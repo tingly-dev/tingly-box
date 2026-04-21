@@ -3,6 +3,7 @@ import { Box, Tooltip, Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import React from 'react';
 import DockerOriginal from 'devicons-react/icons/DockerOriginal';
+import { ActiveBadge } from './ActiveBadge';
 
 // ============================================================================
 // Types
@@ -87,35 +88,7 @@ export const EnvironmentModeSwitcher: React.FC<EnvironmentModeSwitcherProps> = (
                             }}
                         >
                             {mode.icon}
-                            {isActive && (
-                                <Box
-                                    sx={{
-                                        position: 'absolute',
-                                        bottom: -1,
-                                        right: -1,
-                                        width: 12,
-                                        height: 12,
-                                        borderRadius: '50%',
-                                        backgroundColor: 'success.main',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        border: '1.5px solid',
-                                        borderColor: 'background.paper',
-                                    }}
-                                >
-                                    <Typography
-                                        sx={{
-                                            fontSize: '9px',
-                                            lineHeight: 1,
-                                            color: 'background.paper',
-                                            fontWeight: 'bold',
-                                        }}
-                                    >
-                                        ✓
-                                    </Typography>
-                                </Box>
-                            )}
+                            {isActive && <ActiveBadge />}
                         </IconButton>
                     </Tooltip>
                 );

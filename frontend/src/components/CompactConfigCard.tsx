@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { ConfigRow, type TabKey } from './ConfigRow';
 import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { copyableTextStyle } from '@/styles/textStyles';
+import { maskToken, transformUrlByMode } from '@/utils/tokenUtils';
 
 // ============================================================================
 // Types
@@ -28,32 +30,6 @@ interface CompactConfigCardProps {
     /** Optional: available environment modes (defaults to local + docker) */
     environmentModes?: EnvironmentMode[];
 }
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-const transformUrlByMode = (url: string, mode: EnvironmentMode): string => {
-    switch (mode) {
-        case 'docker':
-            return url.replace(/\/\/([^/:]+)(?::(\d+))?/, '//host.docker.internal:$2');
-        case 'cli':
-        case 'npx':
-        case 'wsl':
-            // Future: implement specific transformations
-            return url;
-        case 'local':
-        default:
-            return url;
-    }
-};
-
-const maskToken = (token: string): string => {
-    if (token.length <= 16) return token;
-    const start = token.slice(0, 12);
-    const end = token.slice(-12);
-    return `${start}${'*'.repeat(8)}${end}`;
-};
 
 // ============================================================================
 // Component
@@ -107,19 +83,7 @@ export const CompactConfigCard: React.FC<CompactConfigCardProps> = ({
                 <Typography
                     variant="subtitle2"
                     onClick={() => onCopy(fullUrl, title || baseUrlLabel)}
-                    sx={{
-                        fontFamily: 'monospace',
-                        fontSize: '0.75rem',
-                        color: 'primary.main',
-                        cursor: 'pointer',
-                        '&:hover': {
-                            textDecoration: 'underline',
-                            backgroundColor: 'action.hover',
-                        },
-                        padding: 1,
-                        borderRadius: 1,
-                        transition: 'all 0.2s ease-in-out',
-                    }}
+                    sx={copyableTextStyle}
                     title={`Click to copy ${baseUrlLabel}: ${fullUrl}`}
                 >
                     {fullUrl}
@@ -140,19 +104,7 @@ export const CompactConfigCard: React.FC<CompactConfigCardProps> = ({
                 <Typography
                     variant="subtitle2"
                     onClick={() => onCopy(token, apiKeyLabel)}
-                    sx={{
-                        fontFamily: 'monospace',
-                        fontSize: '0.75rem',
-                        color: 'primary.main',
-                        cursor: 'pointer',
-                        '&:hover': {
-                            textDecoration: 'underline',
-                            backgroundColor: 'action.hover',
-                        },
-                        padding: 1,
-                        borderRadius: 1,
-                        transition: 'all 0.2s ease-in-out',
-                    }}
+                    sx={copyableTextStyle}
                     title={`Click to copy ${apiKeyLabel}`}
                 >
                     {maskToken(token)}

@@ -425,13 +425,12 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             setEffortLevel(level.value);
                             handleMenuClose('effort');
                         }}
+                        title={level.description}
                     >
-                        <Tooltip title={level.description} placement="right" arrow>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                <ListItemText>{level.label}</ListItemText>
-                                {level.value === effort && <IconCheck size={16} />}
-                            </Box>
-                        </Tooltip>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                            <ListItemText>{level.label}</ListItemText>
+                            {level.value === effort && <IconCheck size={16} />}
+                        </Box>
                     </MenuItem>
                 ))}
             </Menu>
@@ -455,16 +454,15 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                     updateThinkingMode(mode.value);
                                     handleMenuClose('thinkingMode');
                                 }}
+                                title={mode.description}
                             >
-                                <Tooltip title={mode.description} placement="right" arrow>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                        <ListItemIcon sx={{ mr: -1 }}>
-                                            <Icon size={16} />
-                                        </ListItemIcon>
-                                        <ListItemText>{mode.label}</ListItemText>
-                                        {mode.value === thinkingMode && <IconCheck size={16} />}
-                                    </Box>
-                                </Tooltip>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                    <ListItemIcon sx={{ mr: -1 }}>
+                                        <Icon size={16} />
+                                    </ListItemIcon>
+                                    <ListItemText>{mode.label}</ListItemText>
+                                    {mode.value === thinkingMode && <IconCheck size={16} />}
+                                </Box>
                             </MenuItem>
                         );
                     })}
@@ -484,32 +482,30 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                     >
-                        <Tooltip title={feature.description} placement="right" arrow>
-                            <MenuItem
-                                selected={isEnabled}
-                                onClick={() => {
-                                    setFeature(feature.key, true);
-                                    handleMenuClose(feature.key);
-                                }}
-                                sx={{ width: '100%' }}
-                            >
-                                <ListItemText>On</ListItemText>
-                                {isEnabled && <IconCheck size={16} />}
-                            </MenuItem>
-                        </Tooltip>
-                        <Tooltip title={feature.description} placement="right" arrow>
-                            <MenuItem
-                                selected={!isEnabled}
-                                onClick={() => {
-                                    setFeature(feature.key, false);
-                                    handleMenuClose(feature.key);
-                                }}
-                                sx={{ width: '100%' }}
-                            >
-                                <ListItemText>Off</ListItemText>
-                                {!isEnabled && <IconCheck size={16} />}
-                            </MenuItem>
-                        </Tooltip>
+                        <MenuItem
+                            selected={isEnabled}
+                            onClick={() => {
+                                setFeature(feature.key, true);
+                                handleMenuClose(feature.key);
+                            }}
+                            sx={{ width: '100%' }}
+                            title={feature.description}
+                        >
+                            <ListItemText>On</ListItemText>
+                            {isEnabled && <IconCheck size={16} />}
+                        </MenuItem>
+                        <MenuItem
+                            selected={!isEnabled}
+                            onClick={() => {
+                                setFeature(feature.key, false);
+                                handleMenuClose(feature.key);
+                            }}
+                            sx={{ width: '100%' }}
+                            title={feature.description}
+                        >
+                            <ListItemText>Off</ListItemText>
+                            {!isEnabled && <IconCheck size={16} />}
+                        </MenuItem>
                     </Menu>
                 );
             })}
@@ -530,13 +526,12 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             handleRecordV2Change({ target: { value: mode.value } } as SelectChangeEvent<string>);
                             handleMenuClose('recordV2');
                         }}
+                        title={mode.description}
                     >
-                        <Tooltip title={mode.description} placement="right" arrow>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                <ListItemText>{mode.label}</ListItemText>
-                                {mode.value === recordV2Mode && <IconCheck size={16} />}
-                            </Box>
-                        </Tooltip>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                            <ListItemText>{mode.label}</ListItemText>
+                            {mode.value === recordV2Mode && <IconCheck size={16} />}
+                        </Box>
                     </MenuItem>
                 ))}
             </Menu>

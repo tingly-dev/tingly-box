@@ -3,9 +3,11 @@ import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ConfigRow from "@/components/ConfigRow.tsx";
+import { ActiveBadge } from "@/components/ActiveBadge";
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
+import { copyableTextStyle } from '@/styles/textStyles';
 import { ContentCopy as ContentCopyIcon } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -216,19 +218,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                         <Typography
                                             variant="subtitle2"
                                             onClick={() => copyToClipboard(ccCommand, 'command')}
-                                            sx={{
-                                                fontFamily: 'monospace',
-                                                fontSize: '0.75rem',
-                                                color: 'primary.main',
-                                                cursor: 'pointer',
-                                                '&:hover': {
-                                                    textDecoration: 'underline',
-                                                    backgroundColor: 'action.hover'
-                                                },
-                                                padding: 1,
-                                                borderRadius: 1,
-                                                transition: 'all 0.2s ease-in-out'
-                                            }}
+                                            sx={copyableTextStyle}
                                             title={t('claudeCode.profile.clickToCopy')}
                                         >
                                             {ccCommand}
@@ -265,35 +255,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                                             n
                                                         </Typography>
                                                     </Box>
-                                                    {commandMode === 'npx' && (
-                                                        <Box
-                                                            sx={{
-                                                                position: 'absolute',
-                                                                bottom: -1,
-                                                                right: -1,
-                                                                width: 12,
-                                                                height: 12,
-                                                                borderRadius: '50%',
-                                                                backgroundColor: 'success.main',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                border: '1.5px solid',
-                                                                borderColor: 'background.paper',
-                                                            }}
-                                                        >
-                                                            <Typography
-                                                                sx={{
-                                                                    fontSize: '9px',
-                                                                    lineHeight: 1,
-                                                                    color: 'background.paper',
-                                                                    fontWeight: 'bold',
-                                                                }}
-                                                            >
-                                                                ✓
-                                                            </Typography>
-                                                        </Box>
-                                                    )}
+                                                    {commandMode === 'npx' && <ActiveBadge />}
                                                 </IconButton>
                                             </Tooltip>
                                             <Tooltip title="Use global CLI command">
@@ -310,35 +272,7 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                                                     }}
                                                 >
                                                     <TerminalIcon fontSize="small" sx={{ color: 'text.primary' }} />
-                                                    {commandMode === 'global' && (
-                                                        <Box
-                                                            sx={{
-                                                                position: 'absolute',
-                                                                bottom: -1,
-                                                                right: -1,
-                                                                width: 12,
-                                                                height: 12,
-                                                                borderRadius: '50%',
-                                                                backgroundColor: 'success.main',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                border: '1.5px solid',
-                                                                borderColor: 'background.paper',
-                                                            }}
-                                                        >
-                                                            <Typography
-                                                                sx={{
-                                                                    fontSize: '9px',
-                                                                    lineHeight: 1,
-                                                                    color: 'background.paper',
-                                                                    fontWeight: 'bold',
-                                                                }}
-                                                            >
-                                                                ✓
-                                                            </Typography>
-                                                        </Box>
-                                                    )}
+                                                    {commandMode === 'global' && <ActiveBadge />}
                                                 </IconButton>
                                             </Tooltip>
                                         </>

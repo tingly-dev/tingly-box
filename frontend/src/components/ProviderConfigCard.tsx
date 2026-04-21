@@ -15,17 +15,8 @@ import { CompactConfigCard } from './CompactConfigCard';
 import PluginFeatures from './PluginFeatures';
 import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
-
-const maskToken = (token: string): string => {
-    if (token.length <= 16) return token;
-    const start = token.slice(0, 12);
-    const end = token.slice(-12);
-    return `${start}${'*'.repeat(8)}${end}`;
-};
-
-const toDockerUrl = (url: string): string => {
-    return url.replace(/\/\/([^/:]+)(?::(\d+))?/, '//host.docker.internal:$2');
-};
+import { copyableTextStyle } from '@/styles/textStyles';
+import { maskToken, transformUrlByMode } from '@/utils/tokenUtils';
 
 export interface ProviderConfigCardProps {
     /** Card title */
@@ -136,7 +127,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
     // Build full URL based on environment mode
     const fullUrl = React.useMemo(() => {
         const url = `${baseUrl}${baseUrlPath}`;
-        return envMode === 'docker' ? toDockerUrl(url) : url;
+        return transformUrlByMode(url, envMode);
     }, [baseUrl, baseUrlPath, envMode]);
 
     return (
@@ -153,19 +144,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                                     <Typography
                                         variant="subtitle2"
                                         onClick={() => onCopy(fullUrl, `${title} ${baseUrlLabel}`)}
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            fontSize: '0.75rem',
-                                            color: 'primary.main',
-                                            cursor: 'pointer',
-                                            '&:hover': {
-                                                textDecoration: 'underline',
-                                                backgroundColor: 'action.hover',
-                                            },
-                                            padding: 1,
-                                            borderRadius: 1,
-                                            transition: 'all 0.2s ease-in-out',
-                                        }}
+                                        sx={copyableTextStyle}
                                         title={`Click to copy ${baseUrlLabel}`}
                                     >
                                         {fullUrl}
@@ -197,19 +176,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                                     <Typography
                                         variant="subtitle2"
                                         onClick={() => onCopy(token, 'API Key')}
-                                        sx={{
-                                            fontFamily: 'monospace',
-                                            fontSize: '0.75rem',
-                                            color: 'primary.main',
-                                            cursor: 'pointer',
-                                            '&:hover': {
-                                                textDecoration: 'underline',
-                                                backgroundColor: 'action.hover',
-                                            },
-                                            padding: 1,
-                                            borderRadius: 1,
-                                            transition: 'all 0.2s ease-in-out',
-                                        }}
+                                        sx={copyableTextStyle}
                                         title="Click to copy API Key"
                                     >
                                         {maskToken(token)}
