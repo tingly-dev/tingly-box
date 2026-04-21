@@ -41,6 +41,10 @@ func (f *ToolSourceFactory) CreateToolSource(sourceConfig typ.MCPSourceConfig) (
 		return NewHTTPToolSource(sourceConfig, f.sessionCache)
 	case "sse":
 		return NewSSEToolSource(sourceConfig, f.sessionCache)
+	case "advisor":
+		// Virtual in-process tool — should never reach the factory.
+		// getOrCreateSource guards against this, but handle defensively here too.
+		return nil, &UnsupportedTransportError{Transport: transport}
 	default:
 		return nil, &UnsupportedTransportError{Transport: transport}
 	}

@@ -403,6 +403,11 @@ func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolS
 		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " not found"}
 	}
 
+	// Virtual sources (e.g. advisor) are handled in-process; they are never backed by a subprocess or remote connection.
+	if sourceConfig.Advisor != nil {
+		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is a virtual tool (use virtual registry)"}
+	}
+
 	if !typ.IsMCPSourceEnabled(*sourceConfig) {
 		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
 	}
