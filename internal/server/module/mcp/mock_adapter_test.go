@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
@@ -221,13 +220,7 @@ func (m *MockStreamHandle) Current() any {
 }
 
 func (m *MockStreamHandle) Err() error {
-	if m.ErrorToReturn != nil {
-		return m.ErrorToReturn
-	}
-	if m.CurrentIdx >= len(m.Events) {
-		return io.EOF
-	}
-	return nil
+	return m.ErrorToReturn
 }
 
 func (m *MockStreamHandle) Close() error {

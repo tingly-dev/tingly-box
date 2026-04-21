@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultMaxRounds = 6
+	defaultMaxRounds = 3
 )
 
 // GenericStreamInterceptor implements format-agnostic streaming MCP tool handling
@@ -39,6 +39,9 @@ type GenericStreamInterceptor struct {
 	totalInputTokens  int64
 	totalOutputTokens int64
 	totalCacheTokens  int64
+
+	// Mutable request for multi-round loop
+	currentReq any
 
 	// Per-round state (reset each round)
 	round int
@@ -98,21 +101,27 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 	i.adapter.SetupSSEHeaders(i.c)
 	defer i.reportUsage()
 
-	currentReq := req
+	i.currentReq = req
 
 	for i.round = 0; i.round < i.config.MaxRounds; i.round++ {
 		i.resetRoundState()
 		logrus.Debugf("[MCP-Interceptor] Round %d: starting", i.round)
 
+		if i.round > 0 && i.config.OnBeforeRound != nil {
+			if err := i.config.OnBeforeRound(i.round); err != nil {
+				return err
+			}
+		}
+
 		// Forward request to upstream
-		stream, err := i.forwarder.ForwardStream(i.c.Request.Context(), i.provider, i.extractModel(currentReq), currentReq)
+		stream, err := i.forwarder.ForwardStream(i.c.Request.Context(), i.provider, i.extractModel(i.currentReq), i.currentReq)
 		if err != nil {
 			return fmt.Errorf("forward stream failed: %w", err)
 		}
-		defer stream.Close()
 
 		// Consume round and build response
 		response, err := i.consumeRound(stream)
+		stream.Close()
 		if err != nil {
 			return err
 		}
@@ -132,7 +141,10 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 
 		case DecisionPureVirtual:
 			logrus.Debugf("[MCP-Interceptor] Round %d: pure virtual, continuing", i.round)
-			return i.handlePureVirtual(response, currentReq)
+			if err := i.handlePureVirtual(response); err != nil {
+				return err
+			}
+			// Loop continues with updated i.currentReq
 
 		case DecisionPureExternal:
 			logrus.Debugf("[MCP-Interceptor] Round %d: pure external, ending", i.round)
@@ -140,7 +152,7 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 
 		case DecisionMixed:
 			logrus.Debugf("[MCP-Interceptor] Round %d: mixed, stashing and ending", i.round)
-			return i.handleMixed(response, currentReq)
+			return i.handleMixed(response, i.currentReq)
 		}
 	}
 
@@ -433,8 +445,8 @@ func (i *GenericStreamInterceptor) classifyResponse(response any) ResponseDecisi
 	return DecisionPureExternal
 }
 
-// handlePureVirtual executes virtual tools and continues loop
-func (i *GenericStreamInterceptor) handlePureVirtual(response, req any) error {
+// handlePureVirtual executes virtual tools and updates i.currentReq for next round
+func (i *GenericStreamInterceptor) handlePureVirtual(response any) error {
 	tools, err := i.extractRoundTools(response)
 	if err != nil {
 		return err
@@ -443,26 +455,22 @@ func (i *GenericStreamInterceptor) handlePureVirtual(response, req any) error {
 	// Execute virtual tools
 	results := make([]ToolExecutionResult, 0, len(tools))
 	for _, tool := range tools {
-		result, err := i.executeTool(tool, req)
+		result, err := i.executeTool(tool, i.currentReq)
 		if err != nil {
 			logrus.WithError(err).Warnf("tool execution failed: %s", tool.Name())
 		}
 		results = append(results, result)
 	}
 
-	// Append tool results to request and continue loop
-	updatedReq, err := i.adapter.AppendToolResults(req, response, i.resultsToAny(results))
+	// Append tool results to request; updated req used in next round
+	updatedReq, err := i.adapter.AppendToolResults(i.currentReq, response, i.resultsToAny(results))
 	if err != nil {
 		return err
 	}
+	i.currentReq = updatedReq
 
 	// Send keep-alive to client
-	if err := i.adapter.SendKeepAlive(i.c); err != nil {
-		return err
-	}
-
-	// Continue to next round (loop continues in Run())
-	return i.continueLoop(updatedReq)
+	return i.adapter.SendKeepAlive(i.c)
 }
 
 // handleMixed executes virtual tools, stashes results, returns external to client
@@ -552,7 +560,14 @@ func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error
 }
 
 func (i *GenericStreamInterceptor) extractMessages(req any) []map[string]any {
-	// Extract messages for tool execution hooks
+	switch r := req.(type) {
+	case *anthropic.MessageNewParams:
+		return extractAnthropicV1Messages(r.Messages)
+	case *anthropic.BetaMessageNewParams:
+		return extractAnthropicBetaMessages(r.Messages)
+	case *openai.ChatCompletionNewParams:
+		return extractOpenAIChatMessages(r.Messages)
+	}
 	return nil
 }
 
@@ -571,7 +586,7 @@ func (i *GenericStreamInterceptor) recordTTFT() {
 	// See: mcp_anthropic_v1_helper.go - dispatchGeneric*Stream functions
 }
 
-func (i *GenericStreamInterceptor) bufferToolEvent(event any) error {
+func (i *GenericStreamInterceptor) bufferToolEvent(_ any) error {
 	// Buffer tool event for potential later flush
 	// Currently virtual tool events are suppressed, so this is a no-op
 	// If buffering is needed in the future, implement here
@@ -594,12 +609,6 @@ func (i *GenericStreamInterceptor) reportUsage() {
 	if i.c != nil {
 		i.s.TrackUsage(i.c, int(i.totalInputTokens), int(i.totalOutputTokens), int(i.totalCacheTokens))
 	}
-}
-
-func (i *GenericStreamInterceptor) continueLoop(req any) error {
-	// Store updated request for next round
-	// This is handled by the Run() loop
-	return nil
 }
 
 func (i *GenericStreamInterceptor) recordRoundTool(tool Tool) {
@@ -626,4 +635,53 @@ func (i *GenericStreamInterceptor) extractRoundTools(response any) ([]Tool, erro
 		return i.roundTools, nil
 	}
 	return tools, err
+}
+
+// extractAnthropicV1Messages serialises Anthropic v1 messages to []map[string]any for advisor context.
+// JSON round-trip is used because the SDK union types don't expose underlying maps directly.
+func extractAnthropicV1Messages(messages []anthropic.MessageParam) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(messages)
+	if err != nil {
+		return nil
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// extractAnthropicBetaMessages serialises Anthropic Beta messages to []map[string]any for advisor context.
+func extractAnthropicBetaMessages(messages []anthropic.BetaMessageParam) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(messages)
+	if err != nil {
+		return nil
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// extractOpenAIChatMessages serialises OpenAI chat messages to []map[string]any for advisor context.
+func extractOpenAIChatMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(messages)
+	if err != nil {
+		return nil
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return out
 }

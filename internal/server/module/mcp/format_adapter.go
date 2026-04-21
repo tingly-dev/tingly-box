@@ -118,10 +118,15 @@ type PendingResultsManager interface {
 
 // InterceptorConfig configures the generic interceptors
 type InterceptorConfig struct {
-	MaxRounds      int
+	MaxRounds        int
 	EnableGuardrails bool
-	DisableUsage   bool
-	ResponseModel  string
+	DisableUsage     bool
+	ResponseModel    string
+	// OnBeforeRound is called at the start of each round after round 0.
+	// Use this to reset per-round state that lives outside the interceptor
+	// (e.g. guardrails stream accumulator). The interceptor does not know
+	// what this callback does — it only calls it.
+	OnBeforeRound func(round int) error
 }
 
 // ResponseDecision represents the decision after classifying a response
