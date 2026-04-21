@@ -92,8 +92,21 @@ func runMatrix(opts *matrixOptions) error {
 	// Build matrix with filters
 	matrix := protocol_validate.DefaultMatrix()
 
+	// Apply filters to limit execution (not just display)
 	if len(opts.scenarios) > 0 {
 		matrix = matrix.OnlyScenarios(opts.scenarios...)
+	}
+	if len(opts.sources) > 0 {
+		matrix = matrix.OnlySources(opts.sources...)
+	}
+	if len(opts.targets) > 0 {
+		matrix = matrix.OnlyTargets(opts.targets...)
+	}
+	if opts.streaming {
+		matrix = matrix.OnlyStreaming(true)
+	}
+	if opts.nonStream {
+		matrix = matrix.OnlyStreaming(false)
 	}
 
 	// Set record directory if provided
@@ -111,15 +124,17 @@ func runMatrix(opts *matrixOptions) error {
 		matrix = matrix.WithBatchCount(opts.batchCount)
 	}
 
-	// Resolve streaming filter
+	// Resolve streaming filter conflict
 	if opts.streaming && opts.nonStream {
 		return fmt.Errorf("cannot specify both --streaming and --non-streaming")
 	}
 
-	// Execute all tests
+	// Execute tests (only filtered combinations)
 	results := matrix.ExecuteAll()
 
-	// Filter results by options
+	// Note: No need to filter results here since we filtered before execution
+	// But keep filterResults for backward compatibility in case results contain
+	// additional entries from skipPairs or skipSourceScenarios
 	results = filterResults(results, opts)
 
 	// Output results

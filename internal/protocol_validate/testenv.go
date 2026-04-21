@@ -220,12 +220,12 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 // Streaming requests use the real httptest.Server (env.gatewayServer) because
 // httptest.ResponseRecorder does not support Gin's streaming/SSE machinery.
 // Non-streaming requests use the recorder for simplicity.
-func (env *TestEnv) SendAs(t *testing.T, source protocol.APIType, s Scenario, streaming bool) *RoundTripResult {
+func (env *TestEnv) SendAs(t *testing.T, source, target protocol.APIType, s Scenario, streaming bool) *RoundTripResult {
 	t.Helper()
 
-	requestModel := env.findRouteModel(source, s.Name)
+	requestModel := env.findRouteModel(source, target, s.Name)
 	if requestModel == "" {
-		t.Fatalf("no route configured for source=%s scenario=%s — call SetupRoute first", source, s.Name)
+		t.Fatalf("no route configured for source=%s target=%s scenario=%s — call SetupRoute first", source, target, s.Name)
 	}
 
 	path, body := buildRequest(source, requestModel, streaming)
@@ -283,10 +283,10 @@ func (env *TestEnv) SendAs(t *testing.T, source protocol.APIType, s Scenario, st
 // Streaming requests use the real httptest.Server (env.gatewayServer) because
 // httptest.ResponseRecorder does not support Gin's streaming/SSE machinery.
 // Non-streaming requests use the recorder for simplicity.
-func (env *TestEnv) SendAsCLI(source protocol.APIType, s Scenario, streaming bool) (*RoundTripResult, error) {
-	requestModel := env.findRouteModel(source, s.Name)
+func (env *TestEnv) SendAsCLI(source, target protocol.APIType, s Scenario, streaming bool) (*RoundTripResult, error) {
+	requestModel := env.findRouteModel(source, target, s.Name)
 	if requestModel == "" {
-		return nil, fmt.Errorf("no route configured for source=%s scenario=%s — call SetupRoute first", source, s.Name)
+		return nil, fmt.Errorf("no route configured for source=%s target=%s scenario=%s — call SetupRoute first", source, target, s.Name)
 	}
 
 	path, body := buildRequest(source, requestModel, streaming)
@@ -343,18 +343,11 @@ func routeKey(source, target protocol.APIType, scenario string) string {
 	return fmt.Sprintf("%s|%s|%s", source, target, scenario)
 }
 
-func (env *TestEnv) findRouteModel(source protocol.APIType, scenarioName string) string {
+func (env *TestEnv) findRouteModel(source, target protocol.APIType, scenarioName string) string {
 	env.mu.Lock()
 	defer env.mu.Unlock()
-	prefix := fmt.Sprintf("%s|", source)
-	suffix := fmt.Sprintf("|%s", scenarioName)
-	for k, v := range env.routeModels {
-		if len(k) >= len(prefix) && k[:len(prefix)] == prefix &&
-			len(k) >= len(suffix) && k[len(k)-len(suffix):] == suffix {
-			return v
-		}
-	}
-	return ""
+	key := routeKey(source, target, scenarioName)
+	return env.routeModels[key]
 }
 
 func buildRequest(source protocol.APIType, model string, streaming bool) (path string, body []byte) {

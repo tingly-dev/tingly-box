@@ -75,6 +75,71 @@ func (m *Matrix) OnlyScenarios(names ...string) *Matrix {
 	}
 }
 
+// OnlySources returns a copy of the Matrix filtered to only the specified source protocols.
+func (m *Matrix) OnlySources(sources ...string) *Matrix {
+	sourceSet := make(map[protocol.APIType]bool, len(sources))
+	for _, s := range sources {
+		sourceSet[protocol.APIType(s)] = true
+	}
+
+	filtered := make([]protocol.APIType, 0, len(sources))
+	for _, s := range m.Sources {
+		if sourceSet[s] {
+			filtered = append(filtered, s)
+		}
+	}
+
+	return &Matrix{
+		Sources:    filtered,
+		Targets:    m.Targets,
+		Scenarios:  m.Scenarios,
+		Streaming:  m.Streaming,
+		RecordDir:  m.RecordDir,
+		ServerMode: m.ServerMode,
+		BatchCount: m.BatchCount,
+	}
+}
+
+// OnlyTargets returns a copy of the Matrix filtered to only the specified target protocols.
+func (m *Matrix) OnlyTargets(targets ...string) *Matrix {
+	targetSet := make(map[protocol.APIType]bool, len(targets))
+	for _, t := range targets {
+		targetSet[protocol.APIType(t)] = true
+	}
+
+	filtered := make([]protocol.APIType, 0, len(targets))
+	for _, t := range m.Targets {
+		if targetSet[t] {
+			filtered = append(filtered, t)
+		}
+	}
+
+	return &Matrix{
+		Sources:    m.Sources,
+		Targets:    filtered,
+		Scenarios:  m.Scenarios,
+		Streaming:  m.Streaming,
+		RecordDir:  m.RecordDir,
+		ServerMode: m.ServerMode,
+		BatchCount: m.BatchCount,
+	}
+}
+
+// OnlyStreaming returns a copy of the Matrix filtered to only streaming or non-streaming tests.
+// If streaming is true, only streaming tests are included. If false, only non-streaming tests.
+func (m *Matrix) OnlyStreaming(streaming bool) *Matrix {
+	filtered := []bool{streaming}
+	return &Matrix{
+		Sources:    m.Sources,
+		Targets:    m.Targets,
+		Scenarios:  m.Scenarios,
+		Streaming:  filtered,
+		RecordDir:  m.RecordDir,
+		ServerMode: m.ServerMode,
+		BatchCount: m.BatchCount,
+	}
+}
+
 // WithRecordDir returns a copy of the Matrix with the record directory set.
 // If recordDir is empty, recording is disabled.
 func (m *Matrix) WithRecordDir(recordDir string) *Matrix {
@@ -181,7 +246,7 @@ func (m *Matrix) Run(t *testing.T) {
 
 									env.SetupRoute(source, target, scenario)
 
-									result := env.SendAs(t, source, scenario, streaming)
+									result := env.SendAs(t, source, target, scenario, streaming)
 
 									for _, a := range scenario.Assertions {
 										if err := a.Check(result); err != nil {
@@ -511,7 +576,7 @@ func (m *Matrix) executeOne(s Scenario, source, target protocol.APIType, streami
 	defer env.Close()
 
 	env.SetupRoute(source, target, s)
-	result, err := env.SendAsCLI(source, s, streaming)
+	result, err := env.SendAsCLI(source, target, s, streaming)
 	if err != nil {
 		return TestResult{
 			Name:      m.buildTestName(s.Name, source, target, streaming),
@@ -562,7 +627,7 @@ func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target prot
 	start := time.Now()
 
 	env.SetupRoute(source, target, s)
-	result, err := env.SendAsCLI(source, s, streaming)
+	result, err := env.SendAsCLI(source, target, s, streaming)
 	if err != nil {
 		return TestResult{
 			Name:      m.buildTestName(s.Name, source, target, streaming),

@@ -19,7 +19,7 @@ func TestRoundTrip_AnthropicV1_To_OpenAIChat_Text(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.TextScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, pt.TextScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.TextScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.Equal(t, "assistant", result.Role)
@@ -35,7 +35,7 @@ func TestRoundTrip_AnthropicBeta_To_OpenAIResponses_Text(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.TextScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicBeta, pt.TextScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.TextScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.Equal(t, "assistant", result.Role)
@@ -48,7 +48,7 @@ func TestRoundTrip_OpenAIChat_To_AnthropicV1_Text(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeOpenAIChat, protocol.TypeAnthropicV1, pt.TextScenario())
 
-	result := env.SendAs(t, protocol.TypeOpenAIChat, pt.TextScenario(), false)
+	result := env.SendAs(t, protocol.TypeOpenAIChat, protocol.TypeAnthropicV1, pt.TextScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.Equal(t, "assistant", result.Role)
@@ -62,7 +62,7 @@ func TestRoundTrip_AnthropicV1_To_OpenAIChat_ToolUse(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ToolUseScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, pt.ToolUseScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ToolUseScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	require.Len(t, result.ToolCalls, 1)
@@ -77,7 +77,7 @@ func TestRoundTrip_AnthropicBeta_To_OpenAIChat_ToolUse(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.ToolUseScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicBeta, pt.ToolUseScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.ToolUseScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	require.Len(t, result.ToolCalls, 1)
@@ -90,7 +90,7 @@ func TestRoundTrip_AnthropicV1_To_AnthropicV1_Thinking(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, pt.ThinkingScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, pt.ThinkingScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, pt.ThinkingScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.ThinkingContent)
@@ -103,7 +103,7 @@ func TestRoundTrip_AnthropicV1_To_OpenAIChat_Thinking(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ThinkingScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, pt.ThinkingScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ThinkingScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.Content)
@@ -115,7 +115,7 @@ func TestRoundTrip_AnthropicV1_To_OpenAIChat_MultiTurn(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.MultiTurnScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, pt.MultiTurnScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.MultiTurnScenario(), false)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.Equal(t, "assistant", result.Role)
@@ -128,7 +128,7 @@ func TestRoundTrip_AnthropicV1_To_OpenAIChat_Streaming(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.StreamingTextScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, pt.StreamingTextScenario(), true)
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.StreamingTextScenario(), true)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.StreamEvents)
@@ -141,7 +141,7 @@ func TestRoundTrip_AnthropicBeta_To_OpenAIChat_StreamingToolUse(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.StreamingToolUseScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicBeta, pt.StreamingToolUseScenario(), true)
+	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, pt.StreamingToolUseScenario(), true)
 
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.NotEmpty(t, result.StreamEvents)
@@ -155,7 +155,7 @@ func TestRoundTrip_ErrorPassthrough(t *testing.T) {
 
 	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ErrorScenario())
 
-	result := env.SendAs(t, protocol.TypeAnthropicV1, pt.ErrorScenario(), false)
+	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, pt.ErrorScenario(), false)
 
 	assert.NotEqual(t, 200, result.HTTPStatus)
 }
@@ -177,7 +177,7 @@ func TestRoundTrip_AllSources_TextScenario_NonStreaming(t *testing.T) {
 
 			env.SetupRoute(src, protocol.TypeOpenAIChat, pt.TextScenario())
 
-			result := env.SendAs(t, src, pt.TextScenario(), false)
+			result := env.SendAs(t, src, protocol.TypeOpenAIChat, pt.TextScenario(), false)
 			require.Equal(t, 200, result.HTTPStatus)
 			assert.NotEmpty(t, result.Content)
 		})

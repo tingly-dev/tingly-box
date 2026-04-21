@@ -135,7 +135,7 @@ func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
-	scenario := vs.detectScenario(r)
+	scenario := vs.detectScenario(bodyBytes)
 
 	resp, ok := vs.scenarios[scenario]
 	if !ok {
@@ -219,7 +219,7 @@ func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
-	scenario := vs.detectScenario(r)
+	scenario := vs.detectScenario(bodyBytes)
 
 	resp, ok := vs.scenarios[scenario]
 	if !ok {
@@ -247,8 +247,11 @@ func (vs *VirtualServer) handleGoogle(w http.ResponseWriter, r *http.Request) {
 	vs.callCount++
 	vs.mu.Unlock()
 
+	bodyBytes, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
 	streaming := strings.Contains(r.URL.Path, "streamGenerateContent")
-	scenario := vs.detectScenario(r)
+	scenario := vs.detectScenarioFromURLOrBody(r.URL.Path, bodyBytes)
 
 	resp, ok := vs.scenarios[scenario]
 	if !ok {
@@ -282,7 +285,51 @@ func (vs *VirtualServer) parseStreamFlagFromBytes(body []byte) bool {
 	return flag
 }
 
-func (vs *VirtualServer) detectScenario(_ *http.Request) string {
+// detectScenarioFromURLOrBody extracts scenario from Google-style URL path or falls back to body.
+// Google requests encode the model in the URL: /v1beta/models/{model}/generateContent
+func (vs *VirtualServer) detectScenarioFromURLOrBody(urlPath string, body []byte) string {
+	const prefix = "virtual-model-"
+	// Try URL path first: extract model segment
+	parts := strings.Split(urlPath, "/")
+	for _, part := range parts {
+		if strings.HasPrefix(part, prefix) {
+			name := part[len(prefix):]
+			// Strip trailing action suffix if any (e.g. ":generateContent" edge case)
+			if idx := strings.IndexByte(name, ':'); idx >= 0 {
+				name = name[:idx]
+			}
+			vs.mu.RLock()
+			_, exists := vs.scenarios[name]
+			vs.mu.RUnlock()
+			if exists {
+				return name
+			}
+		}
+	}
+	// Fallback to body parsing
+	return vs.detectScenario(body)
+}
+
+// detectScenario extracts the scenario name from the request body's model field.
+// The model field is expected to be "virtual-model-{scenario}" (set by SetupRoute).
+// Falls back to the first registered scenario if extraction fails.
+func (vs *VirtualServer) detectScenario(body []byte) string {
+	var m map[string]interface{}
+	if err := json.Unmarshal(body, &m); err == nil {
+		if model, ok := m["model"].(string); ok {
+			const prefix = "virtual-model-"
+			if strings.HasPrefix(model, prefix) {
+				name := model[len(prefix):]
+				vs.mu.RLock()
+				_, exists := vs.scenarios[name]
+				vs.mu.RUnlock()
+				if exists {
+					return name
+				}
+			}
+		}
+	}
+	// Fallback: return first registered scenario name
 	vs.mu.RLock()
 	defer vs.mu.RUnlock()
 	for name := range vs.scenarios {
