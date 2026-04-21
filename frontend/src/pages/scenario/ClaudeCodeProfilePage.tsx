@@ -2,6 +2,7 @@ import CardGrid from "@/components/CardGrid.tsx";
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
+import ConfigRow from "@/components/ConfigRow.tsx";
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
@@ -9,7 +10,6 @@ import { ContentCopy as ContentCopyIcon } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import InfoIcon from '@mui/icons-material/Info';
-import CodeIcon from '@mui/icons-material/Code';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import Chip from '@mui/material/Chip';
 import Switch from '@mui/material/Switch';
@@ -62,10 +62,10 @@ const ClaudeCodeProfilePage: React.FC = () => {
     const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
     const [renameName, setRenameName] = useState('');
     const [isProfileMutating, setIsProfileMutating] = useState(false);
-    const [npmMode, setNpmMode] = useState(true);
     const [appVersion, setAppVersion] = useState('');
     const [unifiedMode, setUnifiedMode] = useState(currentProfile?.unified || false);
     const [isUpdatingMode, setIsUpdatingMode] = useState(false);
+    const [commandMode, setCommandMode] = useState<'npx' | 'global'>('npx');
 
     // Update unified mode when profile changes
     useEffect(() => {
@@ -161,9 +161,12 @@ const ClaudeCodeProfilePage: React.FC = () => {
         }
     };
 
-    const ccCommand = npmMode && appVersion
-        ? `npx -y tingly-box@${appVersion} cc --profile ${profileId}`
-        : `tingly-box cc --profile ${profileId}`;
+    const ccCommand = React.useMemo(() => {
+        if (commandMode === 'npx' && appVersion) {
+            return `npx -y tingly-box@${appVersion} cc --profile ${profileId}`;
+        }
+        return `tingly-box cc --profile ${profileId}`;
+    }, [commandMode, appVersion, profileId]);
 
     return (
         <PageLayout loading={loadingRule} notification={notification}>
@@ -202,120 +205,183 @@ const ClaudeCodeProfilePage: React.FC = () => {
                         </Stack>
                     }
                 >
-                    <Box sx={{ px: 2, pb: 1.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, maxWidth: 700 }}>
-                            <Typography
-                                variant="subtitle2"
-                                color="text.secondary"
-                                sx={{ minWidth: 190, flexShrink: 0, fontWeight: 500 }}
-                            >
-                                {t('claudeCode.profile.quickStart')}
-                            </Typography>
-                            <Typography
-                                variant="subtitle2"
-                                onClick={() => copyToClipboard(ccCommand, 'command')}
-                                sx={{
-                                    fontFamily: 'monospace',
-                                    fontSize: '0.75rem',
-                                    color: 'primary.main',
-                                    flex: 1,
-                                    minWidth: 0,
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                        textDecoration: 'underline',
-                                        backgroundColor: 'action.hover'
-                                    },
-                                    padding: 1,
-                                    borderRadius: 1,
-                                    transition: 'all 0.2s ease-in-out'
-                                }}
-                                title={t('claudeCode.profile.clickToCopy')}
-                            >
-                                {ccCommand}
-                            </Typography>
-                            <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, ml: 'auto' }}>
-                                <Tooltip title={npmMode ? t('claudeCode.profile.switchToGlobal') : t('claudeCode.profile.switchToNpm')}>
-                                    <IconButton
-                                        onClick={() => setNpmMode(!npmMode)}
-                                        size="small"
-                                        color={npmMode ? "primary" : "default"}
-                                        sx={{ position: 'relative' }}
-                                    >
-                                        {npmMode ? (
-                                            <Box
-                                                sx={{
-                                                    width: 20,
-                                                    height: 20,
-                                                    borderRadius: '50%',
-                                                    backgroundColor: 'success.main',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                }}
-                                            >
-                                                <Typography sx={{ fontSize: '12px', lineHeight: 1, color: 'background.paper', fontWeight: 'bold' }}>
-                                                    n
-                                                </Typography>
-                                            </Box>
-                                        ) : (
-                                            <CodeIcon fontSize="small" />
-                                        )}
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title={t('claudeCode.profile.copyCommand')}>
-                                    <IconButton size="small" onClick={() => copyToClipboard(ccCommand, 'command')}>
-                                        <ContentCopyIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Stack>
-                        </Box>
+                    <Box sx={{ px: 2, pb: 0.5 }}>
+                        <ConfigRow
+                            tabs={[
+                                {
+                                    key: 'quickstart',
+                                    label: t('claudeCode.profile.quickStart'),
+                                    content: (
+                                        <Typography
+                                            variant="subtitle2"
+                                            onClick={() => copyToClipboard(ccCommand, 'command')}
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem',
+                                                color: 'primary.main',
+                                                cursor: 'pointer',
+                                                '&:hover': {
+                                                    textDecoration: 'underline',
+                                                    backgroundColor: 'action.hover'
+                                                },
+                                                padding: 1,
+                                                borderRadius: 1,
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                            title={t('claudeCode.profile.clickToCopy')}
+                                        >
+                                            {ccCommand}
+                                        </Typography>
+                                    ),
+                                    actions: (
+                                        <>
+                                            <Tooltip title="Use npx command">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => setCommandMode('npx')}
+                                                    sx={{
+                                                        position: 'relative',
+                                                        opacity: commandMode === 'npx' ? 1 : 0.5,
+                                                        transition: 'opacity 0.2s',
+                                                        '&:hover': {
+                                                            opacity: 1,
+                                                            backgroundColor: 'action.hover',
+                                                        },
+                                                    }}
+                                                >
+                                                    <Box
+                                                        sx={{
+                                                            width: 20,
+                                                            height: 20,
+                                                            borderRadius: '50%',
+                                                            backgroundColor: 'success.main',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                        }}
+                                                    >
+                                                        <Typography sx={{ fontSize: '12px', lineHeight: 1, color: 'background.paper', fontWeight: 'bold' }}>
+                                                            n
+                                                        </Typography>
+                                                    </Box>
+                                                    {commandMode === 'npx' && (
+                                                        <Box
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                bottom: -1,
+                                                                right: -1,
+                                                                width: 12,
+                                                                height: 12,
+                                                                borderRadius: '50%',
+                                                                backgroundColor: 'success.main',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                border: '1.5px solid',
+                                                                borderColor: 'background.paper',
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                sx={{
+                                                                    fontSize: '9px',
+                                                                    lineHeight: 1,
+                                                                    color: 'background.paper',
+                                                                    fontWeight: 'bold',
+                                                                }}
+                                                            >
+                                                                ✓
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Use global CLI command">
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => setCommandMode('global')}
+                                                    sx={{
+                                                        opacity: commandMode === 'global' ? 1 : 0.5,
+                                                        transition: 'opacity 0.2s',
+                                                        '&:hover': {
+                                                            opacity: 1,
+                                                            backgroundColor: 'action.hover',
+                                                        },
+                                                    }}
+                                                >
+                                                    <TerminalIcon fontSize="small" sx={{ color: 'text.primary' }} />
+                                                    {commandMode === 'global' && (
+                                                        <Box
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                bottom: -1,
+                                                                right: -1,
+                                                                width: 12,
+                                                                height: 12,
+                                                                borderRadius: '50%',
+                                                                backgroundColor: 'success.main',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                border: '1.5px solid',
+                                                                borderColor: 'background.paper',
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                sx={{
+                                                                    fontSize: '9px',
+                                                                    lineHeight: 1,
+                                                                    color: 'background.paper',
+                                                                    fontWeight: 'bold',
+                                                                }}
+                                                            >
+                                                                ✓
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                </IconButton>
+                                            </Tooltip>
+                                        </>
+                                    ),
+                                },
+                            ]}
+                            activeTab="quickstart"
+                            onTabChange={() => {}}
+                        />
                     </Box>
-                    <Divider sx={{ mx: 2 }} />
-                    {/* Mode Toggle Section */}
-                    <Box sx={{ px: 2, py: 1.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, maxWidth: 700 }}>
-                            <Typography variant="subtitle2" color="text.secondary" sx={{ minWidth: 190, flexShrink: 0, fontWeight: 500 }}>
-                                {t('claudeCode.profile.mode')}
-                            </Typography>
-                            <Typography variant="subtitle2" color="text.secondary"
-                            sx={{
-                                    fontFamily: 'monospace',
-                                    fontSize: '0.75rem',
-                                    color: 'primary.main',
-                                    flex: 1,
-                                    minWidth: 0,
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                        textDecoration: 'underline',
-                                        backgroundColor: 'action.hover'
-                                    },
-                                    padding: 1,
-                                    borderRadius: 1,
-                                    transition: 'all 0.2s ease-in-out'
-                                }}
-                            >
-                            {unifiedMode
-                                ? t('claudeCode.profile.unifiedDescription')
-                                : t('claudeCode.profile.separateDescription')}
-                            </Typography>
-                            {/*<Stack direction="row" spacing={1} alignItems="center">*/}
-                            {/*    <Typography variant="body2" color="text.secondary">*/}
-                            {/*        {t('claudeCode.profile.separate')}*/}
-                            {/*    </Typography>*/}
-                            {/*    <Switch*/}
-                            {/*        checked={unifiedMode}*/}
-                            {/*        onChange={handleModeToggle}*/}
-                            {/*        disabled={isUpdatingMode}*/}
-                            {/*        size="small"*/}
-                            {/*    />*/}
-                            {/*    <Typography variant="body2" color="text.secondary">*/}
-                            {/*        {t('claudeCode.profile.unified')}*/}
-                            {/*    </Typography>*/}
-                            {/*</Stack>*/}
-                        </Box>
-
+                    <Box sx={{ px: 2, py: 0.5 }}>
+                        <ConfigRow
+                            tabs={[
+                                {
+                                    key: 'mode',
+                                    label: t('claudeCode.profile.mode'),
+                                    content: (
+                                        <Typography
+                                            variant="subtitle2"
+                                            color="text.secondary"
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem',
+                                                cursor: 'pointer',
+                                                '&:hover': {
+                                                    textDecoration: 'underline',
+                                                    backgroundColor: 'action.hover'
+                                                },
+                                                padding: 1,
+                                                borderRadius: 1,
+                                                transition: 'all 0.2s ease-in-out'
+                                            }}
+                                        >
+                                            {unifiedMode
+                                                ? t('claudeCode.profile.unifiedDescription')
+                                                : t('claudeCode.profile.separateDescription')}
+                                        </Typography>
+                                    ),
+                                },
+                            ]}
+                            activeTab="mode"
+                            onTabChange={() => {}}
+                        />
                     </Box>
-                    <Divider sx={{ mx: 2 }} />
                     <ProviderConfigCard
                         title={`Claude Code [${profileId}]`}
                         baseUrlPath={`/tingly/${scenario}`}
@@ -326,6 +392,7 @@ const ClaudeCodeProfilePage: React.FC = () => {
                         scenario={scenario}
                         showApiKeyRow={true}
                         showBaseUrlRow={true}
+                        compact={true}
                     />
                     <Divider sx={{ mx: 2, mt: 1.5 }} />
                 </UnifiedCard>

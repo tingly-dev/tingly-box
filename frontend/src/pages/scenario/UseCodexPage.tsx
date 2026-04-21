@@ -61,6 +61,7 @@ const UseCodexPage: React.FC = () => {
                         token={token}
                         onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
+                        compact={true}
                     />
                 </UnifiedCard>
                 <TemplatePage

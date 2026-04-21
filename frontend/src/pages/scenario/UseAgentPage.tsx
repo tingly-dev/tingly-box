@@ -38,6 +38,7 @@ const UseAgentPage: React.FC = () => {
                         onCopy={copyToClipboard}
                         token={token}
                         onShowTokenModal={() => setShowTokenModal(true)}
+                        compact={true}
                     />
                 </UnifiedCard>
 

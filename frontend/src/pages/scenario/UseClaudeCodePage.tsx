@@ -271,6 +271,7 @@ const UseClaudeCodePage: React.FC = () => {
                         scenario={SCENARIO}
                         showApiKeyRow={true}
                         showBaseUrlRow={true}
+                        compact={true}
                     />
                 </UnifiedCard>
 

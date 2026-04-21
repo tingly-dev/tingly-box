@@ -62,6 +62,7 @@ const UseXcodePage: React.FC = () => {
                         onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         showApiKeyRow={true}
+                        compact={true}
                     />
                 </UnifiedCard>
 

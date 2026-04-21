@@ -40,22 +40,7 @@ const UseVSCodePage: React.FC = () => {
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
                             </Tooltip>
-                        </Box>
-                    }
-                    size="full"
-                    rightAction={
-                        <Button
-                            onClick={handleOpenConfigModal}
-                            variant="contained"
-                            size="small"
-                        >
-                            Config Guide
-                        </Button>
-                    }
-                >
-                    {/* Tingly Box For VS Code subtitle */}
-                    <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
+                             <Typography variant="body2" color="text.secondary">
                             Tingly Box For VS Code ·{' '}
                             <Link
                                 href="https://marketplace.visualstudio.com/items?itemName=Tingly-Dev.vscode-tingly-box"
@@ -71,8 +56,19 @@ const UseVSCodePage: React.FC = () => {
                                 Install Now
                             </Link>
                         </Typography>
-                    </Box>
-
+                        </Box>
+                    }
+                    size="full"
+                    rightAction={
+                        <Button
+                            onClick={handleOpenConfigModal}
+                            variant="contained"
+                            size="small"
+                        >
+                            Config Guide
+                        </Button>
+                    }
+                >
                     <ProviderConfigCard
                         title="VSCode Copliot Chat"
                         baseUrlPath="/tingly/vscode"
@@ -82,6 +78,7 @@ const UseVSCodePage: React.FC = () => {
                         onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         showApiKeyRow={true}
+                        compact={true}
                     />
                 </UnifiedCard>
 

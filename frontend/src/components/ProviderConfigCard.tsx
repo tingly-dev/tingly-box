@@ -12,6 +12,7 @@ import {
 import React, {type ReactNode } from 'react';
 import { ApiConfigRow } from './ApiConfigRow';
 import { BaseUrlRow } from './BaseUrlRow';
+import { CompactConfigCard } from './CompactConfigCard';
 import PluginFeatures from './PluginFeatures';
 
 export interface ConfigSectionProps {
@@ -64,6 +65,8 @@ export interface ProviderConfigCardProps {
     titleInfoTooltip?: string;
     /** Optional: custom label for base URL row */
     baseUrlLabel?: string;
+    /** Optional: use compact horizontal tab mode */
+    compact?: boolean;
     /** Container props */
     containerProps?: BoxProps;
 }
@@ -72,9 +75,13 @@ export interface ProviderConfigCardProps {
  * Unified provider configuration card component.
  * Provides a consistent layout for SDK configuration across all provider pages.
  *
- * Structure:
- * 1. Base URL row (always shown)
- * 2. API Key row (optional, shown by default)
+ * Modes:
+ * - Compact: Horizontal tab switching (Base URL | API Key) - saves vertical space
+ * - Standard: Vertical rows with Base URL and API Key sections
+ *
+ * Standard Structure:
+ * 1. Base URL row (when showBaseUrlRow=true)
+ * 2. API Key row (when showApiKeyRow=true)
  * 3. Divider
  * 4. Mode selection (optional, e.g., ClaudeCode)
  * 5. Experimental features (optional, when scenario is provided)
@@ -93,10 +100,58 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
     showBaseUrlRow = true,
     titleInfoTooltip,
     baseUrlLabel = 'Base URL',
+    compact = false,
     containerProps,
 }) => {
     const showOptionalSections = scenario || modeSelection || extraContent;
     const hasDivider = showApiKeyRow && showOptionalSections;
+
+    // Compact mode: single horizontal layout with tab switching
+    if (compact) {
+        return (
+            <Box {...containerProps}>
+                <Box sx={{ px: 2, py: 0.5 }}>
+                    <CompactConfigCard
+                        baseUrlPath={baseUrlPath}
+                        baseUrl={baseUrl}
+                        token={token}
+                        onCopy={onCopy}
+                        onShowTokenModal={onShowTokenModal}
+                        baseUrlLabel={baseUrlLabel}
+                        title={title}
+                    />
+                </Box>
+
+                {/* Divider - Between core config and optional sections */}
+                {showOptionalSections && (
+                    <Divider sx={{ mx: 2, mt: 1 }} />
+                )}
+
+                {/* Mode Selection - Optional */}
+                {modeSelection && (
+                    <Box sx={{ px: 2, pt: 1.5 }}>
+                        {modeSelection}
+                    </Box>
+                )}
+
+                {/* Extra Content - Optional */}
+                {extraContent && (
+                    <Box sx={{ px: 2, pt: 1.5 }}>
+                        {extraContent}
+                    </Box>
+                )}
+
+                {/* Scenario Features - Optional */}
+                {scenario && (
+                    <Box sx={{ px: 2, pt: 1.5 }}>
+                        <PluginFeatures scenario={scenario} />
+                    </Box>
+                )}
+            </Box>
+        );
+    }
+
+    // Standard mode: vertical rows
 
     return (
         <Box {...containerProps}>
