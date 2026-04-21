@@ -17,9 +17,8 @@ import (
 const DefaultSummaryFile = "harness-summary.csv"
 
 // summaryCSVColumns is the canonical column order of the summary CSV.
-// Schema is verbose on purpose — the file doubles as a forensic log of every
-// agent run, so we capture enough context (prompt, output, baseurl) to
-// reproduce or diagnose later, not just the on-screen Pass/Fail table.
+// The CSV contains only metadata; full prompt/output are written to
+// separate markdown files in harness-output/ and referenced by output_id.
 var summaryCSVColumns = []string{
 	"timestamp",
 	"agent",
@@ -31,9 +30,9 @@ var summaryCSVColumns = []string{
 	"status",
 	"duration_ms",
 	"exit_code",
-	"prompt",
-	"output",
-	"error",
+	"output_id",      // reference to output file in harness-output/
+	"prompt_summary", // first 50 chars of prompt
+	"error",          // kept short for in-CSV viewing
 }
 
 // summaryWriter persists per-row results to a CSV file as soon as each row
@@ -43,11 +42,13 @@ type summaryWriter struct {
 	path string
 	f    *os.File
 	w    *csv.Writer
+	ow   *outputWriter // output writer for full content
 }
 
 // openSummaryWriter opens (or creates) the summary CSV at path in append mode.
 // If the file is new or empty, the column header row is written first.
-func openSummaryWriter(path string) (*summaryWriter, error) {
+// Also initializes the output writer for full content files.
+func openSummaryWriter(path string, outputDir string) (*summaryWriter, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("open summary file %s: %w", path, err)
@@ -69,15 +70,35 @@ func openSummaryWriter(path string) (*summaryWriter, error) {
 			return nil, fmt.Errorf("flush summary header: %w", err)
 		}
 	}
-	return &summaryWriter{path: path, f: f, w: w}, nil
+
+	// Initialize output writer
+	ow, err := openOutputWriter(outputDir)
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("open output writer: %w", err)
+	}
+
+	return &summaryWriter{path: path, f: f, w: w, ow: ow}, nil
 }
 
 // Append writes one result row and flushes immediately so the row survives
-// abrupt termination.
+// abrupt termination. Full content is written to a separate file; only
+// metadata and a summary are written to the CSV.
 func (s *summaryWriter) Append(r *RealAgentTestResult) error {
 	if s == nil {
 		return nil
 	}
+
+	// Write full output to file
+	outputID := ""
+	if s.ow != nil {
+		id, err := s.ow.Write(r)
+		if err != nil {
+			return fmt.Errorf("write output file: %w", err)
+		}
+		outputID = id
+	}
+
 	status := "FAIL"
 	switch {
 	case r.Success:
@@ -85,6 +106,10 @@ func (s *summaryWriter) Append(r *RealAgentTestResult) error {
 	case r.TimedOut:
 		status = "TIMEOUT"
 	}
+
+	// Generate prompt summary (first 50 chars)
+	promptSummary := truncateString(r.Prompt, 50)
+
 	row := []string{
 		time.Now().Format(time.RFC3339),
 		r.Agent,
@@ -96,8 +121,8 @@ func (s *summaryWriter) Append(r *RealAgentTestResult) error {
 		status,
 		strconv.FormatInt(r.Duration.Milliseconds(), 10),
 		strconv.Itoa(r.ExitCode),
-		r.Prompt,
-		r.Output,
+		outputID,
+		promptSummary,
 		r.Error,
 	}
 	if err := s.w.Write(row); err != nil {
@@ -119,8 +144,10 @@ func (s *summaryWriter) Close() error {
 	s.w.Flush()
 	if err := s.w.Error(); err != nil {
 		_ = s.f.Close()
+		_ = s.ow.Close()
 		return err
 	}
+	_ = s.ow.Close()
 	return s.f.Close()
 }
 

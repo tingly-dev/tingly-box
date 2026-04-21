@@ -23,7 +23,8 @@ func newAgentCommand() *cobra.Command {
 	var useMock bool
 	var prompt string
 	var summaryFile string
-	var resume bool
+	var outputDir string
+	var resumeFrom string
 	var filter []string
 	var timeout time.Duration
 
@@ -83,7 +84,7 @@ Examples:
   harness agent batch  --config models.yaml
 
   # Resume an interrupted run (skips every (agent,entry) already in the CSV)
-  harness agent batch  --config models.yaml --resume
+  harness agent batch --config models.yaml --resume ""
 
   # Run only specific entries by name (real-provider mode)
   harness agent claude --config models.yaml --filter acme,beta
@@ -91,9 +92,11 @@ Examples:
 
 Persistence:
   Every run appends per-row results to harness-summary.csv in the working
-  directory (override with --summary <file>). Rows are flushed immediately, so
-  partial progress survives Ctrl-C / crashes. With --resume, any (agent,entry)
-  pair already recorded in the summary file is skipped.
+  directory (override with --summary <file>). Full prompt and output are written
+  to separate markdown files in harness-output/ (override with --output-dir <dir>).
+  Rows are flushed immediately, so partial progress survives Ctrl-C / crashes.
+  With --resume, any (agent,entry) pair already recorded in the summary file
+  is skipped. Output IDs use UUIDs, so no ID state management is needed.
 
 Timeouts:
   Each per-entry agent CLI invocation is capped by --timeout (default 2m). On
@@ -122,15 +125,21 @@ Generate a config template with: harness init-config`,
 			}
 
 			// Open durable summary writer and load resume keys before any work runs.
-			writer, err := openSummaryWriter(summaryFile)
+			// Note: --resume no longer needs to specify output directory since we use UUIDs.
+			writer, err := openSummaryWriter(summaryFile, outputDir)
 			if err != nil {
 				return err
 			}
 			defer writer.Close()
 			fmt.Printf("📒 Summary: %s (per-row, append-on-write)\n", summaryFile)
+			if outputDir != "" {
+				fmt.Printf("📁 Output: %s\n", outputDir)
+			} else {
+				fmt.Printf("📁 Output: %s\n", DefaultOutputDir)
+			}
 
 			var skip map[resumeKey]struct{}
-			if resume {
+			if resumeFrom != "" {
 				skip, err = loadResumeKeys(summaryFile)
 				if err != nil {
 					return err
@@ -164,7 +173,8 @@ Generate a config template with: harness init-config`,
 	cmd.Flags().StringVar(&configFile, "config", "", "Real-provider mode: path to provider config file (YAML or CSV)")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "Prompt to send (overrides positional arg and default)")
 	cmd.Flags().StringVar(&summaryFile, "summary", DefaultSummaryFile, "Path to CSV summary file (per-row results, written durably)")
-	cmd.Flags().BoolVar(&resume, "resume", false, "Skip (agent,entry) rows already recorded in the summary file")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for full output files (default: harness-output/)")
+	cmd.Flags().StringVar(&resumeFrom, "resume", "", "Resume from a previous run: skip recorded (agent,entry) pairs from the summary file (output IDs are UUIDs, no directory needed)")
 	cmd.Flags().StringSliceVar(&filter, "filter", nil, "Only run entries whose name matches (comma-separated or repeat; case-insensitive). Real-provider mode only.")
 	cmd.Flags().DurationVar(&timeout, "timeout", 2*time.Minute, "Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.")
 
