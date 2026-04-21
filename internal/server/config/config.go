@@ -1349,8 +1349,7 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 						cloned.UUID = uuid.New().String()
 						cloned.Scenario = profiledScenario
 						cloned.RequestModel = "cc" // Use "cc" for unified mode
-						// Clear services - users should configure their own
-						cloned.Services = nil
+						cloned.Services = nil      // cleared here (not at bottom) because unified path uses continue
 						cloned.SmartRouting = nil
 						c.Rules = append(c.Rules, cloned)
 					}
@@ -1388,8 +1387,9 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 	return meta, c.Save()
 }
 
-// UpdateProfile updates the name and/or mode of an existing profile.
-// Pass nil for unified to keep existing mode, or bool pointer to change it.
+// UpdateProfile updates the name of an existing profile.
+// The unified parameter is accepted for API compatibility but ignored — mode is
+// fixed at creation time. To switch modes, delete and recreate the profile.
 func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, name string, unified *bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1420,14 +1420,10 @@ func (c *Config) UpdateProfile(baseScenario typ.RuleScenario, profileID string, 
 
 	// Update fields
 	profiles[idx].Name = name
-	if unified != nil {
-		profiles[idx].Unified = *unified
-	}
-
-	// Note: Mode (unified/separate) is determined at profile creation time.
-	// Changing the mode field here only affects display, not the actual rules.
-	// To switch modes, users should delete and recreate the profile.
-	// This prevents confusion and data loss from rule reconstruction.
+	// Note: unified/separate mode is intentionally not updated here.
+	// Mode is fixed at profile creation time; to switch, delete and recreate.
+	// Accepting a unified flag change here would silently diverge the stored
+	// metadata from the actual rules, which are not rebuilt by this function.
 
 	return c.Save()
 }
