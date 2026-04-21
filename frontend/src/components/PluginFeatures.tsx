@@ -22,6 +22,7 @@ import {
 import type { SelectChangeEvent } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { ConfigRow } from './ConfigRow';
 
 export interface PluginFeaturesProps {
     scenario: string;
@@ -225,6 +226,141 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         loadData();
     }, [scenario]);
 
+    // Helper to render effort button
+    const renderEffortButton = () => {
+        const currentLevel = EFFORT_LEVELS.find(l => l.value === effort);
+        return (
+            <Tooltip title={`Effort: ${currentLevel?.label || 'Default'}`} placement="right" arrow>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(e) => !updating.effort && handleMenuOpen('effort', e)}
+                    disabled={updating.effort}
+                    endIcon={<IconChevronDown size={18} />}
+                    sx={{
+                        minWidth: 110,
+                        textTransform: 'none',
+                        bgcolor: effort && effort !== '' ? 'primary.main' : 'transparent',
+                        color: effort && effort !== '' ? 'primary.contrastText' : 'text.primary',
+                        border: effort && effort !== '' ? 'none' : '1px solid',
+                        borderColor: 'divider',
+                        opacity: updating.effort ? 0.6 : 1,
+                        '&:hover': {
+                            bgcolor: effort && effort !== '' ? 'primary.dark' : 'action.selected',
+                        },
+                    }}
+                >
+                    Effort: {currentLevel?.label || 'Default'}
+                </Button>
+            </Tooltip>
+        );
+    };
+
+    // Helper to render thinking mode button (claude_code only)
+    const renderThinkingModeButton = () => {
+        if (baseScenario !== 'claude_code') return null;
+        const currentMode = THINKING_MODES.find(m => m.value === thinkingMode);
+        return (
+            <Tooltip title={`Mode: ${currentMode?.label || 'Default'}`} placement="right" arrow>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(e) => !updating.thinkingMode && handleMenuOpen('thinkingMode', e)}
+                    disabled={updating.thinkingMode}
+                    endIcon={<IconChevronDown size={18} />}
+                    sx={{
+                        minWidth: 110,
+                        textTransform: 'none',
+                        bgcolor: thinkingMode && thinkingMode !== 'default' ? 'primary.main' : 'transparent',
+                        color: thinkingMode && thinkingMode !== 'default' ? 'primary.contrastText' : 'text.primary',
+                        border: thinkingMode && thinkingMode !== 'default' ? 'none' : '1px solid',
+                        borderColor: 'divider',
+                        opacity: updating.thinkingMode ? 0.6 : 1,
+                        '&:hover': {
+                            bgcolor: thinkingMode && thinkingMode !== 'default' ? 'primary.dark' : 'action.selected',
+                        },
+                    }}
+                >
+                    Mode: {currentMode?.label || 'Default'}
+                </Button>
+            </Tooltip>
+        );
+    };
+
+    // Helper to render plugin feature buttons
+    const renderPluginButtons = () => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {visibleFeatures.map((feature) => {
+                const isEnabled = features[feature.key] || false;
+                const isUpdating = updating[feature.key] || false;
+                return (
+                    <Tooltip key={feature.key} title={`${feature.label}: ${feature.description} (${isEnabled ? 'On' : 'Off'})`} placement="right" arrow>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={(e) => !isUpdating && handleMenuOpen(feature.key, e)}
+                            disabled={isUpdating}
+                            endIcon={<IconChevronDown size={18} />}
+                            sx={{
+                                minWidth: 100,
+                                textTransform: 'none',
+                                bgcolor: isEnabled ? 'primary.main' : 'transparent',
+                                color: isEnabled ? 'primary.contrastText' : 'text.primary',
+                                fontWeight: isEnabled ? 600 : 400,
+                                border: isEnabled ? 'none' : '1px solid',
+                                borderColor: 'divider',
+                                opacity: isUpdating ? 0.6 : 1,
+                                '&:hover': {
+                                    bgcolor: isEnabled ? 'primary.dark' : 'action.selected',
+                                },
+                            }}
+                        >
+                            {feature.label}: {isEnabled ? 'On' : 'Off'}
+                        </Button>
+                    </Tooltip>
+                );
+            })}
+        </Box>
+    );
+
+    // Helper to render record V2 button
+    const renderRecordV2Button = () => {
+        const currentRecordMode = RECORD_V2_MODES.find(m => m.value === recordV2Mode);
+        const isRecordV2Enabled = recordV2Mode !== '';
+        const isUpdatingRecordV2 = updating.recordV2 || false;
+        return (
+            <Tooltip
+                title={`Recording V2: ${currentRecordMode?.description || 'Disabled'}${isRecordV2Enabled ? ' (enabled)' : ' (disabled)'}`}
+                placement="right"
+                arrow
+            >
+                <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(e) => !isUpdatingRecordV2 && handleMenuOpen('recordV2', e)}
+                    disabled={isUpdatingRecordV2}
+                    endIcon={<IconChevronDown size={18} />}
+                    sx={{
+                        minWidth: 110,
+                        textTransform: 'none',
+                        bgcolor: isRecordV2Enabled ? 'primary.main' : 'transparent',
+                        color: isRecordV2Enabled ? 'primary.contrastText' : 'text.primary',
+                        fontWeight: isRecordV2Enabled ? 600 : 400,
+                        border: isRecordV2Enabled ? 'none' : '1px solid',
+                        borderColor: 'divider',
+                        opacity: isUpdatingRecordV2 ? 0.6 : 1,
+                        '&:hover': {
+                            bgcolor: isRecordV2Enabled ? 'primary.dark' : 'action.selected',
+                        },
+                    }}
+                >
+                    <IconCircleFilled size={14} style={{ marginRight: '4px' }} />
+                    Record: {currentRecordMode?.label || 'Off'}
+                </Button>
+            </Tooltip>
+        );
+    };
+
     if (loading) {
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', py: 2, gap: 2, alignItems: 'center', justifyContent: 'center', minHeight: 100 }}>
@@ -235,273 +371,175 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     }
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', py: 2, gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {/* Thinking Row */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <Tooltip title="Thinking configuration" arrow>
-                        <IconBrain size={16} style={{ color: 'var(--mui-palette-text-secondary)' }} />
-                    </Tooltip>
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        Thinking
-                    </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                    {/* Thinking Effort */}
-                    <Tooltip title={`Effort: ${EFFORT_LEVELS.find(l => l.value === effort)?.label || 'Default'}`} placement="right" arrow>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={(e) => !updating.effort && handleMenuOpen('effort', e)}
-                            disabled={updating.effort}
-                            endIcon={<IconChevronDown size={18} />}
-                            sx={{
-                                minWidth: 110,
-                                textTransform: 'none',
-                                bgcolor: effort && effort !== '' ? 'primary.main' : 'transparent',
-                                color: effort && effort !== '' ? 'primary.contrastText' : 'text.primary',
-                                border: effort && effort !== '' ? 'none' : '1px solid',
-                                borderColor: 'divider',
-                                opacity: updating.effort ? 0.6 : 1,
-                                '&:hover': {
-                                    bgcolor: effort && effort !== '' ? 'primary.dark' : 'action.selected',
-                                },
-                            }}
-                        >
-                            Effort: {EFFORT_LEVELS.find(l => l.value === effort)?.label || 'Default'}
-                        </Button>
-                    </Tooltip>
-                    <Menu
-                        anchorEl={menuAnchor['effort']}
-                        open={Boolean(menuAnchor['effort'])}
-                        onClose={() => handleMenuClose('effort')}
-                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                    >
-                        {EFFORT_LEVELS.map((level) => (
-                            <MenuItem
-                                key={level.value}
-                                selected={level.value === effort}
-                                onClick={() => {
-                                    setEffortLevel(level.value);
-                                    handleMenuClose('effort');
-                                }}
-                            >
-                                <Tooltip title={level.description} placement="right" arrow>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                        <ListItemText>{level.label}</ListItemText>
-                                        {level.value === effort && <IconCheck size={16} />}
-                                    </Box>
-                                </Tooltip>
-                            </MenuItem>
-                        ))}
-                    </Menu>
-
-                    {/* Thinking Mode (claude_code only) */}
-                    {baseScenario === 'claude_code' && (
-                        <>
-                            <Tooltip title={`Mode: ${THINKING_MODES.find(m => m.value === thinkingMode)?.label || 'Default'}`} placement="right" arrow>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={(e) => !updating.thinkingMode && handleMenuOpen('thinkingMode', e)}
-                                    disabled={updating.thinkingMode}
-                                    endIcon={<IconChevronDown size={18} />}
-                                    sx={{
-                                        minWidth: 110,
-                                        textTransform: 'none',
-                                        bgcolor: thinkingMode && thinkingMode !== 'default' ? 'primary.main' : 'transparent',
-                                        color: thinkingMode && thinkingMode !== 'default' ? 'primary.contrastText' : 'text.primary',
-                                        border: thinkingMode && thinkingMode !== 'default' ? 'none' : '1px solid',
-                                        borderColor: 'divider',
-                                        opacity: updating.thinkingMode ? 0.6 : 1,
-                                        '&:hover': {
-                                            bgcolor: thinkingMode && thinkingMode !== 'default' ? 'primary.dark' : 'action.selected',
-                                        },
-                                    }}
-                                >
-                                    Mode: {THINKING_MODES.find(m => m.value === thinkingMode)?.label || 'Default'}
-                                </Button>
-                            </Tooltip>
-                            <Menu
-                                anchorEl={menuAnchor['thinkingMode']}
-                                open={Boolean(menuAnchor['thinkingMode'])}
-                                onClose={() => handleMenuClose('thinkingMode')}
-                                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                            >
-                                {THINKING_MODES.map((mode) => {
-                                    const Icon = mode.icon;
-                                    return (
-                                        <MenuItem
-                                            key={mode.value}
-                                            selected={mode.value === thinkingMode}
-                                            onClick={() => {
-                                                updateThinkingMode(mode.value);
-                                                handleMenuClose('thinkingMode');
-                                            }}
-                                        >
-                                            <Tooltip title={mode.description} placement="right" arrow>
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                                                    <ListItemIcon sx={{ mr: -1 }}>
-                                                        <Icon size={16} />
-                                                    </ListItemIcon>
-                                                    <ListItemText>{mode.label}</ListItemText>
-                                                    {mode.value === thinkingMode && <IconCheck size={16} />}
-                                                </Box>
-                                            </Tooltip>
-                                        </MenuItem>
-                                    );
-                                })}
-                            </Menu>
-                        </>
-                    )}
-                </Box>
-            </Box>
+            <ConfigRow
+                tabs={[
+                    {
+                        key: 'thinking',
+                        label: 'Thinking',
+                        content: (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                {renderEffortButton()}
+                                {renderThinkingModeButton()}
+                            </Box>
+                        ),
+                    },
+                ]}
+                activeTab="thinking"
+                onTabChange={() => {}}
+            />
 
             {/* Plugin Features Row */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <Tooltip title="Plugin Features Control" arrow>
-                        <IconFlask size={16} style={{ color: 'var(--mui-palette-text-secondary)' }} />
-                    </Tooltip>
-                    <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        Plugin
-                    </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
-                    {visibleFeatures.map((feature) => {
-                        const isEnabled = features[feature.key] || false;
-                        const isUpdating = updating[feature.key] || false;
-                        const anchorEl = menuAnchor[feature.key];
-                        return (
-                            <Box key={feature.key}>
-                                <Tooltip title={`${feature.label}: ${feature.description} (${isEnabled ? 'On' : 'Off'})`} placement="right" arrow>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={(e) => !isUpdating && handleMenuOpen(feature.key, e)}
-                                        disabled={isUpdating}
-                                        endIcon={<IconChevronDown size={18} />}
-                                        sx={{
-                                            minWidth: 100,
-                                            textTransform: 'none',
-                                            bgcolor: isEnabled ? 'primary.main' : 'transparent',
-                                            color: isEnabled ? 'primary.contrastText' : 'text.primary',
-                                            fontWeight: isEnabled ? 600 : 400,
-                                            border: isEnabled ? 'none' : '1px solid',
-                                            borderColor: 'divider',
-                                            opacity: isUpdating ? 0.6 : 1,
-                                            '&:hover': {
-                                                bgcolor: isEnabled ? 'primary.dark' : 'action.selected',
-                                            },
-                                        }}
-                                    >
-                                        {feature.label}: {isEnabled ? 'On' : 'Off'}
-                                    </Button>
-                                </Tooltip>
-                                <Menu
-                                    anchorEl={anchorEl}
-                                    open={Boolean(anchorEl)}
-                                    onClose={() => handleMenuClose(feature.key)}
-                                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                                >
-                                    <Tooltip title={feature.description} placement="right" arrow>
-                                        <MenuItem
-                                            selected={isEnabled}
-                                            onClick={() => {
-                                                setFeature(feature.key, true);
-                                                handleMenuClose(feature.key);
-                                            }}
-                                            sx={{ width: '100%' }}
-                                        >
-                                            <ListItemText>On</ListItemText>
-                                            {isEnabled && <IconCheck size={16} />}
-                                        </MenuItem>
-                                    </Tooltip>
-                                    <Tooltip title={feature.description} placement="right" arrow>
-                                        <MenuItem
-                                            selected={!isEnabled}
-                                            onClick={() => {
-                                                setFeature(feature.key, false);
-                                                handleMenuClose(feature.key);
-                                            }}
-                                            sx={{ width: '100%' }}
-                                        >
-                                            <ListItemText>Off</ListItemText>
-                                            {!isEnabled && <IconCheck size={16} />}
-                                        </MenuItem>
-                                    </Tooltip>
-                                </Menu>
+            <ConfigRow
+                tabs={[
+                    {
+                        key: 'plugin',
+                        label: 'Plugin',
+                        content: (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                {renderPluginButtons()}
+                                {renderRecordV2Button()}
                             </Box>
-                        );
-                    })}
+                        ),
+                    },
+                ]}
+                activeTab="plugin"
+                onTabChange={() => {}}
+            />
 
-                    {/* Record V2 */}
-                    {(() => {
-                        const currentRecordMode = RECORD_V2_MODES.find(m => m.value === recordV2Mode);
-                        const isRecordV2Enabled = recordV2Mode !== '';
-                        const isUpdatingRecordV2 = updating.recordV2 || false;
-                        return (
-                            <Tooltip
-                                title={`Recording V2: ${currentRecordMode?.description || 'Disabled'}${isRecordV2Enabled ? ' (enabled)' : ' (disabled)'}`}
-                                placement="right"
-                                arrow
-                            >
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={(e) => !isUpdatingRecordV2 && handleMenuOpen('recordV2', e)}
-                                    disabled={isUpdatingRecordV2}
-                                    endIcon={<IconChevronDown size={18} />}
-                                    sx={{
-                                        minWidth: 110,
-                                        textTransform: 'none',
-                                        bgcolor: isRecordV2Enabled ? 'primary.main' : 'transparent',
-                                        color: isRecordV2Enabled ? 'primary.contrastText' : 'text.primary',
-                                        fontWeight: isRecordV2Enabled ? 600 : 400,
-                                        border: isRecordV2Enabled ? 'none' : '1px solid',
-                                        borderColor: 'divider',
-                                        opacity: isUpdatingRecordV2 ? 0.6 : 1,
-                                        '&:hover': {
-                                            bgcolor: isRecordV2Enabled ? 'primary.dark' : 'action.selected',
-                                        },
-                                    }}
-                                >
-                                    <IconCircleFilled size={14} style={{ marginRight: '4px' }} />
-                                    Record: {currentRecordMode?.label || 'Off'}
-                                </Button>
-                            </Tooltip>
-                        );
-                    })()}
-                    <Menu
-                        anchorEl={menuAnchor['recordV2']}
-                        open={Boolean(menuAnchor['recordV2'])}
-                        onClose={() => handleMenuClose('recordV2')}
-                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            {/* Menus */}
+            {/* Effort Menu */}
+            <Menu
+                anchorEl={menuAnchor['effort']}
+                open={Boolean(menuAnchor['effort'])}
+                onClose={() => handleMenuClose('effort')}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+                {EFFORT_LEVELS.map((level) => (
+                    <MenuItem
+                        key={level.value}
+                        selected={level.value === effort}
+                        onClick={() => {
+                            setEffortLevel(level.value);
+                            handleMenuClose('effort');
+                        }}
                     >
-                        {RECORD_V2_MODES.map((mode) => (
+                        <Tooltip title={level.description} placement="right" arrow>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                <ListItemText>{level.label}</ListItemText>
+                                {level.value === effort && <IconCheck size={16} />}
+                            </Box>
+                        </Tooltip>
+                    </MenuItem>
+                ))}
+            </Menu>
+
+            {/* Thinking Mode Menu */}
+            {baseScenario === 'claude_code' && (
+                <Menu
+                    anchorEl={menuAnchor['thinkingMode']}
+                    open={Boolean(menuAnchor['thinkingMode'])}
+                    onClose={() => handleMenuClose('thinkingMode')}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                >
+                    {THINKING_MODES.map((mode) => {
+                        const Icon = mode.icon;
+                        return (
                             <MenuItem
                                 key={mode.value}
-                                selected={mode.value === recordV2Mode}
+                                selected={mode.value === thinkingMode}
                                 onClick={() => {
-                                    handleRecordV2Change({ target: { value: mode.value } } as SelectChangeEvent<string>);
-                                    handleMenuClose('recordV2');
+                                    updateThinkingMode(mode.value);
+                                    handleMenuClose('thinkingMode');
                                 }}
                             >
                                 <Tooltip title={mode.description} placement="right" arrow>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                        <ListItemIcon sx={{ mr: -1 }}>
+                                            <Icon size={16} />
+                                        </ListItemIcon>
                                         <ListItemText>{mode.label}</ListItemText>
-                                        {mode.value === recordV2Mode && <IconCheck size={16} />}
+                                        {mode.value === thinkingMode && <IconCheck size={16} />}
                                     </Box>
                                 </Tooltip>
                             </MenuItem>
-                        ))}
+                        );
+                    })}
+                </Menu>
+            )}
+
+            {/* Plugin Feature Menus */}
+            {visibleFeatures.map((feature) => {
+                const isEnabled = features[feature.key] || false;
+                const anchorEl = menuAnchor[feature.key];
+                return (
+                    <Menu
+                        key={feature.key}
+                        anchorEl={anchorEl}
+                        open={Boolean(anchorEl)}
+                        onClose={() => handleMenuClose(feature.key)}
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                    >
+                        <Tooltip title={feature.description} placement="right" arrow>
+                            <MenuItem
+                                selected={isEnabled}
+                                onClick={() => {
+                                    setFeature(feature.key, true);
+                                    handleMenuClose(feature.key);
+                                }}
+                                sx={{ width: '100%' }}
+                            >
+                                <ListItemText>On</ListItemText>
+                                {isEnabled && <IconCheck size={16} />}
+                            </MenuItem>
+                        </Tooltip>
+                        <Tooltip title={feature.description} placement="right" arrow>
+                            <MenuItem
+                                selected={!isEnabled}
+                                onClick={() => {
+                                    setFeature(feature.key, false);
+                                    handleMenuClose(feature.key);
+                                }}
+                                sx={{ width: '100%' }}
+                            >
+                                <ListItemText>Off</ListItemText>
+                                {!isEnabled && <IconCheck size={16} />}
+                            </MenuItem>
+                        </Tooltip>
                     </Menu>
-                </Box>
-            </Box>
+                );
+            })}
+
+            {/* Record V2 Menu */}
+            <Menu
+                anchorEl={menuAnchor['recordV2']}
+                open={Boolean(menuAnchor['recordV2'])}
+                onClose={() => handleMenuClose('recordV2')}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+                {RECORD_V2_MODES.map((mode) => (
+                    <MenuItem
+                        key={mode.value}
+                        selected={mode.value === recordV2Mode}
+                        onClick={() => {
+                            handleRecordV2Change({ target: { value: mode.value } } as SelectChangeEvent<string>);
+                            handleMenuClose('recordV2');
+                        }}
+                    >
+                        <Tooltip title={mode.description} placement="right" arrow>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                                <ListItemText>{mode.label}</ListItemText>
+                                {mode.value === recordV2Mode && <IconCheck size={16} />}
+                            </Box>
+                        </Tooltip>
+                    </MenuItem>
+                ))}
+            </Menu>
         </Box>
     );
 };
