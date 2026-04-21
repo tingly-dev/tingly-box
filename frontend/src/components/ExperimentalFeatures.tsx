@@ -58,7 +58,7 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
             setFeatures(newFeatures);
 
             // Load Record V2 mode (string flag)
-            const recordV2Result = await api.getScenarioStringFlag(scenario, 'record_v2');
+            const recordV2Result = await api.getScenarioStringFlag(scenario, 'recording_v2');
             setRecordV2Mode(recordV2Result?.data?.value || '');
         } catch (error) {
             console.error('Failed to load experimental features:', error);
@@ -89,17 +89,17 @@ const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario })
     const handleRecordV2Change = (event: SelectChangeEvent<string>) => {
         const newMode = event.target.value;
         console.log('Record V2 mode changed:', newMode);
-        api.setScenarioStringFlag(scenario, 'record_v2', newMode)
+        api.setScenarioStringFlag(scenario, 'recording_v2', newMode)
             .then((result) => {
                 if (result.success) {
                     setRecordV2Mode(newMode);
                 } else {
-                    console.error('Failed to set record_v2 mode:', result);
+                    console.error('Failed to set recording_v2 mode:', result);
                     loadFeatures();
                 }
             })
             .catch((err) => {
-                console.error('Failed to set record_v2 mode:', err);
+                console.error('Failed to set recording_v2 mode:', err);
                 loadFeatures();
             });
     };

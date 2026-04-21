@@ -1493,8 +1493,6 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.Smart
 	case "smart_compact":
 		return flags.SmartCompact
-	case "recording":
-		return flags.Recording
 	case "disable_stream_usage":
 		return flags.DisableStreamUsage
 	case "clean_header":
@@ -1559,8 +1557,6 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.Smart = value
 	case "smart_compact":
 		config.Flags.SmartCompact = value
-	case "recording":
-		config.Flags.Recording = value
 	case "disable_stream_usage":
 		config.Flags.DisableStreamUsage = value
 	case "clean_header":
@@ -1605,11 +1601,11 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	flags := config.GetDefaultFlags()
 	switch flagName {
 	case "thinking_effort":
-		return string(flags.ThinkingEffort)
+		return flags.ThinkingEffort
 	case "thinking_mode":
 		return flags.ThinkingMode
-	case "record_v2":
-		return string(flags.RecordV2)
+	case "recording_v2":
+		return string(flags.RecordingV2)
 	default:
 		return ""
 	}
@@ -1646,11 +1642,11 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
 	case "thinking_mode":
 		config.Flags.ThinkingMode = value
-	case "record_v2":
+	case "recording_v2":
 		if !typ.IsValidRecordingMode(value) {
-			return fmt.Errorf("invalid record_v2 value: %s (must be one of: request, response, request_response, or empty)", value)
+			return fmt.Errorf("invalid recording_v2 value: %s (must be one of: request, response, request_response, or empty)", value)
 		}
-		config.Flags.RecordV2 = typ.RecordingMode(value)
+		config.Flags.RecordingV2 = typ.RecordingMode(value)
 	default:
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}
@@ -1738,8 +1734,8 @@ func (c *Config) GetScenarioRecordingMode(scenario typ.RuleScenario) typ.Recordi
 
 	flags := config.GetDefaultFlags()
 
-	if flags.RecordV2 != typ.RecordingModeDisabled {
-		return flags.RecordV2
+	if flags.RecordingV2 != typ.RecordingModeDisabled {
+		return flags.RecordingV2
 	}
 
 	return typ.RecordingModeDisabled

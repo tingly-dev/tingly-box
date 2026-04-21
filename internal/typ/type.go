@@ -135,8 +135,7 @@ type ScenarioFlags struct {
 
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
-	Recording    bool          `json:"recording,omitempty" yaml:"recording,omitempty"`           // Enable scenario recording (legacy boolean flag)
-	RecordV2     RecordingMode `json:"record_v2,omitempty" yaml:"record_v2,omitempty"`           // Enable scenario recording V2 (request/response/request_response)
+	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`     // Enable scenario recording V2 (request/response/request_response)
 	Beta         bool          `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
 
 	// Stream configuration flags

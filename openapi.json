@@ -7679,9 +7679,9 @@
             "type": "boolean",
             "description": "Field disable_stream_usage"
           },
-          "record_v2": {
+          "recording_v2": {
             "type": "string",
-            "description": "Field record_v2"
+            "description": "Field recording_v2"
           },
           "recording": {
             "type": "boolean",

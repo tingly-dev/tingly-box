@@ -109,7 +109,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             setFeatures(newFeatures);
 
             // Load Record V2 mode (string flag)
-            const recordV2Result = await api.getScenarioStringFlag(scenario, 'record_v2');
+            const recordV2Result = await api.getScenarioStringFlag(scenario, 'recording_v2');
             if (recordV2Result?.success && recordV2Result?.data?.value !== undefined) {
                 setRecordV2Mode(recordV2Result.data.value);
             }
@@ -203,17 +203,17 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
 
         setUpdating(prev => ({ ...prev, recordV2: true }));
 
-        api.setScenarioStringFlag(scenario, 'record_v2', newMode)
+        api.setScenarioStringFlag(scenario, 'recording_v2', newMode)
             .then((result) => {
                 if (result.success) {
                     setRecordV2Mode(newMode);
                 } else {
-                    console.error('Failed to set record_v2 mode:', result);
+                    console.error('Failed to set recording_v2 mode:', result);
                     loadData();
                 }
             })
             .catch((err) => {
-                console.error('Failed to set record_v2 mode:', err);
+                console.error('Failed to set recording_v2 mode:', err);
                 loadData();
             })
             .finally(() => {
