@@ -16,10 +16,8 @@ import (
 
 // AnthropicMessagesV1 implements standard v1 messages API
 func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
-	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
-	var recorder *ProtocolRecorder
+
 	scenarioType := rule.GetScenario()
-	recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
 
 	// Check if streaming is requested
 	isStreaming := req.Stream
@@ -74,12 +72,15 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 	}
 
+	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
+	var recorder *ProtocolRecorder
+	if s.ApplyRecording(scenarioType) {
+		recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
+	}
+
 	reqCtx, err := s.transformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
 		return
 	}
 

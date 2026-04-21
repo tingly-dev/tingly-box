@@ -19,10 +19,7 @@ import (
 // AnthropicMessagesV1Beta implements beta messages API
 func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, proxyModel string, provider *typ.Provider, actualModel string, rule *typ.Rule) {
 
-	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
-	var recorder *ProtocolRecorder
 	scenarioType := rule.GetScenario()
-	recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
 
 	// Check if streaming is requested
 	isStreaming := req.Stream
@@ -81,12 +78,15 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		}
 	}
 
+	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
+	var recorder *ProtocolRecorder
+	if s.ApplyRecording(scenarioType) {
+		recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
+	}
+
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
 		return
 	}
 
