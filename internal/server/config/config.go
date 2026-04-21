@@ -1349,6 +1349,9 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 						cloned.UUID = uuid.New().String()
 						cloned.Scenario = profiledScenario
 						cloned.RequestModel = "cc" // Use "cc" for unified mode
+						// Clear services - users should configure their own
+						cloned.Services = nil
+						cloned.SmartRouting = nil
 						c.Rules = append(c.Rules, cloned)
 					}
 					// Skip individual model rules (haiku, sonnet, opus, default, subagent)
@@ -1372,9 +1375,12 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 				if !unified {
 					continue
 				}
-				// For unified mode, rename to "*"
-				cloned.RequestModel = "*"
+				// For unified mode, rename to "cc"
+				cloned.RequestModel = "cc"
 			}
+			// Clear services and smart routing - users should configure their own
+			cloned.Services = nil
+			cloned.SmartRouting = nil
 			c.Rules = append(c.Rules, cloned)
 		}
 	}
