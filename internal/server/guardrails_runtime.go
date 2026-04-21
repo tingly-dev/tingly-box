@@ -274,6 +274,34 @@ func (s *Server) attachGuardrailsHooks(c *gin.Context, hc *protocol.HandleContex
 	}
 }
 
+// reattachGuardrailsHooks resets per-round guardrails state and re-registers fresh
+// hooks on hc for the next MCP loop round. It truncates OnStreamEventHooks back to
+// baseEventHooks (the count before guardrails was first attached) so previous-round
+// guardrails hooks don't accumulate.
+func (s *Server) reattachGuardrailsHooks(
+	c *gin.Context,
+	hc *protocol.HandleContext,
+	actualModel string,
+	provider *typ.Provider,
+	messages []guardrailscore.Message,
+	baseEventHooks int,
+	baseErrorHooks int,
+) {
+	// Truncate back to pre-guardrails hooks
+	if len(hc.OnStreamEventHooks) > baseEventHooks {
+		hc.OnStreamEventHooks = hc.OnStreamEventHooks[:baseEventHooks]
+	}
+	if len(hc.OnStreamErrorHooks) > baseErrorHooks {
+		hc.OnStreamErrorHooks = hc.OnStreamErrorHooks[:baseErrorHooks]
+	}
+	// Reset stream accumulator state so the new round starts clean
+	if hc.Guardrails != nil {
+		hc.Guardrails.Stream = nil
+	}
+	// Re-attach with a fresh accumulator
+	s.attachGuardrailsHooks(c, hc, actualModel, provider, messages)
+}
+
 // ----------------------------------------------------------------------
 // Request Guardrails
 // ----------------------------------------------------------------------

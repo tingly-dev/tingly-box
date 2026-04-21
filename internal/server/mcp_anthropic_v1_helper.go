@@ -120,7 +120,7 @@ func (s *Server) runGenericOpenAIChatNonStream(
 		forwarder,
 		toolExecutor,
 		pendingManager,
-		mcp.InterceptorConfig{MaxRounds: 6},
+		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
 	response, err := processor.Run(req)
@@ -169,7 +169,7 @@ func (s *Server) runGenericAnthropicV1NonStream(
 		forwarder,
 		toolExecutor,
 		pendingManager,
-		mcp.InterceptorConfig{MaxRounds: 6},
+		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
 	response, err := processor.Run(req)
@@ -218,7 +218,7 @@ func (s *Server) runGenericAnthropicBetaNonStream(
 		forwarder,
 		toolExecutor,
 		pendingManager,
-		mcp.InterceptorConfig{MaxRounds: 6},
+		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
 	response, err := processor.Run(req)
@@ -288,7 +288,7 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 		forwarder,
 		toolExecutor,
 		pendingManager,
-		mcp.InterceptorConfig{MaxRounds: 6},
+		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
 	// Run processor
@@ -390,9 +390,18 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 
 	// Response guardrails
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if s.guardrailsEnabledForScenario(scenario) {
+	guardrailsEnabled := s.guardrailsEnabledForScenario(scenario)
+	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
+	if guardrailsEnabled {
 		hc.EnsureGuardrails().Enabled = true
-		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages))
+		messages := guardrailsadapter.AdaptMessagesFromAnthropicV1(req.System, req.Messages)
+		baseEventHooks := len(hc.OnStreamEventHooks)
+		baseErrorHooks := len(hc.OnStreamErrorHooks)
+		s.attachGuardrailsHooks(c, hc, actualModel, provider, messages)
+		interceptorCfg.OnBeforeRound = func(round int) error {
+			s.reattachGuardrailsHooks(c, hc, actualModel, provider, messages, baseEventHooks, baseErrorHooks)
+			return nil
+		}
 	}
 
 	// Create and run generic interceptor
@@ -405,7 +414,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 		recorderAdapter,
 		adapter,
 		forwarder,
-		mcp.InterceptorConfig{MaxRounds: 6},
+		interceptorCfg,
 	)
 	interceptor.SetPendingResultsManager(pendingManager)
 
@@ -516,7 +525,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 		recorderAdapter,
 		adapter,
 		forwarder,
-		mcp.InterceptorConfig{MaxRounds: 6},
+		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 	interceptor.SetPendingResultsManager(pendingManager)
 
@@ -625,9 +634,18 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Response guardrails
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
-	if s.guardrailsEnabledForScenario(scenario) {
+	guardrailsEnabled := s.guardrailsEnabledForScenario(scenario)
+	interceptorCfg := mcp.InterceptorConfig{MaxRounds: 3, EnableGuardrails: guardrailsEnabled}
+	if guardrailsEnabled {
 		hc.EnsureGuardrails().Enabled = true
-		s.attachGuardrailsHooks(c, hc, actualModel, provider, guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages))
+		messages := guardrailsadapter.AdaptMessagesFromAnthropicV1Beta(req.System, req.Messages)
+		baseEventHooks := len(hc.OnStreamEventHooks)
+		baseErrorHooks := len(hc.OnStreamErrorHooks)
+		s.attachGuardrailsHooks(c, hc, actualModel, provider, messages)
+		interceptorCfg.OnBeforeRound = func(round int) error {
+			s.reattachGuardrailsHooks(c, hc, actualModel, provider, messages, baseEventHooks, baseErrorHooks)
+			return nil
+		}
 	}
 
 	// Create and run generic interceptor
@@ -640,7 +658,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 		recorderAdapter,
 		adapter,
 		forwarder,
-		mcp.InterceptorConfig{MaxRounds: 6},
+		interceptorCfg,
 	)
 	interceptor.SetPendingResultsManager(pendingManager)
 
