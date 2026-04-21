@@ -29,16 +29,28 @@ func printTable(results []protocol_validate.TestResult, verbose int) {
 		runtime.Version(),
 		time.Now().Format("2006-01-02 15:04:05"))
 
-	// Table header
-	fmt.Fprintln(w, "Scenario\tSource\tTarget\tStreaming\tStatus\tDuration")
-	fmt.Fprintln(w, "--------\t------\t------\t---------\t------\t--------")
+	// Table header - always show Duration (ms) for consistency
+	fmt.Fprintln(w, "Scenario\tSource\tTarget\tStreaming\tStatus\tDuration (ms)")
+	fmt.Fprintln(w, "--------\t------\t------\t---------\t------\t-------------")
 
 	for _, r := range results {
-		status := "✓ PASS"
+		// Unified status format: always show N/M
+		batchCount := r.BatchCount
+		if batchCount == 0 {
+			batchCount = 1
+		}
+		batchPassed := r.BatchPassed
+		if batchPassed == 0 && r.Passed {
+			batchPassed = batchCount
+		}
+
+		var status string
 		if r.Skipped {
 			status = fmt.Sprintf("⊘ SKIP: %s", truncateString(r.SkipReason, 30))
-		} else if !r.Passed {
-			status = "✗ FAIL"
+		} else if r.Passed {
+			status = fmt.Sprintf("✓ PASS %d/%d", batchPassed, batchCount)
+		} else {
+			status = fmt.Sprintf("✗ FAIL %d/%d", batchPassed, batchCount)
 		}
 
 		streaming := "no"
@@ -46,13 +58,27 @@ func printTable(results []protocol_validate.TestResult, verbose int) {
 			streaming = "yes"
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-			r.Scenario,
-			r.Source,
-			r.Target,
-			streaming,
-			status,
-			r.Duration.Round(time.Millisecond))
+		if batchCount > 1 {
+			// Batch mode: show min/avg/max
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\tmin:%s avg:%s max:%s\n",
+				r.Scenario,
+				r.Source,
+				r.Target,
+				streaming,
+				status,
+				r.BatchMinDur.Round(time.Millisecond),
+				r.BatchAvgDur.Round(time.Millisecond),
+				r.BatchMaxDur.Round(time.Millisecond))
+		} else {
+			// Single mode (batch=1): show just the duration
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				r.Scenario,
+				r.Source,
+				r.Target,
+				streaming,
+				status,
+				r.Duration.Round(time.Millisecond))
+		}
 	}
 
 	w.Flush()

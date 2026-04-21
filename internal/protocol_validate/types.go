@@ -76,8 +76,8 @@ type Assertion struct {
 // This is returned by Matrix.ExecuteAll() for CLI and other non-testing contexts.
 type TestResult struct {
 	// Test identification
-	Name      string        // Full test name: "scenario/source/target/mode"
-	Scenario  string        // Scenario name: "text", "tool_use", etc.
+	Name      string // Full test name: "scenario/source/target/mode"
+	Scenario  string // Scenario name: "text", "tool_use", etc.
 	Source    protocol.APIType
 	Target    protocol.APIType
 	Streaming bool
@@ -91,9 +91,17 @@ type TestResult struct {
 	Errors   []AssertionError // list of assertion failures
 	Duration time.Duration    // test execution time
 
+	// Batch statistics (populated when BatchCount > 1)
+	BatchCount  int           // number of times the test was executed
+	BatchPassed int           // number of executions that passed
+	BatchMinDur time.Duration // minimum duration across executions
+	BatchAvgDur time.Duration // average duration across executions
+	BatchMaxDur time.Duration // maximum duration across executions
+	BatchErrors []string      // unique error messages from failed executions
+
 	// Response details (for debugging/verbose output)
 	HTTPStatus int              // HTTP status code
-	Response   *RoundTripResult // full round-trip result
+	Response   *RoundTripResult // full round-trip result (from first or last execution)
 }
 
 // AssertionError represents a single assertion failure.

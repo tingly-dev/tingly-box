@@ -18,6 +18,8 @@ type matrixOptions struct {
 	jsonOutput bool
 	verbose    int
 	recordDir  string // Directory for recording requests/responses
+	serverMode string // Server reuse mode: auto (per-scenario), all, pair
+	batchCount int    // Number of times to run each test (for batch testing)
 }
 
 // newMatrixCommand creates the matrix test subcommand.
@@ -66,6 +68,8 @@ Use flags to filter specific combinations.`,
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "Output results as JSON")
 	cmd.Flags().CountVarP(&opts.verbose, "verbose", "v", "Verbose output (can repeat for more detail)")
 	cmd.Flags().StringVar(&opts.recordDir, "record-dir", os.Getenv("HARNESS_RECORD_DIR"), "Directory for recording requests/responses (default: disabled)")
+	cmd.Flags().StringVar(&opts.serverMode, "server-mode", "auto", "Server reuse mode: auto (per-scenario), all (single server), pair (per source-target)")
+	cmd.Flags().IntVar(&opts.batchCount, "batch", 1, "Number of times to run each test (for stability/performance testing)")
 
 	return cmd
 }
@@ -95,6 +99,16 @@ func runMatrix(opts *matrixOptions) error {
 	// Set record directory if provided
 	if opts.recordDir != "" {
 		matrix = matrix.WithRecordDir(opts.recordDir)
+	}
+
+	// Set server mode
+	if opts.serverMode != "" && opts.serverMode != "auto" {
+		matrix = matrix.WithServerMode(opts.serverMode)
+	}
+
+	// Set batch count
+	if opts.batchCount > 1 {
+		matrix = matrix.WithBatchCount(opts.batchCount)
 	}
 
 	// Resolve streaming filter
