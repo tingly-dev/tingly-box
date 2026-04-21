@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -18,8 +19,15 @@ func printTable(results []protocol_validate.TestResult, verbose int) {
 	// Summary
 	pass, fail, skip := countResults(results)
 	fmt.Printf("\n📊 Matrix Test Results\n")
-	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d | ⊘ Skip: %d\n\n",
+	fmt.Printf("Total: %d | ✓ Pass: %d | ✗ Fail: %d | ⊘ Skip: %d\n",
 		len(results), pass, fail, skip)
+
+	// Device info
+	fmt.Printf("Host: %s/%s | CPUs: %d | Go: %s | Time: %s\n\n",
+		runtime.GOOS, runtime.GOARCH,
+		runtime.NumCPU(),
+		runtime.Version(),
+		time.Now().Format("2006-01-02 15:04:05"))
 
 	// Table header
 	fmt.Fprintln(w, "Scenario\tSource\tTarget\tStreaming\tStatus\tDuration")
