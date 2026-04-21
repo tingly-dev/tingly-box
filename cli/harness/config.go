@@ -14,49 +14,33 @@ import (
 // newInitConfigCommand creates the top-level `harness init-config` command.
 func newInitConfigCommand() *cobra.Command {
 	var output string
-	var format string
 
 	cmd := &cobra.Command{
 		Use:   "init-config",
-		Short: "Create a real-provider config file template",
+		Short: "Create a providers config file template",
 		Long: `Generate a template config file for use with 'harness agent <agent> --config <file>'.
 
-The template is pre-filled with entries for all known providers from the
-embedded provider templates (OAuth-only providers are skipped). Fill in the
-apikey (and model where blank) fields of the providers you want to test.
+The template is pre-filled with all known providers from the embedded provider
+templates (OAuth-only providers are skipped). Fill in the apikey and configure
+the models array for each provider you want to test.
 
 Examples:
   harness init-config
-  harness init-config --output providers.yaml --format yaml
-  harness init-config --output providers.csv --format csv`,
+  harness init-config --output providers.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInitConfig(output, format)
+			return runInitConfig(output)
 		},
 	}
 
-	cmd.Flags().StringVar(&output, "output", "", "Output file path (default: models.yaml or models.csv based on format)")
-	cmd.Flags().StringVar(&format, "format", "csv", "Config format: yaml or csv")
+	cmd.Flags().StringVar(&output, "output", "", "Output file path (default: providers.yaml)")
 
 	return cmd
 }
 
-const csvConfigHeader = "name,baseurl,apikey,model,api_style\n"
-
-// runInitConfig writes a pre-filled config file built from embedded provider templates.
-func runInitConfig(output string, format string) error {
-	format = strings.ToLower(format)
-	switch format {
-	case "csv", "yaml", "yml":
-	default:
-		return fmt.Errorf("unsupported format %q (available: yaml, csv)", format)
-	}
-
+// runInitConfig writes a pre-filled providers config file built from embedded provider templates.
+func runInitConfig(output string) error {
 	if output == "" {
-		if format == "csv" {
-			output = "models.csv"
-		} else {
-			output = "models.yaml"
-		}
+		output = "providers.yaml"
 	}
 
 	if _, err := os.Stat(output); err == nil {
@@ -69,40 +53,31 @@ func runInitConfig(output string, format string) error {
 		return fmt.Errorf("load provider templates: %w", err)
 	}
 
-	entries := buildConfigEntries(tm.GetAllTemplates())
-
-	var content string
-	if format == "csv" {
-		content = buildCSVConfig(entries)
-	} else {
-		content = buildYAMLConfig(entries)
-	}
+	content := buildProvidersConfig(tm.GetAllTemplates())
 
 	if err := os.WriteFile(output, []byte(content), 0644); err != nil {
 		return fmt.Errorf("write config file: %w", err)
 	}
 
-	fmt.Printf("✅ Created %s (%d providers, %d with models pre-filled)\n", output, len(entries), countWithModels(entries))
-	fmt.Printf("📝 Fill in your API keys, then run:\n")
+	providerCount := len(tm.GetAllTemplates())
+	fmt.Printf("✅ Created %s (%d providers)\n", output, providerCount)
+	fmt.Printf("📝 Fill in your API keys and configure models, then run:\n")
 	fmt.Printf("   harness agent claude --config %s\n", output)
-	fmt.Printf("   (entries with empty apikey/model are automatically skipped)\n")
+	fmt.Printf("   (providers with empty apikey are automatically skipped)\n")
 	return nil
 }
 
-// configEntry is a normalized row for config file generation.
-type configEntry struct {
-	Name     string
+// providerEntry is a normalized provider for config file generation.
+type providerEntry struct {
+	ID       string
 	BaseURL  string
-	APIKey   string // placeholder or empty
-	Model    string // first model or empty
 	APIStyle string
-	APIType  string // optional
+	Models   []string
 }
 
-// buildConfigEntries converts provider templates into config entries.
-// OAuth-only providers are excluded (no API key to fill in).
-func buildConfigEntries(templates map[string]*data.ProviderTemplate) []configEntry {
-	var entries []configEntry
+// buildProvidersConfig converts provider templates into the new YAML format.
+func buildProvidersConfig(templates map[string]*data.ProviderTemplate) string {
+	var entries []providerEntry
 	for _, tmpl := range templates {
 		// Skip OAuth-only providers — they can't be tested with an API key.
 		if tmpl.AuthType == "oauth" {
@@ -119,64 +94,43 @@ func buildConfigEntries(templates map[string]*data.ProviderTemplate) []configEnt
 			continue
 		}
 
-		// Use first model if available, else leave blank.
-		model := ""
-		if len(tmpl.Models) > 0 {
-			model = tmpl.Models[0]
-		}
-
-		entries = append(entries, configEntry{
-			Name:     tmpl.ID,
+		entries = append(entries, providerEntry{
+			ID:       tmpl.ID,
 			BaseURL:  baseURL,
-			APIKey:   "", // user must fill in
-			Model:    model,
 			APIStyle: apiStyle,
-			APIType:  "", // optional, leave empty for default
+			Models:   tmpl.Models, // Use all available models
 		})
 	}
 
 	// Stable sort by name.
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	return entries
+	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
+
+	return buildProvidersYAML(entries)
 }
 
-func countWithModels(entries []configEntry) int {
-	n := 0
-	for _, e := range entries {
-		if e.Model != "" {
-			n++
-		}
-	}
-	return n
-}
-
-func buildYAMLConfig(entries []configEntry) string {
+func buildProvidersYAML(entries []providerEntry) string {
 	var sb strings.Builder
-	sb.WriteString("# Harness models config — used with: harness agent <agent> --config <this-file>\n")
+	sb.WriteString("# Harness providers config — used with: harness agent <agent> --config <this-file>\n")
 	sb.WriteString("#\n")
-	sb.WriteString("# Fill in the 'apikey' fields. Entries with empty apikey/baseurl/model are skipped.\n")
+	sb.WriteString("# Fill in the 'apikey' field for each provider you want to test.\n")
+	sb.WriteString("# Configure the 'models' array with the models you want to test.\n")
+	sb.WriteString("# Providers with empty apikey or empty models array are skipped.\n")
 	sb.WriteString("#\n")
-	sb.WriteString("models:\n")
+	sb.WriteString("providers:\n")
 	for _, e := range entries {
-		apiKey := e.APIKey
-		model := e.Model
-		sb.WriteString(fmt.Sprintf("  - name: %q\n", e.Name))
+		sb.WriteString(fmt.Sprintf("  - name: %q\n", e.ID))
 		sb.WriteString(fmt.Sprintf("    baseurl: %q\n", e.BaseURL))
-		sb.WriteString(fmt.Sprintf("    apikey: %q\n", apiKey))
-		sb.WriteString(fmt.Sprintf("    model: %q\n", model))
+		sb.WriteString("    apikey: \"\"\n")
 		sb.WriteString(fmt.Sprintf("    api_style: %q\n", e.APIStyle))
+		if len(e.Models) > 0 {
+			sb.WriteString("    models:\n")
+			for _, m := range e.Models {
+				sb.WriteString(fmt.Sprintf("      - %q\n", m))
+			}
+		} else {
+			sb.WriteString("    models: []\n")
+		}
 		sb.WriteString("\n")
-	}
-	return sb.String()
-}
-
-func buildCSVConfig(entries []configEntry) string {
-	var sb strings.Builder
-	sb.WriteString(csvConfigHeader)
-	for _, e := range entries {
-		apiKey := e.APIKey
-		model := e.Model
-		sb.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s\n", e.Name, e.BaseURL, apiKey, model, e.APIStyle))
 	}
 	return sb.String()
 }

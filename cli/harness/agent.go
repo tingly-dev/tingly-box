@@ -51,25 +51,23 @@ Two modes, selected by an explicit flag:
     rule matching without touching any real upstream.
 
   --config <file>        Real-provider mode
-    Reads a list of real providers from a YAML/CSV config file. For each entry,
-    spins up an isolated gateway, registers the provider, binds the built-in
-    rule (built-in-cc / built-in-codex / built-in-opencode) to a Service pointing
-    at that provider+model, and runs the agent CLI against the gateway. Reports
-    pass/fail per entry.
+    Reads a list of real providers from a YAML config file. For each provider
+    and model combination, spins up an isolated gateway, registers the provider,
+    binds the built-in rule (built-in-cc / built-in-codex / built-in-opencode)
+    to a Service pointing at that provider+model, and runs the agent CLI against
+    the gateway. Reports pass/fail per entry.
 
 Exactly one of --mock or --config must be supplied.
 
 Config file format — YAML (.yaml/.yml):
-  models:
+  providers:
     - name: "my-provider"
       baseurl: "https://api.anthropic.com"
       apikey: "sk-ant-..."
-      model: "claude-3-5-sonnet-20241022"
-      api_style: "anthropic"   # required; auto-detected from baseurl if omitted
-
-Config file format — CSV (.csv, header row required):
-  name,baseurl,apikey,model,api_style
-  my-provider,https://api.anthropic.com,sk-ant-...,claude-3-5-sonnet-20241022,anthropic
+      api_style: "anthropic"
+      models:
+        - "claude-3-5-sonnet-20241022"
+        - "claude-3-5-opus-20241022"
 
 Examples:
   # Virtual-model mode
@@ -79,16 +77,16 @@ Examples:
   harness agent batch    --mock
 
   # Real-provider mode
-  harness agent claude --config models.yaml
-  harness agent codex  --config providers.csv "What is 2+2?"
-  harness agent batch  --config models.yaml
+  harness agent claude --config providers.yaml
+  harness agent codex  --config providers.yaml "What is 2+2?"
+  harness agent batch  --config providers.yaml
 
   # Resume an interrupted run (skips every (agent,entry) already in the CSV)
-  harness agent batch --config models.yaml --resume ""
+  harness agent batch --config providers.yaml --resume ""
 
   # Run only specific entries by name (real-provider mode)
-  harness agent claude --config models.yaml --filter acme,beta
-  harness agent batch  --config models.yaml --filter acme
+  harness agent claude --config providers.yaml --filter acme,beta
+  harness agent batch  --config providers.yaml --filter acme
 
 Persistence:
   Every run appends per-row results to harness-summary.csv in the working

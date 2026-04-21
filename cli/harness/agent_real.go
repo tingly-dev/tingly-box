@@ -48,9 +48,10 @@ func missingFields(entry protocol_validate.RealModelEntry) []string {
 	return miss
 }
 
-// loadRealModelsConfig reads and parses a models config file (YAML or CSV).
-func loadRealModelsConfig(path string) (*protocol_validate.RealModelsConfig, error) {
-	return protocol_validate.LoadRealModelsConfig(path)
+// loadProvidersConfig reads and parses a providers config file (YAML).
+// Returns the expanded list of test entries.
+func loadProvidersConfig(path string) ([]protocol_validate.RealModelEntry, error) {
+	return protocol_validate.LoadProvidersConfig(path)
 }
 
 // runRealAgentTests iterates over all model entries and runs the agent against each.
@@ -78,7 +79,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 		}
 	}
 
-	cfg, err := loadRealModelsConfig(modelsFile)
+	entries, err := loadProvidersConfig(modelsFile)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +100,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 	// Separate runnable entries from incomplete ones.
 	var runnable []protocol_validate.RealModelEntry
 	var skipped []string
-	for _, entry := range cfg.Models {
+	for _, entry := range entries {
 		if wanted != nil {
 			if _, ok := wanted[strings.ToLower(strings.TrimSpace(entry.Name))]; !ok {
 				continue
