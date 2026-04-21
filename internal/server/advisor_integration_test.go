@@ -391,16 +391,14 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	require.Len(t, receivedRequests, 1)
 	messages := receivedRequests[0]["messages"].([]any)
 
-	// Expected: advisor system prompt + workspace tree + build logs + last worker resp + original user + reason
-	require.Len(t, messages, 6)
+	// Expected: advisor system prompt + build logs + last worker resp + original user + reason
+	require.Len(t, messages, 5)
 
 	require.Equal(t, "system", messages[0].(map[string]any)["role"])
 	require.Equal(t, "system", messages[1].(map[string]any)["role"])
-	require.Contains(t, messages[1].(map[string]any)["content"], "Workspace tree")
+	require.Contains(t, messages[1].(map[string]any)["content"], "Build logs")
 	require.Equal(t, "system", messages[2].(map[string]any)["role"])
-	require.Contains(t, messages[2].(map[string]any)["content"], "Build logs")
-	require.Equal(t, "system", messages[3].(map[string]any)["role"])
-	require.Contains(t, messages[3].(map[string]any)["content"], "Last worker response")
+	require.Contains(t, messages[2].(map[string]any)["content"], "Last worker response")
+	require.Equal(t, "user", messages[3].(map[string]any)["role"])
 	require.Equal(t, "user", messages[4].(map[string]any)["role"])
-	require.Equal(t, "user", messages[5].(map[string]any)["role"])
 }
