@@ -106,28 +106,23 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                     />
                 </Box>
 
-                {/* Divider - Between core config and optional sections */}
-                {showOptionalSections && (
-                    <Divider sx={{ mx: 2, mt: 1 }} />
-                )}
-
                 {/* Mode Selection - Optional */}
                 {modeSelection && (
-                    <Box sx={{ px: 2, pt: 1.5 }}>
+                    <Box sx={{ px: 2, pt: 0.5 }}>
                         {modeSelection}
                     </Box>
                 )}
 
                 {/* Extra Content - Optional */}
                 {extraContent && (
-                    <Box sx={{ px: 2, pt: 1.5 }}>
+                    <Box sx={{ px: 2, pt: 0.5 }}>
                         {extraContent}
                     </Box>
                 )}
 
                 {/* Scenario Features - Optional */}
                 {scenario && (
-                    <Box sx={{ px: 2, pt: 1.5 }}>
+                    <Box sx={{ px: 2, pt: 0.5 }}>
                         <PluginFeatures scenario={scenario} />
                     </Box>
                 )}
@@ -235,28 +230,23 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                 </Box>
             )}
 
-            {/* Divider - Between core config and optional sections */}
-            {hasDivider && (
-                <Divider sx={{ mx: 2 }} />
-            )}
-
             {/* Mode Selection - Optional (e.g., ClaudeCode unified/separate) */}
             {modeSelection && (
-                <Box sx={{ px: 2 }}>
+                <Box sx={{ px: 2, py: 0.5 }}>
                     {modeSelection}
                 </Box>
             )}
 
             {/* Extra Content - Optional */}
             {extraContent && (
-                <Box sx={{ px: 2 }}>
+                <Box sx={{ px: 2, py: 0.5 }}>
                     {extraContent}
                 </Box>
             )}
 
             {/* Scenario Features (Thinking Effort + Plugin) - Optional (when scenario is provided) */}
             {scenario && (
-                <Box sx={{ px: 2 }}>
+                <Box sx={{ px: 2, py: 0.5 }}>
                     <PluginFeatures scenario={scenario} />
                 </Box>
             )}

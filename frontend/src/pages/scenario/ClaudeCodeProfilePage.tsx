@@ -393,7 +393,6 @@ const ClaudeCodeProfilePageContent: React.FC = () => {
                         showBaseUrlRow={true}
                         compact={true}
                     />
-                    <Divider sx={{ mx: 2, mt: 1.5 }} />
                 </UnifiedCard>
 
                 <TemplatePage
