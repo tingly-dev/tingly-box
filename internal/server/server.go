@@ -427,7 +427,9 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 	// Create new sink for this scenario
 	sink := obs.NewSink(s.recordDir, obs.RecordModeScenario)
 	if sink == nil {
-		logrus.Warnf("Failed to create scenario recording sink for %s", scenario)
+		// Sink creation failed or recording is disabled (empty recordDir)
+		// This is expected when no record directory is configured
+		logrus.Debugf("Failed to create scenario recording sink for %s", scenario)
 		return nil
 	}
 

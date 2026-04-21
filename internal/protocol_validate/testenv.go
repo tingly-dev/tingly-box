@@ -37,6 +37,21 @@ type TestEnv struct {
 	configDir   string            // config directory for cleanup (CLI mode only)
 }
 
+// TestEnvOption is a functional option for configuring TestEnv.
+type TestEnvOption func(*testEnvConfig)
+
+type testEnvConfig struct {
+	recordDir string
+}
+
+// NewTestEnvOptionWithRecordDir creates an option to set the record directory.
+// If empty, recording is disabled.
+func NewTestEnvOptionWithRecordDir(dir string) TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.recordDir = dir
+	}
+}
+
 // NewTestEnv creates a TestEnv with a fresh gateway config and a new VirtualServer.
 // All resources are cleaned up via t.Cleanup.
 func NewTestEnv(t *testing.T) *TestEnv {
@@ -87,7 +102,13 @@ func (env *TestEnv) Close() {
 
 // NewTestEnvForCLI creates a TestEnv for CLI use (without testing.T).
 // Resources must be cleaned up via explicit Close() call.
-func NewTestEnvForCLI() (*TestEnv, error) {
+func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
+	// Apply options
+	cfg := &testEnvConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	configDir, err := os.MkdirTemp("", "pv-cli-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp config dir: %w", err)
@@ -99,7 +120,13 @@ func NewTestEnvForCLI() (*TestEnv, error) {
 		return nil, fmt.Errorf("create app config: %w", err)
 	}
 
-	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), server.WithAdaptor(false))
+	// Build server options
+	serverOpts := []server.ServerOption{server.WithAdaptor(false)}
+	if cfg.recordDir != "" {
+		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
+	}
+
+	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), serverOpts...)
 	router := gatewayServer.GetRouter()
 	ts := httptest.NewServer(router)
 

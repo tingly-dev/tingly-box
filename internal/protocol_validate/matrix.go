@@ -16,6 +16,7 @@ type Matrix struct {
 	Targets   []protocol.APIType
 	Scenarios []Scenario
 	Streaming []bool
+	RecordDir string // Optional directory for recording requests/responses
 }
 
 // DefaultMatrix returns the full validation matrix covering all supported
@@ -59,6 +60,19 @@ func (m *Matrix) OnlyScenarios(names ...string) *Matrix {
 		Targets:   m.Targets,
 		Scenarios: filtered,
 		Streaming: m.Streaming,
+		RecordDir: m.RecordDir,
+	}
+}
+
+// WithRecordDir returns a copy of the Matrix with the record directory set.
+// If recordDir is empty, recording is disabled.
+func (m *Matrix) WithRecordDir(recordDir string) *Matrix {
+	return &Matrix{
+		Sources:   m.Sources,
+		Targets:   m.Targets,
+		Scenarios: m.Scenarios,
+		Streaming: m.Streaming,
+		RecordDir: recordDir,
 	}
 }
 
@@ -187,7 +201,7 @@ func (m *Matrix) ExecuteAll() []TestResult {
 		scenario := scenario
 
 		// Create TestEnv for this scenario
-		env, err := NewTestEnvForCLI()
+		env, err := NewTestEnvForCLI(NewTestEnvOptionWithRecordDir(m.RecordDir))
 		if err != nil {
 			// All tests for this scenario fail with setup error
 			for _, source := range m.Sources {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
@@ -15,6 +16,7 @@ type matrixOptions struct {
 	nonStream  bool
 	jsonOutput bool
 	verbose    int
+	recordDir  string // Directory for recording requests/responses
 }
 
 // newMatrixCommand creates the matrix test subcommand.
@@ -62,6 +64,7 @@ Use flags to filter specific combinations.`,
 	cmd.Flags().BoolVar(&opts.nonStream, "non-streaming", false, "Run only non-streaming tests")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "Output results as JSON")
 	cmd.Flags().CountVarP(&opts.verbose, "verbose", "v", "Verbose output (can repeat for more detail)")
+	cmd.Flags().StringVar(&opts.recordDir, "record-dir", os.Getenv("HARNESS_RECORD_DIR"), "Directory for recording requests/responses (default: disabled)")
 
 	return cmd
 }
@@ -73,6 +76,11 @@ func runMatrix(opts *matrixOptions) error {
 
 	if len(opts.scenarios) > 0 {
 		matrix = matrix.OnlyScenarios(opts.scenarios...)
+	}
+
+	// Set record directory if provided
+	if opts.recordDir != "" {
+		matrix = matrix.WithRecordDir(opts.recordDir)
 	}
 
 	// Resolve streaming filter

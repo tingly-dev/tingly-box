@@ -116,6 +116,11 @@ func NewSink(baseDir string, mode RecordMode) *Sink {
 	case RecordModeAll, RecordModeScenario,
 		RecordModeRequest, RecordModeResponse, RecordModeV2RequestResponse:
 
+		// Empty baseDir means recording is disabled
+		if baseDir == "" {
+			return nil
+		}
+
 		// Ensure base directory exists
 		if err := os.MkdirAll(baseDir, 0755); err != nil {
 			logrus.Errorf("Failed to create record directory %s: %v", baseDir, err)
