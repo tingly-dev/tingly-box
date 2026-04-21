@@ -9,35 +9,23 @@ import {
     Tooltip,
     Typography
 } from '@mui/material';
-import React, {type ReactNode } from 'react';
-import { ApiConfigRow } from './ApiConfigRow';
-import { BaseUrlRow } from './BaseUrlRow';
+import React, { type ReactNode, useState } from 'react';
+import { ConfigRow } from './ConfigRow';
 import { CompactConfigCard } from './CompactConfigCard';
 import PluginFeatures from './PluginFeatures';
+import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
+import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
-export interface ConfigSectionProps {
-    label: string;
-    children: ReactNode;
-    infoTooltip?: string;
-}
+const maskToken = (token: string): string => {
+    if (token.length <= 16) return token;
+    const start = token.slice(0, 12);
+    const end = token.slice(-12);
+    return `${start}${'*'.repeat(8)}${end}`;
+};
 
-const ConfigSection: React.FC<ConfigSectionProps> = ({ label, children, infoTooltip }) => (
-    <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {label}
-            </Typography>
-            {infoTooltip && (
-                <Tooltip title={infoTooltip} arrow>
-                    <InfoIcon sx={{ fontSize: '1rem', color: 'text.secondary', cursor: 'help' }} />
-                </Tooltip>
-            )}
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-            {children}
-        </Box>
-    </Box>
-);
+const toDockerUrl = (url: string): string => {
+    return url.replace(/\/\/([^/:]+)(?::(\d+))?/, '//host.docker.internal:$2');
+};
 
 export interface ProviderConfigCardProps {
     /** Card title */
@@ -48,10 +36,6 @@ export interface ProviderConfigCardProps {
     baseUrl: string;
     /** Copy handler */
     onCopy: (text: string, label: string) => Promise<void>;
-    /** API key token */
-    token: string;
-    /** Handler to show token modal */
-    onShowTokenModal: () => void;
     /** Optional: scenario for experimental features */
     scenario?: string;
     /** Optional: mode selection component */
@@ -75,6 +59,9 @@ export interface ProviderConfigCardProps {
  * Unified provider configuration card component.
  * Provides a consistent layout for SDK configuration across all provider pages.
  *
+ * Modal state (token, showTokenModal, setShowTokenModal) is obtained from
+ * ScenarioPageModalProvider context, so the parent page doesn't need to pass them.
+ *
  * Modes:
  * - Compact: Horizontal tab switching (Base URL | API Key) - saves vertical space
  * - Standard: Vertical rows with Base URL and API Key sections
@@ -91,18 +78,17 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
     baseUrlPath,
     baseUrl,
     onCopy,
-    token,
-    onShowTokenModal,
     scenario,
     modeSelection,
     extraContent,
     showApiKeyRow = true,
     showBaseUrlRow = true,
-    titleInfoTooltip,
     baseUrlLabel = 'Base URL',
     compact = false,
     containerProps,
 }) => {
+    // Get modal state from context instead of props
+    const { token, setShowTokenModal } = useScenarioPageModal();
     const showOptionalSections = scenario || modeSelection || extraContent;
     const hasDivider = showApiKeyRow && showOptionalSections;
 
@@ -114,9 +100,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                     <CompactConfigCard
                         baseUrlPath={baseUrlPath}
                         baseUrl={baseUrl}
-                        token={token}
                         onCopy={onCopy}
-                        onShowTokenModal={onShowTokenModal}
                         baseUrlLabel={baseUrlLabel}
                         title={title}
                     />
@@ -151,38 +135,103 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
         );
     }
 
-    // Standard mode: vertical rows
+    // Standard mode: two separate rows using ConfigRow (single tab each)
+    const [envMode, setEnvMode] = useState<EnvironmentMode>('local');
+
+    // Build full URL based on environment mode
+    const fullUrl = React.useMemo(() => {
+        const url = `${baseUrl}${baseUrlPath}`;
+        return envMode === 'docker' ? toDockerUrl(url) : url;
+    }, [baseUrl, baseUrlPath, envMode]);
 
     return (
         <Box {...containerProps}>
-            {/* Base URL Row - Always shown */}
-            {showBaseUrlRow && <Box sx={{ p: 2, pb: showApiKeyRow ? 2 : 0 }}>
-                <BaseUrlRow
-                    label={baseUrlLabel}
-                    path={baseUrlPath}
-                    baseUrl={baseUrl}
-                    onCopy={(url) => onCopy(url, title)}
-                    urlLabel={`${title} Base URL`}
-                />
-            </Box>}
+            {/* Base URL Row - single tab mode */}
+            {showBaseUrlRow && (
+                <Box sx={{ px: 2, py: 0.5 }}>
+                    <ConfigRow
+                        tabs={[
+                            {
+                                key: 'baseUrl',
+                                label: baseUrlLabel,
+                                content: (
+                                    <Typography
+                                        variant="subtitle2"
+                                        onClick={() => onCopy(fullUrl, `${title} ${baseUrlLabel}`)}
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            color: 'primary.main',
+                                            cursor: 'pointer',
+                                            '&:hover': {
+                                                textDecoration: 'underline',
+                                                backgroundColor: 'action.hover',
+                                            },
+                                            padding: 1,
+                                            borderRadius: 1,
+                                            transition: 'all 0.2s ease-in-out',
+                                        }}
+                                        title={`Click to copy ${baseUrlLabel}`}
+                                    >
+                                        {fullUrl}
+                                    </Typography>
+                                ),
+                                actions: (
+                                    <EnvironmentModeSwitcher
+                                        value={envMode}
+                                        onChange={setEnvMode}
+                                    />
+                                ),
+                            },
+                        ]}
+                        activeTab="baseUrl"
+                        onTabChange={() => {}}
+                    />
+                </Box>
+            )}
 
-            {/* API Key Row - Optional but shown by default */}
+            {/* API Key Row - single tab mode */}
             {showApiKeyRow && (
-                <Box sx={{ px: 2, pb: hasDivider ? 2 : 2 }}>
-                    <ApiConfigRow label="API Key" value={token}>
-                        <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
-                            <Tooltip title="View Token">
-                                <IconButton onClick={onShowTokenModal} size="small">
-                                    <VisibilityIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Copy Token">
-                                <IconButton onClick={() => onCopy(token, 'API Key')} size="small">
-                                    <CopyIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </Box>
-                    </ApiConfigRow>
+                <Box sx={{ px: 2, py: 0.5 }}>
+                    <ConfigRow
+                        tabs={[
+                            {
+                                key: 'apiKey',
+                                label: 'API Key',
+                                content: (
+                                    <Typography
+                                        variant="subtitle2"
+                                        onClick={() => onCopy(token, 'API Key')}
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.75rem',
+                                            color: 'primary.main',
+                                            cursor: 'pointer',
+                                            '&:hover': {
+                                                textDecoration: 'underline',
+                                                backgroundColor: 'action.hover',
+                                            },
+                                            padding: 1,
+                                            borderRadius: 1,
+                                            transition: 'all 0.2s ease-in-out',
+                                        }}
+                                        title="Click to copy API Key"
+                                    >
+                                        {maskToken(token)}
+                                    </Typography>
+                                ),
+                                actions: (
+                                    <Tooltip title="View Full Token">
+                                        <IconButton onClick={() => setShowTokenModal(true)} size="small">
+                                            <VisibilityIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
+                                ),
+                            },
+                        ]}
+                        activeTab="apiKey"
+                        onTabChange={() => {}}
+                    />
                 </Box>
             )}
 

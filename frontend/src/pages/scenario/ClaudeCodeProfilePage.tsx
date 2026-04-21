@@ -31,10 +31,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TemplatePage from './components/TemplatePage.tsx';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const BASE_SCENARIO = 'claude_code';
 
-const ClaudeCodeProfilePage: React.FC = () => {
+const ClaudeCodeProfilePageContent: React.FC = () => {
     const { profileId } = useParams<{ profileId: string }>();
     const navigate = useNavigate();
     const { t } = useTranslation();
@@ -387,8 +388,6 @@ const ClaudeCodeProfilePage: React.FC = () => {
                         baseUrlPath={`/tingly/${scenario}`}
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         showApiKeyRow={true}
                         showBaseUrlRow={true}
@@ -469,6 +468,14 @@ const ClaudeCodeProfilePage: React.FC = () => {
                 </Dialog>
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const ClaudeCodeProfilePage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <ClaudeCodeProfilePageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

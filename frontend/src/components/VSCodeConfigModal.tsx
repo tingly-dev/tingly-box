@@ -1,11 +1,11 @@
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack, Link } from '@mui/material';
 import React from 'react';
+import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
 interface VSCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
     baseUrl: string;
-    token: string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
 }
 
@@ -13,9 +13,10 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
     open,
     onClose,
     baseUrl,
-    token,
     copyToClipboard,
 }) => {
+    // Get token from context
+    const { token } = useScenarioPageModal();
     return (
         <Dialog
             open={open}

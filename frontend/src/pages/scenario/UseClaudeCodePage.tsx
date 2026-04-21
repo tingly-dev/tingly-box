@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -35,12 +36,10 @@ const CONFIG_MODES: { value: ConfigMode; label: string; description: string; ena
 
 const SCENARIO = 'claude_code';
 
-const UseClaudeCodePage: React.FC = () => {
+const UseClaudeCodePageContent: React.FC = () => {
     const { t } = useTranslation();
 
     const {
-        setShowTokenModal,
-        token,
         showNotification,
         notification,
         copyToClipboard,
@@ -266,8 +265,6 @@ const UseClaudeCodePage: React.FC = () => {
                         baseUrlPath={`/tingly/${SCENARIO}`}
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={SCENARIO}
                         showApiKeyRow={true}
                         showBaseUrlRow={true}
@@ -317,7 +314,6 @@ const UseClaudeCodePage: React.FC = () => {
                     }}
                     configMode={configMode}
                     baseUrl={baseUrl}
-                    token={token}
                     rules={rules}
                     copyToClipboard={copyToClipboard}
                     onApply={handleApply}
@@ -327,6 +323,14 @@ const UseClaudeCodePage: React.FC = () => {
 
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseClaudeCodePage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseClaudeCodePageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

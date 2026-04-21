@@ -8,14 +8,12 @@ import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import VSCodeConfigModal from '@/components/VSCodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "vscode";
 
-const UseVSCodePage: React.FC = () => {
+const UseVSCodePageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         isLoading,
         notification,
         copyToClipboard,
@@ -74,11 +72,9 @@ const UseVSCodePage: React.FC = () => {
                         baseUrlPath="/tingly/vscode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         showApiKeyRow={true}
-                        compact={true}
+                        compact={false}
                     />
                 </UnifiedCard>
 
@@ -93,11 +89,18 @@ const UseVSCodePage: React.FC = () => {
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
                     baseUrl={baseUrl}
-                    token={token}
                     copyToClipboard={copyToClipboard}
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseVSCodePage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseVSCodePageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

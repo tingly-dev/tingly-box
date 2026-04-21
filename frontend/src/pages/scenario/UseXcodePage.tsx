@@ -8,14 +8,12 @@ import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import XcodeConfigModal from '@/components/XcodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "xcode";
 
-const UseXcodePage: React.FC = () => {
+const UseXcodePageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         isLoading,
         notification,
         copyToClipboard,
@@ -58,11 +56,9 @@ const UseXcodePage: React.FC = () => {
                         baseUrlPath="/tingly/xcode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         showApiKeyRow={true}
-                        compact={true}
+                        compact={false}
                     />
                 </UnifiedCard>
 
@@ -77,11 +73,18 @@ const UseXcodePage: React.FC = () => {
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
                     baseUrl={baseUrl}
-                    token={token}
                     copyToClipboard={copyToClipboard}
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseXcodePage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseXcodePageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

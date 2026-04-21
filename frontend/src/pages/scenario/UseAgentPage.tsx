@@ -5,15 +5,12 @@ import { Box } from '@mui/material';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "agent";
 
-const UseAgentPage: React.FC = () => {
+const UseAgentPageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
-        providers,
         isLoading,
         notification,
         copyToClipboard,
@@ -36,8 +33,6 @@ const UseAgentPage: React.FC = () => {
                         baseUrlPath="/tingly/agent"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         compact={true}
                     />
                 </UnifiedCard>
@@ -50,6 +45,14 @@ const UseAgentPage: React.FC = () => {
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseAgentPage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseAgentPageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

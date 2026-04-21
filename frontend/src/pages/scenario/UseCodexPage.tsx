@@ -8,14 +8,12 @@ import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "codex";
 
-const UseCodexPage: React.FC = () => {
+const UseCodexPageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
         isLoading,
         notification,
         copyToClipboard,
@@ -58,8 +56,6 @@ const UseCodexPage: React.FC = () => {
                         baseUrlPath="/tingly/codex"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                         scenario={scenario}
                         compact={true}
                     />
@@ -75,11 +71,18 @@ const UseCodexPage: React.FC = () => {
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
                     baseUrl={baseUrl}
-                    token={token}
                     copyToClipboard={copyToClipboard}
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseCodexPage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseCodexPageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

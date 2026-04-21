@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfigRow, type TabKey } from './ConfigRow';
 import { EnvironmentModeSwitcher, type EnvironmentMode } from './EnvironmentModeSwitcher';
+import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
 // ============================================================================
 // Types
@@ -16,12 +17,8 @@ interface CompactConfigCardProps {
     baseUrlPath: string;
     /** Full base URL from getBaseUrl() */
     baseUrl: string;
-    /** API key token */
-    token: string;
     /** Copy handler */
     onCopy: (text: string, label: string) => Promise<void>;
-    /** Handler to show token modal (for viewing full token) */
-    onShowTokenModal?: () => void;
     /** Optional: custom label for base URL */
     baseUrlLabel?: string;
     /** Optional: custom label for API key */
@@ -66,6 +63,9 @@ const maskToken = (token: string): string => {
  * Compact configuration card with horizontal text tab switching.
  * Uses ConfigRow component internally.
  *
+ * Modal state (token, showTokenModal, setShowTokenModal) is obtained from
+ * ScenarioPageModalProvider context.
+ *
  * Layout:
  * ┌─────────────────────────────────────────────────────────────────┐
  * │ Base URL | API Key    http://localhost:8080/tingly/anthropic  │
@@ -80,15 +80,15 @@ const maskToken = (token: string): string => {
 export const CompactConfigCard: React.FC<CompactConfigCardProps> = ({
     baseUrlPath,
     baseUrl,
-    token,
     onCopy,
-    onShowTokenModal,
     baseUrlLabel = 'Base URL',
     apiKeyLabel = 'API Key',
     title,
     environmentModes,
 }) => {
     const { t } = useTranslation();
+    // Get modal state from context
+    const { token, setShowTokenModal } = useScenarioPageModal();
     const [activeTab, setActiveTab] = useState<TabKey>('baseUrl');
     const [envMode, setEnvMode] = useState<EnvironmentMode>('local');
 
@@ -158,13 +158,13 @@ export const CompactConfigCard: React.FC<CompactConfigCardProps> = ({
                     {maskToken(token)}
                 </Typography>
             ),
-            actions: onShowTokenModal ? (
+            actions: (
                 <Tooltip title="View Full Token">
-                    <IconButton onClick={onShowTokenModal} size="small">
+                    <IconButton onClick={() => setShowTokenModal(true)} size="small">
                         <VisibilityIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
-            ) : undefined,
+            ),
         },
     ];
 

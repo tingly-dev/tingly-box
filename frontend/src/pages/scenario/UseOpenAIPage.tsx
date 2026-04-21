@@ -5,15 +5,12 @@ import { Box } from '@mui/material';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
+import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 
 const scenario = "openai";
 
-const UseOpenAIPage: React.FC = () => {
+const UseOpenAIPageContent: React.FC = () => {
     const {
-        showTokenModal,
-        setShowTokenModal,
-        token,
-        providers,
         isLoading,
         notification,
         copyToClipboard,
@@ -36,8 +33,6 @@ const UseOpenAIPage: React.FC = () => {
                         baseUrlPath="/tingly/openai"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
-                        token={token}
-                        onShowTokenModal={() => setShowTokenModal(true)}
                     />
                 </UnifiedCard>
                 <TemplatePage
@@ -48,6 +43,14 @@ const UseOpenAIPage: React.FC = () => {
                 />
             </CardGrid>
         </PageLayout>
+    );
+};
+
+const UseOpenAIPage: React.FC = () => {
+    return (
+        <ScenarioPageModalProvider>
+            <UseOpenAIPageContent />
+        </ScenarioPageModalProvider>
     );
 };
 

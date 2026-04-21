@@ -13,6 +13,7 @@ import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules'
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
+import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
 import api from '@/services/api';
 
 /**
@@ -25,14 +26,22 @@ import api from '@/services/api';
  * EXTERNAL MODE (legacy):
  * Provide all props - for backward compatibility with existing code.
  * <TemplatePage rules={rules} providers={providers} scenario="agent" ... />
+ *
+ * MODAL STATE (shared via context):
+ * The ApiKeyModal state is shared via ScenarioPageModalProvider context.
+ * This ensures that ProviderConfigCard (in the parent page) and TemplatePage
+ * show the same modal when "View Token" is clicked.
  */
 const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
+    // Get modal state from context (shared with ProviderConfigCard)
+    const { showTokenModal, setShowTokenModal, token, copyToClipboard } = useScenarioPageModal();
+
     // Determine which mode we're in
     // If `rules` is provided, use external mode (legacy)
     // If only `scenario` is provided, use internal mode (recommended)
     const isInternalMode = !props.rules && props.scenario;
 
-    // Internal mode: fetch all data internally
+    // Internal mode: fetch all data internally (excluding modal - that's from context)
     const internalData = useScenarioPageInternal(
         isInternalMode ? (props.scenario as string) : ''
     );
@@ -40,9 +49,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
     // External mode: use props directly
     const {
         rules = internalData.rules,
-        showTokenModal = internalData.showTokenModal,
-        setShowTokenModal = internalData.setShowTokenModal,
-        token = internalData.token,
         showNotification = internalData.showNotification,
         providers = internalData.providers,
         onRulesChange = internalData.handleRulesChange,
@@ -359,12 +365,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                 onClose={() => setShowTokenModal(false)}
                 token={token}
                 onCopy={async (text, label) => {
-                    try {
-                        await navigator.clipboard.writeText(text);
-                        showNotification(`${label} copied to clipboard!`, 'success');
-                    } catch (err) {
-                        showNotification('Failed to copy to clipboard', 'error');
-                    }
+                    await copyToClipboard(text, label);
+                    showNotification(`${label} copied to clipboard!`, 'success');
                 }}
             />
 
