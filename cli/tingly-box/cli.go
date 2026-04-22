@@ -1,3 +1,5 @@
+//go:build !kong
+
 package main
 
 import (

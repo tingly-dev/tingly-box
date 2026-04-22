@@ -1,3 +1,6 @@
+//go:build !kong
+//go:build !kong
+
 // Package main provides the CLI harness for protocol validation testing.
 //
 // The harness provides three testing modes:
@@ -55,3 +58,5 @@ func init() {
 	rootCmd.AddCommand(newProviderCommand())
 	rootCmd.AddCommand(newInitConfigCommand())
 }
+
+// Original cobra version - only built when kong tag is NOT set
