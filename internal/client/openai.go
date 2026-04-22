@@ -37,6 +37,7 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	options := []option.RequestOption{
 		option.WithAPIKey(provider.GetAccessToken()),
 		option.WithBaseURL(provider.APIBase),
+		option.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}
 
 	// Add X-ChatGPT-Account-ID header if available from OAuth metadata
