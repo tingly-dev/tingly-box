@@ -53,7 +53,8 @@ type TestEnv struct {
 type TestEnvOption func(*testEnvConfig)
 
 type testEnvConfig struct {
-	recordDir string
+	recordDir  string
+	mcpEnabled bool
 }
 
 // NewTestEnvOptionWithRecordDir creates an option to set the record directory.
@@ -61,6 +62,13 @@ type testEnvConfig struct {
 func NewTestEnvOptionWithRecordDir(dir string) TestEnvOption {
 	return func(cfg *testEnvConfig) {
 		cfg.recordDir = dir
+	}
+}
+
+// NewTestEnvOptionWithMCP creates an option to enable the MCP feature flag.
+func NewTestEnvOptionWithMCP() TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.mcpEnabled = true
 	}
 }
 
@@ -137,6 +145,9 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	serverOpts := []server.ServerOption{server.WithAdaptor(false)}
 	if cfg.recordDir != "" {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
+	}
+	if cfg.mcpEnabled {
+		_ = appConfig.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, "mcp", true)
 	}
 
 	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), serverOpts...)

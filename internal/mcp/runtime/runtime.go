@@ -137,6 +137,9 @@ func (t mcpTool) schema() json.RawMessage {
 // Injection is intentionally restricted to server-side virtual tools.
 // Client-facing non-virtual tools must be exposed through MCP transport endpoints instead.
 func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.ChatCompletionToolUnionParam {
+	if r == nil {
+		return nil
+	}
 	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
 	if r.virtualRegistry != nil {
 		virtualTools := r.virtualRegistry.ListVirtualTools()
@@ -225,6 +228,9 @@ func ParseNormalizedToolName(name string) (string, string, bool) {
 // CallTool executes a normalized MCP tool call and returns serialized result.
 // Dispatches virtual tools first (kernel mode), then remote tools (user mode).
 func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("MCP runtime not initialized")
+	}
 	// 1. Check virtual registry first (kernel mode)
 	sourceID, toolName, ok := ParseNormalizedToolName(normalizedName)
 	if !ok {
@@ -591,8 +597,11 @@ func (r *Runtime) GetConfig() *typ.MCPRuntimeConfig {
 	return r.getConfigOrDefault()
 }
 
-// VirtualRegistry returns the runtime's virtual tool registry.
+// VirtualRegistry returns the runtime's virtual tool registry, or nil if the runtime is nil.
 func (r *Runtime) VirtualRegistry() *VirtualToolRegistry {
+	if r == nil {
+		return nil
+	}
 	return r.virtualRegistry
 }
 
@@ -625,6 +634,9 @@ func (r *Runtime) RegisterAdviser(cfg typ.AdvisorConfig, cp *client.ClientPool) 
 // GetAdvisorMaxUses returns the MaxUsesPerRequest from the advisor source config.
 // Returns 0 if no advisor is configured or the value is not positive.
 func (r *Runtime) GetAdvisorMaxUses() int {
+	if r == nil {
+		return 0
+	}
 	cfg := r.GetConfig()
 	if cfg == nil {
 		return 0
@@ -664,6 +676,9 @@ const enabledNamesCacheTTL = 5 * time.Second
 //
 // Results are cached with a short TTL to avoid repeated full source enumeration.
 func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]struct{} {
+	if r == nil {
+		return nil
+	}
 	r.enabledNamesMu.RLock()
 	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
 		r.enabledNamesMu.RUnlock()

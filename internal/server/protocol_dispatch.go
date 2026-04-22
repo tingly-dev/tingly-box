@@ -233,7 +233,9 @@ func (s *Server) dispatchOpenAIChatFromAnthropicBeta(
 				usage = protocol.NewTokenUsageWithCache(genericUsage.InputTokens, genericUsage.OutputTokens, genericUsage.CacheTokens)
 			}
 		} else {
-			anthropicResp, cancel, forwardErr := forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
+			var cancel context.CancelFunc
+			var forwardErr error
+			anthropicResp, cancel, forwardErr = forwarding.ForwardAnthropicV1Beta(fc, wrapper, req)
 			if cancel != nil {
 				defer cancel()
 			}

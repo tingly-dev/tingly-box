@@ -20,6 +20,7 @@ type matrixOptions struct {
 	recordDir  string // Directory for recording requests/responses
 	serverMode string // Server reuse mode: auto (per-scenario), all, pair
 	batchCount int    // Number of times to run each test (for batch testing)
+	mcpEnabled bool   // Enable MCP feature flag
 }
 
 // newMatrixCommand creates the matrix test subcommand.
@@ -70,6 +71,7 @@ Use flags to filter specific combinations.`,
 	cmd.Flags().StringVar(&opts.recordDir, "record-dir", os.Getenv("HARNESS_RECORD_DIR"), "Directory for recording requests/responses (default: disabled)")
 	cmd.Flags().StringVar(&opts.serverMode, "server-mode", "auto", "Server reuse mode: auto (per-scenario), all (single server), pair (per source-target)")
 	cmd.Flags().IntVar(&opts.batchCount, "batch", 1, "Number of times to run each test (for stability/performance testing)")
+	cmd.Flags().BoolVar(&opts.mcpEnabled, "mcp", false, "Enable MCP feature flag in test env")
 
 	return cmd
 }
@@ -122,6 +124,11 @@ func runMatrix(opts *matrixOptions) error {
 	// Set batch count
 	if opts.batchCount > 1 {
 		matrix = matrix.WithBatchCount(opts.batchCount)
+	}
+
+	// Enable MCP if requested
+	if opts.mcpEnabled {
+		matrix = matrix.WithMCPEnabled()
 	}
 
 	// Resolve streaming filter conflict
