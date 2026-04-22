@@ -88,6 +88,12 @@ func WithContext(c context.Context) TransformOption {
 	return func(ctx *TransformContext) { ctx.Context = c }
 }
 
+// WithIsAdvisorRequest marks whether this is an advisor loopback request.
+// This is used to prevent recursive MCP tool injection.
+func WithIsAdvisorRequest(isAdvisor bool) TransformOption {
+	return func(ctx *TransformContext) { ctx.IsAdvisorRequest = isAdvisor }
+}
+
 // Transform defines the interface for a single transformation step
 type Transform interface {
 	// Name returns the unique identifier for this transform
@@ -126,6 +132,10 @@ type TransformContext struct {
 
 	// IsStreaming indicates if this is a streaming request
 	IsStreaming bool
+
+	// IsAdvisorRequest indicates if this is an advisor loopback request
+	// Used to prevent recursive MCP tool injection
+	IsAdvisorRequest bool
 
 	// OriginalRequest stores the original request before any transformations
 	OriginalRequest interface{}

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -18,6 +20,9 @@ import (
 type contextKey string
 
 const ScenarioContextKey contextKey = "scenario"
+
+// Header to mark advisor loopback requests with depth (must match server check)
+const advisorDepthHeader = "X-Tingly-Advisor-Depth"
 
 // RecordRoundTripper is an http.RoundTripper that records requests and responses
 type RecordRoundTripper struct {
@@ -43,6 +48,16 @@ func NewRecordRoundTripper(transport http.RoundTripper, recordSink *obs.Sink, pr
 // RoundTrip executes a single HTTP transaction and records request/response
 func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	startTime := time.Now()
+
+	// Mark advisor loopback requests with depth header to prevent recursive MCP tool injection
+	if r.provider != nil && r.provider.Name == "advisor" {
+		logrus.Debug("[RECORD-TRIPPER] Setting X-Tingly-Advisor-Depth header for advisor provider")
+		req.Header.Set(advisorDepthHeader, "1")
+	} else if r.provider != nil {
+		logrus.Debugf("[RECORD-TRIPPER] Provider name: %s (not advisor)", r.provider.Name)
+	} else {
+		logrus.Debug("[RECORD-TRIPPER] Provider is nil")
+	}
 
 	// Extract scenario from request context
 	scenario := ""

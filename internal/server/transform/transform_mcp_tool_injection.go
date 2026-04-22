@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"context"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -30,24 +29,17 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 		return nil
 	}
 
-	listCtx := ctx.Context
-	if listCtx == nil {
-		listCtx = context.Background()
-	}
-	mcpTools := t.runtime.ListServerToolsForInjection(listCtx)
-	if len(mcpTools) == 0 {
-		logrus.Debug("[MCP-DEBUG] No MCP tools to inject")
+	// Skip injection for advisor loopback requests (X-Tingly-Advisor-Depth header present).
+	// advisor_call.go sets this header on all outgoing advisor HTTP requests, so any request
+	// that looped back through tingly-box will have IsAdvisorRequest=true here.
+	if ctx.IsAdvisorRequest {
 		return nil
 	}
 
-	// Log injected tools for debugging
-	injectedToolNames := make([]string, 0, len(mcpTools))
-	for _, tool := range mcpTools {
-		if fn := tool.GetFunction(); fn != nil {
-			injectedToolNames = append(injectedToolNames, fn.Name)
-		}
+	mcpTools := t.runtime.ListServerToolsForInjection(ctx.Context)
+	if len(mcpTools) == 0 {
+		return nil
 	}
-	logrus.Debugf("[MCP-DEBUG] Injecting %d MCP tools: %v", len(injectedToolNames), injectedToolNames)
 
 	switch req := ctx.Request.(type) {
 	case *openai.ChatCompletionNewParams:
