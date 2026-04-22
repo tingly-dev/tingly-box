@@ -583,11 +583,20 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	return nil
 }
 
-// AddRequestConfig adds a new Rule
+// AddRequestConfig adds a new Rule. If a rule with the same UUID already exists,
+// it is rejected instead of adding a duplicate.
 func (c *Config) AddRequestConfig(reqConfig typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Check if rule with same UUID already exists
+	for _, rule := range c.Rules {
+		if rule.UUID == reqConfig.UUID {
+			return nil
+		}
+	}
+
+	// No existing rule, append new one
 	c.Rules = append(c.Rules, reqConfig)
 	return c.Save()
 }

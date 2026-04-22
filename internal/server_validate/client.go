@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 )
 
@@ -62,7 +63,7 @@ func (vc *VirtualClient) SendOpenAIChat(t *testing.T, s Scenario, streaming bool
 		"messages": []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
 		"stream":   streaming,
 	}
-	return vc.doRequest(t, "POST", vc.baseURL+"/v1/chat/completions", body, streaming, StyleOpenAI)
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/chat/completions", body, streaming, protocol.APIStyleOpenAI)
 }
 
 // SendOpenAIResponses sends a request to the OpenAI Responses API endpoint.
@@ -74,7 +75,7 @@ func (vc *VirtualClient) SendOpenAIResponses(t *testing.T, s Scenario, streaming
 		"input":  "What is the capital of France?",
 		"stream": streaming,
 	}
-	return vc.doRequest(t, "POST", vc.baseURL+"/v1/responses", body, streaming, StyleOpenAI)
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/responses", body, streaming, protocol.APIStyleOpenAI)
 }
 
 // SendAnthropicV1 sends a request to the Anthropic Messages endpoint.
@@ -87,7 +88,7 @@ func (vc *VirtualClient) SendAnthropicV1(t *testing.T, s Scenario, streaming boo
 		"messages":   []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
 		"stream":     streaming,
 	}
-	return vc.doRequest(t, "POST", vc.baseURL+"/v1/messages", body, streaming, StyleAnthropic)
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/messages", body, streaming, protocol.APIStyleAnthropic)
 }
 
 // SendGoogle sends a request to the Google GenerateContent endpoint.
@@ -103,7 +104,7 @@ func (vc *VirtualClient) SendGoogle(t *testing.T, s Scenario, streaming bool) *P
 	if streaming {
 		suffix = "streamGenerateContent"
 	}
-	return vc.doRequest(t, "POST", vc.baseURL+"/v1beta/models/gemini-2.0-flash/"+suffix, body, streaming, StyleGoogle)
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1beta/models/gemini-2.0-flash/"+suffix, body, streaming, protocol.APIStyleGoogle)
 }
 
 // ─── Model-parameterized send helpers ─────────────────────────────────────────
@@ -117,7 +118,7 @@ func (vc *VirtualClient) SendOpenAIChatModel(t *testing.T, modelID string, strea
 		"messages": []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
 		"stream":   streaming,
 	}
-	return vc.doRequest(t, "POST", vc.baseURL+"/v1/chat/completions", body, streaming, StyleOpenAI)
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/chat/completions", body, streaming, protocol.APIStyleOpenAI)
 }
 
 // SendAnthropicV1Model sends a request to the Anthropic Messages endpoint
@@ -130,7 +131,7 @@ func (vc *VirtualClient) SendAnthropicV1Model(t *testing.T, modelID string, stre
 		"messages":   []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
 		"stream":     streaming,
 	}
-	return vc.doRequest(t, "POST", vc.baseURL+"/v1/messages", body, streaming, StyleAnthropic)
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/messages", body, streaming, protocol.APIStyleAnthropic)
 }
 
 // ─── Internals ─────────────────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ func (vc *VirtualClient) maybeRegister(s Scenario) {
 }
 
 // doRequest sends an HTTP request and returns a ParsedResponse.
-func (vc *VirtualClient) doRequest(t *testing.T, method, url string, body interface{}, streaming bool, style APIStyle) *ParsedResponse {
+func (vc *VirtualClient) doRequest(t *testing.T, method, url string, body interface{}, streaming bool, style protocol.APIStyle) *ParsedResponse {
 	t.Helper()
 
 	reqBody, err := json.Marshal(body)
@@ -179,22 +180,22 @@ func (vc *VirtualClient) doRequest(t *testing.T, method, url string, body interf
 	return result
 }
 
-func parsedResultFromJSON(raw []byte, style APIStyle) sse.ParsedResult {
+func parsedResultFromJSON(raw []byte, style protocol.APIStyle) sse.ParsedResult {
 	var m map[string]interface{}
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return sse.ParsedResult{}
 	}
 	var r *sse.ParsedResult
 	switch style {
-	case StyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		if _, hasOutput := m["output"]; hasOutput {
 			r = sse.ParseOpenAIResponsesResult(m)
 		} else {
 			r = sse.ParseOpenAIChatResult(m)
 		}
-	case StyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		r = sse.ParseAnthropicResult(m)
-	case StyleGoogle:
+	case protocol.APIStyleGoogle:
 		r = sse.ParseGoogleResult(m)
 	default:
 		return sse.ParsedResult{}
@@ -205,14 +206,14 @@ func parsedResultFromJSON(raw []byte, style APIStyle) sse.ParsedResult {
 	return *r
 }
 
-func parsedResultFromStream(events []string, style APIStyle) sse.ParsedResult {
+func parsedResultFromStream(events []string, style protocol.APIStyle) sse.ParsedResult {
 	var r *sse.ParsedResult
 	switch style {
-	case StyleOpenAI:
+	case protocol.APIStyleOpenAI:
 		r = sse.AssembleOpenAIStream(events)
-	case StyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		r = sse.AssembleAnthropicStream(events)
-	case StyleGoogle:
+	case protocol.APIStyleGoogle:
 		r = sse.AssembleGoogleStream(events)
 	default:
 		return sse.ParsedResult{}

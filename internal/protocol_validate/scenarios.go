@@ -12,15 +12,15 @@ import (
 type MockResponseBuilder = server_validate.MockResponseBuilder
 
 // Scenario is a named test scenario describing:
-//   - What the mock provider should return (MockResponses per APIStyle)
+//   - What the mock provider should return (MockResponses per ResponseFormat)
 //   - What assertions to run on the round-trip result
 type Scenario struct {
 	Name        string
 	Description string
 	Tags        []string
 
-	// MockResponses keyed by provider APIStyle ("openai", "anthropic", "google").
-	MockResponses map[server_validate.APIStyle]MockResponseBuilder
+	// MockResponses keyed by response format (openai_chat, openai_responses, anthropic, google).
+	MockResponses map[server_validate.ResponseFormat]MockResponseBuilder
 
 	// Assertions run after every round-trip for this scenario.
 	Assertions []Assertion
@@ -58,10 +58,11 @@ func TextScenario() Scenario {
 		Name:        "text",
 		Description: "Basic text completion: user asks a question, assistant answers",
 		Tags:        []string{"text"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleOpenAI:    openAITextResponse(),
-			server_validate.StyleAnthropic: anthropicTextResponse(),
-			server_validate.StyleGoogle:    googleTextResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatOpenAIChat:      openAITextResponse(),
+			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
+			server_validate.FormatAnthropic:       anthropicTextResponse(),
+			server_validate.FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -155,10 +156,11 @@ func ToolUseScenario() Scenario {
 		Name:        "tool_use",
 		Description: "Single tool call: assistant calls get_weather with location arg",
 		Tags:        []string{"tool_use"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleOpenAI:    openAIToolUseResponse(),
-			server_validate.StyleAnthropic: anthropicToolUseResponse(),
-			server_validate.StyleGoogle:    googleToolUseResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatOpenAIChat:      openAIToolUseResponse(),
+			server_validate.FormatOpenAIResponses: openAIResponsesToolUseResponse(),
+			server_validate.FormatAnthropic:       anthropicToolUseResponse(),
+			server_validate.FormatGoogle:          googleToolUseResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -272,10 +274,11 @@ func ToolResultScenario() Scenario {
 		Name:        "tool_result",
 		Description: "Multi-turn with tool result: user→assistant(tool_use)→user(tool_result)→assistant",
 		Tags:        []string{"tool_use", "multi_turn"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleOpenAI:    openAITextResponse(),
-			server_validate.StyleAnthropic: anthropicTextResponse(),
-			server_validate.StyleGoogle:    googleTextResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatOpenAIChat:      openAITextResponse(),
+			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
+			server_validate.FormatAnthropic:       anthropicTextResponse(),
+			server_validate.FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -293,10 +296,11 @@ func ThinkingScenario() Scenario {
 		Name:        "thinking",
 		Description: "Extended thinking: response contains a thinking block before text",
 		Tags:        []string{"thinking"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleAnthropic: anthropicThinkingResponse(),
-			server_validate.StyleOpenAI:    openAITextResponse(),
-			server_validate.StyleGoogle:    googleTextResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatAnthropic:       anthropicThinkingResponse(),
+			server_validate.FormatOpenAIChat:      openAITextResponse(),
+			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
+			server_validate.FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -341,10 +345,11 @@ func MultiTurnScenario() Scenario {
 		Name:        "multi_turn",
 		Description: "Multi-turn conversation: system + user/assistant history + final user message",
 		Tags:        []string{"multi_turn"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleOpenAI:    openAITextResponse(),
-			server_validate.StyleAnthropic: anthropicTextResponse(),
-			server_validate.StyleGoogle:    googleTextResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatOpenAIChat:      openAITextResponse(),
+			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
+			server_validate.FormatAnthropic:       anthropicTextResponse(),
+			server_validate.FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -362,10 +367,11 @@ func StreamingTextScenario() Scenario {
 		Name:        "streaming_text",
 		Description: "Streaming text: SSE chunks assembling to a complete text response",
 		Tags:        []string{"text", "streaming"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleOpenAI:    openAITextResponse(),
-			server_validate.StyleAnthropic: anthropicTextResponse(),
-			server_validate.StyleGoogle:    googleTextResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatOpenAIChat:      openAITextResponse(),
+			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
+			server_validate.FormatAnthropic:       anthropicTextResponse(),
+			server_validate.FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -383,10 +389,11 @@ func StreamingToolUseScenario() Scenario {
 		Name:        "streaming_tool_use",
 		Description: "Streaming tool use: SSE chunks with tool call deltas",
 		Tags:        []string{"tool_use", "streaming"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleOpenAI:    openAIToolUseResponse(),
-			server_validate.StyleAnthropic: anthropicToolUseResponse(),
-			server_validate.StyleGoogle:    googleToolUseResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatOpenAIChat:      openAIToolUseResponse(),
+			server_validate.FormatOpenAIResponses: openAIResponsesToolUseResponse(),
+			server_validate.FormatAnthropic:       anthropicToolUseResponse(),
+			server_validate.FormatGoogle:          googleToolUseResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -403,10 +410,11 @@ func ErrorScenario() Scenario {
 		Name:        "error",
 		Description: "Provider rate limit error (429) propagated to client",
 		Tags:        []string{"error"},
-		MockResponses: map[server_validate.APIStyle]MockResponseBuilder{
-			server_validate.StyleOpenAI:    openAIErrorResponse(),
-			server_validate.StyleAnthropic: anthropicErrorResponse(),
-			server_validate.StyleGoogle:    googleErrorResponse(),
+		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
+			server_validate.FormatOpenAIChat:      openAIErrorResponse(),
+			server_validate.FormatOpenAIResponses: openAIErrorResponse(),
+			server_validate.FormatAnthropic:       anthropicErrorResponse(),
+			server_validate.FormatGoogle:          googleErrorResponse(),
 		},
 		Assertions: []Assertion{},
 	}
@@ -455,6 +463,86 @@ func googleErrorResponse() MockResponseBuilder {
 	return MockResponseBuilder{
 		NonStream: func() (int, []byte) { return 429, mustMarshal(body) },
 		Stream:    func() []string { return []string{`data: {"error":{"code":429,"message":"Rate limit exceeded"}}`} },
+	}
+}
+
+// ─── OpenAI Responses API mock builders ───────────────────────────────────────
+
+func openAIResponsesTextResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":     "resp-validate-text",
+		"object": "realtime.response",
+		"model":  "gpt-4o",
+		"status": "completed",
+		"output": []map[string]interface{}{
+			{
+				"id":     "item-validate-text",
+				"type":   "message",
+				"role":   "assistant",
+				"status": "completed",
+				"content": []map[string]interface{}{
+					{"type": "output_text", "text": "The capital of France is Paris."},
+				},
+			},
+		},
+		"usage": map[string]interface{}{
+			"input_tokens":  10,
+			"output_tokens": 8,
+			"total_tokens":  18,
+		},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    openAIResponsesTextSSE,
+	}
+}
+
+func openAIResponsesToolUseResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":     "resp-validate-tool",
+		"object": "realtime.response",
+		"model":  "gpt-4o",
+		"status": "completed",
+		"output": []map[string]interface{}{
+			{
+				"id":        "call-validate-weather",
+				"type":      "function_call",
+				"call_id":   "call_validate_weather_1",
+				"name":      "get_weather",
+				"arguments": `{"location":"Paris","unit":"celsius"}`,
+			},
+		},
+		"usage": map[string]interface{}{
+			"input_tokens":  15,
+			"output_tokens": 20,
+			"total_tokens":  35,
+		},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    openAIResponsesToolUseSSE,
+	}
+}
+
+func openAIResponsesTextSSE() []string {
+	return []string{
+		`data: {"type":"response.created","response":{"id":"resp-validate-text","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-text","item":{"id":"item-validate-text","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
+		`data: {"type":"response.output_text.delta","response_id":"resp-validate-text","item_id":"item-validate-text","output_index":0,"content_index":0,"delta":"The capital of France is Paris."}`,
+		`data: {"type":"response.output_text.done","response_id":"resp-validate-text","item_id":"item-validate-text","output_index":0,"content_index":0,"text":"The capital of France is Paris."}`,
+		`data: {"type":"response.completed","response":{"id":"resp-validate-text","object":"realtime.response","model":"gpt-4o","status":"completed","output":[{"id":"item-validate-text","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"The capital of France is Paris."}]}],"usage":{"input_tokens":10,"output_tokens":8,"total_tokens":18}}}`,
+		`data: [DONE]`,
+	}
+}
+
+func openAIResponsesToolUseSSE() []string {
+	return []string{
+		`data: {"type":"response.created","response":{"id":"resp-validate-tool","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-tool","item":{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","status":"in_progress"}}`,
+		`data: {"type":"response.function_call_arguments.delta","response_id":"resp-validate-tool","item_id":"call-validate-weather","output_index":0,"delta":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}`,
+		`data: {"type":"response.function_call_arguments.done","response_id":"resp-validate-tool","item_id":"call-validate-weather","output_index":0,"arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}`,
+		`data: {"type":"response.completed","response":{"id":"resp-validate-tool","object":"realtime.response","model":"gpt-4o","status":"completed","output":[{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}],"usage":{"input_tokens":15,"output_tokens":20,"total_tokens":35}}}`,
+		`data: [DONE]`,
 	}
 }
 

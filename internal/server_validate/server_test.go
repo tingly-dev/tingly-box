@@ -13,8 +13,8 @@ import (
 func newTextScenario() server_validate.Scenario {
 	return server_validate.Scenario{
 		Name: "text",
-		MockResponses: map[server_validate.APIStyle]server_validate.MockResponseBuilder{
-			server_validate.StyleOpenAI: {
+		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
+			server_validate.FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"chatcmpl-test","object":"chat.completion","model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"The capital of France is Paris."},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}`)
 				},
@@ -27,7 +27,7 @@ func newTextScenario() server_validate.Scenario {
 					}
 				},
 			},
-			server_validate.StyleAnthropic: {
+			server_validate.FormatAnthropic: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"msg-test","type":"message","role":"assistant","content":[{"type":"text","text":"The capital of France is Paris."}],"model":"claude-3-5-sonnet-20241022","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":8}}`)
 				},
@@ -42,7 +42,7 @@ func newTextScenario() server_validate.Scenario {
 					}
 				},
 			},
-			server_validate.StyleGoogle: {
+			server_validate.FormatGoogle: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"candidates":[{"content":{"role":"model","parts":[{"text":"The capital of France is Paris."}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":8}}`)
 				},
@@ -59,18 +59,18 @@ func newTextScenario() server_validate.Scenario {
 func newToolUseScenario() server_validate.Scenario {
 	return server_validate.Scenario{
 		Name: "tool_use",
-		MockResponses: map[server_validate.APIStyle]server_validate.MockResponseBuilder{
-			server_validate.StyleOpenAI: {
+		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
+			server_validate.FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"chatcmpl-tool","object":"chat.completion","model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Paris\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":15,"completion_tokens":20}}`)
 				},
 			},
-			server_validate.StyleAnthropic: {
+			server_validate.FormatAnthropic: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"msg-tool","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"get_weather","input":{"location":"Paris"}}],"model":"claude-3-5-sonnet-20241022","stop_reason":"tool_use","usage":{"input_tokens":15,"output_tokens":20}}`)
 				},
 			},
-			server_validate.StyleGoogle: {
+			server_validate.FormatGoogle: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_weather","args":{"location":"Paris"}}}]},"finishReason":"STOP"}]}`)
 				},
@@ -82,8 +82,8 @@ func newToolUseScenario() server_validate.Scenario {
 func newErrorScenario() server_validate.Scenario {
 	return server_validate.Scenario{
 		Name: "error",
-		MockResponses: map[server_validate.APIStyle]server_validate.MockResponseBuilder{
-			server_validate.StyleOpenAI: {
+		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
+			server_validate.FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 429, []byte(`{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
 				},

@@ -1,12 +1,20 @@
 // Package server_validate provides a mock HTTP provider server that speaks
 // OpenAI, Anthropic, and Google response formats for testing purposes.
 //
+// **Architecture Note**: VirtualServer is a **provider mock**, not a gateway mock.
+// It speaks provider-native formats (OpenAI/Anthropic/Google APIs) at provider-native
+// routes (/v1/chat/completions, /v1/messages, /v1beta/models/...).
+//
+// The test harness routing flow is:
+//
+//	Client → Gateway (/tingly/{scenario}/v1/...) → Protocol Transform → Virtual Server (/v1/...)
+//
 // A VirtualServer acts as a deterministic "virtual model" — scenario responses
 // are pre-configured and returned without any real model calls. It is used by
-// the virtualmodel test framework to exercise the gateway's protocol transform
+// the protocol_validate test framework to exercise the gateway's protocol transform
 // pipeline end-to-end.
 //
-// Use VirtualClient (client.go) to send requests to the server and inspect
+// Use VirtualClient (client.go) to send requests directly to the server and inspect
 // parsed responses. A bound client is obtained via vs.Client().
 package server_validate
 
@@ -20,20 +28,20 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 )
 
-// APIStyle aliases protocol.APIStyle for scenario keying.
-type APIStyle = protocol.APIStyle
+// ResponseFormat represents the format of the mock response for different endpoints.
+type ResponseFormat string
 
 const (
-	StyleOpenAI    = protocol.APIStyleOpenAI
-	StyleAnthropic = protocol.APIStyleAnthropic
-	StyleGoogle    = protocol.APIStyleGoogle
+	FormatOpenAIChat      ResponseFormat = "openai_chat"      // /v1/chat/completions
+	FormatOpenAIResponses ResponseFormat = "openai_responses" // /v1/responses
+	FormatAnthropic       ResponseFormat = "anthropic"        // /v1/messages
+	FormatGoogle          ResponseFormat = "google"           // /v1beta/models/.../generateContent
 )
 
-// MockResponseBuilder defines how a virtual server should respond for one provider style.
+// MockResponseBuilder defines how a virtual server should respond for one response format.
 type MockResponseBuilder struct {
 	// NonStream returns the HTTP status code and response body bytes.
 	NonStream func() (statusCode int, body []byte)
@@ -47,13 +55,19 @@ type Scenario struct {
 	Description string
 	Tags        []string
 
-	// MockResponses keyed by provider APIStyle ("openai", "anthropic", "google").
-	MockResponses map[APIStyle]MockResponseBuilder
+	// MockResponses keyed by response format (openai_chat, openai_responses, anthropic, google).
+	// Each endpoint (/v1/chat/completions, /v1/responses, /v1/messages, /v1beta/models/.../generateContent)
+	// returns the corresponding format.
+	MockResponses map[ResponseFormat]MockResponseBuilder
 }
 
 // VirtualServer is a mock provider server backed by httptest.Server.
 // It speaks OpenAI, Anthropic, and Google response formats and returns
 // pre-configured scenario responses.
+//
+// **Provider Routes**: This server handles provider-native routes (/v1/chat/completions,
+// /v1/messages, /v1beta/models/...), NOT gateway routes (/tingly/{scenario}/v1/...).
+// The gateway transforms requests to provider format before forwarding to this server.
 type VirtualServer struct {
 	server    *httptest.Server
 	scenarios map[string]Scenario // keyed by scenario name
@@ -82,19 +96,26 @@ func NewVirtualServer(t *testing.T) *VirtualServer {
 
 // NewVirtualServerForCLI creates a new VirtualServer for CLI use (without testing.T).
 // The caller must call Close() to clean up resources.
+//
+// **Provider Mock**: This is a provider mock, not a gateway. Routes are /v1/...
+// (provider-native), not /tingly/... (gateway). The gateway transforms /tingly/{scenario}/v1/...
+// requests to provider format before forwarding to this server.
 func NewVirtualServerForCLI() *VirtualServer {
 	vs := &VirtualServer{
 		scenarios: make(map[string]Scenario),
 	}
 
 	mux := http.NewServeMux()
+
+	// Provider-native routes (matching actual provider APIs)
+	// Most providers require /v1/ prefix, but we register both for flexibility
 	mux.HandleFunc("/v1/chat/completions", vs.handleOpenAIChat)
-	mux.HandleFunc("/chat/completions", vs.handleOpenAIChat)
 	mux.HandleFunc("/v1/responses", vs.handleOpenAIResponses)
-	mux.HandleFunc("/responses", vs.handleOpenAIResponses)
 	mux.HandleFunc("/v1/messages", vs.handleAnthropicMessages)
-	mux.HandleFunc("/messages", vs.handleAnthropicMessages)
-	mux.HandleFunc("/", vs.handleGoogle) // catches /v1beta/models/*/generateContent
+
+	// Google API route pattern: /v1beta/models/{model}/generateContent
+	// Using catch-all handler since model name is dynamic in the path
+	mux.HandleFunc("/v1beta/models/", vs.handleGoogle)
 
 	vs.server = httptest.NewServer(mux)
 	return vs
@@ -142,9 +163,9 @@ func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request
 		resp = vs.firstScenario()
 	}
 
-	builder, ok := resp.MockResponses[StyleOpenAI]
+	builder, ok := resp.MockResponses[FormatOpenAIChat]
 	if !ok {
-		http.Error(w, "no openai mock response for scenario "+scenario, http.StatusInternalServerError)
+		http.Error(w, "no openai_chat mock response for scenario "+scenario, http.StatusInternalServerError)
 		return
 	}
 
@@ -167,46 +188,30 @@ func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Re
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
+	scenario := vs.detectScenario(bodyBytes)
+
+	resp, ok := vs.scenarios[scenario]
+	if !ok {
+		resp = vs.firstScenario()
+	}
+
+	builder, ok := resp.MockResponses[FormatOpenAIResponses]
+	if !ok {
+		// Fallback to FormatOpenAIChat for Responses API when not explicitly defined
+		builder, ok = resp.MockResponses[FormatOpenAIChat]
+		if !ok {
+			http.Error(w, "no openai_responses or openai_chat mock response for scenario "+scenario, http.StatusInternalServerError)
+			return
+		}
+	}
 
 	if streaming {
-		// Return Responses API SSE streaming format
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.WriteHeader(http.StatusOK)
-		flusher, _ := w.(http.Flusher)
-
-		lines := []string{
-			`data: {"type":"response.created","response":{"id":"resp_vs_001","object":"realtime.response","model":"virtual","status":"in_progress","output":[],"usage":null}}`,
-			``,
-			`data: {"type":"response.output_item.added","response_id":"resp_vs_001","item":{"id":"item_vs_001","type":"message","status":"in_progress","role":"assistant","content":[]}}`,
-			``,
-			`data: {"type":"response.content_part.added","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"part":{"type":"output_text","text":""}}`,
-			``,
-			`data: {"type":"response.output_text.delta","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"delta":"Hello, world!"}`,
-			``,
-			`data: {"type":"response.output_text.done","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"text":"Hello, world!"}`,
-			``,
-			`data: {"type":"response.content_part.done","response_id":"resp_vs_001","item_id":"item_vs_001","output_index":0,"content_index":0,"part":{"type":"output_text","text":"Hello, world!"}}`,
-			``,
-			`data: {"type":"response.output_item.done","response_id":"resp_vs_001","item":{"id":"item_vs_001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello, world!"}]}}`,
-			``,
-			`data: {"type":"response.completed","response":{"id":"resp_vs_001","object":"realtime.response","model":"virtual","status":"completed","output":[{"id":"item_vs_001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello, world!"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}`,
-			``,
-			`data: [DONE]`,
-			``,
-		}
-		for _, line := range lines {
-			w.Write([]byte(line + "\n"))
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
+		sse.WriteSSEResponse(w, builder.Stream())
 	} else {
-		// Return Responses API non-streaming format
+		status, body := builder.NonStream()
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"resp_vs_001","object":"realtime.response","model":"virtual","status":"completed","output":[{"id":"item_vs_001","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello, world!"}]}],"usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}`))
+		w.WriteHeader(status)
+		w.Write(body)
 	}
 }
 
@@ -226,7 +231,7 @@ func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.
 		resp = vs.firstScenario()
 	}
 
-	builder, ok := resp.MockResponses[StyleAnthropic]
+	builder, ok := resp.MockResponses[FormatAnthropic]
 	if !ok {
 		http.Error(w, "no anthropic mock response for scenario "+scenario, http.StatusInternalServerError)
 		return
@@ -258,7 +263,7 @@ func (vs *VirtualServer) handleGoogle(w http.ResponseWriter, r *http.Request) {
 		resp = vs.firstScenario()
 	}
 
-	builder, ok := resp.MockResponses[StyleGoogle]
+	builder, ok := resp.MockResponses[FormatGoogle]
 	if !ok {
 		http.Error(w, "no google mock response for scenario "+scenario, http.StatusInternalServerError)
 		return
@@ -293,7 +298,15 @@ func (vs *VirtualServer) detectScenarioFromURLOrBody(urlPath string, body []byte
 	parts := strings.Split(urlPath, "/")
 	for _, part := range parts {
 		if strings.HasPrefix(part, prefix) {
-			name := part[len(prefix):]
+			remaining := part[len(prefix):] // "{target}-{scenario}"
+			// Find the last "-" to separate target from scenario
+			lastDash := strings.LastIndex(remaining, "-")
+			var name string
+			if lastDash > 0 {
+				name = remaining[lastDash+1:]
+			} else {
+				name = remaining
+			}
 			// Strip trailing action suffix if any (e.g. ":generateContent" edge case)
 			if idx := strings.IndexByte(name, ':'); idx >= 0 {
 				name = name[:idx]
@@ -311,7 +324,8 @@ func (vs *VirtualServer) detectScenarioFromURLOrBody(urlPath string, body []byte
 }
 
 // detectScenario extracts the scenario name from the request body's model field.
-// The model field is expected to be "virtual-model-{scenario}" (set by SetupRoute).
+// The model field is expected to be "virtual-model-{target}-{scenario}" (set by SetupRoute).
+// We extract just the scenario name for lookup.
 // Falls back to the first registered scenario if extraction fails.
 func (vs *VirtualServer) detectScenario(body []byte) string {
 	var m map[string]interface{}
@@ -319,12 +333,19 @@ func (vs *VirtualServer) detectScenario(body []byte) string {
 		if model, ok := m["model"].(string); ok {
 			const prefix = "virtual-model-"
 			if strings.HasPrefix(model, prefix) {
-				name := model[len(prefix):]
-				vs.mu.RLock()
-				_, exists := vs.scenarios[name]
-				vs.mu.RUnlock()
-				if exists {
-					return name
+				// Format: virtual-model-{target}-{scenario}
+				// We need to extract the scenario name after the target
+				remaining := model[len(prefix):] // "{target}-{scenario}"
+				// Find the last "-" to separate target from scenario
+				lastDash := strings.LastIndex(remaining, "-")
+				if lastDash > 0 {
+					name := remaining[lastDash+1:]
+					vs.mu.RLock()
+					_, exists := vs.scenarios[name]
+					vs.mu.RUnlock()
+					if exists {
+						return name
+					}
 				}
 			}
 		}
