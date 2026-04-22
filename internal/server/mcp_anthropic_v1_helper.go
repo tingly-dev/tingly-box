@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
@@ -22,8 +23,9 @@ import (
 
 // serverOpsAdapter implements mcp.ServerOps by wrapping Server
 type serverOpsAdapter struct {
-	server   *Server
-	recorder *ProtocolRecorder
+	server     *Server
+	recorder   *ProtocolRecorder
+	advisorCtx *mcpruntime.AdvisorContext // persists AdvisorContext pointer across CallMCPTool rounds
 }
 
 func newServerOpsAdapter(server *Server, recorder *ProtocolRecorder) *serverOpsAdapter {
@@ -39,7 +41,18 @@ func (a *serverOpsAdapter) TrackUsage(c *gin.Context, input, output, cache int) 
 }
 
 func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error) {
-	return a.server.callMCPToolWithHooks(ctx, toolName, arguments, messages)
+	// Inject persisted AdvisorContext into the caller's ctx so UsesRemaining survives
+	// across multi-round tool calls without losing the caller's cancellation chain.
+	callCtx := ctx
+	if a.advisorCtx != nil {
+		callCtx = mcpruntime.WithAdvisorContext(ctx, a.advisorCtx)
+	}
+	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
+	// Extract and persist the AdvisorContext pointer for the next round.
+	if ac, ok := mcpruntime.GetAdvisorContext(updatedCtx); ok {
+		a.advisorCtx = ac
+	}
+	return result, err
 }
 
 func (a *serverOpsAdapter) GetRecorder() mcp.ProtocolRecorder {

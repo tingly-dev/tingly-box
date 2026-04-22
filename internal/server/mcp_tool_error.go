@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // mcpResponseToolCallHook prepares runtime context for specific MCP servertool calls.
@@ -87,7 +89,9 @@ func (s *Server) mcpResponseToolCallHooks() []mcpResponseToolCallHook {
 func (s *Server) withAdvisorContext(ctx context.Context, messages []map[string]any) context.Context {
 	if actx, ok := mcpruntime.GetAdvisorContext(ctx); ok {
 		actx.Messages = messages
-		return mcpruntime.WithAdvisorContext(ctx, actx)
+		// Don't create a new context - return the original so modifications to actx
+		// are visible to subsequent calls within the same request
+		return ctx
 	}
 
 	maxUses := 0
@@ -100,7 +104,7 @@ func (s *Server) withAdvisorContext(ctx context.Context, messages []map[string]a
 
 	return mcpruntime.WithAdvisorContext(ctx, &mcpruntime.AdvisorContext{
 		Messages:      messages,
-		UsesRemaining: maxUses,
+		UsesRemaining: &maxUses,
 	})
 }
 
@@ -111,6 +115,14 @@ func (s *Server) applyMCPResponseToolCallHooks(ctx context.Context, toolName str
 			depth := mcpruntime.GetAdvisorDepth(ctx)
 			ctx = mcpruntime.WithAdvisorDepth(ctx, depth+1)
 			ctx = hook.PrepareContext(s, ctx, messages)
+
+			// Inject scenario record sink so advisor HTTP calls get recorded
+			if scenarioVal := ctx.Value(client.ScenarioContextKey); scenarioVal != nil {
+				scenario := typ.RuleScenario(scenarioVal.(string))
+				if sink := s.GetOrCreateScenarioSink(scenario); sink != nil && sink.IsEnabled() {
+					ctx = mcpruntime.WithAdvisorRecordSink(ctx, sink)
+				}
+			}
 		}
 	}
 	return ctx
@@ -118,7 +130,12 @@ func (s *Server) applyMCPResponseToolCallHooks(ctx context.Context, toolName str
 
 // callMCPToolWithHooks executes response-phase MCP servertool hooks before the runtime call.
 // Hooks run when we consume worker-returned tool calls.
-func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error) {
+// Returns updated context (with advisor quota decremented), result, and error.
+func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error) {
+	prevDepth := mcpruntime.GetAdvisorDepth(ctx)
 	ctx = s.applyMCPResponseToolCallHooks(ctx, toolName, messages)
-	return s.callMCPToolWithGuard(ctx, toolName, arguments)
+	result, err := s.callMCPToolWithGuard(ctx, toolName, arguments)
+	// Restore depth after call so it doesn't accumulate across sequential tool calls.
+	ctx = mcpruntime.WithAdvisorDepth(ctx, prevDepth)
+	return ctx, result, err
 }

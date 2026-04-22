@@ -69,7 +69,7 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 
 		// Check per-request quota from context
 		actx, ok := GetAdvisorContext(ctx)
-		if !ok || actx.UsesRemaining <= 0 {
+		if !ok || actx.UsesRemaining == nil || *actx.UsesRemaining <= 0 {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{mcp.NewTextContent("Advisor consultations exhausted for this request.")},
 				IsError: true,
@@ -89,7 +89,7 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 		// Execute advisor call
 		logrus.WithFields(logrus.Fields{
 			"reason":         reason,
-			"uses_remaining": actx.UsesRemaining,
+			"uses_remaining": *actx.UsesRemaining,
 			"depth":          depth,
 			"format":         detectAdvisorFormat(cfg),
 		}).Debug("[MCP-DEBUG] ADVISOR: calling advisor model")
@@ -98,7 +98,10 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 		if cfg.TimeoutSeconds > 0 {
 			timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 		}
-		advisorCtx, cancel := context.WithTimeout(ctx, timeout)
+		// Detach from parent cancellation: the parent request context may be canceled
+		// when streaming finishes (gin handler exits), but advisor HTTP call must complete.
+		// We keep only the advisor's own timeout.
+		advisorCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 		defer cancel()
 
 		var result string
@@ -109,17 +112,21 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 			result, err = callAnthropic(advisorCtx, cfg, cp, reason, actx)
 		}
 
+		// Decrement uses regardless of outcome to prevent retry loops on failure
+		*actx.UsesRemaining = *actx.UsesRemaining - 1
+
 		if err != nil {
-			logrus.WithError(err).Error("[MCP-DEBUG] ADVISOR: consultation failed")
+			logrus.WithFields(logrus.Fields{
+				"error":          err,
+				"uses_remaining": *actx.UsesRemaining,
+			}).Error("[MCP-DEBUG] ADVISOR: consultation failed")
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{mcp.NewTextContent(fmt.Sprintf("Advisor error: %v", err))},
 				IsError: true,
 			}, nil
 		}
 
-		// Decrement uses
-		actx.UsesRemaining--
-		logrus.WithField("uses_remaining", actx.UsesRemaining).Debug("[MCP-DEBUG] ADVISOR: consultation completed")
+		logrus.WithField("uses_remaining", *actx.UsesRemaining).Debug("[MCP-DEBUG] ADVISOR: consultation completed")
 
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(result)}}, nil
 	}

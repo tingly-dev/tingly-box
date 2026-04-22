@@ -79,13 +79,14 @@ func TestAdvisorToolLoop(t *testing.T) {
 	}
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
+	uses3 := 3
 	actx := &runtime.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "You are a helpful assistant."},
 			{"role": "user", "content": "Hello"},
 			{"role": "assistant", "content": "Hi there!"},
 		},
-		UsesRemaining: 3,
+		UsesRemaining: &uses3,
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
@@ -112,28 +113,28 @@ func TestAdvisorToolLoop(t *testing.T) {
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "situation clear")
 	require.Contains(t, extractText(result), "proceed with caution")
-	require.Equal(t, 2, actx.UsesRemaining)
+	require.Equal(t, 2, *actx.UsesRemaining)
 
 	// Second call.
 	result, err = vt.Handler(ctx, makeReq("Still unsure"))
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "situation clear")
-	require.Equal(t, 1, actx.UsesRemaining)
+	require.Equal(t, 1, *actx.UsesRemaining)
 
 	// Third call.
 	result, err = vt.Handler(ctx, makeReq("One more time"))
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "situation clear")
-	require.Equal(t, 0, actx.UsesRemaining)
+	require.Equal(t, 0, *actx.UsesRemaining)
 
 	// Fourth call should return exhaustion message as an error result.
 	result, err = vt.Handler(ctx, makeReq("No uses left"))
 	require.NoError(t, err)
 	require.True(t, result.IsError)
 	require.Equal(t, "Advisor consultations exhausted for this request.", extractText(result))
-	require.Equal(t, 0, actx.UsesRemaining)
+	require.Equal(t, 0, *actx.UsesRemaining)
 
 	// Verify handler had no errors and received correct paths.
 	require.Empty(t, handlerErrors, "mock server handler encountered errors")
@@ -244,13 +245,14 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	}
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
+	uses2 := 2
 	actx := &runtime.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "Executor system prompt."},
 			{"role": "user", "content": "Help me"},
 			{"role": "assistant", "content": "Sure!"},
 		},
-		UsesRemaining: 2,
+		UsesRemaining: &uses2,
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
@@ -275,13 +277,13 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "anthropic clear")
-	require.Equal(t, 1, actx.UsesRemaining)
+	require.Equal(t, 1, *actx.UsesRemaining)
 
 	result, err = vt.Handler(ctx, makeReq("Again"))
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "anthropic clear")
-	require.Equal(t, 0, actx.UsesRemaining)
+	require.Equal(t, 0, *actx.UsesRemaining)
 
 	result, err = vt.Handler(ctx, makeReq("Exhausted"))
 	require.NoError(t, err)
@@ -364,11 +366,12 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	}
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
+	uses1 := 1
 	actx := &runtime.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "user", "content": "Hello"},
 		},
-		UsesRemaining: 1,
+		UsesRemaining: &uses1,
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 

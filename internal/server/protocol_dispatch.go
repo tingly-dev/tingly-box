@@ -381,7 +381,10 @@ func (s *Server) buildOpenAIToAnthropicMCPHooks(
 				if arguments == "" {
 					arguments = "{}"
 				}
-				result, err := s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
+				// callMCPToolWithHooks updates context (e.g., advisor quota), so we must propagate it
+				var result string
+				var err error
+				ctx, result, err = s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
 				if err != nil {
 					logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tc.Name, arguments)
 				}

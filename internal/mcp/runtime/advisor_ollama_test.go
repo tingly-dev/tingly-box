@@ -52,13 +52,14 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 
 	vt := NewAdvisorVirtualTool(cfg, cp, store)
 
+	uses2 := 2
 	actx := &AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "You are a helpful coding assistant."},
 			{"role": "user", "content": "I need to add a new endpoint /health to a Go HTTP server."},
 			{"role": "assistant", "content": "I'll add a /health endpoint that returns 200 OK with a JSON body."},
 		},
-		UsesRemaining: 2,
+		UsesRemaining: &uses2,
 	}
 	ctx := WithAdvisorContext(context.Background(), actx)
 
@@ -102,8 +103,8 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 	}
 
 	// UsesRemaining should have decremented.
-	if actx.UsesRemaining != 1 {
-		t.Errorf("expected UsesRemaining=1, got %d", actx.UsesRemaining)
+	if *actx.UsesRemaining != 1 {
+		t.Errorf("expected UsesRemaining=1, got %d", *actx.UsesRemaining)
 	}
 }
 
@@ -126,9 +127,10 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 
 	vt := NewAdvisorVirtualTool(cfg, cp, store)
 
+	uses1 := 1
 	actx := &AdvisorContext{
 		Messages:      []map[string]any{{"role": "user", "content": "hello"}},
-		UsesRemaining: 1,
+		UsesRemaining: &uses1,
 	}
 	ctx := WithAdvisorContext(context.Background(), actx)
 
@@ -149,8 +151,8 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("first call should not error, got: %v", result.Content)
 	}
-	if actx.UsesRemaining != 0 {
-		t.Errorf("expected UsesRemaining=0 after first call, got %d", actx.UsesRemaining)
+	if *actx.UsesRemaining != 0 {
+		t.Errorf("expected UsesRemaining=0 after first call, got %d", *actx.UsesRemaining)
 	}
 
 	text, ok := result.Content[0].(mcp.TextContent)
