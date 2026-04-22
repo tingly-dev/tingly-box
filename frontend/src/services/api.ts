@@ -1,28 +1,11 @@
 // API service layer for communicating with the backend
 
 import TinglyService from "@/bindings";
-import type { paths } from '../client/schema';
-import { getApiBaseUrl, getDisplayOrigin } from '../utils/protocol';
+import type { paths } from '@/client';
+import { getApiBaseUrl as getApiBaseUrlUtil } from '../utils/protocol';
 
-const DEFAULT_BASE_PATH = getDisplayOrigin().replace(/\/+$/, "");
-
-// Type definitions for backward compatibility
-// @deprecated Direct client access is preferred now
-interface ApiInstances {
-    historyApi: any;
-    modelsApi: any;
-    providersApi: any;
-    rulesApi: any;
-    serverApi: any;
-    skillsApi: any;
-    testingApi: any;
-    tokenApi: any;
-    infoApi: any;
-    oauthApi: any;
-    logsApi: any;
-    usageApi: any;
-    imbotSettingsApi: any;
-}
+// Re-export getBaseUrl for backward compatibility
+export const getBaseUrl = getApiBaseUrlUtil;
 
 
 // Get user auth token for UI and control API from localStorage
@@ -54,18 +37,12 @@ const getModelToken = (): string | null => {
     return localStorage.getItem('model_token');
 };
 
-// Get base URL for API calls using centralized protocol utility
-// @deprecated Use getApiBaseUrl from utils/protocol.ts directly
-export const getBaseUrl = async (): Promise<string> => {
-    return getApiBaseUrl();
-}
-
 // Import openapi-fetch
 import createClient from 'openapi-fetch';
 
 // Create the typed client with base URL
 const createApiClient = async () => {
-    const basePath = await getApiBaseUrl();
+    const basePath = await getApiBaseUrlUtil();
     return createClient<paths>({ baseUrl: basePath });
 };
 
@@ -146,47 +123,6 @@ async function modelAPI(url: string, options: RequestInit = {}): Promise<any> {
     } catch (error) {
         return { success: false, error: (error as Error).message };
     }
-}
-
-// ============================================
-// Legacy API Instances Wrapper
-// Maintained for backward compatibility with api.instances()
-// ============================================
-
-// Lazy client initialization
-let apiInstancesInitialized = false;
-
-// Async initialization function (backward compat)
-async function initializeApiInstances(): Promise<ApiInstances> {
-    await getClient(); // Ensure client is ready
-    apiInstancesInitialized = true;
-    // Return mock instances that delegate to the real client
-    return createMockApiInstances();
-}
-
-// Create mock instances that delegate to openapi-fetch client
-function createMockApiInstances(): ApiInstances {
-    return {
-        historyApi: {},
-        modelsApi: {},
-        providersApi: {},
-        rulesApi: {},
-        serverApi: {},
-        skillsApi: {},
-        testingApi: {},
-        tokenApi: {},
-        infoApi: {},
-        oauthApi: {},
-        logsApi: {},
-        usageApi: {},
-        imbotSettingsApi: {},
-    };
-}
-
-// Get API instances (async) - backward compatibility
-export async function getApiInstances(): Promise<ApiInstances> {
-    await getClient();
-    return createMockApiInstances();
 }
 
 export const api = {
@@ -821,9 +757,6 @@ export const api = {
         localStorage.removeItem('model_token');
     },
 
-    // Direct access to raw API instances for advanced usage (backward compat)
-    instances: getApiInstances,
-
     // Usage Dashboard API calls
     getUsageStats: async (params: {
         group_by?: string;
@@ -901,19 +834,15 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            console.log('[OAuth API] Sending request:', data);
             const response = await client.POST('/api/v1/oauth/authorize', {
                 headers,
                 body: data as any
             });
-            console.log('[OAuth API] Response:', response);
             if (response.error) {
-                console.error('[OAuth API] Error response:', response.error);
                 return { success: false, error: 'Request failed', data: response.error };
             }
             return response.data;
         } catch (error: any) {
-            console.error('[OAuth API] Exception:', error);
             return { success: false, error: error.message };
         }
     },
@@ -1176,79 +1105,6 @@ export const api = {
         } catch (error: any) {
             return { success: false, error: error.message };
         }
-    },
-
-    // ============================================
-    // ImBot Settings API (Migrated to standard API)
-    // ============================================
-
-    // Get all ImBot settings
-    getImBotSettingsList: async (): Promise<any> => {
-        return uiAPI('/imbot-settings');
-    },
-
-    // Get a specific ImBot setting by UUID
-    getImBotSetting: async (uuid: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${uuid}`);
-    },
-
-    // Create a new ImBot setting
-    createImBotSetting: async (data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        enabled?: boolean;
-        token?: string;
-    }): Promise<any> => {
-        return uiAPI('/imbot-settings', {
-            method: 'POST',
-            body: JSON.stringify(data),
-        });
-    },
-
-    // Update an ImBot setting
-    updateImBotSetting: async (uuid: string, data: {
-        name?: string;
-        platform?: string;
-        auth_type?: string;
-        auth?: Record<string, string>;
-        proxy_url?: string;
-        chat_id?: string;
-        bash_allowlist?: string[];
-        enabled?: boolean;
-    }): Promise<any> => {
-        return uiAPI(`/imbot-settings/${uuid}`, {
-            method: 'PUT',
-            body: JSON.stringify(data),
-        });
-    },
-
-    // Delete an ImBot setting
-    deleteImBotSetting: async (uuid: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${uuid}`, {
-            method: 'DELETE',
-        });
-    },
-
-    // Toggle an ImBot setting's enabled status
-    toggleImBotSetting: async (uuid: string): Promise<any> => {
-        return uiAPI(`/imbot-settings/${uuid}/toggle`, {
-            method: 'POST',
-        });
-    },
-
-    // Get all supported ImBot platforms
-    getImBotPlatforms: async (): Promise<any> => {
-        return uiAPI('/imbot-platforms');
-    },
-
-    // Get platform auth configuration
-    getImBotPlatformConfig: async (platform: string): Promise<any> => {
-        return uiAPI(`/imbot-platform-config?platform=${platform}`);
     },
 
     // ============================================

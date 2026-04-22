@@ -1,92 +1,79 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useLocalStorage } from './useLocalStorage';
+import { createEventSystem } from '../utils/eventSystem';
 
 // Local storage key for custom models
 const CUSTOM_MODELS_STORAGE_KEY = 'tingly_custom_models';
 
-// Helper functions to manage custom models in local storage
-export const loadCustomModelsFromStorage = (): { [providerUuid: string]: string | string[] } => {
-    try {
-        const stored = localStorage.getItem(CUSTOM_MODELS_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {};
-    } catch (error) {
-        console.error('Failed to load custom models from storage:', error);
-        return {};
-    }
-};
+// Type for custom models data (supports both old string format and new array format)
+type CustomModelsData = { [providerUuid: string]: string | string[] };
+const DEFAULT_CUSTOM_MODELS = {};
 
-export const saveCustomModelToStorage = (providerUuid: string, customModel: string | string[]) => {
-    try {
-        const customModels = loadCustomModelsFromStorage();
-        if (typeof customModel === 'string') {
-            // For backward compatibility, if saving a single string, check if it's already an array
-            const existing = customModels[providerUuid];
-            if (Array.isArray(existing)) {
-                // Add to existing array if not duplicate
-                if (!existing.includes(customModel)) {
-                    customModels[providerUuid] = [...existing, customModel];
-                }
-            } else {
-                // Convert to array format
-                customModels[providerUuid] = existing ? [existing, customModel] : [customModel];
-            }
-        } else {
-            // Save array directly
-            customModels[providerUuid] = customModel;
-        }
-        localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(customModels));
-        return true;
-    } catch (error) {
-        console.error('Failed to save custom model to storage:', error);
-        return false;
-    }
-};
+// Event system for custom model updates
+const customModelEvent = createEventSystem<{ providerUuid: string; modelName: string }>(
+    'tingly_custom_model_update'
+);
 
-export const removeCustomModelFromStorage = (providerUuid: string) => {
-    try {
-        const customModels = loadCustomModelsFromStorage();
-        delete customModels[providerUuid];
-        localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(customModels));
-        return true;
-    } catch (error) {
-        console.error('Failed to remove custom model from storage:', error);
-        return false;
-    }
+// Export event name for backward compatibility
+export const CUSTOM_MODEL_UPDATE_EVENT = customModelEvent.eventName;
+
+// Helper to convert storage data to array format
+const toArrayFormat = (value: string | string[]): string[] => {
+    return Array.isArray(value) ? value : [value].filter(Boolean);
 };
 
 // Custom hook to manage custom models
 export const useCustomModels = () => {
-    const [customModels, setCustomModels] = useState<{ [providerUuid: string]: string[] }>({});
-    const [version, setVersion] = useState(0);
+    const { data, version, saveData, removeKey, loadData, refetch } =
+        useLocalStorage<CustomModelsData>(CUSTOM_MODELS_STORAGE_KEY, DEFAULT_CUSTOM_MODELS);
 
-    // Function to load custom models from storage and update state
-    const refetch = useCallback(() => {
-        const storedCustomModels = loadCustomModelsFromStorage();
-        // Convert single string to array for backward compatibility
-        const adaptedModels: { [providerUuid: string]: string[] } = {};
-        Object.keys(storedCustomModels).forEach(providerUuid => {
-            const value = storedCustomModels[providerUuid];
-            // If it's a string (old format), convert to array
-            adaptedModels[providerUuid] = Array.isArray(value) ? value : [value].filter(Boolean);
+    // Convert storage data to normalized array format
+    const customModels: { [providerUuid: string]: string[] } = useCallback(() => {
+        const adapted: { [providerUuid: string]: string[] } = {};
+        Object.keys(data).forEach(providerUuid => {
+            adapted[providerUuid] = toArrayFormat(data[providerUuid]);
         });
-        setCustomModels(adaptedModels);
-        setVersion(prev => prev + 1);
-    }, []);
-
-    // Load custom models from local storage on hook mount
-    useEffect(() => {
-        refetch();
-    }, [refetch]);
+        return adapted;
+    }, [data])();
 
     // Listen for custom model updates from other components and reload
     useEffect(() => {
-        const cleanup = listenForCustomModelUpdates(() => {
+        const cleanup = customModelEvent.listen(() => {
             refetch();
         });
         return cleanup;
     }, [refetch]);
 
+    // Helper function to save with backward compatibility
+    const saveCustomModelToStorage = useCallback((
+        providerUuid: string,
+        customModel: string | string[]
+    ): boolean => {
+        try {
+            const currentData = loadData();
+            if (typeof customModel === 'string') {
+                // For backward compatibility
+                const existing = currentData[providerUuid];
+                if (Array.isArray(existing)) {
+                    if (!existing.includes(customModel)) {
+                        currentData[providerUuid] = [...existing, customModel];
+                    }
+                } else {
+                    currentData[providerUuid] = existing ? [existing, customModel] : [customModel];
+                }
+            } else {
+                currentData[providerUuid] = customModel;
+            }
+            localStorage.setItem(CUSTOM_MODELS_STORAGE_KEY, JSON.stringify(currentData));
+            return true;
+        } catch (error) {
+            console.error('Failed to save custom model to storage:', error);
+            return false;
+        }
+    }, [loadData]);
+
     // Save custom model for a provider
-    const saveCustomModel = (providerUuid: string, customModel: string) => {
+    const saveCustomModel = useCallback((providerUuid: string, customModel: string) => {
         if (!customModel?.trim()) return false;
 
         const currentModels = customModels[providerUuid] || [];
@@ -97,85 +84,92 @@ export const useCustomModels = () => {
 
         const newModels = [...currentModels, customModel];
         if (saveCustomModelToStorage(providerUuid, newModels)) {
-            setCustomModels(prev => ({ ...prev, [providerUuid]: newModels }));
-            dispatchCustomModelUpdate(providerUuid, customModel);
+            refetch();
+            customModelEvent.dispatch({ providerUuid, modelName: customModel });
             return true;
         }
         return false;
-    };
+    }, [customModels, saveCustomModelToStorage, refetch]);
 
     // Remove custom model for a provider
-    const removeCustomModel = (providerUuid: string, customModel: string) => {
+    const removeCustomModel = useCallback((providerUuid: string, customModel: string) => {
         const currentModels = customModels[providerUuid] || [];
         const newModels = currentModels.filter(model => model !== customModel);
 
         if (newModels.length === 0) {
             // Remove the entire entry if no models left
-            if (removeCustomModelFromStorage(providerUuid)) {
-                setCustomModels(prev => {
-                    const newModels = { ...prev };
-                    delete newModels[providerUuid];
-                    return newModels;
-                });
-                dispatchCustomModelUpdate(providerUuid, customModel);
+            if (removeKey(providerUuid)) {
+                refetch();
+                customModelEvent.dispatch({ providerUuid, modelName: customModel });
                 return true;
             }
         } else if (saveCustomModelToStorage(providerUuid, newModels)) {
-            setCustomModels(prev => ({ ...prev, [providerUuid]: newModels }));
-            dispatchCustomModelUpdate(providerUuid, customModel);
+            refetch();
+            customModelEvent.dispatch({ providerUuid, modelName: customModel });
             return true;
         }
         return false;
-    };
+    }, [customModels, saveCustomModelToStorage, removeKey, refetch]);
 
     // Update custom model for a provider (atomically replace old value with new value)
-    const updateCustomModel = (providerUuid: string, oldValue: string, newValue: string) => {
+    const updateCustomModel = useCallback((providerUuid: string, oldValue: string, newValue: string) => {
         if (!newValue?.trim()) return false;
 
-        // Use functional update to avoid stale closure
-        setCustomModels(prev => {
-            const currentModels = prev[providerUuid] || [];
+        const currentModels = customModels[providerUuid] || [];
 
-            // Remove old value and add new value in one operation
-            const newModels = currentModels.filter(model => model !== oldValue);
+        // Remove old value and add new value in one operation
+        const newModels = currentModels.filter(model => model !== oldValue);
 
-            // Avoid duplicates (in case newValue already exists)
-            if (!newModels.includes(newValue)) {
-                newModels.push(newValue);
-            }
+        // Avoid duplicates (in case newValue already exists)
+        if (!newModels.includes(newValue)) {
+            newModels.push(newValue);
+        }
 
-            // Save to storage
-            saveCustomModelToStorage(providerUuid, newModels.length > 0 ? newModels : []);
+        // Save to storage
+        if (saveCustomModelToStorage(providerUuid, newModels.length > 0 ? newModels : [])) {
+            refetch();
+            customModelEvent.dispatch({ providerUuid, modelName: newValue });
+            return true;
+        }
 
-            // Dispatch update event
-            dispatchCustomModelUpdate(providerUuid, newValue);
-
-            // Return updated state
-            if (newModels.length === 0) {
-                const newState = { ...prev };
-                delete newState[providerUuid];
-                return newState;
-            }
-            return { ...prev, [providerUuid]: newModels };
-        });
-
-        return true;
-    };
+        return false;
+    }, [customModels, saveCustomModelToStorage, refetch]);
 
     // Get all custom models for a specific provider
-    const getCustomModels = (providerUuid: string): string[] => {
+    const getCustomModels = useCallback((providerUuid: string): string[] => {
         return customModels[providerUuid] || [];
-    };
+    }, [customModels]);
 
     // Get the first/custom model for backward compatibility
-    const getCustomModel = (providerUuid: string): string | undefined => {
+    const getCustomModel = useCallback((providerUuid: string): string | undefined => {
         const models = customModels[providerUuid];
         return models && models.length > 0 ? models[0] : undefined;
-    };
+    }, [customModels]);
 
     // Check if a model is a custom model for a provider
-    const isCustomModel = (model: string, providerUuid: string): boolean => {
+    const isCustomModel = useCallback((model: string, providerUuid: string): boolean => {
         return customModels[providerUuid]?.includes(model) || false;
+    }, [customModels]);
+
+    // Helper functions for backward compatibility
+    const loadCustomModelsFromStorage = useCallback((): CustomModelsData => {
+        return loadData();
+    }, [loadData]);
+
+    const removeCustomModelFromStorage = useCallback((providerUuid: string): boolean => {
+        return removeKey(providerUuid);
+    }, [removeKey]);
+
+    // Helper to dispatch custom model update event (backward compatibility)
+    const dispatchCustomModelUpdate = (providerUuid: string, modelName: string) => {
+        customModelEvent.dispatch({ providerUuid, modelName });
+    };
+
+    // Helper to listen for custom model updates (backward compatibility)
+    const listenForCustomModelUpdates = (callback: (providerUuid: string, modelName: string) => void) => {
+        return customModelEvent.listen(({ providerUuid, modelName }) => {
+            callback(providerUuid, modelName);
+        });
     };
 
     return {
@@ -190,30 +184,8 @@ export const useCustomModels = () => {
         isCustomModel,
         loadCustomModelsFromStorage,
         saveCustomModelToStorage,
-        removeCustomModelFromStorage
-    };
-};
-
-// Export event name for custom model updates
-export const CUSTOM_MODEL_UPDATE_EVENT = 'tingly_custom_model_update';
-
-// Helper to dispatch custom model update event
-export const dispatchCustomModelUpdate = (providerUuid: string, modelName: string) => {
-    window.dispatchEvent(new CustomEvent(CUSTOM_MODEL_UPDATE_EVENT, {
-        detail: { providerUuid, modelName }
-    }));
-};
-
-// Helper to listen for custom model updates
-export const listenForCustomModelUpdates = (callback: (providerUuid: string, modelName: string) => void) => {
-    const handler = ((event: CustomEvent) => {
-        callback(event.detail.providerUuid, event.detail.modelName);
-    }) as EventListener;
-
-    window.addEventListener(CUSTOM_MODEL_UPDATE_EVENT, handler);
-
-    // Return cleanup function
-    return () => {
-        window.removeEventListener(CUSTOM_MODEL_UPDATE_EVENT, handler);
+        removeCustomModelFromStorage,
+        dispatchCustomModelUpdate,
+        listenForCustomModelUpdates,
     };
 };

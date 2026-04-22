@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useLocalStorage } from './useLocalStorage';
+import { createEventSystem } from '../utils/eventSystem';
 
 // Local storage key for new models
 const NEW_MODELS_STORAGE_KEY = 'tingly_new_models';
-
-// Export event name for new models updates
-export const NEW_MODELS_UPDATE_EVENT = 'tingly_new_models_update';
+const DEFAULT_NEW_MODELS = {};
 
 // Type definition for new models diff
 export interface NewModelsDiff {
@@ -16,61 +16,22 @@ export interface NewModelsDiff {
 // Type for the entire storage structure
 export type NewModelsData = { [providerUuid: string]: NewModelsDiff };
 
-// Helper functions to manage new models in local storage
-export const loadNewModelsFromStorage = (): NewModelsData => {
-    try {
-        const stored = localStorage.getItem(NEW_MODELS_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {};
-    } catch (error) {
-        console.error('Failed to load new models from storage:', error);
-        return {};
-    }
-};
+// Event system for new models updates
+const newModelsEvent = createEventSystem<{ providerUuid: string; diff: NewModelsDiff | null }>(
+    'tingly_new_models_update'
+);
 
-export const saveNewModelsToStorage = (providerUuid: string, diff: NewModelsDiff) => {
-    try {
-        const newModels = loadNewModelsFromStorage();
-        newModels[providerUuid] = diff;
-        localStorage.setItem(NEW_MODELS_STORAGE_KEY, JSON.stringify(newModels));
-        return true;
-    } catch (error) {
-        console.error('Failed to save new models to storage:', error);
-        return false;
-    }
-};
-
-export const removeNewModelsFromStorage = (providerUuid: string) => {
-    try {
-        const newModels = loadNewModelsFromStorage();
-        delete newModels[providerUuid];
-        localStorage.setItem(NEW_MODELS_STORAGE_KEY, JSON.stringify(newModels));
-        return true;
-    } catch (error) {
-        console.error('Failed to remove new models from storage:', error);
-        return false;
-    }
-};
+// Export event name for backward compatibility
+export const NEW_MODELS_UPDATE_EVENT = newModelsEvent.eventName;
 
 // Custom hook to manage new models
 export const useNewModels = () => {
-    const [newModels, setNewModels] = useState<NewModelsData>({});
-    const [version, setVersion] = useState(0);
-
-    // Function to load new models from storage and update state
-    const refetch = useCallback(() => {
-        const storedNewModels = loadNewModelsFromStorage();
-        setNewModels(storedNewModels);
-        setVersion(prev => prev + 1);
-    }, []);
-
-    // Load new models from local storage on hook mount
-    useEffect(() => {
-        refetch();
-    }, [refetch]);
+    const { data: newModels, version, saveData, removeKey, setData, refetch } =
+        useLocalStorage<NewModelsData>(NEW_MODELS_STORAGE_KEY, DEFAULT_NEW_MODELS);
 
     // Listen for new models updates from other components and reload
     useEffect(() => {
-        const cleanup = listenForNewModelsUpdates(() => {
+        const cleanup = newModelsEvent.listen(() => {
             refetch();
         });
         return cleanup;
@@ -78,15 +39,15 @@ export const useNewModels = () => {
 
     // Clear new models for a specific provider
     const clearNewModels = useCallback((providerUuid: string) => {
-        if (removeNewModelsFromStorage(providerUuid)) {
-            setNewModels(prev => {
+        if (removeKey(providerUuid)) {
+            setData(prev => {
                 const newModelsData = { ...prev };
                 delete newModelsData[providerUuid];
                 return newModelsData;
             });
-            dispatchNewModelsUpdate(providerUuid, null);
+            newModelsEvent.dispatch({ providerUuid, diff: null });
         }
-    }, []);
+    }, [removeKey, setData]);
 
     // Detect and store new models after a refresh
     const detectAndStoreNewModels = useCallback((
@@ -122,20 +83,46 @@ export const useNewModels = () => {
                 timestamp: existingDiff?.timestamp || new Date().toISOString(),
             };
 
-            if (saveNewModelsToStorage(providerUuid, diff)) {
-                setNewModels(prev => ({ ...prev, [providerUuid]: diff }));
-                dispatchNewModelsUpdate(providerUuid, diff);
+            if (saveData(providerUuid, diff)) {
+                setData(prev => ({ ...prev, [providerUuid]: diff }));
+                newModelsEvent.dispatch({ providerUuid, diff });
             }
         } else {
             // No new models left (all were removed), clear the entry
             clearNewModels(providerUuid);
         }
-    }, [newModels, clearNewModels]);
+    }, [newModels, clearNewModels, saveData, setData]);
 
     // Get new models diff for a specific provider
     const getNewModels = useCallback((providerUuid: string): NewModelsDiff | undefined => {
         return newModels[providerUuid];
     }, [newModels]);
+
+    // Helper functions for backward compatibility
+    const loadNewModelsFromStorage = useCallback(() => {
+        const stored = localStorage.getItem(NEW_MODELS_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : {};
+    }, []);
+
+    const saveNewModelsToStorage = useCallback((providerUuid: string, diff: NewModelsDiff) => {
+        return saveData(providerUuid, diff);
+    }, [saveData]);
+
+    const removeNewModelsFromStorage = useCallback((providerUuid: string) => {
+        return removeKey(providerUuid);
+    }, [removeKey]);
+
+    // Helper to dispatch new models update event (backward compatibility)
+    const dispatchNewModelsUpdate = (providerUuid: string, diff: NewModelsDiff | null) => {
+        newModelsEvent.dispatch({ providerUuid, diff });
+    };
+
+    // Helper to listen for new models updates (backward compatibility)
+    const listenForNewModelsUpdates = (callback: (providerUuid: string, diff: NewModelsDiff | null) => void) => {
+        return newModelsEvent.listen(({ providerUuid, diff }) => {
+            callback(providerUuid, diff);
+        });
+    };
 
     return {
         newModels,
@@ -147,26 +134,7 @@ export const useNewModels = () => {
         loadNewModelsFromStorage,
         saveNewModelsToStorage,
         removeNewModelsFromStorage,
-    };
-};
-
-// Helper to dispatch new models update event
-export const dispatchNewModelsUpdate = (providerUuid: string, diff: NewModelsDiff | null) => {
-    window.dispatchEvent(new CustomEvent(NEW_MODELS_UPDATE_EVENT, {
-        detail: { providerUuid, diff }
-    }));
-};
-
-// Helper to listen for new models updates
-export const listenForNewModelsUpdates = (callback: (providerUuid: string, diff: NewModelsDiff | null) => void) => {
-    const handler = ((event: CustomEvent) => {
-        callback(event.detail.providerUuid, event.detail.diff);
-    }) as EventListener;
-
-    window.addEventListener(NEW_MODELS_UPDATE_EVENT, handler);
-
-    // Return cleanup function
-    return () => {
-        window.removeEventListener(NEW_MODELS_UPDATE_EVENT, handler);
+        dispatchNewModelsUpdate,
+        listenForNewModelsUpdates,
     };
 };
