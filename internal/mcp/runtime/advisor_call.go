@@ -55,7 +55,9 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 	if wrapper == nil {
 		return "", fmt.Errorf("advisor: failed to create OpenAI client")
 	}
-
+	if sink, ok := GetAdvisorRecordSink(ctx); ok {
+		wrapper.SetRecordSink(sink)
+	}
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(advisorSystemPrompt),
 	}
@@ -110,6 +112,9 @@ func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.Client
 	wrapper := cp.GetAnthropicClient(ctx, provider, cfg.Model)
 	if wrapper == nil {
 		return "", fmt.Errorf("advisor: failed to create Anthropic client")
+	}
+	if sink, ok := GetAdvisorRecordSink(ctx); ok {
+		wrapper.SetRecordSink(sink)
 	}
 
 	var messages []anthropic.MessageParam
