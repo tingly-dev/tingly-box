@@ -1,0 +1,16 @@
+# Development files
+pnpm-lock.yaml
+download.sh
+npm-*
+
+# Build artifacts
+node_modules
+*.tgz
+
+# Documentation
+README.md
+*.md
+
+# Hidden files
+.*
+!.npmignore

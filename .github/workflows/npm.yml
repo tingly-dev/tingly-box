@@ -212,19 +212,15 @@ jobs:
         run: |
           mkdir -p "${{ matrix.pkg_dir }}/zip"
 
-          echo "📥 Downloading zip files from release $RELEASE_TAG..."
-          gh release download "$RELEASE_TAG" --repo "$REPO" --pattern "tingly-box-*.zip" --dir "${{ matrix.pkg_dir }}/zip"
+          echo "📥 Downloading required zip files from release $RELEASE_TAG..."
+          # Only download the platforms we support in bundle
+          gh release download "$RELEASE_TAG" --repo "$REPO" \
+            --pattern "tingly-box-macos-arm64.zip" \
+            --pattern "tingly-box-linux-amd64.zip" \
+            --pattern "tingly-box-windows-amd64.zip" \
+            --dir "${{ matrix.pkg_dir }}/zip"
 
           echo "✅ Downloaded zip files:"
-          ls -lh "${{ matrix.pkg_dir }}/zip/"
-
-          # Remove unwanted packages to reduce size
-          echo "🗑️ Removing unwanted packages..."
-          rm -rf "${{ matrix.pkg_dir }}"/zip/tingly-box-gui-*.zip
-          rm -f "${{ matrix.pkg_dir }}"/zip/tingly-box-linux-arm64.zip
-          rm -f "${{ matrix.pkg_dir }}"/zip/tingly-box-macos-amd64.zip
-
-          echo "✅ Remaining zip files after cleanup:"
           ls -lh "${{ matrix.pkg_dir }}/zip/"
 
       - name: Verify bundle structure
@@ -248,6 +244,15 @@ jobs:
             exit 1
           fi
 
+          # Verify only expected platform files are present
+          EXPECTED_FILES=3
+          ACTUAL_COUNT=$(ls -1 "$PKG_DIR/zip"/*.zip 2>/dev/null | wc -l)
+          if [ "$ACTUAL_COUNT" -ne "$EXPECTED_FILES" ]; then
+            echo "❌ Expected $EXPECTED_FILES zip files, found $ACTUAL_COUNT"
+            ls -lh "$PKG_DIR/zip/"
+            exit 1
+          fi
+
           for zip in tingly-box-macos-arm64.zip tingly-box-linux-amd64.zip tingly-box-windows-amd64.zip; do
             if [ ! -f "$PKG_DIR/zip/$zip" ]; then
               echo "❌ Zip file not found: $zip"
@@ -264,6 +269,19 @@ jobs:
           echo "📦 Package size information:"
           du -sh "${{ matrix.pkg_dir }}"
           du -sh "${{ matrix.pkg_dir }}/zip/"*.zip
+
+          # Validate package size is within acceptable limits
+          # Expected size: ~70MB (3 platforms ~16-17MB each)
+          MAX_SIZE_MB=70
+          ACTUAL_SIZE_MB=$(du -sm "${{ matrix.pkg_dir }}" | cut -f1)
+          echo "📊 Package size: ${ACTUAL_SIZE_MB}MB (max: ${MAX_SIZE_MB}MB)"
+
+          if [ "$ACTUAL_SIZE_MB" -gt "$MAX_SIZE_MB" ]; then
+            echo "❌ Package size exceeds ${MAX_SIZE_MB}MB threshold!"
+            echo "Please review which files are included in the bundle."
+            exit 1
+          fi
+          echo "✅ Package size within acceptable limits"
 
       # Shared publish step
       - name: Publish to npm
