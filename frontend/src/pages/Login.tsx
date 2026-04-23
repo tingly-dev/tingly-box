@@ -94,13 +94,6 @@ const Login: React.FC = () => {
         }
     };
 
-    const handleGenerateToken = () => {
-        const clientId = prompt('Enter client ID (web):', 'web');
-        if (clientId) {
-            window.open(`/api/token?client_id=${encodeURIComponent(clientId)}`, '_blank');
-        }
-    };
-
     return (
         <Container component="main" maxWidth="sm">
             <Box
@@ -149,15 +142,6 @@ const Login: React.FC = () => {
                             disabled={loading}
                         >
                             {loading ? t('login.validating') : t('login.loginButton')}
-                        </Button>
-
-                        <Button
-                            fullWidth
-                            variant="outlined"
-                            onClick={handleGenerateToken}
-                            sx={{ mb: 2 }}
-                        >
-                            {t('login.generateTokenButton')}
                         </Button>
                     </Box>
                 </Paper>
