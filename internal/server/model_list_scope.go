@@ -28,20 +28,6 @@ func shouldIncludeRuleInModelList(requestedScenario typ.RuleScenario, ruleScenar
 		return false
 	}
 
-	// For non-profile scenarios, check exact match first
-	if requestedScenario == ruleScenario {
-		return true
-	}
-
-	// Then check transport reachability for non-profile scenarios
-	requestedDescriptor, ok := typ.GetScenarioDescriptor(requestedScenario)
-	if !ok {
-		return false
-	}
-	for _, transport := range requestedDescriptor.SupportedTransport {
-		if scenarioSupportsTransport(ruleScenario, transport) {
-			return true
-		}
-	}
-	return false
+	// Only include rules that exactly match the requested scenario
+	return requestedScenario == ruleScenario
 }

@@ -399,6 +399,26 @@ tasks:
           "stream": true
         }'
   
+  vscode-models:
+    cmds:
+      - |
+        curl "http://localhost:12580/tingly/vscode/v1/models" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}"
+        
+  cc-models:
+    cmds:
+      - |
+        curl "http://localhost:12580/tingly/claude_code/v1/models" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}"
+        
+  cc-profile-models:
+    cmds:
+      - |
+        curl "http://localhost:12580/tingly/claude_code:p1/v1/models" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}"
   
   vscode:
     cmds:
