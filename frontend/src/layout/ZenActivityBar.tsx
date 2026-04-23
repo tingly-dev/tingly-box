@@ -13,6 +13,7 @@ import {
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { useThemeMode } from '../contexts/ThemeContext';
@@ -47,6 +48,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
     zenEnabled = false,
     onMoreClick,
 }) => {
+    const { t } = useTranslation();
     const { currentVersion } = useAppVersion();
     const { hasUpdate, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
@@ -192,7 +194,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                 {/* Disconnected indicator */}
                 {(!isHealthy || import.meta.env.DEV) && (
                     <Tooltip
-                        title={import.meta.env.DEV && isHealthy ? 'Disconnected (Debug)' : 'Disconnected'}
+                        title={import.meta.env.DEV && isHealthy ? t('layout.activityBar.disconnectedDebug') : t('layout.activityBar.disconnected')}
                         placement="right"
                         arrow
                     >
@@ -204,7 +206,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                                 <IconAlertCircle size={22} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                Error
+                                {t('layout.activityBar.error')}
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
@@ -213,7 +215,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                 {/* Update indicator */}
                 {(hasUpdate || import.meta.env.DEV) && (
                     <Tooltip
-                        title={import.meta.env.DEV && !hasUpdate ? 'Dev Mode' : 'New Version Available'}
+                        title={import.meta.env.DEV && !hasUpdate ? t('layout.activityBar.devMode') : t('layout.activityBar.newVersionAvailable')}
                         placement="right"
                         arrow
                     >
@@ -228,7 +230,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                                 <IconStar size={22} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                {import.meta.env.DEV && !hasUpdate ? 'Dev' : 'Update'}
+                                {import.meta.env.DEV && !hasUpdate ? t('layout.activityBar.devMode') : t('layout.activityBar.newVersionAvailable')}
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
@@ -236,7 +238,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
 
                 {/* Theme toggle button - only show in normal mode */}
                 {!zenEnabled && (
-                    <Tooltip title="Theme" placement="right" arrow>
+                    <Tooltip title={t('layout.activityBar.theme')} placement="right" arrow>
                         <ListItemButton
                             onClick={handleThemeMenuClick}
                             sx={activityItemSx({
@@ -247,7 +249,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                                 <IconBrush size={22} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                Theme
+                                {t('common.theme')}
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
@@ -279,7 +281,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             sx={{ gap: 1.5 }}
                         >
                             <IconSun size={18} />
-                            <Typography>Light</Typography>
+                            <Typography>{t('layout.activityBar.light')}</Typography>
                         </MenuItem>
                         <MenuItem
                             selected={mode === 'dark'}
@@ -290,7 +292,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             sx={{ gap: 1.5 }}
                         >
                             <IconMoon size={18} />
-                            <Typography>Dark</Typography>
+                            <Typography>{t('layout.activityBar.dark')}</Typography>
                         </MenuItem>
                         <MenuItem
                             selected={mode === 'sunlit'}
@@ -301,7 +303,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             sx={{ gap: 1.5 }}
                         >
                             <IconSunHigh size={18} />
-                            <Typography>Sunlit</Typography>
+                            <Typography>{t('layout.activityBar.sunlit')}</Typography>
                         </MenuItem>
                     </Menu>
                 )}
@@ -309,7 +311,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                 {/* Zen mode toggle button - only show in normal mode */}
                 {!zenEnabled && (
                     <>
-                        <Tooltip title="Zen Mode" placement="right" arrow>
+                        <Tooltip title={t('layout.activityBar.zenMode')} placement="right" arrow>
                             <ListItemButton
                                 onClick={handleZenMenuClick}
                                 sx={activityItemSx({
@@ -320,7 +322,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                                     <IconYinYang size={22} />
                                 </ListItemIcon>
                                 <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                    Zen
+                                    {t('common.zen')}
                                 </Typography>
                             </ListItemButton>
                         </Tooltip>
@@ -343,7 +345,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         >
                             <MenuItem disabled sx={{ opacity: 0.6 }}>
                                 <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                    Enter Zen Mode:
+                                    {t('layout.activityBar.enterZenMode')}
                                 </Typography>
                             </MenuItem>
                             <MenuItem onClick={() => handleZenAgentSelect('/zen/claude_code')} sx={{ gap: 1.5 }}>
@@ -384,7 +386,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
 
                 {/* More button - only show in zen mode */}
                 {zenEnabled && onMoreClick && (
-                    <Tooltip title="More" placement="right" arrow>
+                    <Tooltip title={t('layout.activityBar.more')} placement="right" arrow>
                         <ListItemButton
                             onClick={onMoreClick}
                             sx={activityItemSx({
@@ -395,7 +397,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                                 <IconDots size={22} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                More
+                                {t('layout.activityBar.more')}
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
@@ -403,7 +405,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
 
                 {/* Exit Zen button - only show in zen mode */}
                 {zenEnabled && onZenToggle && (
-                    <Tooltip title="Exit Zen" placement="right" arrow>
+                    <Tooltip title={t('layout.activityBar.exitZen')} placement="right" arrow>
                         <ListItemButton
                             onClick={onZenToggle}
                             sx={activityItemSx({
@@ -414,7 +416,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                                 <IconYinYang size={22} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                Exit
+                                {t('layout.activityBar.exitZen')}
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
@@ -437,7 +439,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                 }}
             >
                 {/* User icon */}
-                <Tooltip title="Click" placement="right" arrow>
+                <Tooltip title={t('layout.activityBar.click')} placement="right" arrow>
                     <ListItemButton
                         onClick={onUserClick}
                         sx={{

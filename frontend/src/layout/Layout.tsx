@@ -1,6 +1,7 @@
 import { Box, Drawer, IconButton, Popover, Typography, Menu, MenuItem } from '@mui/material';
 import { IconMenu, IconDots, IconYinYang, IconSun, IconMoon, IconSunHigh } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { useThemeMode } from '../contexts/ThemeContext';
@@ -16,6 +17,7 @@ import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } f
 import { IconPlus } from '@tabler/icons-react';
 
 const Layout = ({ children }: LayoutProps) => {
+    const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
     const { currentVersion } = useAppVersion();
@@ -354,7 +356,7 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                         <MenuItem disabled sx={{ opacity: 0.6 }}>
                             <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                Switch to:
+                                {t('layout.themeMenu.switchTo')}
                             </Typography>
                         </MenuItem>
                         {activityItems.map((activity) => (
@@ -388,20 +390,20 @@ const Layout = ({ children }: LayoutProps) => {
                             <>
                                 <MenuItem disabled sx={{ opacity: 0.6 }}>
                                     <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                        Theme:
+                                        {t('layout.themeMenu.theme')}
                                     </Typography>
                                 </MenuItem>
                                 <MenuItem onClick={() => setTheme('light')} sx={{ gap: 1.5 }}>
                                     <IconSun size={18} />
-                                    <Typography>Light</Typography>
+                                    <Typography>{t('layout.activityBar.light')}</Typography>
                                 </MenuItem>
                                 <MenuItem onClick={() => setTheme('dark')} sx={{ gap: 1.5 }}>
                                     <IconMoon size={18} />
-                                    <Typography>Dark</Typography>
+                                    <Typography>{t('layout.activityBar.dark')}</Typography>
                                 </MenuItem>
                                 <MenuItem onClick={() => setTheme('sunlit')} sx={{ gap: 1.5 }}>
                                     <IconSunHigh size={18} />
-                                    <Typography>Sunlit</Typography>
+                                    <Typography>{t('layout.activityBar.sunlit')}</Typography>
                                 </MenuItem>
                             </>
                         )}
@@ -416,7 +418,7 @@ const Layout = ({ children }: LayoutProps) => {
                         transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
                         sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
                     >
-                        Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
+                        {t('layout.easterEgg')} · {currentVersion}
                     </Popover>
                 </>
             ) : (
@@ -499,7 +501,7 @@ const Layout = ({ children }: LayoutProps) => {
                         transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
                         sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
                     >
-                        Hi, I'm Tingly-Box, Your Smart AI Orchestrator · {currentVersion}
+                        {t('layout.easterEgg')} · {currentVersion}
                     </Popover>
                 </>
             )}

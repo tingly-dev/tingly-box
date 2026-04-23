@@ -19,14 +19,22 @@ export default {
     "success": "成功",
     "error": "错误",
     "warning": "警告",
-    "info": "信息"
+    "info": "信息",
+    "on": "On",
+    "off": "Off",
+    "direct": "Direct",
+    "theme": "主题",
+    "zen": "禅",
+    "openClaw": "OpenClaw",
+    "prompt": "提示词"
   },
   "layout": {
     "appTitle": "Tingly Box",
     "slogan": "智能，尽在掌握。",
     "version": "版本 {{version}}",
+    "settings": "设置",
     "nav": {
-      "home": "智能",
+      "home": "智能应用",
       "settings": "设置",
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
@@ -39,7 +47,70 @@ export default {
       "oauth": "OAuth 凭证",
       "credential": "凭证",
       "prompt": "提示词"
-    }
+    },
+    "sidebar": {
+      "newProfile": "新建配置文件",
+      "profileName": "配置文件名称",
+      "mode": "模式",
+      "modeUnified": "统一：所有模型使用相同配置",
+      "modeSeparate": "分离：每个模型单独配置",
+      "separate": "分离",
+      "unified": "统一",
+      "createProfileTooltip": "创建一个新的 Claude Code 配置文件，自定义设置",
+      "sloganTooltip": "致，所有独立开发者、开发团队和智能应用。"
+    },
+    "activityBar": {
+      "disconnected": "已断开",
+      "disconnectedDebug": "已断开（调试）",
+      "devMode": "开发",
+      "newVersionAvailable": "更新",
+      "error": "错误",
+      "theme": "主题",
+      "light": "浅色",
+      "dark": "深色",
+      "sunlit": "日光",
+      "zenMode": "禅模式",
+      "enterZenMode": "进入禅模式：",
+      "more": "更多",
+      "exitZen": "退出",
+      "click": "点击"
+    },
+    "themeMenu": {
+      "switchTo": "切换到：",
+      "theme": "主题："
+    },
+    "easterEgg": "Hi，我是 Tingly-Box，为您掌控智能",
+    "dashboard": "仪表盘",
+    "heatmap": "热力图",
+    "today": "今天",
+    "yesterday": "昨天",
+    "days": "天",
+    "remote": "远程访问",
+    "overview": "概览",
+    "platforms": {
+      "weixin": "微信",
+      "wecom": "企业微信",
+      "telegram": "Telegram",
+      "feishu": "飞书",
+      "lark": "Lark",
+      "dingtalk": "钉钉"
+    },
+    "guardrails": "防护栏",
+    "policyGroups": "策略组",
+    "policies": "策略",
+    "guardrailsHistory": "历史",
+    "mcp": "MCP",
+    "sources": "来源",
+    "localMode": "本地模式",
+    "modelKey": "模型密钥",
+    "tinglyBox": "Tingly Box 分发",
+    "accessControl": "访问控制",
+    "status": "状态",
+    "logs": "日志",
+    "userRequest": "用户请求",
+    "skills": "技能",
+    "addProfile": "添加配置文件",
+    "default": "默认"
   },
   "health": {
     "connected": "已连接",
@@ -302,9 +373,10 @@ export default {
     "status": {
       "running": "运行中",
       "stopped": "已停止",
-      "server": "服务器：{{url}}",
-      "keys": "密钥：{{enabled}}/{{total}}",
-      "uptime": "运行时间：{{uptime}}",
+      "server": "服务器",
+      "keys": "密钥",
+      "connected": "已连接",
+      "uptime": "运行时间",
       "lastUpdated": "最后更新：{{time}}",
       "loading": "加载中..."
     },
@@ -327,6 +399,7 @@ export default {
     },
     "proxy": {
       "title": "代理设置",
+      "label": "代理",
       "respectEnvProxy": {
         "label": "遵循环境代理",
         "helper": "启用后，没有显式代理配置的提供商将使用系统代理设置（HTTP_PROXY、HTTPS_PROXY、macOS 系统代理、Clash 等）"
@@ -380,8 +453,20 @@ export default {
       "saveFailed": "语言设置更新失败"
     },
     "experimentalFeatures": {
-      "title": "全局实验性功能",
-      "description": "这些实验性功能适用于所有场景。各个场景可以覆盖这些设置。"
+      "title": "实验性功能",
+      "description": "这些实验性功能适用于所有场景。各个场景可以覆盖这些设置。",
+      "skills": "Skills",
+      "guardrails": "Guardrails",
+      "mcp": "MCP",
+      "enableIdeSkills": "启用 IDE Skills 功能，用于管理来自 IDE 的代码片段和技能",
+      "enableGuardrails": "启用 Guardrails - 阻止有风险的工具调用并过滤敏感输出",
+      "enableMCP": "启用 MCP Tools - 配置 MCP（Model Context Protocol）工具，如网页搜索和网页获取",
+      "on": "On",
+      "off": "Off",
+      "enabled": "已启用",
+      "disabled": "已禁用 - 点击启用",
+      "guardrailsEnabledInfo": "Guardrails 已启用。侧边栏中提供了「Guardrails」页面用于规则管理。",
+      "mcpEnabledInfo": "MCP Tools 已启用。侧边栏 System 下方提供了「MCP Tools」页面进行配置。"
     },
     "about": {
       "title": "关于",
@@ -392,7 +477,10 @@ export default {
       "available": "可用"
     },
     "serverStatus": {
-      "title": "服务器状态"
+      "title": "服务器状态",
+      "server": "服务器",
+      "forceLogout": "强制登出",
+      "refreshStatus": "刷新状态"
     }
   },
   "serverInfo": {

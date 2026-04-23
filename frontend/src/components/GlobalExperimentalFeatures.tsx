@@ -3,18 +3,20 @@ import { IconBrain, IconShield } from '@tabler/icons-react';
 import { SettingsApplications } from '@mui/icons-material';
 import {Alert, Box, Chip, Tooltip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {api} from '../services/api';
 import {isFullEdition} from "@/utils/edition.ts";
 
 const SKILL_FEATURES = [
     {
         key: 'skill_ide',
-        label: 'IDE Skills',
-        description: 'Enable IDE Skills feature for managing code snippets and skills from IDEs'
+        labelKey: 'system.experimentalFeatures.skills',
+        descriptionKey: 'system.experimentalFeatures.enableIdeSkills',
     },
 ] as const;
 
 const GlobalExperimentalFeatures: React.FC = () => {
+    const {t} = useTranslation();
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false);
     const [mcpEnabled, setMCPEnabled] = useState(false);
@@ -133,9 +135,9 @@ const GlobalExperimentalFeatures: React.FC = () => {
                     <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 180}}>
                         <IconBrain size={16} style={{ color: 'var(--mui-palette-text-secondary)' }}/>
                         <Typography variant="subtitle2" sx={{color: 'text.secondary'}}>
-                            Skills
+                            {t('system.experimentalFeatures.skills')}
                         </Typography>
-                        <Tooltip title="Skill Features - Enable prompt and skill management features" arrow>
+                        <Tooltip title={t('system.experimentalFeatures.enableIdeSkills')} arrow>
                             <Box/>
                         </Tooltip>
                     </Box>
@@ -146,10 +148,10 @@ const GlobalExperimentalFeatures: React.FC = () => {
                             const isEnabled = features[feature.key] || false;
                             return (
                                 <Tooltip key={feature.key}
-                                         title={feature.description + (isEnabled ? ' (enabled)' : ' (disabled) - Click to enable')}
+                                         title={t(feature.descriptionKey) + (isEnabled ? ` (${t('system.experimentalFeatures.enabled')})` : ` (${t('system.experimentalFeatures.disabled')})`)}
                                          arrow>
                                     <Chip
-                                        label={`${feature.label} · ${isEnabled ? 'On' : 'Off'}`}
+                                        label={`${t(feature.labelKey)} · ${isEnabled ? t('common.on') : t('common.off')}`}
                                         onClick={() => toggleFeature(feature.key)}
                                         size="small"
                                         sx={chipStyle(isEnabled)}
@@ -166,14 +168,14 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
                     <IconShield size={16} style={{ color: 'var(--mui-palette-text-secondary)' }} />
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        Guardrails
+                        {t('system.experimentalFeatures.guardrails')}
                     </Typography>
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    <Tooltip title={"Enable Guardrails - block risky tool calls and filter sensitive outputs" + (guardrailsEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                    <Tooltip title={t('system.experimentalFeatures.enableGuardrails') + (guardrailsEnabled ? ` (${t('system.experimentalFeatures.enabled')})` : ` (${t('system.experimentalFeatures.disabled')})`)} arrow>
                         <Chip
-                            label={`Guardrails · ${guardrailsEnabled ? 'On' : 'Off'}`}
+                            label={`${t('system.experimentalFeatures.guardrails')} · ${guardrailsEnabled ? t('common.on') : t('common.off')}`}
                             onClick={toggleGuardrails}
                             size="small"
                             sx={chipStyle(guardrailsEnabled)}
@@ -185,7 +187,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             {guardrailsEnabled && (
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
-                        Guardrails is enabled. A "Guardrails" page is available in the sidebar for rule management.
+                        {t('system.experimentalFeatures.guardrailsEnabledInfo')}
                     </Typography>
                 </Alert>
             )}
@@ -195,14 +197,14 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
                     <SettingsApplications sx={{ fontSize: '1rem', color: 'text.secondary' }} />
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
-                        MCP
+                        {t('system.experimentalFeatures.mcp')}
                     </Typography>
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                    <Tooltip title={"Enable MCP Tools - Configure MCP (Model Context Protocol) tools like web search and web fetch" + (mcpEnabled ? ' (enabled)' : ' (disabled) - Click to enable')} arrow>
+                    <Tooltip title={t('system.experimentalFeatures.enableMCP') + (mcpEnabled ? ` (${t('system.experimentalFeatures.enabled')})` : ` (${t('system.experimentalFeatures.disabled')})`)} arrow>
                         <Chip
-                            label={`MCP Tools · ${mcpEnabled ? 'On' : 'Off'}`}
+                            label={`${t('system.experimentalFeatures.mcp')} Tools · ${mcpEnabled ? t('common.on') : t('common.off')}`}
                             onClick={toggleMCP}
                             size="small"
                             sx={{ ...chipStyle(mcpEnabled), cursor: 'pointer', pointerEvents: 'auto' }}
@@ -214,7 +216,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             {mcpEnabled && (
                 <Alert severity="info" sx={{ mt: 1 }}>
                     <Typography variant="body2">
-                        MCP Tools is enabled. An "MCP Tools" page is available under System in the sidebar for configuration.
+                        {t('system.experimentalFeatures.mcpEnabledInfo')}
                     </Typography>
                 </Alert>
             )}

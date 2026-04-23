@@ -102,7 +102,7 @@ const System = () => {
                     size="full"
                     rightAction={
                         <Stack direction="row" spacing={0.5}>
-                            <Tooltip title="Force Logout" arrow>
+                            <Tooltip title={t('system.serverStatus.forceLogout')} arrow>
                                 <IconButton
                                     onClick={handleForceLogout}
                                     size="small"
@@ -114,7 +114,7 @@ const System = () => {
                             <IconButton
                                 onClick={() => { loadServerStatus(); checkHealth(); }}
                                 size="small"
-                                aria-label="Refresh status"
+                                aria-label={t('system.serverStatus.refreshStatus')}
                             >
                                 {checking ? <CircularProgress size={16} /> : <RefreshIcon />}
                             </IconButton>
@@ -132,7 +132,7 @@ const System = () => {
                                         <IconCircleX size={16} style={{ color: 'var(--mui-palette-error-main)' }} />
                                     )}
                                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                        Server
+                                        {t('system.serverStatus.server')}
                                     </Typography>
                                 </Box>
                                 <Box sx={{ flex: 1 }}>
@@ -140,7 +140,7 @@ const System = () => {
                                         {serverStatus.server_running ? t('system.status.running') : t('system.status.stopped')}
                                         {isHealthy && (
                                             <Typography component="span" variant="body2" color="success.main" sx={{ ml: 1 }}>
-                                                · Connected
+                                                · {t('system.status.connected')}
                                             </Typography>
                                         )}
                                     </Typography>
@@ -152,7 +152,7 @@ const System = () => {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
                                     <IconKey size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
                                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                        Keys
+                                        {t('system.status.keys')}
                                     </Typography>
                                 </Box>
                                 <Box sx={{ flex: 1 }}>
@@ -167,7 +167,7 @@ const System = () => {
                                 <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
                                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                            Uptime
+                                            {t('system.status.uptime')}
                                         </Typography>
                                     </Box>
                                     <Box sx={{ flex: 1 }}>
@@ -183,17 +183,17 @@ const System = () => {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
                                     <IconLock size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
                                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                        Proxy
+                                        {t('system.proxy.label')}
                                     </Typography>
                                 </Box>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
                                     {respectEnvProxy !== null && (
                                         <Tooltip
-                                            title={t('system.proxy.respectEnvProxy.helper') + (respectEnvProxy ? ' (enabled)' : ' (disabled)')}
+                                            title={t('system.proxy.respectEnvProxy.helper')}
                                             arrow
                                         >
                                             <Chip
-                                                label={`${respectEnvProxy ? 'System Proxy' : 'Direct'} · ${respectEnvProxy ? 'On' : 'Off'}`}
+                                                label={`${respectEnvProxy ? t('system.proxy.respectEnvProxy.label') : t('common.direct')} · ${respectEnvProxy ? t('common.on') : t('common.off')}`}
                                                 onClick={toggleProxy}
                                                 size="small"
                                                 sx={(theme) => ({

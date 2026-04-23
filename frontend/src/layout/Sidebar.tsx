@@ -193,7 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     return (
                         <React.Fragment key={item.path}>
                             {isAddProfile ? (
-                                <Tooltip title="Create a new Claude Code profile with custom settings" arrow placement="right">
+                                <Tooltip title={t('layout.sidebar.createProfileTooltip')} arrow placement="right">
                                     {button}
                                 </Tooltip>
                             ) : button}
@@ -211,12 +211,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                 slotProps={{ paper: { sx: { p: 2, width: 280, mt: -0.5 } } }}
             >
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>New Profile</Typography>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>{t('layout.sidebar.newProfile')}</Typography>
                 <TextField
                     inputRef={addProfileInputRef}
                     fullWidth
                     size="small"
-                    placeholder="Profile name"
+                    placeholder={t('layout.sidebar.profileName')}
                     value={newProfileName}
                     onChange={(e) => setNewProfileName(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
@@ -224,33 +224,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 />
                 <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>Mode</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{t('layout.sidebar.mode')}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                            {newProfileUnified ? 'Unified: Single model for all' : 'Separate: Individual models'}
+                            {newProfileUnified ? t('layout.sidebar.modeUnified') : t('layout.sidebar.modeSeparate')}
                         </Typography>
                     </Box>
                     <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="body2" color="text.secondary">Separate</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('layout.sidebar.separate')}</Typography>
                         <Switch
                             size="small"
                             checked={newProfileUnified}
                             onChange={(e) => setNewProfileUnified(e.target.checked)}
                             disabled={isCreating}
                         />
-                        <Typography variant="body2" color="text.secondary">Unified</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('layout.sidebar.unified')}</Typography>
                     </Stack>
                 </Box>
                 <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                    <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>Cancel</Button>
+                    <Button size="small" onClick={handleAddProfileClose} disabled={isCreating}>{t('common.cancel')}</Button>
                     <Button size="small" variant="contained" onClick={handleCreateProfile} disabled={!newProfileName.trim() || isCreating}>
-                        Create
+                        {t('common.add')}
                     </Button>
                 </Box>
             </Popover>
 
             {/* Footer Slogan */}
             <Box sx={{ height: footerHeight, py: 1.5, px: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                <Tooltip title="For all Solo Builders, Dev Teams and Agents." placement="top" arrow>
+                <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
                     <Typography
                         variant="caption"
                         sx={{

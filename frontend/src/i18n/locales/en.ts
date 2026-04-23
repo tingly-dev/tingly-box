@@ -19,12 +19,20 @@ export default {
     "success": "Success",
     "error": "Error",
     "warning": "Warning",
-    "info": "Info"
+    "info": "Info",
+    "on": "On",
+    "off": "Off",
+    "direct": "Direct",
+    "theme": "Theme",
+    "zen": "Zen",
+    "openClaw": "OpenClaw",
+    "prompt": "Prompt"
   },
   "layout": {
     "appTitle": "Tingly Box",
     "slogan": "Your Intelligence, Orchestrated.",
     "version": "version {{version}}",
+    "settings": "Settings",
     "nav": {
       "home": "Agent",
       "settings": "Settings",
@@ -39,7 +47,70 @@ export default {
       "oauth": "OAuth",
       "credential": "Credential",
       "prompt": "Prompt"
-    }
+    },
+    "sidebar": {
+      "newProfile": "New Profile",
+      "profileName": "Profile name",
+      "mode": "Mode",
+      "modeUnified": "Unified: Single model for all",
+      "modeSeparate": "Separate: Individual models",
+      "separate": "Separate",
+      "unified": "Unified",
+      "createProfileTooltip": "Create a new Claude Code profile with custom settings",
+      "sloganTooltip": "For all Solo Builders, Dev Teams and Agents."
+    },
+    "activityBar": {
+      "disconnected": "Disconnected",
+      "disconnectedDebug": "Disconnected (Debug)",
+      "devMode": "Dev",
+      "newVersionAvailable": "Update",
+      "error": "Error",
+      "theme": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "sunlit": "Sunlit",
+      "zenMode": "Zen Mode",
+      "enterZenMode": "Enter Zen Mode:",
+      "more": "More",
+      "exitZen": "Exit",
+      "click": "Click"
+    },
+    "themeMenu": {
+      "switchTo": "Switch to:",
+      "theme": "Theme:"
+    },
+    "easterEgg": "Hi, I'm Tingly-Box, Your Smart AI Orchestrator",
+    "dashboard": "Dashboard",
+    "heatmap": "Heatmap",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "days": "Days",
+    "remote": "Remote",
+    "overview": "Overview",
+    "platforms": {
+      "weixin": "Weixin",
+      "wecom": "WeCom",
+      "telegram": "Telegram",
+      "feishu": "Feishu",
+      "lark": "Lark",
+      "dingtalk": "DingTalk"
+    },
+    "guardrails": "Guardrails",
+    "policyGroups": "Policy Groups",
+    "policies": "Policies",
+    "guardrailsHistory": "History",
+    "mcp": "MCP",
+    "sources": "Sources",
+    "localMode": "Local Mode",
+    "modelKey": "Model Key",
+    "tinglyBox": "Tingly Box",
+    "accessControl": "Access Control",
+    "status": "Status",
+    "logs": "Logs",
+    "userRequest": "User Request",
+    "skills": "Skills",
+    "addProfile": "Add Profile",
+    "default": "default"
   },
   "health": {
     "connected": "Connected",
@@ -302,9 +373,10 @@ export default {
     "status": {
       "running": "Running",
       "stopped": "Stopped",
-      "server": "Server: {{url}}",
-      "keys": "Keys: {{enabled}}/{{total}}",
-      "uptime": "Uptime: {{uptime}}",
+      "server": "Server",
+      "keys": "Keys",
+      "connected": "Connected",
+      "uptime": "Uptime",
       "lastUpdated": "Last Updated: {{time}}",
       "loading": "Loading..."
     },
@@ -327,6 +399,7 @@ export default {
     },
     "proxy": {
       "title": "Proxy Settings",
+      "label": "Proxy",
       "respectEnvProxy": {
         "label": "Respect Environment Proxy",
         "helper": "When enabled, providers without explicit proxy configuration will use system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, Clash, etc.)"
@@ -380,8 +453,20 @@ export default {
       "saveFailed": "Failed to update language settings"
     },
     "experimentalFeatures": {
-      "title": "Global Experimental Features",
-      "description": "These experimental features apply globally to all scenarios. Individual scenarios can override these settings."
+      "title": "Experimental Features",
+      "description": "These experimental features apply globally to all scenarios. Individual scenarios can override these settings.",
+      "skills": "Skills",
+      "guardrails": "Guardrails",
+      "mcp": "MCP",
+      "enableIdeSkills": "Enable IDE Skills feature for managing code snippets and skills from IDEs",
+      "enableGuardrails": "Enable Guardrails - block risky tool calls and filter sensitive outputs",
+      "enableMCP": "Enable MCP Tools - Configure MCP (Model Context Protocol) tools like web search and web fetch",
+      "on": "On",
+      "off": "Off",
+      "enabled": "enabled",
+      "disabled": "disabled - Click to enable",
+      "guardrailsEnabledInfo": "Guardrails is enabled. A \"Guardrails\" page is available in the sidebar for rule management.",
+      "mcpEnabledInfo": "MCP Tools is enabled. An \"MCP Tools\" page is available under System in the sidebar for configuration."
     },
     "about": {
       "title": "About",
@@ -392,7 +477,10 @@ export default {
       "available": "available"
     },
     "serverStatus": {
-      "title": "Server Status"
+      "title": "Server Status",
+      "server": "Server",
+      "forceLogout": "Force logout",
+      "refreshStatus": "Refresh status"
     }
   },
   "serverInfo": {
