@@ -181,10 +181,13 @@ const Layout = ({ children }: LayoutProps) => {
 
         sessionStorage.setItem('layout.activeActivity', item.key);
 
+        // Priority: saved path > defaultPath > item.path > first non-divider child
+        const savedPath = sessionStorage.getItem(`layout.activityPath.${item.key}`);
         const firstNavChild = item.children?.find(c => c.type !== 'divider');
         const targetPath =
+            savedPath ||
+            item.defaultPath ||
             item.path ||
-            sessionStorage.getItem(`layout.activityPath.${item.key}`) ||
             firstNavChild?.path;
         if (targetPath) navigate(targetPath);
     };

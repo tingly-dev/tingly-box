@@ -68,6 +68,7 @@ export function useActivityItems(): ActivityItem[] {
                 icon: <IconChartBar size={22} />,
                 label: 'Dashboard',
                 path: '/dashboard/7d',
+                defaultPath: '/dashboard/7d',
                 children: [
                     { path: '/overview/90d', label: 'Heatmap', icon: <IconGridDots size={20} /> },
                     { type: 'divider' },
@@ -83,6 +84,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'scenario',
                 icon: <IconAiAgents size={22} />,
                 label: t('layout.nav.home'),
+                defaultPath: '/agent/claude_code',
                 children: [
                     {
                         path: '/agent/claude_code',
@@ -108,12 +110,14 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'prompt' as const,
                 icon: <IconBrain size={22} />,
                 label: 'Prompt',
+                defaultPath: promptMenuItems[0]?.path,
                 children: promptMenuItems,
             }] as ActivityItem[] : []),
             ...(isFullEdition ? [{
                 key: 'remote-control' as const,
                 icon: <IconDeviceRemote size={22} />,
                 label: 'Remote',
+                defaultPath: '/remote-control',
                 children: [
                     { path: '/remote-control', label: 'Overview', icon: <IconMessageCircle size={20} /> },
                     { type: 'divider' } as NavDivider,
@@ -129,6 +133,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'guardrails',
                 icon: <IconShield size={22} />,
                 label: 'Guardrails',
+                defaultPath: '/guardrails',
                 children: [
                     { path: '/guardrails', label: 'Overview', icon: <IconShield size={20} /> },
                     { path: '/guardrails/groups', label: 'Policy Groups', icon: <IconLicense size={20} /> },
@@ -141,6 +146,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'mcp' as const,
                 icon: <SettingsApplications sx={{ fontSize: 22 }} />,
                 label: 'MCP',
+                defaultPath: '/mcp/sources',
                 children: [
                     { path: '/mcp/sources', label: 'Sources', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
                     { path: '/mcp/local-mode', label: 'Local Mode', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
@@ -150,6 +156,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'credential',
                 icon: <IconLock size={22} />,
                 label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
+                defaultPath: '/credentials',
                 children: [
                     { path: '/credentials', label: 'Model Key', icon: <IconLock size={20} /> },
                     { path: '/tingly-box-token', label: 'Tingly Box', icon: <IconKey size={20} /> },
@@ -159,6 +166,7 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'system',
                 icon: <IconSettings size={22} />,
                 label: 'System',
+                defaultPath: '/system',
                 children: [
                     { path: '/access-control', label: 'Access Control', icon: <IconShield size={20} /> },
                     { path: '/system', label: 'Status', icon: <IconSettings size={20} /> },
