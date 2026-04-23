@@ -40,6 +40,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 	options := []anthropicOption.RequestOption{
 		anthropicOption.WithAPIKey(provider.GetAccessToken()),
 		anthropicOption.WithBaseURL(apiBase),
+		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors in test environments
 	}
 
 	// Create HTTP client with session-bound transport
