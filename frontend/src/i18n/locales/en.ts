@@ -62,7 +62,7 @@ export default {
   },
   "login": {
     "title": "Tingly Box",
-    "subtitle": "Authentication Required",
+    "subtitle": "Your Intelligence, Orchestrated",
     "tokenLabel": "Authentication Token",
     "tokenHelper": "Enter your user authentication token for UI and management access",
     "loginButton": "Login",

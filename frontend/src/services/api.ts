@@ -1,12 +1,10 @@
 // API service layer for communicating with the backend
 
 import TinglyService from "@/bindings";
-import type { paths } from '@/client';
-import { getApiBaseUrl as getApiBaseUrlUtil } from '../utils/protocol';
-
-// Re-export getBaseUrl for backward compatibility
-export const getBaseUrl = getApiBaseUrlUtil;
-
+import type {paths} from '@/client';
+import {getApiBaseUrl} from '../utils/protocol';
+// Import openapi-fetch
+import createClient from 'openapi-fetch';
 
 // Get user auth token for UI and control API from localStorage
 const getUserAuthToken = (): string | null => {
@@ -37,13 +35,10 @@ const getModelToken = (): string | null => {
     return localStorage.getItem('model_token');
 };
 
-// Import openapi-fetch
-import createClient from 'openapi-fetch';
-
 // Create the typed client with base URL
 const createApiClient = async () => {
-    const basePath = await getApiBaseUrlUtil();
-    return createClient<paths>({ baseUrl: basePath });
+    const basePath = await getApiBaseUrl();
+    return createClient<paths>({baseUrl: basePath});
 };
 
 // Global client instance (lazily initialized)
@@ -78,7 +73,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
             try {
                 const guiToken = await svc.GetUserAuthToken();
                 if (guiToken) {
-                    return { 'Authorization': `Bearer ${guiToken}` };
+                    return {'Authorization': `Bearer ${guiToken}`};
                 }
             } catch (err) {
                 console.error('Failed to get GUI token:', err);
@@ -87,7 +82,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
     }
 
     if (token) {
-        return { 'Authorization': `Bearer ${token}` };
+        return {'Authorization': `Bearer ${token}`};
     }
     return {};
 };
@@ -95,33 +90,69 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
 // Lightweight fetch helper for endpoints not covered by codegen
 async function uiAPI(path: string, options: RequestInit = {}): Promise<any> {
     const fullUrl = path.startsWith('/api/v1') ? path : `/api/v1${path}`;
-    const token = getUserAuthToken();
+
+    // Use the same auth logic as getAuthHeaders for consistency
+    let token = getUserAuthToken();
+
+    // Try to get token from GUI if available
+    if (!token && import.meta.env.VITE_PKG_MODE === "gui") {
+        const svc = TinglyService;
+        if (svc) {
+            try {
+                const guiToken = await svc.GetUserAuthToken();
+                if (guiToken) {
+                    token = guiToken;
+                }
+            } catch (err) {
+                console.error('Failed to get GUI token for uiAPI:', err);
+            }
+        }
+    }
+
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...options.headers as Record<string, string>,
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+
     try {
-        const response = await fetch(fullUrl, { headers, ...options });
+        const response = await fetch(fullUrl, {headers, ...options});
         return await response.json();
     } catch (error) {
-        return { success: false, error: (error as Error).message };
+        return {success: false, error: (error as Error).message};
     }
 }
 
 // Fetch helper for model API endpoints (OpenAI/Anthropic compatible)
 async function modelAPI(url: string, options: RequestInit = {}): Promise<any> {
-    const token = getModelToken();
+    let token = getModelToken();
+
+    // Try to get model token from GUI if available
+    if (!token && import.meta.env.VITE_PKG_MODE === "gui") {
+        const svc = TinglyService;
+        if (svc) {
+            try {
+                const guiToken = await svc.GetUserAuthToken();
+                if (guiToken) {
+                    token = guiToken;
+                }
+            } catch (err) {
+                console.error('Failed to get GUI token for modelAPI:', err);
+            }
+        }
+    }
+
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...options.headers as Record<string, string>,
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+
     try {
-        const response = await fetch(url, { headers, ...options });
+        const response = await fetch(url, {headers, ...options});
         return await response.json();
     } catch (error) {
-        return { success: false, error: (error as Error).message };
+        return {success: false, error: (error as Error).message};
     }
 }
 
@@ -136,10 +167,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/status', { headers });
+            const response = await client.GET('/api/v1/status', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -147,7 +178,7 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v2/providers', { headers });
+            const response = await client.GET('/api/v2/providers', {headers});
             const body = response.data;
             if (body?.success && body?.data) {
                 // Sort providers alphabetically by name to reduce UI changes
@@ -155,7 +186,7 @@ export const api = {
             }
             return body;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -164,15 +195,15 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v2/provider-templates', { headers });
+            const response = await client.GET('/api/v2/provider-templates', {headers});
             // openapi-fetch returns { data, error, response }
             // Check for error in response first
             if (response.error) {
-                return { success: false, error: 'Request failed' };
+                return {success: false, error: 'Request failed'};
             }
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -182,7 +213,7 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/provider-models/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             const body = response.data;
             if (body?.success && body?.data) {
@@ -193,7 +224,7 @@ export const api = {
             }
             return body;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -203,7 +234,7 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/provider-models/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             const body = response.data;
             if (body?.success && body?.data) {
@@ -214,7 +245,7 @@ export const api = {
             }
             return body;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -222,10 +253,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/history', { headers });
+            const response = await client.GET('/api/v1/history', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -236,12 +267,12 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v2/providers', {
                 headers,
-                params: { query: { force } as any },
+                params: {query: {force} as any},
                 body: data
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -251,11 +282,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v2/providers/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -265,12 +296,12 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.PUT('/api/v2/providers/{uuid}', {
                 headers,
-                params: { path: { uuid } },
+                params: {path: {uuid}},
                 body: data
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -280,11 +311,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.DELETE('/api/v2/providers/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -294,11 +325,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v2/providers/{uuid}/toggle', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -307,10 +338,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/server/start', { headers });
+            const response = await client.POST('/api/v1/server/start', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -318,10 +349,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/server/stop', { headers });
+            const response = await client.POST('/api/v1/server/stop', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -329,10 +360,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/server/restart', { headers });
+            const response = await client.POST('/api/v1/server/restart', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -342,11 +373,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/token', {
                 headers,
-                body: { client_id: clientId }
+                body: {client_id: clientId}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -354,10 +385,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/token', { headers });
+            const response = await client.GET('/api/v1/token', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -368,15 +399,15 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/rules', {
                 headers,
-                params: { query: { scenario } }
+                params: {query: {scenario}}
             });
             // openapi-fetch returns { data, error, response }
             if (response.error) {
-                return { success: false, error: 'Request failed', data: [] };
+                return {success: false, error: 'Request failed', data: []};
             }
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message, data: [] };
+            return {success: false, error: error.message, data: []};
         }
     },
 
@@ -386,11 +417,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/rule/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -404,7 +435,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -414,12 +445,12 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/rule/{uuid}', {
                 headers,
-                params: { path: { uuid } },
+                params: {path: {uuid}},
                 body: data
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -429,11 +460,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.DELETE('/api/v1/rule/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -482,7 +513,7 @@ export const api = {
     setScenarioFlag: async (scenario: string, flag: string, value: boolean): Promise<any> => {
         return uiAPI(`/scenario/${scenario}/flag/${flag}`, {
             method: 'PUT',
-            body: JSON.stringify({ value }),
+            body: JSON.stringify({value}),
         });
     },
 
@@ -493,7 +524,7 @@ export const api = {
     setScenarioStringFlag: async (scenario: string, flag: string, value: string): Promise<any> => {
         return uiAPI(`/scenario/${scenario}/string-flag/${flag}`, {
             method: 'PUT',
-            body: JSON.stringify({ value }),
+            body: JSON.stringify({value}),
         });
     },
 
@@ -505,7 +536,7 @@ export const api = {
     createProfile: async (scenario: string, name: string, unified?: boolean): Promise<any> => {
         return uiAPI(`/scenario/${scenario}/profiles`, {
             method: 'POST',
-            body: JSON.stringify({ name, unified }),
+            body: JSON.stringify({name, unified}),
         });
     },
 
@@ -543,7 +574,7 @@ export const api = {
     installGuardrailsRegistryPolicy: async (id: string): Promise<any> => {
         return uiAPI('/guardrails/registry/install', {
             method: 'POST',
-            body: JSON.stringify({ id }),
+            body: JSON.stringify({id}),
         });
     },
     getGuardrailsCredentials: async (): Promise<any> => {
@@ -615,19 +646,19 @@ export const api = {
     updateGuardrailsConfig: async (content: string): Promise<any> => {
         return uiAPI('/guardrails/config', {
             method: 'PUT',
-            body: JSON.stringify({ content }),
+            body: JSON.stringify({content}),
         });
     },
     importGuardrailsFragment: async (content: string, fileName?: string): Promise<any> => {
         return uiAPI('/guardrails/fragment/import', {
             method: 'POST',
-            body: JSON.stringify({ content, file_name: fileName }),
+            body: JSON.stringify({content, file_name: fileName}),
         });
     },
     exportGuardrailsFragments: async (paths: string[]): Promise<any> => {
         return uiAPI('/guardrails/fragment/export', {
             method: 'POST',
-            body: JSON.stringify({ paths }),
+            body: JSON.stringify({paths}),
         });
     },
 
@@ -650,7 +681,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -669,7 +700,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -677,7 +708,7 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/info/version', { headers });
+            const response = await client.GET('/api/v1/info/version', {headers});
             // openapi-fetch returns { data, error, response }
             if ((response as any).error || !response.data) {
                 console.error('Failed to get version:', (response as any).error || 'No data in response');
@@ -694,14 +725,14 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/info/version/check', { headers });
+            const response = await client.GET('/api/v1/info/version/check', {headers});
             // openapi-fetch returns { data, error, response }
             if (response.error) {
-                return { success: false, error: 'Request failed' };
+                return {success: false, error: 'Request failed'};
             }
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -786,7 +817,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -816,7 +847,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -839,11 +870,11 @@ export const api = {
                 body: data as any
             });
             if (response.error) {
-                return { success: false, error: 'Request failed', data: response.error };
+                return {success: false, error: 'Request failed', data: response.error};
             }
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -854,11 +885,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/oauth/status', {
                 headers,
-                params: { query: { session_id } }
+                params: {query: {session_id}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -873,7 +904,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -888,7 +919,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -897,10 +928,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/oauth/providers', { headers });
+            const response = await client.GET('/api/v1/oauth/providers', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -911,11 +942,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/oauth/providers/{type}', {
                 headers,
-                params: { path: { type } }
+                params: {path: {type}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -923,7 +954,7 @@ export const api = {
     applyClaudeConfig: async (mode: string, installStatusLine?: boolean): Promise<any> => {
         return uiAPI('/config/apply/claude', {
             method: 'POST',
-            body: JSON.stringify({ mode, installStatusLine }),
+            body: JSON.stringify({mode, installStatusLine}),
         });
     },
 
@@ -965,10 +996,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v2/skill-locations', { headers });
+            const response = await client.GET('/api/v2/skill-locations', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -987,7 +1018,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -998,11 +1029,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v2/skill-locations/{id}', {
                 headers,
-                params: { path: { id } }
+                params: {path: {id}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1013,11 +1044,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.DELETE('/api/v2/skill-locations/{id}', {
                 headers,
-                params: { path: { id } }
+                params: {path: {id}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1028,11 +1059,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v2/skill-locations/{id}/refresh', {
                 headers,
-                params: { path: { id } }
+                params: {path: {id}}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1041,10 +1072,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v2/skill-locations/discover', { headers });
+            const response = await client.GET('/api/v2/skill-locations/discover', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1055,11 +1086,11 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v2/skill-locations/import', {
                 headers,
-                body: { locations }
+                body: {locations}
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1067,43 +1098,43 @@ export const api = {
     scanIdes: async (): Promise<any> => {
         // TODO: Regenerate swagger client
         try {
-            const token = getUserAuthToken();
+            const headers = await getAuthHeaders();
             const response = await fetch(`${await getApiBaseUrl()}/api/v2/skill-locations/scan`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...headers,
                 },
             });
 
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     // Get skill content with file content
     getSkillContent: async (locationId: string, skillId: string, skillPath?: string): Promise<any> => {
         try {
-            const token = getUserAuthToken();
+            const headers = await getAuthHeaders();
             const params = new URLSearchParams({
                 location_id: locationId,
-                ...(skillId && { skill_id: skillId }),
-                ...(skillPath && { skill_path: skillPath }),
+                ...(skillId && {skill_id: skillId}),
+                ...(skillPath && {skill_path: skillPath}),
             });
             const response = await fetch(`${await getApiBaseUrl()}/api/v2/skill-content?${params}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...headers,
                 },
             });
 
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1149,18 +1180,18 @@ export const api = {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...(token && {'Authorization': `Bearer ${token}`}),
                 },
             });
 
             if (response.status === 401) {
                 // Remote-coder auth failures should not force UI logout.
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1173,22 +1204,22 @@ export const api = {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...(token && {'Authorization': `Bearer ${token}`}),
                 },
             });
 
             if (response.status === 401) {
                 // Remote-coder auth failures should not force UI logout.
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
 
             if (response.status === 404) {
-                return { success: false, error: 'Session not found' };
+                return {success: false, error: 'Session not found'};
             }
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1201,21 +1232,21 @@ export const api = {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...(token && {'Authorization': `Bearer ${token}`}),
                 },
             });
 
             if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
 
             if (response.status === 404) {
-                return { success: false, error: 'Session not found' };
+                return {success: false, error: 'Session not found'};
             }
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1228,26 +1259,29 @@ export const api = {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...(token && {'Authorization': `Bearer ${token}`}),
                 },
             });
 
             if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
 
             if (response.status === 404) {
-                return { success: false, error: 'Session not found' };
+                return {success: false, error: 'Session not found'};
             }
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     // Update UI/session state for a specific remote-coder session
-    updateRemoteCCSessionState: async (sessionId: string, data: { project_path?: string; expanded_messages?: number[] }): Promise<any> => {
+    updateRemoteCCSessionState: async (sessionId: string, data: {
+        project_path?: string;
+        expanded_messages?: number[]
+    }): Promise<any> => {
         try {
             const token = await getRemoteCCAuthToken();
             const baseUrl = api.getRemoteCCBaseUrl();
@@ -1255,27 +1289,31 @@ export const api = {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...(token && {'Authorization': `Bearer ${token}`}),
                 },
                 body: JSON.stringify(data),
             });
 
             if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
 
             if (response.status === 404) {
-                return { success: false, error: 'Session not found' };
+                return {success: false, error: 'Session not found'};
             }
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     // Send chat message to remote-coder
-    sendRemoteCCChat: async (data: { session_id?: string; message: string; context?: Record<string, any> }): Promise<any> => {
+    sendRemoteCCChat: async (data: {
+        session_id?: string;
+        message: string;
+        context?: Record<string, any>
+    }): Promise<any> => {
         try {
             const token = await getRemoteCCAuthToken();
             const baseUrl = api.getRemoteCCBaseUrl();
@@ -1283,23 +1321,23 @@ export const api = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...(token && {'Authorization': `Bearer ${token}`}),
                 },
                 body: JSON.stringify(data),
             });
 
             if (response.status === 401) {
                 // Remote-coder auth failures should not force UI logout.
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
 
             if (response.status === 404) {
-                return { success: false, error: 'Session not found' };
+                return {success: false, error: 'Session not found'};
             }
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1312,17 +1350,17 @@ export const api = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
+                    ...(token && {'Authorization': `Bearer ${token}`}),
                 },
             });
 
             if (response.status === 401) {
-                return { success: false, error: 'Authentication required' };
+                return {success: false, error: 'Authentication required'};
             }
 
             return await response.json();
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1333,10 +1371,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/imbot-settings', { headers });
+            const response = await client.GET('/api/v1/imbot-settings', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1347,14 +1385,14 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/imbot-settings/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
-                return { success: false, error: 'ImBot setting not found' };
+                return {success: false, error: 'ImBot setting not found'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1381,7 +1419,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1402,15 +1440,15 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.PUT('/api/v1/imbot-settings/{uuid}', {
                 headers,
-                params: { path: { uuid } },
+                params: {path: {uuid}},
                 body: data
             });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
-                return { success: false, error: 'ImBot setting not found' };
+                return {success: false, error: 'ImBot setting not found'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1421,14 +1459,14 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.DELETE('/api/v1/imbot-settings/{uuid}', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
-                return { success: false, error: 'ImBot setting not found' };
+                return {success: false, error: 'ImBot setting not found'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1439,27 +1477,31 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.POST('/api/v1/imbot-settings/{uuid}/toggle', {
                 headers,
-                params: { path: { uuid } }
+                params: {path: {uuid}}
             });
             return response.data;
         } catch (error: any) {
             if (error.response?.status === 404) {
-                return { success: false, error: 'ImBot setting not found' };
+                return {success: false, error: 'ImBot setting not found'};
             }
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
     // User Token Management APIs
     // Get current user token (masked)
-    getUserAuthTokenInfo: async (): Promise<{ success: boolean; data?: { token: string; is_default: boolean }; error?: string }> => {
+    getUserAuthTokenInfo: async (): Promise<{
+        success: boolean;
+        data?: { token: string; is_default: boolean };
+        error?: string
+    }> => {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/auth/token', { headers });
-            return { success: true, data: response.data?.data as { token: string; is_default: boolean } | undefined };
+            const response = await client.GET('/api/v1/auth/token', {headers});
+            return {success: true, data: response.data?.data as { token: string; is_default: boolean } | undefined};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1468,16 +1510,16 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/auth/token/reset', { headers });
+            const response = await client.POST('/api/v1/auth/token/reset', {headers});
             const data = response.data?.data as { token: string } | undefined;
             if (data?.token) {
                 // Update localStorage with new token
                 localStorage.setItem('user_auth_token', data.token);
                 resetClient();
             }
-            return { success: true, data };
+            return {success: true, data};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1486,10 +1528,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/auth/model-token/reset', { headers });
-            return { success: true, data: (response.data as any)?.data };
+            const response = await client.POST('/api/v1/auth/model-token/reset', {headers});
+            return {success: true, data: (response.data as any)?.data};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1499,7 +1541,7 @@ export const api = {
     weixinQRStart: async (botUUID: string, platform?: string, botName?: string): Promise<any> => {
         return uiAPI(`/imbot-settings/${botUUID}/weixin/qr-start`, {
             method: 'POST',
-            body: JSON.stringify({ bot_uuid: botUUID, bot_platform: platform, bot_name: botName }),
+            body: JSON.stringify({bot_uuid: botUUID, bot_platform: platform, bot_name: botName}),
         });
     },
 
@@ -1524,10 +1566,10 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.GET('/api/v1/config', { headers });
+            const response = await client.GET('/api/v1/config', {headers});
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1542,7 +1584,7 @@ export const api = {
             });
             return response.data;
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1728,15 +1770,15 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/tokens', {
                 headers,
-                params: { query: params as any }
+                params: {query: params as any}
             });
             // openapi-fetch returns { data, error, response }
             if (response.error) {
-                return { success: false, error: response.error };
+                return {success: false, error: response.error};
             }
-            return { success: true, data: response.data };
+            return {success: true, data: response.data};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1747,14 +1789,14 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.GET('/api/v1/tokens/{token_id}', {
                 headers,
-                params: { path: { token_id: tokenId } }
+                params: {path: {token_id: tokenId}}
             });
             if (response.error) {
-                return { success: false, error: response.error };
+                return {success: false, error: response.error};
             }
-            return { success: true, data: response.data };
+            return {success: true, data: response.data};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1771,11 +1813,11 @@ export const api = {
                 body: data
             });
             if (response.error) {
-                return { success: false, error: response.error };
+                return {success: false, error: response.error};
             }
-            return { success: true, data: response.data };
+            return {success: true, data: response.data};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1786,14 +1828,14 @@ export const api = {
             const headers = await getAuthHeaders();
             const response = await client.DELETE('/api/v1/tokens/{token_id}', {
                 headers,
-                params: { path: { token_id: tokenId } }
+                params: {path: {token_id: tokenId}}
             });
             if (response.error) {
-                return { success: false, error: response.error };
+                return {success: false, error: response.error};
             }
-            return { success: true, data: response.data };
+            return {success: true, data: response.data};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 
@@ -1807,14 +1849,14 @@ export const api = {
                 : '/api/v1/tokens/{token_id}/disable';
             const response = await client.PUT(endpoint, {
                 headers,
-                params: { path: { token_id: tokenId } }
+                params: {path: {token_id: tokenId}}
             });
             if (response.error) {
-                return { success: false, error: response.error };
+                return {success: false, error: response.error};
             }
-            return { success: true, data: response.data };
+            return {success: true, data: response.data};
         } catch (error: any) {
-            return { success: false, error: error.message };
+            return {success: false, error: error.message};
         }
     },
 };

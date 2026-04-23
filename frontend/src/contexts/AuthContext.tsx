@@ -95,7 +95,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // This prevents showing the auth dialog during initial token validation
     const isInitializingRef = useRef(true);
 
-    const isAuthenticated = !!token;
+    // Check both state and localStorage for authentication
+    // This prevents race conditions where state hasn't updated yet but token is in storage
+    const isAuthenticated = !!token || !!localStorage.getItem('user_auth_token');
 
     const login = async (newToken: string) => {
         setToken(newToken);

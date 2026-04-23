@@ -24,4 +24,6 @@ export interface ActivityItem {
     label: string;
     path?: string;
     children?: NavItem[];
+    // Default path to use when there's no saved path in memory
+    defaultPath?: string;
 }
