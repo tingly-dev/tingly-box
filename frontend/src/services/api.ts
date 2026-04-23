@@ -3,6 +3,8 @@
 import TinglyService from "@/bindings";
 import type {paths} from '@/client';
 import {getApiBaseUrl} from '../utils/protocol';
+// Import openapi-fetch
+import createClient from 'openapi-fetch';
 
 // Get user auth token for UI and control API from localStorage
 const getUserAuthToken = (): string | null => {
@@ -32,9 +34,6 @@ const getRemoteCCAuthToken = async (): Promise<string | null> => {
 const getModelToken = (): string | null => {
     return localStorage.getItem('model_token');
 };
-
-// Import openapi-fetch
-import createClient from 'openapi-fetch';
 
 // Create the typed client with base URL
 const createApiClient = async () => {
