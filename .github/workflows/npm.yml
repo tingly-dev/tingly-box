@@ -354,7 +354,7 @@ jobs:
           NOTES_EOF
 
           if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
-            cat >> npx_release_notes.md << 'BUNDLE_EOF'
+            cat >> npx_release_notes.md << BUNDLE_EOF
 
           ### ✨ Bundle Package Features
 
@@ -364,11 +364,11 @@ jobs:
           - **Multi-platform**: Supports macOS (ARM64/AMD64), Linux (x64/ARM64), Windows (x64)
 
           \`\`\`bash
-          # Use the bundle package (includes pre-built binaries, ~70MB)
           npx tingly-box-bundle@$VERSION
           \`\`\`
 
           > For a smaller package with download-on-demand, use \`tingly-box\` instead.
+          > the bundle package includes pre-built binaries, ~70MB
           BUNDLE_EOF
           fi
 
