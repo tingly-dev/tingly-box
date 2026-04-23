@@ -669,7 +669,7 @@ export default {
   "dashboard": {
     "agentNav": {
       "title": "快速开始",
-      "description": "选择代理以开始"
+      "description": "开启智能应用"
     }
   },
   "mcp": {
