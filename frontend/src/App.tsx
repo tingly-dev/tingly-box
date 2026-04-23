@@ -295,8 +295,13 @@ function AppContent() {
                         </ProtectedRoute>
                     }
                 >
-                    {/* Default redirect */}
-                    <Route index element={<Navigate to="/dashboard/7d" replace />} />
+                    {/* Default redirect - use layout memory (localStorage), fallback to agent page */}
+                    <Route index element={<Navigate to={
+                        (() => {
+                            const activeActivity = localStorage.getItem('layout.activeActivity') || 'scenario';
+                            return localStorage.getItem(`layout.activityPath.${activeActivity}`) || '/agent/claude_code';
+                        })()
+                    } replace />} />
                     {/* Function panel routes */}
                     <Route path="/agent/openai" element={<UseOpenAIPage />} />
                     <Route path="/agent/anthropic" element={<UseAnthropicPage />} />
@@ -387,7 +392,7 @@ function AppContent() {
                     {/* Legacy zen redirects */}
                     <Route path="/zen/claude-code" element={<Navigate to="/zen/claude_code" replace />} />
                     {/* Catch-all redirect for unknown routes */}
-                    <Route path="*" element={<Navigate to="/dashboard/7d" replace />} />
+                    <Route path="*" element={<Navigate to="/agent/claude_code" replace />} />
                 </Route>
             </Routes>
     )

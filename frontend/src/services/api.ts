@@ -1366,6 +1366,30 @@ export const api = {
 
     // ========== ImBot Settings API ==========
 
+    // Get ImBot platform configurations
+    getImBotPlatforms: async (): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/imbot-platforms', {headers});
+            return response.data;
+        } catch (error: any) {
+            return {success: false, error: error.message};
+        }
+    },
+
+    // List all ImBot settings
+    getImBotSettingsList: async (): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/imbot-settings', {headers});
+            return response.data;
+        } catch (error: any) {
+            return {success: false, error: error.message};
+        }
+    },
+
     // List all ImBot settings
     listImbotSettings: async (): Promise<any> => {
         try {
@@ -1458,6 +1482,112 @@ export const api = {
             const client = await getClient();
             const headers = await getAuthHeaders();
             const response = await client.DELETE('/api/v1/imbot-settings/{uuid}', {
+                headers,
+                params: {path: {uuid}}
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return {success: false, error: 'ImBot setting not found'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
+    // Aliases using getImBot* naming convention (used by BotPage and PlatformBotPage)
+    getImBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/imbot-settings/{uuid}', {
+                headers,
+                params: {path: {uuid}}
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return {success: false, error: 'ImBot setting not found'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
+    createImBotSetting: async (data: {
+        name?: string;
+        platform: string;
+        auth_type: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        default_agent?: string;
+        agent_type?: string;
+        default_cwd?: string;
+        enabled?: boolean;
+    }): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/imbot-settings', {
+                headers,
+                body: data as any
+            });
+            return response.data;
+        } catch (error: any) {
+            return {success: false, error: error.message};
+        }
+    },
+
+    updateImBotSetting: async (uuid: string, data: {
+        name?: string;
+        auth_type?: string;
+        auth?: Record<string, string>;
+        proxy_url?: string;
+        chat_id?: string;
+        bash_allowlist?: string[];
+        enabled?: boolean;
+        default_agent?: string;
+        default_cwd?: string;
+    }): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.PUT('/api/v1/imbot-settings/{uuid}', {
+                headers,
+                params: {path: {uuid}},
+                body: data
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return {success: false, error: 'ImBot setting not found'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
+    deleteImBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.DELETE('/api/v1/imbot-settings/{uuid}', {
+                headers,
+                params: {path: {uuid}}
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return {success: false, error: 'ImBot setting not found'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
+    toggleImBotSetting: async (uuid: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/imbot-settings/{uuid}/toggle', {
                 headers,
                 params: {path: {uuid}}
             });

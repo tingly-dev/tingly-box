@@ -53,15 +53,15 @@ const Layout = ({ children }: LayoutProps) => {
     const isChildActive = (children?: ActivityItem['children']) =>
         children?.some(item => item.type !== 'divider' && isActive(item.path)) ?? false;
 
-    // Determine active activity from current path, falling back to sessionStorage
+    // Determine active activity from current path, falling back to localStorage
     const activeActivity = useMemo(() => {
         for (const item of activityItems) {
             if (item.path && isActive(item.path)) return item.key;
             if (item.children && isChildActive(item.children)) return item.key;
         }
-        const saved = sessionStorage.getItem('layout.activeActivity');
+        const saved = sessionStorage.getItem('layout.activeActivity') || localStorage.getItem('layout.activeActivity');
         if (saved && activityItems.some(item => item.key === saved)) return saved;
-        return 'dashboard';
+        return 'scenario';
     }, [activityItems, location.pathname]);
 
     // In zen mode, active activity is based on current zen path
@@ -74,10 +74,12 @@ const Layout = ({ children }: LayoutProps) => {
         return activeActivity;
     }, [effectiveZenEnabled, location.pathname, activeActivity]);
 
-    // Persist active activity + last visited path
+    // Persist active activity + last visited path (localStorage for cross-session memory)
     useEffect(() => {
         sessionStorage.setItem('layout.activeActivity', activeActivity);
         sessionStorage.setItem(`layout.activityPath.${activeActivity}`, location.pathname);
+        localStorage.setItem('layout.activeActivity', activeActivity);
+        localStorage.setItem(`layout.activityPath.${activeActivity}`, location.pathname);
     }, [activeActivity, location.pathname]);
 
     // When navigating to a zen path, clear zenMoreActivity
