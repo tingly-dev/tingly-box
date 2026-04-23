@@ -99,11 +99,12 @@ export function QuotaInlineDisplay({
   return (
     <Box
       sx={{
-        px: 2,
+        pl: 6,
+        pr: 2,
         py: 1,
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'flex-end',
+        justifyContent: 'flex-start',
         gap: 2,
       }}
     >
