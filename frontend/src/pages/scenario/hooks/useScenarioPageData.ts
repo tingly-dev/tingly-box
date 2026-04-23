@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBaseUrl } from '@/services/api.ts';
+import {getApiBaseUrl} from '@/utils/protocol';
 
 /**
  * Hook for managing shared scenario page state and data loading
@@ -12,7 +12,7 @@ export const useScenarioPageData = (providers: any[], dependencies: any[] = []) 
         let isMounted = true;
 
         const loadBaseUrl = async () => {
-            const url = await getBaseUrl();
+            const url = await getApiBaseUrl();
             if (isMounted) {
                 setBaseUrl(url);
             }
