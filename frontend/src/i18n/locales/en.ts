@@ -369,6 +369,30 @@ export default {
         "message": "Your new user token has been generated and saved to your session.",
         "saved": "I've Saved My Token"
       }
+    },
+    "language": {
+      "title": "Language",
+      "description": "Select interface display language",
+      "en": "English",
+      "zh": "中文",
+      "current": "Current",
+      "saveSuccess": "Language settings updated",
+      "saveFailed": "Failed to update language settings"
+    },
+    "experimentalFeatures": {
+      "title": "Global Experimental Features",
+      "description": "These experimental features apply globally to all scenarios. Individual scenarios can override these settings."
+    },
+    "about": {
+      "title": "About",
+      "version": "Version",
+      "license": "License",
+      "github": "GitHub",
+      "devMode": "Dev Mode",
+      "available": "available"
+    },
+    "serverStatus": {
+      "title": "Server Status"
     }
   },
   "serverInfo": {
@@ -449,7 +473,7 @@ export default {
       "profileName": "Profile Name",
       "save": "Save",
       "deleteTitle": "Delete Profile",
-      "deleteConfirm": "Are you sure you want to delete profile <strong>{{name}}</strong>?",
+      "deleteConfirm": "Are you sure you want to delete profile {{name}}?",
       "deleteWarning": "This will remove the profile and all its associated rules and flags. This action cannot be undone.",
       "profileRenamed": "Profile renamed",
       "profileDeleted": "Profile deleted",
