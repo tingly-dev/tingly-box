@@ -99,7 +99,7 @@ export function QuotaInlineDisplay({
   return (
     <Box
       sx={{
-        pl: 6,
+        pl: 8,
         pr: 2,
         py: 1,
         display: 'flex',
@@ -108,25 +108,6 @@ export function QuotaInlineDisplay({
         gap: 2,
       }}
     >
-      {/* Quota items */}
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{
-          overflowX: 'auto',
-          // Hide scrollbar but keep functionality
-          '&::-webkit-scrollbar': {
-            display: 'none',
-          },
-          msOverflowStyle: 'none',
-          scrollbarWidth: 'none',
-        }}
-      >
-        {visibleWindows.map(({ key, window }) => (
-          <QuotaBarItem key={key} window={window} />
-        ))}
-      </Stack>
-
       {/* Actions */}
       <Stack direction="row" spacing={1} alignItems="center">
         {/* Info icon for hidden items */}
@@ -171,6 +152,25 @@ export function QuotaInlineDisplay({
             )}
           </IconButton>
         </Tooltip>
+      </Stack>
+
+      {/* Quota items */}
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{
+          overflowX: 'auto',
+          // Hide scrollbar but keep functionality
+          '&::-webkit-scrollbar': {
+            display: 'none',
+          },
+          msOverflowStyle: 'none',
+          scrollbarWidth: 'none',
+        }}
+      >
+        {visibleWindows.map(({ key, window }) => (
+          <QuotaBarItem key={key} window={window} />
+        ))}
       </Stack>
     </Box>
   );
