@@ -1,4 +1,4 @@
-import { Add, Upload, VpnKey } from '@mui/icons-material';
+import { Add, Upload, VpnKey, ListAlt } from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -10,7 +10,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
 import { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
@@ -399,6 +399,16 @@ const CredentialPage = () => {
                 size="full"
                 rightAction={
                     <Stack direction="row" spacing={1}>
+                        <Button
+                            component={Link}
+                            to="/credentials/providers"
+                            variant="outlined"
+                            startIcon={<ListAlt />}
+                            size="small"
+                            sx={{ minWidth: 130 }}
+                        >
+                            Browse Providers
+                        </Button>
                         <Button
                             variant="outlined"
                             startIcon={<Upload />}

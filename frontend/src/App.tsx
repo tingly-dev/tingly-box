@@ -30,6 +30,7 @@ import UseOpenCodePage from './pages/scenario/UseOpenCodePage';
 import UseXcodePage from './pages/scenario/UseXcodePage';
 import UseVSCodePage from './pages/scenario/UseVSCodePage';
 import CredentialPage from './pages/CredentialPage';
+import ProviderListPage from './pages/ProviderListPage';
 import System from './pages/System';
 import AccessControl from './pages/AccessControl';
 import LogsPage from './pages/system/LogsPage';
@@ -325,6 +326,8 @@ function AppContent() {
                     {/* Credential routes - new unified page */}
                     <Route path="/credentials" element={<CredentialPage />} />
                     <Route path="/credentials/:tab" element={<CredentialPage />} />
+                    {/* Provider List page */}
+                    <Route path="/credentials/providers" element={<ProviderListPage />} />
                     {/* Legacy redirects for backward compatibility */}
                     <Route path="/api-keys" element={<Navigate to="/credentials" replace />} />
                     <Route path="/oauth" element={<Navigate to="/credentials" replace />} />

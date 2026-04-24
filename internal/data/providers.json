@@ -145,7 +145,9 @@
         { "id": "gpt-5.2-codex" },
         { "id": "gpt-5.3-codex" },
         { "id": "gpt-5.4" },
-        { "id": "gpt-5.4-mini" }
+        { "id": "gpt-5.4-mini" },
+        { "id": "gpt-5.5" },
+        { "id": "gpt-5.5-mini" }
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "codex",
