@@ -158,6 +158,7 @@ export interface UniqueProvider {
     supportsAnthropic: boolean;
     baseUrlOpenAI?: string;
     baseUrlAnthropic?: string;
+    apiDoc?: string;
     icon?: string; // Icon identifier for Lobe Icons
 }
 
@@ -182,6 +183,7 @@ export function getAllUniqueProviders(): UniqueProvider[] {
             supportsAnthropic: !!sp.base_url_anthropic,
             baseUrlOpenAI: sp.base_url_openai,
             baseUrlAnthropic: sp.base_url_anthropic,
+            apiDoc: sp.api_doc,
             icon: sp.icon,
         });
     });

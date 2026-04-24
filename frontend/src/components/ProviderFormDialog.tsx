@@ -1,10 +1,11 @@
-import { WarningAmber, Close, Visibility, VisibilityOff } from '@mui/icons-material';
+import { Close, Visibility, VisibilityOff } from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
     Box,
     Button,
     Checkbox,
+    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -36,7 +37,6 @@ export interface EnhancedProviderFormData {
     noKeyRequired?: boolean;
     enabled?: boolean;
     proxyUrl?: string;
-    // New fields for multi-protocol support
     protocols?: ('openai' | 'anthropic')[];
     providerBaseUrls?: { openai?: string; anthropic?: string };
 }
@@ -53,6 +53,30 @@ interface PresetProviderFormDialogProps {
     submitText?: string;
     isFirstProvider?: boolean;
 }
+
+const OPENAI_RESPONSE_HINTS = ['responses', 'response'];
+const OPENAI_CHAT_HINTS = ['chat/completions', '/chat', 'chat'];
+
+const detectOpenAICapabilities = (provider: UniqueProvider | null) => {
+    if (!provider?.baseUrlOpenAI) {
+        return [] as string[];
+    }
+
+    const haystacks = [
+        provider.baseUrlOpenAI,
+        provider.apiDoc || '',
+        provider.name,
+        provider.alias || '',
+    ].map(value => value.toLowerCase());
+
+    const supportsResponses = OPENAI_RESPONSE_HINTS.some(hint => haystacks.some(text => text.includes(hint)));
+    const supportsChat = OPENAI_CHAT_HINTS.some(hint => haystacks.some(text => text.includes(hint)));
+
+    const capabilities: string[] = [];
+    if (supportsChat) capabilities.push('Chat');
+    if (supportsResponses) capabilities.push('Responses');
+    return capabilities;
+};
 
 const ProviderFormDialog = ({
     open,
@@ -80,21 +104,15 @@ const ProviderFormDialog = ({
         responseTime?: number;
         modelsCount?: number;
     } | null>(null);
-
-    // Selected provider object (null for custom URL)
     const [selectedProvider, setSelectedProvider] = useState<UniqueProvider | null>(null);
-
-    // Protocol checkboxes state
     const [protocolOpenAI, setProtocolOpenAI] = useState(false);
     const [protocolAnthropic, setProtocolAnthropic] = useState(false);
-
-    // Track if user has manually edited the name
     const [nameIsAutoFilled, setNameIsAutoFilled] = useState(true);
 
-    // All unique providers - use hook to get reactive updates
     const allProviders = useProviderTemplates();
 
-    // Helper component for displaying base URL
+    const openAICapabilities = useMemo(() => detectOpenAICapabilities(selectedProvider), [selectedProvider]);
+
     const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({ url }) => {
         if (!url) return null;
         return (
@@ -103,7 +121,7 @@ const ProviderFormDialog = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 0.5,
-                    mt: 0.5,
+                    mt: 0.75,
                     px: 1,
                     py: 0.5,
                     bgcolor: 'background.default',
@@ -125,38 +143,30 @@ const ProviderFormDialog = ({
         );
     };
 
-    // Sync noApiKey state with data.noKeyRequired prop
     useEffect(() => {
         setNoApiKey(data.noKeyRequired || false);
     }, [data.noKeyRequired]);
 
-    // Track if name was manually edited by user
     useEffect(() => {
-        // Check if current name differs from the auto-fill pattern
         if (data.name && !nameIsAutoFilled) {
-            // User has edited the name, don't auto-fill anymore
             return;
         }
     }, [data.name, nameIsAutoFilled]);
 
-    // Initialize state when dialog opens or mode changes
     useEffect(() => {
         if (open) {
             setVerificationResult(null);
 
             if (mode === 'edit') {
-                // In edit mode, set protocol based on existing apiStyle
                 setProtocolOpenAI(data.apiStyle === 'openai');
                 setProtocolAnthropic(data.apiStyle === 'anthropic');
 
-                // Try to find matching provider
                 const matchingProvider = allProviders.find(p =>
                     (p.baseUrlOpenAI === data.apiBase && data.apiStyle === 'openai') ||
                     (p.baseUrlAnthropic === data.apiBase && data.apiStyle === 'anthropic')
                 );
                 setSelectedProvider(matchingProvider || null);
             } else {
-                // In add mode, check if protocols were pre-set
                 if (data.protocols && data.protocols.length > 0) {
                     setProtocolOpenAI(data.protocols.includes('openai'));
                     setProtocolAnthropic(data.protocols.includes('anthropic'));
@@ -170,56 +180,47 @@ const ProviderFormDialog = ({
                 setSelectedProvider(null);
             }
         }
-    }, [open, mode]);
+    }, [open, mode, data.apiBase, data.apiStyle, data.protocols, allProviders]);
 
-    // Sync protocol state back to parent data
     useEffect(() => {
         const protocols: ('openai' | 'anthropic')[] = [];
         if (protocolOpenAI) protocols.push('openai');
         if (protocolAnthropic) protocols.push('anthropic');
         onChange('protocols', protocols);
 
-        // Set apiStyle to the first selected protocol (for backward compatibility)
         if (protocols.length > 0) {
             onChange('apiStyle', protocols[0]);
         } else {
             onChange('apiStyle', undefined);
         }
 
-        // Update providerBaseUrls
         if (selectedProvider) {
             onChange('providerBaseUrls', {
                 openai: selectedProvider.baseUrlOpenAI,
                 anthropic: selectedProvider.baseUrlAnthropic,
             });
-            // Set apiBase to match the first selected protocol
             if (protocolOpenAI && selectedProvider.baseUrlOpenAI) {
                 onChange('apiBase', selectedProvider.baseUrlOpenAI);
             } else if (protocolAnthropic && selectedProvider.baseUrlAnthropic) {
                 onChange('apiBase', selectedProvider.baseUrlAnthropic);
             }
         }
-    }, [protocolOpenAI, protocolAnthropic]);
+    }, [protocolOpenAI, protocolAnthropic, selectedProvider, onChange]);
 
-    // Handle provider selection from autocomplete
     const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
         setVerificationResult(null);
 
         if (typeof newValue === 'string') {
-            // Custom URL input
             setSelectedProvider(null);
             onChange('apiBase', newValue);
             onChange('providerBaseUrls', undefined);
         } else if (newValue) {
-            // Preset provider selected
             setSelectedProvider(newValue);
             const displayName = newValue.alias || newValue.name;
 
-            // Auto-select all supported protocols
             setProtocolOpenAI(newValue.supportsOpenAI);
             setProtocolAnthropic(newValue.supportsAnthropic);
 
-            // Set base URL (prefer OpenAI if both supported)
             const baseUrl = newValue.baseUrlOpenAI || newValue.baseUrlAnthropic || '';
             onChange('apiBase', baseUrl);
             onChange('providerBaseUrls', {
@@ -227,14 +228,12 @@ const ProviderFormDialog = ({
                 anthropic: newValue.baseUrlAnthropic,
             });
 
-            // Auto-fill name only if user hasn't manually edited it
             if (nameIsAutoFilled || !data.name) {
                 const autoName = t('providerDialog.keyName.autoFill', { title: displayName });
                 onChange('name', autoName);
                 setNameIsAutoFilled(true);
             }
         } else {
-            // Cleared
             setSelectedProvider(null);
             onChange('apiBase', '');
             onChange('providerBaseUrls', undefined);
@@ -243,7 +242,6 @@ const ProviderFormDialog = ({
         }
     };
 
-    // Handle verification
     const handleVerify = async () => {
         if (noApiKey) {
             setVerificationResult(null);
@@ -281,14 +279,14 @@ const ProviderFormDialog = ({
                     modelsCount: result.data.models_count,
                 });
                 return isValid;
-            } else {
-                setVerificationResult({
-                    success: false,
-                    message: result.error?.message || t('providerDialog.verification.failed'),
-                });
-                return false;
             }
-        } catch (error) {
+
+            setVerificationResult({
+                success: false,
+                message: result.error?.message || t('providerDialog.verification.failed'),
+            });
+            return false;
+        } catch (_error) {
             setVerificationResult({
                 success: false,
                 message: t('providerDialog.verification.networkError'),
@@ -299,7 +297,6 @@ const ProviderFormDialog = ({
         }
     };
 
-    // Wrapped submit handler
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -312,8 +309,6 @@ const ProviderFormDialog = ({
             }
         }
 
-        // Close dialog immediately for better UX
-        // The parent onSubmit will handle the actual API operation
         onClose();
         onSubmit(e);
     };
@@ -325,12 +320,7 @@ const ProviderFormDialog = ({
             <DialogTitle>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     {title || defaultTitle}
-                    <IconButton
-                        aria-label="close"
-                        onClick={onClose}
-                        sx={{ ml: 2 }}
-                        size="small"
-                    >
+                    <IconButton aria-label="close" onClick={onClose} sx={{ ml: 2 }} size="small">
                         <Close />
                     </IconButton>
                 </Box>
@@ -343,7 +333,6 @@ const ProviderFormDialog = ({
                         </Typography>
                     )}
                     <Stack spacing={2.5}>
-                        {/* First Provider Welcome Message */}
                         {isFirstProvider && mode === 'add' && (
                             <Alert severity="info" sx={{ mb: 1 }}>
                                 <Typography variant="body2">
@@ -353,7 +342,6 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        {/* ① Provider Selection */}
                         <Autocomplete
                             freeSolo
                             autoHighlight
@@ -364,7 +352,6 @@ const ProviderFormDialog = ({
                             options={allProviders}
                             filterOptions={(options, state) => {
                                 const inputValue = state.inputValue.toLowerCase();
-                                // If input matches a selected provider's display, show all
                                 const isSelectedFormat = selectedProvider &&
                                     (selectedProvider.alias || selectedProvider.name).toLowerCase() === inputValue;
                                 if (isSelectedFormat) return options;
@@ -384,107 +371,40 @@ const ProviderFormDialog = ({
                             onChange={(_event, newValue) => {
                                 handleProviderSelect(newValue);
                             }}
-                            inputValue={(() => {
-                                if (selectedProvider) {
-                                    return selectedProvider.alias || selectedProvider.name;
-                                }
-                                return data.apiBase;
-                            })()}
-                            onInputChange={(_event, newInputValue, reason) => {
-                                if (reason === 'input') {
-                                    // If typing, treat as custom URL when no provider matches
-                                    const matchingProvider = allProviders.find(p =>
-                                        (p.alias || p.name).toLowerCase() === newInputValue.toLowerCase()
-                                    );
-                                    if (!matchingProvider) {
-                                        setSelectedProvider(null);
-                                        onChange('apiBase', newInputValue);
-                                        setVerificationResult(null);
-                                        // Clear protocols when input is cleared
-                                        if (!newInputValue) {
-                                            setProtocolOpenAI(false);
-                                            setProtocolAnthropic(false);
-                                        }
-                                    }
-                                } else if (reason === 'clear') {
-                                    // Handle clear button click
-                                    setSelectedProvider(null);
-                                    onChange('apiBase', '');
-                                    onChange('providerBaseUrls', undefined);
-                                    setProtocolOpenAI(false);
-                                    setProtocolAnthropic(false);
-                                    setVerificationResult(null);
-                                }
-                            }}
-                            renderOption={(props, option) => (
-                                <Box component="li" {...props} sx={{ fontSize: '0.875rem' }}>
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        {option.icon && (
-                                            <ProviderIcon identifier={option.icon} size={18} />
-                                        )}
-                                        <Typography variant="body2" fontWeight="medium">
-                                            {option.alias || option.name}
-                                        </Typography>
-                                    </Stack>
-                                </Box>
-                            )}
+                            inputValue={selectedProvider ? (selectedProvider.alias || selectedProvider.name) : data.apiBase}
                             renderInput={(params) => (
                                 <TextField
                                     {...params}
-                                    label={t('providerDialog.provider.label')}
-                                    required
-                                    placeholder={t('providerDialog.provider.placeholder')}
+                                    label="Provider"
+                                    placeholder="Select a provider or enter custom base URL"
                                 />
                             )}
-                            isOptionEqualToValue={(option, value) => {
-                                if (typeof value === 'string') return false;
-                                return option.id === value?.id;
+                            renderOption={(props, option) => {
+                                const { key, ...optionProps } = props;
+                                return (
+                                    <Box component="li" key={key} {...optionProps} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        {option.icon ? <ProviderIcon identifier={option.icon} size={18} /> : null}
+                                        <Box>
+                                            <Typography variant="body2">{option.alias || option.name}</Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                                {option.baseUrlOpenAI || option.baseUrlAnthropic}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                );
                             }}
                         />
 
-                        {/* ② Protocol Selection (Checkboxes) */}
-                        <FormControl
-                            required
-                            disabled={mode === 'edit'}
-                            sx={{
-                                position: 'relative',
-                                border: 1,
-                                borderColor: 'text.primary',
-                                borderWidth: 0.5,
-                                borderRadius: 1,
-                                p: 0.5,
-                                m: 0,
-                                opacity: mode === 'edit' ? 0.6 : 1,
-                            }}
-                        >
-                            <FormLabel
-                                sx={{
-                                    position: 'absolute',
-                                    top: -10,
-                                    left: 12,
-                                    px: 0.5,
-                                    bgcolor: 'background.paper',
-                                    fontSize: '0.75rem',
-                                    color: 'text.secondary',
-                                    '&.Mui-focused': {
-                                        color: 'text.secondary',
-                                    },
-                                }}
-                            >
-                                {t('providerDialog.protocol.label')}
-                                {mode === 'edit' && (
-                                    <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
-                                        (Cannot be modified in edit mode)
-                                    </Typography>
-                                )}
+                        <FormControl component="fieldset">
+                            <FormLabel component="legend" sx={{ mb: 1 }}>
+                                {t('providerDialog.apiStyle.label')}
                             </FormLabel>
-                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                                {/* OpenAI Protocol */}
+                            <Stack spacing={1}>
                                 <Box
                                     sx={{
+                                        borderRadius: 1,
                                         px: 1.5,
                                         py: 1,
-                                        borderRadius: 1,
                                         cursor: mode === 'edit' ? 'not-allowed' : 'pointer',
                                         transition: 'all 0.15s',
                                         bgcolor: protocolOpenAI ? 'action.selected' : 'transparent',
@@ -506,8 +426,19 @@ const ProviderFormDialog = ({
                                                 {t('providerDialog.apiStyle.openAI')}
                                             </Typography>
                                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
-                                                {t('providerDialog.apiStyle.helperOpenAI')}
+                                                {openAICapabilities.length > 0
+                                                    ? `Supports ${openAICapabilities.join(' + ')}`
+                                                    : t('providerDialog.apiStyle.helperOpenAI')}
                                             </Typography>
+                                            <Stack direction="row" spacing={0.75} sx={{ mt: 0.75, flexWrap: 'wrap', rowGap: 0.75 }}>
+                                                {openAICapabilities.length > 0 ? (
+                                                    openAICapabilities.map(capability => (
+                                                        <Chip key={capability} label={capability} size="small" variant="outlined" color="primary" />
+                                                    ))
+                                                ) : (
+                                                    <Chip label="OpenAI style" size="small" variant="outlined" color="primary" />
+                                                )}
+                                            </Stack>
                                             {selectedProvider?.baseUrlOpenAI && (
                                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI} />
                                             )}
@@ -520,7 +451,7 @@ const ProviderFormDialog = ({
                                         />
                                     </Stack>
                                 </Box>
-                                {/* Anthropic Protocol */}
+
                                 <Box
                                     sx={{
                                         borderRadius: 1,
@@ -564,7 +495,6 @@ const ProviderFormDialog = ({
                             </Stack>
                         </FormControl>
 
-                        {/* ③ API Key Field */}
                         <Box>
                             <TextField
                                 size="small"
@@ -624,7 +554,6 @@ const ProviderFormDialog = ({
                             </Box>
                         </Box>
 
-                        {/* ④ Name Field */}
                         <TextField
                             size="small"
                             fullWidth
@@ -633,14 +562,12 @@ const ProviderFormDialog = ({
                             onChange={(e) => {
                                 onChange('name', e.target.value);
                                 setVerificationResult(null);
-                                // Mark that user has manually edited the name
                                 setNameIsAutoFilled(false);
                             }}
                             required
                             placeholder={t('providerDialog.keyName.placeholder')}
                         />
 
-                        {/* Proxy URL Field */}
                         <TextField
                             size="small"
                             fullWidth
@@ -650,7 +577,6 @@ const ProviderFormDialog = ({
                             onChange={(e) => onChange('proxyUrl', e.target.value)}
                         />
 
-                        {/* Enabled Toggle (Edit mode only) */}
                         {mode === 'edit' && (
                             <FormControlLabel
                                 control={
@@ -664,7 +590,6 @@ const ProviderFormDialog = ({
                             />
                         )}
 
-                        {/* Verification Result */}
                         {verificationResult && (
                             <Alert
                                 severity={verificationResult.success ? 'success' : 'warning'}
@@ -706,7 +631,6 @@ const ProviderFormDialog = ({
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
-                    {/* Add/Save Anyway button - skip verification */}
                     <Button
                         type="button"
                         variant="outlined"
