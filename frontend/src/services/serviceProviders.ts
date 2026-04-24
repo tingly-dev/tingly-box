@@ -9,7 +9,10 @@ export interface ServiceProvider {
     valid: boolean;
     website: string;
     description: string;
-    type: string;
+    canonical_domain?: string; // API host (Schema V2)
+    vendor_family?: string;    // Vendor aggregation key (Schema V2)
+    region?: string;           // "cn" | "intl" | "global" (Schema V2)
+    plan?: string;             // "standard" | "coding" | "oauth" (Schema V2)
     api_doc: string;
     model_doc: string;
     pricing_doc: string;
