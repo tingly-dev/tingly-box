@@ -31,12 +31,14 @@ const (
 type WindowType string
 
 const (
-	WindowTypeSession WindowType = "session" // 会话配额（小时级）
-	WindowTypeDaily   WindowType = "daily"   // 日配额
-	WindowTypeWeekly  WindowType = "weekly"  // 周配额
-	WindowTypeMonthly WindowType = "monthly" // 月配额
-	WindowTypeCustom  WindowType = "custom"  // 自定义窗口
-	WindowTypeBalance WindowType = "balance" // 余额/积分
+	WindowTypeSession    WindowType = "session"     // 会话配额（小时级）
+	WindowTypeDaily      WindowType = "daily"       // 日配额
+	WindowTypeWeekly     WindowType = "weekly"      // 周配额
+	WindowTypeMonthly    WindowType = "monthly"     // 月配额
+	WindowTypeCustom     WindowType = "custom"      // 自定义窗口
+	WindowTypeBalance    WindowType = "balance"     // 余额/积分
+	WindowTypeModel      WindowType = "model"       // 模型特定配额
+	WindowTypeCodeReview WindowType = "code_review" // 代码审查配额
 )
 
 // UsageUnit 用量单位枚举
@@ -63,6 +65,9 @@ type ProviderUsage struct {
 	Primary   *UsageWindow `json:"primary,omitempty"`
 	Secondary *UsageWindow `json:"secondary,omitempty"`
 	Tertiary  *UsageWindow `json:"tertiary,omitempty"`
+
+	// 额外配额窗口（用于模型特定配额、代码审查配额等）
+	ExtraWindows []*UsageWindow `json:"extra_windows,omitempty"`
 
 	// 费用信息（如月度费用）
 	Cost *UsageCost `json:"cost,omitempty"`
@@ -115,6 +120,10 @@ type UsageWindow struct {
 	// 元数据
 	Label       string `json:"label"`       // 显示标签，如 "Session Quota"
 	Description string `json:"description"` // 描述信息
+
+	// 限制状态（可选）
+	Allowed      *bool `json:"allowed,omitempty"`       // 是否允许请求
+	LimitReached *bool `json:"limit_reached,omitempty"` // 是否达到限制
 }
 
 // UsageCost 表示费用信息
@@ -133,6 +142,9 @@ type UsageAccount struct {
 	Email          string `json:"email,omitempty"` // 账户邮箱
 	Tier           string `json:"tier,omitempty"`  // 账户层级
 	OrganizationID string `json:"organization_id,omitempty"`
+
+	// 费用控制状态（可选）
+	SpendControlReached bool `json:"spend_control_reached,omitempty"` // 是否达到费用控制限制
 }
 
 // CalculateUsedPercent 计算使用百分比

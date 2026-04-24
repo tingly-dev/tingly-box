@@ -49,17 +49,45 @@ type codexUsageResponse struct {
 		PrimaryWindow   *codexWindow `json:"primary_window"`
 		SecondaryWindow *codexWindow `json:"secondary_window"`
 	} `json:"rate_limit"`
-	Credits *struct {
-		HasCredits bool    `json:"has_credits"`
-		Unlimited  bool    `json:"unlimited"`
-		Balance    float64 `json:"balance"`
+	CodeReviewRateLimit  *codexRateLimit            `json:"code_review_rate_limit"`
+	AdditionalRateLimits []codexAdditionalRateLimit `json:"additional_rate_limits"`
+	Credits              *struct {
+		HasCredits          bool     `json:"has_credits"`
+		Unlimited           bool     `json:"unlimited"`
+		OverageLimitReached bool     `json:"overage_limit_reached"`
+		Balance             *float64 `json:"balance"`
+		ApproxLocalMessages []int    `json:"approx_local_messages"`
+		ApproxCloudMessages []int    `json:"approx_cloud_messages"`
 	} `json:"credits"`
+	SpendControl *struct {
+		Reached bool `json:"reached"`
+	} `json:"spend_control"`
+	RateLimitReachedType *string     `json:"rate_limit_reached_type"`
+	Promo                interface{} `json:"promo"`
+	ReferralBeacon       interface{} `json:"referral_beacon"`
+	Email                string      `json:"email"`
+	UserID               string      `json:"user_id"`
+	AccountID            string      `json:"account_id"`
 }
 
 type codexWindow struct {
 	UsedPercent        int   `json:"used_percent"`
 	ResetAt            int64 `json:"reset_at"`             // unix epoch
 	LimitWindowSeconds int   `json:"limit_window_seconds"` // window duration in seconds
+	ResetAfterSeconds  int   `json:"reset_after_seconds"`
+}
+
+type codexRateLimit struct {
+	Allowed         bool         `json:"allowed"`
+	LimitReached    bool         `json:"limit_reached"`
+	PrimaryWindow   *codexWindow `json:"primary_window"`
+	SecondaryWindow *codexWindow `json:"secondary_window"`
+}
+
+type codexAdditionalRateLimit struct {
+	LimitName      string         `json:"limit_name"`
+	MeteredFeature string         `json:"metered_feature"`
+	RateLimit      codexRateLimit `json:"rate_limit"`
 }
 
 // ── Fetch ──────────────────────────────────────────────
@@ -157,13 +185,69 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quot
 		}
 	}
 
-	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited {
+	// Handle additional_rate_limits (model-specific quotas like GPT-5.3-Codex-Spark)
+	var extraWindows []*quota.UsageWindow
+	for _, arl := range apiResp.AdditionalRateLimits {
+		if arl.RateLimit.PrimaryWindow != nil {
+			w := arl.RateLimit.PrimaryWindow
+			resetsAt := time.Unix(w.ResetAt, 0)
+			label := arl.LimitName
+			if label == "" {
+				label = arl.MeteredFeature
+			}
+			extraWindows = append(extraWindows, &quota.UsageWindow{
+				Type:          quota.WindowTypeModel,
+				UsedPercent:   float64(w.UsedPercent),
+				Unit:          quota.UsageUnitPercent,
+				ResetsAt:      &resetsAt,
+				WindowMinutes: w.LimitWindowSeconds / 60,
+				Label:         label,
+				Description:   fmt.Sprintf("%s: %.0f%% used", label, float64(w.UsedPercent)),
+				Allowed:       &arl.RateLimit.Allowed,
+				LimitReached:  &arl.RateLimit.LimitReached,
+			})
+		}
+	}
+
+	// Handle code_review_rate_limit if present
+	if apiResp.CodeReviewRateLimit != nil && apiResp.CodeReviewRateLimit.PrimaryWindow != nil {
+		w := apiResp.CodeReviewRateLimit.PrimaryWindow
+		resetsAt := time.Unix(w.ResetAt, 0)
+		codeReviewWindow := &quota.UsageWindow{
+			Type:          quota.WindowTypeCodeReview,
+			UsedPercent:   float64(w.UsedPercent),
+			Unit:          quota.UsageUnitPercent,
+			ResetsAt:      &resetsAt,
+			WindowMinutes: w.LimitWindowSeconds / 60,
+			Label:         "Code Review",
+			Description:   fmt.Sprintf("Code Review: %.0f%% used", float64(w.UsedPercent)),
+			Allowed:       &apiResp.CodeReviewRateLimit.Allowed,
+			LimitReached:  &apiResp.CodeReviewRateLimit.LimitReached,
+		}
+		// Add to extra windows
+		extraWindows = append(extraWindows, codeReviewWindow)
+	}
+
+	if len(extraWindows) > 0 {
+		usage.ExtraWindows = extraWindows
+	}
+
+	// Handle credits (balance is now a pointer)
+	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited && apiResp.Credits.Balance != nil {
 		usage.Cost = &quota.UsageCost{
 			Used:         0, // API doesn't report used amount directly
-			Limit:        apiResp.Credits.Balance,
+			Limit:        *apiResp.Credits.Balance,
 			CurrencyCode: "USD",
 			Label:        "Credits Balance",
 		}
+	}
+
+	// Add spend control status to account info
+	if apiResp.SpendControl != nil {
+		if usage.Account == nil {
+			usage.Account = &quota.UsageAccount{}
+		}
+		usage.Account.SpendControlReached = apiResp.SpendControl.Reached
 	}
 
 	return usage, nil

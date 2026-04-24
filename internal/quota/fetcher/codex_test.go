@@ -233,3 +233,267 @@ func TestCodexFetcher_Validate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
+	logger := logrus.New()
+	now := time.Now()
+	resetAt := now.Add(5 * time.Hour).Unix()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"plan_type": "prolite",
+			"rate_limit": map[string]interface{}{
+				"primary_window": map[string]interface{}{
+					"used_percent":         25,
+					"reset_at":             resetAt,
+					"limit_window_seconds": 18000,
+				},
+				"secondary_window": map[string]interface{}{
+					"used_percent":         10,
+					"reset_at":             resetAt,
+					"limit_window_seconds": 604800,
+				},
+			},
+			"additional_rate_limits": []interface{}{
+				map[string]interface{}{
+					"limit_name":      "GPT-5.3-Codex-Spark",
+					"metered_feature": "codex_bengalfox",
+					"rate_limit": map[string]interface{}{
+						"allowed":       true,
+						"limit_reached": false,
+						"primary_window": map[string]interface{}{
+							"used_percent":         50,
+							"reset_at":             resetAt,
+							"limit_window_seconds": 18000,
+							"reset_after_seconds":  18000,
+						},
+						"secondary_window": map[string]interface{}{
+							"used_percent":         5,
+							"reset_at":             resetAt,
+							"limit_window_seconds": 604800,
+							"reset_after_seconds":  604800,
+						},
+					},
+				},
+			},
+			"credits": map[string]interface{}{
+				"has_credits": false,
+				"unlimited":   false,
+			},
+			"spend_control": map[string]interface{}{
+				"reached": false,
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	fetcher := &CodexFetcher{logger: logger}
+	provider := &typ.Provider{
+		UUID:     "codex-prolite",
+		Name:     "Codex ProLite",
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			AccessToken: "test-token",
+		},
+		APIBase: server.URL,
+	}
+
+	usage, err := fetcher.Fetch(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	// Verify extra windows
+	if len(usage.ExtraWindows) != 1 {
+		t.Fatalf("Expected 1 extra window, got %d", len(usage.ExtraWindows))
+	}
+
+	extra := usage.ExtraWindows[0]
+	if extra.Label != "GPT-5.3-Codex-Spark" {
+		t.Errorf("Extra window label = %q, want 'GPT-5.3-Codex-Spark'", extra.Label)
+	}
+	if extra.UsedPercent != 50 {
+		t.Errorf("Extra window UsedPercent = %f, want 50", extra.UsedPercent)
+	}
+	if extra.Allowed == nil || !*extra.Allowed {
+		t.Errorf("Extra window Allowed should be true, got %v", extra.Allowed)
+	}
+	if extra.LimitReached == nil || *extra.LimitReached {
+		t.Errorf("Extra window LimitReached should be false, got %v", extra.LimitReached)
+	}
+
+	// Verify spend control
+	if usage.Account == nil {
+		t.Fatal("Account is nil")
+	}
+	if usage.Account.SpendControlReached {
+		t.Errorf("SpendControlReached should be false, got true")
+	}
+}
+
+func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
+	logger := logrus.New()
+	now := time.Now()
+	resetAt := now.Add(7 * 24 * time.Hour).Unix()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"plan_type": "free",
+			"rate_limit": map[string]interface{}{
+				"primary_window": map[string]interface{}{
+					"used_percent":         80,
+					"reset_at":             resetAt,
+					"limit_window_seconds": 604800,
+				},
+				"secondary_window": nil,
+			},
+			"code_review_rate_limit": map[string]interface{}{
+				"allowed":       true,
+				"limit_reached": false,
+				"primary_window": map[string]interface{}{
+					"used_percent":         30,
+					"reset_at":             resetAt,
+					"limit_window_seconds": 604800,
+				},
+				"secondary_window": nil,
+			},
+			"additional_rate_limits": nil,
+			"credits": map[string]interface{}{
+				"has_credits": false,
+				"unlimited":   false,
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	fetcher := &CodexFetcher{logger: logger}
+	provider := &typ.Provider{
+		UUID:     "codex-free",
+		Name:     "Codex Free",
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			AccessToken: "test-token",
+		},
+		APIBase: server.URL,
+	}
+
+	usage, err := fetcher.Fetch(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	// Verify extra windows includes code review
+	if len(usage.ExtraWindows) != 1 {
+		t.Fatalf("Expected 1 extra window (code review), got %d", len(usage.ExtraWindows))
+	}
+
+	codeReview := usage.ExtraWindows[0]
+	if codeReview.Label != "Code Review" {
+		t.Errorf("Code review window label = %q, want 'Code Review'", codeReview.Label)
+	}
+	if codeReview.UsedPercent != 30 {
+		t.Errorf("Code review UsedPercent = %f, want 30", codeReview.UsedPercent)
+	}
+	if codeReview.Type != quota.WindowTypeCodeReview {
+		t.Errorf("Code review Type = %q, want 'code_review'", codeReview.Type)
+	}
+}
+
+func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
+	logger := logrus.New()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		balance := 150.0
+		resp := map[string]interface{}{
+			"plan_type": "pro",
+			"rate_limit": map[string]interface{}{
+				"primary_window": map[string]interface{}{
+					"used_percent":         25,
+					"reset_at":             time.Now().Add(5 * time.Hour).Unix(),
+					"limit_window_seconds": 18000,
+				},
+			},
+			"credits": map[string]interface{}{
+				"has_credits":           true,
+				"unlimited":             false,
+				"overage_limit_reached": false,
+				"balance":               &balance,
+				"approx_local_messages": []int{0, 0},
+				"approx_cloud_messages": []int{0, 0},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	fetcher := &CodexFetcher{logger: logger}
+	provider := &typ.Provider{
+		UUID:     "codex-pro",
+		Name:     "Codex Pro",
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			AccessToken: "test-token",
+		},
+		APIBase: server.URL,
+	}
+
+	usage, err := fetcher.Fetch(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	// Verify credits
+	if usage.Cost == nil {
+		t.Fatal("Cost should not be nil when credits are present")
+	}
+	if usage.Cost.Limit != 150.0 {
+		t.Errorf("Cost.Limit = %f, want 150.0", usage.Cost.Limit)
+	}
+}
+
+func TestCodexFetcher_Fetch_WithNilCreditsBalance(t *testing.T) {
+	logger := logrus.New()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := map[string]interface{}{
+			"plan_type": "free",
+			"rate_limit": map[string]interface{}{
+				"primary_window": map[string]interface{}{
+					"used_percent":         80,
+					"reset_at":             time.Now().Add(2 * time.Hour).Unix(),
+					"limit_window_seconds": 18000,
+				},
+			},
+			"credits": map[string]interface{}{
+				"has_credits": false,
+				"unlimited":   false,
+				"balance":     nil,
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	fetcher := &CodexFetcher{logger: logger}
+	provider := &typ.Provider{
+		UUID:     "codex-free",
+		Name:     "Codex Free",
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			AccessToken: "test-token",
+		},
+		APIBase: server.URL,
+	}
+
+	usage, err := fetcher.Fetch(context.Background(), provider)
+	if err != nil {
+		t.Fatalf("Fetch() error: %v", err)
+	}
+
+	// Should not have cost when balance is nil
+	if usage.Cost != nil {
+		t.Errorf("Cost should be nil when balance is nil, got %+v", usage.Cost)
+	}
+}
