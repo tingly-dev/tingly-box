@@ -13,6 +13,24 @@ const resources = {
     },
 };
 
+// Custom language detector that defaults to English when localStorage is empty
+const languageDetectorOptions = {
+    // Order and sources where to look for language
+    order: ['localStorage'],
+    // Keys or params to lookup language from
+    lookupLocalStorage: 'i18nextLng',
+    // Cache user language
+    caches: ['localStorage'],
+    // Custom detection function - check localStorage first, default to 'en' if empty
+    detection: () => {
+        const stored = localStorage.getItem('i18nextLng');
+        if (stored && (stored === 'en' || stored === 'zh')) {
+            return stored;
+        }
+        return 'en'; // Default to English
+    },
+};
+
 i18n
     .use(LanguageDetector) // Detect user language
     .use(initReactI18next) // Passes i18n down to react-i18next
@@ -23,14 +41,7 @@ i18n
         debug: false,
 
         // Configure language detection and storage
-        detection: {
-            // Order and sources where to look for language
-            order: ['localStorage', 'navigator'],
-            // Keys or params to lookup language from
-            lookupLocalStorage: 'i18nextLng',
-            // Cache user language
-            caches: ['localStorage'],
-        },
+        detection: languageDetectorOptions,
 
         interpolation: {
             escapeValue: false, // React already escapes values
