@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -42,6 +43,36 @@ func (f *CodexFetcher) Validate(provider *typ.Provider) error {
 
 // ── API response ───────────────────────────────────────
 
+// codexBalance is a flexible balance type that can be unmarshaled from
+// either a string ("150.00") or a number (150.0).
+type codexBalance float64
+
+// UnmarshalJSON implements json.Unmarshaler for codexBalance.
+// It handles both string and number formats from the API.
+func (b *codexBalance) UnmarshalJSON(data []byte) error {
+	// Try string first
+	if len(data) > 2 && data[0] == '"' && data[len(data)-1] == '"' {
+		str := string(data[1 : len(data)-1])
+		if str == "" {
+			*b = 0
+			return nil
+		}
+		f, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return fmt.Errorf("parse balance string %q: %w", str, err)
+		}
+		*b = codexBalance(f)
+		return nil
+	}
+	// Try number
+	var f float64
+	if err := json.Unmarshal(data, &f); err != nil {
+		return err
+	}
+	*b = codexBalance(f)
+	return nil
+}
+
 // codexUsageResponse from GET /backend-api/wham/usage
 type codexUsageResponse struct {
 	PlanType  string `json:"plan_type"` // guest, free, go, plus, pro, team, business, enterprise
@@ -55,7 +86,7 @@ type codexUsageResponse struct {
 		HasCredits          bool     `json:"has_credits"`
 		Unlimited           bool     `json:"unlimited"`
 		OverageLimitReached bool     `json:"overage_limit_reached"`
-		Balance             *float64 `json:"balance"`
+		Balance             *codexBalance `json:"balance"`
 		ApproxLocalMessages []int    `json:"approx_local_messages"`
 		ApproxCloudMessages []int    `json:"approx_cloud_messages"`
 	} `json:"credits"`
@@ -236,7 +267,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quot
 	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited && apiResp.Credits.Balance != nil {
 		usage.Cost = &quota.UsageCost{
 			Used:         0, // API doesn't report used amount directly
-			Limit:        *apiResp.Credits.Balance,
+			Limit:        float64(*apiResp.Credits.Balance),
 			CurrencyCode: "USD",
 			Label:        "Credits Balance",
 		}
