@@ -269,6 +269,33 @@ tasks:
           "input": [{"role": "user", "content": "Hello!"}],
           "stream": true
         }'
+        
+  anthropic2codex:
+    cmds:
+      - |
+        curl -v -X POST -k http://localhost:12580/tingly/anthropic/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-codex",
+          "messages": [{"role": "user", "content": "who are you"}],
+          "stream": true,
+          "max_tokens": 10000
+        }'
+        
+  codex-responses2:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/codex/v1/responses \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "stream": true,
+          "model": "tingly-codex",
+          "previous_response_id": "resp_05317e38712808d20169ec0e08f7648191a5014bffc2566dd7",
+          "input": [{"role": "user", "content": "what can you do?"}],
+          "store": true
+        }'
   
   openai-stream:
     cmds:
