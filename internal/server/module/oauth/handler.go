@@ -309,6 +309,8 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		}
 		h.oauthManager.SetProxyURL(parsedURL)
 		log.Printf("[OAuth] Proxy URL configured: %s", proxyURL)
+	} else {
+		h.oauthManager.ResetProxyURL()
 	}
 
 	// Generate session ID for this OAuth flow
