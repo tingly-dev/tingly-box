@@ -90,9 +90,9 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, recorder)
 }
 
-// handleAnthropicV1ViaResponsesAPINonStreaming handles non-streaming Responses API request for v1
+// nonstreamResponsesToAnthropic handles non-streaming Responses API request for v1
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
-func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder if exists
 	var recorder *ScenarioRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
@@ -151,9 +151,9 @@ func (s *Server) handleAnthropicV1ViaResponsesAPINonStreaming(c *gin.Context, pr
 	c.JSON(http.StatusOK, anthropicResp)
 }
 
-// handleAnthropicV1ViaResponsesAPIStreaming handles streaming Responses API request for v1
+// streamResponsesToAnthropic handles streaming Responses API request for v1
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and streams back in v1 format
-func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ProtocolRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
@@ -205,8 +205,8 @@ func (s *Server) handleAnthropicV1ViaResponsesAPIStreaming(c *gin.Context, proxy
 	// Note: The handler tracks usage when response.completed event is received
 }
 
-// handleAnthropicV1ViaResponsesAPIStreaming handles streaming Responses API request
-func (s *Server) handleAnthropicV1ViaResponsesAPIAssembly(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
+// streamResponsesToAnthropic handles streaming Responses API request
+func (s *Server) assembleResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ProtocolRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
