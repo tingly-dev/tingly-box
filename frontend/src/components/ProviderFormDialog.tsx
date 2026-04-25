@@ -28,6 +28,23 @@ import { api } from '../services/api';
 import { OpenAI, Anthropic } from './BrandIcons';
 import ProviderIcon from './ProviderIcon';
 
+const protocolsEqual = (
+    left?: ('openai' | 'anthropic')[],
+    right?: ('openai' | 'anthropic')[],
+) => {
+    const a = left || [];
+    const b = right || [];
+    return a.length === b.length && a.every((value, index) => value === b[index]);
+};
+
+const providerBaseUrlsEqual = (
+    left?: { openai?: string; anthropic?: string },
+    right?: { openai?: string; anthropic?: string },
+) => {
+    return (left?.openai || '') === (right?.openai || '') &&
+        (left?.anthropic || '') === (right?.anthropic || '');
+};
+
 export interface EnhancedProviderFormData {
     uuid?: string;
     name: string;
@@ -186,26 +203,39 @@ const ProviderFormDialog = ({
         const protocols: ('openai' | 'anthropic')[] = [];
         if (protocolOpenAI) protocols.push('openai');
         if (protocolAnthropic) protocols.push('anthropic');
-        onChange('protocols', protocols);
+        if (!protocolsEqual(data.protocols, protocols)) {
+            onChange('protocols', protocols);
+        }
 
+        const nextApiStyle = protocols.length > 0 ? protocols[0] : undefined;
+        if (data.apiStyle !== nextApiStyle) {
+            onChange('apiStyle', nextApiStyle);
+        }
+
+        let nextProviderBaseUrls: { openai?: string; anthropic?: string } | undefined;
         if (protocols.length > 0) {
-            onChange('apiStyle', protocols[0]);
-        } else {
-            onChange('apiStyle', undefined);
+            nextProviderBaseUrls = selectedProvider ? {
+                openai: selectedProvider.baseUrlOpenAI,
+                anthropic: selectedProvider.baseUrlAnthropic,
+            } : undefined;
+        }
+
+        if (!providerBaseUrlsEqual(data.providerBaseUrls, nextProviderBaseUrls)) {
+            onChange('providerBaseUrls', nextProviderBaseUrls);
         }
 
         if (selectedProvider) {
-            onChange('providerBaseUrls', {
-                openai: selectedProvider.baseUrlOpenAI,
-                anthropic: selectedProvider.baseUrlAnthropic,
-            });
             if (protocolOpenAI && selectedProvider.baseUrlOpenAI) {
-                onChange('apiBase', selectedProvider.baseUrlOpenAI);
+                if (data.apiBase !== selectedProvider.baseUrlOpenAI) {
+                    onChange('apiBase', selectedProvider.baseUrlOpenAI);
+                }
             } else if (protocolAnthropic && selectedProvider.baseUrlAnthropic) {
-                onChange('apiBase', selectedProvider.baseUrlAnthropic);
+                if (data.apiBase !== selectedProvider.baseUrlAnthropic) {
+                    onChange('apiBase', selectedProvider.baseUrlAnthropic);
+                }
             }
         }
-    }, [protocolOpenAI, protocolAnthropic, selectedProvider, onChange]);
+    }, [protocolOpenAI, protocolAnthropic, selectedProvider, onChange, data.protocols, data.apiStyle, data.providerBaseUrls, data.apiBase]);
 
     const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
         setVerificationResult(null);

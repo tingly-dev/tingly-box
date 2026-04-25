@@ -9,7 +9,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
@@ -111,6 +111,34 @@ const CredentialPage = () => {
     const showNotification = (message: string, severity: 'success' | 'error') => {
         setSnackbar({ open: true, message, severity });
     };
+
+    const handleProviderFormChange = useCallback((field: keyof EnhancedProviderFormData, value: any) => {
+        setProviderFormData((prev) => {
+            if (field === 'protocols') {
+                const prevProtocols = (prev.protocols || []) as string[];
+                const nextProtocols = (value || []) as string[];
+                if (
+                    prevProtocols.length === nextProtocols.length &&
+                    prevProtocols.every((item, index) => item === nextProtocols[index])
+                ) {
+                    return prev;
+                }
+            } else if (field === 'providerBaseUrls') {
+                const prevUrls = prev.providerBaseUrls || {};
+                const nextUrls = value || {};
+                if (
+                    prevUrls.openai === nextUrls.openai &&
+                    prevUrls.anthropic === nextUrls.anthropic
+                ) {
+                    return prev;
+                }
+            } else if (prev[field] === value) {
+                return prev;
+            }
+
+            return { ...prev, [field]: value };
+        });
+    }, []);
 
     const handleAddApiKey = () => {
         setApiKeyDialogMode('add');
@@ -528,7 +556,7 @@ const CredentialPage = () => {
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
                 data={providerFormData}
-                onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                onChange={handleProviderFormChange}
                 mode={apiKeyDialogMode}
             />
 
