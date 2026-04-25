@@ -11,6 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const reasoningMarker = "reasoning.encrypted_content"
+
 // codexRoundTripper wraps an http.RoundTripper to transform ChatGPT backend API
 // responses to OpenAI Responses API format. The ChatGPT backend API returns a custom format
 // that differs from the standard OpenAI Responses API spec.
@@ -96,51 +98,69 @@ func filterCodexRequestJSON(data []byte) ([]byte, bool) {
 		return data, false // Return original if parsing fails
 	}
 
-	isStreaming := false
-	if stream, ok := req["stream"]; ok {
-		isStreaming, ok = stream.(bool)
-	}
+	// stream is always true: codex-rs hardcodes true, and our SSE layer only handles streaming
+	isStreaming := true
 
-	// required
 	req["store"] = false
-	req["include"] = []string{}
 
-	if ins, ok := req["instructions"]; ok {
-		if insStr, ok := ins.(string); ok {
-			req["instructions"] = "You are a helpful AI assistant."
-			if input, ok := req["input"].([]any); ok {
-				tmp := []any{
-					map[string]any{
-						"content": []map[string]any{
-							{
-								"text": insStr,
-								"type": "input_text",
-							},
-						},
-						"role": "user", "type": "message"},
-				}
-				if len(input) > 0 {
-					tmp = append(tmp, input...)
-				}
-				req["input"] = tmp
-			}
+	// Force stream=true — override even if client sent false
+	req["stream"] = isStreaming
+
+	// Merge "reasoning.encrypted_content" into existing include array (preserve client-provided values)
+	includes := []interface{}{}
+	if existing, ok := req["include"].([]interface{}); ok {
+		includes = existing
+	}
+	hasMarker := false
+	for _, v := range includes {
+		if s, ok := v.(string); ok && s == reasoningMarker {
+			hasMarker = true
+			break
 		}
+	}
+	if !hasMarker {
+		includes = append(includes, reasoningMarker)
+	}
+	req["include"] = includes
+
+	if _, ok := req["instructions"]; ok {
+		//if insStr, ok := ins.(string); ok {
+		//	req["instructions"] = "You are a helpful AI assistant."
+		//	if input, ok := req["input"].([]any); ok {
+		//		tmp := []any{
+		//			map[string]any{
+		//				"content": []map[string]any{
+		//					{
+		//						"text": insStr,
+		//						"type": "input_text",
+		//					},
+		//				},
+		//				"role": "user", "type": "message"},
+		//		}
+		//		if len(input) > 0 {
+		//			tmp = append(tmp, input...)
+		//		}
+		//		req["input"] = tmp
+		//	}
+		//}
 	} else {
 		req["instructions"] = "You are a helpful AI assistant."
 	}
-	//delete(req, "tools")
-	//delete(req, "input")
 
-	// Filter out unsupported parameters
-	// These parameters are NOT supported by ChatGPT backend API
+	// Insert defaults only if client did not provide them
+	if _, ok := req["tools"]; !ok {
+		req["tools"] = []interface{}{}
+	}
+	if _, ok := req["parallel_tool_calls"]; !ok {
+		req["parallel_tool_calls"] = false
+	}
+
+	// Remove unsupported parameters
 	delete(req, "max_tokens")
 	delete(req, "max_completion_tokens")
 	delete(req, "max_output_tokens")
 	delete(req, "temperature")
 	delete(req, "top_p")
-
-	// max_output_tokens IS supported, so we keep it
-	// Other supported parameters: instructions, input, tools, tool_choice, stream, store, include, etc.
 
 	result, err := json.Marshal(req)
 	if err != nil {
