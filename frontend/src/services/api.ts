@@ -394,6 +394,10 @@ export const api = {
 
     // Rules API
     getRules: async (scenario: string): Promise<any> => {
+        if (!scenario.trim()) {
+            return {success: false, error: 'Scenario is required', data: []};
+        }
+
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
