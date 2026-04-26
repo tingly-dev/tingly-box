@@ -685,20 +685,24 @@ func (s *Server) dispatchChainFromResponses(
 	case protocol.TypeAnthropicV1:
 		logrus.Debugf("[AnthropicV1] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
-			s.streamAnthropicV1ToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
-		} else if provider.APIBase == protocol.CodexAPIBase {
-			s.handleAnthropicV1ViaResponsesAPIAssembly(c, responseModel, actualModel, provider, *req)
+			s.streamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
 		} else {
-			s.nonstreamAnthropicV1ToResponses(c, reqCtx, rule, provider, isStreaming, recorder)
+			if provider.APIBase == protocol.CodexAPIBase {
+				s.assembleResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
+			} else {
+				s.nonstreamResponsesToAnthropic(c, responseModel, actualModel, provider, *req)
+			}
 		}
 	case protocol.TypeAnthropicBeta:
 		logrus.Debugf("[Anthropic Beta] Using Transform Chain for Responses API for model=%s", actualModel)
 		if isStreaming {
-			s.handleAnthropicV1BetaViaResponsesAPIStreaming(c, responseModel, actualModel, provider, *req)
-		} else if provider.APIBase == protocol.CodexAPIBase {
-			s.handleAnthropicV1BetaViaResponsesAPIAssembly(c, responseModel, actualModel, provider, *req)
+			s.streamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
 		} else {
-			s.handleAnthropicV1BetaViaResponsesAPINonStreaming(c, responseModel, actualModel, provider, *req)
+			if provider.APIBase == protocol.CodexAPIBase {
+				s.assembleResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
+			} else {
+				s.nonstreamResponsesToAnthropicBeta(c, responseModel, actualModel, provider, *req)
+			}
 		}
 	case protocol.TypeOpenAIChat:
 		// Client sent Responses API, but provider needs Chat format

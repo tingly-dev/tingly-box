@@ -325,8 +325,7 @@ function AppContent() {
                     <Route path="/use-vscode" element={<Navigate to="/agent/vscode" replace />} />
                     {/* Credential routes - new unified page */}
                     <Route path="/credentials" element={<CredentialPage />} />
-                    <Route path="/credentials/:tab" element={<CredentialPage />} />
-                    {/* Provider List page */}
+                    {/* Provider List page - must come before :tab wildcard */}
                     <Route path="/credentials/providers" element={<ProviderListPage />} />
                     {/* Legacy redirects for backward compatibility */}
                     <Route path="/api-keys" element={<Navigate to="/credentials" replace />} />

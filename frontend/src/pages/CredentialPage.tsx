@@ -404,6 +404,10 @@ const CredentialPage = () => {
         }
     };
 
+    const handleProviderFormChange = useCallback((field: keyof ProviderFormData, value: any) => {
+        setProviderFormData(prev => ({ ...prev, [field]: value }));
+    }, []);
+
     // Derived state
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
         const apiKeys = providers.filter((p: any) => p.auth_type !== 'oauth');

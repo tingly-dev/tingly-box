@@ -34,10 +34,11 @@ type ModelEndpointCapability struct {
 
 // EndpointStatus represents the status of a single endpoint
 type EndpointStatus struct {
-	Available    bool
-	LatencyMs    int
-	ErrorMessage string
-	LastChecked  time.Time
+	Available      bool
+	LatencyMs      int
+	ErrorMessage   string
+	LastChecked    time.Time
+	SupportsStream bool // True if streaming works for this endpoint
 }
 
 // ProbeResult represents the complete probe result for a model
