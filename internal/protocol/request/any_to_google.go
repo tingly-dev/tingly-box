@@ -9,9 +9,9 @@ import (
 	"google.golang.org/genai"
 )
 
-// normalizeSchemaTypes converts lowercase JSON Schema types to Google's uppercase format
+// NormalizeSchemaTypes converts lowercase JSON Schema types to Google's uppercase format
 // This recursively processes all schemas, including nested properties and array items
-func normalizeSchemaTypes(schema *genai.Schema) {
+func NormalizeSchemaTypes(schema *genai.Schema) {
 	if schema == nil {
 		return
 	}
@@ -41,17 +41,17 @@ func normalizeSchemaTypes(schema *genai.Schema) {
 
 	// Recursively normalize nested property schemas
 	for _, propSchema := range schema.Properties {
-		normalizeSchemaTypes(propSchema)
+		NormalizeSchemaTypes(propSchema)
 	}
 
 	// Normalize array item schema
 	if schema.Items != nil {
-		normalizeSchemaTypes(schema.Items)
+		NormalizeSchemaTypes(schema.Items)
 	}
 
 	// Normalize anyOf schemas
 	for _, anyOfSchema := range schema.AnyOf {
-		normalizeSchemaTypes(anyOfSchema)
+		NormalizeSchemaTypes(anyOfSchema)
 	}
 }
 
@@ -254,7 +254,7 @@ func ConvertOpenAIToGoogleTools(tools []openai.ChatCompletionToolUnionParam) []*
 			if schemaBytes, err := json.Marshal(fn.Parameters); err == nil {
 				_ = json.Unmarshal(schemaBytes, &parameters)
 				// Normalize schema types from lowercase (JSON Schema) to uppercase (Google format)
-				normalizeSchemaTypes(parameters)
+				NormalizeSchemaTypes(parameters)
 			}
 		}
 
@@ -477,7 +477,7 @@ func ConvertAnthropicToGoogleTools(tools []anthropic.ToolUnionParam) []*genai.Fu
 			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
 				_ = json.Unmarshal(schemaBytes, &parameters)
 				// Normalize schema types from lowercase (JSON Schema) to uppercase (Google format)
-				normalizeSchemaTypes(parameters)
+				NormalizeSchemaTypes(parameters)
 			}
 		}
 
@@ -688,7 +688,7 @@ func ConvertAnthropicBetaToGoogleTools(tools []anthropic.BetaToolUnionParam) []*
 			if schemaBytes, err := json.Marshal(tool.InputSchema); err == nil {
 				_ = json.Unmarshal(schemaBytes, &parameters)
 				// Normalize schema types from lowercase (JSON Schema) to uppercase (Google format)
-				normalizeSchemaTypes(parameters)
+				NormalizeSchemaTypes(parameters)
 			}
 		}
 
