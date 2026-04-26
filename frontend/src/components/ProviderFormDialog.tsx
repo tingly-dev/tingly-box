@@ -113,6 +113,17 @@ const ProviderFormDialog = ({
 
     const openAICapabilities = useMemo(() => detectOpenAICapabilities(selectedProvider), [selectedProvider]);
 
+    // Memoize provider selection to avoid unnecessary re-renders
+    const matchingProvider = useMemo(() => {
+        if (!open || mode !== 'edit') return null;
+        return allProviders.find(p =>
+            (p.baseUrlOpenAI === data.apiBase && data.apiStyle === 'openai') ||
+            (p.baseUrlAnthropic === data.apiBase && data.apiStyle === 'anthropic')
+        ) || null;
+    }, [open, mode, data.apiBase, data.apiStyle, allProviders]);
+
+    const hasProviderChange = selectedProvider?.id !== matchingProvider?.id;
+
     const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({ url }) => {
         if (!url) return null;
         return (
@@ -160,12 +171,7 @@ const ProviderFormDialog = ({
             if (mode === 'edit') {
                 setProtocolOpenAI(data.apiStyle === 'openai');
                 setProtocolAnthropic(data.apiStyle === 'anthropic');
-
-                const matchingProvider = allProviders.find(p =>
-                    (p.baseUrlOpenAI === data.apiBase && data.apiStyle === 'openai') ||
-                    (p.baseUrlAnthropic === data.apiBase && data.apiStyle === 'anthropic')
-                );
-                setSelectedProvider(matchingProvider || null);
+                setSelectedProvider(matchingProvider);
             } else {
                 if (data.protocols && data.protocols.length > 0) {
                     setProtocolOpenAI(data.protocols.includes('openai'));
@@ -180,7 +186,7 @@ const ProviderFormDialog = ({
                 setSelectedProvider(null);
             }
         }
-    }, [open, mode, data.apiBase, data.apiStyle, data.protocols, allProviders]);
+    }, [open, mode, matchingProvider?.id]);
 
     useEffect(() => {
         const protocols: ('openai' | 'anthropic')[] = [];
@@ -205,7 +211,7 @@ const ProviderFormDialog = ({
                 onChange('apiBase', selectedProvider.baseUrlAnthropic);
             }
         }
-    }, [protocolOpenAI, protocolAnthropic, selectedProvider, onChange]);
+    }, [protocolOpenAI, protocolAnthropic, selectedProvider?.id, onChange]);
 
     const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
         setVerificationResult(null);
@@ -431,13 +437,9 @@ const ProviderFormDialog = ({
                                                     : t('providerDialog.apiStyle.helperOpenAI')}
                                             </Typography>
                                             <Stack direction="row" spacing={0.75} sx={{ mt: 0.75, flexWrap: 'wrap', rowGap: 0.75 }}>
-                                                {openAICapabilities.length > 0 ? (
-                                                    openAICapabilities.map(capability => (
-                                                        <Chip key={capability} label={capability} size="small" variant="outlined" color="primary" />
-                                                    ))
-                                                ) : (
-                                                    <Chip label="OpenAI style" size="small" variant="outlined" color="primary" />
-                                                )}
+                                                {openAICapabilities.length > 0 && openAICapabilities.map(capability => (
+                                                    <Chip key={capability} label={capability} size="small" variant="outlined" color="primary" />
+                                                ))}
                                             </Stack>
                                             {selectedProvider?.baseUrlOpenAI && (
                                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI} />
