@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sync"
@@ -257,7 +256,7 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 	startTime := time.Now()
 
 	// Get OpenAI client from pool
-	wrapper := ap.server.clientPool.GetOpenAIClient(context.Background(), provider, "")
+	wrapper := ap.server.clientPool.GetOpenAIClient(context.Background(), provider, modelID)
 	if wrapper == nil {
 		return EndpointStatus{
 			Available:    false,
@@ -269,45 +268,19 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 	// Create minimal Responses API request using raw JSON approach
 	// This avoids the complex type issues with the SDK
 	params := responses.ResponseNewParams{
-		Input: responses.ResponseNewParamsInputUnion{OfString: param.NewOpt("Hi")},
-	}
-
-	// Set model via raw JSON - marshal to JSON, set model, unmarshal back
-	paramsJSON, err := json.Marshal(params)
-	if err != nil {
-		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to marshal params: %v", err),
-			LastChecked:  time.Now(),
-		}
-	}
-
-	var raw map[string]interface{}
-	if err := json.Unmarshal(paramsJSON, &raw); err != nil {
-		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to unmarshal params: %v", err),
-			LastChecked:  time.Now(),
-		}
-	}
-
-	raw["model"] = modelID
-
-	modifiedJSON, err := json.Marshal(raw)
-	if err != nil {
-		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to marshal modified params: %v", err),
-			LastChecked:  time.Now(),
-		}
-	}
-
-	if err := json.Unmarshal(modifiedJSON, &params); err != nil {
-		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: fmt.Sprintf("Failed to unmarshal modified params: %v", err),
-			LastChecked:  time.Now(),
-		}
+		Model: modelID,
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: responses.ResponseInputParam{
+				{
+					OfMessage: &responses.EasyInputMessageParam{
+						Role: responses.EasyInputMessageRoleUser,
+						Content: responses.EasyInputMessageContentUnionParam{
+							OfString: param.NewOpt("hi"),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	// Make the request
@@ -460,25 +433,26 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 // GetPreferredEndpoint returns the preferred endpoint for a model
 func (ap *AdaptiveProbe) GetPreferredEndpoint(provider *typ.Provider, modelID string) string {
 	capability, err := ap.GetModelCapability(provider.UUID, modelID)
-	if err != nil {
+	if err != nil || capability.PreferredEndpoint == "" {
 		// Trigger async probe refresh
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), DefaultProbeTimeout)
-			defer cancel()
-			ap.ProbeModelEndpoints(ctx, ModelProbeRequest{
-				ProviderUUID: provider.UUID,
-				ModelID:      modelID,
-			})
-		}()
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultProbeTimeout)
+		defer cancel()
+		res, err := ap.ProbeModelEndpoints(ctx, ModelProbeRequest{
+			ProviderUUID: provider.UUID,
+			ModelID:      modelID,
+		})
 
-		// Default to chat for unknown models
+		if err != nil {
+			logrus.Warnf("Failed to get model capability: %v", err)
+			return string(db.EndpointTypeChat)
+		}
+		return res.PreferredEndpoint
+	}
+
+	if capability.SupportsChat {
 		return string(db.EndpointTypeChat)
 	}
-
-	if capability.PreferredEndpoint == string(db.EndpointTypeResponses) {
-		return string(db.EndpointTypeResponses)
-	}
-	return string(db.EndpointTypeChat)
+	return string(db.EndpointTypeResponses)
 }
 
 // InvalidateProviderCache invalidates all cached capabilities for a provider
