@@ -129,7 +129,7 @@ func (t *BaseTransform) convertToOpenAIResponses(ctx *TransformContext, disableS
 			HasThinking:     false,
 			ReasoningEffort: "none",
 		}
-		ctx.Request = &responsesReq
+		ctx.Request = responsesReq
 
 	case *anthropic.BetaMessageNewParams:
 		// Anthropic beta request
@@ -138,13 +138,13 @@ func (t *BaseTransform) convertToOpenAIResponses(ctx *TransformContext, disableS
 			HasThinking:     false,
 			ReasoningEffort: "none",
 		}
-		ctx.Request = &responsesReq
+		ctx.Request = responsesReq
 
 	case *openai.ChatCompletionNewParams:
 		// OpenAI Chat to Responses conversion is not directly supported
 		// This should not happen in normal flow, but handle gracefully
 		responsesReq := request.ConvertChatToOpenAIResponses(req, ctx.Config.MaxTokens)
-		ctx.Request = &responsesReq
+		ctx.Request = responsesReq
 
 	case *responses.ResponseNewParams:
 		// Already in Responses API format, no conversion needed

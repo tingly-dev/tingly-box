@@ -11,8 +11,8 @@ import (
 
 // ConvertAnthropicV1ToResponsesRequest converts Anthropic v1 request to OpenAI Responses API format
 // The Responses API has a different structure than Chat Completions
-func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewParams) responses.ResponseNewParams {
-	params := responses.ResponseNewParams{}
+func ConvertAnthropicV1ToResponsesRequest(anthropicReq *anthropic.MessageNewParams) *responses.ResponseNewParams {
+	params := &responses.ResponseNewParams{}
 	params.Model = shared.ResponsesModel(anthropicReq.Model)
 
 	// Convert system messages to Instructions (system role in v1)
