@@ -13,7 +13,7 @@ import (
 
 func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	t.Run("simple user message", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model: "gpt-4",
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: responses.ResponseInputParam{
@@ -41,7 +41,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("system instructions and user message", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model:        "gpt-4",
 			Instructions: param.NewOpt("You are a helpful assistant."),
 			Input: responses.ResponseNewParamsInputUnion{
@@ -70,7 +70,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("assistant message with text", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model: "gpt-4",
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: responses.ResponseInputParam{
@@ -95,7 +95,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("with temperature and top_p", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model:           "gpt-4",
 			Temperature:     param.NewOpt(0.7),
 			TopP:            param.NewOpt(0.9),
@@ -122,7 +122,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("default max tokens when not set", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model: "gpt-4",
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: responses.ResponseInputParam{
@@ -145,7 +145,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("multi-turn conversation", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model:        "gpt-4",
 			Instructions: param.NewOpt("You are a helpful assistant."),
 			Input: responses.ResponseNewParamsInputUnion{
@@ -194,7 +194,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("function call and output", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model: "gpt-4",
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: responses.ResponseInputParam{
@@ -250,7 +250,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("with tools", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model: "gpt-4",
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: responses.ResponseInputParam{
@@ -296,7 +296,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("with tool choice auto", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model: "gpt-4",
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: responses.ResponseInputParam{
@@ -322,7 +322,7 @@ func TestConvertOpenAIResponsesToChat(t *testing.T) {
 	})
 
 	t.Run("with tool choice specific function", func(t *testing.T) {
-		params := responses.ResponseNewParams{
+		params := &responses.ResponseNewParams{
 			Model: "gpt-4",
 			Input: responses.ResponseNewParamsInputUnion{
 				OfInputItemList: responses.ResponseInputParam{

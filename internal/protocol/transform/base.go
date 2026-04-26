@@ -100,7 +100,7 @@ func (t *BaseTransform) convertToOpenAIChat(ctx *TransformContext, disableStream
 
 	case *responses.ResponseNewParams:
 		// OpenAI Responses API request - convert to Chat format
-		chatReq := request.ConvertOpenAIResponsesToChat(*req, ctx.Config.MaxTokens)
+		chatReq := request.ConvertOpenAIResponsesToChat(req, ctx.Config.MaxTokens)
 		ctx.Request = chatReq
 		// Create a default config for consistency
 		ctx.Config.OpenAIConfig = &protocol.OpenAIConfig{
