@@ -1,8 +1,23 @@
 package stream
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // StreamEventRecorder is an interface for recording stream events during protocol conversion
 type StreamEventRecorder interface {
 	RecordRawMapEvent(eventType string, event map[string]interface{})
+}
+
+func PrintChunk(chunk any) {
+	switch chunk.(type) {
+	case string:
+		fmt.Printf("%s\n", chunk)
+	default:
+		bs, _ := json.MarshalIndent(chunk, "  ", "  ")
+		fmt.Printf("%s\n", string(bs))
+	}
 }
 
 // streamState tracks the streaming conversion state
