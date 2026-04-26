@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,13 +20,24 @@ import (
 
 // responsesToChatState tracks the streaming conversion state from Responses API to Chat Completions
 type responsesToChatState struct {
-	chatID         string
-	createdAt      int64
-	accumulated    string
-	inputTokens    int64
-	outputTokens   int64
-	cacheTokens    int64
-	hasSentCreated bool
+	chatID          string
+	createdAt       int64
+	accumulated     strings.Builder
+	inputTokens     int64
+	outputTokens    int64
+	cacheTokens     int64
+	hasSentCreated  bool
+	hasToolCalls    bool
+	completed       bool
+	toolCallIndexes map[string]int
+	toolCalls       map[int]*responsesToChatToolCall
+}
+
+type responsesToChatToolCall struct {
+	id        string
+	callID    string
+	name      string
+	arguments strings.Builder
 }
 
 // HandleResponsesToOpenAIChatStream converts Responses API streaming to Chat Completions format.
@@ -69,7 +81,10 @@ func HandleResponsesToOpenAIChatStream(
 	}
 
 	state := &responsesToChatState{
-		createdAt: time.Now().Unix(),
+		chatID:          fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
+		createdAt:       time.Now().Unix(),
+		toolCallIndexes: make(map[string]int),
+		toolCalls:       make(map[int]*responsesToChatToolCall),
 	}
 
 	// Trigger stream event hook
@@ -96,84 +111,97 @@ func HandleResponsesToOpenAIChatStream(
 
 		switch evt.Type {
 		case "response.created":
-			// Extract response ID and timestamp
 			state.chatID = evt.Response.ID
 			if !state.hasSentCreated {
-				// Send initial chat.chunk with created event
-				chunk := map[string]interface{}{
-					"id":      state.chatID,
-					"object":  "chat.completion.chunk",
-					"created": state.createdAt,
-					"model":   responseModel,
-					"choices": []map[string]interface{}{
-						{
-							"index": 0,
-							"delta": map[string]interface{}{
-								"role": "assistant",
-							},
-							"finish_reason": nil,
-						},
-					},
-				}
-				writeSSEChunk(c, flusher, chunk)
-				state.hasSentCreated = true
+				writeResponsesToChatRoleChunk(c, flusher, state, responseModel)
 			}
 
 		case "response.output_text.delta":
-			// Text delta - send as chat chunk
-			state.accumulated += evt.Text
-			chunk := map[string]interface{}{
-				"id":      state.chatID,
-				"object":  "chat.completion.chunk",
-				"created": state.createdAt,
-				"model":   responseModel,
-				"choices": []map[string]interface{}{
-					{
-						"index": 0,
-						"delta": map[string]interface{}{
-							"content": evt.Text,
-						},
-						"finish_reason": nil,
-					},
-				},
+			if !state.hasSentCreated {
+				writeResponsesToChatRoleChunk(c, flusher, state, responseModel)
 			}
-			writeSSEChunk(c, flusher, chunk)
+			state.accumulated.WriteString(evt.Delta)
+			writeResponsesToChatTextChunk(c, flusher, state, responseModel, evt.Delta)
 
 		case "response.output_text.done":
 			// Text output is complete - handled in response.completed
 
+		case "response.output_item.added":
+			if evt.Item.Type == "function_call" {
+				if !state.hasSentCreated {
+					writeResponsesToChatRoleChunk(c, flusher, state, responseModel)
+				}
+				index := int(evt.OutputIndex)
+				callID := evt.Item.CallID
+				if callID == "" {
+					callID = evt.Item.ID
+				}
+				state.toolCallIndexes[evt.Item.ID] = index
+				state.toolCalls[index] = &responsesToChatToolCall{id: evt.Item.ID, callID: callID, name: evt.Item.Name}
+				state.hasToolCalls = true
+				writeResponsesToChatToolCallStart(c, flusher, state, responseModel, index, callID, evt.Item.Name)
+			}
+
+		case "response.function_call_arguments.delta":
+			if !state.hasSentCreated {
+				writeResponsesToChatRoleChunk(c, flusher, state, responseModel)
+			}
+			index, ok := state.toolCallIndexes[evt.ItemID]
+			if !ok {
+				index = int(evt.OutputIndex)
+			}
+			if toolCall, ok := state.toolCalls[index]; ok {
+				toolCall.arguments.WriteString(evt.Delta)
+			}
+			state.hasToolCalls = true
+			writeResponsesToChatToolCallDelta(c, flusher, state, responseModel, index, evt.Delta)
+
+		case "response.function_call_arguments.done":
+			index, ok := state.toolCallIndexes[evt.ItemID]
+			if !ok {
+				index = int(evt.OutputIndex)
+			}
+			if toolCall, ok := state.toolCalls[index]; ok && toolCall.arguments.Len() == 0 {
+				toolCall.arguments.WriteString(evt.Arguments)
+			}
+
+		case "response.output_item.done":
+			if evt.Item.Type == "function_call" {
+				index, ok := state.toolCallIndexes[evt.Item.ID]
+				if !ok {
+					index = int(evt.OutputIndex)
+				}
+				callID := evt.Item.CallID
+				if callID == "" {
+					callID = evt.Item.ID
+				}
+				toolCall, ok := state.toolCalls[index]
+				if !ok {
+					toolCall = &responsesToChatToolCall{id: evt.Item.ID}
+					state.toolCalls[index] = toolCall
+				}
+				toolCall.id = evt.Item.ID
+				toolCall.callID = callID
+				toolCall.name = evt.Item.Name
+				if toolCall.arguments.Len() == 0 {
+					toolCall.arguments.WriteString(evt.Item.Arguments.OfString)
+				}
+				state.hasToolCalls = true
+			}
+
 		case "response.completed":
-			// Response is complete, send final chunk with usage
 			state.inputTokens = evt.Response.Usage.InputTokens
 			state.outputTokens = evt.Response.Usage.OutputTokens
 			state.cacheTokens = evt.Response.Usage.InputTokensDetails.CachedTokens
-
-			// Send final chunk with finish_reason and usage
-			finalChunk := map[string]interface{}{
-				"id":      state.chatID,
-				"object":  "chat.completion.chunk",
-				"created": state.createdAt,
-				"model":   responseModel,
-				"choices": []map[string]interface{}{
-					{
-						"index":         0,
-						"delta":         map[string]interface{}{},
-						"finish_reason": "stop",
-					},
-				},
+			flushResponsesToChatCompletedOutput(c, flusher, state, responseModel, evt.Response.Output)
+			finishReason := "stop"
+			if state.hasToolCalls {
+				finishReason = openaiFinishReasonToolCalls
 			}
-			// Only include usage if not disabled
-			if !hc.DisableStreamUsage {
-				finalChunk["usage"] = map[string]interface{}{
-					"prompt_tokens":     state.inputTokens,
-					"completion_tokens": state.outputTokens,
-					"total_tokens":      state.inputTokens + state.outputTokens,
-				}
-			}
-			writeSSEChunk(c, flusher, finalChunk)
+			writeResponsesToChatFinalChunk(c, flusher, state, responseModel, finishReason, !hc.DisableStreamUsage)
+			state.completed = true
 
 		case "error":
-			// Handle error event
 			errorChunk := map[string]interface{}{
 				"error": map[string]interface{}{
 					"message": evt.Message,
@@ -200,11 +228,174 @@ func HandleResponsesToOpenAIChatStream(
 		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
 	}
 
+	if !state.completed {
+		if !state.hasSentCreated {
+			writeResponsesToChatRoleChunk(c, flusher, state, responseModel)
+		}
+		finishReason := "stop"
+		if state.hasToolCalls {
+			finishReason = openaiFinishReasonToolCalls
+		}
+		writeResponsesToChatFinalChunk(c, flusher, state, responseModel, finishReason, !hc.DisableStreamUsage)
+	}
+
 	// Send final [DONE] message
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
 
 	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+}
+
+func writeResponsesToChatRoleChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string) {
+	chunk := map[string]interface{}{
+		"id":      state.chatID,
+		"object":  "chat.completion.chunk",
+		"created": state.createdAt,
+		"model":   responseModel,
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"delta": map[string]interface{}{
+					"role": "assistant",
+				},
+				"finish_reason": nil,
+			},
+		},
+	}
+	writeSSEChunk(c, flusher, chunk)
+	state.hasSentCreated = true
+}
+
+func writeResponsesToChatTextChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, delta string) {
+	chunk := map[string]interface{}{
+		"id":      state.chatID,
+		"object":  "chat.completion.chunk",
+		"created": state.createdAt,
+		"model":   responseModel,
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"delta": map[string]interface{}{
+					"content": delta,
+				},
+				"finish_reason": nil,
+			},
+		},
+	}
+	writeSSEChunk(c, flusher, chunk)
+}
+
+func writeResponsesToChatToolCallStart(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string, index int, id, name string) {
+	chunk := map[string]interface{}{
+		"id":      state.chatID,
+		"object":  "chat.completion.chunk",
+		"created": state.createdAt,
+		"model":   responseModel,
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"delta": map[string]interface{}{
+					"tool_calls": []map[string]interface{}{
+						{
+							"index": index,
+							"id":    id,
+							"type":  "function",
+							"function": map[string]interface{}{
+								"name":      name,
+								"arguments": "",
+							},
+						},
+					},
+				},
+				"finish_reason": nil,
+			},
+		},
+	}
+	writeSSEChunk(c, flusher, chunk)
+}
+
+func writeResponsesToChatToolCallDelta(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string, index int, delta string) {
+	chunk := map[string]interface{}{
+		"id":      state.chatID,
+		"object":  "chat.completion.chunk",
+		"created": state.createdAt,
+		"model":   responseModel,
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"delta": map[string]interface{}{
+					"tool_calls": []map[string]interface{}{
+						{
+							"index": index,
+							"function": map[string]interface{}{
+								"arguments": delta,
+							},
+						},
+					},
+				},
+				"finish_reason": nil,
+			},
+		},
+	}
+	writeSSEChunk(c, flusher, chunk)
+}
+
+func flushResponsesToChatCompletedOutput(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string, output []responses.ResponseOutputItemUnion) {
+	if state.accumulated.Len() > 0 || len(state.toolCalls) > 0 {
+		return
+	}
+	for outputIndex, item := range output {
+		switch item.Type {
+		case "message":
+			for _, content := range item.Content {
+				if content.Type == "output_text" && content.Text != "" {
+					if !state.hasSentCreated {
+						writeResponsesToChatRoleChunk(c, flusher, state, responseModel)
+					}
+					state.accumulated.WriteString(content.Text)
+					writeResponsesToChatTextChunk(c, flusher, state, responseModel, content.Text)
+				}
+			}
+		case "function_call":
+			if !state.hasSentCreated {
+				writeResponsesToChatRoleChunk(c, flusher, state, responseModel)
+			}
+			index := outputIndex
+			callID := item.CallID
+			if callID == "" {
+				callID = item.ID
+			}
+			state.hasToolCalls = true
+			writeResponsesToChatToolCallStart(c, flusher, state, responseModel, index, callID, item.Name)
+			if item.Arguments.OfString != "" {
+				writeResponsesToChatToolCallDelta(c, flusher, state, responseModel, index, item.Arguments.OfString)
+			}
+		}
+	}
+}
+
+func writeResponsesToChatFinalChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, finishReason string, includeUsage bool) {
+	finalChunk := map[string]interface{}{
+		"id":      state.chatID,
+		"object":  "chat.completion.chunk",
+		"created": state.createdAt,
+		"model":   responseModel,
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"delta":         map[string]interface{}{},
+				"finish_reason": finishReason,
+			},
+		},
+	}
+	if includeUsage {
+		finalChunk["usage"] = map[string]interface{}{
+			"prompt_tokens":     state.inputTokens,
+			"completion_tokens": state.outputTokens,
+			"total_tokens":      state.inputTokens + state.outputTokens,
+		}
+	}
+	writeSSEChunk(c, flusher, finalChunk)
 }
 
 // writeSSEChunk writes a single SSE chunk
