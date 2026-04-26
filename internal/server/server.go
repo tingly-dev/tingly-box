@@ -1288,10 +1288,11 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	if strings.Contains(strings.ToLower(modelID), "codex") {
 		return string(db.EndpointTypeResponses)
 	}
-	// TODO: we use chat as default unless the model do not support chat, e.g. codex
-	// In the future, we can use adaptiveProbe := NewAdaptiveProbe(s)
-	// return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
-	return "chat"
+	if strings.Contains(strings.ToLower(provider.APIBase), "chatgpt.com") {
+		return string(db.EndpointTypeResponses)
+	}
+	adaptiveProbe := NewAdaptiveProbe(s)
+	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
 }
 
 // HealthMonitor returns the server's health monitor
