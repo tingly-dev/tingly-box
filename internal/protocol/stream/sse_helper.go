@@ -35,6 +35,7 @@ type streamState struct {
 	inputTokens                int64
 	cacheTokens                int64        // Cache read tokens (from Anthropic or other sources)
 	stoppedBlocks              map[int]bool // Tracks blocks that have already sent content_block_stop
+	thinkingBlocks             map[int]bool // Tracks which block indices are thinking blocks (need signature_delta before stop)
 }
 
 // newStreamState creates a new streamState
@@ -49,5 +50,6 @@ func newStreamState() *streamState {
 		toolIndexToBlockIndex:      make(map[int]int),
 		deltaExtras:                make(map[string]interface{}),
 		stoppedBlocks:              make(map[int]bool),
+		thinkingBlocks:             make(map[int]bool),
 	}
 }

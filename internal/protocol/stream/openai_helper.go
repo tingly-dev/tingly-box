@@ -153,6 +153,18 @@ func truncateToolCallID(id string) string {
 	return id[:maxToolCallIDLength-3] + "..."
 }
 
+// rewriteToolCallIDForAnthropic converts an OpenAI-style tool call ID (call_...) to an
+// Anthropic-style ID (toolu_...) for protocol compliance, then truncates if necessary.
+func rewriteToolCallIDForAnthropic(id string) string {
+	// MENTION: we keep this in comment but do not use it for loose.
+	//const openAIPrefix = "call_"
+	//const anthropicPrefix = "toolu_"
+	//if len(id) >= len(openAIPrefix) && id[:len(openAIPrefix)] == openAIPrefix {
+	//	id = anthropicPrefix + id[len(openAIPrefix):]
+	//}
+	return truncateToolCallID(id)
+}
+
 // pendingToolCall tracks a tool call being assembled from stream chunks
 type pendingToolCall struct {
 	id    string
