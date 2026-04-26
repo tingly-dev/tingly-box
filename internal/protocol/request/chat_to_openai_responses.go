@@ -21,20 +21,14 @@ func ConvertChatToOpenAIResponses(params *openai.ChatCompletionNewParams, defaul
 
 	// Separate system messages from other messages
 	for _, msg := range params.Messages {
-		raw, _ := json.Marshal(msg)
-		var m map[string]interface{}
-		if err := json.Unmarshal(raw, &m); err != nil {
-			// If we can't parse, skip this message
-			continue
-		}
-
-		role, _ := m["role"].(string)
-		if role == "system" {
+		switch {
+		case !param.IsOmitted(msg.OfSystem):
 			// Extract system message content
-			if content, ok := m["content"].(string); ok && content != "" {
-				systemParts = append(systemParts, content)
+			if sysMsg := msg.OfSystem; !param.IsOmitted(sysMsg.Content.OfString) && sysMsg.Content.OfString.Value != "" {
+				systemParts = append(systemParts, sysMsg.Content.OfString.Value)
 			}
-		} else {
+
+		default:
 			otherMessages = append(otherMessages, msg)
 		}
 	}
@@ -85,47 +79,34 @@ func ConvertChatMessagesToResponsesInput(messages []openai.ChatCompletionMessage
 	var result responses.ResponseInputParam
 
 	for _, msg := range messages {
-		raw, _ := json.Marshal(msg)
-		var m map[string]interface{}
-		if err := json.Unmarshal(raw, &m); err != nil {
-			continue
-		}
+		switch {
+		case !param.IsOmitted(msg.OfUser):
+			result = append(result, convertChatUserMessageToResponses(msg.OfUser))
 
-		role, _ := m["role"].(string)
-
-		switch role {
-		case "user":
-			result = append(result, convertChatUserMessageToResponses(m))
-
-		case "assistant":
-			// Check if assistant has tool_calls
-			if toolCalls, ok := m["tool_calls"].([]interface{}); ok && len(toolCalls) > 0 {
+		case !param.IsOmitted(msg.OfAssistant):
+			assistantMsg := msg.OfAssistant
+			// Check if assistant has tool calls
+			if len(assistantMsg.ToolCalls) > 0 {
 				// Convert each tool call to function_call item
-				for _, tc := range toolCalls {
-					if call, ok := tc.(map[string]interface{}); ok {
-						if fn, ok := call["function"].(map[string]interface{}); ok {
-							callID, _ := call["id"].(string)
-							name, _ := fn["name"].(string)
-							arguments, _ := fn["arguments"].(string)
-
-							result = append(result, responses.ResponseInputItemUnionParam{
-								OfFunctionCall: &responses.ResponseFunctionToolCallParam{
-									CallID:    callID,
-									Name:      name,
-									Arguments: arguments,
-								},
-							})
-						}
+				for _, tc := range assistantMsg.ToolCalls {
+					if !param.IsOmitted(tc.OfFunction) {
+						fnCall := tc.OfFunction
+						result = append(result, responses.ResponseInputItemUnionParam{
+							OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+								CallID:    fnCall.ID,
+								Name:      fnCall.Function.Name,
+								Arguments: fnCall.Function.Arguments,
+							},
+						})
 					}
 				}
 			} else {
 				// Regular assistant message
-				result = append(result, convertChatAssistantMessageToResponses(m))
+				result = append(result, convertChatAssistantMessageToResponses(assistantMsg))
 			}
 
-		case "tool":
-			// Tool result message → function_call_output item
-			result = append(result, convertChatToolMessageToResponses(m))
+		case !param.IsOmitted(msg.OfTool):
+			result = append(result, convertChatToolMessageToResponses(msg.OfTool))
 		}
 	}
 
@@ -133,13 +114,16 @@ func ConvertChatMessagesToResponsesInput(messages []openai.ChatCompletionMessage
 }
 
 // convertChatUserMessageToResponses converts a Chat user message to Responses format.
-func convertChatUserMessageToResponses(m map[string]interface{}) responses.ResponseInputItemUnionParam {
-	content, _ := m["content"].(string)
+func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessageParam) responses.ResponseInputItemUnionParam {
+	content := ""
+	if !param.IsOmitted(userMsg.Content.OfString) && userMsg.Content.OfString.Value != "" {
+		content = userMsg.Content.OfString.Value
+	}
 
 	return responses.ResponseInputItemUnionParam{
 		OfMessage: &responses.EasyInputMessageParam{
 			Type: responses.EasyInputMessageTypeMessage,
-			Role: responses.EasyInputMessageRoleUser,
+			Role: responses.EasyInputMessageRole("user"),
 			Content: responses.EasyInputMessageContentUnionParam{
 				OfString: param.NewOpt(content),
 			},
@@ -148,13 +132,16 @@ func convertChatUserMessageToResponses(m map[string]interface{}) responses.Respo
 }
 
 // convertChatAssistantMessageToResponses converts a Chat assistant message to Responses format.
-func convertChatAssistantMessageToResponses(m map[string]interface{}) responses.ResponseInputItemUnionParam {
-	content, _ := m["content"].(string)
+func convertChatAssistantMessageToResponses(assistantMsg *openai.ChatCompletionAssistantMessageParam) responses.ResponseInputItemUnionParam {
+	content := ""
+	if !param.IsOmitted(assistantMsg.Content.OfString) && assistantMsg.Content.OfString.Value != "" {
+		content = assistantMsg.Content.OfString.Value
+	}
 
 	return responses.ResponseInputItemUnionParam{
 		OfMessage: &responses.EasyInputMessageParam{
 			Type: responses.EasyInputMessageTypeMessage,
-			Role: responses.EasyInputMessageRoleAssistant,
+			Role: responses.EasyInputMessageRole("assistant"),
 			Content: responses.EasyInputMessageContentUnionParam{
 				OfString: param.NewOpt(content),
 			},
@@ -163,13 +150,15 @@ func convertChatAssistantMessageToResponses(m map[string]interface{}) responses.
 }
 
 // convertChatToolMessageToResponses converts a Chat tool message to Responses function_call_output format.
-func convertChatToolMessageToResponses(m map[string]interface{}) responses.ResponseInputItemUnionParam {
-	toolCallID, _ := m["tool_call_id"].(string)
-	content, _ := m["content"].(string)
+func convertChatToolMessageToResponses(toolMsg *openai.ChatCompletionToolMessageParam) responses.ResponseInputItemUnionParam {
+	content := ""
+	if !param.IsOmitted(toolMsg.Content.OfString) && toolMsg.Content.OfString.Value != "" {
+		content = toolMsg.Content.OfString.Value
+	}
 
 	return responses.ResponseInputItemUnionParam{
 		OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-			CallID: toolCallID,
+			CallID: toolMsg.ToolCallID,
 			Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
 				OfString: param.NewOpt(content),
 			},
@@ -208,7 +197,7 @@ func ConvertChatToolsToResponsesTools(tools []openai.ChatCompletionToolUnionPara
 		}
 
 		// Set description if present
-		if fn.Description.Value != "" {
+		if !param.IsOmitted(fn.Description) && fn.Description.Value != "" {
 			functionTool.Description = param.NewOpt(fn.Description.Value)
 		}
 
@@ -223,7 +212,7 @@ func ConvertChatToolsToResponsesTools(tools []openai.ChatCompletionToolUnionPara
 // ConvertChatToolChoiceToResponsesToolChoice converts Chat Completion tool_choice to Responses API format.
 func ConvertChatToolChoiceToResponsesToolChoice(choice *openai.ChatCompletionToolChoiceOptionUnionParam) responses.ResponseNewParamsToolChoiceUnion {
 	// Handle OfAuto (auto, none, required modes)
-	if choice.OfAuto.Value != "" {
+	if !param.IsOmitted(choice.OfAuto) && choice.OfAuto.Value != "" {
 		mode := choice.OfAuto.Value
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions(mode)),
@@ -231,14 +220,14 @@ func ConvertChatToolChoiceToResponsesToolChoice(choice *openai.ChatCompletionToo
 	}
 
 	// Handle OfAllowedTools - default to auto
-	if choice.OfAllowedTools != nil {
+	if !param.IsOmitted(choice.OfAllowedTools) {
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
 		}
 	}
 
 	// Handle specific function tool choice
-	if choice.OfFunctionToolChoice != nil {
+	if !param.IsOmitted(choice.OfFunctionToolChoice) {
 		fn := choice.OfFunctionToolChoice.Function
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfFunctionTool: &responses.ToolChoiceFunctionParam{
@@ -248,7 +237,7 @@ func ConvertChatToolChoiceToResponsesToolChoice(choice *openai.ChatCompletionToo
 	}
 
 	// Handle OfCustomToolChoice - default to auto
-	if choice.OfCustomToolChoice != nil {
+	if !param.IsOmitted(choice.OfCustomToolChoice) {
 		return responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptions("auto")),
 		}
