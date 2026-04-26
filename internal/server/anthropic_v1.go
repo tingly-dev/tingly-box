@@ -63,7 +63,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
 		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
-		logrus.Debugf("[AnthropicV1] Probe cache preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
+		logrus.Debugf("[AnthropicV1] Preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
 		useResponsesAPI := preferredEndpoint == "responses"
 		if useResponsesAPI {
 			target = protocol.TypeOpenAIResponses

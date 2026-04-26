@@ -47,6 +47,7 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 	if !req.ForceRefresh && ap.server.probeCache != nil {
 		if cached := ap.server.probeCache.Get(req.ProviderUUID, req.ModelID); cached != nil {
 			// Convert cached capability to probe result
+			logrus.Debugf("Prefer cache hit for provider %s, %s", req.ProviderUUID, cached.PreferredEndpoint)
 			return ap.cachedCapabilityToResult(cached), nil
 		}
 	}
@@ -128,15 +129,17 @@ func (ap *AdaptiveProbe) probeChatEndpoint(ctx context.Context, provider *typ.Pr
 	}
 }
 
-// probeOpenAIChatEndpointWithSDK probes OpenAI-style chat completions endpoint using SDK
+// probeOpenAIChatEndpointWithSDK probes OpenAI-style chat completions endpoint using SDK.
+// Tests streaming capability only.
 func (ap *AdaptiveProbe) probeOpenAIChatEndpointWithSDK(ctx context.Context, provider *typ.Provider, modelID string, startTime time.Time) EndpointStatus {
 	// Get OpenAI client from pool
 	wrapper := ap.server.clientPool.GetOpenAIClient(context.Background(), provider, "")
 	if wrapper == nil {
 		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: "Failed to get OpenAI client",
-			LastChecked:  time.Now(),
+			Available:      false,
+			SupportsStream: false,
+			ErrorMessage:   "Failed to get OpenAI client",
+			LastChecked:    time.Now(),
 		}
 	}
 
@@ -144,42 +147,52 @@ func (ap *AdaptiveProbe) probeOpenAIChatEndpointWithSDK(ctx context.Context, pro
 		openai.UserMessage("Hi"),
 	}
 
-	params := openai.ChatCompletionNewParams{
-		Model:    openai.ChatModel(modelID),
-		Messages: messages,
-	}
-
 	// Create a context with timeout for the probe
 	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
 	defer cancel()
 
-	resp, err := wrapper.Client().Chat.Completions.New(probeCtx, params)
+	// Test streaming capability
+	params := openai.ChatCompletionNewParams{
+		Model:    openai.ChatModel(modelID),
+		Messages: messages,
+	}
+	stream := wrapper.Client().Chat.Completions.NewStreaming(probeCtx, params)
+	defer stream.Close()
+
+	streamWorks := false
+	for stream.Next() {
+		streamWorks = true
+		break // Got at least one chunk, streaming works
+	}
+
 	latency := int(time.Since(startTime).Milliseconds())
 
-	if err != nil {
+	if err := stream.Err(); err != nil {
 		return EndpointStatus{
-			Available:    false,
-			LatencyMs:    latency,
-			ErrorMessage: fmt.Sprintf("Chat request failed: %v", err),
-			LastChecked:  time.Now(),
+			Available:      false,
+			SupportsStream: false,
+			LatencyMs:      latency,
+			ErrorMessage:   fmt.Sprintf("Chat streaming failed: %v", err),
+			LastChecked:    time.Now(),
 		}
 	}
 
-	// Check if response is valid
-	if resp != nil && len(resp.Choices) > 0 {
+	if streamWorks {
 		return EndpointStatus{
-			Available:    true,
-			LatencyMs:    latency,
-			ErrorMessage: "",
-			LastChecked:  time.Now(),
+			Available:      true,
+			SupportsStream: true,
+			LatencyMs:      latency,
+			ErrorMessage:   "",
+			LastChecked:    time.Now(),
 		}
 	}
 
 	return EndpointStatus{
-		Available:    false,
-		LatencyMs:    latency,
-		ErrorMessage: "Chat endpoint returned invalid response",
-		LastChecked:  time.Now(),
+		Available:      false,
+		SupportsStream: false,
+		LatencyMs:      latency,
+		ErrorMessage:   "Chat streaming returned no data",
+		LastChecked:    time.Now(),
 	}
 }
 
@@ -251,7 +264,8 @@ func (ap *AdaptiveProbe) probeAnthropicChatEndpoint(ctx context.Context, provide
 	return ap.probeAnthropicChatEndpointWithSDK(ctx, provider, modelID, startTime)
 }
 
-// probeResponsesEndpoint probes the Responses API endpoint for a model
+// probeResponsesEndpoint probes the Responses API endpoint for a model.
+// Tests streaming capability only.
 func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *typ.Provider, modelID string) EndpointStatus {
 	startTime := time.Now()
 
@@ -259,14 +273,14 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 	wrapper := ap.server.clientPool.GetOpenAIClient(context.Background(), provider, modelID)
 	if wrapper == nil {
 		return EndpointStatus{
-			Available:    false,
-			ErrorMessage: "Failed to get OpenAI client",
-			LastChecked:  time.Now(),
+			Available:      false,
+			SupportsStream: false,
+			ErrorMessage:   "Failed to get OpenAI client",
+			LastChecked:    time.Now(),
 		}
 	}
 
-	// Create minimal Responses API request using raw JSON approach
-	// This avoids the complex type issues with the SDK
+	// Create minimal Responses API request
 	params := responses.ResponseNewParams{
 		Model: modelID,
 		Input: responses.ResponseNewParamsInputUnion{
@@ -283,47 +297,60 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 		},
 	}
 
-	// Make the request
-	resp, err := wrapper.Client().Responses.New(ctx, params)
+	// Test streaming capability
+	stream := wrapper.Client().Responses.NewStreaming(ctx, params)
+
+	streamWorks := false
+	for stream.Next() {
+		streamWorks = true
+		break // Got at least one chunk, streaming works
+	}
+
 	latency := int(time.Since(startTime).Milliseconds())
 
-	if err != nil {
+	if err := stream.Err(); err != nil {
 		return EndpointStatus{
-			Available:    false,
-			LatencyMs:    latency,
-			ErrorMessage: fmt.Sprintf("Responses API request failed: %v", err),
-			LastChecked:  time.Now(),
+			Available:      false,
+			SupportsStream: false,
+			LatencyMs:      latency,
+			ErrorMessage:   fmt.Sprintf("Responses streaming failed: %v", err),
+			LastChecked:    time.Now(),
 		}
 	}
 
-	// Check if response is valid
-	if resp != nil && resp.ID != "" {
+	if streamWorks {
 		return EndpointStatus{
-			Available:    true,
-			LatencyMs:    latency,
-			ErrorMessage: "",
-			LastChecked:  time.Now(),
+			Available:      true,
+			SupportsStream: true,
+			LatencyMs:      latency,
+			ErrorMessage:   "",
+			LastChecked:    time.Now(),
 		}
 	}
 
 	return EndpointStatus{
-		Available:    false,
-		LatencyMs:    latency,
-		ErrorMessage: "Responses API returned invalid response",
-		LastChecked:  time.Now(),
+		Available:      false,
+		SupportsStream: false,
+		LatencyMs:      latency,
+		ErrorMessage:   "Responses streaming returned no data",
+		LastChecked:    time.Now(),
 	}
 }
 
-// determinePreferredEndpoint determines which endpoint to prefer based on availability
+// determinePreferredEndpoint determines which endpoint to prefer based on streaming support.
+// Priority: Responses with streaming > Chat with streaming
 func (ap *AdaptiveProbe) determinePreferredEndpoint(chat, responses *EndpointStatus) string {
-	// Responses API is preferred when available
-	if responses.Available {
+	// Priority 1: Responses API with streaming support (preferred)
+	if responses.Available && responses.SupportsStream {
 		return string(db.EndpointTypeResponses)
 	}
-	if chat.Available {
+
+	// Priority 2: Chat API with streaming support
+	if chat.Available && chat.SupportsStream {
 		return string(db.EndpointTypeChat)
 	}
-	return "" // Neither available
+
+	return "" // Neither available with streaming
 }
 
 // persistResult persists probe result to database
@@ -449,10 +476,8 @@ func (ap *AdaptiveProbe) GetPreferredEndpoint(provider *typ.Provider, modelID st
 		return res.PreferredEndpoint
 	}
 
-	if capability.SupportsChat {
-		return string(db.EndpointTypeChat)
-	}
-	return string(db.EndpointTypeResponses)
+	// Return the preferred endpoint that was determined during probing
+	return capability.PreferredEndpoint
 }
 
 // InvalidateProviderCache invalidates all cached capabilities for a provider
