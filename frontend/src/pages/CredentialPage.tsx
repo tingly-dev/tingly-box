@@ -9,7 +9,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
@@ -376,6 +376,10 @@ const CredentialPage = () => {
         }
     };
 
+    const handleProviderFormChange = useCallback((field: keyof ProviderFormData, value: any) => {
+        setProviderFormData(prev => ({ ...prev, [field]: value }));
+    }, []);
+
     // Derived state
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
         const apiKeys = providers.filter((p: any) => p.auth_type !== 'oauth');
@@ -528,7 +532,7 @@ const CredentialPage = () => {
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
                 data={providerFormData}
-                onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                onChange={handleProviderFormChange}
                 mode={apiKeyDialogMode}
             />
 
