@@ -191,9 +191,31 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 
 		// Handle tool calls (function_call, custom_tool_call, mcp_call)
 		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
+			// Parse arguments JSON string to map
+			var arguments map[string]interface{}
+			var argsStr string
+
+			// Try to get arguments as string first
+			if output.Arguments.OfString != "" {
+				argsStr = output.Arguments.OfString
+			} else if output.Arguments.OfResponseToolSearchCallArguments != nil {
+				// Convert to JSON string
+				if jsonBytes, err := json.Marshal(output.Arguments.OfResponseToolSearchCallArguments); err == nil {
+					argsStr = string(jsonBytes)
+				}
+			}
+
+			if argsStr != "" {
+				if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
+					arguments = make(map[string]interface{})
+				}
+			} else {
+				arguments = make(map[string]interface{})
+			}
+
 			contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(
 				output.ID,
-				output.Arguments,
+				arguments,
 				output.Name,
 			))
 
@@ -268,9 +290,31 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 
 		// Handle tool calls (function_call, custom_tool_call, mcp_call)
 		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
+			// Parse arguments JSON string to map
+			var arguments map[string]interface{}
+			var argsStr string
+
+			// Try to get arguments as string first
+			if output.Arguments.OfString != "" {
+				argsStr = output.Arguments.OfString
+			} else if output.Arguments.OfResponseToolSearchCallArguments != nil {
+				// Convert to JSON string
+				if jsonBytes, err := json.Marshal(output.Arguments.OfResponseToolSearchCallArguments); err == nil {
+					argsStr = string(jsonBytes)
+				}
+			}
+
+			if argsStr != "" {
+				if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
+					arguments = make(map[string]interface{})
+				}
+			} else {
+				arguments = make(map[string]interface{})
+			}
+
 			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(
 				output.ID,
-				output.Arguments,
+				arguments,
 				output.Name,
 			))
 
