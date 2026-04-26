@@ -55,9 +55,17 @@ func ConvertAnthropicToOpenAIRequest(anthropicReq *anthropic.MessageNewParams, c
 		openaiReq.ToolChoice = ConvertAnthropicToolChoiceToOpenAI(&anthropicReq.ToolChoice)
 	}
 
+	// thinking
 	config := &protocol.OpenAIConfig{
-		HasThinking:     isThinking,
-		ReasoningEffort: "low", // Default to "low" for OpenAI-compatible APIs
+		HasThinking:     false,
+		ReasoningEffort: "", // Default to "low" for OpenAI-compatible APIs
+	}
+	if anthropicReq.Thinking.OfEnabled != nil || anthropicReq.Thinking.OfAdaptive != nil || isThinking {
+		config.HasThinking = true
+		config.ReasoningEffort = "low"
+	}
+	if anthropicReq.OutputConfig.Effort != "" {
+		config.ReasoningEffort = shared.ReasoningEffort(anthropicReq.OutputConfig.Effort)
 	}
 
 	// Only set stream_options for streaming requests (per OpenAI API spec)

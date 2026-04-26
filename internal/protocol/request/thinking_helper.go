@@ -9,7 +9,6 @@ import (
 
 // IsThinkingEnabled checks if thinking mode is enabled in the Anthropic request
 func IsThinkingEnabled(anthropicReq *anthropic.MessageNewParams) bool {
-	isThinking := anthropicReq.Thinking.OfEnabled != nil
 	for _, msg := range anthropicReq.Messages {
 		for _, block := range msg.Content {
 			if block.OfThinking != nil {
@@ -18,12 +17,11 @@ func IsThinkingEnabled(anthropicReq *anthropic.MessageNewParams) bool {
 
 		}
 	}
-	return isThinking
+	return false
 }
 
 // IsThinkingEnabledBeta checks if thinking mode is enabled in the Anthropic beta request
 func IsThinkingEnabledBeta(anthropicReq *anthropic.BetaMessageNewParams) bool {
-	isThinking := anthropicReq.Thinking.OfEnabled != nil
 	for _, msg := range anthropicReq.Messages {
 		for _, block := range msg.Content {
 			if block.OfThinking != nil {
@@ -32,7 +30,7 @@ func IsThinkingEnabledBeta(anthropicReq *anthropic.BetaMessageNewParams) bool {
 
 		}
 	}
-	return isThinking
+	return false
 }
 
 // convertBetaToolResultContent extracts the content from a beta tool result block
