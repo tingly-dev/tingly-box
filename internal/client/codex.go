@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 )
+
+var codexInputIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // codexRoundTripper wraps an http.RoundTripper to transform ChatGPT backend API
 // responses to OpenAI Responses API format. The ChatGPT backend API returns a custom format
@@ -139,6 +142,10 @@ func filterCodexRequestJSON(data []byte) ([]byte, bool) {
 	delete(req, "temperature")
 	delete(req, "top_p")
 
+	// ChatGPT Codex rejects empty/invalid item ids in input[].
+	// These ids are optional for request items, so strip malformed values.
+	sanitizeCodexInputIDs(req)
+
 	// max_output_tokens IS supported, so we keep it
 	// Other supported parameters: instructions, input, tools, tool_choice, stream, store, include, etc.
 
@@ -147,6 +154,40 @@ func filterCodexRequestJSON(data []byte) ([]byte, bool) {
 		return data, isStreaming // Return original if marshaling fails
 	}
 	return result, isStreaming
+}
+
+func sanitizeCodexInputIDs(req map[string]interface{}) {
+	input, ok := req["input"]
+	if !ok {
+		return
+	}
+	model, _ := req["model"].(string)
+	req["input"] = sanitizeCodexValue(input, "input", model)
+}
+
+func sanitizeCodexValue(v interface{}, path, model string) interface{} {
+	switch item := v.(type) {
+	case []interface{}:
+		for i := range item {
+			item[i] = sanitizeCodexValue(item[i], fmt.Sprintf("%s[%d]", path, i), model)
+		}
+		return item
+	case map[string]interface{}:
+		for key, value := range item {
+			item[key] = sanitizeCodexValue(value, path+"."+key, model)
+		}
+		if rawID, ok := item["id"].(string); ok {
+			rawID = strings.TrimSpace(rawID)
+			if rawID == "" || !codexInputIDPattern.MatchString(rawID) {
+				delete(item, "id")
+			} else {
+				item["id"] = rawID
+			}
+		}
+		return item
+	default:
+		return v
+	}
 }
 
 func rewriteCodexPath(path string) string {
