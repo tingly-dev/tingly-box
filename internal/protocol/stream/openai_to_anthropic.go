@@ -415,6 +415,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 		truncatedID string // truncated ID for OpenAI compatibility (sent to client)
 		name        string
 		arguments   string
+		completed   bool // true when content_block_stop has been sent
 	}
 	pendingToolCalls := make(map[string]*pendingToolCall) // key: itemID
 
@@ -639,7 +640,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					toolCall.name = argsDone.Name
 				}
 				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
-				delete(pendingToolCalls, argsDone.ItemID)
+				// Mark as completed but don't delete yet - we need this for response.completed check
+				toolCall.completed = true
 			}
 
 		case "response.custom_tool_call_input.delta":
@@ -656,7 +658,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			customDone := currentEvent.AsResponseCustomToolCallInputDone()
 			if toolCall, exists := pendingToolCalls[customDone.ItemID]; exists {
 				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
-				delete(pendingToolCalls, customDone.ItemID)
+				// Mark as completed but don't delete yet - we need this for response.completed check
+				toolCall.completed = true
 			}
 
 		case "response.mcp_call_arguments.delta":
@@ -673,7 +676,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			mcpDone := currentEvent.AsResponseMcpCallArgumentsDone()
 			if toolCall, exists := pendingToolCalls[mcpDone.ItemID]; exists {
 				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
-				delete(pendingToolCalls, mcpDone.ItemID)
+				// Mark as completed but don't delete yet - we need this for response.completed check
+				toolCall.completed = true
 			}
 
 		case "response.output_item.done":
