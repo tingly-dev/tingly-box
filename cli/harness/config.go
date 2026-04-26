@@ -94,11 +94,17 @@ func buildProvidersConfig(templates map[string]*data.ProviderTemplate) string {
 			continue
 		}
 
+		// Extract model IDs from ModelInfo array
+		modelIDs := make([]string, len(tmpl.Models))
+		for i, m := range tmpl.Models {
+			modelIDs[i] = m.ID
+		}
+
 		entries = append(entries, providerEntry{
 			ID:       tmpl.ID,
 			BaseURL:  baseURL,
 			APIStyle: apiStyle,
-			Models:   tmpl.Models, // Use all available models
+			Models:   modelIDs,
 		})
 	}
 
