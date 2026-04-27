@@ -100,6 +100,16 @@ type (
 	InlineKeyboardMarkup = interaction.InlineKeyboardMarkup
 	KeyboardBuilder      = interaction.KeyboardBuilder
 
+	// Card types
+	Card               = interaction.Card
+	CardSection        = interaction.CardSection
+	CardField          = interaction.CardField
+	CardAction         = interaction.CardAction
+	CardActionStyle    = interaction.CardActionStyle
+	CardBuilder        = interaction.CardBuilder
+	CardSectionBuilder = interaction.CardSectionBuilder
+	CardActionBuilder  = interaction.CardActionBuilder
+
 	// Command types
 	Command         = command.Command
 	CommandHandler  = command.CommandHandler
@@ -154,6 +164,7 @@ const (
 	ReactionLove     = core.ReactionLove
 	ReactionLaugh    = core.ReactionLaugh
 )
+
 // Version is the imbot package version
 const Version = "0.1.0"
 
@@ -347,6 +358,11 @@ const (
 	ModeAuto        = interaction.ModeAuto
 	ModeInteractive = interaction.ModeInteractive
 	ModeText        = interaction.ModeText
+
+	// Card action styles
+	CardActionStyleDefault = interaction.CardActionStyleDefault
+	CardActionStylePrimary = interaction.CardActionStylePrimary
+	CardActionStyleDanger  = interaction.CardActionStyleDanger
 )
 
 // Interaction constructors
@@ -354,6 +370,36 @@ const (
 // NewInteractionBuilder creates a new interaction builder
 func NewInteractionBuilder() *interaction.Builder {
 	return interaction.NewBuilder()
+}
+
+// NewCard creates a new card builder.
+func NewCard(id string) *interaction.CardBuilder {
+	return interaction.NewCard(id)
+}
+
+// NewCardBuilder creates a new card builder.
+func NewCardBuilder(id string) *interaction.CardBuilder {
+	return interaction.NewCardBuilder(id)
+}
+
+// NewCardSection creates a new card section builder.
+func NewCardSection() *interaction.CardSectionBuilder {
+	return interaction.NewCardSection()
+}
+
+// NewCardAction creates a new card action builder.
+func NewCardAction(id, label string) *interaction.CardActionBuilder {
+	return interaction.NewCardAction(id, label)
+}
+
+// CallbackCardAction creates a callback-style card action builder.
+func CallbackCardAction(id, label, value string) *interaction.CardActionBuilder {
+	return interaction.CallbackCardAction(id, label, value)
+}
+
+// URLCardAction creates a URL card action builder.
+func URLCardAction(id, label, url string) *interaction.CardActionBuilder {
+	return interaction.URLCardAction(id, label, url)
 }
 
 // NewInteractionHandler creates a new interaction handler
