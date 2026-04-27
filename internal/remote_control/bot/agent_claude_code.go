@@ -165,6 +165,13 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		if response == "" {
 			response = fmt.Sprintf("Execution failed: %v", err)
 		}
+
+		// Check for session ID conflict error and provide helpful message
+		errStr := err.Error()
+		if strings.Contains(errStr, "Session ID") && strings.Contains(errStr, "already in use") {
+			response = fmt.Sprintf("⚠️ Session ID conflict: This session is already active in another Claude Code process.\n\nSession ID: %s\n\nPossible solutions:\n• Wait for the other session to complete\n• Use /stop to end the current session and try again\n• If the other process is stuck, terminate it manually", sessionID)
+		}
+
 		e.deps.SendTextWithReply(req.HCtx, response, req.ReplyTo)
 		return &ExecutionResult{
 			SessionID:    sessionID,

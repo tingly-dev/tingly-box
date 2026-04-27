@@ -372,12 +372,17 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 		return
 	}
 
-
 	// NEW: Route all messages through agent router
 	// The router now defaults to @tb (Smart Guide) for new users
 	// Smart Guide can help with navigation, project setup, and handoff to @cc
 	if routeErr := h.routeToAgent(hCtx, hCtx.Text()); routeErr != nil {
 		logrus.WithError(routeErr).Error("Failed to route to agent")
+		// Send error message to user
+		errMsg := fmt.Sprintf("⚠️ **Error**: %v", routeErr)
+		if strings.Contains(routeErr.Error(), "already in progress") || strings.Contains(routeErr.Error(), "already in use") {
+			errMsg = fmt.Sprintf("⚠️ **Session Busy**\n\nAnother execution is already in progress for this chat.\n\nPlease:\n• Wait for the current task to complete\n• Use `/stop` to cancel the current execution\n\nTechnical details: %v", routeErr)
+		}
+		h.SendText(hCtx, errMsg)
 	}
 }
 
