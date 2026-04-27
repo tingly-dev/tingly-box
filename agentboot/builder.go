@@ -6,6 +6,12 @@ func (h *CompositeHandler) WithCompletionFunc(f func(result *CompletionResult)) 
 	return h.SetCompletionCallback(&funcCompletionCallback{onComplete: f})
 }
 
+// WithMessageFunc sets a function to be called for each message.
+// Convenience method that wraps f in a MessageStreamer.
+func (h *CompositeHandler) WithMessageFunc(f func(msg interface{}) error) *CompositeHandler {
+	return h.SetStreamer(&funcMessageStreamer{onMessage: f})
+}
+
 // WithErrorFunc sets a function to be called on error.
 // If a streamer is already set, the function is layered on top; otherwise a
 // no-op streamer is created so only the error hook fires.
@@ -28,6 +34,25 @@ type funcCompletionCallback struct {
 func (f *funcCompletionCallback) OnComplete(result *CompletionResult) {
 	if f.onComplete != nil {
 		f.onComplete(result)
+	}
+}
+
+// funcMessageStreamer adapts a function to MessageStreamer.
+type funcMessageStreamer struct {
+	onMessage func(msg interface{}) error
+	onError   func(err error)
+}
+
+func (f *funcMessageStreamer) OnMessage(msg interface{}) error {
+	if f.onMessage != nil {
+		return f.onMessage(msg)
+	}
+	return nil
+}
+
+func (f *funcMessageStreamer) OnError(err error) {
+	if f.onError != nil {
+		f.onError(err)
 	}
 }
 
@@ -60,5 +85,6 @@ func (e *errorWrapperStreamer) OnError(err error) {
 }
 
 var _ CompletionCallback = (*funcCompletionCallback)(nil)
+var _ MessageStreamer = (*funcMessageStreamer)(nil)
 var _ MessageStreamer = (*errorOnlyStreamer)(nil)
 var _ MessageStreamer = (*errorWrapperStreamer)(nil)
