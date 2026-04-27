@@ -120,7 +120,7 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 								"role":    "assistant",
 								"content": "",
 								"tool_calls": []map[string]any{
-									{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{"reason":"need strategy"}`}},
+									{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{}`}},
 								},
 							},
 							"finish_reason": "tool_calls",
@@ -264,7 +264,7 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 					"role":  "assistant",
 					"model": "claude-worker-v1",
 					"content": []map[string]any{
-						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{"reason": "need strategy"}},
+						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{}},
 					},
 					"stop_reason": "tool_use",
 					"usage":       map[string]any{"input_tokens": 1, "output_tokens": 1},
@@ -376,7 +376,7 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 					"role":  "assistant",
 					"model": "claude-worker-beta",
 					"content": []map[string]any{
-						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{"reason": "need strategy"}},
+						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{}},
 					},
 					"stop_reason": "tool_use",
 					"usage":       map[string]any{"input_tokens": 1, "output_tokens": 1},
@@ -475,7 +475,7 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 							"role":    "assistant",
 							"content": "",
 							"tool_calls": []map[string]any{
-								{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{"reason":"need strategy"}`}},
+								{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{}`}},
 							},
 						},
 						"finish_reason": "tool_calls",
@@ -629,7 +629,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 				w.Header().Set("Content-Type", "text/event-stream")
 				writeSSEEvent(w, "message_start", `{"type":"message_start","message":{"id":"msg_worker_tool","type":"message","role":"assistant","model":"claude-worker-v1","content":[],"stop_reason":null,"usage":{"input_tokens":8,"output_tokens":0}}}`)
 				writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"tingly_box_mcp__builtin__advisor","input":{}}}`)
-				writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"reason\":\"need strategy\"}"}}`)
+				writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}`)
 				writeSSEEvent(w, "content_block_stop", `{"type":"content_block_stop","index":0}`)
 				writeSSEEvent(w, "message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":4}}`)
 				writeSSEEvent(w, "message_stop", `{"type":"message_stop"}`)
@@ -646,7 +646,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 						"type":  "tool_use",
 						"id":    "toolu_1",
 						"name":  "tingly_box_mcp__builtin__advisor",
-						"input": map[string]any{"reason": "need strategy"},
+						"input": map[string]any{},
 					},
 				},
 				"stop_reason": "tool_use",

@@ -77,7 +77,7 @@ func TestCallMCPToolWithHooks_AdvisorInjectsContext(t *testing.T) {
 		mcpRuntime: rt,
 	}
 	// No pre-injected AdvisorContext here; hook should create one.
-	_, result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{"reason":"x"}`, []map[string]any{
+	_, result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{}`, []map[string]any{
 		{"role": "user", "content": "hello"},
 	})
 	require.NoError(t, err)
@@ -155,15 +155,15 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 		UsesRemaining: &uses,
 	})
 
-	_, result1, err1 := s.callMCPToolWithHooks(ctx, toolName, `{"reason":"first"}`, msgs)
+	_, result1, err1 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err1)
 	require.Contains(t, result1, "plan")
 
-	ctx, result2, err2 := s.callMCPToolWithHooks(ctx, toolName, `{"reason":"second"}`, msgs)
+	ctx, result2, err2 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err2)
 	require.Contains(t, result2, "plan")
 
-	_, result3, err3 := s.callMCPToolWithHooks(ctx, toolName, `{"reason":"third"}`, msgs)
+	_, result3, err3 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err3)
 	require.Equal(t, "Advisor consultations exhausted for this request.", result3)
 }

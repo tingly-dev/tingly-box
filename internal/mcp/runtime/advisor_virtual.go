@@ -22,14 +22,7 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 	}
 
 	schema := mcp.ToolInputSchema{Type: "object"}
-	props := map[string]any{
-		"reason": map[string]any{
-			"type":        "string",
-			"description": "Why the executor is consulting the advisor.",
-		},
-	}
-	schema.Properties = props
-	schema.Required = []string{"reason"}
+	schema.Properties = map[string]any{}
 
 	return VirtualTool{
 		Name:         "advisor",
@@ -42,19 +35,8 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 
 func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualToolHandler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Extract arguments
-		args, ok := req.Params.Arguments.(map[string]any)
-		if !ok {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{mcp.NewTextContent("invalid arguments")},
-				IsError: true,
-			}, nil
-		}
-
-		reason, _ := args["reason"].(string)
-		if reason == "" {
-			reason = "The executor has requested strategic guidance."
-		}
+		// Extract arguments (advisor takes no parameters; args may still carry session_id)
+		args, _ := req.Params.Arguments.(map[string]any)
 
 		// Check depth to prevent recursion.
 		// Depth is incremented by response hook before tool execution, so the first
@@ -88,7 +70,6 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 
 		// Execute advisor call
 		logrus.WithFields(logrus.Fields{
-			"reason":         reason,
 			"uses_remaining": *actx.UsesRemaining,
 			"depth":          depth,
 			"format":         detectAdvisorFormat(cfg),
@@ -107,9 +88,9 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 		var result string
 		var err error
 		if detectAdvisorFormat(cfg) == FormatOpenAI {
-			result, err = callOpenAI(advisorCtx, cfg, cp, reason, actx)
+			result, err = callOpenAI(advisorCtx, cfg, cp, actx)
 		} else {
-			result, err = callAnthropic(advisorCtx, cfg, cp, reason, actx)
+			result, err = callAnthropic(advisorCtx, cfg, cp, actx)
 		}
 
 		// Decrement uses regardless of outcome to prevent retry loops on failure

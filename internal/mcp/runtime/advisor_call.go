@@ -44,7 +44,7 @@ func buildProvider(cfg typ.AdvisorConfig, style protocol.APIStyle) *typ.Provider
 	}
 }
 
-func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, reason string, actx *AdvisorContext) (string, error) {
+func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *AdvisorContext) (string, error) {
 	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
@@ -79,10 +79,6 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 			}
 		}
 	}
-	if reason == "" {
-		reason = "The executor has requested strategic guidance."
-	}
-	messages = append(messages, openai.UserMessage(reason))
 
 	req := openai.ChatCompletionNewParams{
 		Model:    cfg.Model,
@@ -102,7 +98,7 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 	return normalizeAdvisorResponse(content), nil
 }
 
-func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, reason string, actx *AdvisorContext) (string, error) {
+func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *AdvisorContext) (string, error) {
 	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
@@ -137,10 +133,6 @@ func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.Client
 			}
 		}
 	}
-	if reason == "" {
-		reason = "The executor has requested strategic guidance."
-	}
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(reason)))
 
 	systemPrompt := advisorSystemPrompt
 	if len(systemParts) > 0 {
@@ -196,9 +188,23 @@ func normalizeAdvisorResponse(raw string) string {
 }
 
 func description(remainingUses int) string {
-	return "Consult a more powerful advisor model for strategic guidance. " +
-		"Use this when facing architectural decisions, complex debugging, unclear trade-offs, or when stuck. " +
-		"You have " + strconv.Itoa(remainingUses) + " advisor consultation(s) remaining this request."
+	return `You have access to an advisor tool backed by a stronger reviewer model. When you call advisor(), your entire conversation history is automatically forwarded. They see the task, every tool call you've made, every result you've seen.
+
+Call advisor BEFORE substantive work -- before writing, before committing to an interpretation, before building on an assumption. If the task requires orientation first (finding files, fetching a source, seeing what's there), do that, then call advisor. Orientation is not substantive work. Writing, editing, and declaring an answer are.
+
+Also call advisor:
+
+- When you believe the task is complete. BEFORE this call, make your deliverable durable: write the file, save the result, commit the change. The advisor call takes time; if the session ends during it, a durable result persists and an unwritten one doesn't.
+- When stuck -- errors recurring, approach not converging, results that don't fit.
+- When considering a change of approach.
+
+On tasks longer than a few steps, call advisor at least once before committing to an approach and once before declaring done. On short reactive tasks where the next action is dictated by tool output you just read, you don't need to keep calling -- the advisor adds most of its value on the first call, before the approach crystallizes.
+
+Give the advice serious weight. If you follow a step and it fails empirically, or you have primary-source evidence that contradicts a specific claim (the file says X, the paper states Y), adapt. A passing self-test is not evidence the advice is wrong -- it's evidence your test doesn't check what the advice is checking.
+
+If you've already retrieved data pointing one way and the advisor points another: don't silently switch. Surface the conflict in one more advisor call -- "I found X, you suggest Y, which constraint breaks the tie?" The advisor saw your evidence but may have underweighted it; a reconcile call is cheaper than committing to the wrong branch.
+
+You have ` + strconv.Itoa(remainingUses) + ` advisor consultation(s) remaining this request.`
 }
 
 const advisorCallTimeout = 60 * time.Second

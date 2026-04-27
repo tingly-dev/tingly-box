@@ -90,11 +90,11 @@ func TestAdvisorToolLoop(t *testing.T) {
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func(reason string) mcp.CallToolRequest {
+	makeReq := func() mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Name:      "advisor",
-				Arguments: map[string]any{"reason": reason},
+				Arguments: map[string]any{},
 			},
 		}
 	}
@@ -108,7 +108,7 @@ func TestAdvisorToolLoop(t *testing.T) {
 	}
 
 	// First call should succeed and decrement UsesRemaining.
-	result, err := vt.Handler(ctx, makeReq("Need strategic guidance"))
+	result, err := vt.Handler(ctx, makeReq())
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "situation clear")
@@ -116,21 +116,21 @@ func TestAdvisorToolLoop(t *testing.T) {
 	require.Equal(t, 2, *actx.UsesRemaining)
 
 	// Second call.
-	result, err = vt.Handler(ctx, makeReq("Still unsure"))
+	result, err = vt.Handler(ctx, makeReq())
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "situation clear")
 	require.Equal(t, 1, *actx.UsesRemaining)
 
 	// Third call.
-	result, err = vt.Handler(ctx, makeReq("One more time"))
+	result, err = vt.Handler(ctx, makeReq())
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "situation clear")
 	require.Equal(t, 0, *actx.UsesRemaining)
 
 	// Fourth call should return exhaustion message as an error result.
-	result, err = vt.Handler(ctx, makeReq("No uses left"))
+	result, err = vt.Handler(ctx, makeReq())
 	require.NoError(t, err)
 	require.True(t, result.IsError)
 	require.Equal(t, "Advisor consultations exhausted for this request.", extractText(result))
@@ -150,8 +150,8 @@ func TestAdvisorToolLoop(t *testing.T) {
 		messages, ok := req["messages"].([]any)
 		require.True(t, ok, "request %d: expected messages array", i)
 
-		// Advisor system prompt + context system message + user + assistant + reason = 5 messages.
-		require.Len(t, messages, 5, "request %d: expected 5 messages", i)
+		// Advisor system prompt + context system message + user + assistant = 4 messages.
+		require.Len(t, messages, 4, "request %d: expected 4 messages", i)
 
 		advisorSysMsg, ok := messages[0].(map[string]any)
 		require.True(t, ok, "request %d: first message should be system", i)
@@ -172,15 +172,7 @@ func TestAdvisorToolLoop(t *testing.T) {
 		require.True(t, ok, "request %d: fourth message should be assistant", i)
 		require.Equal(t, "assistant", asstMsg["role"], "request %d", i)
 		require.Equal(t, "Hi there!", asstMsg["content"], "request %d", i)
-
-		reasonMsg, ok := messages[4].(map[string]any)
-		require.True(t, ok, "request %d: fifth message should be user", i)
-		require.Equal(t, "user", reasonMsg["role"], "request %d", i)
 	}
-
-	require.Equal(t, "Need strategic guidance", receivedRequests[0]["messages"].([]any)[4].(map[string]any)["content"])
-	require.Equal(t, "Still unsure", receivedRequests[1]["messages"].([]any)[4].(map[string]any)["content"])
-	require.Equal(t, "One more time", receivedRequests[2]["messages"].([]any)[4].(map[string]any)["content"])
 }
 
 func TestAdvisorToolLoop_Anthropic(t *testing.T) {
@@ -256,11 +248,11 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func(reason string) mcp.CallToolRequest {
+	makeReq := func() mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Name:      "advisor",
-				Arguments: map[string]any{"reason": reason},
+				Arguments: map[string]any{},
 			},
 		}
 	}
@@ -273,19 +265,19 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 		return text.Text
 	}
 
-	result, err := vt.Handler(ctx, makeReq("Need Anthropic guidance"))
+	result, err := vt.Handler(ctx, makeReq())
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "anthropic clear")
 	require.Equal(t, 1, *actx.UsesRemaining)
 
-	result, err = vt.Handler(ctx, makeReq("Again"))
+	result, err = vt.Handler(ctx, makeReq())
 	require.NoError(t, err)
 	require.False(t, result.IsError)
 	require.Contains(t, extractText(result), "anthropic clear")
 	require.Equal(t, 0, *actx.UsesRemaining)
 
-	result, err = vt.Handler(ctx, makeReq("Exhausted"))
+	result, err = vt.Handler(ctx, makeReq())
 	require.NoError(t, err)
 	require.True(t, result.IsError)
 	require.Equal(t, "Advisor consultations exhausted for this request.", extractText(result))
@@ -313,7 +305,7 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 
 		messages, ok := req["messages"].([]any)
 		require.True(t, ok, "request %d: expected messages array", i)
-		require.Len(t, messages, 3, "request %d: expected 3 messages", i)
+		require.Len(t, messages, 2, "request %d: expected 2 messages", i)
 	}
 }
 
@@ -379,7 +371,6 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 		Params: mcp.CallToolParams{
 			Name: "advisor",
 			Arguments: map[string]any{
-				"reason":     "Check workspace",
 				"session_id": "sess-42",
 			},
 		},
@@ -394,8 +385,8 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	require.Len(t, receivedRequests, 1)
 	messages := receivedRequests[0]["messages"].([]any)
 
-	// Expected: advisor system prompt + build logs + last worker resp + original user + reason
-	require.Len(t, messages, 5)
+	// Expected: advisor system prompt + build logs + last worker resp + original user
+	require.Len(t, messages, 4)
 
 	require.Equal(t, "system", messages[0].(map[string]any)["role"])
 	require.Equal(t, "system", messages[1].(map[string]any)["role"])
@@ -403,5 +394,4 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	require.Equal(t, "system", messages[2].(map[string]any)["role"])
 	require.Contains(t, messages[2].(map[string]any)["content"], "Last worker response")
 	require.Equal(t, "user", messages[3].(map[string]any)["role"])
-	require.Equal(t, "user", messages[4].(map[string]any)["role"])
 }
