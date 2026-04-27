@@ -211,7 +211,17 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 	// Make provider UUID unique per source+target+scenario to avoid conflicts
 	providerUUID := fmt.Sprintf("virtual-%s-%s-%s", source, target, s.Name)
 	providerName := providerUUID // Use UUID as name for uniqueness
-	providerModel := fmt.Sprintf("virtual-model-%s-%s", target, s.Name)
+
+	// Build model name that reflects the target type
+	// For Responses API target, use "-codex" suffix (for both codex and general cases)
+	// This allows GetPreferredEndpointForModel to identify Responses API preference
+	modelSuffix := s.Name
+	if target == protocol.TypeOpenAIResponses {
+		modelSuffix = s.Name + "-codex"
+	} else if target == protocol.TypeOpenAIChat {
+		modelSuffix = s.Name + "-chat"
+	}
+	providerModel := fmt.Sprintf("virtual-model-%s", modelSuffix)
 	requestModel := fmt.Sprintf("pv-%s-to-%s-%s", source, target, s.Name)
 
 	apiStyle := targetToAPIStyle(target)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -62,17 +63,17 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 // SmartGuideCompletionCallback handles completion events for SmartGuide agent
 // It saves messages to session, updates project path if changed, and sends response + action keyboard
 type SmartGuideCompletionCallback struct {
-	hCtx             HandlerContext
-	sessionID        string
-	chatStore        ChatStoreInterface
-	tbSessionStore   *smart_guide.SessionStore
-	agent            *smart_guide.TinglyBoxAgent
-	projectPath      string
-	meta             *ResponseMeta
-	behavior         OutputBehavior
-	formatResponse   func(meta ResponseMeta, response string, showMeta bool) string
-	sendText         func(hCtx HandlerContext, text string)
-	messagesSent     int // Track number of messages sent via hooks (for fallback)
+	hCtx           HandlerContext
+	sessionID      string
+	chatStore      ChatStoreInterface
+	tbSessionStore *smart_guide.SessionStore
+	agent          *smart_guide.TinglyBoxAgent
+	projectPath    string
+	meta           *ResponseMeta
+	behavior       OutputBehavior
+	formatResponse func(meta ResponseMeta, response string, showMeta bool) string
+	sendText       func(hCtx HandlerContext, text string)
+	messagesSent   int // Track number of messages sent via hooks (for fallback)
 }
 
 // messageTrackingWrapper wraps a message handler and tracks assistant messages
@@ -155,8 +156,8 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 				"currentWorkingDir": currentWorkingDir,
 				"storedProjectPath": storedProjectPath,
 				"storedBashCwd":     storedBashCwd,
-				"updateProjectPath":  updateProjectPath,
-				"updateBashCwd":      updateBashCwd,
+				"updateProjectPath": updateProjectPath,
+				"updateBashCwd":     updateBashCwd,
 			}).Info("SmartGuide: Syncing working directory to chat store")
 
 			if err := c.chatStore.UpdateChat(c.hCtx.ChatID, func(ch *Chat) {
@@ -262,7 +263,12 @@ func (h *BotHandler) handleAgentMessage(hCtx HandlerContext, agent agentboot.Age
 	_, err := h.agentRouter.Execute(h.ctx, agent, req)
 	if err != nil {
 		logrus.WithError(err).Error("Agent execution failed via router")
-		h.SendText(hCtx, fmt.Sprintf("Agent execution failed: %v", err))
+		// Provide helpful error message for session conflicts
+		errMsg := fmt.Sprintf("Agent execution failed: %v", err)
+		if strings.Contains(err.Error(), "already in progress") || strings.Contains(err.Error(), "already in use") {
+			errMsg = fmt.Sprintf("⚠️ **Session Busy**\n\nAnother execution is already in progress for this chat.\n\nPlease:\n• Wait for the current task to complete\n• Use `/stop` to cancel the current execution")
+		}
+		h.SendText(hCtx, errMsg)
 		return
 	}
 	h.reactDone(hCtx)

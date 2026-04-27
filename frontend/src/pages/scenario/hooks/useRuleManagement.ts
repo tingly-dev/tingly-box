@@ -24,6 +24,12 @@ export const useRuleManagement = () => {
     }, [rules.length]);
 
     const loadRules = useCallback(async (scenario: string) => {
+        if (!scenario.trim()) {
+            setRules([]);
+            setLoadingRule(false);
+            return;
+        }
+
         const result = await api.getRules(scenario);
         if (result && result.success) {
             // Ensure data is an array to prevent crashes

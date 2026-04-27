@@ -39,7 +39,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
     // Determine which mode we're in
     // If `rules` is provided, use external mode (legacy)
     // If only `scenario` is provided, use internal mode (recommended)
-    const isInternalMode = !props.rules && props.scenario;
+    const isInternalMode = !props.rules && Boolean(props.scenario);
 
     // Internal mode: fetch all data internally (excluding modal - that's from context)
     const internalData = useScenarioPageInternal(

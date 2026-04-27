@@ -92,6 +92,15 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 		"newSession":  isNewSession,
 	}).Info("Routing prepared request to executor")
 
+	// 5.5. Check for already running execution for this chat (prevent session conflicts)
+	r.deps.RunningCancelMu.Lock()
+	if _, exists := r.deps.RunningCancel[req.HCtx.ChatID]; exists {
+		r.deps.RunningCancelMu.Unlock()
+		cancel()
+		return nil, fmt.Errorf("another execution is already in progress for this chat. Please wait for it to complete or use /stop to cancel it")
+	}
+	r.deps.RunningCancelMu.Unlock()
+
 	// 6. Delegate to executor (it is responsible for calling defer cleanup)
 	result, err := executor.Execute(execCtx, prepared)
 

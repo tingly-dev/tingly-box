@@ -406,17 +406,17 @@ func (h *StdinHandler) OnComplete(result *agentboot.CompletionResult) {
 
 var _ agentboot.MessageHandler = (*StdinHandler)(nil)
 
-// Example 1: Simple query with Launcher
+// Example 1: Simple query with Agent
 func exampleSimpleQuery() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 1: Simple Query ===")
 
-	result, err := launcher.Execute(ctx, "Say hello in one word", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "Say hello in one word", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatText,
@@ -435,12 +435,12 @@ func exampleStreamQuery() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 2: Stream Format Query ===")
 
-	result, err := launcher.Execute(ctx, "What is 2+2? Answer with just the number.", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "What is 2+2? Answer with just the number.", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -459,12 +459,12 @@ func exampleWithModel() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 3: With Model Selection ===")
 
-	result, err := launcher.Execute(ctx, "Explain Go channels in one sentence", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "Explain Go channels in one sentence", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatText,
@@ -483,7 +483,7 @@ func exampleResume() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	// In real usage, you'd get sessionID from a previous execution
@@ -491,7 +491,7 @@ func exampleResume() {
 
 	fmt.Println("=== Example 4: Resume Conversation ===")
 
-	result, err := launcher.Execute(ctx, "Continue our conversation about Go", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "Continue our conversation about Go", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatText,
@@ -512,14 +512,14 @@ func exampleContinue() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{
-		ContinueConversation: true,
-	})
+	cfg := claude.DefaultConfig()
+	cfg.ContinueConversation = true
+	agent := claude.NewAgentWithConfig(cfg)
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 5: Continue Conversation ===")
 
-	result, err := launcher.Execute(ctx, "What were we discussing?", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "What were we discussing?", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatText,
@@ -537,12 +537,12 @@ func exampleWithToolFiltering() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 6: With Tool Filtering ===")
 
-	result, err := launcher.Execute(ctx, "Read the files in current directory", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "Read the files in current directory", agentboot.ExecutionOptions{
 		Handler:         handler,
 		ProjectPath:     "/tmp",
 		OutputFormat:    agentboot.OutputFormatStreamJSON,
@@ -562,12 +562,12 @@ func exampleWithTimeout() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 7: With Timeout ===")
 
-	result, err := launcher.Execute(ctx, "Count to 100 slowly", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "Count to 100 slowly", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatText,
@@ -586,12 +586,12 @@ func exampleAskUserQuestion() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 8: AskUserQuestion Handling ===")
 
-	result, err := launcher.Execute(ctx, "Call AskUserQuestion tool to user to choose from 3 tasks", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "Call AskUserQuestion tool to user to choose from 3 tasks", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatStreamJSON,
@@ -609,12 +609,12 @@ func exampleApprovePermission() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	launcher := claude.NewLauncher(claude.Config{})
+	agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 	handler := NewStdinHandler()
 
 	fmt.Println("=== Example 9: Approve Handling ===")
 
-	result, err := launcher.Execute(ctx, "Call Bash git add -A", agentboot.ExecutionOptions{
+	result, err := agent.Execute(ctx, "Call Bash git add -A", agentboot.ExecutionOptions{
 		Handler:      handler,
 		ProjectPath:  "/tmp",
 		OutputFormat: agentboot.OutputFormatStreamJSON,

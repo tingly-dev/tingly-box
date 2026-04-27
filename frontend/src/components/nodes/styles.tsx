@@ -4,17 +4,17 @@ import { styled, type Theme } from '@mui/material/styles';
 // Node dimensions constants
 export const MODEL_NODE_STYLES = {
     width: 220,
-    height: 90,
-    heightCompact: 60,
+    height: 72,
+    heightCompact: 48,
     widthCompact: 220,
-    padding: 8,
+    padding: 5,
 } as const;
 
 export const PROVIDER_NODE_STYLES = {
     width: 220,
-    height: 90,
-    heightCompact: 60,
-    padding: 8,
+    height: 72,
+    heightCompact: 48,
+    padding: 5,
     widthCompact: 320,
     badgeHeight: 5,
     fieldHeight: 5,
@@ -24,8 +24,8 @@ export const PROVIDER_NODE_STYLES = {
 
 export const SMART_NODE_STYLES = {
     width: 220,
-    height: 90,
-    padding: 8,
+    height: 72,
+    padding: 5,
 } as const;
 
 export const { modelNode, providerNode, smartNode } = {
@@ -159,19 +159,19 @@ export const NODE_LAYER_STYLES = {
         justifyContent: 'center',
         width: '100%',
     } as const,
-    divider: { width: '80%', my: 0.5 } as const,
+    divider: { width: '78%', my: 0.125 } as const,
     bottomLayer: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         width: '100%',
-        minHeight: 24,
+        minHeight: 18,
     } as const,
-    typography: { fontWeight: 600, fontSize: '0.9rem' } as const,
+    typography: { fontWeight: 600, fontSize: '0.8rem', lineHeight: 1.15 } as const,
     toggleButton: {
-        height: 24,
-        padding: '0 8px',
-        fontSize: '0.65rem',
+        height: 20,
+        padding: '0 6px',
+        fontSize: '0.6rem',
         fontWeight: 600,
         textTransform: 'none' as const,
         border: '1px solid',

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,12 +31,50 @@ const (
 // StdinHandler implements MessageHandler using stdin/stdout.
 // This is a simple implementation for the example server.
 type StdinHandler struct {
-	Debug bool
+	Debug    bool
+	messages []claude.Message
+	mu       sync.Mutex
 }
 
 // NewStdinHandler creates a new StdinHandler
 func NewStdinHandler() *StdinHandler {
-	return &StdinHandler{}
+	return &StdinHandler{
+		messages: make([]claude.Message, 0),
+	}
+}
+
+// Reset clears collected messages for a new execution
+func (h *StdinHandler) Reset() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.messages = h.messages[:0]
+}
+
+// GetTextOutput extracts and returns the text output from collected messages
+func (h *StdinHandler) GetTextOutput() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	var output strings.Builder
+	for _, msg := range h.messages {
+		switch m := msg.(type) {
+		case *claude.AssistantMessage:
+			// Extract text content from assistant message
+			for _, content := range m.Message.Content {
+				if content.Type == "text" && content.Text != "" {
+					output.WriteString(content.Text)
+				}
+			}
+		case *claude.StreamEventMessage:
+			// Extract text from stream events (content_delta)
+			if m.Event.Type == "content_delta" {
+				if delta, ok := m.Event.Delta.(string); ok {
+					output.WriteString(delta)
+				}
+			}
+		}
+	}
+	return output.String()
 }
 
 // OnApproval implements agentboot.ApprovalHandler
@@ -182,7 +221,7 @@ func (h *StdinHandler) handleAskUserQuestionApproval(ctx context.Context, req ag
 			}
 
 			// Try to parse as number
-			var selectedIndex int = -1
+			var selectedIndex = -1
 			var selectedLabel string
 
 			// Try numeric parsing
@@ -406,7 +445,7 @@ func (h *StdinHandler) handleAskUserQuestion(ctx context.Context, req agentboot.
 			}
 
 			// Try to parse as number
-			var selectedIndex int = -1
+			var selectedIndex = -1
 			var selectedLabel string
 
 			// Try numeric parsing
@@ -468,8 +507,17 @@ func (h *StdinHandler) OnError(err error) {
 
 // OnMessage implements agentboot.MessageStreamer - collects messages for output
 func (h *StdinHandler) OnMessage(msg interface{}) error {
-	// For this simple example, we don't need to process messages here
-	// The Launcher will collect results via ExecuteWithTimeout
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.Debug {
+		fmt.Printf("[DEBUG] OnMessage: received message type=%T\n", msg)
+	}
+	if m, ok := msg.(claude.Message); ok {
+		h.messages = append(h.messages, m)
+		if h.Debug {
+			fmt.Printf("[DEBUG] OnMessage: appended message, total=%d\n", len(h.messages))
+		}
+	}
 	return nil
 }
 
@@ -489,18 +537,18 @@ var _ agentboot.MessageHandler = (*StdinHandler)(nil)
 
 // Server handles Claude interaction with simplified input/output
 type Server struct {
-	launcher *claude.Launcher
-	handler  *StdinHandler
-	model    string
-	cwd      string
-	debug    bool
+	agent   *claude.Agent
+	handler *StdinHandler
+	model   string
+	cwd     string
+	debug   bool
 }
 
 // NewServer creates a new server instance
 func NewServer() *Server {
 	return &Server{
-		launcher: claude.NewLauncher(claude.Config{}),
-		handler:  NewStdinHandler(),
+		agent:   claude.NewAgentWithConfig(claude.DefaultConfig()),
+		handler: NewStdinHandler(),
 	}
 }
 
@@ -522,24 +570,43 @@ func (s *Server) SetDebug(debug bool) {
 
 // QueryAgent processes a single user query
 func (s *Server) QueryAgent(ctx context.Context, userPrompt string, continueConversation bool) (string, error) {
+	// Reset handler state before new execution
+	s.handler.Reset()
+
+	if s.handler.Debug {
+		fmt.Printf("[DEBUG] QueryAgent: starting query for %q\n", userPrompt)
+		defer fmt.Printf("[DEBUG] QueryAgent: returning\n")
+	}
+
 	// Build execution options
 	opts := agentboot.ExecutionOptions{
-		Handler:    s.handler,
-		Model:      s.model,
+		Handler:     s.handler,
+		Model:       s.model,
 		ProjectPath: s.cwd,
 	}
 
 	// Use stream-json format for proper message handling
 	opts.OutputFormat = agentboot.OutputFormatStreamJSON
 
-	// Execute using Launcher
-	result, err := s.launcher.Execute(ctx, userPrompt, opts)
+	if s.handler.Debug {
+		fmt.Printf("[DEBUG] QueryAgent: calling Execute\n")
+	}
+	// Execute using Agent
+	// Note: When Handler is provided, Execute returns (nil, error) - the handler collects results
+	_, err := s.agent.Execute(ctx, userPrompt, opts)
+	if s.handler.Debug {
+		fmt.Printf("[DEBUG] QueryAgent: Execute returned err=%v\n", err)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to execute: %w", err)
 	}
 
-	// Extract text output from result
-	return result.TextOutput(), nil
+	// Extract text output from handler's collected events
+	result := s.handler.GetTextOutput()
+	if s.handler.Debug {
+		fmt.Printf("[DEBUG] QueryAgent: got output length=%d\n", len(result))
+	}
+	return result, nil
 }
 
 // QueryResult represents the result of a query execution
@@ -551,7 +618,13 @@ type QueryResult struct {
 // QueryAgentAsync processes a query asynchronously
 func (s *Server) QueryAgentAsync(ctx context.Context, userPrompt string, continueConversation bool, resultChan chan<- QueryResult, interruptFunc context.CancelFunc) {
 	go func() {
+		if s.handler.Debug {
+			fmt.Printf("[DEBUG] QueryAgentAsync: starting goroutine\n")
+		}
 		response, err := s.QueryAgent(ctx, userPrompt, continueConversation)
+		if s.handler.Debug {
+			fmt.Printf("[DEBUG] QueryAgentAsync: got response length=%d, err=%v\n", len(response), err)
+		}
 		resultChan <- QueryResult{Response: response, Error: err}
 		interruptFunc()
 	}()

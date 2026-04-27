@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
 // AgentType defines the supported agent types
@@ -35,8 +37,8 @@ func (f OutputFormat) String() string {
 	return string(f)
 }
 
-// PermissionMode defines how permission requests are handled
-// Deprecated: Use ask.Mode instead
+// PermissionMode defines how permission requests are handled.
+// Use ask.Mode for the ask-subsystem-specific mode values.
 type PermissionMode string
 
 const (
@@ -48,15 +50,6 @@ const (
 // String returns the string representation of PermissionMode
 func (m PermissionMode) String() string {
 	return string(m)
-}
-
-// PermissionHandler is the interface for permission handling
-// This is defined here to avoid circular dependencies
-// Deprecated: Use ask.Handler instead
-type PermissionHandler interface {
-	CanUseTool(ctx context.Context, req PermissionRequest) (PermissionResult, error)
-	SetMode(scopeID string, mode PermissionMode) error
-	GetMode(scopeID string) (PermissionMode, error)
 }
 
 // MessageHandler is the primary interface for handling agent callbacks
@@ -380,13 +373,9 @@ type PermissionConfig struct {
 	DecisionDuration  time.Duration  `json:"decision_duration"`
 }
 
-// Event represents a generic agent event
-type Event struct {
-	Type      string                 `json:"type"`
-	Data      map[string]interface{} `json:"data"`
-	Timestamp time.Time              `json:"timestamp"`
-	Raw       string                 `json:"raw,omitempty"`
-}
+// Event represents a generic agent event.
+// Alias of common.Event — the two types are identical and interchangeable.
+type Event = common.Event
 
 // Agent is the interface for all agent types
 type Agent interface {

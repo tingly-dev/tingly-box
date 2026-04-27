@@ -183,6 +183,7 @@ func handleOpenAIToAnthropicBetaStream(
 					if state.thinkingBlockIndex == -1 {
 						state.thinkingBlockIndex = state.nextBlockIndex
 						state.nextBlockIndex++
+						state.thinkingBlocks[state.thinkingBlockIndex] = true
 						logrus.Debugf("[Thinking] Initializing thinking block at index %d", state.thinkingBlockIndex)
 						sendContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
 							"thinking": "",
@@ -214,6 +215,8 @@ func handleOpenAIToAnthropicBetaStream(
 		if delta.Refusal != "" {
 			// Refusal should be sent as content
 			if state.textBlockIndex == -1 {
+				// Close any open block (e.g. thinking) before opening text block
+				closeOpenBlock(c, state, flusher)
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
 				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
@@ -234,6 +237,8 @@ func handleOpenAIToAnthropicBetaStream(
 
 			// Initialize text block on first content
 			if state.textBlockIndex == -1 {
+				// Close any open block (e.g. thinking) before opening text block
+				closeOpenBlock(c, state, flusher)
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
 				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
@@ -241,29 +246,11 @@ func handleOpenAIToAnthropicBetaStream(
 				}, flusher)
 			}
 
-			// Parse delta raw JSON to get extra fields
-			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = FilterSpecialFields(currentExtras)
-
-			// Send content_block_delta with actual content
-			deltaMap := map[string]interface{}{
+			// Send content_block_delta with only text - no OpenAI fields merged in
+			sendContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Content,
-			}
-			deltaMap = mergeMaps(deltaMap, currentExtras)
-			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
-		} else if choice.FinishReason == "" && state.textBlockIndex != -1 {
-			// Send empty delta for empty chunks to keep client informed
-			// Only if text block has been initialized
-			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = FilterSpecialFields(currentExtras)
-
-			deltaMap := map[string]interface{}{
-				"type": deltaTypeTextDelta,
-				"text": "",
-			}
-			deltaMap = mergeMaps(deltaMap, currentExtras)
-			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
+			}, flusher)
 		}
 
 		// Handle tool_calls delta
@@ -278,8 +265,8 @@ func handleOpenAIToAnthropicBetaStream(
 					state.toolIndexToBlockIndex[openaiIndex] = anthropicIndex
 					state.nextBlockIndex++
 
-					// Truncate tool call ID to meet OpenAI's 40 character limit
-					truncatedID := truncateToolCallID(toolCall.ID)
+					// Rewrite OpenAI call_ prefix to Anthropic toolu_ prefix
+					truncatedID := rewriteToolCallIDForAnthropic(toolCall.ID)
 
 					// Initialize pending tool call
 					state.pendingToolCalls[anthropicIndex] = &pendingToolCall{
@@ -288,11 +275,15 @@ func handleOpenAIToAnthropicBetaStream(
 						emit: !(hooks != nil && hooks.ShouldSuppressTool != nil && hooks.ShouldSuppressTool(toolCall.Function.Name)),
 					}
 
+					// Close any open block (text/thinking) before opening tool_use block
+					closeOpenBlock(c, state, flusher)
+
 					// Send content_block_start for tool_use unless suppressed by MCP hook.
 					if state.pendingToolCalls[anthropicIndex].emit {
 						sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
-							"id":   truncatedID,
-							"name": toolCall.Function.Name,
+							"id":    truncatedID,
+							"name":  toolCall.Function.Name,
+							"input": map[string]interface{}{},
 						}, flusher)
 					}
 				}

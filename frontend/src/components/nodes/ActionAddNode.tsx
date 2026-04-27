@@ -13,8 +13,8 @@ import React from 'react';
 // ActionAddNode dimensions
 const ADD_PROVIDER_NODE_STYLES = {
     width: 100,
-    height: 90,
-    padding: 8,
+    height: 72,
+    padding: 5,
 } as const;
 
 const { node } = { node: ADD_PROVIDER_NODE_STYLES };
@@ -67,8 +67,8 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                 warning={warning}
                 onClick={active ? onAdd : undefined}
             >
-                <AddIcon sx={{ fontSize: 28, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ fontSize: '0.65rem' }}>
+                <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
+                <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ fontSize: '0.6rem', lineHeight: 1.1 }}>
                     Add
                 </Typography>
             </StyledAddProviderNode>

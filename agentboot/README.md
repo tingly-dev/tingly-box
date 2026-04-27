@@ -37,11 +37,14 @@ import (
 
 func main() {
     // Create AgentBoot instance
-    ab := agentboot.New(agentboot.Config{
+    ab, err := agentboot.New(agentboot.Config{
         DefaultAgent:     agentboot.AgentTypeClaude,
         DefaultFormat:    agentboot.OutputFormatStreamJSON,
         EnableStreamJSON: true,
     })
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Register Claude agent (or use agents that have auto-registered via init())
     claudeAgent := claude.NewAgent(ab.GetConfig())

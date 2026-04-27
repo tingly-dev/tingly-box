@@ -18,7 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-//go:embed provider_templates.json
+//go:embed providers.json
 var embeddedTemplatesJSON []byte
 
 const DefaultTemplateHTTPTimeout = 30 * time.Second // Default HTTP timeout for fetching templates
@@ -27,9 +27,30 @@ const DefaultTemplateCacheTTL = 12 * time.Hour // Default TTL for template cache
 
 const TemplateCacheFileName = "provider_template.json"
 
-const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/data/provider_templates.json"
+const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/data/providers.json"
 
-// CapabilitySchema defines the structure for capability schemas like web_search
+// ModelInfo represents detailed information about a model
+type ModelInfo struct {
+	ID        string `json:"id"`
+	Context   int    `json:"context,omitempty"`
+	MaxOutput int    `json:"max_output,omitempty"`
+}
+
+// NamingRules defines the naming conventions for provider IDs
+type NamingRules struct {
+	KeyFormat      string `json:"key_format"`
+	SlugRule1      string `json:"slug_rule_1,omitempty"`
+	SlugRule2      string `json:"slug_rule_2,omitempty"`
+	SlugRule3      string `json:"slug_rule_3,omitempty"`
+	Variant        string `json:"variant,omitempty"`
+	RequiredFields struct {
+		CanonicalDomain string `json:"canonical_domain"`
+		VendorFamily    string `json:"vendor_family"`
+		Region          string `json:"region"`
+		Plan            string `json:"plan"`
+		ModelsSchema    string `json:"models_schema"`
+	} `json:"required_fields"`
+}
 type CapabilitySchema struct {
 	BuiltIn      bool         `json:"built_in"`
 	ToolType     string       `json:"tool_type,omitempty"`
@@ -47,28 +68,43 @@ type ResultFormat struct {
 
 // ProviderTemplate represents a predefined provider configuration template
 type ProviderTemplate struct {
-	ID                     string            `json:"id"`
-	Name                   string            `json:"name"`
-	Alias                  string            `json:"alias,omitempty"` // Display name with locale information
-	Status                 string            `json:"status"`          // "active", "deprecated", etc.
-	Valid                  bool              `json:"valid"`
-	Website                string            `json:"website"`
-	Description            string            `json:"description"`
-	Type                   string            `json:"type"` // "official", "reseller", etc.
-	APIDoc                 string            `json:"api_doc"`
-	ModelDoc               string            `json:"model_doc"`
-	PricingDoc             string            `json:"pricing_doc"`
-	BaseURLOpenAI          string            `json:"base_url_openai,omitempty"`
-	BaseURLAnthropic       string            `json:"base_url_anthropic,omitempty"`
-	Models                 []string          `json:"models"`                 // List of model IDs
-	ModelLimits            map[string]int    `json:"model_limits,omitempty"` // Model name -> max_tokens mapping
-	SupportsModelsEndpoint bool              `json:"supports_models_endpoint"`
-	Tags                   []string          `json:"tags,omitempty"`
-	Metadata               map[string]string `json:"metadata,omitempty"`
-	OAuthProvider          string            `json:"oauth_provider,omitempty"`    // OAuth provider type for oauth type providers
-	AuthType               string            `json:"auth_type,omitempty"`         // "oauth", "key"
-	WebSearchSchema        string            `json:"web_search_schema,omitempty"` // Reference to capability schema for web_search
-	Icon                   string            `json:"icon,omitempty"`              // Icon identifier (e.g., "openai", "anthropic") for Lobe Icons
+	// Core identification
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Alias   string `json:"alias,omitempty"` // Display name with locale information
+	Status  string `json:"status"`          // "active", "deprecated", etc.
+	Valid   bool   `json:"valid"`
+	Website string `json:"website"`
+
+	// NEW: Structured metadata (Schema V2)
+	CanonicalDomain string `json:"canonical_domain"` // API host (e.g., "api.anthropic.com")
+	VendorFamily    string `json:"vendor_family"`    // Vendor aggregation key (e.g., "anthropic", "alibaba")
+	Region          string `json:"region"`           // "cn" | "intl" | "global"
+	Plan            string `json:"plan"`             // "standard" | "coding" | "oauth"
+
+	Description string `json:"description"`
+
+	// Documentation
+	APIDoc     string `json:"api_doc"`
+	ModelDoc   string `json:"model_doc"`
+	PricingDoc string `json:"pricing_doc"`
+
+	// API endpoints
+	BaseURLOpenAI    string `json:"base_url_openai,omitempty"`
+	BaseURLAnthropic string `json:"base_url_anthropic,omitempty"`
+
+	// CHANGED: Models now include context/max_output directly (Schema V2)
+	Models []ModelInfo `json:"models"`
+
+	SupportsModelsEndpoint bool `json:"supports_models_endpoint"`
+
+	// Authentication
+	AuthType      string `json:"auth_type,omitempty"`      // "oauth", "key"
+	OAuthProvider string `json:"oauth_provider,omitempty"` // OAuth provider type for oauth type providers
+
+	// Capabilities
+	WebSearchSchema string `json:"web_search_schema,omitempty"` // Reference to capability schema for web_search
+	Icon            string `json:"icon,omitempty"`              // Icon identifier (e.g., "openai", "anthropic") for Lobe Icons
 
 	// Capacity configuration for TacticCapacityBased load balancing
 	// TotalCapacity is the total seat count for this provider (shared across all models)
@@ -82,6 +118,8 @@ type ProviderTemplate struct {
 
 // ProviderTemplateRegistry represents the provider template registry structure from GitHub
 type ProviderTemplateRegistry struct {
+	SchemaVersion     int                          `json:"_schema_version"`
+	NamingRules       *NamingRules                 `json:"_naming_rules,omitempty"`
 	Providers         map[string]*ProviderTemplate `json:"providers"`
 	CapabilitySchemas map[string]*CapabilitySchema `json:"capability_schemas,omitempty"`
 	Version           string                       `json:"version"`
@@ -499,8 +537,8 @@ func ValidateTemplate(tmpl *ProviderTemplate) error {
 }
 
 // findTemplateByProvider finds a matching template for the given provider.
-// For OAuth providers, it matches by OAuthDetail.APIStyle against template.OAuthProvider.
-// For API key providers, it matches by APIBase against template base URLs based on APIStyle.
+// For OAuth providers, it matches by OAuthDetail.ProviderType against template.OAuthProvider.
+// For API key providers, it matches by APIBase against template canonical_domain or base URLs based on APIStyle.
 func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *ProviderTemplate {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
@@ -521,7 +559,14 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 		return nil
 	}
 
-	// Determine which base URL field to match based on APIStyle
+	// NEW: Try matching by canonical_domain first (Schema V2)
+	if result := tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
+		return tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain)
+	}); result != nil {
+		return result
+	}
+
+	// Fallback: Determine which base URL field to match based on APIStyle
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
 		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
@@ -557,32 +602,18 @@ func (tm *TemplateManager) searchTemplates(matcher func(*ProviderTemplate) bool)
 func deepCopyTemplate(tmpl *ProviderTemplate) *ProviderTemplate {
 	result := *tmpl
 
-	// Copy models slice
+	// Copy models slice (NEW: ModelInfo array)
 	if tmpl.Models != nil {
-		result.Models = make([]string, len(tmpl.Models))
+		result.Models = make([]ModelInfo, len(tmpl.Models))
 		copy(result.Models, tmpl.Models)
 	}
 
-	// Copy model limits map
-	if tmpl.ModelLimits != nil {
-		result.ModelLimits = make(map[string]int, len(tmpl.ModelLimits))
-		for k, v := range tmpl.ModelLimits {
-			result.ModelLimits[k] = v
+	// Copy model capacities map
+	if tmpl.ModelCapacities != nil {
+		result.ModelCapacities = make(map[string]int, len(tmpl.ModelCapacities))
+		for k, v := range tmpl.ModelCapacities {
+			result.ModelCapacities[k] = v
 		}
-	}
-
-	// Copy metadata map
-	if tmpl.Metadata != nil {
-		result.Metadata = make(map[string]string, len(tmpl.Metadata))
-		for k, v := range tmpl.Metadata {
-			result.Metadata[k] = v
-		}
-	}
-
-	// Copy tags slice
-	if tmpl.Tags != nil {
-		result.Tags = make([]string, len(tmpl.Tags))
-		copy(result.Tags, tmpl.Tags)
 	}
 
 	return &result
@@ -620,9 +651,13 @@ func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]strin
 	source := tm.source
 	tm.mu.RUnlock()
 
-	// Return models from template
+	// NEW: Extract model IDs from ModelInfo array
 	if len(tmpl.Models) > 0 {
-		return tmpl.Models, source, nil
+		modelIDs := make([]string, len(tmpl.Models))
+		for i, m := range tmpl.Models {
+			modelIDs[i] = m.ID
+		}
+		return modelIDs, source, nil
 	}
 
 	return nil, TemplateSourceLocal, fmt.Errorf("no models found for provider with api_base '%s'", provider.APIBase)
@@ -632,21 +667,25 @@ func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]strin
 // using the provider templates. If templates are not available, falls back to
 // the global default.
 // It checks in order:
-// 1. Exact match of provider:model in templates
-// 2. Model wildcard match (provider:*) in templates
+// 1. Exact match in Models array (ModelInfo.MaxOutput)
+// 2. ModelCapacities override (for capacity-based limits)
 // 3. Global default
 func (tm *TemplateManager) GetMaxTokensForModel(provider, model string) int {
 	// Try templates first if available
 	if tm != nil {
 		tmpl, _ := tm.GetTemplate(provider)
-		if tmpl != nil && tmpl.ModelLimits != nil {
-			// Check exact model match
-			if maxTokens, ok := tmpl.ModelLimits[model]; ok {
-				return maxTokens
+		if tmpl != nil {
+			// NEW: Check Models array for MaxOutput
+			for _, m := range tmpl.Models {
+				if m.ID == model && m.MaxOutput > 0 {
+					return m.MaxOutput
+				}
 			}
-			// Check provider wildcard (provider:*)
-			if maxTokens, ok := tmpl.ModelLimits[provider+":*"]; ok {
-				return maxTokens
+			// Fallback to ModelCapacities (for capacity-based limits)
+			if tmpl.ModelCapacities != nil {
+				if maxTokens, ok := tmpl.ModelCapacities[model]; ok {
+					return maxTokens
+				}
 			}
 		}
 	}
@@ -665,10 +704,18 @@ func (tm *TemplateManager) GetMaxTokensForModelByProvider(provider *typ.Provider
 
 	// Find matching template
 	tmpl := tm.findTemplateByProvider(provider)
-	if tmpl != nil && tmpl.ModelLimits != nil {
-		// Check exact model match
-		if maxTokens, ok := tmpl.ModelLimits[model]; ok {
-			return maxTokens
+	if tmpl != nil {
+		// NEW: Check Models array for MaxOutput
+		for _, m := range tmpl.Models {
+			if m.ID == model && m.MaxOutput > 0 {
+				return m.MaxOutput
+			}
+		}
+		// Fallback to ModelCapacities (for capacity-based limits)
+		if tmpl.ModelCapacities != nil {
+			if maxTokens, ok := tmpl.ModelCapacities[model]; ok {
+				return maxTokens
+			}
 		}
 	}
 

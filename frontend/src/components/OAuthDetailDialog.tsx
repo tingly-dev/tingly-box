@@ -297,6 +297,37 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                             </Box>
                         </Stack>
 
+                        {/* Extra Fields */}
+                        {provider.oauth_detail && (
+                            <Stack spacing={1.5}>
+                                <Alert severity="info" icon={<Info fontSize="small" />}>
+                                    <Typography variant="caption" display="block">
+                                        <strong>Extra Fields</strong>
+                                    </Typography>
+                                </Alert>
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    multiline
+                                    rows={4}
+                                    label="OAuth Extra Data"
+                                    value={JSON.stringify(provider.oauth_detail, null, 2)}
+                                    disabled
+                                    slotProps={{
+                                        input: {
+                                            sx: {
+                                                fontFamily: 'monospace',
+                                                fontSize: '0.75rem',
+                                                '&.Mui-disabled': {
+                                                    color: 'text.primary',
+                                                },
+                                            },
+                                        },
+                                    }}
+                                />
+                            </Stack>
+                        )}
+
                         {/* Submit Error */}
                         {submitError && (
                             <Alert severity="error" onClose={() => setSubmitError(null)}>

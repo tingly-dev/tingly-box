@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -42,6 +43,36 @@ func (f *CodexFetcher) Validate(provider *typ.Provider) error {
 
 // ── API response ───────────────────────────────────────
 
+// codexBalance is a flexible balance type that can be unmarshaled from
+// either a string ("150.00") or a number (150.0).
+type codexBalance float64
+
+// UnmarshalJSON implements json.Unmarshaler for codexBalance.
+// It handles both string and number formats from the API.
+func (b *codexBalance) UnmarshalJSON(data []byte) error {
+	// Try string first
+	if len(data) > 2 && data[0] == '"' && data[len(data)-1] == '"' {
+		str := string(data[1 : len(data)-1])
+		if str == "" {
+			*b = 0
+			return nil
+		}
+		f, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return fmt.Errorf("parse balance string %q: %w", str, err)
+		}
+		*b = codexBalance(f)
+		return nil
+	}
+	// Try number
+	var f float64
+	if err := json.Unmarshal(data, &f); err != nil {
+		return err
+	}
+	*b = codexBalance(f)
+	return nil
+}
+
 // codexUsageResponse from GET /backend-api/wham/usage
 type codexUsageResponse struct {
 	PlanType  string `json:"plan_type"` // guest, free, go, plus, pro, team, business, enterprise
@@ -49,17 +80,45 @@ type codexUsageResponse struct {
 		PrimaryWindow   *codexWindow `json:"primary_window"`
 		SecondaryWindow *codexWindow `json:"secondary_window"`
 	} `json:"rate_limit"`
-	Credits *struct {
-		HasCredits bool    `json:"has_credits"`
-		Unlimited  bool    `json:"unlimited"`
-		Balance    float64 `json:"balance"`
+	CodeReviewRateLimit  *codexRateLimit            `json:"code_review_rate_limit"`
+	AdditionalRateLimits []codexAdditionalRateLimit `json:"additional_rate_limits"`
+	Credits              *struct {
+		HasCredits          bool     `json:"has_credits"`
+		Unlimited           bool     `json:"unlimited"`
+		OverageLimitReached bool     `json:"overage_limit_reached"`
+		Balance             *codexBalance `json:"balance"`
+		ApproxLocalMessages []int    `json:"approx_local_messages"`
+		ApproxCloudMessages []int    `json:"approx_cloud_messages"`
 	} `json:"credits"`
+	SpendControl *struct {
+		Reached bool `json:"reached"`
+	} `json:"spend_control"`
+	RateLimitReachedType *string     `json:"rate_limit_reached_type"`
+	Promo                interface{} `json:"promo"`
+	ReferralBeacon       interface{} `json:"referral_beacon"`
+	Email                string      `json:"email"`
+	UserID               string      `json:"user_id"`
+	AccountID            string      `json:"account_id"`
 }
 
 type codexWindow struct {
 	UsedPercent        int   `json:"used_percent"`
 	ResetAt            int64 `json:"reset_at"`             // unix epoch
 	LimitWindowSeconds int   `json:"limit_window_seconds"` // window duration in seconds
+	ResetAfterSeconds  int   `json:"reset_after_seconds"`
+}
+
+type codexRateLimit struct {
+	Allowed         bool         `json:"allowed"`
+	LimitReached    bool         `json:"limit_reached"`
+	PrimaryWindow   *codexWindow `json:"primary_window"`
+	SecondaryWindow *codexWindow `json:"secondary_window"`
+}
+
+type codexAdditionalRateLimit struct {
+	LimitName      string         `json:"limit_name"`
+	MeteredFeature string         `json:"metered_feature"`
+	RateLimit      codexRateLimit `json:"rate_limit"`
 }
 
 // ── Fetch ──────────────────────────────────────────────
@@ -157,13 +216,69 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quot
 		}
 	}
 
-	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited {
+	// Handle additional_rate_limits (model-specific quotas like GPT-5.3-Codex-Spark)
+	var extraWindows []*quota.UsageWindow
+	for _, arl := range apiResp.AdditionalRateLimits {
+		if arl.RateLimit.PrimaryWindow != nil {
+			w := arl.RateLimit.PrimaryWindow
+			resetsAt := time.Unix(w.ResetAt, 0)
+			label := arl.LimitName
+			if label == "" {
+				label = arl.MeteredFeature
+			}
+			extraWindows = append(extraWindows, &quota.UsageWindow{
+				Type:          quota.WindowTypeModel,
+				UsedPercent:   float64(w.UsedPercent),
+				Unit:          quota.UsageUnitPercent,
+				ResetsAt:      &resetsAt,
+				WindowMinutes: w.LimitWindowSeconds / 60,
+				Label:         label,
+				Description:   fmt.Sprintf("%s: %.0f%% used", label, float64(w.UsedPercent)),
+				Allowed:       &arl.RateLimit.Allowed,
+				LimitReached:  &arl.RateLimit.LimitReached,
+			})
+		}
+	}
+
+	// Handle code_review_rate_limit if present
+	if apiResp.CodeReviewRateLimit != nil && apiResp.CodeReviewRateLimit.PrimaryWindow != nil {
+		w := apiResp.CodeReviewRateLimit.PrimaryWindow
+		resetsAt := time.Unix(w.ResetAt, 0)
+		codeReviewWindow := &quota.UsageWindow{
+			Type:          quota.WindowTypeCodeReview,
+			UsedPercent:   float64(w.UsedPercent),
+			Unit:          quota.UsageUnitPercent,
+			ResetsAt:      &resetsAt,
+			WindowMinutes: w.LimitWindowSeconds / 60,
+			Label:         "Code Review",
+			Description:   fmt.Sprintf("Code Review: %.0f%% used", float64(w.UsedPercent)),
+			Allowed:       &apiResp.CodeReviewRateLimit.Allowed,
+			LimitReached:  &apiResp.CodeReviewRateLimit.LimitReached,
+		}
+		// Add to extra windows
+		extraWindows = append(extraWindows, codeReviewWindow)
+	}
+
+	if len(extraWindows) > 0 {
+		usage.ExtraWindows = extraWindows
+	}
+
+	// Handle credits (balance is now a pointer)
+	if apiResp.Credits != nil && apiResp.Credits.HasCredits && !apiResp.Credits.Unlimited && apiResp.Credits.Balance != nil {
 		usage.Cost = &quota.UsageCost{
 			Used:         0, // API doesn't report used amount directly
-			Limit:        apiResp.Credits.Balance,
+			Limit:        float64(*apiResp.Credits.Balance),
 			CurrencyCode: "USD",
 			Label:        "Credits Balance",
 		}
+	}
+
+	// Add spend control status to account info
+	if apiResp.SpendControl != nil {
+		if usage.Account == nil {
+			usage.Account = &quota.UsageAccount{}
+		}
+		usage.Account.SpendControlReached = apiResp.SpendControl.Reached
 	}
 
 	return usage, nil

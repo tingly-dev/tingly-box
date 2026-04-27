@@ -66,6 +66,7 @@ export const useScenarioPageInternal = (scenario: string) => {
 
     // Load rules for the specified scenario
     useEffect(() => {
+        if (!scenario.trim()) return;
         ruleManagement.loadRules(scenario);
     }, [scenario, ruleManagement.loadRules]);
 

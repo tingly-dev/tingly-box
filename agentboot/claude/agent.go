@@ -6,56 +6,65 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
-// Agent implements the agentboot.Agent interface for Claude Code
+// Agent implements the agentboot.Agent interface for Claude Code.
+// Internally it uses Driver (process setup) + Transport (protocol) + agentboot.Runner (execution).
 type Agent struct {
-	launcher *Launcher
+	runner    *agentboot.Runner
+	driver    *Driver
+	transport *Transport
 }
 
-// NewAgent creates a new Claude agent
+// NewAgent creates a new Claude agent.
 func NewAgent(config agentboot.Config) *Agent {
-	launcherConfig := Config{
+	claudeConfig := Config{
 		EnableStreamJSON:        config.EnableStreamJSON,
 		StreamBufferSize:        config.StreamBufferSize,
 		DefaultExecutionTimeout: config.DefaultExecutionTimeout,
 	}
+	return NewAgentWithConfig(claudeConfig)
+}
 
+// NewAgentWithConfig creates a Claude agent with full Claude-specific config.
+func NewAgentWithConfig(config Config) *Agent {
+	driver := NewDriver(config)
+	transport := NewTransport()
+	runner := agentboot.NewRunner(driver, transport)
 	return &Agent{
-		launcher: NewLauncher(launcherConfig),
+		runner:    runner,
+		driver:    driver,
+		transport: transport,
 	}
 }
 
-
-// Execute runs the Claude agent
+// Execute runs the Claude agent.
 func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*agentboot.Result, error) {
-	return a.launcher.Execute(ctx, prompt, opts)
+	// Inject per-execution routing context into the transport before running.
+	a.transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
+	return a.runner.Execute(ctx, prompt, opts)
 }
 
-// IsAvailable checks if Claude Code is available
-func (a *Agent) IsAvailable() bool {
-	return a.launcher.IsAvailable()
-}
+// IsAvailable checks if Claude Code is available.
+func (a *Agent) IsAvailable() bool { return a.driver.IsAvailable() }
 
-// Type returns the agent type
-func (a *Agent) Type() agentboot.AgentType {
-	return agentboot.AgentTypeClaude
-}
+// Type returns the agent type.
+func (a *Agent) Type() agentboot.AgentType { return agentboot.AgentTypeClaude }
 
-// SetDefaultFormat sets the default output format
+// SetDefaultFormat sets the default output format.
 func (a *Agent) SetDefaultFormat(format agentboot.OutputFormat) {
-	a.launcher.SetDefaultFormat(format)
+	a.runner.SetDefaultFormat(format)
 }
 
-// GetDefaultFormat returns the current default format
+// GetDefaultFormat returns the current default format.
 func (a *Agent) GetDefaultFormat() agentboot.OutputFormat {
-	return a.launcher.GetDefaultFormat()
+	return a.runner.GetDefaultFormat()
 }
 
-// SetSkipPermissions enables or disables skip permissions mode
+// SetSkipPermissions enables or disables skip permissions mode.
 func (a *Agent) SetSkipPermissions(enabled bool) {
-	a.launcher.SetSkipPermissions(enabled)
+	a.driver.SetSkipPermissions(enabled)
 }
 
-// SetCLIPath sets an explicit CLI path
+// SetCLIPath sets an explicit CLI path.
 func (a *Agent) SetCLIPath(path string) {
-	a.launcher.SetCLIPath(path)
+	a.driver.SetCLIPath(path)
 }

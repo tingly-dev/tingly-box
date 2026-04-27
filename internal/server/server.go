@@ -876,6 +876,28 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		return fmt.Errorf("callback server already exists for session %s", sessionID)
 	}
 
+	// Providers with fixed callback ports (for example Codex/OpenAI on 1455)
+	// can only have one active browser flow at a time. If a previous attempt
+	// is still waiting or failed before cleanup, replace it so retrying OAuth
+	// does not require waiting for the five minute timeout.
+	if port > 0 {
+		for existingSessionID, existingServer := range s.callbackServers {
+			if existingServer.GetPort() != port {
+				continue
+			}
+
+			_ = s.oauthManager.UpdateSessionStatus(existingSessionID, pkgoauth.SessionStatusFailed, "", "Superseded by a new OAuth authorization attempt")
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := existingServer.Stop(ctx); err != nil {
+				cancel()
+				return fmt.Errorf("failed to stop existing callback server on port %d: %w", port, err)
+			}
+			cancel()
+			delete(s.callbackServers, existingSessionID)
+			logrus.Debugf("[OAuth] Replaced existing dynamic callback server on port %d for session %s", port, existingSessionID)
+		}
+	}
+
 	// Create an http.HandlerFunc that properly handles the OAuth callback
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 		// Ignore favicon requests
@@ -892,6 +914,10 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		token, err := s.oauthManager.HandleCallback(r.Context(), r)
 		if err != nil {
 			logrus.Debugf("[OAuth] Callback error: %v", err)
+			if sessionID != "" {
+				_ = s.oauthManager.UpdateSessionStatus(sessionID, pkgoauth.SessionStatusFailed, "", err.Error())
+				s.stopDynamicCallbackServerAfterResponse(sessionID)
+			}
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "<html><body><h1>OAuth Error</h1><p>%s</p></body></html>", err.Error())
@@ -902,6 +928,14 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		providerUUID, err := s.oauthHandler.CreateProviderFromToken(token, token.Provider, "", token.SessionID)
 		if err != nil {
 			logrus.Debugf("[OAuth] Failed to create provider: %v", err)
+			failedSessionID := token.SessionID
+			if failedSessionID == "" {
+				failedSessionID = sessionID
+			}
+			if failedSessionID != "" {
+				_ = s.oauthManager.UpdateSessionStatus(failedSessionID, pkgoauth.SessionStatusFailed, "", err.Error())
+			}
+			s.stopDynamicCallbackServerAfterResponse(sessionID)
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "<html><body><h1>OAuth Error</h1><p>Failed to create provider: %v</p></body></html>", err)
@@ -916,10 +950,7 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		logrus.Debugf("[OAuth] Callback successful for provider %s, created provider %s", token.Provider, providerUUID)
 
 		// Stop the dynamic callback server after successful callback
-		go func() {
-			time.Sleep(1 * time.Second) // Give time for the response to be sent
-			s.stopDynamicCallbackServer(sessionID)
-		}()
+		s.stopDynamicCallbackServerAfterResponse(sessionID)
 
 		// Return success HTML page
 		w.Header().Set("Content-Type", "text/html")
@@ -964,6 +995,13 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 	}()
 
 	return nil
+}
+
+func (s *Server) stopDynamicCallbackServerAfterResponse(sessionID string) {
+	go func() {
+		time.Sleep(1 * time.Second) // Give time for the response to be sent
+		s.stopDynamicCallbackServer(sessionID)
+	}()
 }
 
 // stopDynamicCallbackServer stops and removes a dynamic callback server
@@ -1344,10 +1382,11 @@ func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID st
 	if strings.Contains(strings.ToLower(modelID), "codex") {
 		return string(db.EndpointTypeResponses)
 	}
-	// TODO: we use chat as default unless the model do not support chat, e.g. codex
-	// In the future, we can use adaptiveProbe := NewAdaptiveProbe(s)
-	// return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
-	return "chat"
+	if strings.Contains(strings.ToLower(provider.APIBase), "chatgpt.com") {
+		return string(db.EndpointTypeResponses)
+	}
+	adaptiveProbe := NewAdaptiveProbe(s)
+	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
 }
 
 // HealthMonitor returns the server's health monitor

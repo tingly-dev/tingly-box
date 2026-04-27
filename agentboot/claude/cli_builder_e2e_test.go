@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package claude
 
 import (
@@ -143,10 +146,6 @@ func TestControlManager(t *testing.T) {
 
 	// Test 4: Request timeout
 	t.Run("RequestTimeout", func(t *testing.T) {
-		reader, writer := io.Pipe()
-		defer reader.Close()
-		defer writer.Close()
-
 		manager.SetRequestTimeout(10 * time.Millisecond)
 
 		req := ControlRequest{
@@ -154,7 +153,8 @@ func TestControlManager(t *testing.T) {
 			Type:      "permission",
 		}
 
-		_, err := manager.SendRequest(ctx, req, writer)
+		// Use io.Discard so writeRequest doesn't block waiting for a reader
+		_, err := manager.SendRequest(ctx, req, io.Discard)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "timeout")
 	})
@@ -249,21 +249,14 @@ func TestParseVersion(t *testing.T) {
 		{"Standard version", "Claude CLI v1.0.0", "1.0.0"},
 		{"No prefix", "1.2.3", "1.2.3"},
 		{"With extra text", "Claude Code CLI version 2.0.0-beta", "2.0.0-beta"},
-		{"Multi-word", "Claude CLI 1.5.0\nSome other text", "Claude"},
+		{"Multi-word", "Claude CLI 1.5.0\nSome other text", "1.5.0"},
 		{"Just version number", "3.0.0", "3.0.0"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parseVersion(tt.input)
-			// For the multi-word case, we expect the first word
-			if tt.name == "Multi-word" {
-				assert.Equal(t, "Claude", result)
-			} else if tt.name == "With extra text" {
-				assert.Equal(t, "2.0.0-beta", result)
-			} else {
-				assert.Equal(t, tt.expected, result)
-			}
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -416,10 +409,11 @@ func TestGenerateRequestID(t *testing.T) {
 	assert.NotEmpty(t, id1)
 	assert.NotEmpty(t, id2)
 	assert.NotEqual(t, id1, id2)
-	assert.True(t, strings.HasPrefix(id1, "req_"))
+	// generateRequestID returns a UUID
+	assert.Len(t, id1, 36)
 }
 
-// TestLauncherWithNewConfig tests launcher with new config options
+// TestLauncherWithNewConfig tests launcher initialisation with config options
 func TestLauncherWithNewConfig(t *testing.T) {
 	config := Config{
 		Model:                "claude-sonnet-4-6",
@@ -431,20 +425,25 @@ func TestLauncherWithNewConfig(t *testing.T) {
 
 	launcher := NewLauncher(config)
 
-	// Get the config back
-	assert.Equal(t, "claude-sonnet-4-6", launcher.config.Model)
-	assert.True(t, launcher.config.ContinueConversation)
-	assert.Equal(t, PermissionModeAuto, launcher.config.PermissionMode)
-	assert.Equal(t, "You are a helpful assistant", launcher.config.CustomSystemPrompt)
-	assert.Equal(t, []string{"bash", "editor"}, launcher.config.AllowedTools)
-
-	// Test control manager and discovery are initialized
+	// Control manager and discovery should be reachable.
 	assert.NotNil(t, launcher.GetControlManager())
 	assert.NotNil(t, launcher.GetDiscovery())
+
+	// Driver should carry the config.
+	driver := launcher.driver
+	driver.mu.RLock()
+	driverConfig := driver.config
+	driver.mu.RUnlock()
+
+	assert.Equal(t, "claude-sonnet-4-6", driverConfig.Model)
+	assert.True(t, driverConfig.ContinueConversation)
+	assert.Equal(t, PermissionModeAuto, driverConfig.PermissionMode)
+	assert.Equal(t, "You are a helpful assistant", driverConfig.CustomSystemPrompt)
+	assert.Equal(t, []string{"bash", "editor"}, driverConfig.AllowedTools)
 }
 
-// TestLauncherWithConfig tests buildCommandArgs with new options
-func TestLauncherWithConfig(t *testing.T) {
+// TestDriverBuildArgs tests Driver.buildArgs with various options
+func TestDriverBuildArgs(t *testing.T) {
 	tests := []struct {
 		name           string
 		config         Config
@@ -473,7 +472,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
 			},
-			expectedSubstr: []string{"--custom-system-prompt", "Custom prompt"},
+			expectedSubstr: []string{"--system-prompt", "Custom prompt"},
 		},
 		{
 			name:   "Allowed tools",
@@ -481,7 +480,7 @@ func TestLauncherWithConfig(t *testing.T) {
 			opts: agentboot.ExecutionOptions{
 				OutputFormat: agentboot.OutputFormatStreamJSON,
 			},
-			expectedSubstr: []string{"--allowed-tools", "bash,editor"},
+			expectedSubstr: []string{"--allowedTools", "bash,editor"},
 		},
 		{
 			name:   "Resume session",
@@ -505,11 +504,14 @@ func TestLauncherWithConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			launcher := NewLauncher(tt.config)
-			args, err := launcher.buildCommandArgs(tt.opts.OutputFormat, "test prompt", tt.opts)
+			driver := NewDriver(tt.config)
+			format := tt.opts.OutputFormat
+			if format == "" {
+				format = agentboot.OutputFormatStreamJSON
+			}
+			args, err := driver.buildArgs(format, "test prompt", tt.opts, tt.config, false)
 			require.NoError(t, err)
 			argsStr := strings.Join(args, " ")
-
 			for _, substr := range tt.expectedSubstr {
 				assert.Contains(t, argsStr, substr)
 			}
@@ -517,27 +519,22 @@ func TestLauncherWithConfig(t *testing.T) {
 	}
 }
 
-// TestLauncherBuildMCPArgs tests MCP argument building
-func TestLauncherBuildMCPArgs(t *testing.T) {
-	launcher := NewLauncher(Config{})
-
-	servers := map[string]interface{}{
-		"filesystem": map[string]interface{}{
-			"command": "npx",
-			"args":    []string{"-y", "@modelcontextprotocol/server-filesystem", "/tmp"},
-		},
-		"brave-search": map[string]interface{}{
-			"apiKey": "test-key",
+// TestDriverBuildMCPArgs tests MCP argument building via BuildCommonArgs
+func TestDriverBuildMCPArgs(t *testing.T) {
+	config := Config{
+		MCPServers: map[string]interface{}{
+			"filesystem": map[string]interface{}{
+				"command": "npx",
+			},
+			"brave-search": map[string]interface{}{
+				"apiKey": "test-key",
+			},
 		},
 	}
 
-	args, err := launcher.buildMCPArgs(servers)
-	require.NoError(t, err)
-
-	// Check that we have MCP server arguments
-	assert.NotEmpty(t, args)
+	args := BuildCommonArgs(config, CommonOptions{})
 	argsStr := strings.Join(args, " ")
-	assert.Contains(t, argsStr, "--mcp-server")
+	assert.Contains(t, argsStr, "--mcp-config")
 	assert.Contains(t, argsStr, "filesystem")
 	assert.Contains(t, argsStr, "brave-search")
 }
@@ -548,47 +545,37 @@ func TestControlManagerConcurrent(t *testing.T) {
 	defer manager.Close()
 
 	ctx := context.Background()
-	reader, writer := io.Pipe()
-	defer reader.Close()
-	defer writer.Close()
 
-	// Track request IDs
-	requestIDs := make(chan string, 10)
+	// Use io.Discard so writes never block
+	writer := io.Discard
 
-	// Start response simulator
-	go func() {
-		for requestID := range requestIDs {
-			respData := map[string]interface{}{
-				"type":       "control_response",
-				"request_id": requestID,
-				"response": map[string]interface{}{
-					"subtype": "success",
-				},
-			}
-			// Feed the response into the manager
-			manager.HandleControlMessage(respData)
-		}
-	}()
-
-	// Send multiple concurrent requests
+	// Send multiple concurrent requests; each goroutine feeds its own response
+	// after registering with the manager (via a small delay to let SendRequest register).
 	errChan := make(chan error, 10)
 	for i := 0; i < 10; i++ {
-		go func(idx int) {
+		go func() {
 			req := ControlRequest{
 				RequestID: generateRequestID(),
 				Type:      "permission",
 			}
-			requestIDs <- req.RequestID
+			// Feed response asynchronously after a brief yield so SendRequest
+			// has time to register the pending channel before the response arrives.
+			go func(id string) {
+				time.Sleep(5 * time.Millisecond)
+				manager.HandleControlMessage(map[string]interface{}{
+					"type":       "control_response",
+					"request_id": id,
+					"response":   map[string]interface{}{"subtype": "success"},
+				})
+			}(req.RequestID)
 			_, err := manager.SendRequest(ctx, req, writer)
 			errChan <- err
-		}(i)
+		}()
 	}
 
-	// Collect errors
+	// All should succeed
 	for i := 0; i < 10; i++ {
-		// Some may timeout, some may succeed - we just want to ensure no deadlocks
-		<-errChan
+		err := <-errChan
+		assert.NoError(t, err)
 	}
-
-	close(requestIDs)
 }

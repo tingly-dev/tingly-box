@@ -312,7 +312,18 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 func (h *streamingMessageHandler) OnError(err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.sendMessage(fmt.Sprintf("[ERROR] %v", err))
+
+	errStr := err.Error()
+	var errMsg string
+
+	// Check for session ID conflict error and provide helpful message
+	if strings.Contains(errStr, "Session ID") && strings.Contains(errStr, "already in use") {
+		errMsg = fmt.Sprintf("⚠️ **Session ID Conflict**\n\nThe Claude CLI reported: %v\n\nThis usually means:\n• Another Claude Code process is using this session\n• The session file is locked\n\nTry using `/stop` to end the current session, then retry.", err)
+	} else {
+		errMsg = fmt.Sprintf("[ERROR] %v", err)
+	}
+
+	h.sendMessage(errMsg)
 }
 
 // GetOutput returns the accumulated output (for compatibility, returns empty as we stream immediately)

@@ -80,8 +80,8 @@ type Config struct {
 }
 
 // DefaultConfig returns a config with sensible defaults
-func DefaultConfig() *Config {
-	return &Config{
+func DefaultConfig() Config {
+	return Config{
 		EnableStreamJSON: true,
 		StreamBufferSize: 100,
 		Model:            "", // Empty means use Claude default
@@ -105,21 +105,6 @@ func (c *Config) WithResume(sessionID string) *Config {
 func (c *Config) WithContinue() *Config {
 	c.ContinueConversation = true
 	return c
-}
-
-// MapAskModeToPermissionMode maps the internal ask.Mode to Claude CLI permission mode
-// This is used when converting from bot handler's ask mode to Claude CLI permission mode
-func MapAskModeToPermissionMode(askMode string) PermissionMode {
-	switch askMode {
-	case "auto":
-		return PermissionModeAuto
-	case "manual":
-		return PermissionModeDefault // Manual ask mode maps to default (ask for permissions)
-	case "skip":
-		return PermissionModeBypassPermissions // Skip mode bypasses permissions
-	default:
-		return PermissionModeDefault
-	}
 }
 
 // IsValidPermissionMode checks if a permission mode is valid for Claude CLI

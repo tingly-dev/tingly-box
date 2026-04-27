@@ -203,6 +203,7 @@ func handleOpenAIToAnthropicStreamResponse(
 					if state.thinkingBlockIndex == -1 {
 						state.thinkingBlockIndex = state.nextBlockIndex
 						state.nextBlockIndex++
+						state.thinkingBlocks[state.thinkingBlockIndex] = true
 						sendContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
 							"thinking": "",
 						}, flusher)
@@ -231,6 +232,8 @@ func handleOpenAIToAnthropicStreamResponse(
 		if delta.Refusal != "" {
 			// Refusal should be sent as content
 			if state.textBlockIndex == -1 {
+				// Close any open block (e.g. thinking) before opening text block
+				closeOpenBlock(c, state, flusher)
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
 				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
@@ -251,6 +254,8 @@ func handleOpenAIToAnthropicStreamResponse(
 
 			// Initialize text block on first content
 			if state.textBlockIndex == -1 {
+				// Close any open block (e.g. thinking) before opening text block
+				closeOpenBlock(c, state, flusher)
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
 				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
@@ -258,29 +263,11 @@ func handleOpenAIToAnthropicStreamResponse(
 				}, flusher)
 			}
 
-			// Parse delta raw JSON to get extra fields
-			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = FilterSpecialFields(currentExtras)
-
-			// Send content_block_delta with actual content
-			deltaMap := map[string]interface{}{
+			// Send content_block_delta with only text - no OpenAI fields merged in
+			sendContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Content,
-			}
-			deltaMap = mergeMaps(deltaMap, currentExtras)
-			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
-		} else if choice.FinishReason == "" && state.textBlockIndex != -1 {
-			// Send empty delta for empty chunks to keep client informed
-			// Only if text block has been initialized
-			currentExtras := parseRawJSON(delta.RawJSON())
-			currentExtras = FilterSpecialFields(currentExtras)
-
-			deltaMap := map[string]interface{}{
-				"type": deltaTypeTextDelta,
-				"text": "",
-			}
-			deltaMap = mergeMaps(deltaMap, currentExtras)
-			sendContentBlockDelta(c, state.textBlockIndex, deltaMap, flusher)
+			}, flusher)
 		}
 
 		// Handle tool_calls delta
@@ -295,8 +282,8 @@ func handleOpenAIToAnthropicStreamResponse(
 					state.toolIndexToBlockIndex[openaiIndex] = anthropicIndex
 					state.nextBlockIndex++
 
-					// Truncate tool call ID to meet OpenAI's 40 character limit
-					truncatedID := truncateToolCallID(toolCall.ID)
+					// Rewrite OpenAI call_ prefix to Anthropic toolu_ prefix
+					truncatedID := rewriteToolCallIDForAnthropic(toolCall.ID)
 
 					// Initialize pending tool call
 					state.pendingToolCalls[anthropicIndex] = &pendingToolCall{
@@ -305,11 +292,15 @@ func handleOpenAIToAnthropicStreamResponse(
 						emit: !(hooks != nil && hooks.ShouldSuppressTool != nil && hooks.ShouldSuppressTool(toolCall.Function.Name)),
 					}
 
+					// Close any open block (text/thinking) before opening tool_use block
+					closeOpenBlock(c, state, flusher)
+
 					// Send content_block_start for tool_use unless suppressed by MCP hook.
 					if state.pendingToolCalls[anthropicIndex].emit {
 						sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
-							"id":   truncatedID,
-							"name": toolCall.Function.Name,
+							"id":    truncatedID,
+							"name":  toolCall.Function.Name,
+							"input": map[string]interface{}{},
 						}, flusher)
 					}
 				}
@@ -487,6 +478,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 		truncatedID string // truncated ID for OpenAI compatibility (sent to client)
 		name        string
 		arguments   string
+		completed   bool // true when content_block_stop has been sent
 	}
 	pendingToolCalls := make(map[string]*pendingToolCall) // key: itemID
 
@@ -565,6 +557,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			if state.thinkingBlockIndex == -1 {
 				state.thinkingBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
+				state.thinkingBlocks[state.thinkingBlockIndex] = true
 				logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
@@ -577,7 +570,12 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.reasoning_text.done":
 			logrus.Debugf("[Thinking][ResponsesAPI] Thinking block done at index %d", state.thinkingBlockIndex)
-			if state.thinkingBlockIndex != -1 {
+			if state.thinkingBlockIndex != -1 && !state.stoppedBlocks[state.thinkingBlockIndex] {
+				// Send signature_delta before stopping thinking block (Anthropic extended thinking requirement)
+				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
+					"type":      "signature_delta",
+					"signature": GenerateObfuscationString(),
+				}, flusher)
 				senders.SendContentBlockStop(state, state.thinkingBlockIndex, flusher)
 				state.thinkingBlockIndex = -1
 			}
@@ -589,6 +587,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				state.reasoningSummaryBlockIndex = state.nextBlockIndex
 				state.hasTextContent = true
 				state.nextBlockIndex++
+				state.thinkingBlocks[state.reasoningSummaryBlockIndex] = true
 				senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
 			senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
@@ -597,7 +596,12 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			}, flusher)
 
 		case "response.reasoning_summary_text.done":
-			if state.reasoningSummaryBlockIndex != -1 {
+			if state.reasoningSummaryBlockIndex != -1 && !state.stoppedBlocks[state.reasoningSummaryBlockIndex] {
+				// Send signature_delta before stopping thinking block (Anthropic extended thinking requirement)
+				senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
+					"type":      "signature_delta",
+					"signature": GenerateObfuscationString(),
+				}, flusher)
 				senders.SendContentBlockStop(state, state.reasoningSummaryBlockIndex, flusher)
 				state.reasoningSummaryBlockIndex = -1
 			}
@@ -630,6 +634,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				if state.thinkingBlockIndex == -1 {
 					state.thinkingBlockIndex = state.nextBlockIndex
 					state.nextBlockIndex++
+					state.thinkingBlocks[state.thinkingBlockIndex] = true
 					logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 					senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
@@ -673,8 +678,9 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				lastOutputItemType = "function_call"
 
 				senders.SendContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
-					"id":   truncatedID,
-					"name": toolName,
+					"id":    truncatedID,
+					"name":  toolName,
+					"input": map[string]interface{}{},
 				}, flusher)
 			default:
 				logrus.Warnf("missing process for stream chunk: %s, %s", itemAdded.Type, itemAdded.Item.Type)
@@ -697,7 +703,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					toolCall.name = argsDone.Name
 				}
 				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
-				delete(pendingToolCalls, argsDone.ItemID)
+				// Mark as completed but don't delete yet - we need this for response.completed check
+				toolCall.completed = true
 			}
 
 		case "response.custom_tool_call_input.delta":
@@ -714,7 +721,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			customDone := currentEvent.AsResponseCustomToolCallInputDone()
 			if toolCall, exists := pendingToolCalls[customDone.ItemID]; exists {
 				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
-				delete(pendingToolCalls, customDone.ItemID)
+				// Mark as completed but don't delete yet - we need this for response.completed check
+				toolCall.completed = true
 			}
 
 		case "response.mcp_call_arguments.delta":
@@ -731,7 +739,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			mcpDone := currentEvent.AsResponseMcpCallArgumentsDone()
 			if toolCall, exists := pendingToolCalls[mcpDone.ItemID]; exists {
 				senders.SendContentBlockStop(state, toolCall.blockIndex, flusher)
-				delete(pendingToolCalls, mcpDone.ItemID)
+				// Mark as completed but don't delete yet - we need this for response.completed check
+				toolCall.completed = true
 			}
 
 		case "response.output_item.done":
@@ -782,8 +791,9 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 					// Send content_block_start for this tool
 					senders.SendContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
-						"id":   truncatedID,
-						"name": toolName,
+						"id":    truncatedID,
+						"name":  toolName,
+						"input": map[string]interface{}{},
 					}, flusher)
 
 					// Send the arguments as content_block_delta
@@ -831,6 +841,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					state.reasoningSummaryBlockIndex = state.nextBlockIndex
 					state.hasTextContent = true
 					state.nextBlockIndex++
+					state.thinkingBlocks[state.reasoningSummaryBlockIndex] = true
 					// reasoning_summary should be converted to thinking block (per Claude Code spec)
 					senders.SendContentBlockStart(state.reasoningSummaryBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
@@ -843,7 +854,12 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			}
 
 		case "response.reasoning_summary_part.done":
-			if state.reasoningSummaryBlockIndex != -1 {
+			if state.reasoningSummaryBlockIndex != -1 && !state.stoppedBlocks[state.reasoningSummaryBlockIndex] {
+				// Send signature_delta before stopping thinking block (Anthropic extended thinking requirement)
+				senders.SendContentBlockDelta(state.reasoningSummaryBlockIndex, map[string]interface{}{
+					"type":      "signature_delta",
+					"signature": GenerateObfuscationString(),
+				}, flusher)
 				senders.SendContentBlockStop(state, state.reasoningSummaryBlockIndex, flusher)
 				state.reasoningSummaryBlockIndex = -1
 			}

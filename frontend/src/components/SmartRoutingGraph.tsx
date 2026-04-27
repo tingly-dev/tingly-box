@@ -50,9 +50,9 @@ const RULE_GRAPH_STYLES = {
     },
     graphContainer: {
         paddingX: 16,
-        paddingY: 10,
+        paddingY: 8,
         marginX: 16,
-        marginY: 8,
+        marginY: 6,
     },
     graph: {
         stackSpacing: 0,
@@ -146,7 +146,7 @@ const GraphRow = styled(Box)(({ theme }) => ({
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: graph.rowGap,
-    marginBottom: theme.spacing(1),
+    marginBottom: theme.spacing(0.5),
 }));
 
 const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
@@ -282,7 +282,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
 
             {/* Graph Content */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <CardContent sx={{ pt: 0, pb: 1 }}>
+                <CardContent sx={{ pt: 0, pb: 0.25, '&:last-child': { pb: 0.25 } }}>
                     <Stack spacing={graph.stackSpacing}>
                         {/* Graph Visualization */}
                         <Box sx={{ overflowX: 'auto' }}>

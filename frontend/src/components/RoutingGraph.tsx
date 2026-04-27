@@ -48,9 +48,9 @@ const RULE_GRAPH_STYLES = {
     // Graph container
     graphContainer: {
         paddingX: 16,  // spacing(2)
-        paddingY: 10,  // Reduced from 12
+        paddingY: 8,  // Reduced from 12
         marginX: 16,   // spacing(2)
-        marginY: 8,    // spacing(1)
+        marginY: 6,    // spacing(1)
     },
     // Graph content spacing
     graph: {
@@ -158,7 +158,7 @@ const GraphRow = styled(Box)(({ theme }) => ({
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: graph.rowGap,
-    marginBottom: theme.spacing(1),
+    marginBottom: theme.spacing(0.5),
 }));
 
 // Main RuleGraph Component
@@ -310,7 +310,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
 
             {/* Expanded Content - Graph View */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <CardContent sx={{ pt: 0, pb: 1 }}>
+                <CardContent sx={{ pt: 0, pb: 0.25, '&:last-child': { pb: 0.25 } }}>
                     <Stack spacing={graph.stackSpacing}>
                         {/* Graph Visualization */}
                         <Box sx={{ overflowX: 'auto' }}>

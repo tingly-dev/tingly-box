@@ -1,4 +1,4 @@
-import { Add, Upload, VpnKey } from '@mui/icons-material';
+import { Add, Upload, VpnKey, ListAlt } from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -9,8 +9,8 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
 import { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
@@ -376,6 +376,10 @@ const CredentialPage = () => {
         }
     };
 
+    const handleProviderFormChange = useCallback((field: keyof ProviderFormData, value: any) => {
+        setProviderFormData(prev => ({ ...prev, [field]: value }));
+    }, []);
+
     // Derived state
     const { apiKeyProviders, oauthProviders, credentialCounts } = useMemo(() => {
         const apiKeys = providers.filter((p: any) => p.auth_type !== 'oauth');
@@ -399,6 +403,16 @@ const CredentialPage = () => {
                 size="full"
                 rightAction={
                     <Stack direction="row" spacing={1}>
+                        <Button
+                            component={Link}
+                            to="/credentials/providers"
+                            variant="outlined"
+                            startIcon={<ListAlt />}
+                            size="small"
+                            sx={{ minWidth: 130 }}
+                        >
+                            Browse Providers
+                        </Button>
                         <Button
                             variant="outlined"
                             startIcon={<Upload />}
@@ -518,7 +532,7 @@ const CredentialPage = () => {
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
                 data={providerFormData}
-                onChange={(field, value) => setProviderFormData(prev => ({ ...prev, [field]: value }))}
+                onChange={handleProviderFormChange}
                 mode={apiKeyDialogMode}
             />
 

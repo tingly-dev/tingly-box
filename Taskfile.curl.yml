@@ -183,6 +183,34 @@ tasks:
               }]
         	}'
   
+  anthropic2deepseek-stream:
+    cmds:
+      - |
+        curl -X POST http://localhost:12580/tingly/anthropic/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+                "stream": true,
+               "max_tokens": 4096,
+        		"model": "tingly-deepseek",
+        		"tools": [{
+                  "name": "add_numbers",
+                  "description": "Add two numbers",
+                  "input_schema": {
+                      "type": "object",
+                      "properties": {
+                          "a": {"type": "number"},
+                          "b": {"type": "number"}
+                      },
+                      "required": ["a", "b"]
+                  }
+              }]
+        	}'
+  
   openai-responses-tool:
     cmds:
       - |
@@ -258,6 +286,38 @@ tasks:
           "stream": true
         }'
   
+  chat2responses-tool:
+    cmds:
+      - |
+        curl -X POST "http://localhost:12580/tingly/codex/chat/completions" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+          -d '{
+        		"messages": [{
+        			"role": "user",
+        			"content": "请帮我计算 3+5，并告诉我北京天气"
+        		}],
+        		"model": "tingly-codex",
+        		"stream": true,
+                "tools": [
+                    {
+                      "type": "function",
+                      "function": {
+                        "name": "add_numbers",
+                        "description": "Add two numbers",
+                        "parameters": {
+                          "type": "object",
+                          "properties": {
+                            "a": { "type": "number" },
+                            "b": { "type": "number" }
+                          },
+                          "required": ["a", "b"]
+                        }
+                      }
+                    }
+                  ]
+        	}'
+  
   codex-responses:
     cmds:
       - |
@@ -268,6 +328,33 @@ tasks:
           "model": "tingly-codex",
           "input": [{"role": "user", "content": "Hello!"}],
           "stream": true
+        }'
+        
+  anthropic2codex:
+    cmds:
+      - |
+        curl -v -X POST -k http://localhost:12580/tingly/anthropic/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "tingly-codex",
+          "messages": [{"role": "user", "content": "who are you"}],
+          "stream": true,
+          "max_tokens": 10000
+        }'
+        
+  codex-responses2:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/codex/v1/responses \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "stream": true,
+          "model": "tingly-codex",
+          "previous_response_id": "resp_05317e38712808d20169ec0e08f7648191a5014bffc2566dd7",
+          "input": [{"role": "user", "content": "what can you do?"}],
+          "store": true
         }'
   
   openai-stream:
@@ -433,7 +520,7 @@ tasks:
         		}],
         		"model": "tingly",
         		"stream": true,
-                  "tools": [
+                "tools": [
                     {
                       "type": "function",
                       "function": {

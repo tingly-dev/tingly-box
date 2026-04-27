@@ -1,4 +1,4 @@
-package events
+package common
 
 import (
 	"encoding/json"
@@ -45,11 +45,6 @@ func NewEventFromRaw(raw string) Event {
 	eventType := "unknown"
 	if t, ok := data["type"].(string); ok {
 		eventType = t
-	}
-
-	if data != nil && raw == "" {
-		bs, _ := json.Marshal(data)
-		raw = string(bs)
 	}
 
 	return Event{

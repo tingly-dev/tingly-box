@@ -356,7 +356,7 @@ func parseVersion(output string) string {
 	// Try to extract version number (e.g., "1.0.0" from "Claude CLI v1.0.0")
 	parts := strings.Fields(firstLine)
 	for _, part := range parts {
-		if strings.HasPrefix(part, "v") {
+		if strings.HasPrefix(part, "v") && len(part) > 1 && part[1] >= '0' && part[1] <= '9' {
 			return strings.TrimPrefix(part, "v")
 		}
 		// Check if it looks like a version (starts with digit)
@@ -517,17 +517,15 @@ func (r *StreamReader) ReadAll() ([]map[string]interface{}, error) {
 
 // StreamWriter writes line-delimited JSON to a writer
 type StreamWriter struct {
-	writer  io.Writer
-	encoder *json.Encoder
-	closed  bool
-	mu      sync.Mutex
+	writer io.Writer
+	closed bool
+	mu     sync.Mutex
 }
 
 // NewStreamWriter creates a new stream writer
 func NewStreamWriter(w io.Writer) *StreamWriter {
 	return &StreamWriter{
-		writer:  w,
-		encoder: json.NewEncoder(w),
+		writer: w,
 	}
 }
 

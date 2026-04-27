@@ -9,7 +9,10 @@ export interface ServiceProvider {
     valid: boolean;
     website: string;
     description: string;
-    type: string;
+    canonical_domain?: string; // API host (Schema V2)
+    vendor_family?: string;    // Vendor aggregation key (Schema V2)
+    region?: string;           // "cn" | "intl" | "global" (Schema V2)
+    plan?: string;             // "standard" | "coding" | "oauth" (Schema V2)
     api_doc: string;
     model_doc: string;
     pricing_doc: string;
@@ -155,6 +158,7 @@ export interface UniqueProvider {
     supportsAnthropic: boolean;
     baseUrlOpenAI?: string;
     baseUrlAnthropic?: string;
+    apiDoc?: string;
     icon?: string; // Icon identifier for Lobe Icons
 }
 
@@ -179,6 +183,7 @@ export function getAllUniqueProviders(): UniqueProvider[] {
             supportsAnthropic: !!sp.base_url_anthropic,
             baseUrlOpenAI: sp.base_url_openai,
             baseUrlAnthropic: sp.base_url_anthropic,
+            apiDoc: sp.api_doc,
             icon: sp.icon,
         });
     });

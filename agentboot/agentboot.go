@@ -1,9 +1,12 @@
 package agentboot
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
 // Config holds the AgentBoot configuration
@@ -13,6 +16,9 @@ type Config struct {
 	EnableStreamJSON        bool          `json:"enable_stream_json"`
 	StreamBufferSize        int           `json:"stream_buffer_size"`
 	DefaultExecutionTimeout time.Duration `json:"default_execution_timeout"`
+
+	// Session configuration
+	ClaudeProjectsDir string `json:"claude_projects_dir,omitempty"` // Path to Claude projects directory
 }
 
 // AgentBoot manages agent instances
@@ -20,10 +26,12 @@ type AgentBoot struct {
 	mu     sync.RWMutex
 	config Config
 	agents map[AgentType]Agent
+	store  common.SessionStore // nil if ClaudeProjectsDir not configured
 }
 
-// New creates a new AgentBoot instance
-func New(config Config) *AgentBoot {
+// New creates a new AgentBoot instance.
+// Returns an error only if ClaudeProjectsDir is set but cannot be initialized.
+func New(config Config) (*AgentBoot, error) {
 	if config.DefaultAgent == "" {
 		config.DefaultAgent = AgentTypeClaude
 	}
@@ -34,10 +42,20 @@ func New(config Config) *AgentBoot {
 		config.StreamBufferSize = 100
 	}
 
-	return &AgentBoot{
+	ab := &AgentBoot{
 		config: config,
 		agents: make(map[AgentType]Agent),
 	}
+
+	if config.ClaudeProjectsDir != "" {
+		store, err := NewClaudeStore(config.ClaudeProjectsDir)
+		if err != nil {
+			return nil, fmt.Errorf("initialize session store: %w", err)
+		}
+		ab.store = store
+	}
+
+	return ab, nil
 }
 
 // RegisterAgent registers a new agent type
@@ -103,4 +121,28 @@ func (ab *AgentBoot) ListAgents() []AgentType {
 		types = append(types, agentType)
 	}
 	return types
+}
+
+// ListRecentSessions returns recent sessions for a project
+func (ab *AgentBoot) ListRecentSessions(ctx context.Context, projectPath string, limit int) ([]common.SessionMetadata, error) {
+	if ab.store == nil {
+		return nil, fmt.Errorf("session store not configured: set ClaudeProjectsDir in Config")
+	}
+	return ab.store.GetRecentSessions(ctx, projectPath, limit)
+}
+
+// GetSessionSummary returns a summary of a session
+func (ab *AgentBoot) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*common.SessionSummary, error) {
+	if ab.store == nil {
+		return nil, fmt.Errorf("session store not configured: set ClaudeProjectsDir in Config")
+	}
+	return ab.store.GetSessionSummary(ctx, sessionID, firstN, lastM)
+}
+
+// ResumeSession creates ExecutionOptions to resume a session
+func (ab *AgentBoot) ResumeSession(sessionID string) ExecutionOptions {
+	return ExecutionOptions{
+		SessionID: sessionID,
+		Resume:    true,
+	}
 }

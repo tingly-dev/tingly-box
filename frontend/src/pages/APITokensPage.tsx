@@ -196,20 +196,6 @@ const APITokensPage = () => {
     return (
         <PageLayout loading={loading} notification={notification}>
             <Stack spacing={3}>
-                {/* Header */}
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h4" fontWeight="bold">
-                        Tingly Box Share Model Tokens
-                    </Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<IconPlus size={18} />}
-                        onClick={() => setCreateDialogOpen(true)}
-                    >
-                        Create Token
-                    </Button>
-                </Box>
-
                 {/* Info Alert */}
                 <Alert severity="info" icon={<IconInfoCircle size={20} />}>
                     <strong>Share Model Tokens</strong> let you distribute access to your Tingly Box models without sharing your credentials.
@@ -218,7 +204,20 @@ const APITokensPage = () => {
                 </Alert>
 
                 {/* Tokens Table */}
-                <UnifiedCard title="Tokens" size="full">
+                <UnifiedCard
+                    title="Tingly Box Share Model Tokens"
+                    subtitle="Manage API tokens for sharing model access with clients and environments."
+                    size="full"
+                    rightAction={
+                        <Button
+                            variant="contained"
+                            startIcon={<IconPlus size={18} />}
+                            onClick={() => setCreateDialogOpen(true)}
+                        >
+                            Create Token
+                        </Button>
+                    }
+                >
                     <TableContainer>
                         <Table>
                             <TableHead>

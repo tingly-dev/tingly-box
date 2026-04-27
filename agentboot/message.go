@@ -110,23 +110,12 @@ type InitMessage struct {
 
 // ToEvent converts InitMessage to Event
 func (m *InitMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type":     string(m.AgentType),
-			"session_id":     m.SessionID,
-			"max_iterations": m.MaxIterations,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
 func (m *InitMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // AssistantMessage represents an assistant response
@@ -171,10 +160,7 @@ func (m *AssistantMessage) ToEvent() Event {
 
 // GetRawData returns raw data
 func (m *AssistantMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // GetText returns the text content
@@ -205,28 +191,12 @@ type PermissionRequestMessage struct {
 
 // ToEvent converts PermissionRequestMessage to Event
 func (m *PermissionRequestMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type": string(m.AgentType),
-			"session_id": m.SessionID,
-			"request_id": m.RequestID,
-			"tool_name":  m.ToolName,
-			"input":      m.Input,
-			"reason":     m.Reason,
-			"step":       m.Step,
-			"total":      m.Total,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
 func (m *PermissionRequestMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // PermissionResultMessage represents the result of a permission request
@@ -240,26 +210,12 @@ type PermissionResultMessage struct {
 
 // ToEvent converts PermissionResultMessage to Event
 func (m *PermissionResultMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type": string(m.AgentType),
-			"session_id": m.SessionID,
-			"request_id": m.RequestID,
-			"approved":   m.Approved,
-			"reason":     m.Reason,
-			"remember":   m.Remember,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
 func (m *PermissionResultMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // ResultMessage represents the final result
@@ -276,29 +232,12 @@ type ResultMessage struct {
 
 // ToEvent converts ResultMessage to Event
 func (m *ResultMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type":     string(m.AgentType),
-			"session_id":     m.SessionID,
-			"status":         m.Status,
-			"message":        m.Message,
-			"cost_usd":       m.CostUSD,
-			"duration_ms":    m.Duration,
-			"steps_completed": m.Steps,
-			"is_error":       m.IsError,
-			"error":          m.ErrorMsg,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
 func (m *ResultMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // IsSuccess returns true if result is successful
@@ -314,23 +253,12 @@ type StreamDeltaMessage struct {
 
 // ToEvent converts StreamDeltaMessage to Event
 func (m *StreamDeltaMessage) ToEvent() Event {
-	return Event{
-		Type: m.Type,
-		Data: map[string]interface{}{
-			"agent_type": string(m.AgentType),
-			"session_id": m.SessionID,
-			"delta":      m.Delta,
-		},
-		Timestamp: m.Timestamp,
-	}
+	return Event{Type: m.Type, Data: marshalToMap(m), Timestamp: m.Timestamp}
 }
 
 // GetRawData returns raw data
 func (m *StreamDeltaMessage) GetRawData() map[string]interface{} {
-	data, _ := json.Marshal(m)
-	var result map[string]interface{}
-	_ = json.Unmarshal(data, &result)
-	return result
+	return marshalToMap(m)
 }
 
 // NewInitMessage creates a new init message
@@ -415,6 +343,14 @@ func NewStreamDeltaMessage(agentType AgentType, sessionID, delta string) *Stream
 		},
 		Delta: delta,
 	}
+}
+
+// marshalToMap serializes v to a map via JSON round-trip
+func marshalToMap(v any) map[string]interface{} {
+	data, _ := json.Marshal(v)
+	var result map[string]interface{}
+	_ = json.Unmarshal(data, &result)
+	return result
 }
 
 // MessageFromEvent converts an Event to an AgentMessage if possible

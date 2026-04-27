@@ -203,30 +203,6 @@ func TestTextFormatter_FormatStreamEventMessage(t *testing.T) {
 	}
 }
 
-func TestTextFormatter_SetTemplate(t *testing.T) {
-	formatter := NewTextFormatter()
-
-	// Set custom template
-	customTmpl := "[CUSTOM] {{if .SessionID}}{{.SessionID}}{{end}}"
-	err := formatter.SetTemplate(SDKSystemMessage, customTmpl)
-	if err != nil {
-		t.Fatalf("Failed to set template: %v", err)
-	}
-
-	msg := &SystemMessage{
-		Type:      SDKSystemMessage,
-		SessionID: "custom-test-123",
-	}
-
-	output := formatter.Format(msg)
-	if !contains(output, "[CUSTOM]") {
-		t.Errorf("Expected [CUSTOM] in output: %s", output)
-	}
-	if !contains(output, "custom-test-123") {
-		t.Errorf("Expected session ID in output: %s", output)
-	}
-}
-
 func TestTextFormatter_VerboseMode(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetVerbose(true)
@@ -315,9 +291,9 @@ func TestTextFormatter_EmptyFieldsNoOutput(t *testing.T) {
 	}
 
 	output := formatter.Format(msg)
-	// Should only contain [ASSISTANT], no content from empty text
-	if !contains(output, "[ASSISTANT]") {
-		t.Errorf("Expected [ASSISTANT] in output: %s", output)
+	// Empty content means no output at all (filtered intentionally)
+	if output != "" {
+		t.Errorf("Expected empty output for empty content, got: %q", output)
 	}
 }
 
@@ -523,7 +499,7 @@ func TestTextFormatter_RealWorldAssistantMessageWithExtraFields(t *testing.T) {
 	formatter.SetShowToolDetails(true)
 
 	// Read test data from file
-	data, err := os.ReadFile("testcase/assistant.json")
+	data, err := os.ReadFile("ref/assistant.json")
 	if err != nil {
 		t.Fatalf("Failed to read test data file: %v", err)
 	}

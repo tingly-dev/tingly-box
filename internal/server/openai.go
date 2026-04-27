@@ -230,8 +230,11 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		if s.GetPreferredEndpointForModel(provider, actualModel) == "responses" {
+		prefer := s.GetPreferredEndpointForModel(provider, actualModel)
+		if prefer == "responses" {
 			target = protocol.TypeOpenAIResponses
+		} else {
+			target = protocol.TypeOpenAIChat
 		}
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
