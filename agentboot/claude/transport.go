@@ -2,10 +2,8 @@ package claude
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/common"
@@ -174,54 +172,6 @@ func (t *Transport) HandleControl(
 	return nil
 }
 
-// HandleAssistantAsk handles the legacy path where AskUserQuestion arrives as an
-// assistant message content block (when --permission-prompt-tool is not "stdio").
-// Returns (response, true) if a response was sent, otherwise (nil, false).
-func (t *Transport) HandleAssistantAsk(
-	ctx context.Context,
-	ae agentboot.AgentEvent,
-	msgs []Message,
-	handler agentboot.MessageHandler,
-	write func(any) error,
-) (bool, error) {
-	if ae.Raw.Type != SDKAssistantMessage {
-		return false, nil
-	}
-
-	requestID := getString(ae.Raw.Data, "request_id")
-	for _, msg := range msgs {
-		assistant, ok := msg.(*AssistantMessage)
-		if !ok {
-			continue
-		}
-		for _, c := range assistant.Message.Content {
-			if c.Name != "AskUserQuestion" {
-				continue
-			}
-			req := t.parseAskRequestFromContentBlock(c)
-			req.ID = requestID
-
-			logrus.WithFields(logrus.Fields{
-				"platform":   req.Platform,
-				"chat_id":    req.ChatID,
-				"session_id": req.SessionID,
-				"request_id": req.ID,
-			}).Info("Processing ask_user control request")
-
-			result, err := handler.OnAsk(ctx, req)
-			if err != nil {
-				logrus.Errorf("Ask handler error: %v", err)
-				result = agentboot.AskResult{ID: requestID, Approved: false}
-			}
-			if wErr := write(t.buildAskResponse(requestID, result)); wErr != nil {
-				return true, wErr
-			}
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // --- request parsing helpers ------------------------------------------------
 
 func (t *Transport) parsePermissionRequest(data map[string]interface{}) agentboot.PermissionRequest {
@@ -262,22 +212,6 @@ func (t *Transport) parseAskRequestFromControl(controlData map[string]interface{
 		ToolName:  toolName,
 		Input:     input,
 		CallID:    toolUseID,
-	}
-}
-
-func (t *Transport) parseAskRequestFromContentBlock(c anthropic.ContentBlockUnion) agentboot.AskRequest {
-	input := map[string]any{}
-	_ = json.Unmarshal(c.Input, &input)
-	return agentboot.AskRequest{
-		Type:      c.Type,
-		AgentType: agentboot.AgentTypeClaude,
-		Platform:  t.execCtx.platform,
-		ChatID:    t.execCtx.chatID,
-		SessionID: t.execCtx.sessionID,
-		ToolName:  c.Name,
-		Input:     input,
-		Message:   c.Text,
-		CallID:    c.ID,
 	}
 }
 
