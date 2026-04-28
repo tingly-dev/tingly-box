@@ -94,6 +94,10 @@ func (m *Manager) AddBot(config *core.Config) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if config.UUID == "" {
+		return fmt.Errorf("missing bot uuid")
+	}
+
 	// Create bot
 	bot, err := CreateBot(config)
 	if err != nil {
@@ -104,11 +108,7 @@ func (m *Manager) AddBot(config *core.Config) error {
 	m.setupBotHandlers(bot, config.Platform)
 
 	// Add to UUID index
-	if config.UUID != "" {
-		m.bots[config.UUID] = bot
-	} else {
-		return fmt.Errorf("missing bot uuid")
-	}
+	m.bots[config.UUID] = bot
 
 	// Connect if enabled
 	if config.Enabled {
@@ -186,13 +186,12 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.logger.Info("Starting bot manager...")
 
 	// Connect all bots
-	for _, bot := range m.bots {
+	for _, bot := range m.snapshotBots() {
 		if !bot.IsConnected() {
 			if err := bot.Connect(ctx); err != nil {
 				m.logger.Error("Failed to connect %s bot: %v", bot.PlatformInfo().Name, err)
 			}
 		}
-
 	}
 
 	m.logger.Info("Bot manager started")
@@ -212,12 +211,7 @@ func (m *Manager) shutdown() {
 	m.stopping.Store(true)
 
 	// Disconnect all bots without using WaitGroup to avoid deadlock
-	m.mu.RLock()
-	bots := make([]core.Bot, 0, len(m.bots))
-	for _, bot := range m.bots {
-		bots = append(bots, bot)
-	}
-	m.mu.RUnlock()
+	bots := m.snapshotBots()
 
 	// Disconnect each bot (with timeout)
 	for _, bot := range bots {
@@ -323,75 +317,19 @@ func (m *Manager) setupBotHandlers(bot core.Bot, platform Platform) {
 	botUUID := bot.UUID()
 
 	bot.OnMessage(func(msg core.Message) {
-		m.mu.RLock()
-		handlers := make([]func(core.Message, Platform, string), len(m.handlers.message))
-		copy(handlers, m.handlers.message)
-		m.mu.RUnlock()
-
-		for _, handler := range handlers {
-			go func(h func(core.Message, Platform, string)) {
-				defer func() {
-					if r := recover(); r != nil {
-						m.logger.Error("panic in message handler: %v", r)
-					}
-				}()
-				h(msg, platform, botUUID)
-			}(handler)
-		}
+		m.emitMessageHandlers(m.snapshotMessageHandlers(), msg, platform, botUUID, "message")
 	})
 
 	bot.OnError(func(err error) {
-		m.mu.RLock()
-		handlers := make([]func(error, Platform, string), len(m.handlers.error))
-		copy(handlers, m.handlers.error)
-		m.mu.RUnlock()
-
-		for _, handler := range handlers {
-			go func(h func(error, Platform, string)) {
-				defer func() {
-					if r := recover(); r != nil {
-						m.logger.Error("panic in error handler: %v", r)
-					}
-				}()
-				h(err, platform, botUUID)
-			}(handler)
-		}
+		m.emitErrorHandlers(m.snapshotErrorHandlers(), err, platform, botUUID, "error")
 	})
 
 	bot.OnConnected(func() {
-		m.mu.RLock()
-		handlers := make([]func(Platform), len(m.handlers.connected))
-		copy(handlers, m.handlers.connected)
-		m.mu.RUnlock()
-
-		for _, handler := range handlers {
-			go func(h func(Platform)) {
-				defer func() {
-					if r := recover(); r != nil {
-						m.logger.Error("panic in connected handler: %v", r)
-					}
-				}()
-				h(platform)
-			}(handler)
-		}
+		m.emitPlatformHandlers(m.snapshotConnectedHandlers(), platform, "connected")
 	})
 
 	bot.OnDisconnected(func() {
-		m.mu.RLock()
-		handlers := make([]func(Platform), len(m.handlers.disconnected))
-		copy(handlers, m.handlers.disconnected)
-		m.mu.RUnlock()
-
-		for _, handler := range handlers {
-			go func(h func(Platform)) {
-				defer func() {
-					if r := recover(); r != nil {
-						m.logger.Error("panic in disconnected handler: %v", r)
-					}
-				}()
-				h(platform)
-			}(handler)
-		}
+		m.emitPlatformHandlers(m.snapshotDisconnectedHandlers(), platform, "disconnected")
 
 		// Auto-reconnect if enabled
 		if m.config.AutoReconnect {
@@ -400,22 +338,91 @@ func (m *Manager) setupBotHandlers(bot core.Bot, platform Platform) {
 	})
 
 	bot.OnReady(func() {
-		m.mu.RLock()
-		handlers := make([]func(Platform), len(m.handlers.ready))
-		copy(handlers, m.handlers.ready)
-		m.mu.RUnlock()
-
-		for _, handler := range handlers {
-			go func(h func(Platform)) {
-				defer func() {
-					if r := recover(); r != nil {
-						m.logger.Error("panic in ready handler: %v", r)
-					}
-				}()
-				h(platform)
-			}(handler)
-		}
+		m.emitPlatformHandlers(m.snapshotReadyHandlers(), platform, "ready")
 	})
+}
+
+func (m *Manager) snapshotBots() []core.Bot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	bots := make([]core.Bot, 0, len(m.bots))
+	for _, bot := range m.bots {
+		bots = append(bots, bot)
+	}
+	return bots
+}
+
+func (m *Manager) snapshotMessageHandlers() []func(core.Message, Platform, string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	handlers := make([]func(core.Message, Platform, string), len(m.handlers.message))
+	copy(handlers, m.handlers.message)
+	return handlers
+}
+
+func (m *Manager) snapshotErrorHandlers() []func(error, Platform, string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	handlers := make([]func(error, Platform, string), len(m.handlers.error))
+	copy(handlers, m.handlers.error)
+	return handlers
+}
+
+func (m *Manager) snapshotConnectedHandlers() []func(Platform) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	handlers := make([]func(Platform), len(m.handlers.connected))
+	copy(handlers, m.handlers.connected)
+	return handlers
+}
+
+func (m *Manager) snapshotDisconnectedHandlers() []func(Platform) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	handlers := make([]func(Platform), len(m.handlers.disconnected))
+	copy(handlers, m.handlers.disconnected)
+	return handlers
+}
+
+func (m *Manager) snapshotReadyHandlers() []func(Platform) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	handlers := make([]func(Platform), len(m.handlers.ready))
+	copy(handlers, m.handlers.ready)
+	return handlers
+}
+
+func (m *Manager) emitMessageHandlers(handlers []func(core.Message, Platform, string), msg core.Message, platform Platform, botUUID string, event string) {
+	for _, handler := range handlers {
+		go func(h func(core.Message, Platform, string)) {
+			defer m.recoverHandler(event)
+			h(msg, platform, botUUID)
+		}(handler)
+	}
+}
+
+func (m *Manager) emitErrorHandlers(handlers []func(error, Platform, string), err error, platform Platform, botUUID string, event string) {
+	for _, handler := range handlers {
+		go func(h func(error, Platform, string)) {
+			defer m.recoverHandler(event)
+			h(err, platform, botUUID)
+		}(handler)
+	}
+}
+
+func (m *Manager) emitPlatformHandlers(handlers []func(Platform), platform Platform, event string) {
+	for _, handler := range handlers {
+		go func(h func(Platform)) {
+			defer m.recoverHandler(event)
+			h(platform)
+		}(handler)
+	}
+}
+
+func (m *Manager) recoverHandler(event string) {
+	if r := recover(); r != nil {
+		m.logger.Error("panic in %s handler: %v", event, r)
+	}
 }
 
 // handleReconnect handles auto-reconnect logic
