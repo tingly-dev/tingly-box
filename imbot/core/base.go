@@ -196,97 +196,99 @@ func (b *BaseBot) OnReady(handler func()) {
 // EmitMessage emits a message event
 func (b *BaseBot) EmitMessage(msg Message) {
 	b.UpdateLastActivity()
+	b.emitMessageHandlers(b.snapshotMessageHandlers(), msg, "message")
+}
 
+// EmitError emits an error event
+func (b *BaseBot) EmitError(err error) {
+	b.emitErrorHandlers(b.snapshotErrorHandlers(), err, "error")
+}
+
+// EmitConnected emits a connected event
+func (b *BaseBot) EmitConnected() {
+	b.emitVoidHandlers(b.snapshotConnectedHandlers(), "connected")
+}
+
+// EmitDisconnected emits a disconnected event
+func (b *BaseBot) EmitDisconnected() {
+	b.emitVoidHandlers(b.snapshotDisconnectedHandlers(), "disconnected")
+}
+
+// EmitReady emits a ready event
+func (b *BaseBot) EmitReady() {
+	b.emitVoidHandlers(b.snapshotReadyHandlers(), "ready")
+}
+
+func (b *BaseBot) snapshotMessageHandlers() []func(Message) {
 	b.mu.RLock()
+	defer b.mu.RUnlock()
 	handlers := make([]func(Message), len(b.handlers.message))
 	copy(handlers, b.handlers.message)
-	b.mu.RUnlock()
+	return handlers
+}
 
+func (b *BaseBot) snapshotErrorHandlers() []func(error) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	handlers := make([]func(error), len(b.handlers.error))
+	copy(handlers, b.handlers.error)
+	return handlers
+}
+
+func (b *BaseBot) snapshotConnectedHandlers() []func() {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	handlers := make([]func(), len(b.handlers.connected))
+	copy(handlers, b.handlers.connected)
+	return handlers
+}
+
+func (b *BaseBot) snapshotDisconnectedHandlers() []func() {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	handlers := make([]func(), len(b.handlers.disconnected))
+	copy(handlers, b.handlers.disconnected)
+	return handlers
+}
+
+func (b *BaseBot) snapshotReadyHandlers() []func() {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	handlers := make([]func(), len(b.handlers.ready))
+	copy(handlers, b.handlers.ready)
+	return handlers
+}
+
+func (b *BaseBot) emitMessageHandlers(handlers []func(Message), msg Message, event string) {
 	for _, handler := range handlers {
 		go func(h func(Message)) {
-			defer func() {
-				if r := recover(); r != nil {
-					b.Logger().Error(fmt.Sprintf("panic in message handler: %v", r))
-				}
-			}()
+			defer b.recoverHandler(event)
 			h(msg)
 		}(handler)
 	}
 }
 
-// EmitError emits an error event
-func (b *BaseBot) EmitError(err error) {
-	b.mu.RLock()
-	handlers := make([]func(error), len(b.handlers.error))
-	copy(handlers, b.handlers.error)
-	b.mu.RUnlock()
-
+func (b *BaseBot) emitErrorHandlers(handlers []func(error), err error, event string) {
 	for _, handler := range handlers {
 		go func(h func(error)) {
-			defer func() {
-				if r := recover(); r != nil {
-					b.Logger().Error(fmt.Sprintf("panic in error handler: %v", r))
-				}
-			}()
+			defer b.recoverHandler(event)
 			h(err)
 		}(handler)
-	}
+		}
 }
 
-// EmitConnected emits a connected event
-func (b *BaseBot) EmitConnected() {
-	b.mu.RLock()
-	handlers := make([]func(), len(b.handlers.connected))
-	copy(handlers, b.handlers.connected)
-	b.mu.RUnlock()
-
+func (b *BaseBot) emitVoidHandlers(handlers []func(), event string) {
 	for _, handler := range handlers {
 		go func(h func()) {
-			defer func() {
-				if r := recover(); r != nil {
-					b.Logger().Error(fmt.Sprintf("panic in connected handler: %v", r))
-				}
-			}()
+			defer b.recoverHandler(event)
 			h()
 		}(handler)
 	}
 }
 
-// EmitDisconnected emits a disconnected event
-func (b *BaseBot) EmitDisconnected() {
-	b.mu.RLock()
-	handlers := make([]func(), len(b.handlers.disconnected))
-	copy(handlers, b.handlers.disconnected)
-	b.mu.RUnlock()
-
-	for _, handler := range handlers {
-		go func(h func()) {
-			defer func() {
-				if r := recover(); r != nil {
-					b.Logger().Error(fmt.Sprintf("panic in disconnected handler: %v", r))
-				}
-			}()
-			h()
-		}(handler)
-	}
-}
-
-// EmitReady emits a ready event
-func (b *BaseBot) EmitReady() {
-	b.mu.RLock()
-	handlers := make([]func(), len(b.handlers.ready))
-	copy(handlers, b.handlers.ready)
-	b.mu.RUnlock()
-
-	for _, handler := range handlers {
-		go func(h func()) {
-			defer func() {
-				if r := recover(); r != nil {
-					b.Logger().Error(fmt.Sprintf("panic in ready handler: %v", r))
-				}
-			}()
-			h()
-		}(handler)
+func (b *BaseBot) recoverHandler(event string) {
+	if r := recover(); r != nil {
+		b.Logger().Error(fmt.Sprintf("panic in %s handler: %v", event, r))
 	}
 }
 
