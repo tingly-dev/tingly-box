@@ -17,7 +17,7 @@ func TestHasDeclaredMCPTools_OpenAI(t *testing.T) {
 				Name: "normal_tool",
 			}),
 			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
-				Name: "mcp__websearch__search",
+				Name: "tingly_box_mcp__websearch__search",
 			}),
 		},
 	}
@@ -29,7 +29,7 @@ func TestHasDeclaredMCPTools_AnthropicV1AndBeta(t *testing.T) {
 	v1Req := &anthropic.MessageNewParams{
 		Tools: []anthropic.ToolUnionParam{
 			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "normal_tool"),
-			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "mcp__webfetch__fetch"),
+			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__webfetch__fetch"),
 		},
 	}
 	require.True(t, hasDeclaredMCPAnthropicV1Tools(v1Req))
@@ -37,7 +37,7 @@ func TestHasDeclaredMCPTools_AnthropicV1AndBeta(t *testing.T) {
 	betaReq := &anthropic.BetaMessageNewParams{
 		Tools: []anthropic.BetaToolUnionParam{
 			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "normal_tool"),
-			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "mcp__websearch__search"),
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__websearch__search"),
 		},
 	}
 	require.True(t, hasDeclaredMCPAnthropicBetaTools(betaReq))
@@ -46,14 +46,14 @@ func TestHasDeclaredMCPTools_AnthropicV1AndBeta(t *testing.T) {
 func TestHasOnlyMCPToolCalls(t *testing.T) {
 	var allMCP []openai.ChatCompletionMessageToolCallUnion
 	require.NoError(t, json.Unmarshal([]byte(`[
-	  {"id":"call_1","type":"function","function":{"name":"mcp__a__x","arguments":"{}"}},
-	  {"id":"call_2","type":"function","function":{"name":"mcp__b__y","arguments":"{}"}}
+	  {"id":"call_1","type":"function","function":{"name":"tingly_box_mcp__a__x","arguments":"{}"}},
+	  {"id":"call_2","type":"function","function":{"name":"tingly_box_mcp__b__y","arguments":"{}"}}
 	]`), &allMCP))
 	require.True(t, hasOnlyMCPToolCalls(allMCP))
 
 	var mixed []openai.ChatCompletionMessageToolCallUnion
 	require.NoError(t, json.Unmarshal([]byte(`[
-	  {"id":"call_1","type":"function","function":{"name":"mcp__a__x","arguments":"{}"}},
+	  {"id":"call_1","type":"function","function":{"name":"tingly_box_mcp__a__x","arguments":"{}"}},
 	  {"id":"call_2","type":"function","function":{"name":"normal_tool","arguments":"{}"}}
 	]`), &mixed))
 	require.False(t, hasOnlyMCPToolCalls(mixed))
@@ -62,7 +62,7 @@ func TestHasOnlyMCPToolCalls(t *testing.T) {
 func TestHasOnlyMCPToolUsesV1AndBeta(t *testing.T) {
 	var v1Content []anthropic.ContentBlockUnion
 	require.NoError(t, json.Unmarshal([]byte(`[
-	  {"type":"tool_use","id":"toolu_1","name":"mcp__a__x","input":{}}
+	  {"type":"tool_use","id":"toolu_1","name":"tingly_box_mcp__a__x","input":{}}
 	]`), &v1Content))
 	toolUsesV1, okV1 := hasOnlyMCPToolUsesV1(v1Content)
 	require.True(t, okV1)
@@ -70,7 +70,7 @@ func TestHasOnlyMCPToolUsesV1AndBeta(t *testing.T) {
 
 	var betaContent []anthropic.BetaContentBlockUnion
 	require.NoError(t, json.Unmarshal([]byte(`[
-	  {"type":"tool_use","id":"toolu_1","name":"mcp__a__x","input":{}}
+	  {"type":"tool_use","id":"toolu_1","name":"tingly_box_mcp__a__x","input":{}}
 	]`), &betaContent))
 	toolUsesBeta, okBeta := hasOnlyMCPToolUsesBeta(betaContent)
 	require.True(t, okBeta)
