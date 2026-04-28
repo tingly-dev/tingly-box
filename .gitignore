@@ -1,6 +1,7 @@
 # doc
 docs
 script
+.worktrees
 
 # codegen
 internal/web/dist
@@ -110,3 +111,4 @@ wheels/
 MANIFEST
 /tests/test_results/
 go.work.sum
+/docs/plans/
