@@ -3,34 +3,29 @@ package wecom
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
+	weixinadapter "github.com/tingly-dev/tingly-box/imbot/platform/weixin"
 	"github.com/tingly-dev/weixin/types"
 )
 
 // Adapter converts types.Message (already translated from WeCom wire format by the SDK)
 // to core.Message.
 type Adapter struct {
-	*core.BaseAdapter
+	*weixinadapter.Adapter
 }
 
 // NewAdapter creates a new WeCom adapter.
 func NewAdapter(config *core.Config) *Adapter {
 	return &Adapter{
-		BaseAdapter: core.NewBaseAdapter(config),
+		Adapter: weixinadapter.NewAdapterForPlatform(config, nil, core.PlatformWecom),
 	}
-}
-
-// Platform returns core.PlatformWecom.
-func (a *Adapter) Platform() core.Platform {
-	return core.PlatformWecom
 }
 
 // AdaptMessage converts a types.Message to core.Message.
 func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.Message, error) {
 	if msg == nil {
-		return nil, fmt.Errorf("nil message")
+		return nil, core.NewAdaptError(core.PlatformWecom, "adapt message", msg, context.Canceled)
 	}
 
 	// Determine recipient ID: use chatId from metadata when available (group),
@@ -41,12 +36,12 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.M
 		recipientID = cid
 	}
 
-	builder := core.NewMessageBuilder(core.PlatformWecom).
+	builder := core.NewMessageBuilder(a.Platform()).
 		WithID(msg.MessageID).
 		WithTimestamp(msg.Timestamp.Unix()).
 		WithSender(msg.SenderID, "", "").
 		WithRecipient(recipientID, string(chatType), "").
-		WithContent(a.extractContent(msg)).
+		WithContent(weixinadapter.BuildContent(msg, mapMimeType)).
 		WithMetadata("context_token", msg.ContextToken)
 
 	if msg.ReplyToID != "" {
@@ -56,25 +51,6 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.M
 	}
 
 	return builder.Build(), nil
-}
-
-// extractContent derives a core.Content value from the SDK message.
-func (a *Adapter) extractContent(msg *types.Message) core.Content {
-	if len(msg.Attachments) > 0 {
-		media := make([]core.MediaAttachment, 0, len(msg.Attachments))
-		for _, att := range msg.Attachments {
-			media = append(media, core.MediaAttachment{
-				Type:     mapMimeType(att.MimeType),
-				URL:      att.URL,
-				Filename: att.FileName,
-			})
-		}
-		return core.NewMediaContent(media, msg.Text)
-	}
-	if msg.Text != "" {
-		return core.NewTextContent(msg.Text)
-	}
-	return core.NewSystemContent("unknown", nil)
 }
 
 // mapChatType maps SDK ChatType to core ChatType.

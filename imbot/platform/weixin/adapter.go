@@ -13,6 +13,7 @@ import (
 type Adapter struct {
 	*core.BaseAdapter
 	account *types.WeChatAccount
+	platform core.Platform
 }
 
 // NewAdapter creates a new Weixin adapter with the given config and account.
@@ -20,12 +21,19 @@ func NewAdapter(config *core.Config, account *types.WeChatAccount) *Adapter {
 	return &Adapter{
 		BaseAdapter: core.NewBaseAdapter(config),
 		account:     account,
+		platform:    core.PlatformWeixin,
 	}
+}
+
+func NewAdapterForPlatform(config *core.Config, account *types.WeChatAccount, platform core.Platform) *Adapter {
+	adapter := NewAdapter(config, account)
+	adapter.platform = platform
+	return adapter
 }
 
 // Platform returns core.PlatformWeixin.
 func (a *Adapter) Platform() core.Platform {
-	return core.PlatformWeixin
+	return a.platform
 }
 
 // AdaptMessage converts a types.Message to core.Message.
@@ -40,7 +48,7 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.M
 	messageState, _ := msg.Metadata["message_state"].(int)
 
 	// Build message using fluent builder
-	messageBuilder := core.NewMessageBuilder(core.PlatformWeixin).
+	messageBuilder := core.NewMessageBuilder(a.Platform()).
 		WithID(msg.MessageID).
 		WithTimestamp(msg.Timestamp.Unix()).
 		WithRecipient(msg.To, string(msg.ChatType), "").
@@ -67,39 +75,39 @@ func (a *Adapter) AdaptMessage(ctx context.Context, msg *types.Message) (*core.M
 
 // extractContent extracts the content from a types.Message.
 func (a *Adapter) extractContent(msg *types.Message) core.Content {
-	// Check if there's text
+	return BuildContent(msg, a.mapContentType)
+}
+
+func BuildContent(msg *types.Message, mapType func(string) string) core.Content {
 	if msg.Text != "" {
-		// Check if there are also attachments
 		if len(msg.Attachments) > 0 {
-			// Compound content: text + media
-			media := make([]core.MediaAttachment, 0, len(msg.Attachments))
-			for _, att := range msg.Attachments {
-				media = append(media, core.MediaAttachment{
-					Type:     a.mapContentType(att.ContentType),
-					URL:      att.URL,
-					Filename: att.FileName,
-				})
-			}
-			return core.NewMediaContent(media, msg.Text)
+			return core.NewMediaContent(buildMediaAttachments(msg.Attachments, mapType), msg.Text)
 		}
 		return core.NewTextContent(msg.Text)
 	}
-
-	// Only attachments (media)
 	if len(msg.Attachments) > 0 {
-		media := make([]core.MediaAttachment, 0, len(msg.Attachments))
-		for _, att := range msg.Attachments {
-			media = append(media, core.MediaAttachment{
-				Type:     a.mapContentType(att.ContentType),
-				URL:      att.URL,
-				Filename: att.FileName,
-			})
-		}
-		return core.NewMediaContent(media, "")
+		return core.NewMediaContent(buildMediaAttachments(msg.Attachments, mapType), "")
 	}
-
-	// Unknown content
 	return core.NewSystemContent("unknown", nil)
+}
+
+func buildMediaAttachments(attachments []types.Attachment, mapType func(string) string) []core.MediaAttachment {
+	media := make([]core.MediaAttachment, 0, len(attachments))
+	for _, att := range attachments {
+		media = append(media, core.MediaAttachment{
+			Type:     mapType(resolveAttachmentType(att)),
+			URL:      att.URL,
+			Filename: att.FileName,
+		})
+	}
+	return media
+}
+
+func resolveAttachmentType(att types.Attachment) string {
+	if att.ContentType != "" {
+		return att.ContentType
+	}
+	return att.MimeType
 }
 
 // mapContentType maps Weixin content type to core media type.
