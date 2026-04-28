@@ -139,7 +139,7 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/guardrails', label: t('layout.overview'), icon: <IconShield size={20} /> },
                     { path: '/guardrails/groups', label: t('layout.policyGroups'), icon: <IconLicense size={20} /> },
                     { path: '/guardrails/rules', label: t('layout.policies'), icon: <IconLicense size={20} /> },
-                    { path: '/guardrails/credentials', label: t('layout.credential'), icon: <IconKey size={20} /> },
+                    { path: '/guardrails/credentials', label: t('layout.nav.credential', { defaultValue: 'Credential' }), icon: <IconKey size={20} /> },
                     { path: '/guardrails/history', label: t('layout.guardrailsHistory'), icon: <IconHistory size={20} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
