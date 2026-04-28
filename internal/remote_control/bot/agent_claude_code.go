@@ -74,10 +74,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	}
 
 	// Determine if we should resume
-	shouldResume := false
-	if msgs, ok := e.deps.SessionMgr.GetMessages(sessionID); ok && len(msgs) > 1 {
-		shouldResume = true
-	}
+	shouldResume := !req.IsNewSession
 
 	logrus.WithFields(logrus.Fields{
 		"chatID":       req.HCtx.ChatID,
