@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 )
@@ -35,9 +36,9 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 	}
 
 	// Build action keyboard and card
-	kb := BuildActionKeyboard()
+	kb := feature.BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-	actionCard := BuildActionCard()
+	actionCard := feature.BuildActionCard()
 
 	doneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
@@ -213,9 +214,9 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 	}
 
 	// Send action keyboard on completion
-	kb := BuildActionKeyboard()
+	kb := feature.BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-	actionCard := BuildActionCard()
+	actionCard := feature.BuildActionCard()
 
 	// Build metadata with platform-specific card rendering
 	metadata := buildActionMenuMetadata(c.hCtx, tgKeyboard, actionCard)

@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot/ask"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 )
 
 // handleCallbackQuery handles callback queries from inline keyboards
@@ -109,7 +110,7 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			if msgID == "" {
 				msgID = msg.ID
 			}
-			_, _ = SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
+			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
 
 		case "up":
 			// Navigate to parent directory
@@ -121,7 +122,7 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			if msgID == "" {
 				msgID = msg.ID
 			}
-			_, _ = SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
+			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
 
 		case "prev":
 			if err := h.directoryBrowser.PrevPage(chatID); err != nil {
@@ -132,7 +133,7 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			if msgID == "" {
 				msgID = msg.ID
 			}
-			_, _ = SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
+			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
 
 		case "next":
 			if err := h.directoryBrowser.NextPage(chatID); err != nil {
@@ -143,7 +144,7 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			if msgID == "" {
 				msgID = msg.ID
 			}
-			_, _ = SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
+			_, _ = feature.SendDirectoryBrowser(h.ctx, bot, h.directoryBrowser, chatID, msgID)
 
 		case "select":
 			// Select current directory (path is in state)
@@ -215,7 +216,7 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, true, "")
 
 	// Send prompt with cancel keyboard
-	kb := BuildCancelKeyboard()
+	kb := feature.BuildCancelKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
@@ -348,7 +349,7 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	// Reset waiting input state (no longer waiting for text input)
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, false, "")
 
-	kb, text := BuildCreateConfirmKeyboard(path)
+	kb, text := feature.BuildCreateConfirmKeyboard(path)
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{

@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -603,7 +604,7 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	authConfig := buildAuthConfigInternal(setting)
 	platform := imbot.Platform(setting.Platform)
 
-	directoryBrowser := bot.NewDirectoryBrowser()
+	directoryBrowser := feature.NewDirectoryBrowser()
 
 	manager := imbot.NewManager(
 		imbot.WithAutoReconnect(true),

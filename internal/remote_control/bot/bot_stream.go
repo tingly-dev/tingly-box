@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
@@ -111,7 +112,7 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 	defer f.mu.Unlock()
 
 	// Build action keyboard
-	kb := BuildActionKeyboard()
+	kb := feature.BuildActionKeyboard()
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	// Prepare completion message based on verbose mode
@@ -124,7 +125,7 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 		Text: completionText,
 		Metadata: map[string]interface{}{
 			"replyMarkup": tgKeyboard,
-			"card":        BuildActionCard(),
+			"card":        feature.BuildActionCard(),
 		},
 	})
 	if err != nil {

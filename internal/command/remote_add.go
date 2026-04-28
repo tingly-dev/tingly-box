@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 )
 
 // remoteAddCommand creates the `remote add` subcommand
@@ -309,7 +309,7 @@ func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]stri
 	}
 
 	// Create QR client
-	qrClient := bot.NewWeChatQRClient("")
+	qrClient := feature.NewWeChatQRClient("")
 
 	// Fetch QR code
 	PrintInfo("Fetching QR code from Weixin...")
@@ -340,7 +340,7 @@ func runWeChatQRFlow(ctx context.Context, reader *bufio.Reader) (map[string]stri
 	defer cancel()
 
 	// Poll status
-	statusResp, err := bot.PollQRStatus(pollCtx, qrClient, qrResp.Qrcode, 3*time.Second)
+	statusResp, err := feature.PollQRStatus(pollCtx, qrClient, qrResp.Qrcode, 3*time.Second)
 	if err != nil {
 		ClearLine()
 		if err == context.DeadlineExceeded {

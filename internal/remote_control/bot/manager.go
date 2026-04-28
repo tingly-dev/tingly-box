@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
@@ -32,7 +33,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		return fmt.Errorf("session manager is nil")
 	}
 
-	directoryBrowser := NewDirectoryBrowser()
+	directoryBrowser := feature.NewDirectoryBrowser()
 
 	manager := imbot.NewManager(
 		imbot.WithAutoReconnect(true),
