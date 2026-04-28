@@ -66,9 +66,16 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 		UserID:      req.HCtx.SenderID,
 	}
 
-	// 4. Setup cancellable context + /stop bookkeeping
+	// 4. Setup cancellable context + /stop bookkeeping.
+	// Check-and-set must happen atomically under the same lock: registering
+	// the cancel before the conflict check would always trip on our own entry.
 	execCtx, cancel := context.WithCancel(ctx)
 	r.deps.RunningCancelMu.Lock()
+	if _, exists := r.deps.RunningCancel[req.HCtx.ChatID]; exists {
+		r.deps.RunningCancelMu.Unlock()
+		cancel()
+		return nil, fmt.Errorf("another execution is already in progress for this chat. Please wait for it to complete or use /stop to cancel it")
+	}
 	r.deps.RunningCancel[req.HCtx.ChatID] = cancel
 	r.deps.RunningCancelMu.Unlock()
 
@@ -91,15 +98,6 @@ func (r *AgentRouter) Execute(ctx context.Context, agentType agentboot.AgentType
 		"projectPath": projectPath,
 		"newSession":  isNewSession,
 	}).Info("Routing prepared request to executor")
-
-	// 5.5. Check for already running execution for this chat (prevent session conflicts)
-	r.deps.RunningCancelMu.Lock()
-	if _, exists := r.deps.RunningCancel[req.HCtx.ChatID]; exists {
-		r.deps.RunningCancelMu.Unlock()
-		cancel()
-		return nil, fmt.Errorf("another execution is already in progress for this chat. Please wait for it to complete or use /stop to cancel it")
-	}
-	r.deps.RunningCancelMu.Unlock()
 
 	// 6. Delegate to executor (it is responsible for calling defer cleanup)
 	result, err := executor.Execute(execCtx, prepared)
