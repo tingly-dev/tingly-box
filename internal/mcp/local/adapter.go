@@ -43,7 +43,7 @@ func (a *MCPRuntimeAdapter) ListTools(ctx context.Context) ([]MCPTool, error) {
 		return nil, fmt.Errorf("runtime not initialized")
 	}
 
-	sourceTools, err := a.runtime.ListSourceTools(ctx)
+	sourceTools, err := a.runtime.ListClientSourceToolsForMCP(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list source tools: %w", err)
 	}

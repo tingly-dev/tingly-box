@@ -63,7 +63,7 @@ func TestHTTPToolSource_Configuration(t *testing.T) {
 		ID:        "test-http",
 		Name:      "Test HTTP Source",
 		Transport: "http",
-		Endpoint: "http://localhost:8080/mcp",
+		Endpoint:  "http://localhost:8080/mcp",
 		Enabled:   typ.BoolPtr(true),
 		Tools:     []string{"*"},
 	}
@@ -89,10 +89,10 @@ func TestHTTPToolSource_Configuration(t *testing.T) {
 		t.Errorf("Expected initial state %s, got %s", StateDisconnected, status.State)
 	}
 
-// 	// Test that HTTP source implements ReconnectableSource
-// 	if _, ok := source.(ReconnectableSource); !ok {
-// 		t.Error("HTTP source should implement ReconnectableSource")
-// 	}
+	// 	// Test that HTTP source implements ReconnectableSource
+	// 	if _, ok := source.(ReconnectableSource); !ok {
+	// 		t.Error("HTTP source should implement ReconnectableSource")
+	// 	}
 
 	// Test disconnect before connect (should be safe)
 	if err := source.Disconnect(ctx); err != nil {
@@ -102,14 +102,14 @@ func TestHTTPToolSource_Configuration(t *testing.T) {
 
 // TestSSEToolSource_Configuration tests SSE source configuration
 func TestSSEToolSource_Configuration(t *testing.T) {
-// 	ctx := context.Background()
+	// 	ctx := context.Background()
 
 	// Test SSE source creation
 	cfg := typ.MCPSourceConfig{
 		ID:        "test-sse",
 		Name:      "Test SSE Source",
 		Transport: "sse",
-		Endpoint: "http://localhost:8080/mcp",
+		Endpoint:  "http://localhost:8080/mcp",
 		Enabled:   typ.BoolPtr(true),
 		Tools:     []string{"*"},
 	}
@@ -129,10 +129,11 @@ func TestSSEToolSource_Configuration(t *testing.T) {
 		t.Errorf("Expected transport type 'sse', got '%s'", source.GetType())
 	}
 
-// 	// Test that SSE source implements ReconnectableSource
-// 	if _, ok := source.(ReconnectableSource); !ok {
-// 		t.Error("SSE source should implement ReconnectableSource")
-// 	}
+	// // Test that SSE source implements ReconnectableSource
+	//
+	//	if _, ok := source.(ReconnectableSource); !ok {
+	//		t.Error("SSE source should implement ReconnectableSource")
+	//	}
 }
 
 // TestRuntime_EndToEndToolCall tests complete tool call flow
@@ -181,40 +182,18 @@ func TestRuntime_EndToEndToolCall(t *testing.T) {
 	r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	defer r.Close()
 
-	t.Run("ListOpenAITools", func(t *testing.T) {
-		tools := r.ListOpenAITools(ctx)
+	t.Run("ListServerToolsForInjection", func(t *testing.T) {
+		tools := r.ListServerToolsForInjection(ctx)
 		if tools == nil {
 			t.Fatal("Expected tools list, got nil")
 		}
 
 		t.Logf("Found %d tools", len(tools))
 
-		// We expect at least mcp_web_search and mcp_web_fetch
-		if len(tools) < 2 {
-			t.Errorf("Expected at least 2 tools (mcp_web_search, mcp_web_fetch), got %d", len(tools))
-		}
-
-		// Verify tool names by checking if they contain expected substrings
-		foundWebSearch := false
-		foundWebFetch := false
-		for _, tool := range tools {
-			// Convert tool to string for inspection
-			toolJSON, _ := json.Marshal(tool)
-			toolStr := string(toolJSON)
-
-			if strings.Contains(toolStr, "tingly_box_mcp__webtools__mcp_web_search") {
-				foundWebSearch = true
-			}
-			if strings.Contains(toolStr, "tingly_box_mcp__webtools__mcp_web_fetch") {
-				foundWebFetch = true
-			}
-		}
-
-		if !foundWebSearch {
-			t.Error("Expected to find mcp_web_search tool")
-		}
-		if !foundWebFetch {
-			t.Error("Expected to find mcp_web_fetch tool")
+		// Injection is reserved for server-side virtual tools.
+		// webtools is a client-facing non-virtual source and must not be injected.
+		if len(tools) != 0 {
+			t.Errorf("Expected 0 injected tools for non-virtual webtools-only config, got %d", len(tools))
 		}
 	})
 
@@ -409,7 +388,7 @@ func TestRuntime_EndToEndToolCall(t *testing.T) {
 // TestToolSourceFactory_AllTransports tests factory creates all transport types
 func TestToolSourceFactory_AllTransports(t *testing.T) {
 	sc := newSessionCache()
-	factory := NewToolSourceFactory(sc)
+	factory := NewToolSourceFactory(sc, nil)
 
 	testCases := []struct {
 		name      string
@@ -432,7 +411,7 @@ func TestToolSourceFactory_AllTransports(t *testing.T) {
 			config: typ.MCPSourceConfig{
 				ID:        "test-http",
 				Transport: "http",
-				Endpoint: "http://localhost:8080/mcp",
+				Endpoint:  "http://localhost:8080/mcp",
 			},
 		},
 		{
@@ -441,7 +420,7 @@ func TestToolSourceFactory_AllTransports(t *testing.T) {
 			config: typ.MCPSourceConfig{
 				ID:        "test-sse",
 				Transport: "sse",
-				Endpoint: "http://localhost:8080/mcp",
+				Endpoint:  "http://localhost:8080/mcp",
 			},
 		},
 		{
@@ -503,16 +482,16 @@ func TestHealthMonitor_Strategy(t *testing.T) {
 	// Test cases account for ±25% jitter in implementation
 	testCases := []struct {
 		retryCount int
-		minDelay    time.Duration // Base delay - 25% jitter
-		maxDelay    time.Duration // Base delay + 25% jitter (or max)
+		minDelay   time.Duration // Base delay - 25% jitter
+		maxDelay   time.Duration // Base delay + 25% jitter (or max)
 	}{
-		{0, 5 * time.Second, 5 * time.Second},                    // No jitter for first attempt
-		{1, 7 * time.Second, 12 * time.Second},                  // 10s ± 25%
-		{2, 15 * time.Second, 25 * time.Second},                 // 20s ± 25%
-		{3, 30 * time.Second, 50 * time.Second},                 // 40s ± 25%
-		{4, 45 * time.Second, 60 * time.Second},                 // 60s ± 25% (capped at max)
-		{5, 45 * time.Second, 60 * time.Second},                 // Still max
-		{10, 45 * time.Second, 60 * time.Second},                // Still max
+		{0, 5 * time.Second, 5 * time.Second},    // No jitter for first attempt
+		{1, 7 * time.Second, 12 * time.Second},   // 10s ± 25%
+		{2, 15 * time.Second, 25 * time.Second},  // 20s ± 25%
+		{3, 30 * time.Second, 50 * time.Second},  // 40s ± 25%
+		{4, 45 * time.Second, 60 * time.Second},  // 60s ± 25% (capped at max)
+		{5, 45 * time.Second, 60 * time.Second},  // Still max
+		{10, 45 * time.Second, 60 * time.Second}, // Still max
 	}
 
 	for _, tc := range testCases {
@@ -638,11 +617,11 @@ func TestRuntime_ConcurrentAccess(t *testing.T) {
 // BenchmarkToolSourceFactory_Creation benchmarks tool source creation
 func BenchmarkToolSourceFactory_Creation(b *testing.B) {
 	sc := newSessionCache()
-	factory := NewToolSourceFactory(sc)
+	factory := NewToolSourceFactory(sc, nil)
 
 	config := typ.MCPSourceConfig{
 		ID:        "bench-stdio",
-			Transport: "stdio",
+		Transport: "stdio",
 		Command:   "echo",
 		Args:      []string{"bench"},
 	}
