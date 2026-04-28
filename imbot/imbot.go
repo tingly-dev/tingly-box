@@ -2,6 +2,7 @@
 package imbot
 
 import (
+	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/command"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
@@ -15,13 +16,15 @@ type TelegramBot interface {
 	// ResolveChatID resolves a chat ID from invite link, username, or direct ID
 	ResolveChatID(input string) (string, error)
 	// EditMessageWithKeyboard edits a message text and keyboard
-	EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error
+	EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard *models.InlineKeyboardMarkup) error
 	// RemoveMessageKeyboard removes the inline keyboard from a message
 	RemoveMessageKeyboard(ctx interface{}, chatID string, messageID string) error
 	// SetCommandList sets the bot's command list (shown in the menu button)
-	SetCommandList(commands interface{}) error
+	SetCommandList(commands []models.BotCommand) error
 	// SetMenuButton sets the menu button for the bot
-	SetMenuButton(config interface{}) error
+	SetMenuButton(config telegram.MenuButtonConfig) error
+	// GetMenuButton gets the current menu button configuration
+	GetMenuButton() (map[string]interface{}, error)
 }
 
 // AsTelegramBot attempts to cast a Bot to TelegramBot interface
