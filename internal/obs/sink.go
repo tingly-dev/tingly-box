@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -264,7 +265,8 @@ func (r *Sink) writeEntry(provider string, entry *RecordEntry) {
 	}
 }
 
-// writeEntryWithScenario writes an entry to a scenario-based file
+// writeEntryWithScenario writes an entry to a scenario-based file with directory structure.
+// Files are organized as: {baseDir}/{scenario}/{model}.{hour}.jsonl
 func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -272,10 +274,13 @@ func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 	// Get current hour for file rotation (YYYY-MM-DD-HH)
 	currentHour := time.Now().UTC().Format("2006-01-02-15")
 
-	// Use scenario as the file key
-	fileKey := fmt.Sprintf("scenario:%s:%s", scenario, entry.Provider)
+	// Sanitize model name for path usage
+	sanitizedModel := sanitizeModelForPath(entry.Model)
 
-	// Get or create file for this scenario
+	// Use scenario:model as the file key (provider no longer needed in file key)
+	fileKey := fmt.Sprintf("%s:%s", scenario, sanitizedModel)
+
+	// Get or create file for this scenario:model combination
 	rf, exists := r.fileMap[fileKey]
 	if !exists || rf.currentHour != currentHour {
 		// Close old file if hour changed
@@ -283,8 +288,16 @@ func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
 			r.closeFile(rf)
 		}
 
-		// Create new file with scenario-based naming
-		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.%s.jsonl", scenario, entry.Provider, currentHour))
+		// Create scenario subdirectory
+		scenarioDir := filepath.Join(r.baseDir, scenario)
+		if err := os.MkdirAll(scenarioDir, 0755); err != nil {
+			logrus.Errorf("Failed to create scenario directory %s: %v", scenarioDir, err)
+			return
+		}
+
+		// Create new file with scenario/model directory structure
+		// Format: {scenario}/{model}.{hour}.jsonl
+		filename := filepath.Join(scenarioDir, fmt.Sprintf("%s.%s.jsonl", sanitizedModel, currentHour))
 		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			logrus.Errorf("Failed to open record file %s: %v", filename, err)
@@ -314,6 +327,18 @@ func (r *Sink) closeFile(rf *recordFile) {
 	}
 }
 
+// sanitizeModelForPath sanitizes model names for use in file paths.
+// Replaces invalid filename characters with hyphens.
+func sanitizeModelForPath(model string) string {
+	// Replace invalid filename characters with hyphens
+	invalid := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
+	result := model
+	for _, char := range invalid {
+		result = strings.ReplaceAll(result, char, "-")
+	}
+	return result
+}
+
 // Close closes all open record files
 func (r *Sink) Close() {
 	r.mutex.Lock()
@@ -339,8 +364,9 @@ func (r *Sink) GetBaseDir() string {
 	return r.baseDir
 }
 
-// RecordEntryV2 records a V2 entry with dual-stage request/response recording
-// This is used for protocol conversion scenarios where we need to capture requests at multiple stages
+// RecordEntryV2 records a V2 entry with dual-stage request/response recording.
+// This is used for protocol conversion scenarios where we need to capture requests at multiple stages.
+// Files are organized as: {baseDir}/{scenario}/{model}.{hour}.jsonl
 func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
 	if r == nil || r.mode == "" {
 		return
@@ -352,10 +378,16 @@ func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
 	// Get current hour for file rotation (YYYY-MM-DD-HH)
 	currentHour := time.Now().UTC().Format("2006-01-02-15")
 
-	// Use scenario-based file key if scenario is available, otherwise use provider
-	fileKey := fmt.Sprintf("v2:%s:%s", entry.Scenario, entry.Provider)
-	if entry.Scenario == "" {
-		fileKey = fmt.Sprintf("v2:%s", entry.Provider)
+	// Sanitize model name for path usage
+	sanitizedModel := sanitizeModelForPath(entry.Model)
+
+	// Use scenario:model as the file key
+	// If scenario is empty, fall back to model-only key
+	var fileKey string
+	if entry.Scenario != "" {
+		fileKey = fmt.Sprintf("%s:%s", entry.Scenario, sanitizedModel)
+	} else {
+		fileKey = fmt.Sprintf("_%s", sanitizedModel)
 	}
 
 	// Get or create file for this entry
@@ -366,15 +398,24 @@ func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
 			r.closeFile(rf)
 		}
 
-		// Create new file with V2 naming
-		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.v2.%s.jsonl", entry.Scenario, entry.Provider, currentHour))
-		if entry.Scenario == "" {
-			filename = filepath.Join(r.baseDir, fmt.Sprintf("%s.v2.%s.jsonl", entry.Provider, currentHour))
+		var filename string
+		if entry.Scenario != "" {
+			// Create scenario subdirectory
+			scenarioDir := filepath.Join(r.baseDir, entry.Scenario)
+			if err := os.MkdirAll(scenarioDir, 0755); err != nil {
+				logrus.Errorf("Failed to create scenario directory %s: %v", scenarioDir, err)
+				return
+			}
+			// Format: {scenario}/{model}.{hour}.jsonl
+			filename = filepath.Join(scenarioDir, fmt.Sprintf("%s.%s.jsonl", sanitizedModel, currentHour))
+		} else {
+			// Fallback: {model}.{hour}.jsonl in base directory
+			filename = filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.jsonl", sanitizedModel, currentHour))
 		}
 
 		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
 		if err != nil {
-			logrus.Errorf("Failed to open V2 record file %s: %v", filename, err)
+			logrus.Errorf("Failed to open record file %s: %v", filename, err)
 			return
 		}
 
@@ -388,6 +429,6 @@ func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
 
 	// Write entry as JSONL (one JSON object per line)
 	if err := rf.writer.Encode(entry); err != nil {
-		logrus.Errorf("Failed to write V2 record entry: %v", err)
+		logrus.Errorf("Failed to write record entry: %v", err)
 	}
 }
