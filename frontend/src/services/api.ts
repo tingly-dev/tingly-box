@@ -1735,6 +1735,7 @@ export const api = {
     setMCPConfig: async (config: {
         sources?: Array<{
             id?: string;
+            enabled?: boolean;
             transport?: string;
             endpoint?: string;
             headers?: Record<string, string>;
@@ -1743,6 +1744,15 @@ export const api = {
             args?: string[];
             cwd?: string;
             env?: Record<string, string>;
+            proxy_url?: string;
+            is_client_tool?: boolean;
+            advisor?: {
+                base_url?: string;
+                model?: string;
+                api_key?: string;
+                max_uses_per_request?: number;
+                max_tokens?: number;
+            };
         }>;
         request_timeout?: number;
         strip_disabled_mcp_tools?: boolean;
@@ -1750,6 +1760,14 @@ export const api = {
         return uiAPI('/mcp/config', {
             method: 'PUT',
             body: JSON.stringify(config),
+        });
+    },
+
+    // Probe models from an arbitrary OpenAI-compatible endpoint
+    probeModels: async (baseUrl: string, apiKey?: string): Promise<{ success: boolean; models?: string[]; error?: string }> => {
+        return uiAPI('/probe-models', {
+            method: 'POST',
+            body: JSON.stringify({ base_url: baseUrl, api_key: apiKey || '' }),
         });
     },
 

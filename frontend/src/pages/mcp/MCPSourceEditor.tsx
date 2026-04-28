@@ -91,23 +91,6 @@ const MCPSourceEditor = ({
                 </ToggleButtonGroup>
             </Box>
 
-            <Box sx={sectionSx}>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Tool Type</Typography>
-                <FormControlLabel
-                    control={
-                        <Checkbox
-                            checked={value.isClientTool}
-                            onChange={(e) => set({ isClientTool: e.target.checked })}
-                        />
-                    }
-                    label="Client Tool (expose to external MCP clients instead of injecting into AI requests)"
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    When enabled, tools from this source will be exposed to external MCP clients but will NOT be injected into AI model requests.
-                    When disabled (default), tools will be injected into AI model requests for automatic execution.
-                </Typography>
-            </Box>
-
             {value.transport === 'stdio' ? (
                 <>
                     <Box sx={sectionSx}>

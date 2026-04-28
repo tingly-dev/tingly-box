@@ -146,12 +146,8 @@ export function useActivityItems(): ActivityItem[] {
             ...(enableMCP ? [{
                 key: 'mcp' as const,
                 icon: <SettingsApplications sx={{ fontSize: 22 }} />,
-                label: t('layout.mcp'),
-                defaultPath: '/mcp/sources',
-                children: [
-                    { path: '/mcp/sources', label: t('layout.sources'), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/mcp/local-mode', label: t('layout.localMode'), icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                ] as NavItem[],
+                label: 'MCP',
+                path: '/mcp/sources',
             }] as ActivityItem[] : []),
             {
                 key: 'credential',

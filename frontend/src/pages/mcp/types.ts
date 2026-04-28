@@ -19,6 +19,13 @@ export interface MCPSourceConfig {
     tools_auto_exec?: string[];
     allowed_extra_headers?: string[];
     auto_registered?: boolean;
+    advisor?: {
+        base_url?: string;
+        model?: string;
+        api_key?: string;
+        max_uses_per_request?: number;
+        max_tokens?: number;
+    };
 }
 
 export interface MCPRuntimeConfig {
@@ -33,7 +40,9 @@ export interface MCPConfigResponse {
     error?: string;
 }
 
-export const BUILTIN_IDS = ['webtools'] as const;
+export const BUILTIN_WEBTOOLS_ID = 'webtools' as const;
+export const BUILTIN_ADVISOR_ID = 'advisor' as const;
+export const BUILTIN_IDS = [BUILTIN_WEBTOOLS_ID, BUILTIN_ADVISOR_ID] as const;
 export type BuiltinId = typeof BUILTIN_IDS[number];
 
 export interface MCPKVPair {
@@ -101,10 +110,20 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         args = [];
     }
 
+    const normalizedTransport = source.transport === 'http' || source.transport === 'sse' || source.transport === 'stdio'
+        ? source.transport
+        : 'stdio';
+
+    // advisor is an in-process backend transport; keep frontend UX on stdio editor.
+    if (source.transport === 'advisor' && !command) {
+        command = 'builtin';
+        args = [];
+    }
+
     return {
         id: source.id || '',
         enabled: source.enabled ?? true,
-        transport: (source.transport as 'http' | 'stdio' | 'sse') || 'stdio',
+        transport: normalizedTransport,
         endpoint: source.endpoint || '',
         command,
         args,
