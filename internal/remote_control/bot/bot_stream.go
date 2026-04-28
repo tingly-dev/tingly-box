@@ -124,6 +124,7 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 		Text: completionText,
 		Metadata: map[string]interface{}{
 			"replyMarkup": tgKeyboard,
+			"card":        BuildActionCard(),
 		},
 	})
 	if err != nil {

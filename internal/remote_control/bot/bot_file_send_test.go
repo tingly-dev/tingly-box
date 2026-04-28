@@ -19,7 +19,7 @@ type stubBot struct {
 	sendErr    error
 }
 
-func (b *stubBot) UUID() string                          { return "stub" }
+func (b *stubBot) UUID() string                         { return "stub" }
 func (b *stubBot) Connect(ctx context.Context) error    { return nil }
 func (b *stubBot) Disconnect(ctx context.Context) error { return nil }
 func (b *stubBot) IsConnected() bool                    { return true }
@@ -41,7 +41,7 @@ func (b *stubBot) ChunkText(text string) []string                               
 func (b *stubBot) ValidateTextLength(text string) error                                 { return nil }
 func (b *stubBot) GetMessageLimit() int                                                 { return 4096 }
 func (b *stubBot) Status() *imbot.BotStatus                                             { return &imbot.BotStatus{} }
-func (b *stubBot) PlatformInfo() *imbot.PlatformInfo                                   { return &imbot.PlatformInfo{} }
+func (b *stubBot) PlatformInfo() *imbot.PlatformInfo                                    { return &imbot.PlatformInfo{} }
 func (b *stubBot) OnMessage(handler func(imbot.Message))                                {}
 func (b *stubBot) OnError(handler func(error))                                          {}
 func (b *stubBot) OnConnected(handler func())                                           {}

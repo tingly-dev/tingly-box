@@ -63,6 +63,9 @@ type BotHandler struct {
 
 	// commandAdapter bridges BotHandler to the command system
 	commandAdapter BotHandlerAdapter
+
+	// feishuCardRenderer converts imbot.Card to Feishu card JSON
+	feishuCardRenderer *FeishuCardRenderer
 }
 
 // PendingBind represents a pending bind confirmation request
@@ -182,6 +185,7 @@ func NewBotHandler(
 		pendingBinds:        make(map[string]*PendingBind),
 		actionMenuMessageID: make(map[string]string),
 		verbose:             true, // Default to verbose mode
+		feishuCardRenderer:  NewFeishuCardRenderer(),
 	}
 
 	// Initialize AgentRouter with dependencies
@@ -590,6 +594,8 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		}
 	}
 
+	actionCard := BuildActionCard()
+
 	// Use public ChunkText API with smart break-point detection
 	chunks := hCtx.Bot.ChunkText(text)
 	for i, chunk := range chunks {
@@ -601,10 +607,20 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		}
 		// Only attach keyboard to the last chunk
 		if i == len(chunks)-1 {
-			opts.Metadata = map[string]interface{}{
+			metadata := map[string]interface{}{
 				"replyMarkup":        tgKeyboard,
+				"card":               actionCard,
 				"_trackActionMenuID": true,
 			}
+
+			// For Feishu/Lark, add card_json
+			if hCtx.Platform == imbot.PlatformFeishu || hCtx.Platform == imbot.PlatformLark {
+				if cardJSON, err := h.feishuCardRenderer.Render(actionCard); err == nil {
+					metadata["card_json"] = cardJSON
+				}
+			}
+
+			opts.Metadata = metadata
 		}
 		// Forward context_token for Weixin
 		if contextToken != "" {

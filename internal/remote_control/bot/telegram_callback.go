@@ -310,11 +310,11 @@ func (h *BotHandler) handlePermissionCallback(hCtx HandlerContext, parts []strin
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"request_id":    requestID,
-			"tool_name":     pendingReq.ToolName,
-			"question":      questionText,
-			"option_label":  optionLabel,
-			"user_id":       hCtx.SenderID,
+			"request_id":   requestID,
+			"tool_name":    pendingReq.ToolName,
+			"question":     questionText,
+			"option_label": optionLabel,
+			"user_id":      hCtx.SenderID,
 		}).Info("User selected option")
 
 	default:
