@@ -368,7 +368,7 @@ func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *Directory
 	if ok && editMessageID != "" && state.MessageID != "" {
 		// Edit existing message
 		tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, tgKeyboard); err != nil {
+		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, &tgKeyboard); err != nil {
 			logrus.WithError(err).Warn("Failed to edit message, sending new one")
 			// Fall through to send new message
 		} else {

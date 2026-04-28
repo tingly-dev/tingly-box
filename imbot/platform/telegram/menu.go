@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
 	"github.com/tingly-dev/tingly-box/imbot/menu"
@@ -198,7 +199,7 @@ func (a *MenuAdapter) HideMenu(ctx context.Context, bot core.Bot, menuCtx *menu.
 func (a *MenuAdapter) UpdateMenu(ctx context.Context, bot core.Bot, menuCtx *menu.MenuContext, m *menu.Menu) error {
 	// For inline keyboards, we can edit the existing message
 	type TelegramEditBot interface {
-		EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard interface{}) error
+		EditMessageWithKeyboard(ctx interface{}, chatID string, messageID string, text string, keyboard *models.InlineKeyboardMarkup) error
 	}
 
 	if tgBot, ok := bot.(TelegramEditBot); ok && menuCtx.MessageID != "" {
@@ -209,7 +210,20 @@ func (a *MenuAdapter) UpdateMenu(ctx context.Context, bot core.Bot, menuCtx *men
 		}
 
 		if kb, ok := markup.(interaction.InlineKeyboardMarkup); ok {
-			return tgBot.EditMessageWithKeyboard(ctx, menuCtx.ChatID, menuCtx.MessageID, m.Title, kb)
+			telegramRows := make([][]models.InlineKeyboardButton, 0, len(kb.InlineKeyboard))
+			for _, row := range kb.InlineKeyboard {
+				telegramRow := make([]models.InlineKeyboardButton, len(row))
+				for i, button := range row {
+					telegramRow[i] = models.InlineKeyboardButton{
+						Text:         button.Text,
+						CallbackData: button.CallbackData,
+						URL:          button.URL,
+					}
+				}
+				telegramRows = append(telegramRows, telegramRow)
+			}
+			markup := models.InlineKeyboardMarkup{InlineKeyboard: telegramRows}
+			return tgBot.EditMessageWithKeyboard(ctx, menuCtx.ChatID, menuCtx.MessageID, m.Title, &markup)
 		}
 	}
 

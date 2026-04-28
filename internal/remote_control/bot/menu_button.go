@@ -2,8 +2,11 @@ package bot
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot"
+	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 )
 
 // MenuButtonConfig configures the menu button for different platforms
@@ -220,52 +223,45 @@ func (r *MenuRegistry) matchesContext(cfg MenuButtonConfig, ctx *MenuContext) bo
 }
 
 // BuildForTelegram returns the Telegram Bot API configuration for the menu button
-func (r *MenuRegistry) BuildForTelegram(context *MenuContext) map[string]interface{} {
+func (r *MenuRegistry) BuildForTelegram(context *MenuContext) imbottelegram.MenuButtonConfig {
 	config := r.GetForPlatform(imbot.PlatformTelegram, context)
 	if config == nil {
-		// Return default commands menu
-		return map[string]interface{}{
-			"type": "commands",
-		}
+		return imbottelegram.MenuButtonConfig{Type: imbottelegram.MenuButtonTypeCommands}
 	}
 
 	switch config.Type {
 	case MenuTypeCommands:
-		// Build commands list
-		commands := make([]map[string]string, 0)
-		for _, item := range config.Items {
-			if item.Hidden {
-				continue
-			}
-			commands = append(commands, map[string]string{
-				"command":     item.Value,
-				"description": item.Description,
-			})
-		}
-		return map[string]interface{}{
-			"type":     "commands",
-			"commands": commands,
-		}
+		return imbottelegram.MenuButtonConfig{Type: imbottelegram.MenuButtonTypeCommands}
 
 	case MenuTypeWebApp:
-		return map[string]interface{}{
-			"type": "web_app",
-			"text": config.ButtonText,
-			"url":  config.Items[0].URL,
+		menuConfig := imbottelegram.MenuButtonConfig{Type: imbottelegram.MenuButtonTypeDefault}
+		if len(config.Items) > 0 {
+			menuConfig = imbottelegram.MenuButtonConfig{
+				Type: imbottelegram.MenuButtonTypeWebApp,
+				Text: config.ButtonText,
+				URL:  config.Items[0].URL,
+			}
 		}
+		return menuConfig
 
 	case MenuTypeCallbacks:
-		// Telegram doesn't support callback menu buttons directly
-		// Fall back to commands
-		return map[string]interface{}{
-			"type": "commands",
-		}
+		return imbottelegram.MenuButtonConfig{Type: imbottelegram.MenuButtonTypeCommands}
 
 	default:
-		return map[string]interface{}{
-			"type": "commands",
-		}
+		return imbottelegram.MenuButtonConfig{Type: imbottelegram.MenuButtonTypeCommands}
 	}
+}
+
+func buildTelegramBotCommands(cmds []map[string]string) []models.BotCommand {
+	commands := make([]models.BotCommand, 0, len(cmds))
+	for _, cmd := range cmds {
+		command := strings.TrimPrefix(cmd["command"], "/")
+		commands = append(commands, models.BotCommand{
+			Command:     command,
+			Description: cmd["description"],
+		})
+	}
+	return commands
 }
 
 // BuildForFeishu returns the Feishu/Lark configuration for quick actions
@@ -464,7 +460,7 @@ func setupTelegramMenuButton(bot imbot.Bot, cmdRegistry *imbot.CommandRegistry) 
 	}
 
 	// Build command list from the imbot command registry
-	telegramCommands := cmdRegistry.BuildPlatformCommands(imbot.PlatformTelegram)
+	telegramCommands := buildTelegramBotCommands(cmdRegistry.BuildPlatformCommands(imbot.PlatformTelegram))
 
 	if err := tgBot.SetCommandList(telegramCommands); err != nil {
 		return fmt.Errorf("failed to set bot commands: %w", err)
