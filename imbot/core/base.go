@@ -119,6 +119,26 @@ func (b *BaseBot) UpdateReady(ready bool) {
 	b.status.Ready = ready
 }
 
+// MarkConnected marks the bot connected and authenticated, then emits connected.
+func (b *BaseBot) MarkConnected(authenticated bool) {
+	b.UpdateConnected(true)
+	b.UpdateAuthenticated(authenticated)
+	b.EmitConnected()
+}
+
+// MarkReady marks the bot ready and emits ready.
+func (b *BaseBot) MarkReady() {
+	b.UpdateReady(true)
+	b.EmitReady()
+}
+
+// MarkDisconnected marks the bot disconnected and not ready, then emits disconnected.
+func (b *BaseBot) MarkDisconnected() {
+	b.UpdateConnected(false)
+	b.UpdateReady(false)
+	b.EmitDisconnected()
+}
+
 // UpdateLastActivity updates the last activity timestamp
 func (b *BaseBot) UpdateLastActivity() {
 	b.mu.Lock()

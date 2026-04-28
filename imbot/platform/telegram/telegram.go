@@ -111,9 +111,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.api.RegisterHandler(tgbot.HandlerTypeMessageText, "", tgbot.MatchTypePrefix, b.handleMessageUpdate)
 	b.api.RegisterHandler(tgbot.HandlerTypeCallbackQueryData, "", tgbot.MatchTypePrefix, b.handleCallbackQueryUpdate)
 
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
-	b.EmitConnected()
+	b.MarkConnected(true)
 
 	// Get bot info
 	me, err := b.api.GetMe(b.ctx)
@@ -123,8 +121,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 		b.Logger().Info("Telegram bot connected: @%s", me.Username)
 	}
 
-	b.UpdateReady(true)
-	b.EmitReady()
+	b.MarkReady()
 
 	// Start receiving messages
 	b.wg.Add(1)
@@ -187,9 +184,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 
 	b.wg.Wait()
 
-	b.UpdateConnected(false)
-	b.UpdateReady(false)
-	b.EmitDisconnected()
+	b.MarkDisconnected()
 	b.Logger().Info("Telegram bot disconnected")
 
 	return nil

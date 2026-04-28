@@ -125,9 +125,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 	b.adapter = NewAdapter(b.BaseBot.Config(), wcAccount)
 
 	// Mark as connected and start receiving messages
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
-	b.EmitConnected()
+	b.MarkConnected(true)
 	b.Logger().Info("Weixin bot connected: account=%s", b.account.ID())
 
 	b.wg.Add(1)
@@ -147,9 +145,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 	// Disconnect from plugin
 	_ = b.WechatBot.Disconnect()
 
-	b.UpdateConnected(false)
-	b.UpdateReady(false)
-	b.EmitDisconnected()
+	b.MarkDisconnected()
 	b.Logger().Info("Weixin bot disconnected")
 
 	return nil
@@ -407,8 +403,7 @@ func (b *Bot) receiveMessages() {
 	defer b.wg.Done()
 
 	// Mark as ready
-	b.UpdateReady(true)
-	b.EmitReady()
+	b.MarkReady()
 	b.Logger().Info("Weixin bot ready: account=%s", b.accountID)
 
 	var syncBuf string

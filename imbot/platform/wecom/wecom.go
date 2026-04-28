@@ -65,8 +65,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 		return core.NewAuthFailedError(core.PlatformWecom, fmt.Sprintf("connect failed: %v", err), err)
 	}
 
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
+	b.MarkConnected(true)
 
 	b.wg.Add(1)
 	go b.runUntilDone()
@@ -78,8 +77,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 func (b *Bot) runUntilDone() {
 	defer b.wg.Done()
 
-	b.UpdateReady(true)
-	b.EmitReady()
+	b.MarkReady()
 	b.Logger().Info("WeCom bot ready: botID=%s", b.botID)
 
 	<-b.ctx.Done()
@@ -97,9 +95,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 
 	_ = b.sdk.Disconnect()
 
-	b.UpdateConnected(false)
-	b.UpdateReady(false)
-	b.EmitDisconnected()
+	b.MarkDisconnected()
 	b.Logger().Info("WeCom bot disconnected")
 
 	return nil

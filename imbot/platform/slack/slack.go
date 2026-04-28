@@ -58,9 +58,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 		return core.NewAuthFailedError(core.PlatformSlack, "authentication failed", err)
 	}
 
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
-	b.EmitConnected()
+	b.MarkConnected(true)
 	b.Logger().Info("Slack bot connected: %s", authResp.User)
 
 	// Start RTM or WebSocket
@@ -83,9 +81,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 
 	b.wg.Wait()
 
-	b.UpdateConnected(false)
-	b.UpdateReady(false)
-	b.EmitDisconnected()
+	b.MarkDisconnected()
 	b.Logger().Info("Slack bot disconnected")
 
 	return nil
@@ -233,8 +229,7 @@ func (b *Bot) handleRTMEvents(rtm *slack.RTM) {
 	b.wg.Add(1)
 	defer b.wg.Done()
 
-	b.UpdateReady(true)
-	b.EmitReady()
+	b.MarkReady()
 
 	for {
 		select {

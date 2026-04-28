@@ -126,9 +126,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 		return err
 	}
 
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
-	b.EmitConnected()
+	b.MarkConnected(true)
 	b.Logger().Info("WhatsApp bot connected: phoneID=%s", b.phoneID)
 
 	// Start receiving events (via webhook polling or websocket)
@@ -146,9 +144,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 
 	b.wg.Wait()
 
-	b.UpdateConnected(false)
-	b.UpdateReady(false)
-	b.EmitDisconnected()
+	b.MarkDisconnected()
 	b.Logger().Info("WhatsApp bot disconnected")
 
 	return nil
@@ -283,8 +279,7 @@ func (b *Bot) authenticate() error {
 func (b *Bot) receiveEvents() {
 	defer b.wg.Done()
 
-	b.UpdateReady(true)
-	b.EmitReady()
+	b.MarkReady()
 
 	// WhatsApp primarily uses webhooks
 	// In a real implementation, you would:

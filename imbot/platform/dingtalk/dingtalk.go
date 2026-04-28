@@ -100,9 +100,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 		return core.NewConnectionFailedError(core.PlatformDingTalk, "stream connection failed", true)
 	}
 
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
-	b.EmitConnected()
+	b.MarkConnected(true)
 	b.Logger().Info("DingTalk bot connected")
 
 	// Wait for connection to be ready
@@ -127,9 +125,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 
 	b.wg.Wait()
 
-	b.UpdateConnected(false)
-	b.UpdateReady(false)
-	b.EmitDisconnected()
+	b.MarkDisconnected()
 	b.Logger().Info("DingTalk bot disconnected")
 
 	return nil
@@ -139,8 +135,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 func (b *Bot) waitForReady() {
 	defer b.wg.Done()
 	time.Sleep(2 * time.Second)
-	b.UpdateReady(true)
-	b.EmitReady()
+	b.MarkReady()
 }
 
 // onChatBotMessage handles chat bot callback messages

@@ -123,9 +123,7 @@ func (b *Bot) Connect(ctx context.Context) error {
 		return core.NewAuthFailedError(core.Platform(b.domain), "authentication failed", err)
 	}
 
-	b.UpdateConnected(true)
-	b.UpdateAuthenticated(true)
-	b.EmitConnected()
+	b.MarkConnected(true)
 	b.Logger().Info("%s bot connected (authenticated): domain=%s", b.domain, b.domain)
 
 	// Auto-start receiving messages via WebSocket
@@ -145,9 +143,7 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 		_ = b.StopReceiving(ctx)
 	}
 
-	b.UpdateConnected(false)
-	b.UpdateReady(false)
-	b.EmitDisconnected()
+	b.MarkDisconnected()
 	b.Logger().Info("%s bot disconnected", b.domain)
 	return nil
 }
@@ -191,8 +187,7 @@ func (b *Bot) StartReceiving(ctx context.Context) error {
 	// Wait a moment for connection to establish
 	time.Sleep(2 * time.Second)
 
-	b.UpdateReady(true)
-	b.EmitReady()
+	b.MarkReady()
 	b.Logger().Info("%s WebSocket connected and receiving events", b.domain)
 
 	return nil
