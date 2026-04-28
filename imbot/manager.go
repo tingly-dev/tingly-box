@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -20,6 +20,7 @@ type Manager struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
+	stopping atomic.Bool
 }
 
 // eventHandlers stores global event handlers
@@ -93,14 +94,6 @@ func (m *Manager) AddBot(config *core.Config) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Validate config
-	if err := config.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	// Expand environment variables
-	config.ExpandEnvVars()
-
 	// Create bot
 	bot, err := CreateBot(config)
 	if err != nil {
@@ -114,7 +107,7 @@ func (m *Manager) AddBot(config *core.Config) error {
 	if config.UUID != "" {
 		m.bots[config.UUID] = bot
 	} else {
-		logrus.Errorf("missing bot uuid")
+		return fmt.Errorf("missing bot uuid")
 	}
 
 	// Connect if enabled
@@ -153,8 +146,8 @@ func (m *Manager) RemoveBot(uid string) error {
 		m.logger.Error("Error closing bot: %v", err)
 	}
 
-	// Remove
-	logrus.Infof("remove bot: %s[%s]", bot.PlatformInfo().Name, bot.UUID())
+	delete(m.bots, uid)
+	m.logger.Info("Removed %s bot [%s]", bot.PlatformInfo().Name, bot.UUID())
 	return nil
 }
 
@@ -187,6 +180,7 @@ func (m *Manager) GetBotByUUID(uuid string) core.Bot {
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	m.ctx = ctx
+	m.stopping.Store(false)
 	m.mu.Unlock()
 
 	m.logger.Info("Starting bot manager...")
@@ -215,13 +209,15 @@ func (m *Manager) Start(ctx context.Context) error {
 
 // shutdown performs the actual shutdown (called from Stop goroutine or when context is cancelled)
 func (m *Manager) shutdown() {
+	m.stopping.Store(true)
+
 	// Disconnect all bots without using WaitGroup to avoid deadlock
-	m.mu.Lock()
+	m.mu.RLock()
 	bots := make([]core.Bot, 0, len(m.bots))
 	for _, bot := range m.bots {
 		bots = append(bots, bot)
 	}
-	m.mu.Unlock()
+	m.mu.RUnlock()
 
 	// Disconnect each bot (with timeout)
 	for _, bot := range bots {
@@ -239,13 +235,20 @@ func (m *Manager) shutdown() {
 // Stop stops the manager and disconnects all bots
 func (m *Manager) Stop(ctx context.Context) error {
 	m.logger.Info("Stopping bot manager...")
+	m.stopping.Store(true)
 
 	m.cancel()
+
+	shutdownDone := make(chan struct{})
+	go func() {
+		m.shutdown()
+		close(shutdownDone)
+	}()
 
 	// Wait for shutdown to complete (with timeout)
 	done := make(chan struct{})
 	go func() {
-		m.wg.Wait()
+		<-shutdownDone
 		close(done)
 	}()
 
@@ -253,6 +256,8 @@ func (m *Manager) Stop(ctx context.Context) error {
 	case <-done:
 		m.logger.Info("Bot manager stopped")
 		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("stop cancelled: %w", ctx.Err())
 	case <-time.After(10 * time.Second):
 		m.logger.Warn("Timeout waiting for bot manager to stop")
 		return fmt.Errorf("timeout waiting for bots to stop")
@@ -430,7 +435,7 @@ func (m *Manager) handleReconnect(bot core.Bot, platform Platform) {
 			m.mu.RUnlock()
 
 			// Don't reconnect if context is cancelled or auto-reconnect is disabled
-			if ctxCancelled || !autoReconnect {
+			if ctxCancelled || !autoReconnect || m.stopping.Load() {
 				m.logger.Info("Skipping reconnect for %s bot: context cancelled or auto-reconnect disabled", platform)
 				return
 			}
