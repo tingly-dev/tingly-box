@@ -45,8 +45,6 @@ type Runtime struct {
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
 	virtualRegistry   *VirtualToolRegistry
-	sessionStore      *SessionStore
-	sweeper           *time.Ticker
 
 	// Cache for enabled server tool names to avoid repeated full enumeration.
 	enabledNamesCache   map[string]struct{}
@@ -68,9 +66,7 @@ func NewRuntime(getConfig configProvider) *Runtime {
 		toolSourceFactory: NewToolSourceFactory(sc, nil),
 		activeSources:     make(map[string]ToolSource),
 		virtualRegistry:   NewVirtualToolRegistry(),
-		sessionStore:      NewSessionStore(10 * time.Minute),
 	}
-	r.sweeper = r.sessionStore.StartSweeper(1 * time.Minute)
 	return r
 }
 
@@ -92,9 +88,6 @@ func (r *Runtime) Close() {
 
 	// Close all active tool sources
 	if r.activeSources != nil {
-		if r.sweeper != nil {
-			r.sweeper.Stop()
-		}
 		r.sourcesMu.Lock()
 		defer r.sourcesMu.Unlock()
 
@@ -627,7 +620,7 @@ func (r *Runtime) RegisterAdviser(cfg typ.AdvisorConfig, cp *client.ClientPool) 
 	if r == nil || r.virtualRegistry == nil {
 		return
 	}
-	tool := NewAdvisorVirtualTool(cfg, cp, r.sessionStore)
+	tool := NewAdvisorVirtualTool(cfg, cp)
 	r.virtualRegistry.Register(tool)
 }
 

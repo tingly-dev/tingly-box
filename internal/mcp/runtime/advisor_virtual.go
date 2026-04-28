@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,7 +12,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualTool {
+func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualTool {
 	if cfg.MaxUsesPerRequest <= 0 {
 		cfg.MaxUsesPerRequest = 3
 	}
@@ -28,16 +27,13 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 		Name:         "advisor",
 		Description:  description(),
 		InputSchema:  schema,
-		Handler:      newAdvisorHandler(cfg, cp, store),
+		Handler:      newAdvisorHandler(cfg, cp),
 		IsClientTool: false, // Server tool: not exposed to clients
 	}
 }
 
-func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualToolHandler {
+func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool) VirtualToolHandler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Extract arguments (advisor takes no parameters; args may still carry session_id)
-		args, _ := req.Params.Arguments.(map[string]any)
-
 		// Check depth to prevent recursion.
 		// Depth is incremented by response hook before tool execution, so the first
 		// legitimate advisor call runs at depth=1 and must be allowed.
@@ -56,16 +52,6 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 				Content: []mcp.Content{mcp.NewTextContent("Advisor consultations exhausted for this request.")},
 				IsError: true,
 			}, nil
-		}
-
-		// Enrich advisor context with session data from SessionStore
-		if store != nil {
-			if sessionID, _ := args["session_id"].(string); sessionID != "" {
-				if sc, found := store.Get(sessionID); found {
-					actx = enrichAdvisorContextWithSession(actx, sc)
-					ctx = WithAdvisorContext(ctx, actx)
-				}
-			}
 		}
 
 		// Execute advisor call
@@ -111,28 +97,4 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(result)}}, nil
 	}
-}
-
-// enrichAdvisorContextWithSession prepends session-persistent heavy data as
-// system messages so the advisor model sees workspace state and build logs
-// before the conversation history.
-func enrichAdvisorContextWithSession(actx *AdvisorContext, sc *SessionContext) *AdvisorContext {
-	if actx == nil {
-		actx = &AdvisorContext{}
-	}
-	var enriched []map[string]any
-	if len(sc.BuildLogs) > 0 {
-		enriched = append(enriched, map[string]any{
-			"role":    "system",
-			"content": "Build logs:\n" + strings.Join(sc.BuildLogs, "\n"),
-		})
-	}
-	if sc.LastWorkerResp != "" {
-		enriched = append(enriched, map[string]any{
-			"role":    "system",
-			"content": "Last worker response:\n" + sc.LastWorkerResp,
-		})
-	}
-	actx.Messages = append(enriched, actx.Messages...)
-	return actx
 }
