@@ -32,6 +32,7 @@ type StoreManager struct {
 	modelCapabilityStore *ModelCapabilityStore
 	modelStore           *ModelStore
 	apiTokenStore        *APITokenStore
+	taskStore            *TaskStore
 }
 
 // StoreManagerConfig holds configuration for StoreManager initialization.
@@ -160,6 +161,9 @@ func (sm *StoreManager) initStores() error {
 	if err := sm.initAPITokenStore(); err != nil {
 		errs = append(errs, fmt.Errorf("api token store: %w", err))
 	}
+	if err := sm.initTaskStore(); err != nil {
+		errs = append(errs, fmt.Errorf("task store: %w", err))
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to initialize stores: %v", errs)
@@ -276,6 +280,22 @@ func (sm *StoreManager) initAPITokenStore() error {
 	return nil
 }
 
+// initTaskStore initializes the TaskStore.
+func (sm *StoreManager) initTaskStore() error {
+	if err := sm.db.AutoMigrate(&TaskRecord{}); err != nil {
+		return err
+	}
+	// Belt-and-suspenders: ensure composite indices exist regardless of GORM tag behaviour.
+	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status_scheduled ON tasks(status, scheduled_at)`)
+	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_key_status ON tasks(serialization_key, status, created_at)`)
+	sm.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner_type, owner_id, created_at)`)
+	sm.taskStore = &TaskStore{
+		db:     sm.db,
+		dbPath: constant.GetDBFile(sm.baseDir),
+	}
+	return nil
+}
+
 // Stats returns the StatsStore (thread-safe).
 // Returns nil if the store is not initialized or after Close() has been called.
 func (sm *StoreManager) Stats() *StatsStore {
@@ -348,6 +368,14 @@ func (sm *StoreManager) APIToken() *APITokenStore {
 	return sm.apiTokenStore
 }
 
+// Tasks returns the TaskStore (thread-safe).
+// Returns nil if the store is not initialized or after Close() has been called.
+func (sm *StoreManager) Tasks() *TaskStore {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.taskStore
+}
+
 // BaseDir returns the base directory for this StoreManager.
 func (sm *StoreManager) BaseDir() string {
 	sm.mu.RLock()
@@ -385,6 +413,7 @@ func (sm *StoreManager) Close() error {
 	sm.modelCapabilityStore = nil
 	sm.modelStore = nil
 	sm.apiTokenStore = nil
+	sm.taskStore = nil
 	sm.db = nil
 
 	logrus.Info("StoreManager: Closed all stores")
@@ -398,7 +427,7 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 	defer sm.mu.RUnlock()
 
 	status := &HealthStatus{
-		TotalStores: 9,
+		TotalStores: 10,
 		StoreStatus: make(map[string]string),
 	}
 
@@ -413,6 +442,7 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 		"modelCapability": sm.modelCapabilityStore,
 		"model":           sm.modelStore,
 		"apiToken":        sm.apiTokenStore,
+		"tasks":           sm.taskStore,
 	}
 
 	for name, store := range stores {
