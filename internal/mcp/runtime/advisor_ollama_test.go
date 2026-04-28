@@ -66,7 +66,7 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Name:      "advisor",
-			Arguments: map[string]any{"reason": "Should I also add a /ready endpoint for kubernetes readiness probes?"},
+			Arguments: map[string]any{},
 		},
 	}
 
@@ -134,17 +134,17 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 	}
 	ctx := WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func(reason string) mcp.CallToolRequest {
+	makeReq := func() mcp.CallToolRequest {
 		return mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Name:      "advisor",
-				Arguments: map[string]any{"reason": reason},
+				Arguments: map[string]any{},
 			},
 		}
 	}
 
 	// First call: should succeed.
-	result, err := vt.Handler(ctx, makeReq("Quick check: is this approach correct?"))
+	result, err := vt.Handler(ctx, makeReq())
 	if err != nil {
 		t.Fatalf("first call unexpected error: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 	t.Logf("First advisor response: %s", text.Text)
 
 	// Second call: should be rejected with exhaustion.
-	result, err = vt.Handler(ctx, makeReq("One more question"))
+	result, err = vt.Handler(ctx, makeReq())
 	if err != nil {
 		t.Fatalf("second call unexpected error: %v", err)
 	}

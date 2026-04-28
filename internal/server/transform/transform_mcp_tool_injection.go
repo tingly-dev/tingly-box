@@ -41,6 +41,8 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 		return nil
 	}
 
+	advisorInjected := containsAdvisorTool(mcpTools)
+
 	switch req := ctx.Request.(type) {
 	case *openai.ChatCompletionNewParams:
 		originalCount := 0
@@ -51,6 +53,11 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 		req.Tools = mergeUniqueOpenAITools(req.Tools, mcpTools)
 		logrus.Debugf("[MCP-DEBUG] OpenAI tools: original=%d, injected=%d, total=%d",
 			originalCount, len(mcpTools), len(req.Tools))
+		if advisorInjected {
+			originalLen := len(req.Messages)
+			req.Messages = appendAdvisorBehaviorToOpenAISystem(req.Messages)
+			logrus.Debugf("[MCP-DEBUG] Advisor system-prompt appended (OpenAI Chat): messages %d -> %d", originalLen, len(req.Messages))
+		}
 	case *anthropic.MessageNewParams:
 		logOriginalToolNames("Anthropic V1", extractAnthropicV1ToolNames(req.Tools))
 		betaTools := request.ConvertOpenAIToAnthropicTools(mcpTools)
@@ -69,6 +76,11 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 			req.Tools = mergeUniqueAnthropicV1Tools(req.Tools, toolsV1)
 			logrus.Debugf("[MCP-DEBUG] Anthropic V1 tools: original=%d, injected=%d, total=%d",
 				originalCount, len(toolsV1), len(req.Tools))
+			if advisorInjected {
+				originalSystemLen := len(req.System)
+				req.System = appendAdvisorBehaviorToAnthropicV1System(req.System)
+				logrus.Debugf("[MCP-DEBUG] Advisor system-prompt appended (Anthropic V1): blocks %d -> %d", originalSystemLen, len(req.System))
+			}
 		}
 	case *anthropic.BetaMessageNewParams:
 		logOriginalToolNames("Anthropic Beta", extractAnthropicBetaToolNames(req.Tools))
@@ -87,6 +99,11 @@ func (t *MCPToolInjectionTransform) Apply(ctx *protocoltransform.TransformContex
 			}
 			logrus.Debugf("[MCP-DEBUG] Anthropic Beta tools: original=%d, injected=%d, total=%d, names=%v",
 				originalCount, len(tools), len(req.Tools), injectedNames)
+			if advisorInjected {
+				originalSystemLen := len(req.System)
+				req.System = appendAdvisorBehaviorToAnthropicBetaSystem(req.System)
+				logrus.Debugf("[MCP-DEBUG] Advisor system-prompt appended (Anthropic Beta): blocks %d -> %d", originalSystemLen, len(req.System))
+			}
 		}
 	}
 

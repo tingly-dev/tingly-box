@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -187,8 +186,16 @@ func normalizeAdvisorResponse(raw string) string {
 	return string(b)
 }
 
-func description(remainingUses int) string {
-	return `You have access to an advisor tool backed by a stronger reviewer model. When you call advisor(), your entire conversation history is automatically forwarded. They see the task, every tool call you've made, every result you've seen.
+// AdvisorToolDescription is the short, concise tool description shown alongside
+// other tools. The full behavioral contract lives in AdvisorBehaviorPrompt and
+// is appended to the worker's system prompt by the MCP injection transform.
+const AdvisorToolDescription = "Consult a stronger reviewer model for strategic guidance. Your full conversation context is forwarded automatically. Use this when facing significant decisions, when stuck, or before declaring a task complete."
+
+// AdvisorBehaviorPrompt is the behavioral contract that tingly-box appends to
+// the worker's system prompt whenever the advisor tool is injected. Behavior
+// instructions are weighted more heavily in system prompts than in tool
+// descriptions, so models follow them more reliably.
+const AdvisorBehaviorPrompt = `You have access to an advisor tool backed by a stronger reviewer model. When you call advisor(), your entire conversation history is automatically forwarded. They see the task, every tool call you've made, every result you've seen.
 
 Call advisor BEFORE substantive work -- before writing, before committing to an interpretation, before building on an assumption. If the task requires orientation first (finding files, fetching a source, seeing what's there), do that, then call advisor. Orientation is not substantive work. Writing, editing, and declaring an answer are.
 
@@ -202,9 +209,10 @@ On tasks longer than a few steps, call advisor at least once before committing t
 
 Give the advice serious weight. If you follow a step and it fails empirically, or you have primary-source evidence that contradicts a specific claim (the file says X, the paper states Y), adapt. A passing self-test is not evidence the advice is wrong -- it's evidence your test doesn't check what the advice is checking.
 
-If you've already retrieved data pointing one way and the advisor points another: don't silently switch. Surface the conflict in one more advisor call -- "I found X, you suggest Y, which constraint breaks the tie?" The advisor saw your evidence but may have underweighted it; a reconcile call is cheaper than committing to the wrong branch.
+If you've already retrieved data pointing one way and the advisor points another: don't silently switch. Surface the conflict in one more advisor call -- "I found X, you suggest Y, which constraint breaks the tie?" The advisor saw your evidence but may have underweighted it; a reconcile call is cheaper than committing to the wrong branch.`
 
-You have ` + strconv.Itoa(remainingUses) + ` advisor consultation(s) remaining this request.`
+func description() string {
+	return AdvisorToolDescription
 }
 
 const advisorCallTimeout = 60 * time.Second

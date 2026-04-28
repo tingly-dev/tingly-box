@@ -26,7 +26,7 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 
 	return VirtualTool{
 		Name:         "advisor",
-		Description:  description(cfg.MaxUsesPerRequest),
+		Description:  description(),
 		InputSchema:  schema,
 		Handler:      newAdvisorHandler(cfg, cp, store),
 		IsClientTool: false, // Server tool: not exposed to clients
