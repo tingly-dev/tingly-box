@@ -195,7 +195,7 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 			// Post-process: lock affinity if needed
 			s.postProcess(ctx, result)
 
-			logrus.Infof("[selector] selected service %s from provider %s via %s",
+			logrus.Debugf("[selector] selected service %s from provider %s via %s",
 				result.Service.Model, provider.Name, result.Source)
 
 			return result, nil

@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,6 +31,7 @@ func AnthropicSingleMessage(c *gin.Context, resp *anthropic.Message, responseMod
 	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
 	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicStreamEvent, state.inputTokens)
 
+	hasToolUse := false
 	for idx, block := range resp.Content {
 		switch v := block.AsAny().(type) {
 		case anthropic.TextBlock:
@@ -51,16 +53,26 @@ func AnthropicSingleMessage(c *gin.Context, resp *anthropic.Message, responseMod
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.ToolUseBlock:
+			hasToolUse = true
 			sendContentBlockStart(c, idx, blockTypeToolUse, map[string]interface{}{
 				"id":    v.ID,
 				"name":  v.Name,
-				"input": v.Input,
+				"input": map[string]any{},
 			}, flusher)
+			if inputBytes, err := json.Marshal(v.Input); err == nil {
+				sendContentBlockDelta(c, idx, map[string]interface{}{
+					"type":         deltaTypeInputJSONDelta,
+					"partial_json": string(inputBytes),
+				}, flusher)
+			}
 			sendContentBlockStop(c, state, idx, flusher)
 		}
 	}
 
 	stopReason := anthropicStopReasonEndTurn
+	if hasToolUse {
+		stopReason = anthropicStopReasonToolUse
+	}
 	sendMessageDelta(c, state, stopReason, flusher)
 	sendMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
 	return nil
@@ -86,6 +98,7 @@ func AnthropicSingleBetaMessage(c *gin.Context, resp *anthropic.BetaMessage, res
 	state := buildStreamState(resp.Usage.InputTokens, resp.Usage.OutputTokens)
 	sendMessageStart(c, flusher, model, eventTypeMessageStart, sendAnthropicStreamEvent, state.inputTokens)
 
+	hasToolUse := false
 	for idx, block := range resp.Content {
 		switch v := block.AsAny().(type) {
 		case anthropic.BetaTextBlock:
@@ -107,16 +120,26 @@ func AnthropicSingleBetaMessage(c *gin.Context, resp *anthropic.BetaMessage, res
 			}
 			sendContentBlockStop(c, state, idx, flusher)
 		case anthropic.BetaToolUseBlock:
+			hasToolUse = true
 			sendContentBlockStart(c, idx, blockTypeToolUse, map[string]interface{}{
 				"id":    v.ID,
 				"name":  v.Name,
-				"input": v.Input,
+				"input": map[string]any{},
 			}, flusher)
+			if inputBytes, err := json.Marshal(v.Input); err == nil {
+				sendContentBlockDelta(c, idx, map[string]interface{}{
+					"type":         deltaTypeInputJSONDelta,
+					"partial_json": string(inputBytes),
+				}, flusher)
+			}
 			sendContentBlockStop(c, state, idx, flusher)
 		}
 	}
 
 	stopReason := anthropicStopReasonEndTurn
+	if hasToolUse {
+		stopReason = anthropicStopReasonToolUse
+	}
 	sendMessageDelta(c, state, stopReason, flusher)
 	sendMessageStop(c, fmt.Sprintf("msg_%d", time.Now().Unix()), model, state, stopReason, flusher)
 	return nil

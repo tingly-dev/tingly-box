@@ -19,6 +19,7 @@ type Matrix struct {
 	RecordDir  string // Optional directory for recording requests/responses
 	ServerMode string // Server reuse mode: auto, all, pair
 	BatchCount int    // Number of times to run each test
+	MCPEnabled bool   // Enable MCP feature flag in test env
 }
 
 // ServerMode constants
@@ -148,9 +149,10 @@ func (m *Matrix) WithRecordDir(recordDir string) *Matrix {
 		Targets:    m.Targets,
 		Scenarios:  m.Scenarios,
 		Streaming:  m.Streaming,
-		RecordDir:  m.RecordDir,
+		RecordDir:  recordDir,
 		ServerMode: m.ServerMode,
 		BatchCount: m.BatchCount,
+		MCPEnabled: m.MCPEnabled,
 	}
 }
 
@@ -164,6 +166,7 @@ func (m *Matrix) WithServerMode(mode string) *Matrix {
 		RecordDir:  m.RecordDir,
 		ServerMode: mode,
 		BatchCount: m.BatchCount,
+		MCPEnabled: m.MCPEnabled,
 	}
 }
 
@@ -177,6 +180,21 @@ func (m *Matrix) WithBatchCount(count int) *Matrix {
 		RecordDir:  m.RecordDir,
 		ServerMode: m.ServerMode,
 		BatchCount: count,
+		MCPEnabled: m.MCPEnabled,
+	}
+}
+
+// WithMCPEnabled returns a copy of the Matrix with the MCP feature flag enabled.
+func (m *Matrix) WithMCPEnabled() *Matrix {
+	return &Matrix{
+		Sources:    m.Sources,
+		Targets:    m.Targets,
+		Scenarios:  m.Scenarios,
+		Streaming:  m.Streaming,
+		RecordDir:  m.RecordDir,
+		ServerMode: m.ServerMode,
+		BatchCount: m.BatchCount,
+		MCPEnabled: true,
 	}
 }
 
@@ -189,6 +207,16 @@ var skipPairs = map[string]string{
 	"anthropic_v1|google":   "Anthropic→Google target not yet implemented",
 	"anthropic_beta|google": "Anthropic→Google target not yet implemented",
 	"openai_chat|google":    "OpenAI Chat→Google target not yet implemented",
+}
+
+// testEnvOpts returns the TestEnvOptions to apply when creating a TestEnv for this matrix.
+func (m *Matrix) testEnvOpts() []TestEnvOption {
+	var opts []TestEnvOption
+	opts = append(opts, NewTestEnvOptionWithRecordDir(m.RecordDir))
+	if m.MCPEnabled {
+		opts = append(opts, NewTestEnvOptionWithMCP())
+	}
+	return opts
 }
 
 // skipSourceScenarios lists source+scenario combinations that are known to be broken.
@@ -323,7 +351,7 @@ func (m *Matrix) executeAllWithScenarioServer() []TestResult {
 		scenario := scenario
 
 		// Create TestEnv for this scenario
-		env, err := NewTestEnvForCLI(NewTestEnvOptionWithRecordDir(m.RecordDir))
+		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
 		if err != nil {
 			// All tests for this scenario fail with setup error
 			for _, source := range m.Sources {
@@ -423,7 +451,7 @@ func (m *Matrix) executeAllWithPairServer() []TestResult {
 			}
 
 			// Create TestEnv for this pair
-			env, err := NewTestEnvForCLI(NewTestEnvOptionWithRecordDir(m.RecordDir))
+			env, err := NewTestEnvForCLI(m.testEnvOpts()...)
 			if err != nil {
 				// All tests for this pair fail with setup error
 				for _, scenario := range m.Scenarios {
@@ -558,7 +586,7 @@ func (m *Matrix) executeOne(s Scenario, source, target protocol.APIType, streami
 	start := time.Now()
 
 	// Create test environment
-	env, err := NewTestEnvForCLI()
+	env, err := NewTestEnvForCLI(m.testEnvOpts()...)
 	if err != nil {
 		return TestResult{
 			Name:      m.buildTestName(s.Name, source, target, streaming),

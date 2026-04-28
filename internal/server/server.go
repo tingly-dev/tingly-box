@@ -6,7 +6,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -95,6 +97,8 @@ type Server struct {
 
 	// mcp runtime for external MCP tools
 	mcpRuntime *mcpruntime.Runtime
+	// pending virtual tool results for mixed server+client tool-use follow-up merge
+	pendingVirtualToolResults *pendingVirtualToolResultStore
 
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
@@ -523,6 +527,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.engine = gin.New()
 	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
 	server.errorMW = errorMW
+	server.pendingVirtualToolResults = newPendingVirtualToolResultStore()
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
 	grRuntime := server.currentGuardrailsRuntime()
@@ -657,6 +662,14 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.config.SetTemplateManager(templateManager)
 
 	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
+	server.mcpRuntime.SetClientPool(server.clientPool)
+	// Auto-register built-in tools (e.g., webtools) if not already present
+	if err := mcpruntime.RegisterBuiltinTools(cfg.GetMCPRuntimeConfig, cfg.SetToolConfig); err != nil {
+		logrus.WithError(err).Warn("mcp: failed to register builtin tools")
+	}
+
+	// Register adviser as virtual tool if configured
+	server.registerAdviserFromConfig()
 
 	// Initialize probe cache with 24-hour TTL
 	server.probeCache = NewProbeCache(24 * time.Hour)
@@ -770,6 +783,46 @@ func (s *Server) Cancel() context.CancelFunc {
 	return s.cancel
 }
 
+// expandAdvisorConfig expands ${VAR} placeholders in AdvisorConfig fields using
+// the process environment. Fields that still contain unexpanded placeholders after
+// expansion (i.e. the env var was not set) are cleared so callers get empty strings
+// rather than literal "${...}" template tokens.
+func expandAdvisorConfig(cfg typ.AdvisorConfig) typ.AdvisorConfig {
+	envVarPattern := regexp.MustCompile(`\$\{([^}]+)\}`)
+	expand := func(s string) string {
+		result := envVarPattern.ReplaceAllStringFunc(s, func(match string) string {
+			varName := match[2 : len(match)-1]
+			return os.Getenv(varName)
+		})
+		// If the result still looks like an unexpanded placeholder, return empty.
+		if envVarPattern.MatchString(result) {
+			return ""
+		}
+		return result
+	}
+	cfg.BaseURL = expand(cfg.BaseURL)
+	cfg.APIKey = expand(cfg.APIKey)
+	cfg.Model = expand(cfg.Model)
+	return cfg
+}
+
+// registerAdviserFromConfig reads the MCP config and registers the adviser
+// virtual tool if an enabled advisor source is found.
+func (s *Server) registerAdviserFromConfig() {
+	mcpCfg := s.mcpRuntime.GetConfig()
+	if mcpCfg == nil {
+		return
+	}
+	for _, source := range mcpCfg.Sources {
+		if source.Advisor != nil && source.Enabled != nil && *source.Enabled {
+			advisorCfg := expandAdvisorConfig(*source.Advisor)
+			s.mcpRuntime.RegisterAdviser(advisorCfg, s.clientPool)
+			logrus.Info("mcp: registered adviser as virtual tool")
+			break
+		}
+	}
+}
+
 // setupConfigWatcher initializes the configuration hot-reload watcher
 func (s *Server) setupConfigWatcher() {
 	watcher, err := config.NewConfigWatcher(s.config)
@@ -807,6 +860,9 @@ func (s *Server) setupConfigWatcher() {
 
 		// Re-sync guardrails based on updated config flags.
 		s.syncGuardrailsFromConfig()
+
+		// Re-register adviser with expanded env vars in case advisor config changed.
+		s.registerAdviserFromConfig()
 	})
 }
 

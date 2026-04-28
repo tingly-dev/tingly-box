@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -105,9 +106,9 @@ func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string
 
 	// Use standard OpenAI Responses API (session ID already in c.Request.Context)
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := NewForwardContext(nil, provider)
+	fc := forwarding.NewForwardContext(nil, provider)
 
-	response, cancel, err = ForwardOpenAIResponses(fc, wrapper, responsesReq)
+	response, cancel, err = forwarding.ForwardOpenAIResponses(fc, wrapper, responsesReq)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -166,8 +167,8 @@ func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, a
 
 	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -219,8 +220,8 @@ func (s *Server) assembleResponsesToAnthropic(c *gin.Context, proxyModel string,
 
 	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, responsesReq.Model)
-	fc := NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := forwarding.ForwardOpenAIResponsesStream(fc, wrapper, responsesReq)
 	if cancel != nil {
 		defer cancel()
 	}
