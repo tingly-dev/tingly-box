@@ -62,7 +62,10 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 	}
 	for _, m := range actx.Messages {
 		role, _ := m["role"].(string)
-		content, _ := m["content"].(string)
+		content := extractMessageText(m["content"])
+		if content == "" {
+			continue
+		}
 		switch role {
 		case "user":
 			messages = append(messages, openai.UserMessage(content))
@@ -73,15 +76,18 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 		case "tool":
 			messages = append(messages, openai.UserMessage("[tool result]: "+content))
 		default:
-			if content != "" {
-				logrus.WithField("role", role).Warn("advisor: dropping unknown message role")
-			}
+			logrus.WithField("role", role).Warn("advisor: dropping unknown message role")
 		}
 	}
 
 	req := openai.ChatCompletionNewParams{
 		Model:    cfg.Model,
 		Messages: messages,
+	}
+
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		summary := summarizeAdvisorMessages(messages)
+		logrus.WithField("count", len(messages)).WithField("summary", summary).Debug("[MCP-DEBUG] ADVISOR: outgoing OpenAI messages")
 	}
 
 	resp, err := wrapper.ChatCompletionsNew(ctx, req)
@@ -116,7 +122,10 @@ func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.Client
 	var systemParts []string
 	for _, m := range actx.Messages {
 		role, _ := m["role"].(string)
-		content, _ := m["content"].(string)
+		content := extractMessageText(m["content"])
+		if content == "" {
+			continue
+		}
 		switch role {
 		case "user":
 			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(content)))
@@ -127,9 +136,7 @@ func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.Client
 		case "tool":
 			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock("[tool result]: "+content)))
 		default:
-			if content != "" {
-				logrus.WithField("role", role).Warn("advisor: dropping unknown message role")
-			}
+			logrus.WithField("role", role).Warn("advisor: dropping unknown message role")
 		}
 	}
 
@@ -211,8 +218,84 @@ Give the advice serious weight. If you follow a step and it fails empirically, o
 
 If you've already retrieved data pointing one way and the advisor points another: don't silently switch. Surface the conflict in one more advisor call -- "I found X, you suggest Y, which constraint breaks the tie?" The advisor saw your evidence but may have underweighted it; a reconcile call is cheaper than committing to the wrong branch.`
 
+// summarizeAdvisorMessages produces a short, log-friendly summary of the
+// OpenAI messages the advisor is about to send (role + content length).
+func summarizeAdvisorMessages(messages []openai.ChatCompletionMessageParamUnion) string {
+	var b strings.Builder
+	for i, m := range messages {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		role := "?"
+		contentLen := 0
+		switch {
+		case m.OfSystem != nil:
+			role = "system"
+			contentLen = len(m.OfSystem.Content.OfString.Value)
+		case m.OfUser != nil:
+			role = "user"
+			contentLen = len(m.OfUser.Content.OfString.Value)
+		case m.OfAssistant != nil:
+			role = "assistant"
+			contentLen = len(m.OfAssistant.Content.OfString.Value)
+		}
+		fmt.Fprintf(&b, "%s(%d)", role, contentLen)
+	}
+	return b.String()
+}
+
 func description() string {
 	return AdvisorToolDescription
+}
+
+// extractMessageText normalizes a message "content" field to a plain string.
+// OpenAI/Anthropic clients may serialize content as either a bare string or as
+// an array of content parts (e.g. [{"type":"text","text":"..."},
+// {"type":"tool_use",...}]). The advisor handler only consumes plain text, so
+// we extract and concatenate the text parts and ignore the rest. Returning
+// "" lets callers skip the message entirely instead of forwarding an empty
+// content block (which some upstreams reject as "messages 参数非法").
+func extractMessageText(content any) string {
+	switch v := content.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case []any:
+		var b strings.Builder
+		for _, part := range v {
+			switch p := part.(type) {
+			case string:
+				if b.Len() > 0 {
+					b.WriteString("\n")
+				}
+				b.WriteString(p)
+			case map[string]any:
+				// Standard text part: {"type":"text","text":"..."}
+				if t, _ := p["type"].(string); t == "text" {
+					if txt, _ := p["text"].(string); txt != "" {
+						if b.Len() > 0 {
+							b.WriteString("\n")
+						}
+						b.WriteString(txt)
+					}
+				}
+				// Tool-result part (Anthropic style): {"type":"tool_result","content":...}
+				if t, _ := p["type"].(string); t == "tool_result" {
+					if inner := extractMessageText(p["content"]); inner != "" {
+						if b.Len() > 0 {
+							b.WriteString("\n")
+						}
+						b.WriteString("[tool result]: ")
+						b.WriteString(inner)
+					}
+				}
+			}
+		}
+		return b.String()
+	default:
+		return ""
+	}
 }
 
 const advisorCallTimeout = 60 * time.Second
