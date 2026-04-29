@@ -3,19 +3,37 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 const normalizedPrefix = "tingly_box_mcp__"
+
+// advisorDepthKey is the context key for tracking adviser call depth.
+type advisorDepthKey struct{}
+
+// WithAdvisorDepth sets the adviser call depth in context.
+func WithAdvisorDepth(ctx context.Context, depth int) context.Context {
+	return context.WithValue(ctx, advisorDepthKey{}, depth)
+}
+
+// GetAdvisorDepth retrieves the current adviser call depth from context.
+func GetAdvisorDepth(ctx context.Context) int {
+	v, _ := ctx.Value(advisorDepthKey{}).(int)
+	return v
+}
 
 type configProvider func() *typ.MCPRuntimeConfig
 
@@ -26,6 +44,7 @@ type Runtime struct {
 	toolSourceFactory *ToolSourceFactory
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
+	virtualRegistry   *VirtualToolRegistry
 
 	// Cache for enabled server tool names to avoid repeated full enumeration.
 	enabledNamesCache   map[string]struct{}
@@ -41,11 +60,23 @@ func NewRuntime(getConfig configProvider) *Runtime {
 		return nil
 	}
 	sc := newSessionCache()
-	return &Runtime{
+	r := &Runtime{
 		getConfig:         getConfig,
 		sc:                sc,
-		toolSourceFactory: NewToolSourceFactory(sc),
+		toolSourceFactory: NewToolSourceFactory(sc, nil),
 		activeSources:     make(map[string]ToolSource),
+		virtualRegistry:   NewVirtualToolRegistry(),
+	}
+	return r
+}
+
+// SetClientPool injects the client pool into the runtime's tool source factory.
+func (r *Runtime) SetClientPool(cp *client.ClientPool) {
+	if r == nil {
+		return
+	}
+	if r.toolSourceFactory != nil {
+		r.toolSourceFactory.SetClientPool(cp)
 	}
 }
 
@@ -95,95 +126,73 @@ func (t mcpTool) schema() json.RawMessage {
 	return nil
 }
 
-// ListOpenAITools returns all MCP tools in normalized OpenAI function-tool format.
-func (r *Runtime) ListOpenAITools(ctx context.Context) []openai.ChatCompletionToolUnionParam {
-	cfg := r.getConfigOrDefault()
-	if cfg == nil || len(cfg.Sources) == 0 {
-		sourceCount := 0
-		if cfg != nil {
-			sourceCount = len(cfg.Sources)
-		}
-		logrus.Debugf("mcp: ListOpenAITools - no config or no sources (cfg=%v, sources=%d)", cfg != nil, sourceCount)
+// ListServerToolsForInjection returns MCP tools that should be injected into upstream model requests.
+// Injection is intentionally restricted to server-side virtual tools.
+// Client-facing non-virtual tools must be exposed through MCP transport endpoints instead.
+func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.ChatCompletionToolUnionParam {
+	if r == nil {
 		return nil
 	}
-	logrus.Debugf("mcp: ListOpenAITools - %d sources", len(cfg.Sources))
-
 	out := make([]openai.ChatCompletionToolUnionParam, 0, 8)
-	for _, source := range cfg.Sources {
-		if !typ.IsMCPSourceEnabled(source) {
-			logrus.Debugf("mcp: source=%s is disabled; skip tool listing", source.ID)
-			continue
-		}
-		// Skip client tools - they should not be injected into AI requests
-		if source.IsClientTool != nil && *source.IsClientTool {
-			logrus.Debugf("mcp: source=%s is a client tool; skip tool injection", source.ID)
-			continue
-		}
-
-		// Get or create tool source
-		toolSource, err := r.getOrCreateSource(ctx, source.ID)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"source": source.ID,
-				"error":  err.Error(),
-			}).Warn("mcp: failed to get tool source")
-			continue
-		}
-
-		// Ensure source is connected
-		if !toolSource.IsConnected() {
-			if err := toolSource.Connect(ctx); err != nil {
-				logrus.WithFields(logrus.Fields{
-					"source":    source.ID,
-					"transport": toolSource.GetType(),
-					"error":     err.Error(),
-				}).Warn("mcp: connect failed")
+	if r.virtualRegistry != nil {
+		virtualTools := r.virtualRegistry.ListVirtualTools()
+		for _, vt := range virtualTools {
+			if !r.isVirtualServerToolInjectable(vt) {
 				continue
 			}
-		}
-
-		// List tools from source
-		tools, err := toolSource.ListTools(ctx)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"source": source.ID,
-				"error":  err.Error(),
-			}).Warn("mcp: list tools failed")
-			continue
-		}
-
-		// Apply allow list filtering
-		allowAll, allowSet := buildAllowList(source.Tools)
-		for _, t := range tools {
-			if strings.TrimSpace(t.Name) == "" {
-				continue
-			}
-			if !allowAll && !allowSet[t.Name] {
-				continue
-			}
-
-			normalized := NormalizeToolName(source.ID, t.Name)
+			// Virtual tools use "builtin" as source ID for normalization
+			normalized := NormalizeToolName("builtin", vt.Name)
 			params := shared.FunctionParameters{
 				"type":       "object",
 				"properties": map[string]interface{}{},
 			}
-			if raw := t.InputSchema; len(raw) > 0 {
-				var schema map[string]interface{}
-				if err := json.Unmarshal(raw, &schema); err == nil && len(schema) > 0 {
-					params = schema
-				}
+			// Convert mcp.ToolInputSchema to shared.FunctionParameters via JSON
+			schemaBytes, _ := json.Marshal(vt.InputSchema)
+			var schema map[string]interface{}
+			if err := json.Unmarshal(schemaBytes, &schema); err == nil && len(schema) > 0 {
+				params = shared.FunctionParameters(schema)
 			}
 			def := shared.FunctionDefinitionParam{
 				Name:       normalized,
 				Parameters: params,
 			}
-			if t.Description != "" {
-				def.Description = param.NewOpt(t.Description)
+			if vt.Description != "" {
+				def.Description = param.NewOpt(vt.Description)
 			}
 			out = append(out, openai.ChatCompletionFunctionTool(def))
 		}
 	}
 	return out
+}
+
+func (r *Runtime) isVirtualServerToolInjectable(vt VirtualTool) bool {
+	if strings.TrimSpace(vt.Name) == "" || vt.IsClientTool {
+		return false
+	}
+
+	// Builtin adviser injection must follow source enablement and server-tool semantics.
+	if vt.Name == mcptools.BuiltinAdvisorToolName {
+		cfg := r.getConfigOrDefault()
+		if cfg == nil {
+			return false
+		}
+		for _, source := range cfg.Sources {
+			if source.ID != mcptools.BuiltinAdvisorSourceID {
+				continue
+			}
+			if !typ.IsMCPSourceEnabled(source) {
+				return false
+			}
+			if source.IsClientTool != nil && *source.IsClientTool {
+				return false
+			}
+			allowAll, allowSet := buildAllowList(source.Tools)
+			return allowAll || allowSet[vt.Name]
+		}
+		return false
+	}
+
+	return true
 }
 
 // IsMCPToolName checks whether a tool name is a normalized MCP tool.
@@ -210,13 +219,31 @@ func ParseNormalizedToolName(name string) (string, string, bool) {
 }
 
 // CallTool executes a normalized MCP tool call and returns serialized result.
+// Dispatches virtual tools first (kernel mode), then remote tools (user mode).
 func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("MCP runtime not initialized")
+	}
+	// 1. Check virtual registry first (kernel mode)
 	sourceID, toolName, ok := ParseNormalizedToolName(normalizedName)
 	if !ok {
 		return "", &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
 	}
 
-	// Get or create tool source
+	if sourceID == "builtin" && r.virtualRegistry != nil {
+		if tool, ok := r.virtualRegistry.Get(toolName); ok {
+			return r.callVirtualTool(ctx, tool, arguments)
+		}
+	}
+
+	// Backward compatibility: legacy adviser source ID maps to builtin virtual tool.
+	if sourceID == mcptools.BuiltinAdvisorSourceID && r.virtualRegistry != nil {
+		if tool, ok := r.virtualRegistry.Get(toolName); ok {
+			return r.callVirtualTool(ctx, tool, arguments)
+		}
+	}
+
+	// 2. Forward to remote tool source (user mode)
 	source, err := r.getOrCreateSource(ctx, sourceID)
 	if err != nil {
 		return "", err
@@ -241,6 +268,52 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	}
 
 	return result, nil
+}
+
+// callVirtualTool executes an in-process virtual tool with panic recovery.
+func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, arguments string) (string, error) {
+	// Parse arguments
+	var argMap map[string]any
+	if arguments != "" {
+		if err := json.Unmarshal([]byte(arguments), &argMap); err != nil {
+			return "", fmt.Errorf("invalid arguments JSON: %w", err)
+		}
+	}
+
+	// Build mcp.CallToolRequest
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      tool.Name,
+			Arguments: argMap,
+		},
+	}
+
+	// Execute with panic recovery
+	defer func() {
+		if rec := recover(); rec != nil {
+			logrus.WithField("panic", rec).Error("mcp: virtual tool panic")
+		}
+	}()
+
+	result, err := tool.Handler(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	// Serialize result
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize tool result: %w", err)
+	}
+
+	// Extract text content from result
+	if len(result.Content) > 0 {
+		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
+			return string(textContent.Text), nil
+		}
+	}
+
+	return string(resultBytes), nil
 }
 
 // isSourceEnabled checks if a source is enabled in the current configuration
@@ -329,8 +402,20 @@ func (r *Runtime) getOrCreateSource(ctx context.Context, sourceID string) (ToolS
 		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " not found"}
 	}
 
+	// Virtual sources (e.g. advisor) are handled in-process; they are never backed by a subprocess or remote connection.
+	if sourceConfig.Advisor != nil {
+		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is a virtual tool (use virtual registry)"}
+	}
+
 	if !typ.IsMCPSourceEnabled(*sourceConfig) {
 		return nil, &sessionError{sourceID: sourceID, msg: "mcp source " + sourceID + " is disabled"}
+	}
+	if missing := ValidateEnabledMCPSourceEnvRefs([]typ.MCPSourceConfig{*sourceConfig}); len(missing) > 0 {
+		first := missing[0]
+		return nil, &sessionError{
+			sourceID: sourceID,
+			msg:      "missing environment variable " + first.VarName + " for " + first.FieldPath,
+		}
 	}
 
 	// Create tool source using factory
@@ -369,6 +454,11 @@ func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool,
 
 	for _, source := range cfg.Sources {
 		if !typ.IsMCPSourceEnabled(source) {
+			continue
+		}
+
+		// Skip virtual-only sources (e.g., adviser) — they are not remote tool sources.
+		if source.Advisor != nil {
 			continue
 		}
 
@@ -426,6 +516,45 @@ func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool,
 	return result, nil
 }
 
+// ListClientSourceToolsForMCP returns source tools that are eligible for MCP client exposure.
+// Rules:
+//   - source must be enabled
+//   - source must be client tool (is_client_tool=true)
+//   - tool must come from non-virtual source (ListSourceTools contract)
+func (r *Runtime) ListClientSourceToolsForMCP(ctx context.Context) (map[string][]SourceTool, error) {
+	sourceTools, err := r.ListSourceTools(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(sourceTools) == 0 {
+		return sourceTools, nil
+	}
+
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return map[string][]SourceTool{}, nil
+	}
+
+	clientSources := make(map[string]bool)
+	for _, source := range cfg.Sources {
+		if !typ.IsMCPSourceEnabled(source) {
+			continue
+		}
+		if source.IsClientTool != nil && *source.IsClientTool {
+			clientSources[source.ID] = true
+		}
+	}
+
+	filtered := make(map[string][]SourceTool)
+	for sourceID, tools := range sourceTools {
+		if !clientSources[sourceID] {
+			continue
+		}
+		filtered[sourceID] = tools
+	}
+	return filtered, nil
+}
+
 func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
 	if r == nil || r.getConfig == nil {
 		return nil
@@ -434,13 +563,39 @@ func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
 	if cfg == nil {
 		return nil
 	}
-	typ.ApplyMCPRuntimeDefaults(cfg)
-	return cfg
+	var clone typ.MCPRuntimeConfig
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		logrus.WithError(err).Warn("mcp: failed to clone runtime config, using original")
+		clone = *cfg
+	} else if err := json.Unmarshal(b, &clone); err != nil {
+		logrus.WithError(err).Warn("mcp: failed to unmarshal cloned runtime config, using original")
+		clone = *cfg
+	}
+
+	typ.ApplyMCPRuntimeDefaults(&clone)
+	missing := ExpandMCPRuntimeEnvRefs(&clone)
+	for _, issue := range missing {
+		logrus.WithFields(logrus.Fields{
+			"source": issue.SourceID,
+			"field":  issue.FieldPath,
+			"var":    issue.VarName,
+		}).Warn("mcp: unresolved environment reference in runtime config")
+	}
+	return &clone
 }
 
 // GetConfig returns the current MCP runtime configuration.
 func (r *Runtime) GetConfig() *typ.MCPRuntimeConfig {
 	return r.getConfigOrDefault()
+}
+
+// VirtualRegistry returns the runtime's virtual tool registry, or nil if the runtime is nil.
+func (r *Runtime) VirtualRegistry() *VirtualToolRegistry {
+	if r == nil {
+		return nil
+	}
+	return r.virtualRegistry
 }
 
 func buildAllowList(names []string) (bool, map[string]bool) {
@@ -458,6 +613,33 @@ func buildAllowList(names []string) (bool, map[string]bool) {
 		}
 	}
 	return false, out
+}
+
+// RegisterAdviser registers the adviser as a virtual tool in the runtime.
+func (r *Runtime) RegisterAdviser(cfg typ.AdvisorConfig, cp *client.ClientPool) {
+	if r == nil || r.virtualRegistry == nil {
+		return
+	}
+	tool := NewAdvisorVirtualTool(cfg, cp)
+	r.virtualRegistry.Register(tool)
+}
+
+// GetAdvisorMaxUses returns the MaxUsesPerRequest from the advisor source config.
+// Returns 0 if no advisor is configured or the value is not positive.
+func (r *Runtime) GetAdvisorMaxUses() int {
+	if r == nil {
+		return 0
+	}
+	cfg := r.GetConfig()
+	if cfg == nil {
+		return 0
+	}
+	for _, source := range cfg.Sources {
+		if source.Advisor != nil && source.Advisor.MaxUsesPerRequest > 0 {
+			return source.Advisor.MaxUsesPerRequest
+		}
+	}
+	return 0
 }
 
 // HasServerTools returns true if there are any server tools configured
@@ -480,9 +662,16 @@ func (r *Runtime) HasServerTools() bool {
 
 const enabledNamesCacheTTL = 5 * time.Second
 
-// ListEnabledServerToolNames returns normalized MCP tool names from enabled server-tool sources.
+// ListEnabledServerToolNames returns normalized MCP tool names that are callable by
+// server-side MCP execution paths. This includes:
+//   - injected server-side virtual tools (via ListServerToolsForInjection)
+//   - backward-compatible aliases for server-only virtual tools (e.g. advisor source id)
+//
 // Results are cached with a short TTL to avoid repeated full source enumeration.
 func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]struct{} {
+	if r == nil {
+		return nil
+	}
 	r.enabledNamesMu.RLock()
 	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
 		r.enabledNamesMu.RUnlock()
@@ -495,14 +684,41 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
 		return r.enabledNamesCache
 	}
-
 	out := make(map[string]struct{})
-	for _, t := range r.ListOpenAITools(ctx) {
+	// Include enabled client-facing non-virtual MCP tools so strip-guard does not
+	// incorrectly remove valid tools declared by MCP clients.
+	if clientTools, err := r.ListClientSourceToolsForMCP(ctx); err == nil {
+		for sourceID, tools := range clientTools {
+			for _, t := range tools {
+				if strings.TrimSpace(t.Name) == "" {
+					continue
+				}
+				out[NormalizeToolName(sourceID, t.Name)] = struct{}{}
+			}
+		}
+	}
+
+	// Include server-side injected virtual tools.
+	for _, t := range r.ListServerToolsForInjection(ctx) {
 		fn := t.GetFunction()
 		if fn == nil || fn.Name == "" {
 			continue
 		}
 		out[fn.Name] = struct{}{}
+	}
+	// Server-only virtual tools are intentionally hidden from ListServerToolsForInjection,
+	// but still need to be executable by server-side MCP loops.
+	if r.virtualRegistry != nil {
+		for _, vt := range r.virtualRegistry.ListVirtualTools() {
+			if vt.IsClientTool || strings.TrimSpace(vt.Name) == "" {
+				continue
+			}
+			out[NormalizeToolName("builtin", vt.Name)] = struct{}{}
+			// Backward compatibility: older flows may still reference advisor source id.
+			if vt.Name == "advisor" {
+				out[NormalizeToolName("advisor", vt.Name)] = struct{}{}
+			}
+		}
 	}
 	r.enabledNamesCache = out
 	r.enabledNamesExpires = time.Now().Add(enabledNamesCacheTTL)
