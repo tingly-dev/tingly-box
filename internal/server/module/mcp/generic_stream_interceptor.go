@@ -521,21 +521,7 @@ func (i *GenericStreamInterceptor) executeTool(tool Tool, req any) (ToolExecutio
 // Helper methods
 
 func (i *GenericStreamInterceptor) extractModel(req any) string {
-	// Extract model from request based on format
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		return string(r.Model)
-	case *anthropic.BetaMessageNewParams:
-		return string(r.Model)
-	case *openai.ChatCompletionNewParams:
-		return string(r.Model)
-	default:
-		// Fallback to provider's first model if available
-		if len(i.provider.Models) > 0 {
-			return i.provider.Models[0]
-		}
-		return ""
-	}
+	return extractModelFromRequest(req, i.provider)
 }
 
 func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error) {
@@ -560,15 +546,7 @@ func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error
 }
 
 func (i *GenericStreamInterceptor) extractMessages(req any) []map[string]any {
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		return extractAnthropicV1Messages(r.Messages)
-	case *anthropic.BetaMessageNewParams:
-		return extractAnthropicBetaMessages(r.Messages)
-	case *openai.ChatCompletionNewParams:
-		return extractOpenAIChatMessages(r.Messages)
-	}
-	return nil
+	return extractMessagesForToolCall(req)
 }
 
 func (i *GenericStreamInterceptor) resultsToAny(results []ToolExecutionResult) []any {
@@ -635,53 +613,4 @@ func (i *GenericStreamInterceptor) extractRoundTools(response any) ([]Tool, erro
 		return i.roundTools, nil
 	}
 	return tools, err
-}
-
-// extractAnthropicV1Messages serialises Anthropic v1 messages to []map[string]any for advisor context.
-// JSON round-trip is used because the SDK union types don't expose underlying maps directly.
-func extractAnthropicV1Messages(messages []anthropic.MessageParam) []map[string]any {
-	if len(messages) == 0 {
-		return nil
-	}
-	b, err := json.Marshal(messages)
-	if err != nil {
-		return nil
-	}
-	var out []map[string]any
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil
-	}
-	return out
-}
-
-// extractAnthropicBetaMessages serialises Anthropic Beta messages to []map[string]any for advisor context.
-func extractAnthropicBetaMessages(messages []anthropic.BetaMessageParam) []map[string]any {
-	if len(messages) == 0 {
-		return nil
-	}
-	b, err := json.Marshal(messages)
-	if err != nil {
-		return nil
-	}
-	var out []map[string]any
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil
-	}
-	return out
-}
-
-// extractOpenAIChatMessages serialises OpenAI chat messages to []map[string]any for advisor context.
-func extractOpenAIChatMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
-	if len(messages) == 0 {
-		return nil
-	}
-	b, err := json.Marshal(messages)
-	if err != nil {
-		return nil
-	}
-	var out []map[string]any
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil
-	}
-	return out
 }
