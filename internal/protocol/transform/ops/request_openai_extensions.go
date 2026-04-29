@@ -138,6 +138,40 @@ func messageToMap(msg openai.ChatCompletionMessageParamUnion) (map[string]interf
 	return result, nil
 }
 
+func flattenRichContent(parts []interface{}) (string, bool) {
+	var segments []string
+	var dropped bool
+	for _, part := range parts {
+		switch value := part.(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				segments = append(segments, value)
+			}
+		case map[string]interface{}:
+			if textValue, ok := value["text"].(string); ok {
+				if strings.TrimSpace(textValue) != "" {
+					segments = append(segments, textValue)
+				}
+			} else if contentValue, ok := value["content"].(string); ok {
+				if strings.TrimSpace(contentValue) != "" {
+					segments = append(segments, contentValue)
+				}
+			} else {
+				dropped = true
+			}
+		default:
+			dropped = true
+		}
+	}
+	if len(segments) == 0 && dropped {
+		return "[non-text content omitted]", true
+	}
+	if dropped {
+		segments = append(segments, "[non-text content omitted]")
+	}
+	return strings.Join(segments, "\n"), dropped
+}
+
 // applyDefaultTransform applies default transformations for OpenAI-compatible requests
 // This handles standard fields like reasoning_effort that are widely supported
 func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {

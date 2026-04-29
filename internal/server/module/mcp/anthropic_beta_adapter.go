@@ -89,7 +89,7 @@ func (a *AnthropicBetaAdapter) BuildAssistantMessage(response any) (any, error) 
 	if !ok {
 		return nil, fmt.Errorf("expected *anthropic.BetaMessage, got %T", response)
 	}
-	return msg.ToParam(), nil
+	return betaMessageToParamPreservingThinking(msg), nil
 }
 
 func (a *AnthropicBetaAdapter) BuildToolMessage(result ToolExecutionResult) any {
@@ -110,7 +110,7 @@ func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (
 	// Create new request with appended messages
 	newReq := *reqParams
 	newMessages := append([]anthropic.BetaMessageParam{}, reqParams.Messages...)
-	newMessages = append(newMessages, msg.ToParam())
+	newMessages = append(newMessages, betaMessageToParamPreservingThinking(msg))
 
 	// Convert results to tool result blocks
 	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, len(results))
@@ -122,6 +122,23 @@ func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (
 
 	newReq.Messages = newMessages
 	return &newReq, nil
+}
+
+func betaMessageToParamPreservingThinking(msg *anthropic.BetaMessage) anthropic.BetaMessageParam {
+	if msg == nil {
+		return anthropic.BetaMessageParam{}
+	}
+
+	// Preserve original assistant content when building the follow-up request.
+	// Raw JSON round-trip keeps provider-specific fields that ToParam() may omit.
+	if raw := msg.RawJSON(); raw != "" {
+		var param anthropic.BetaMessageParam
+		if err := json.Unmarshal([]byte(raw), &param); err == nil {
+			return param
+		}
+	}
+
+	return msg.ToParam()
 }
 
 func (a *AnthropicBetaAdapter) FilterVirtualTools(response any, externalTools []Tool) (any, error) {

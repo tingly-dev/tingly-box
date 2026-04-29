@@ -2,11 +2,8 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
@@ -16,17 +13,17 @@ import (
 
 // GenericLoopProcessor implements format-agnostic non-streaming MCP tool handling
 type GenericLoopProcessor struct {
-	ctx              context.Context
-	s                ServerOps
-	provider         *typ.Provider
-	hc               *protocol.HandleContext
-	virtualRegistry  *runtime.VirtualToolRegistry
-	recorder         ProtocolRecorder
-	adapter          FormatAdapter
-	forwarder        Forwarder
-	toolExecutor     ToolExecutor
-	pendingManager   PendingResultsManager
-	config           InterceptorConfig
+	ctx             context.Context
+	s               ServerOps
+	provider        *typ.Provider
+	hc              *protocol.HandleContext
+	virtualRegistry *runtime.VirtualToolRegistry
+	recorder        ProtocolRecorder
+	adapter         FormatAdapter
+	forwarder       Forwarder
+	toolExecutor    ToolExecutor
+	pendingManager  PendingResultsManager
+	config          InterceptorConfig
 
 	// Usage tracking
 	totalInputTokens  int64
@@ -242,61 +239,11 @@ func (p *GenericLoopProcessor) executeTool(tool Tool, req any) (ToolExecutionRes
 // Helper methods
 
 func (p *GenericLoopProcessor) extractModel(req any) string {
-	// Extract model from request based on format
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		return string(r.Model)
-	case *anthropic.BetaMessageNewParams:
-		return string(r.Model)
-	case *openai.ChatCompletionNewParams:
-		return string(r.Model)
-	default:
-		// Fallback to provider name if available
-		if len(p.provider.Models) > 0 {
-			return p.provider.Models[0]
-		}
-		return ""
-	}
+	return extractModelFromRequest(req, p.provider)
 }
 
 func (p *GenericLoopProcessor) extractMessages(req any) []map[string]any {
-	// Extract messages from request for tool execution hooks
-	// Note: Current CallMCPTool implementation does not use messages parameter,
-	// but this is implemented for future compatibility
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		if len(r.Messages) == 0 {
-			return nil
-		}
-		b, _ := json.Marshal(r.Messages)
-		var out []map[string]any
-		json.Unmarshal(b, &out)
-		return out
-	case *anthropic.BetaMessageNewParams:
-		if len(r.Messages) == 0 {
-			return nil
-		}
-		b, _ := json.Marshal(r.Messages)
-		var out []map[string]any
-		json.Unmarshal(b, &out)
-		return out
-	case *openai.ChatCompletionNewParams:
-		// For OpenAI, convert messages to map format
-		if len(r.Messages) == 0 {
-			return nil
-		}
-		messages := make([]map[string]any, len(r.Messages))
-		for i, msg := range r.Messages {
-			// Convert OpenAI message to map representation
-			msgJSON, _ := msg.MarshalJSON()
-			var msgMap map[string]any
-			json.Unmarshal(msgJSON, &msgMap)
-			messages[i] = msgMap
-		}
-		return messages
-	default:
-		return nil
-	}
+	return extractMessagesForToolCall(req)
 }
 
 func (p *GenericLoopProcessor) resultsToAny(results []ToolExecutionResult) []any {
