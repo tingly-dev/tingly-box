@@ -41,14 +41,7 @@ func (s *StartCmdKong) Run(appManager *AppManager) error {
 		RecordDir:            s.RecordDir,
 		Expr:                 s.Expr,
 	}
-	mockCmd := &cobra.Command{}
-	if s.EnableDebug {
-		mockCmd.Flags().Set("debug", "true")
-	}
-	if s.Port != 0 {
-		mockCmd.Flags().Set("port", fmt.Sprintf("%d", s.Port))
-	}
-	opts := options.ResolveStartOptions(mockCmd, flags, appManager.AppConfig())
+	opts := options.ResolveStartOptions(newKongShimCmd(s.EnableDebug), flags, appManager.AppConfig())
 	return startServer(appManager, opts)
 }
 
@@ -100,15 +93,22 @@ func (r *RestartCmdKong) Run(appManager *AppManager) error {
 		RecordDir:            r.RecordDir,
 		Expr:                 r.Expr,
 	}
-	mockCmd := &cobra.Command{}
-	if r.EnableDebug {
-		mockCmd.Flags().Set("debug", "true")
-	}
-	if r.Port != 0 {
-		mockCmd.Flags().Set("port", fmt.Sprintf("%d", r.Port))
-	}
-	opts := options.ResolveStartOptions(mockCmd, flags, appManager.AppConfig())
+	opts := options.ResolveStartOptions(newKongShimCmd(r.EnableDebug), flags, appManager.AppConfig())
 	return startServer(appManager, opts)
+}
+
+// newKongShimCmd builds a cobra.Command whose only purpose is to satisfy
+// options.ResolveStartOptions, which probes cmd.Flags().Changed("debug") to
+// give an explicit --debug priority over the config file value. Kong has
+// already done flag parsing; we register --debug here and Set it iff the
+// caller passed it, so Changed() returns the right answer.
+func newKongShimCmd(debugSet bool) *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("debug", false, "")
+	if debugSet {
+		_ = cmd.Flags().Set("debug", "true")
+	}
+	return cmd
 }
 
 // Build information set by cli/tingly-box/main_kong.go at startup.

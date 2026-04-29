@@ -14,5 +14,9 @@ type OAuthCmdKong struct {
 }
 
 func (o *OAuthCmdKong) Run(appManager *AppManager) error {
-	return runOAuthFlow(appManager.AppConfig(), o.Provider, o.Name, o.Port, o.ProxyURL)
+	appConfig := appManager.AppConfig()
+	if o.Provider == "" {
+		return runInteractiveMode(appConfig, o.Name, o.Port, o.ProxyURL)
+	}
+	return runOAuthFlow(appConfig, o.Provider, o.Name, o.Port, o.ProxyURL)
 }

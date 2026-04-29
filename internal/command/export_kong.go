@@ -2,10 +2,6 @@
 
 package command
 
-import (
-	"github.com/spf13/cobra"
-)
-
 // ExportCmdKong exports routing rules
 type ExportCmdKong struct {
 	RequestModel string `kong:"flag,name='request-model',required,help='Request model name'"`
@@ -15,21 +11,5 @@ type ExportCmdKong struct {
 }
 
 func (e *ExportCmdKong) Run(appManager *AppManager) error {
-	// Create a mock cobra command for the existing runExport function
-	mockCmd := &cobra.Command{}
-	if err := mockCmd.Flags().Set("request-model", e.RequestModel); err != nil {
-		return err
-	}
-	if err := mockCmd.Flags().Set("scenario", e.Scenario); err != nil {
-		return err
-	}
-	if err := mockCmd.Flags().Set("format", e.Format); err != nil {
-		return err
-	}
-	if e.Output != "" {
-		if err := mockCmd.Flags().Set("output", e.Output); err != nil {
-			return err
-		}
-	}
-	return runExport(appManager, mockCmd)
+	return runExport(appManager, e.RequestModel, e.Scenario, e.Format, e.Output)
 }

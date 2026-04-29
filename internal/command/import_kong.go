@@ -9,5 +9,9 @@ type ImportCmdKong struct {
 }
 
 func (i *ImportCmdKong) Run(appManager *AppManager) error {
-	return runImport(appManager, i.Format, []string{i.File})
+	var args []string
+	if i.File != "" {
+		args = []string{i.File}
+	}
+	return runImport(appManager, i.Format, args)
 }

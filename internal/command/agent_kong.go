@@ -40,8 +40,12 @@ func (a *AgentApplyCmdKong) Run(appManager *AppManager) error {
 	if a.Model != "" {
 		args = append(args, "--model", a.Model)
 	}
+	// Always forward unified explicitly: legacy default is true, so a Kong
+	// user passing --unified=false would otherwise be silently dropped.
 	if a.Unified {
 		args = append(args, "--unified=true")
+	} else {
+		args = append(args, "--unified=false")
 	}
 	if a.Force {
 		args = append(args, "--force")

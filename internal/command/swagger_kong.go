@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/server"
 )
 
@@ -17,14 +16,6 @@ type SwaggerCmdKong struct {
 }
 
 func (s *SwaggerCmdKong) Run(appManager *AppManager) error {
-	mockCmd := &cobra.Command{}
-	if s.Output != "" {
-		mockCmd.Flags().Set("output", s.Output)
-	}
-	if s.Stdout {
-		mockCmd.Flags().Set("stdout", "true")
-	}
-	// For now, just call the existing command's RunE logic
 	return runSwagger(appManager, s.Output, s.Stdout)
 }
 

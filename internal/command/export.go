@@ -31,7 +31,11 @@ Examples:
   # Export to clipboard-friendly Base64 format
   tingly-box export --request-model gpt-4 --scenario general --format base64`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runExport(appManager, cmd)
+			formatStr, _ := cmd.Flags().GetString("format")
+			outputFile, _ := cmd.Flags().GetString("output")
+			requestModel, _ := cmd.Flags().GetString("request-model")
+			scenarioStr, _ := cmd.Flags().GetString("scenario")
+			return runExport(appManager, requestModel, scenarioStr, formatStr, outputFile)
 		},
 	}
 
@@ -46,14 +50,7 @@ Examples:
 	return cmd
 }
 
-func runExport(appManager *AppManager, cmd *cobra.Command) error {
-	// Get flags
-	formatStr, _ := cmd.Flags().GetString("format")
-	outputFile, _ := cmd.Flags().GetString("output")
-	requestModel, _ := cmd.Flags().GetString("request-model")
-	scenarioStr, _ := cmd.Flags().GetString("scenario")
-
-	// Parse format
+func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, outputFile string) error {
 	var format dataio.Format
 	switch strings.ToLower(formatStr) {
 	case "jsonl":
