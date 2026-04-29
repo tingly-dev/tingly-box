@@ -35,9 +35,6 @@ type TransportConfig struct {
 	// Set to true: providers without proxy_url will use system/environment proxy
 	RespectEnvProxy *bool // nil = use default (false)
 
-	// GlobalProxyURL is a fallback proxy URL for providers that have no per-provider proxy_url set.
-	// Per-provider proxy_url always takes priority. Supports http://, https://, socks5://.
-	GlobalProxyURL string
 }
 
 // Go defaults for reference (not used directly, only for documentation)
@@ -115,34 +112,6 @@ func GetGlobalTransportPool() *TransportPool {
 	return globalTransportPool
 }
 
-// globalProxyURL holds the fallback proxy URL for providers without an explicit per-provider proxy.
-var (
-	globalProxyURLMu  sync.RWMutex
-	globalProxyURLVal string
-)
-
-// SetGlobalProxyURL sets the global fallback proxy URL (thread-safe).
-func SetGlobalProxyURL(u string) {
-	globalProxyURLMu.Lock()
-	defer globalProxyURLMu.Unlock()
-	globalProxyURLVal = u
-}
-
-// GetGlobalProxyURL returns the current global fallback proxy URL (thread-safe).
-func GetGlobalProxyURL() string {
-	globalProxyURLMu.RLock()
-	defer globalProxyURLMu.RUnlock()
-	return globalProxyURLVal
-}
-
-// resolveProxyURL returns providerProxy if non-empty, otherwise falls back to the global proxy URL.
-func resolveProxyURL(providerProxy string) string {
-	if providerProxy != "" {
-		return providerProxy
-	}
-	return GetGlobalProxyURL()
-}
-
 // SetTransportConfig updates the transport pool configuration
 // Pass nil to reset to Go defaults (backward compatible)
 // This affects newly created transports only, existing transports are not modified
@@ -153,10 +122,8 @@ func SetTransportConfig(config *TransportConfig) {
 	globalTransportPool.config = config
 
 	if config == nil {
-		SetGlobalProxyURL("")
 		logrus.Info("Transport pool config reset to Go defaults")
 	} else {
-		SetGlobalProxyURL(config.GlobalProxyURL)
 		maxIdle := "default"
 		maxIdlePerHost := "default"
 		if config.MaxIdleConns != nil {
@@ -165,8 +132,8 @@ func SetTransportConfig(config *TransportConfig) {
 		if config.MaxIdleConnsPerHost != nil {
 			maxIdlePerHost = fmt.Sprintf("%d", *config.MaxIdleConnsPerHost)
 		}
-		logrus.Infof("Transport pool config updated: MaxIdleConns=%s, MaxIdleConnsPerHost=%s, GlobalProxyURL=%s",
-			maxIdle, maxIdlePerHost, config.GlobalProxyURL)
+		logrus.Infof("Transport pool config updated: MaxIdleConns=%s, MaxIdleConnsPerHost=%s",
+			maxIdle, maxIdlePerHost)
 	}
 }
 
@@ -284,10 +251,6 @@ func (tp *TransportPool) respectEnvProxy() bool {
 
 // createTransport creates a new HTTP transport with proxy support
 func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
-	// Use global proxy as fallback when no provider-specific proxy is set
-	if proxyURL == "" && tp.config != nil && tp.config.GlobalProxyURL != "" {
-		proxyURL = tp.config.GlobalProxyURL
-	}
 	if proxyURL == "" {
 		// Clone default transport for connection pool settings, then clear proxy
 		// unless the user has explicitly opted into env proxy via RespectEnvProxy.

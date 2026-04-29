@@ -145,9 +145,8 @@ type HTTPTransportConfig struct {
 	// Set to true: providers without proxy_url will use system/environment proxy
 	RespectEnvProxy *bool `json:"respect_env_proxy,omitempty" yaml:"respect_env_proxy,omitempty"`
 
-	// GlobalProxyURL is a global fallback proxy URL for all providers that have no per-provider proxy_url.
-	// Per-provider proxy_url always takes priority. Supports http://, https://, socks5://.
-	// Example: "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
+	// GlobalProxyURL stores a shared proxy URL offered as a UI convenience default.
+	// The backend does NOT apply it automatically; users must explicitly opt in per-provider/OAuth.
 	GlobalProxyURL string `json:"global_proxy_url,omitempty" yaml:"global_proxy_url,omitempty"`
 }
 
@@ -2041,8 +2040,7 @@ func (c *Config) ApplyHTTPTransportConfig() {
 		c.HTTPTransport.MaxIdleConnsPerHost == nil &&
 		c.HTTPTransport.MaxConnsPerHost == nil &&
 		c.HTTPTransport.DisableKeepAlives == nil &&
-		c.HTTPTransport.RespectEnvProxy == nil &&
-		c.HTTPTransport.GlobalProxyURL == "" {
+		c.HTTPTransport.RespectEnvProxy == nil {
 		// No custom transport config, use Go defaults (backward compatible with TB)
 		return
 	}
@@ -2055,7 +2053,6 @@ func (c *Config) ApplyHTTPTransportConfig() {
 		MaxConnsPerHost:     c.HTTPTransport.MaxConnsPerHost,
 		DisableKeepAlives:   c.HTTPTransport.DisableKeepAlives,
 		RespectEnvProxy:     c.HTTPTransport.RespectEnvProxy,
-		GlobalProxyURL:      c.HTTPTransport.GlobalProxyURL,
 	}
 	client.SetTransportConfig(config)
 }
