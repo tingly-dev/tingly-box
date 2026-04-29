@@ -2,9 +2,8 @@ package server
 
 import (
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/quota/fetcher"
+	"github.com/tingly-dev/tingly-box/ai/quota"
+	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 )

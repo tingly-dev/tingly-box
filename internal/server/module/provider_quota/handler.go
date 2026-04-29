@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/quota"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // Manager 配额管理器接口

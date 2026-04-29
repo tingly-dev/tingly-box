@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai/quota"
+	typ "github.com/tingly-dev/tingly-box/common/provider"
 )
 
 // CodexFetcher OpenAI Codex 配额获取器
@@ -83,12 +82,12 @@ type codexUsageResponse struct {
 	CodeReviewRateLimit  *codexRateLimit            `json:"code_review_rate_limit"`
 	AdditionalRateLimits []codexAdditionalRateLimit `json:"additional_rate_limits"`
 	Credits              *struct {
-		HasCredits          bool     `json:"has_credits"`
-		Unlimited           bool     `json:"unlimited"`
-		OverageLimitReached bool     `json:"overage_limit_reached"`
+		HasCredits          bool          `json:"has_credits"`
+		Unlimited           bool          `json:"unlimited"`
+		OverageLimitReached bool          `json:"overage_limit_reached"`
 		Balance             *codexBalance `json:"balance"`
-		ApproxLocalMessages []int    `json:"approx_local_messages"`
-		ApproxCloudMessages []int    `json:"approx_cloud_messages"`
+		ApproxLocalMessages []int         `json:"approx_local_messages"`
+		ApproxCloudMessages []int         `json:"approx_cloud_messages"`
 	} `json:"credits"`
 	SpendControl *struct {
 		Reached bool `json:"reached"`

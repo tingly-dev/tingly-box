@@ -8,9 +8,8 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai/quota"
+	typ "github.com/tingly-dev/tingly-box/common/provider"
 )
 
 func TestOpenRouterFetcher_Fetch(t *testing.T) {

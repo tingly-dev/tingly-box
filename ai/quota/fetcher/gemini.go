@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai/quota"
+	typ "github.com/tingly-dev/tingly-box/common/provider"
 )
 
 // GeminiFetcher Google Gemini 配额获取器

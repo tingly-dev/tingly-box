@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	typ "github.com/tingly-dev/tingly-box/common/provider"
 	"golang.org/x/sync/semaphore"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Manager 配额管理器

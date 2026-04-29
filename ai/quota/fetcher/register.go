@@ -2,8 +2,7 @@ package fetcher
 
 import (
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // RegisterAll registers all built-in quota fetchers into the given registrar.
