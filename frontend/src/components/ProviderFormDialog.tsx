@@ -750,40 +750,44 @@ const ProviderFormDialog = ({
                             placeholder={t('providerDialog.keyName.placeholder')}
                         />
 
-                        {mode === 'add' && (
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        size="small"
-                                        checked={useGlobalProxy}
-                                        disabled={!globalProxyUrl}
-                                        onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
-                                    />
-                                }
-                                label={
-                                    <Typography variant="body2" color={globalProxyUrl ? 'text.primary' : 'text.disabled'}>
-                                        {globalProxyUrl
-                                            ? t('providerDialog.advanced.proxyUrl.useGlobal', {url: globalProxyUrl})
-                                            : t('providerDialog.advanced.proxyUrl.useGlobalNotSet')}
-                                    </Typography>
-                                }
+                        <Box>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label={t('providerDialog.advanced.proxyUrl.label')}
+                                placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
+                                value={data.proxyUrl || ''}
+                                onChange={(e) => {
+                                    onChange('proxyUrl', e.target.value);
+                                    if (useGlobalProxy && e.target.value !== globalProxyUrl) {
+                                        setUseGlobalProxy(false);
+                                        localStorage.setItem('provider_use_global_proxy', 'false');
+                                    }
+                                }}
                             />
-                        )}
-
-                        <TextField
-                            size="small"
-                            fullWidth
-                            label={t('providerDialog.advanced.proxyUrl.label')}
-                            placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
-                            value={data.proxyUrl || ''}
-                            onChange={(e) => {
-                                onChange('proxyUrl', e.target.value);
-                                if (useGlobalProxy && e.target.value !== globalProxyUrl) {
-                                    setUseGlobalProxy(false);
-                                    localStorage.setItem('provider_use_global_proxy', 'false');
-                                }
-                            }}
-                        />
+                            {mode === 'add' && (
+                                <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                size="small"
+                                                checked={useGlobalProxy}
+                                                disabled={!globalProxyUrl}
+                                                onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
+                                            />
+                                        }
+                                        label={
+                                            <Typography variant="body2" color={globalProxyUrl ? 'text.secondary' : 'text.disabled'}>
+                                                {globalProxyUrl
+                                                    ? t('providerDialog.advanced.proxyUrl.useGlobal', {url: globalProxyUrl})
+                                                    : t('providerDialog.advanced.proxyUrl.useGlobalNotSet')}
+                                            </Typography>
+                                        }
+                                        labelPlacement="start"
+                                    />
+                                </Box>
+                            )}
+                        </Box>
 
                         {mode === 'edit' && (
                             <FormControlLabel

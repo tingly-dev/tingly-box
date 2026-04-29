@@ -746,23 +746,6 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
 
                     {/* Proxy URL input */}
                     <Box sx={{mb: 3}}>
-                        {globalProxyUrl && (
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        size="small"
-                                        checked={useGlobalProxy}
-                                        onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
-                                    />
-                                }
-                                label={
-                                    <Typography variant="body2">
-                                        {`Use global proxy (${globalProxyUrl})`}
-                                    </Typography>
-                                }
-                                sx={{mb: 1}}
-                            />
-                        )}
                         <TextField
                             fullWidth
                             label="HTTP/SOCKS Proxy URL (Optional)"
@@ -778,6 +761,26 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                             color={autoDetectedProxy ? "success" : "primary"}
                             focused={autoDetectedProxy ? true : undefined}
                         />
+                        <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        size="small"
+                                        checked={useGlobalProxy}
+                                        disabled={!globalProxyUrl}
+                                        onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
+                                    />
+                                }
+                                label={
+                                    <Typography variant="body2" color={globalProxyUrl ? 'text.secondary' : 'text.disabled'}>
+                                        {globalProxyUrl
+                                            ? `Use global proxy (${globalProxyUrl})`
+                                            : 'Use global proxy (not configured)'}
+                                    </Typography>
+                                }
+                                labelPlacement="start"
+                            />
+                        </Box>
                         {autoDetectedProxy && (
                             <Alert severity="success" sx={{mt: 1}} icon={<Launch fontSize="small"/>}>
                                 <Typography variant="caption">
