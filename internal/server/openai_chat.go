@@ -21,8 +21,19 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
 
 // handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
 func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
@@ -30,8 +41,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 
 	// Forward request to provider
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := NewForwardContext(nil, provider)
-	response, _, err := ForwardOpenAIChat(fc, wrapper, req)
+	fc := forwarding.NewForwardContext(nil, provider)
+	response, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, req)
 	if err != nil {
 		// Track error with no usage
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
@@ -43,39 +54,6 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 			},
 		})
 		return
-	}
-
-	// === POST-RESPONSE MCP tool execution loop ===
-	if len(response.Choices) > 0 {
-		choice := response.Choices[0]
-		if len(choice.Message.ToolCalls) > 0 {
-			if hasOnlyMCPToolCalls(choice.Message.ToolCalls) {
-				finalResponse, err := s.handleMCPToolCalls(c.Request.Context(), provider, req, response)
-				if err != nil {
-					usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-					s.trackUsageWithTokenUsage(c, usage, err)
-					SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to handle tool calls: %w", err), "api_error")
-					return
-				}
-
-				// Extract usage from final response
-				inputTokens := int(finalResponse.Usage.PromptTokens)
-				outputTokens := int(finalResponse.Usage.CompletionTokens)
-				cacheTokens := int(finalResponse.Usage.PromptTokensDetails.CachedTokens)
-				usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-				s.trackUsageWithTokenUsage(c, usage, nil)
-
-				responseJSON, _ := json.Marshal(finalResponse)
-				var responseMap map[string]interface{}
-				json.Unmarshal(responseJSON, &responseMap)
-				responseMap["model"] = responseModel
-				if stripUsage {
-					delete(responseMap, "usage")
-				}
-				c.JSON(http.StatusOK, responseMap)
-				return
-			}
-		}
 	}
 
 	// Extract usage from response
@@ -150,99 +128,13 @@ func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) 
 	return true
 }
 
-// handleMCPToolCalls executes MCP-prefixed tool calls and loops until model returns a non-MCP tool step.
-func (s *Server) handleMCPToolCalls(ctx context.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, toolCallResponse *openai.ChatCompletion) (*openai.ChatCompletion, error) {
-	if s.mcpRuntime == nil || !s.mcpEnabled() {
-		return nil, fmt.Errorf("mcp runtime is not initialized")
-	}
-
-	newMessages := make([]openai.ChatCompletionMessageParamUnion, len(originalReq.Messages))
-	copy(newMessages, originalReq.Messages)
-	resp := toolCallResponse
-
-	const maxRounds = 6
-	for round := 0; round < maxRounds; round++ {
-		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) == 0 {
-			return resp, nil
-		}
-		if !hasOnlyMCPToolCalls(resp.Choices[0].Message.ToolCalls) {
-			return resp, nil
-		}
-
-		newMessages = append(newMessages, resp.Choices[0].Message.ToParam())
-		for _, tc := range resp.Choices[0].Message.ToolCalls {
-			result, err := s.callMCPToolWithGuard(ctx, tc.Function.Name, tc.Function.Arguments)
-			if err != nil {
-				logrus.WithError(err).Warnf("mcp: openai tool call failed name=%s arguments=%s", tc.Function.Name, tc.Function.Arguments)
-			}
-			newMessages = append(newMessages, openai.ToolMessage(result, tc.ID))
-		}
-
-		followUpReq := *originalReq
-		followUpReq.Messages = newMessages
-		followUpReq.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
-
-		wrapper := s.clientPool.GetOpenAIClient(ctx, provider, string(followUpReq.Model))
-		fc := NewForwardContext(nil, provider)
-		nextResp, _, err := ForwardOpenAIChat(fc, wrapper, &followUpReq)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get follow-up response after mcp tool execution: %w", err)
-		}
-		resp = nextResp
-	}
-	return resp, nil
-}
-
 // handleOpenAIChatStreamingRequest handles streaming chat completion requests.
 func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	req := originalReq
-	if hasDeclaredMCPTools(req) {
-		reqForMCP := *req
-		reqForMCP.StreamOptions = openai.ChatCompletionStreamOptionsParam{}
-
-		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-		fc := NewForwardContext(nil, provider)
-		resp, _, err := ForwardOpenAIChat(fc, wrapper, &reqForMCP)
-		if err != nil {
-			usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-			s.trackUsageWithTokenUsage(c, usage, err)
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: ErrorDetail{
-					Message: "Failed to forward request: " + err.Error(),
-					Type:    "api_error",
-				},
-			})
-			return
-		}
-
-		if len(resp.Choices) > 0 && len(resp.Choices[0].Message.ToolCalls) > 0 && hasOnlyMCPToolCalls(resp.Choices[0].Message.ToolCalls) {
-			resp, err = s.handleMCPToolCalls(c.Request.Context(), provider, &reqForMCP, resp)
-			if err != nil {
-				usage := protocol.NewTokenUsageWithCache(0, 0, 0)
-				s.trackUsageWithTokenUsage(c, usage, err)
-				c.JSON(http.StatusInternalServerError, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Failed to handle MCP tool calls: " + err.Error(),
-						Type:    "api_error",
-					},
-				})
-				return
-			}
-		}
-
-		usage := protocol.NewTokenUsageWithCache(
-			int(resp.Usage.PromptTokens),
-			int(resp.Usage.CompletionTokens),
-			int(resp.Usage.PromptTokensDetails.CachedTokens),
-		)
-		s.trackUsageWithTokenUsage(c, usage, nil)
-		streamSingleOpenAICompletion(c, resp, responseModel, disableStreamUsage)
-		return
-	}
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
-	fc := NewForwardContext(c.Request.Context(), provider)
-	streamResp, cancel, err := ForwardOpenAIChatStream(fc, wrapper, req)
+	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
+	streamResp, cancel, err := forwarding.ForwardOpenAIChatStream(fc, wrapper, req)
 	if cancel != nil {
 		defer cancel()
 	}

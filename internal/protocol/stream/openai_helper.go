@@ -170,4 +170,5 @@ type pendingToolCall struct {
 	id    string
 	name  string
 	input string
+	emit  bool
 }

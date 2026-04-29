@@ -40,6 +40,12 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		transform.WithStreaming(isStreaming),
 		transform.WithDevice(s.config.ClaudeCodeDeviceID),
 	}
+
+	// Advisor loopback requests carry X-Tingly-Advisor-Depth >= 1; skip MCP tool injection for them
+	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
+		opts = append(opts, transform.WithIsAdvisorRequest(true))
+	}
+
 	if provider.AuthType == typ.AuthTypeOAuth {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
 	}
@@ -99,6 +105,12 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 		transform.WithStreaming(isStreaming),
 		transform.WithDevice(s.config.ClaudeCodeDeviceID),
 	}
+
+	// Check if this is an advisor request
+	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
+		opts = append(opts, transform.WithIsAdvisorRequest(true))
+	}
+
 	if provider.AuthType == typ.AuthTypeOAuth {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
 	}
@@ -146,6 +158,12 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 		transform.WithStreaming(isStreaming),
 		transform.WithDevice(s.config.ClaudeCodeDeviceID),
 	}
+
+	// Check if this is an advisor request
+	if c.GetHeader("X-Tingly-Advisor-Depth") != "" {
+		opts = append(opts, transform.WithIsAdvisorRequest(true))
+	}
+
 	if provider.AuthType == typ.AuthTypeOAuth {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
 	}

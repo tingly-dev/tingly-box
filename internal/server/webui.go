@@ -892,6 +892,12 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ProviderModelsResponse{}),
 	)
 
+	// Probe models from an arbitrary OpenAI-compatible endpoint
+	apiV1.POST("/probe-models", s.ProbeModels,
+		swagger.WithDescription("Fetch model list from an arbitrary OpenAI-compatible endpoint"),
+		swagger.WithTags("models"),
+	)
+
 	// Probe endpoint
 	apiV1.POST("/probe", s.HandleProbeModel,
 		swagger.WithDescription("Test a rule configuration by sending a sample request"),

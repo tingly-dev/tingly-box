@@ -24,6 +24,27 @@ import (
 // HandleOpenAIToAnthropicBetaStream processes OpenAI streaming events and converts them to Anthropic beta format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
+	return handleOpenAIToAnthropicBetaStream(c, req, stream, responseModel, nil)
+}
+
+// HandleOpenAIToAnthropicBetaStreamWithMCPHooks enables MCP-aware tool suppression/finalization during conversion.
+func HandleOpenAIToAnthropicBetaStreamWithMCPHooks(
+	c *gin.Context,
+	req *openai.ChatCompletionNewParams,
+	stream *openaistream.Stream[openai.ChatCompletionChunk],
+	responseModel string,
+	hooks *OpenAIToAnthropicMCPHooks,
+) (*protocol.TokenUsage, error) {
+	return handleOpenAIToAnthropicBetaStream(c, req, stream, responseModel, hooks)
+}
+
+func handleOpenAIToAnthropicBetaStream(
+	c *gin.Context,
+	req *openai.ChatCompletionNewParams,
+	stream *openaistream.Stream[openai.ChatCompletionChunk],
+	responseModel string,
+	hooks *OpenAIToAnthropicMCPHooks,
+) (*protocol.TokenUsage, error) {
 	logrus.Debug("Starting OpenAI to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -61,6 +82,7 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 
 	// Initialize streaming state
 	state := newStreamState()
+	var hookErr error
 
 	// Initialize token counter for accurate usage tracking
 	tokenCounter, err := token.NewStreamTokenCounter()
@@ -250,28 +272,39 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 					state.pendingToolCalls[anthropicIndex] = &pendingToolCall{
 						id:   truncatedID,
 						name: toolCall.Function.Name,
+						emit: !(hooks != nil && hooks.ShouldSuppressTool != nil && hooks.ShouldSuppressTool(toolCall.Function.Name)),
 					}
 
 					// Close any open block (text/thinking) before opening tool_use block
 					closeOpenBlock(c, state, flusher)
 
-					// Send content_block_start for tool_use
-					sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
-						"id":    truncatedID,
-						"name":  toolCall.Function.Name,
-						"input": map[string]interface{}{},
-					}, flusher)
+					// Send content_block_start for tool_use unless suppressed by MCP hook.
+					if state.pendingToolCalls[anthropicIndex].emit {
+						sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
+							"id":    truncatedID,
+							"name":  toolCall.Function.Name,
+							"input": map[string]interface{}{},
+						}, flusher)
+					}
 				}
 
 				// Accumulate arguments and send delta
+				if toolCall.ID != "" {
+					state.pendingToolCalls[anthropicIndex].id = truncateToolCallID(toolCall.ID)
+				}
+				if toolCall.Function.Name != "" {
+					state.pendingToolCalls[anthropicIndex].name = toolCall.Function.Name
+				}
 				if toolCall.Function.Arguments != "" {
 					state.pendingToolCalls[anthropicIndex].input += toolCall.Function.Arguments
 
-					// Send content_block_delta with input_json_delta
-					sendContentBlockDelta(c, anthropicIndex, map[string]interface{}{
-						"type":         deltaTypeInputJSONDelta,
-						"partial_json": toolCall.Function.Arguments,
-					}, flusher)
+					// Send content_block_delta unless suppressed by MCP hook.
+					if state.pendingToolCalls[anthropicIndex].emit {
+						sendContentBlockDelta(c, anthropicIndex, map[string]interface{}{
+							"type":         deltaTypeInputJSONDelta,
+							"partial_json": toolCall.Function.Arguments,
+						}, flusher)
+					}
 				}
 			}
 		}
@@ -296,6 +329,20 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 				state.inputTokens = int64(inputTokens)
 				state.outputTokens = int64(outputTokens)
 			}
+			if hooks != nil && hooks.OnToolCallsFinal != nil && len(state.pendingToolCalls) > 0 {
+				toolCalls := make([]OpenAIToAnthropicToolCall, 0, len(state.pendingToolCalls))
+				for _, tc := range state.pendingToolCalls {
+					toolCalls = append(toolCalls, OpenAIToAnthropicToolCall{
+						ID:        tc.id,
+						Name:      tc.name,
+						Arguments: tc.input,
+					})
+				}
+				if err := hooks.OnToolCallsFinal(toolCalls); err != nil {
+					hookErr = err
+					return false
+				}
+			}
 
 			sendStopEvents(c, state, flusher)
 			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
@@ -305,6 +352,9 @@ func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletio
 
 		return true
 	})
+	if hookErr != nil {
+		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), hookErr
+	}
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {

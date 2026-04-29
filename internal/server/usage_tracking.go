@@ -442,7 +442,7 @@ func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err er
 		"service_id": serviceID,
 		"error":      err != nil,
 		"errorCode":  errorCode,
-	}).Info("[health] Reporting health status")
+	}).Debug("[health] Reporting health status")
 
 	if err == nil {
 		// Success - report to health monitor
