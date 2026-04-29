@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	typ "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
-	typ "github.com/tingly-dev/tingly-box/common/provider"
 )
 
 // ── Codex E2E ───────────────────────────────────────────

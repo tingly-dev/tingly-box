@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/common/provider"
+	typ "github.com/tingly-dev/tingly-box/ai"
 	"golang.org/x/net/proxy"
 )
 

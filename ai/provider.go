@@ -1,6 +1,6 @@
-// Package provider provides types for AI provider configuration and authentication.
+// Package ai provides types for AI provider configuration and authentication.
 // These types are used across multiple components and are part of the public API.
-package provider
+package ai
 
 import (
 	"time"

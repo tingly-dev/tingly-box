@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/common/provider"
+	typ "github.com/tingly-dev/tingly-box/ai"
 )
 
 // Usage: CODEX_ACCESS_TOKEN=eyJ... go test -run TestCodexE2E -v

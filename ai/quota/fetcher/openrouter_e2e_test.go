@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/common/provider"
+	typ "github.com/tingly-dev/tingly-box/ai"
 )
 
 // Usage: OPENROUTER_API_KEY=sk-... go test -run TestOpenRouterE2E -v

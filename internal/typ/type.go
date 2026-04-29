@@ -3,10 +3,9 @@ package typ
 import (
 	"encoding/json"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
-
-	"github.com/tingly-dev/tingly-box/common/provider"
 )
 
 // FlexibleBool is a boolean type that can unmarshal from both bool and int (0/1)
@@ -187,17 +186,17 @@ func (sc *ScenarioConfig) GetDefaultFlags() ScenarioFlags {
 
 // AuthType represents the authentication type for a provider
 // Type alias for backward compatibility with common/provider
-type AuthType = provider.AuthType
+type AuthType = ai.AuthType
 
 // AuthType constants - re-exported for backward compatibility
 const (
-	AuthTypeAPIKey = provider.AuthTypeAPIKey
-	AuthTypeOAuth  = provider.AuthTypeOAuth
+	AuthTypeAPIKey = ai.AuthTypeAPIKey
+	AuthTypeOAuth  = ai.AuthTypeOAuth
 )
 
 // OAuthDetail contains OAuth-specific authentication information
 // Type alias for backward compatibility with common/provider
-type OAuthDetail = provider.OAuthDetail
+type OAuthDetail = ai.OAuthDetail
 
 // MCPMode defines MCP runtime mode
 type MCPMode string
@@ -355,7 +354,7 @@ func IsMCPSourceEnabled(source MCPSourceConfig) bool {
 
 // Provider represents an AI model api key and provider configuration
 // Type alias for backward compatibility with common/provider
-type Provider = provider.Provider
+type Provider = ai.Provider
 
 // Rule represents a request/response configuration with load balancing support
 type Rule struct {
