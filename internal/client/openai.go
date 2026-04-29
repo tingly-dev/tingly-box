@@ -62,6 +62,8 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 			logrus.Infof("[Codex] Using session-bound transport for ChatGPT backend API path rewriting, session: %s", sessionID.Value)
 		} else if providerType != "" {
 			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", providerType, sessionID.Value)
+		} else if provider.ProxyURL != "" {
+			logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
 		}
 	} else {
 		// For non-OAuth providers without proxy, use default transport

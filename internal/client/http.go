@@ -554,9 +554,10 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 			}
 			// Create a separate transport with proxy for Antigravity
 			var antigravityTransport http.RoundTripper = transport
-			if provider.ProxyURL != "" {
+			effectiveProxy := provider.ProxyURL
+			if effectiveProxy != "" {
 				// Use CreateHTTPClientWithProxy to create a transport with proxy
-				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+				proxyClient := CreateHTTPClientWithProxy(effectiveProxy)
 				if proxyClient.Transport != nil {
 					antigravityTransport = proxyClient.Transport
 				}
@@ -567,14 +568,14 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 				RoundTripper: antigravityTransport,
 				project:      project,
 				model:        model,
-				proxyURL:     provider.ProxyURL,
+				proxyURL:     effectiveProxy,
 			}
-			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, provider.ProxyURL)
+			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, effectiveProxy)
 		case oauth.ProviderClaudeCode:
 			// For Claude Code OAuth, use claudeRoundTripper for request/response transformations
 			var claudeTransport http.RoundTripper = transport
-			if provider.ProxyURL != "" {
-				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+			if ep := provider.ProxyURL; ep != "" {
+				proxyClient := CreateHTTPClientWithProxy(ep)
 				if proxyClient.Transport != nil {
 					claudeTransport = proxyClient.Transport
 				}
@@ -587,12 +588,12 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 		case oauth.ProviderCodex:
 			// Create base transport with proxy support if needed
 			var baseTransport http.RoundTripper = transport
-			if provider.ProxyURL != "" {
+			if ep := provider.ProxyURL; ep != "" {
 				// Explicitly create transport with proxy for this provider
-				proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+				proxyClient := CreateHTTPClientWithProxy(ep)
 				if proxyClient.Transport != nil {
 					baseTransport = proxyClient.Transport
-					logrus.Infof("Created proxy transport for %s: %s", providerType, provider.ProxyURL)
+					logrus.Infof("Created proxy transport for %s: %s", providerType, ep)
 				}
 			}
 
@@ -610,12 +611,12 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 			if ok {
 				// Create base transport with proxy support if needed
 				var baseTransport http.RoundTripper = transport
-				if provider.ProxyURL != "" {
+				if ep := provider.ProxyURL; ep != "" {
 					// Explicitly create transport with proxy for this provider
-					proxyClient := CreateHTTPClientWithProxy(provider.ProxyURL)
+					proxyClient := CreateHTTPClientWithProxy(ep)
 					if proxyClient.Transport != nil {
 						baseTransport = proxyClient.Transport
-						logrus.Infof("Created proxy transport for %s: %s", providerType, provider.ProxyURL)
+						logrus.Infof("Created proxy transport for %s: %s", providerType, ep)
 					}
 				}
 

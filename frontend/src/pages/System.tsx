@@ -5,7 +5,7 @@ import UnifiedCard from '@/components/UnifiedCard';
 import { Logout } from '@mui/icons-material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { IconCircleCheck, IconCircleX, IconInfoCircle, IconKey, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage } from '@tabler/icons-react';
-import { Box, CircularProgress, IconButton, Link, Stack, Tooltip, Typography, Chip } from '@mui/material';
+import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '@/contexts/HealthContext';
@@ -22,6 +22,9 @@ const System = () => {
     const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
     const [respectEnvProxy, setRespectEnvProxy] = useState<boolean | null>(null);
+    const [globalProxyUrl, setGlobalProxyUrl] = useState('');
+    const [globalProxyInput, setGlobalProxyInput] = useState('');
+    const [proxyUrlSaving, setProxyUrlSaving] = useState(false);
 
     const handleForceLogout = () => {
         authLogout();
@@ -68,7 +71,24 @@ const System = () => {
         if (result.success && result.data) {
             const value = result.data.http_transport?.respect_env_proxy;
             setRespectEnvProxy(value === null ? false : value);
+            const gpUrl = result.data.http_transport?.global_proxy_url ?? '';
+            setGlobalProxyUrl(gpUrl);
+            setGlobalProxyInput(gpUrl);
         }
+    };
+
+    const saveGlobalProxyUrl = async () => {
+        setProxyUrlSaving(true);
+        const result = await api.updateConfig({
+            http_transport: { global_proxy_url: globalProxyInput },
+        });
+        if (result.success) {
+            setGlobalProxyUrl(globalProxyInput);
+            setNotification({ open: true, message: t('system.proxy.globalProxyUrl.saveSuccess'), severity: 'success' });
+        } else {
+            setNotification({ open: true, message: t('system.proxy.globalProxyUrl.saveFailed'), severity: 'error' });
+        }
+        setProxyUrlSaving(false);
     };
 
     const loadServerStatus = async () => {
@@ -209,6 +229,42 @@ const System = () => {
                                             />
                                         </Tooltip>
                                     )}
+                                </Box>
+                            </Box>
+
+                            {/* Global Proxy URL */}
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', py: 0.5, gap: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100, pt: 1 }}>
+                                    <IconLock size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        {t('system.proxy.globalProxyUrl.label')}
+                                    </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, maxWidth: 380 }}>
+                                    <TextField
+                                        size="small"
+                                        value={globalProxyInput}
+                                        onChange={(e) => setGlobalProxyInput(e.target.value)}
+                                        placeholder="http://127.0.0.1:7890"
+                                        helperText={t('system.proxy.globalProxyUrl.helper')}
+                                        sx={{ flex: 1 }}
+                                        InputProps={globalProxyUrl && globalProxyInput === globalProxyUrl ? {
+                                            endAdornment: (
+                                                <InputAdornment position="end">
+                                                    <IconLock size={14} style={{ color: 'var(--mui-palette-success-main)' }} />
+                                                </InputAdornment>
+                                            )
+                                        } : undefined}
+                                    />
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={saveGlobalProxyUrl}
+                                        disabled={proxyUrlSaving || globalProxyInput === globalProxyUrl}
+                                        sx={{ mt: 0.5, whiteSpace: 'nowrap' }}
+                                    >
+                                        {t('common.save')}
+                                    </Button>
                                 </Box>
                             </Box>
                         </Stack>

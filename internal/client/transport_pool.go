@@ -34,6 +34,7 @@ type TransportConfig struct {
 	// Default (nil): false - providers without proxy_url connect directly
 	// Set to true: providers without proxy_url will use system/environment proxy
 	RespectEnvProxy *bool // nil = use default (false)
+
 }
 
 // Go defaults for reference (not used directly, only for documentation)

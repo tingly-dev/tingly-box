@@ -144,6 +144,10 @@ type HTTPTransportConfig struct {
 	// Default (nil): false - providers without proxy_url connect directly
 	// Set to true: providers without proxy_url will use system/environment proxy
 	RespectEnvProxy *bool `json:"respect_env_proxy,omitempty" yaml:"respect_env_proxy,omitempty"`
+
+	// GlobalProxyURL stores a shared proxy URL offered as a UI convenience default.
+	// The backend does NOT apply it automatically; users must explicitly opt in per-provider/OAuth.
+	GlobalProxyURL string `json:"global_proxy_url,omitempty" yaml:"global_proxy_url,omitempty"`
 }
 
 // MultiTenantConfig holds settings for multi-tenant API token authentication

@@ -238,7 +238,9 @@ export default {
       "proxyUrl": {
         "label": "HTTP/SOCKS Proxy URL (Optional)",
         "placeholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:7890",
-        "helper": "Optional: Use a proxy to bypass region restrictions. Saved for future use."
+        "helper": "Optional: Use a proxy to bypass region restrictions. Saved for future use.",
+        "useGlobal": "Use global proxy ({{url}})",
+        "useGlobalNotSet": "Use global proxy (not configured — set in System Settings)"
       }
     },
     "verification": {
@@ -403,6 +405,12 @@ export default {
       "respectEnvProxy": {
         "label": "Respect Environment Proxy",
         "helper": "When enabled, providers without explicit proxy configuration will use system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, Clash, etc.)"
+      },
+      "globalProxyUrl": {
+        "label": "Global Proxy",
+        "helper": "Fallback proxy for all providers and OAuth. Per-provider proxy takes priority.",
+        "saveSuccess": "Global proxy URL saved",
+        "saveFailed": "Failed to save global proxy URL"
       },
       "notifications": {
         "updateSuccess": "Proxy settings updated successfully",

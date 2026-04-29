@@ -5,10 +5,12 @@ import {
     Button,
     Card,
     CardContent,
+    Checkbox,
     CircularProgress,
     Dialog,
     DialogContent,
     DialogTitle,
+    FormControlLabel,
     IconButton,
     Stack,
     TextField,
@@ -541,19 +543,43 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
     const [proxyUrl, setProxyUrl] = useState('');
     const [autoDetectedProxy, setAutoDetectedProxy] = useState('');
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+    const [useGlobalProxy, setUseGlobalProxy] = useState(false);
+    const [globalProxyUrl, setGlobalProxyUrl] = useState('');
 
-    // Load saved proxy URL from localStorage on mount
+    // Load saved proxy URL and global proxy setting from localStorage/config on mount
     useEffect(() => {
         const savedProxy = localStorage.getItem('oauth_proxy_url');
         if (savedProxy) {
             setProxyUrl(savedProxy);
         }
+        const savedUseGlobal = localStorage.getItem('oauth_use_global_proxy') === 'true';
+        setUseGlobalProxy(savedUseGlobal);
+        // Fetch global proxy URL from config
+        api.getConfig().then((result) => {
+            const gp = result?.data?.http_transport?.global_proxy_url ?? '';
+            setGlobalProxyUrl(gp);
+            if (savedUseGlobal && gp && !savedProxy) {
+                setProxyUrl(gp);
+            }
+        });
     }, []);
 
     // Save proxy URL to localStorage when it changes
     const handleProxyUrlChange = (value: string) => {
         setProxyUrl(value);
         localStorage.setItem('oauth_proxy_url', value);
+    };
+
+    const handleUseGlobalProxyChange = (checked: boolean) => {
+        setUseGlobalProxy(checked);
+        localStorage.setItem('oauth_use_global_proxy', String(checked));
+        if (checked && globalProxyUrl) {
+            setProxyUrl(globalProxyUrl);
+            localStorage.setItem('oauth_proxy_url', globalProxyUrl);
+        } else if (!checked) {
+            setProxyUrl('');
+            localStorage.setItem('oauth_proxy_url', '');
+        }
     };
 
     // Fetch existing providers to detect proxy URLs when dialog opens
@@ -735,6 +761,26 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                             color={autoDetectedProxy ? "success" : "primary"}
                             focused={autoDetectedProxy ? true : undefined}
                         />
+                        <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        size="small"
+                                        checked={useGlobalProxy}
+                                        disabled={!globalProxyUrl}
+                                        onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
+                                    />
+                                }
+                                label={
+                                    <Typography variant="body2" color={globalProxyUrl ? 'text.secondary' : 'text.disabled'}>
+                                        {globalProxyUrl
+                                            ? `Use global proxy (${globalProxyUrl})`
+                                            : 'Use global proxy (not configured)'}
+                                    </Typography>
+                                }
+                                labelPlacement="start"
+                            />
+                        </Box>
                         {autoDetectedProxy && (
                             <Alert severity="success" sx={{mt: 1}} icon={<Launch fontSize="small"/>}>
                                 <Typography variant="caption">

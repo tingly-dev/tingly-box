@@ -55,7 +55,8 @@ func NewHandler(cfg *config.Config, host string) *Handler {
 
 // HTTPTransportConfigUpdate represents the update request for HTTP transport settings
 type HTTPTransportConfigUpdate struct {
-	RespectEnvProxy *bool `json:"respect_env_proxy"` // nil = no change
+	RespectEnvProxy *bool   `json:"respect_env_proxy"` // nil = no change
+	GlobalProxyURL  *string `json:"global_proxy_url"`  // nil = no change; "" = clear
 }
 
 // GetConfig returns the current system configuration
@@ -75,6 +76,7 @@ func (h *Handler) GetConfig(c *gin.Context) {
 		"data": gin.H{
 			"http_transport": gin.H{
 				"respect_env_proxy": cfg.HTTPTransport.RespectEnvProxy,
+				"global_proxy_url":  cfg.HTTPTransport.GlobalProxyURL,
 			},
 		},
 	}
@@ -110,6 +112,11 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 		cfg.HTTPTransport.RespectEnvProxy = req.HTTPTransport.RespectEnvProxy
 	}
 
+	// Update global_proxy_url if provided (pointer allows distinguishing "not sent" from "clear")
+	if req.HTTPTransport.GlobalProxyURL != nil {
+		cfg.HTTPTransport.GlobalProxyURL = *req.HTTPTransport.GlobalProxyURL
+	}
+
 	// Save the configuration
 	if err := cfg.Save(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -127,6 +134,7 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 		"data": gin.H{
 			"http_transport": gin.H{
 				"respect_env_proxy": cfg.HTTPTransport.RespectEnvProxy,
+				"global_proxy_url":  cfg.HTTPTransport.GlobalProxyURL,
 			},
 		},
 	})

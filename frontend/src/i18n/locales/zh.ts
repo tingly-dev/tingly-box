@@ -238,7 +238,9 @@ export default {
       "proxyUrl": {
         "label": "HTTP/SOCKS 代理 URL（可选）",
         "placeholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:7890",
-        "helper": "可选：使用代理绕过区域限制。将保存以供将来使用。"
+        "helper": "可选：使用代理绕过区域限制。将保存以供将来使用。",
+        "useGlobal": "使用全局代理（{{url}}）",
+        "useGlobalNotSet": "使用全局代理（未配置 — 请在系统设置中配置）"
       }
     },
     "verification": {
@@ -403,6 +405,12 @@ export default {
       "respectEnvProxy": {
         "label": "遵循环境代理",
         "helper": "启用后，没有显式代理配置的提供商将使用系统代理设置（HTTP_PROXY、HTTPS_PROXY、macOS 系统代理、Clash 等）"
+      },
+      "globalProxyUrl": {
+        "label": "全局代理",
+        "helper": "所有提供商和 OAuth 的兜底代理，每个提供商的专属代理优先级更高。",
+        "saveSuccess": "全局代理 URL 已保存",
+        "saveFailed": "保存全局代理 URL 失败"
       },
       "notifications": {
         "updateSuccess": "代理设置更新成功",

@@ -109,6 +109,8 @@ const ProviderFormDialog = ({
     const [protocolAnthropic, setProtocolAnthropic] = useState(false);
     const [nameIsAutoFilled, setNameIsAutoFilled] = useState(true);
     const [providerInputValue, setProviderInputValue] = useState('');
+    const [useGlobalProxy, setUseGlobalProxy] = useState(false);
+    const [globalProxyUrl, setGlobalProxyUrl] = useState('');
 
     const allProviders = useProviderTemplates();
 
@@ -173,6 +175,14 @@ const ProviderFormDialog = ({
         setNoApiKey(data.noKeyRequired || false);
     }, [data.noKeyRequired]);
 
+    // Fetch global proxy URL once on mount
+    useEffect(() => {
+        api.getConfig().then((result) => {
+            const gp = result?.data?.http_transport?.global_proxy_url ?? '';
+            setGlobalProxyUrl(gp);
+        });
+    }, []);
+
     // Reset / initialise local state when the dialog opens.
     // Only runs on the open transition — never during typing.
     useEffect(() => {
@@ -200,6 +210,17 @@ const ProviderFormDialog = ({
             }
             setSelectedProvider(null);
             setProviderInputValue('');
+        }
+
+        // Restore "use global proxy" checkbox state from localStorage (add mode only)
+        if (mode === 'add') {
+            const savedUseGlobal = localStorage.getItem('provider_use_global_proxy') === 'true';
+            setUseGlobalProxy(savedUseGlobal);
+            if (savedUseGlobal && globalProxyUrl && !data.proxyUrl) {
+                onChangeRef.current('proxyUrl', globalProxyUrl);
+            }
+        } else {
+            setUseGlobalProxy(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
@@ -234,6 +255,16 @@ const ProviderFormDialog = ({
         },
         []
     );
+
+    const handleUseGlobalProxyChange = (checked: boolean) => {
+        setUseGlobalProxy(checked);
+        localStorage.setItem('provider_use_global_proxy', String(checked));
+        if (checked && globalProxyUrl) {
+            onChange('proxyUrl', globalProxyUrl);
+        } else if (!checked) {
+            onChange('proxyUrl', '');
+        }
+    };
 
     const toggleOpenAIProtocol = () => {
         if (mode === 'edit') return;
@@ -719,14 +750,44 @@ const ProviderFormDialog = ({
                             placeholder={t('providerDialog.keyName.placeholder')}
                         />
 
-                        <TextField
-                            size="small"
-                            fullWidth
-                            label={t('providerDialog.advanced.proxyUrl.label')}
-                            placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
-                            value={data.proxyUrl || ''}
-                            onChange={(e) => onChange('proxyUrl', e.target.value)}
-                        />
+                        <Box>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label={t('providerDialog.advanced.proxyUrl.label')}
+                                placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
+                                value={data.proxyUrl || ''}
+                                onChange={(e) => {
+                                    onChange('proxyUrl', e.target.value);
+                                    if (useGlobalProxy && e.target.value !== globalProxyUrl) {
+                                        setUseGlobalProxy(false);
+                                        localStorage.setItem('provider_use_global_proxy', 'false');
+                                    }
+                                }}
+                            />
+                            {mode === 'add' && (
+                                <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                size="small"
+                                                checked={useGlobalProxy}
+                                                disabled={!globalProxyUrl}
+                                                onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
+                                            />
+                                        }
+                                        label={
+                                            <Typography variant="body2" color={globalProxyUrl ? 'text.secondary' : 'text.disabled'}>
+                                                {globalProxyUrl
+                                                    ? t('providerDialog.advanced.proxyUrl.useGlobal', {url: globalProxyUrl})
+                                                    : t('providerDialog.advanced.proxyUrl.useGlobalNotSet')}
+                                            </Typography>
+                                        }
+                                        labelPlacement="start"
+                                    />
+                                </Box>
+                            )}
+                        </Box>
 
                         {mode === 'edit' && (
                             <FormControlLabel
