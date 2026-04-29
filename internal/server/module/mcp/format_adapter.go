@@ -82,6 +82,13 @@ type FormatAdapter interface {
 	// Event processing (streaming only)
 	ClassifyEvent(event any) EventType
 	ExtractToolFromEvent(event any) (Tool, bool)
+	// ShouldSuppressEvent is called for delta and stop events after ExtractToolFromEvent.
+	//
+	// Design note: suppress logic is format-dependent. Anthropic adapters suppress
+	// virtual tool events at the start stage (bufferToolEvent in handleToolStartEvent),
+	// so delta/stop events never reach the client and ShouldSuppressEvent returns false.
+	// OpenAI adapters must suppress at delta stage because function names appear in
+	// delta.ToolCalls, not at start; hence OpenAI's implementation checks the name here.
 	ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool
 	RewriteEventIndex(event any, offset int) ([]byte, error)
 

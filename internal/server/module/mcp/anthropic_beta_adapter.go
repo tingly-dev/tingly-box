@@ -255,15 +255,9 @@ func (a *AnthropicBetaAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 }
 
 func (a *AnthropicBetaAdapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
-	_, okValue := event.(anthropic.BetaRawMessageStreamEventUnion)
-	_, okPtr := event.(*anthropic.BetaRawMessageStreamEventUnion)
-	if !okValue && !okPtr {
-		return false
-	}
-
-	// For delta and stop events, we need to check if the index corresponds to a virtual tool
-	// This requires external state tracking in the interceptor
-	return false // Let interceptor decide based on tracked state
+	// Anthropic suppresses virtual tools at the start stage (bufferToolEvent),
+	// so delta/stop events never reach the client. No need to check here.
+	return false
 }
 
 func (a *AnthropicBetaAdapter) RewriteEventIndex(event any, offset int) ([]byte, error) {
