@@ -10,6 +10,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -17,32 +18,28 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 )
 
-// RecordScenarioRequest records the scenario-level request (client -> tingly-box)
-// This captures the original request from the client before any transformation
+// RecordScenarioRequest records the scenario-level request (client → tingly-box).
+// It captures the original request before any transformation and returns a
+// ProtocolRecorder that callers use to record the eventual response.
 func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *ProtocolRecorder {
 	scenarioType := typ.RuleScenario(scenario)
 
-	// Get or create sink for this scenario (on-demand)
 	sink := s.GetOrCreateScenarioSink(scenarioType)
 	if sink == nil {
 		return nil
 	}
 
-	// Read and restore the request body
-
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		logrus.Debugf("Failed to read request body for scenario recording: %v", err)
+		logrus.Debugf("obs: failed to read request body for recording: %v", err)
 		return nil
 	}
 	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
-	// Parse request body as JSON
 	var bodyJSON map[string]interface{}
 	if len(bodyBytes) > 0 {
 		if err := json.Unmarshal(bodyBytes, &bodyJSON); err != nil {
-			logrus.Debugf("Failed to parse request body as JSON: %v", err)
-			// Keep raw body as string if JSON parsing fails
+			logrus.Debugf("obs: request body is not JSON, storing as raw string")
 			bodyJSON = map[string]interface{}{"raw": string(bodyBytes)}
 		}
 	}
@@ -54,34 +51,41 @@ func (s *Server) RecordScenarioRequest(c *gin.Context, scenario string) *Protoco
 		Body:    bodyJSON,
 	}
 
+	sid := typ.GetSessionID(c.Request.Context())
+	short, src := obs.SessionShort(sid)
+
 	return &ProtocolRecorder{
 		ScenarioRecorder: &ScenarioRecorder{
-			sink:      sink,
-			scenario:  scenario,
-			req:       req,
-			startTime: time.Now(),
-			c:         c,
-			bodyBytes: bodyBytes,
+			sink:         sink,
+			scenario:     scenario,
+			req:          req,
+			startTime:    time.Now(),
+			c:            c,
+			bodyBytes:    bodyBytes,
+			sessionShort: short,
+			sessionSrc:   src,
 		},
 	}
 }
 
-// ScenarioRecorder captures scenario-level request/response recording
+// ScenarioRecorder captures scenario-level request/response recording.
 type ScenarioRecorder struct {
-	sink      *obs.Sink
-	scenario  string
-	req       *obs.RecordRequest
-	startTime time.Time
-	c         *gin.Context
-	bodyBytes []byte
+	sink         *obs.Sink
+	scenario     string
+	req          *obs.RecordRequest
+	startTime    time.Time
+	c            *gin.Context
+	bodyBytes    []byte
+	sessionShort string
+	sessionSrc   string
 
-	// For streaming responses
-	streamChunks      []map[string]interface{} // Collected stream chunks
-	isStreaming       bool                     // Whether this is a streaming response
-	assembledResponse map[string]interface{}   // Assembled response from stream
+	// Streaming state
+	streamChunks      []map[string]interface{}
+	isStreaming       bool
+	assembledResponse map[string]interface{}
 }
 
-// EnableStreaming enables streaming mode for this recorder
+// EnableStreaming puts the recorder into streaming mode.
 func (sr *ScenarioRecorder) EnableStreaming() {
 	if sr != nil {
 		sr.isStreaming = true
@@ -89,8 +93,7 @@ func (sr *ScenarioRecorder) EnableStreaming() {
 	}
 }
 
-// RecordStreamChunk records a single stream chunk
-// Uses RawJSON() when available to preserve the exact original API response
+// RecordStreamChunk records a single stream chunk.
 func (sr *ScenarioRecorder) RecordStreamChunk(eventType string, chunk interface{}) {
 	if sr == nil || !sr.isStreaming {
 		return
@@ -99,21 +102,17 @@ func (sr *ScenarioRecorder) RecordStreamChunk(eventType string, chunk interface{
 	var chunkJSON []byte
 	var err error
 
-	// Use RawJSON() when available to preserve original API response
-	// This prevents SDK marshaling from adding invalid fields
 	switch v := chunk.(type) {
 	case *anthropic.MessageStreamEventUnion:
 		chunkJSON = []byte(v.RawJSON())
 	case *anthropic.BetaRawMessageStreamEventUnion:
 		chunkJSON = []byte(v.RawJSON())
 	case interface{ RawJSON() string }:
-		// Generic fallback for any type with RawJSON method
 		chunkJSON = []byte(v.RawJSON())
 	default:
-		// Fallback to json.Marshal for other types
 		chunkJSON, err = json.Marshal(chunk)
 		if err != nil {
-			logrus.Debugf("Failed to marshal stream chunk: %v", err)
+			logrus.Debugf("obs: failed to marshal stream chunk: %v", err)
 			return
 		}
 	}
@@ -122,49 +121,41 @@ func (sr *ScenarioRecorder) RecordStreamChunk(eventType string, chunk interface{
 	if err := json.Unmarshal(chunkJSON, &chunkData); err != nil {
 		return
 	}
-
-	// Add event type if not present
 	if _, ok := chunkData["type"]; !ok {
 		chunkData["type"] = eventType
 	}
-
 	sr.streamChunks = append(sr.streamChunks, chunkData)
 }
 
-// SetAssembledResponse sets the assembled response for streaming
-// Accepts any type (e.g., anthropic.Message) and converts to map for storage
+// SetAssembledResponse sets the assembled streaming response.
 func (sr *ScenarioRecorder) SetAssembledResponse(response any) {
 	if sr == nil {
 		return
 	}
-
-	// Convert response to map[string]interface{}
 	var responseMap map[string]interface{}
 	switch v := response.(type) {
 	case map[string]interface{}:
 		responseMap = v
 	case []byte:
 		if err := json.Unmarshal(v, &responseMap); err != nil {
-			logrus.Debugf("Failed to unmarshal response: %v", err)
+			logrus.Debugf("obs: failed to unmarshal assembled response: %v", err)
 			return
 		}
 	default:
-		// Marshal to JSON then unmarshal to map
 		data, err := json.Marshal(response)
 		if err != nil {
-			logrus.Debugf("Failed to marshal response: %v", err)
+			logrus.Debugf("obs: failed to marshal assembled response: %v", err)
 			return
 		}
 		if err := json.Unmarshal(data, &responseMap); err != nil {
-			logrus.Debugf("Failed to unmarshal response: %v", err)
+			logrus.Debugf("obs: failed to unmarshal assembled response: %v", err)
 			return
 		}
 	}
-
 	sr.assembledResponse = responseMap
 }
 
-// GetStreamChunks returns the collected stream chunks
+// GetStreamChunks returns the collected stream chunks.
 func (sr *ScenarioRecorder) GetStreamChunks() []map[string]interface{} {
 	if sr == nil {
 		return nil
@@ -172,25 +163,19 @@ func (sr *ScenarioRecorder) GetStreamChunks() []map[string]interface{} {
 	return sr.streamChunks
 }
 
-// RecordResponse records the scenario-level response (tingly-box -> client)
-// This captures the response sent back to the client
+// RecordResponse emits the scenario-level response record.
 func (sr *ScenarioRecorder) RecordResponse(provider *typ.Provider, model string) {
 	if sr == nil || sr.sink == nil {
 		return
 	}
 
-	// Get response info from the context
 	statusCode := sr.c.Writer.Status()
 	headers := headerToMap(sr.c.Writer.Header())
 
 	var bodyJSON map[string]interface{}
-
-	// If this was a streaming response, use the assembled response
 	if sr.isStreaming && sr.assembledResponse != nil {
 		bodyJSON = sr.assembledResponse
 	} else if sr.isStreaming && len(sr.streamChunks) > 0 {
-		// Fallback for streaming: if no assembled response but we have chunks,
-		// create a minimal response with the chunks
 		bodyJSON = map[string]interface{}{
 			"id":             fmt.Sprintf("msg_%d", sr.startTime.Unix()),
 			"type":           "message",
@@ -198,71 +183,86 @@ func (sr *ScenarioRecorder) RecordResponse(provider *typ.Provider, model string)
 			"content":        []interface{}{},
 			"model":          model,
 			"_stream_chunks": len(sr.streamChunks),
-			"_note":          "Assembled response not available, using fallback",
+			"_note":          "assembled response unavailable",
 		}
-		logrus.Debugf("ScenarioRecorder: using fallback in RecordResponse, chunks=%d", len(sr.streamChunks))
+		logrus.Debugf("obs: ScenarioRecorder fallback response, chunks=%d", len(sr.streamChunks))
 	} else {
-		// Try to get response body if it was captured
 		if responseBody, exists := sr.c.Get("response_body"); exists {
-			if bytes, ok := responseBody.([]byte); ok {
-				if err := json.Unmarshal(bytes, &bodyJSON); err == nil {
-					bodyJSON = map[string]interface{}{"raw": string(bytes)}
-				}
+			if b, ok := responseBody.([]byte); ok {
+				_ = json.Unmarshal(b, &bodyJSON)
 			}
 		}
 	}
 
 	resp := &obs.RecordResponse{
-		StatusCode: statusCode,
-		Headers:    headers,
-		Body:       bodyJSON,
+		StatusCode:  statusCode,
+		Headers:     headers,
+		Body:        bodyJSON,
+		IsStreaming: sr.isStreaming,
 	}
-
-	// Mark as streaming if applicable
-	if sr.isStreaming {
-		resp.IsStreaming = true
-		if len(sr.streamChunks) > 0 {
-			// Store raw chunks for reference
-			chunksJSON := make([]string, 0, len(sr.streamChunks))
-			for _, chunk := range sr.streamChunks {
-				if data, err := json.Marshal(chunk); err == nil {
-					chunksJSON = append(chunksJSON, string(data))
-				}
+	if sr.isStreaming && len(sr.streamChunks) > 0 {
+		chunks := make([]string, 0, len(sr.streamChunks))
+		for _, chunk := range sr.streamChunks {
+			if data, err := json.Marshal(chunk); err == nil {
+				chunks = append(chunks, string(data))
 			}
-			resp.StreamChunks = chunksJSON
 		}
+		resp.StreamChunks = chunks
 	}
 
-	// Record with scenario-based file naming
-	duration := time.Since(sr.startTime)
-	sr.sink.RecordWithScenario(provider.Name, model, sr.scenario, sr.req, resp, duration, nil)
+	providerName := ""
+	if provider != nil {
+		providerName = provider.Name
+	}
+
+	r := &obs.Record{
+		Timestamp:     time.Now().UTC(),
+		RequestID:     uuid.New().String(),
+		SessionID:     sr.sessionShort,
+		SessionSrc:    sr.sessionSrc,
+		Provider:      providerName,
+		Scenario:      sr.scenario,
+		Model:         model,
+		Duration:      time.Since(sr.startTime),
+		OriginalRequest: sr.req,
+		FinalResponse: resp,
+	}
+	sr.sink.Emit(r)
 }
 
-// RecordError records an error for the scenario-level request
+// RecordError emits an error record.
 func (sr *ScenarioRecorder) RecordError(err error) {
 	if sr == nil || sr.sink == nil {
 		return
 	}
 
-	resp := &obs.RecordResponse{
-		StatusCode: sr.c.Writer.Status(),
-		Headers:    headerToMap(sr.c.Writer.Header()),
-	}
-
-	// Extract model from request if available
 	model := ""
-	if sr.req.Body != nil {
+	if sr.req != nil && sr.req.Body != nil {
 		if m, ok := sr.req.Body["model"].(string); ok {
 			model = m
 		}
 	}
 
-	// Record with error
-	duration := time.Since(sr.startTime)
-	sr.sink.RecordWithScenario("tingly-box", model, sr.scenario, sr.req, resp, duration, err)
+	r := &obs.Record{
+		Timestamp:     time.Now().UTC(),
+		RequestID:     uuid.New().String(),
+		SessionID:     sr.sessionShort,
+		SessionSrc:    sr.sessionSrc,
+		Provider:      "tingly-box",
+		Scenario:      sr.scenario,
+		Model:         model,
+		Duration:      time.Since(sr.startTime),
+		Err:           err.Error(),
+		OriginalRequest: sr.req,
+		FinalResponse: &obs.RecordResponse{
+			StatusCode: sr.c.Writer.Status(),
+			Headers:    headerToMap(sr.c.Writer.Header()),
+		},
+	}
+	sr.sink.Emit(r)
 }
 
-// headerToMap converts http.Header to map[string]string
+// headerToMap converts http.Header to map[string]string.
 func headerToMap(h http.Header) map[string]string {
 	result := make(map[string]string)
 	for k, v := range h {
@@ -273,8 +273,10 @@ func headerToMap(h http.Header) map[string]string {
 	return result
 }
 
-// streamRecorder encapsulates recording and assembly logic for streaming responses
-// It provides a unified way to handle both v1 and v1beta Anthropic streaming events
+// ===================================================================
+// streamRecorder — unified stream event recording + assembly
+// ===================================================================
+
 type streamRecorder struct {
 	recorder     *ProtocolRecorder
 	assembler    *assembler.AnthropicStreamAssembler
@@ -283,7 +285,6 @@ type streamRecorder struct {
 	hasUsage     bool
 }
 
-// newStreamRecorder creates a new streamRecorder
 func newStreamRecorder(recorder *ProtocolRecorder) *streamRecorder {
 	if recorder == nil {
 		return nil
@@ -295,7 +296,6 @@ func newStreamRecorder(recorder *ProtocolRecorder) *streamRecorder {
 	}
 }
 
-// RecordV1Event records a v1 stream event
 func (sr *streamRecorder) RecordV1Event(event *anthropic.MessageStreamEventUnion) {
 	if sr == nil {
 		return
@@ -304,7 +304,6 @@ func (sr *streamRecorder) RecordV1Event(event *anthropic.MessageStreamEventUnion
 	sr.assembler.RecordV1Event(event)
 }
 
-// RecordV1BetaEvent records a v1beta stream event
 func (sr *streamRecorder) RecordV1BetaEvent(event *anthropic.BetaRawMessageStreamEventUnion) {
 	if sr == nil {
 		return
@@ -313,14 +312,10 @@ func (sr *streamRecorder) RecordV1BetaEvent(event *anthropic.BetaRawMessageStrea
 	sr.assembler.RecordV1BetaEvent(event)
 }
 
-// Finish finishes recording and sets the assembled response
-// For protocol conversion scenarios, it uses the tracked usage information
-// If the assembler returns nil, it creates a fallback response from collected chunks
 func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
 	if sr == nil {
 		return
 	}
-	// Use tracked usage if provided values are zero and we have tracked usage
 	if inputTokens == 0 && outputTokens == 0 && sr.hasUsage {
 		inputTokens = sr.inputTokens
 		outputTokens = sr.outputTokens
@@ -328,28 +323,24 @@ func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
 	assembled := sr.assembler.Finish(model, inputTokens, outputTokens)
 	if assembled != nil {
 		sr.recorder.SetAssembledResponse(assembled)
-	} else {
-		// Fallback: if assembler returned nil but we have chunks, create a minimal response
-		if len(sr.recorder.streamChunks) > 0 {
-			fallbackResp := map[string]interface{}{
-				"id":          fmt.Sprintf("msg_%d", sr.recorder.startTime.Unix()),
-				"type":        "message",
-				"role":        "assistant",
-				"content":     []interface{}{},
-				"model":       model,
-				"stop_reason": sr.recorder.c.Query("stop_reason"),
-				"usage": map[string]interface{}{
-					"input_tokens":  inputTokens,
-					"output_tokens": outputTokens,
-				},
-			}
-			sr.recorder.SetAssembledResponse(fallbackResp)
-			logrus.Debugf("StreamRecorder: using fallback response, chunks=%d", len(sr.recorder.streamChunks))
+	} else if len(sr.recorder.streamChunks) > 0 {
+		fallback := map[string]interface{}{
+			"id":          fmt.Sprintf("msg_%d", sr.recorder.startTime.Unix()),
+			"type":        "message",
+			"role":        "assistant",
+			"content":     []interface{}{},
+			"model":       model,
+			"stop_reason": sr.recorder.c.Query("stop_reason"),
+			"usage": map[string]interface{}{
+				"input_tokens":  inputTokens,
+				"output_tokens": outputTokens,
+			},
 		}
+		sr.recorder.SetAssembledResponse(fallback)
+		logrus.Debugf("obs: streamRecorder using fallback response, chunks=%d", len(sr.recorder.streamChunks))
 	}
 }
 
-// RecordError records an error
 func (sr *streamRecorder) RecordError(err error) {
 	if sr == nil {
 		return
@@ -357,7 +348,6 @@ func (sr *streamRecorder) RecordError(err error) {
 	sr.recorder.RecordError(err)
 }
 
-// RecordResponse records the final response
 func (sr *streamRecorder) RecordResponse(provider *typ.Provider, model string) {
 	if sr == nil {
 		return
@@ -365,15 +355,10 @@ func (sr *streamRecorder) RecordResponse(provider *typ.Provider, model string) {
 	sr.recorder.RecordResponse(provider, model)
 }
 
-// RecordRawMapEvent records a raw map-based event (for protocol conversion scenarios)
-// This is used when converting between different API formats (e.g., OpenAI -> Anthropic)
-// It also extracts usage information from message_delta and message_stop events
 func (sr *streamRecorder) RecordRawMapEvent(eventType string, event map[string]interface{}) {
 	if sr == nil {
 		return
 	}
-
-	// Convert map to BetaRawMessageStreamEventUnion
 	data, err := json.Marshal(event)
 	if err == nil {
 		var betaEvent anthropic.BetaRawMessageStreamEventUnion
@@ -382,28 +367,25 @@ func (sr *streamRecorder) RecordRawMapEvent(eventType string, event map[string]i
 			sr.assembler.RecordV1BetaEvent(&betaEvent)
 		}
 	}
-
 	sr.recorder.RecordStreamChunk(eventType, event)
 
-	// Extract usage from message_delta event
 	if eventType == "message_delta" {
 		if usage, ok := event["usage"].(map[string]interface{}); ok {
-			if inputTokens, ok := usage["input_tokens"].(float64); ok {
-				sr.inputTokens = int(inputTokens)
-			} else if inputTokens, ok := usage["input_tokens"].(int64); ok {
-				sr.inputTokens = int(inputTokens)
+			if v, ok := usage["input_tokens"].(float64); ok {
+				sr.inputTokens = int(v)
+			} else if v, ok := usage["input_tokens"].(int64); ok {
+				sr.inputTokens = int(v)
 			}
-			if outputTokens, ok := usage["output_tokens"].(float64); ok {
-				sr.outputTokens = int(outputTokens)
-			} else if outputTokens, ok := usage["output_tokens"].(int64); ok {
-				sr.outputTokens = int(outputTokens)
+			if v, ok := usage["output_tokens"].(float64); ok {
+				sr.outputTokens = int(v)
+			} else if v, ok := usage["output_tokens"].(int64); ok {
+				sr.outputTokens = int(v)
 			}
 			sr.hasUsage = true
 		}
 	}
 }
 
-// StreamEventRecorder returns the StreamEventRecorder interface for use in protocol packages
 func (sr *streamRecorder) StreamEventRecorder() interface{} {
 	if sr == nil {
 		return nil
@@ -411,8 +393,6 @@ func (sr *streamRecorder) StreamEventRecorder() interface{} {
 	return sr
 }
 
-// SetupStreamRecorderInContext sets up the stream recorder in gin context for protocol conversion handlers
-// This allows protocol handlers in the stream package to record events without direct dependency on server package
 func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context, key string) {
 	if sr == nil {
 		return
@@ -424,14 +404,8 @@ func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context, key strin
 // Recorder Hook Builders
 // ===================================================================
 
-// NewRecorderHooks creates hook functions from a ScenarioRecorder for use with HandleContext.
-// This allows decoupling the recorder from the handle context while maintaining recording functionality.
-// Usage is tracked internally in the event hook, so complete hooks don't need usage parameters.
-//
-// Returns:
-// - onStreamEvent: Hook for each stream event
-// - onStreamComplete: Hook for stream completion
-// - onStreamError: Hook for stream errors
+// NewRecorderHooks creates hook functions from a ProtocolRecorder for use with
+// HandleContext. Usage is tracked internally; hooks do not need usage parameters.
 func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if recorder == nil {
 		return nil, nil, nil
@@ -439,7 +413,6 @@ func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event inte
 
 	streamRec := newStreamRecorder(recorder)
 
-	// OnStreamEvent hook - records each stream event and tracks usage
 	onStreamEvent = func(event interface{}) error {
 		if streamRec == nil {
 			return nil
@@ -447,7 +420,6 @@ func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event inte
 		switch evt := event.(type) {
 		case *anthropic.MessageStreamEventUnion:
 			streamRec.RecordV1Event(evt)
-			// Track usage from events
 			if evt.Usage.InputTokens > 0 {
 				streamRec.inputTokens = int(evt.Usage.InputTokens)
 				streamRec.hasUsage = true
@@ -458,7 +430,6 @@ func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event inte
 			}
 		case *anthropic.BetaRawMessageStreamEventUnion:
 			streamRec.RecordV1BetaEvent(evt)
-			// Track usage from events
 			if evt.Usage.InputTokens > 0 {
 				streamRec.inputTokens = int(evt.Usage.InputTokens)
 				streamRec.hasUsage = true
@@ -468,7 +439,6 @@ func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event inte
 				streamRec.hasUsage = true
 			}
 		case map[string]interface{}:
-			// For raw map events (protocol conversion scenarios)
 			if eventType, ok := evt["type"].(string); ok {
 				streamRec.RecordRawMapEvent(eventType, evt)
 			}
@@ -476,13 +446,10 @@ func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event inte
 		return nil
 	}
 
-	// OnStreamComplete hook - finalizes recording using internally tracked usage
 	onStreamComplete = func() {
 		if streamRec == nil {
 			return
 		}
-		// Model is not available here, it needs to be set externally
-		// or we can retrieve it from the recorder's gin context
 		model := ""
 		if recorder.c != nil {
 			model = recorder.c.Query("model")
@@ -490,7 +457,6 @@ func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event inte
 		streamRec.Finish(model, streamRec.inputTokens, streamRec.outputTokens)
 	}
 
-	// OnStreamError hook - records errors
 	onStreamError = func(err error) {
 		if streamRec == nil {
 			return
@@ -501,9 +467,7 @@ func NewRecorderHooks(recorder *ProtocolRecorder) (onStreamEvent func(event inte
 	return onStreamEvent, onStreamComplete, onStreamError
 }
 
-// NewRecorderHooksWithModel creates hook functions with an explicit model parameter.
-// This is preferred when the model is known at hook creation time.
-// Usage is tracked internally in the event hook.
+// NewRecorderHooksWithModel creates hooks with an explicit model and provider.
 func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provider *typ.Provider) (onStreamEvent func(event interface{}) error, onStreamComplete func(), onStreamError func(err error)) {
 	if recorder == nil {
 		return nil, nil, nil
@@ -511,7 +475,6 @@ func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provide
 
 	streamRec := newStreamRecorder(recorder)
 
-	// OnStreamEvent hook - records each stream event and tracks usage
 	onStreamEvent = func(event interface{}) error {
 		if streamRec == nil {
 			return nil
@@ -519,7 +482,6 @@ func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provide
 		switch evt := event.(type) {
 		case *anthropic.MessageStreamEventUnion:
 			streamRec.RecordV1Event(evt)
-			// Track usage from events
 			if evt.Usage.InputTokens > 0 {
 				streamRec.inputTokens = int(evt.Usage.InputTokens)
 				streamRec.hasUsage = true
@@ -530,7 +492,6 @@ func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provide
 			}
 		case *anthropic.BetaRawMessageStreamEventUnion:
 			streamRec.RecordV1BetaEvent(evt)
-			// Track usage from events
 			if evt.Usage.InputTokens > 0 {
 				streamRec.inputTokens = int(evt.Usage.InputTokens)
 				streamRec.hasUsage = true
@@ -540,7 +501,6 @@ func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provide
 				streamRec.hasUsage = true
 			}
 		case map[string]interface{}:
-			// For raw map events (protocol conversion scenarios)
 			if eventType, ok := evt["type"].(string); ok {
 				streamRec.RecordRawMapEvent(eventType, evt)
 			}
@@ -548,7 +508,6 @@ func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provide
 		return nil
 	}
 
-	// OnStreamComplete hook - finalizes recording with model and provider using internally tracked usage
 	onStreamComplete = func() {
 		if streamRec == nil {
 			return
@@ -557,7 +516,6 @@ func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provide
 		streamRec.RecordResponse(provider, model)
 	}
 
-	// OnStreamError hook - records errors
 	onStreamError = func(err error) {
 		if streamRec == nil {
 			return
@@ -568,12 +526,11 @@ func NewRecorderHooksWithModel(recorder *ProtocolRecorder, model string, provide
 	return onStreamEvent, onStreamComplete, onStreamError
 }
 
-// NewNonStreamRecorderHook creates a hook for non-streaming responses.
+// NewNonStreamRecorderHook creates a completion hook for non-streaming responses.
 func NewNonStreamRecorderHook(recorder *ScenarioRecorder, provider *typ.Provider, model string) func() {
 	if recorder == nil {
 		return nil
 	}
-
 	return func() {
 		recorder.RecordResponse(provider, model)
 	}

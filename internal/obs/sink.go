@@ -1,37 +1,51 @@
 package obs
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
+	"context"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
-// RecordMode defines the recording mode
+// RecordMode defines which fields are captured by the Sink.
 type RecordMode string
 
 const (
-	RecordModeAll      RecordMode = "all" // Record both request and response
-	RecordModeScenario RecordMode = "scenario"
-	RecordModeSlim     RecordMode = "slim" // TODO: Not implemented yet
+	RecordModeAll      RecordMode = "all"      // requests + responses
+	RecordModeScenario RecordMode = "scenario" // same as all, scenario-partitioned
+	RecordModeSlim     RecordMode = "slim"     // reserved
 
 	RecordModeRequestOnly           RecordMode = "request"                 // Record transformed request only
 	RecordModeRequestResponse       RecordMode = "request_response"        // Record transformed request + final response
 	RecordModeStagedRequestResponse RecordMode = "staged_request_response" // Record original request + transformed request + final response
 )
 
-// RecordEntry represents a single recorded request/response pair
+// RecordRequest represents the HTTP request details. Kept for callers that
+// build RecordRequest directly (e.g. client/record_roundtripper.go).
+type RecordRequest struct {
+	Method  string                 `json:"method"`
+	URL     string                 `json:"url"`
+	Headers map[string]string      `json:"headers"`
+	Body    map[string]interface{} `json:"body,omitempty"`
+}
+
+// RecordResponse represents the HTTP response details.
+type RecordResponse struct {
+	StatusCode   int                    `json:"status_code"`
+	Headers      map[string]string      `json:"headers"`
+	Body         map[string]interface{} `json:"body,omitempty"`
+	IsStreaming  bool                   `json:"is_streaming,omitempty"`
+	StreamChunks []string               `json:"-"`
+}
+
+// RecordEntry is kept for callers in pkg/otel that build it directly.
 type RecordEntry struct {
 	Timestamp  string                 `json:"timestamp"`
 	RequestID  string                 `json:"request_id"`
 	Provider   string                 `json:"provider"`
-	Scenario   string                 `json:"scenario,omitempty"` // Scenario: openai, anthropic, claude_code, etc.
+	Scenario   string                 `json:"scenario,omitempty"`
 	Model      string                 `json:"model"`
 	Request    *RecordRequest         `json:"request"`
 	Response   *RecordResponse        `json:"response"`
@@ -40,404 +54,175 @@ type RecordEntry struct {
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// RecordRequest represents the HTTP request details
-type RecordRequest struct {
-	Method  string                 `json:"method"`
-	URL     string                 `json:"url"`
-	Headers map[string]string      `json:"headers"`
-	Body    map[string]interface{} `json:"body,omitempty"`
-}
-
-// RecordResponse represents the HTTP response details
-type RecordResponse struct {
-	StatusCode int                    `json:"status_code"`
-	Headers    map[string]string      `json:"headers"`
-	Body       map[string]interface{} `json:"body,omitempty"`
-	// Streaming support
-	IsStreaming  bool     `json:"is_streaming,omitempty"`
-	StreamChunks []string `json:"-"` // Parsed SSE data chunks
-}
-
-// RecordEntryV2 represents a V2 recorded entry with dual-stage request/response recording
-// This is used for protocol conversion scenarios where we need to capture:
-// - Original request (before transforms)
-// - Transformed request (after protocol conversion)
-// - Provider response (raw response from provider)
-// - Final response (after reverse transformation, if applicable)
+// RecordEntryV2 is kept for backward compatibility. New code should build
+// a *Record and call Sink.Emit instead.
 type RecordEntryV2 struct {
 	Timestamp string `json:"timestamp"`
 	RequestID string `json:"request_id"`
 	Provider  string `json:"provider"`
-	Scenario  string `json:"scenario,omitempty"` // Scenario: openai, anthropic, claude_code, etc.
+	Scenario  string `json:"scenario,omitempty"`
 	Model     string `json:"model"`
 
-	// Dual-stage request recording
-	OriginalRequest    *RecordRequest `json:"original_request,omitempty"`    // Before any transforms
-	TransformedRequest *RecordRequest `json:"transformed_request,omitempty"` // After base transform
-
-	// Dual-stage response recording
-	ProviderResponse *RecordResponse `json:"provider_response,omitempty"` // Raw response from provider
-	FinalResponse    *RecordResponse `json:"final_response,omitempty"`    // Final response to client
+	OriginalRequest    *RecordRequest  `json:"original_request,omitempty"`
+	TransformedRequest *RecordRequest  `json:"transformed_request,omitempty"`
+	ProviderResponse   *RecordResponse `json:"provider_response,omitempty"`
+	FinalResponse      *RecordResponse `json:"final_response,omitempty"`
 
 	DurationMs     int64                  `json:"duration_ms"`
 	Error          string                 `json:"error,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
-	TransformSteps []string               `json:"transform_steps,omitempty"` // Applied transforms
+	TransformSteps []string               `json:"transform_steps,omitempty"`
 }
 
-// Sink manages recording of HTTP requests/responses to JSONL files
+// Sink manages recording of LLM request/response cycles.
+// All writes are batched asynchronously; Emit is non-blocking.
 type Sink struct {
-	mode    RecordMode
-	baseDir string
-	fileMap map[string]*recordFile // provider -> file
-	mutex   sync.RWMutex
+	mode      RecordMode
+	baseDir   string
+	processor *BatchProcessor
 }
 
-func (r *Sink) GetMode() RecordMode {
-	if r == nil {
+// GetMode returns the configured RecordMode, or "" when the sink is nil.
+func (s *Sink) GetMode() RecordMode {
+	if s == nil {
 		return ""
 	}
-	return r.mode
+	return s.mode
 }
 
-// recordFile holds a file handle and its writer
-type recordFile struct {
-	file        *os.File
-	writer      *json.Encoder
-	currentHour string // time in YYYY-MM-DD-HH format (hourly rotation)
-}
-
-// NewSink creates a new record sink
-// mode: empty string = disabled, "all" = record all, "response" = response only
-// V2 modes: "request", "response_only", "request_response"
+// NewSink creates a new Sink backed by the OTel-shaped batch pipeline.
+// Returns nil when recording is disabled (empty mode or baseDir).
 func NewSink(baseDir string, mode RecordMode) *Sink {
 	switch mode {
 	case "":
-		// Empty mode means recording is disabled
 		return nil
-
 	case RecordModeSlim:
-		// Check for slim mode (not implemented)
-		logrus.Warnf("Record mode 'slim' is not implemented yet, please use 'all' or 'response'")
+		logrus.Warnf("obs: record mode 'slim' is handled automatically, use 'all' or 'scenario'")
 		return nil
-
 	case RecordModeAll, RecordModeScenario,
 		RecordModeRequestOnly, RecordModeRequestResponse, RecordModeStagedRequestResponse:
-
-		// Empty baseDir means recording is disabled
 		if baseDir == "" {
 			return nil
 		}
-
-		// Ensure base directory exists
-		if err := os.MkdirAll(baseDir, 0755); err != nil {
-			logrus.Errorf("Failed to create record directory %s: %v", baseDir, err)
+		exp, err := NewFileExporter(baseDir)
+		if err != nil {
+			logrus.Errorf("obs: failed to initialise file exporter at %s: %v", baseDir, err)
 			return nil
 		}
-
 		return &Sink{
-			mode:    mode,
-			baseDir: baseDir,
-			fileMap: make(map[string]*recordFile),
+			mode:      mode,
+			baseDir:   baseDir,
+			processor: NewBatchProcessor(exp, BatchProcessorOptions{}),
 		}
 	default:
-		// Invalid mode
-		logrus.Warnf("Invalid record mode '%s', recording disabled", mode)
+		logrus.Warnf("obs: unknown record mode %q, recording disabled", mode)
 		return nil
 	}
 }
 
-// Record records a single request/response pair
-func (r *Sink) Record(provider, model string, req *RecordRequest, resp *RecordResponse, duration time.Duration, err error) {
-	if r.mode == "" {
+// Emit enqueues r for asynchronous export. The call is non-blocking.
+func (s *Sink) Emit(r *Record) {
+	if s == nil || s.processor == nil {
 		return
 	}
-
-	entry := &RecordEntry{
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		RequestID:  uuid.New().String(),
-		Provider:   provider,
-		Model:      model,
-		Response:   resp,
-		DurationMs: duration.Milliseconds(),
-	}
-
-	// Only include request if mode is "all"
-	if r.mode == RecordModeAll {
-		entry.Request = req
-	}
-
-	if err != nil {
-		entry.Error = err.Error()
-	}
-
-	r.writeEntry(provider, entry)
+	s.processor.Emit(r)
 }
 
-// RecordWithMetadata records a request/response with additional metadata
-func (r *Sink) RecordWithMetadata(provider, model string, req *RecordRequest, resp *RecordResponse, duration time.Duration, metadata map[string]interface{}, err error) {
-	if r.mode == "" {
+// RecordEntryV2 converts a legacy V2 entry to a Record and emits it.
+// Deprecated: build a *Record and call Emit directly.
+func (s *Sink) RecordEntryV2(entry *RecordEntryV2) {
+	if s == nil || entry == nil {
 		return
 	}
+	r := &Record{
+		Timestamp: time.Now().UTC(),
+		RequestID: entry.RequestID,
+		Provider:  entry.Provider,
+		Scenario:  entry.Scenario,
+		Model:     entry.Model,
+		Steps:     entry.TransformSteps,
+		Err:       entry.Error,
+		Duration:  time.Duration(entry.DurationMs) * time.Millisecond,
 
-	entry := &RecordEntry{
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		RequestID:  uuid.New().String(),
-		Provider:   provider,
-		Model:      model,
-		Response:   resp,
-		DurationMs: duration.Milliseconds(),
-		Metadata:   metadata,
+		OriginalRequest:    entry.OriginalRequest,
+		TransformedRequest: entry.TransformedRequest,
+		ProviderResponse:   entry.ProviderResponse,
+		FinalResponse:      entry.FinalResponse,
 	}
-
-	// Only include request if mode is "all"
-	if r.mode == RecordModeAll {
-		entry.Request = req
+	if r.RequestID == "" {
+		r.RequestID = uuid.New().String()
 	}
-
-	if err != nil {
-		entry.Error = err.Error()
-	}
-
-	r.writeEntry(provider, entry)
+	s.Emit(r)
 }
 
-// RecordWithScenario records a request/response with scenario information
-// Uses scenario-based file naming (e.g., claude_code-{date}.jsonl)
-func (r *Sink) RecordWithScenario(provider, model, scenario string, req *RecordRequest, resp *RecordResponse, duration time.Duration, err error) {
-	if r.mode == "" {
+// RecordWithScenario is kept for callers that haven't migrated to Emit.
+// Deprecated: build a *Record and call Emit directly.
+func (s *Sink) RecordWithScenario(provider, model, scenario string, req *RecordRequest, resp *RecordResponse, duration time.Duration, err error) {
+	if s == nil {
 		return
 	}
+	r := &Record{
+		Timestamp: time.Now().UTC(),
+		RequestID: uuid.New().String(),
+		Provider:  provider,
+		Scenario:  scenario,
+		Model:     model,
+		Duration:  duration,
 
-
-	entry := &RecordEntry{
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-		RequestID:  uuid.New().String(),
-		Provider:   provider,
-		Scenario:   scenario,
-		Model:      model,
-		Response:   resp,
-		DurationMs: duration.Milliseconds(),
+		OriginalRequest: req,
+		FinalResponse:   resp,
 	}
-
-	switch r.mode {
-	case RecordModeAll:
-		entry.Request = req
-	case RecordModeScenario:
-		entry.Request = req
-	}
-
 	if err != nil {
-		entry.Error = err.Error()
+		r.Err = err.Error()
 	}
-
-	// Use scenario-based file naming
-	r.writeEntryWithScenario(scenario, entry)
+	s.Emit(r)
 }
 
-// writeEntry writes an entry to the appropriate file
-func (r *Sink) writeEntry(provider string, entry *RecordEntry) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	// Get current hour for file rotation (YYYY-MM-DD-HH)
-	currentHour := time.Now().UTC().Format("2006-01-02-15")
-
-	// Get or create file for this provider
-	rf, exists := r.fileMap[provider]
-	if !exists || rf.currentHour != currentHour {
-		// Close old file if hour changed
-		if exists && rf.currentHour != currentHour {
-			r.closeFile(rf)
-		}
-
-		// Create new file
-		filename := filepath.Join(r.baseDir, fmt.Sprintf("%s-%s.jsonl", provider, currentHour))
-		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			logrus.Errorf("Failed to open record file %s: %v", filename, err)
-			return
-		}
-
-		rf = &recordFile{
-			file:        file,
-			writer:      json.NewEncoder(file),
-			currentHour: currentHour,
-		}
-		r.fileMap[provider] = rf
-	}
-
-	// Write entry as JSONL (one JSON object per line)
-	if err := rf.writer.Encode(entry); err != nil {
-		logrus.Errorf("Failed to write record entry: %v", err)
-	}
+// Record is kept for the oldest callers.
+// Deprecated: use Emit.
+func (s *Sink) Record(provider, model string, req *RecordRequest, resp *RecordResponse, duration time.Duration, err error) {
+	s.RecordWithScenario(provider, model, "", req, resp, duration, err)
 }
 
-// writeEntryWithScenario writes an entry to a scenario-based file with directory structure.
-// Files are organized as: {baseDir}/{scenario}/{model}.{hour}.jsonl
-func (r *Sink) writeEntryWithScenario(scenario string, entry *RecordEntry) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	// Get current hour for file rotation (YYYY-MM-DD-HH)
-	currentHour := time.Now().UTC().Format("2006-01-02-15")
-
-	// Sanitize model name for path usage
-	sanitizedModel := sanitizeModelForPath(entry.Model)
-
-	// Use scenario:model as the file key (provider no longer needed in file key)
-	fileKey := fmt.Sprintf("%s:%s", scenario, sanitizedModel)
-
-	// Get or create file for this scenario:model combination
-	rf, exists := r.fileMap[fileKey]
-	if !exists || rf.currentHour != currentHour {
-		// Close old file if hour changed
-		if exists && rf.currentHour != currentHour {
-			r.closeFile(rf)
-		}
-
-		// Create scenario subdirectory
-		scenarioDir := filepath.Join(r.baseDir, scenario)
-		if err := os.MkdirAll(scenarioDir, 0755); err != nil {
-			logrus.Errorf("Failed to create scenario directory %s: %v", scenarioDir, err)
-			return
-		}
-
-		// Create new file with scenario/model directory structure
-		// Format: {scenario}/{model}.{hour}.jsonl
-		filename := filepath.Join(scenarioDir, fmt.Sprintf("%s.%s.jsonl", sanitizedModel, currentHour))
-		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			logrus.Errorf("Failed to open record file %s: %v", filename, err)
-			return
-		}
-
-		rf = &recordFile{
-			file:        file,
-			writer:      json.NewEncoder(file),
-			currentHour: currentHour,
-		}
-		r.fileMap[fileKey] = rf
-	}
-
-	// Write entry as JSONL (one JSON object per line)
-	if err := rf.writer.Encode(entry); err != nil {
-		logrus.Errorf("Failed to write record entry: %v", err)
-	}
+// RecordWithMetadata is kept for older callers.
+// Deprecated: use Emit.
+func (s *Sink) RecordWithMetadata(provider, model string, req *RecordRequest, resp *RecordResponse, duration time.Duration, _ map[string]interface{}, err error) {
+	s.RecordWithScenario(provider, model, "", req, resp, duration, err)
 }
 
-// closeFile closes a record file
-func (r *Sink) closeFile(rf *recordFile) {
-	if rf != nil && rf.file != nil {
-		if err := rf.file.Close(); err != nil {
-			logrus.Errorf("Failed to close record file: %v", err)
-		}
-	}
+// IsEnabled returns whether recording is active.
+func (s *Sink) IsEnabled() bool {
+	return s != nil && s.processor != nil
 }
 
-// sanitizeModelForPath sanitizes model names for use in file paths.
-// Replaces invalid filename characters with hyphens.
+// GetBaseDir returns the recording root directory.
+func (s *Sink) GetBaseDir() string {
+	if s == nil {
+		return ""
+	}
+	return s.baseDir
+}
+
+// Close drains pending records and shuts down the pipeline.
+func (s *Sink) Close() {
+	if s == nil || s.processor == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := s.processor.Shutdown(ctx); err != nil {
+		logrus.Warnf("obs: sink shutdown error: %v", err)
+	}
+	logrus.Info("obs: recording sink closed")
+}
+
+// sanitizeModelForPath replaces invalid filename characters with hyphens.
+// Kept for any callers outside the obs package that reference it via sink.
 func sanitizeModelForPath(model string) string {
-	// Replace invalid filename characters with hyphens
 	invalid := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
 	result := model
 	for _, char := range invalid {
 		result = strings.ReplaceAll(result, char, "-")
 	}
 	return result
-}
-
-// Close closes all open record files
-func (r *Sink) Close() {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	for _, rf := range r.fileMap {
-		r.closeFile(rf)
-	}
-	r.fileMap = make(map[string]*recordFile)
-
-	if r.mode != "" {
-		logrus.Info("Record sink closed")
-	}
-}
-
-// IsEnabled returns whether recording is enabled
-func (r *Sink) IsEnabled() bool {
-	return r.mode != ""
-}
-
-// GetBaseDir returns the base directory for recordings
-func (r *Sink) GetBaseDir() string {
-	return r.baseDir
-}
-
-// RecordEntryV2 records a V2 entry with dual-stage request/response recording.
-// This is used for protocol conversion scenarios where we need to capture requests at multiple stages.
-// Files are organized as: {baseDir}/{scenario}/{model}.{hour}.jsonl
-func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
-	if r == nil || r.mode == "" {
-		return
-	}
-
-
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	// Get current hour for file rotation (YYYY-MM-DD-HH)
-	currentHour := time.Now().UTC().Format("2006-01-02-15")
-
-	// Sanitize model name for path usage
-	sanitizedModel := sanitizeModelForPath(entry.Model)
-
-	// Use scenario:model as the file key
-	// If scenario is empty, fall back to model-only key
-	var fileKey string
-	if entry.Scenario != "" {
-		fileKey = fmt.Sprintf("%s:%s", entry.Scenario, sanitizedModel)
-	} else {
-		fileKey = fmt.Sprintf("_%s", sanitizedModel)
-	}
-
-	// Get or create file for this entry
-	rf, exists := r.fileMap[fileKey]
-	if !exists || rf.currentHour != currentHour {
-		// Close old file if hour changed
-		if exists && rf.currentHour != currentHour {
-			r.closeFile(rf)
-		}
-
-		var filename string
-		if entry.Scenario != "" {
-			// Create scenario subdirectory
-			scenarioDir := filepath.Join(r.baseDir, entry.Scenario)
-			if err := os.MkdirAll(scenarioDir, 0755); err != nil {
-				logrus.Errorf("Failed to create scenario directory %s: %v", scenarioDir, err)
-				return
-			}
-			// Format: {scenario}/{model}.{hour}.jsonl
-			filename = filepath.Join(scenarioDir, fmt.Sprintf("%s.%s.jsonl", sanitizedModel, currentHour))
-		} else {
-			// Fallback: {model}.{hour}.jsonl in base directory
-			filename = filepath.Join(r.baseDir, fmt.Sprintf("%s.%s.jsonl", sanitizedModel, currentHour))
-		}
-
-		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
-		if err != nil {
-			logrus.Errorf("Failed to open record file %s: %v", filename, err)
-			return
-		}
-
-		rf = &recordFile{
-			file:        file,
-			writer:      json.NewEncoder(file),
-			currentHour: currentHour,
-		}
-		r.fileMap[fileKey] = rf
-	}
-
-	// Write entry as JSONL (one JSON object per line)
-	if err := rf.writer.Encode(entry); err != nil {
-		logrus.Errorf("Failed to write record entry: %v", err)
-	}
 }
