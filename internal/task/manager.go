@@ -41,27 +41,47 @@ type Manager interface {
 	Stop(ctx context.Context) error
 }
 
+// ManagerOption configures a Manager at construction time.
+type ManagerOption func(*taskManager)
+
+// WithPollInterval overrides the scheduler polling interval.
+// Useful in tests; default is 5s.
+func WithPollInterval(d time.Duration) ManagerOption {
+	return func(m *taskManager) { m.sched.poll = d }
+}
+
+// WithWaitInterval overrides the Wait() polling interval.
+// Useful in tests; default is 50ms.
+func WithWaitInterval(d time.Duration) ManagerOption {
+	return func(m *taskManager) { m.waitInterval = d }
+}
+
 // taskManager is the concrete implementation of Manager.
 type taskManager struct {
-	mu       sync.Mutex
-	store    Store
-	handlers *handlerRegistry
-	registry *cancelRegistry
-	queue    *serialKeyQueue
-	sched    *scheduler
-	stopFn   context.CancelFunc
-	running  bool
+	mu           sync.Mutex
+	store        Store
+	handlers     *handlerRegistry
+	registry     *cancelRegistry
+	queue        *serialKeyQueue
+	sched        *scheduler
+	stopFn       context.CancelFunc
+	running      bool
+	waitInterval time.Duration
 }
 
 // NewManager constructs a Manager backed by the provided Store.
-func NewManager(store Store) Manager {
+func NewManager(store Store, opts ...ManagerOption) Manager {
 	m := &taskManager{
-		store:    store,
-		handlers: newHandlerRegistry(),
-		registry: newCancelRegistry(),
-		queue:    newSerialKeyQueue(),
+		store:        store,
+		handlers:     newHandlerRegistry(),
+		registry:     newCancelRegistry(),
+		queue:        newSerialKeyQueue(),
+		waitInterval: schedulerDefaultWaitPoll,
 	}
 	m.sched = newScheduler(store, m.dispatchTask)
+	for _, opt := range opts {
+		opt(m)
+	}
 	return m
 }
 
@@ -146,7 +166,7 @@ func (m *taskManager) Wait(ctx context.Context, taskID string) (*Task, error) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(schedulerWaitInterval):
+		case <-time.After(m.waitInterval):
 		}
 	}
 }

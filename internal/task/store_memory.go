@@ -1,0 +1,201 @@
+package task
+
+import (
+	"context"
+	"encoding/json"
+	"sort"
+	"sync"
+	"time"
+)
+
+// MemoryStore is a thread-safe in-memory implementation of Store.
+// Intended for tests; do not use in production.
+type MemoryStore struct {
+	mu    sync.Mutex
+	tasks map[string]*Task
+}
+
+// NewMemoryStore returns an empty MemoryStore.
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{tasks: make(map[string]*Task)}
+}
+
+func (s *MemoryStore) Create(_ context.Context, t *Task) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *t
+	s.tasks[t.ID] = &cp
+	return nil
+}
+
+func (s *MemoryStore) Get(_ context.Context, taskID string) (*Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tasks[taskID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *t
+	return &cp, nil
+}
+
+func (s *MemoryStore) Update(_ context.Context, t *Task) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.tasks[t.ID]; !ok {
+		return ErrNotFound
+	}
+	cp := *t
+	s.tasks[t.ID] = &cp
+	return nil
+}
+
+func (s *MemoryStore) List(_ context.Context, filter ListFilter) ([]Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	statusSet := make(map[TaskStatus]bool, len(filter.Status))
+	for _, st := range filter.Status {
+		statusSet[st] = true
+	}
+
+	var result []Task
+	for _, t := range s.tasks {
+		if filter.OwnerType != "" && t.OwnerType != filter.OwnerType {
+			continue
+		}
+		if filter.OwnerID != "" && t.OwnerID != filter.OwnerID {
+			continue
+		}
+		if filter.Type != "" && t.Type != filter.Type {
+			continue
+		}
+		if len(statusSet) > 0 && !statusSet[t.Status] {
+			continue
+		}
+		cp := *t
+		result = append(result, cp)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+
+	if filter.Offset > 0 {
+		if filter.Offset >= len(result) {
+			return nil, nil
+		}
+		result = result[filter.Offset:]
+	}
+	if filter.Limit > 0 && filter.Limit < len(result) {
+		result = result[:filter.Limit]
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) MarkInterruptedOnStartup(_ context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for _, t := range s.tasks {
+		switch t.Status {
+		case StatusRunning:
+			t.Status = StatusInterrupted
+			t.UpdatedAt = now
+		case StatusQueued:
+			t.Status = StatusPending
+			t.ScheduledAt = nil
+			t.UpdatedAt = now
+		}
+	}
+	return nil
+}
+
+func (s *MemoryStore) FindDueTasks(_ context.Context, now time.Time, limit int) ([]Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var result []Task
+	for _, t := range s.tasks {
+		if t.Status != StatusPending {
+			continue
+		}
+		if t.ScheduledAt != nil && t.ScheduledAt.After(now) {
+			continue
+		}
+		cp := *t
+		result = append(result, cp)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) FindQueuedForKey(_ context.Context, key string) (*Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var oldest *Task
+	for _, t := range s.tasks {
+		if t.SerializationKey != key || t.Status != StatusQueued {
+			continue
+		}
+		if oldest == nil || t.CreatedAt.Before(oldest.CreatedAt) {
+			cp := *t
+			oldest = &cp
+		}
+	}
+	return oldest, nil
+}
+
+func (s *MemoryStore) UpdateStatus(_ context.Context, taskID string, fields map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	t, ok := s.tasks[taskID]
+	if !ok {
+		return ErrNotFound
+	}
+	for k, v := range fields {
+		switch k {
+		case "status":
+			t.Status = TaskStatus(v.(string))
+		case "attempt":
+			t.Attempt = v.(int)
+		case "progress":
+			t.Progress = v.(string)
+		case "error":
+			t.Error = v.(string)
+		case "result":
+			if sv, ok := v.(string); ok && sv != "" {
+				t.Result = json.RawMessage(sv)
+			}
+		case "started_at":
+			if ts, ok := v.(time.Time); ok {
+				t.StartedAt = &ts
+			}
+		case "finished_at":
+			if ts, ok := v.(time.Time); ok {
+				t.FinishedAt = &ts
+			}
+		case "cancelled_at":
+			if ts, ok := v.(time.Time); ok {
+				t.CancelledAt = &ts
+			}
+		case "scheduled_at":
+			if v == nil {
+				t.ScheduledAt = nil
+			} else if ts, ok := v.(time.Time); ok {
+				t.ScheduledAt = &ts
+			} else if ts, ok := v.(*time.Time); ok {
+				t.ScheduledAt = ts
+			}
+		}
+	}
+	t.UpdatedAt = time.Now()
+	return nil
+}

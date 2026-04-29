@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	schedulerDefaultPoll  = 5 * time.Second
-	schedulerBatchSize    = 50
-	schedulerWaitInterval = 500 * time.Millisecond // Wait() poll interval
+	schedulerDefaultPoll     = 5 * time.Second
+	schedulerBatchSize       = 50
+	schedulerDefaultWaitPoll = 50 * time.Millisecond // Wait() default poll interval
 )
 
 type scheduler struct {
