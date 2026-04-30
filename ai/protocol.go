@@ -1,6 +1,6 @@
 // Package protocol provides types for AI protocol conversion and client interfaces.
 // This is the public API for protocol-related types.
-package protocol
+package ai
 
 import (
 	"github.com/openai/openai-go/v3/shared"

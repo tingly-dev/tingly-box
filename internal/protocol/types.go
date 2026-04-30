@@ -3,7 +3,7 @@
 package protocol
 
 import (
-	publicprotocol "github.com/tingly-dev/tingly-box/protocol"
+	publicprotocol "github.com/tingly-dev/tingly-box/ai"
 )
 
 // Type aliases to public protocol types for backward compatibility
