@@ -3,21 +3,23 @@ package oauth
 import (
 	"sync"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // TokenStorage defines the interface for storing and retrieving OAuth tokens
 type TokenStorage interface {
 	// SaveToken saves a token for the given user and provider
-	SaveToken(userID string, provider ProviderType, token *Token) error
+	SaveToken(userID string, provider ai.Issuer, token *Token) error
 
 	// GetToken retrieves a token for the given user and provider
-	GetToken(userID string, provider ProviderType) (*Token, error)
+	GetToken(userID string, provider ai.Issuer) (*Token, error)
 
 	// DeleteToken removes a token for the given user and provider
-	DeleteToken(userID string, provider ProviderType) error
+	DeleteToken(userID string, provider ai.Issuer) error
 
 	// ListProviders returns all providers that have tokens for the user
-	ListProviders(userID string) ([]ProviderType, error)
+	ListProviders(userID string) ([]ai.Issuer, error)
 
 	// CleanupExpired removes all expired tokens from the storage
 	CleanupExpired() error
@@ -26,23 +28,23 @@ type TokenStorage interface {
 // MemoryTokenStorage is an in-memory implementation of TokenStorage
 type MemoryTokenStorage struct {
 	mu     sync.RWMutex
-	tokens map[string]map[ProviderType]*Token // userID -> provider -> token
+	tokens map[string]map[ai.Issuer]*Token // userID -> provider -> token
 }
 
 // NewMemoryTokenStorage creates a new in-memory token storage
 func NewMemoryTokenStorage() *MemoryTokenStorage {
 	return &MemoryTokenStorage{
-		tokens: make(map[string]map[ProviderType]*Token),
+		tokens: make(map[string]map[ai.Issuer]*Token),
 	}
 }
 
 // SaveToken saves a token for the given user and provider
-func (s *MemoryTokenStorage) SaveToken(userID string, provider ProviderType, token *Token) error {
+func (s *MemoryTokenStorage) SaveToken(userID string, provider ai.Issuer, token *Token) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.tokens[userID] == nil {
-		s.tokens[userID] = make(map[ProviderType]*Token)
+		s.tokens[userID] = make(map[ai.Issuer]*Token)
 	}
 
 	s.tokens[userID][provider] = token
@@ -50,7 +52,7 @@ func (s *MemoryTokenStorage) SaveToken(userID string, provider ProviderType, tok
 }
 
 // GetToken retrieves a token for the given user and provider
-func (s *MemoryTokenStorage) GetToken(userID string, provider ProviderType) (*Token, error) {
+func (s *MemoryTokenStorage) GetToken(userID string, provider ai.Issuer) (*Token, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -67,7 +69,7 @@ func (s *MemoryTokenStorage) GetToken(userID string, provider ProviderType) (*To
 }
 
 // DeleteToken removes a token for the given user and provider
-func (s *MemoryTokenStorage) DeleteToken(userID string, provider ProviderType) error {
+func (s *MemoryTokenStorage) DeleteToken(userID string, provider ai.Issuer) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -103,15 +105,15 @@ func (s *MemoryTokenStorage) CleanupExpired() error {
 }
 
 // ListProviders returns all providers that have tokens for the user
-func (s *MemoryTokenStorage) ListProviders(userID string) ([]ProviderType, error) {
+func (s *MemoryTokenStorage) ListProviders(userID string) ([]ai.Issuer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.tokens[userID] == nil {
-		return []ProviderType{}, nil
+		return []ai.Issuer{}, nil
 	}
 
-	providers := make([]ProviderType, 0, len(s.tokens[userID]))
+	providers := make([]ai.Issuer, 0, len(s.tokens[userID]))
 	for provider := range s.tokens[userID] {
 		providers = append(providers, provider)
 	}
@@ -123,7 +125,7 @@ func (s *MemoryTokenStorage) ListProviders(userID string) ([]ProviderType, error
 type TokenWithMetadata struct {
 	Token     *Token
 	UserID    string
-	Provider  ProviderType
+	Provider  ai.Issuer
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -133,10 +135,10 @@ type MetadataTokenStorage interface {
 	TokenStorage
 
 	// SaveTokenWithMetadata saves a token with additional metadata
-	SaveTokenWithMetadata(userID string, provider ProviderType, token *Token, metadata map[string]string) error
+	SaveTokenWithMetadata(userID string, provider ai.Issuer, token *Token, metadata map[string]string) error
 
 	// GetTokenWithMetadata retrieves a token with metadata
-	GetTokenWithMetadata(userID string, provider ProviderType) (*TokenWithMetadata, error)
+	GetTokenWithMetadata(userID string, provider ai.Issuer) (*TokenWithMetadata, error)
 
 	// ListAllTokens returns all tokens with their metadata
 	ListAllTokens() ([]*TokenWithMetadata, error)

@@ -7,26 +7,6 @@ import (
 	"time"
 )
 
-// CodexAPIBase is the API base URL for ChatGPT/Codex OAuth provider
-const CodexAPIBase = "https://chatgpt.com/backend-api"
-
-// OAuth issuer constants - represent the OAuth identity providers
-const (
-	IssuerAnthropic   = "anthropic"   // Anthropic OAuth issuer
-	IssuerClaudeCode  = "claude_code" // Claude Code OAuth issuer
-	IssuerCodex       = "codex"       // ChatGPT/Codex OAuth issuer
-	IssuerGitHub      = "github"      // GitHub OAuth issuer
-	IssuerGoogle      = "google"      // Google OAuth issuer
-	IssuerOpenAI      = "openai"      // OpenAI OAuth issuer
-	IssuerGemini      = "gemini"      // Gemini CLI OAuth issuer
-	IssuerCopilot     = "copilot"     // GitHub Copilot OAuth issuer
-	IssuerCursor      = "cursor"      // Cursor OAuth issuer
-	IssuerKimi        = "kimi_code"   // Kimi OAuth issuer
-	IssuerQwen        = "qwen_code"   // Qwen OAuth issuer
-	IssuerAntigravity = "antigravity" // Antigravity OAuth issuer
-	IssuerIFlow       = "iflow"       // IFlow OAuth issuer
-)
-
 // AuthType represents the authentication type for a provider
 type AuthType string
 
@@ -38,7 +18,7 @@ const (
 // OAuthDetail contains OAuth-specific authentication information
 type OAuthDetail struct {
 	AccessToken  string                 `json:"access_token"`           // OAuth access token
-	Issuer       string                 `json:"issuer"`                 // OAuth issuer: claude_code, github, google, etc. for token manager lookup
+	Issuer       Issuer                 `json:"issuer"`                 // OAuth issuer: claude_code, github, google, etc. for token manager lookup
 	UserID       string                 `json:"user_id"`                // OAuth user identifier
 	RefreshToken string                 `json:"refresh_token"`          // Token for refreshing access token
 	ExpiresAt    string                 `json:"expires_at"`             // Token expiration time (RFC3339)
@@ -68,7 +48,7 @@ func (o *OAuthDetail) UnmarshalJSON(data []byte) error {
 
 	// Backward compatibility: if ProviderType is set but Issuer is not, copy ProviderType to Issuer
 	if o.ProviderType != "" && o.Issuer == "" {
-		o.Issuer = o.ProviderType
+		o.Issuer = Issuer(o.ProviderType)
 	}
 	return nil
 }
@@ -85,7 +65,7 @@ func (o *OAuthDetail) MarshalJSON() ([]byte, error) {
 		ProviderType string `json:"provider_type,omitempty"`
 	}{
 		alias:        alias(*o),
-		ProviderType: o.Issuer, // Write Issuer to provider_type for compatibility
+		ProviderType: string(o.Issuer), // Write Issuer to provider_type for compatibility
 	}
 
 	return json.Marshal(tmp)
@@ -106,7 +86,7 @@ func (o *OAuthDetail) IsExpired() bool {
 
 // GetIssuer returns the OAuth issuer, with backward compatibility for ProviderType.
 // It returns Issuer if set, otherwise falls back to the deprecated ProviderType.
-func (o *OAuthDetail) GetIssuer() string {
+func (o *OAuthDetail) GetIssuer() Issuer {
 	if o == nil {
 		return ""
 	}
@@ -114,7 +94,7 @@ func (o *OAuthDetail) GetIssuer() string {
 		return o.Issuer
 	}
 	// Backward compatibility: fall back to ProviderType
-	return o.ProviderType
+	return Issuer(o.ProviderType)
 }
 
 // Provider represents an AI model api key and provider configuration

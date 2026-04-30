@@ -1,5 +1,9 @@
 package oauth
 
+import (
+	"github.com/tingly-dev/tingly-box/ai"
+)
+
 // DefaultRegistry returns a registry with default provider configurations
 // Note: Client ID and Secret must be set from environment variables or config
 func DefaultRegistry() *Registry {
@@ -207,13 +211,13 @@ func DefaultRegistry() *Registry {
 
 // Registry manages OAuth provider configurations
 type Registry struct {
-	providers map[ProviderType]*ProviderConfig
+	providers map[ai.Issuer]*ProviderConfig
 }
 
 // NewRegistry creates a new OAuth provider registry
 func NewRegistry() *Registry {
 	return &Registry{
-		providers: make(map[ProviderType]*ProviderConfig),
+		providers: make(map[ai.Issuer]*ProviderConfig),
 	}
 }
 
@@ -223,19 +227,19 @@ func (r *Registry) Register(config *ProviderConfig) {
 }
 
 // Unregister removes a provider configuration
-func (r *Registry) Unregister(providerType ProviderType) {
+func (r *Registry) Unregister(providerType ai.Issuer) {
 	delete(r.providers, providerType)
 }
 
 // Get returns a provider configuration
-func (r *Registry) Get(providerType ProviderType) (*ProviderConfig, bool) {
+func (r *Registry) Get(providerType ai.Issuer) (*ProviderConfig, bool) {
 	config, ok := r.providers[providerType]
 	return config, ok
 }
 
 // List returns all registered provider types
-func (r *Registry) List() []ProviderType {
-	types := make([]ProviderType, 0, len(r.providers))
+func (r *Registry) List() []ai.Issuer {
+	types := make([]ai.Issuer, 0, len(r.providers))
 	for t := range r.providers {
 		types = append(types, t)
 	}
@@ -243,18 +247,18 @@ func (r *Registry) List() []ProviderType {
 }
 
 // IsRegistered checks if a provider is registered
-func (r *Registry) IsRegistered(providerType ProviderType) bool {
+func (r *Registry) IsRegistered(providerType ai.Issuer) bool {
 	_, ok := r.providers[providerType]
 	return ok
 }
 
 // ProviderInfo returns information about a provider
 type ProviderInfo struct {
-	Type        ProviderType `json:"type"`
-	DisplayName string       `json:"display_name"`
-	AuthURL     string       `json:"auth_url,omitempty"`
-	Scopes      []string     `json:"scopes,omitempty"`
-	Configured  bool         `json:"configured"` // Has client credentials
+	Type        ai.Issuer `json:"type"`
+	DisplayName string    `json:"display_name"`
+	AuthURL     string    `json:"auth_url,omitempty"`
+	Scopes      []string  `json:"scopes,omitempty"`
+	Configured  bool      `json:"configured"` // Has client credentials
 }
 
 // GetProviderInfo returns info about all registered providers

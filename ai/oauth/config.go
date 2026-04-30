@@ -8,23 +8,25 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
-// ProviderType represents the OAuth provider type
-type ProviderType string
-
+// Deprecated: Use ai.Issuer constants directly
 const (
-	ProviderClaudeCode  ProviderType = "claude_code"
-	ProviderOpenAI      ProviderType = "openai"
-	ProviderGoogle      ProviderType = "google"
-	ProviderGemini      ProviderType = "gemini" // Gemini CLI OAuth
-	ProviderGitHub      ProviderType = "github"
-	ProviderQwenCode    ProviderType = "qwen_code"
-	ProviderAntigravity ProviderType = "antigravity"
-	ProviderIFlow       ProviderType = "iflow"
-	ProviderCodex       ProviderType = "codex"
-	ProviderMock        ProviderType = "mock"
-	ProviderKimi        ProviderType = "kimi_code"
+	ProviderClaudeCode  = ai.IssuerClaudeCode
+	ProviderOpenAI      = ai.IssuerOpenAI
+	ProviderGoogle      = ai.IssuerGoogle
+	ProviderGemini      = ai.IssuerGemini
+	ProviderGitHub      = ai.IssuerGitHub
+	ProviderQwenCode    = ai.IssuerQwen
+	ProviderAntigravity = ai.IssuerAntigravity
+	ProviderIFlow       = ai.IssuerIFlow
+	ProviderCodex       = ai.IssuerCodex
+	ProviderMock        = ai.IssuerMock
+	ProviderKimi        = ai.IssuerKimi
+	ProviderCursor      = ai.IssuerCursor
+	ProviderCopilot     = ai.IssuerCopilot
 )
 
 // DefaultSessionExpiry is the default expiration time for OAuth sessions
@@ -32,21 +34,18 @@ const (
 const DefaultSessionExpiry = 10 * time.Minute
 
 // ParseProviderType parses a provider type from string, case-insensitive
-func ParseProviderType(s string) (ProviderType, error) {
-	p := ProviderType(s)
+func ParseProviderType(s string) (ai.Issuer, error) {
+	p := ai.Issuer(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock, ProviderKimi:
+	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock, ProviderKimi, ProviderCursor, ProviderCopilot:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)
 	}
 }
 
-// String returns the string representation of ProviderType
-func (p ProviderType) String() string {
-	return string(p)
-}
+// String returns the string representation of ai.Issuer
 
 // Config holds the OAuth configuration
 type Config struct {
@@ -54,7 +53,7 @@ type Config struct {
 	BaseURL string
 
 	// ProviderConfigs maps provider types to their OAuth configurations
-	ProviderConfigs map[ProviderType]*ProviderConfig
+	ProviderConfigs map[ai.Issuer]*ProviderConfig
 
 	// TokenStorage is the storage for OAuth tokens
 	TokenStorage TokenStorage
@@ -80,7 +79,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	cfg := &Config{
 		BaseURL:           "http://localhost:12580",
-		ProviderConfigs:   make(map[ProviderType]*ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*ProviderConfig),
 		TokenStorage:      NewMemoryTokenStorage(),
 		StateStorage:      NewMemoryStateStorage(),
 		SessionStorage:    NewMemorySessionStorage(),
@@ -122,7 +121,7 @@ func (c *Config) GetHTTPClient() *http.Client {
 // ProviderConfig holds the OAuth configuration for a specific provider
 type ProviderConfig struct {
 	// Type is the provider type
-	Type ProviderType
+	Type ai.Issuer
 
 	GrantType string
 
@@ -261,7 +260,7 @@ type Token struct {
 	Expiry time.Time `json:"-"`
 
 	// Provider is the provider that issued this token
-	Provider ProviderType `json:"-"`
+	Provider ai.Issuer `json:"-"`
 
 	// RedirectTo is the optional URL to redirect to after successful OAuth
 	RedirectTo string `json:"-"`
@@ -332,7 +331,7 @@ type DeviceCodeResponse struct {
 // DeviceCodeData holds device code information with metadata
 type DeviceCodeData struct {
 	*DeviceCodeResponse
-	Provider     ProviderType
+	Provider     ai.Issuer
 	UserID       string
 	RedirectTo   string
 	Name         string

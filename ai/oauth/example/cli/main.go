@@ -35,6 +35,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 )
 
@@ -146,7 +147,7 @@ func main() {
 	log.Println("OAuth test completed successfully!")
 }
 
-func printDemoInfo(providerType oauth.ProviderType, port int) {
+func printDemoInfo(providerType ai.Issuer, port int) {
 	providerConfig, ok := oauth.DefaultRegistry().Get(providerType)
 	if !ok {
 		log.Fatalf("Provider %s not found", providerType)
@@ -194,7 +195,7 @@ func printDemoInfo(providerType oauth.ProviderType, port int) {
 
 type ExampleConfig struct {
 	ServerPort    int
-	ProviderType  oauth.ProviderType
+	ProviderType  ai.Issuer
 	UserID        string
 	BaseURL       string
 	ShowFullToken bool
@@ -299,7 +300,7 @@ func shouldSkipClientSecret(config *oauth.ProviderConfig) bool {
 func newOAuthConfig(baseURL string) *oauth.Config {
 	cfg := oauth.DefaultConfig()
 	cfg.BaseURL = baseURL
-	cfg.ProviderConfigs = make(map[oauth.ProviderType]*oauth.ProviderConfig)
+	cfg.ProviderConfigs = make(map[ai.Issuer]*oauth.ProviderConfig)
 	return cfg
 }
 
@@ -484,7 +485,7 @@ func runDeviceCodeFlow(config *ExampleConfig, registry *oauth.Registry, provider
 	}
 }
 
-func printTokenResult(token *oauth.Token, userID string, oauthConfig *oauth.Config, providerType oauth.ProviderType, showFullToken bool) {
+func printTokenResult(token *oauth.Token, userID string, oauthConfig *oauth.Config, providerType ai.Issuer, showFullToken bool) {
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("OAUTH SUCCESSFUL")
 	fmt.Println(strings.Repeat("=", 80))

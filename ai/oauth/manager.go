@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // SessionStatus represents the status of an OAuth session
@@ -31,7 +33,7 @@ const (
 type SessionState struct {
 	SessionID    string        `json:"session_id"`
 	Status       SessionStatus `json:"status"`
-	Provider     ProviderType  `json:"provider"`
+	Provider     ai.Issuer     `json:"provider"`
 	UserID       string        `json:"user_id"`
 	CreatedAt    time.Time     `json:"created_at"`
 	ExpiresAt    time.Time     `json:"expires_at"`
@@ -54,7 +56,7 @@ type Manager struct {
 type StateData struct {
 	State         string
 	UserID        string
-	Provider      ProviderType
+	Provider      ai.Issuer
 	ExpiresAt     time.Time
 	Timestamp     int64  // Unix timestamp when state was created
 	ExpiresAtUnix int64  // Unix timestamp when state expires
@@ -181,7 +183,7 @@ func (m *Manager) deleteState(state string) {
 // cleanupExpiredStates is removed - now handled by cleanupPeriodically
 
 // GetAuthURL generates the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(userID string, providerType ProviderType, redirectTo string, name string, sessionID string) (string, string, error) {
+func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo string, name string, sessionID string) (string, string, error) {
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
@@ -540,7 +542,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 }
 
 // GetToken retrieves a token for a user and provider, refreshing if necessary
-func (m *Manager) GetToken(ctx context.Context, userID string, providerType ProviderType, opts ...Option) (*Token, error) {
+func (m *Manager) GetToken(ctx context.Context, userID string, providerType ai.Issuer, opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
 	token, err := m.config.TokenStorage.GetToken(userID, providerType)
 	if err != nil {
@@ -573,7 +575,7 @@ func (m *Manager) GetToken(ctx context.Context, userID string, providerType Prov
 }
 
 // refreshToken refreshes an access token using a refresh token
-func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, refreshToken string, opts *Options) (*Token, error) {
+func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refreshToken string, opts *Options) (*Token, error) {
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
@@ -674,7 +676,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ProviderType, r
 
 // RefreshToken refreshes an access token using a refresh token
 // This is a public method that can be called from HTTP handlers
-func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType ProviderType, refreshToken string, opts ...Option) (*Token, error) {
+func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType ai.Issuer, refreshToken string, opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
 	// Refresh the token
 	token, err := m.refreshToken(ctx, providerType, refreshToken, options)
@@ -699,12 +701,12 @@ func (m *Manager) RefreshToken(ctx context.Context, userID string, providerType 
 }
 
 // RevokeToken removes a token for a user and provider
-func (m *Manager) RevokeToken(userID string, providerType ProviderType) error {
+func (m *Manager) RevokeToken(userID string, providerType ai.Issuer) error {
 	return m.config.TokenStorage.DeleteToken(userID, providerType)
 }
 
 // ListProviders returns all providers that have valid tokens for the user
-func (m *Manager) ListProviders(userID string) ([]ProviderType, error) {
+func (m *Manager) ListProviders(userID string) ([]ai.Issuer, error) {
 	return m.config.TokenStorage.ListProviders(userID)
 }
 
@@ -742,7 +744,7 @@ func (m *Manager) ResetProxyURL() {
 
 // InitiateDeviceCodeFlow initiates the Device Code flow and returns device code data
 // RFC 8628: OAuth 2.0 Device Authorization Grant
-func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ProviderType, redirectTo string, name string, opts ...Option) (*DeviceCodeData, error) {
+func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, providerType ai.Issuer, redirectTo string, name string, opts ...Option) (*DeviceCodeData, error) {
 	options := applyOptions(opts...)
 	config, ok := m.registry.Get(providerType)
 	if !ok {
@@ -1080,7 +1082,7 @@ func (m *Manager) generateSessionID() (string, error) {
 }
 
 // CreateSession creates a new OAuth session with pending status
-func (m *Manager) CreateSession(userID string, provider ProviderType) (*SessionState, error) {
+func (m *Manager) CreateSession(userID string, provider ai.Issuer) (*SessionState, error) {
 	sessionID, err := m.generateSessionID()
 	if err != nil {
 		return nil, err
