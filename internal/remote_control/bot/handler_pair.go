@@ -109,4 +109,3 @@ func (h *BotHandler) auditWarn(action, userID, message string, details map[strin
 	}
 	h.audit.Warn(action, userID, "", message, details)
 }
-
