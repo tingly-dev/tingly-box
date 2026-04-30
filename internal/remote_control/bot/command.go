@@ -129,6 +129,32 @@ type SessionInfo struct {
 	LastActivity   time.Time
 }
 
+func sendCommandText(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, text string) error {
+	return adapter.SendText(ctx.ChatID, text)
+}
+
+func parseToggleArg(arg string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(arg)) {
+	case "on", "true", "1", "yes", "enable":
+		return true, true
+	case "off", "false", "0", "no", "disable":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func parsePairBindCode(args []string) (string, bool) {
+	if len(args) < 1 {
+		return "", false
+	}
+	code := strings.TrimSpace(args[0])
+	if code == "" {
+		return "", false
+	}
+	return code, true
+}
+
 // Command implementations
 
 func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
@@ -536,32 +562,19 @@ func newVerboseCommand(adapter BotHandlerAdapter) imbot.Command {
 				if current {
 					status = "on"
 				}
-				return adapter.SendText(ctx.ChatID, fmt.Sprintf("📢 Verbose mode: %s\n\nUsage: /verbose <on|off>", status))
+				return sendCommandText(adapter, ctx, fmt.Sprintf("📢 Verbose mode: %s\n\nUsage: /verbose <on|off>", status))
 			}
 
-			// Parse argument
-			arg := strings.ToLower(strings.TrimSpace(args[0]))
-			var enabled bool
-			var valid bool
-
-			switch arg {
-			case "on", "true", "1", "yes", "enable":
-				enabled = true
-				valid = true
-			case "off", "false", "0", "no", "disable":
-				enabled = false
-				valid = true
-			}
-
+			enabled, valid := parseToggleArg(args[0])
 			if !valid {
-				return adapter.SendText(ctx.ChatID, "Usage: /verbose <on|off>\n\nExample: /verbose on")
+				return sendCommandText(adapter, ctx, "Usage: /verbose <on|off>\n\nExample: /verbose on")
 			}
 
 			adapter.SetVerbose(ctx.ChatID, enabled)
 			if enabled {
-				return adapter.SendText(ctx.ChatID, "✅ Verbose mode enabled\n\nAll message details will be shown.")
+				return sendCommandText(adapter, ctx, "✅ Verbose mode enabled\n\nAll message details will be shown.")
 			}
-			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown.")
+			return sendCommandText(adapter, ctx, "🔇 Quiet mode enabled\n\nOnly final results will be shown.")
 		}).
 		WithCategory("advanced").
 		WithPriority(5).
@@ -575,7 +588,7 @@ func newQuietCommand(adapter BotHandlerAdapter) imbot.Command {
 		WithAliases("noverbose").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			adapter.SetVerbose(ctx.ChatID, false)
-			return adapter.SendText(ctx.ChatID, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose on to show all details.")
+			return sendCommandText(adapter, ctx, "🔇 Quiet mode enabled\n\nOnly final results will be shown. Use /verbose on to show all details.")
 		}).
 		WithCategory("advanced").
 		WithPriority(4).
@@ -600,14 +613,11 @@ func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
 		"Pair this chat with the bot using the operator's pairing code").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if !ctx.IsDirectMessage {
-				return adapter.SendText(ctx.ChatID, "/bind only works in a direct message.")
+				return sendCommandText(adapter, ctx, "/bind only works in a direct message.")
 			}
-			if len(args) < 1 {
-				return adapter.SendText(ctx.ChatID, "Usage: /bind <code>")
-			}
-			code := strings.TrimSpace(args[0])
-			if code == "" {
-				return adapter.SendText(ctx.ChatID, "Usage: /bind <code>")
+			code, ok := parsePairBindCode(args)
+			if !ok {
+				return sendCommandText(adapter, ctx, "Usage: /bind <code>")
 			}
 			botUUID := ""
 			if ctx.Bot != nil {
@@ -615,9 +625,9 @@ func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 			if err := adapter.VerifyAndPair(botUUID, ctx.ChatID, ctx.SenderID,
 				string(ctx.Platform), code); err != nil {
-				return adapter.SendText(ctx.ChatID, "❌ "+err.Error())
+				return sendCommandText(adapter, ctx, "❌ "+err.Error())
 			}
-			return adapter.SendText(ctx.ChatID,
+			return sendCommandText(adapter, ctx,
 				"✅ Paired. You can now send commands to this bot.")
 		}).
 		WithCategory("system").
