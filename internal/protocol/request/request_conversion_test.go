@@ -1,4 +1,4 @@
-package protocol
+package request
 
 import (
 	"encoding/json"
@@ -11,11 +11,26 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"google.golang.org/genai"
-
-	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 )
+
+// newExampleTool creates a simple example tool for testing
+func newExampleTool() openai.ChatCompletionToolUnionParam {
+	return openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
+		Name:        "get_weather",
+		Description: param.Opt[string]{Value: "Get the current weather for a location"},
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"location": map[string]interface{}{
+					"type":        "string",
+					"description": "The city and state, e.g. San Francisco, CA",
+				},
+			},
+			"required": []string{"location"},
+		},
+	})
+}
 
 func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 	tests := []struct {
@@ -140,7 +155,7 @@ func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 				},
 				MaxTokens: openai.Opt(int64(100)),
 				Tools: []openai.ChatCompletionToolUnionParam{
-					stream.NewExampleTool(),
+					newExampleTool(),
 				},
 			},
 			expectedModel:      "gpt-4",
@@ -152,7 +167,7 @@ func TestConvertOpenAIToAnthropicRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := request.ConvertOpenAIToAnthropicRequest(tt.req, 8192) // Use default max tokens
+			result := ConvertOpenAIToAnthropicRequest(tt.req, 8192) // Use default max tokens
 
 			assert.Equal(t, anthropic.Model(tt.expectedModel), result.Model)
 			assert.Equal(t, tt.expectedMaxTokens, result.MaxTokens)
@@ -200,7 +215,7 @@ func TestConvertOpenAIToAnthropicTools(t *testing.T) {
 		{
 			name: "simple tool",
 			tools: func() []openai.ChatCompletionToolUnionParam {
-				tool := stream.NewExampleTool()
+				tool := newExampleTool()
 				return []openai.ChatCompletionToolUnionParam{tool}
 			}(),
 			expected: 1,
@@ -209,7 +224,7 @@ func TestConvertOpenAIToAnthropicTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := request.ConvertOpenAIToAnthropicTools(tt.tools)
+			result := ConvertOpenAIToAnthropicTools(tt.tools)
 			assert.Len(t, result, tt.expected)
 
 			// Verify tool structure if we have tools
@@ -236,7 +251,7 @@ func TestConvertOpenAIToAnthropicToolChoice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := request.ConvertOpenAIToAnthropicToolChoice(tt.tc)
+			result := ConvertOpenAIToAnthropicToolChoice(tt.tc)
 			assert.NotNil(t, result)
 		})
 	}
@@ -283,7 +298,7 @@ func TestConvertAnthropicToOpenAIRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, _ := request.ConvertAnthropicToOpenAIRequest(tt.anthropicReq, false, false, false)
+			result, _ := ConvertAnthropicToOpenAIRequest(tt.anthropicReq, false, false, false)
 
 			assert.Equal(t, openai.ChatModel(tt.expectedModel), result.Model)
 			assert.Equal(t, tt.expectedMaxTokens, result.MaxTokens.Value)
@@ -322,7 +337,7 @@ func TestConvertContentBlocksToString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := request.ConvertContentBlocksToString(tt.blocks)
+			result := ConvertContentBlocksToString(tt.blocks)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -359,7 +374,7 @@ func TestConvertTextBlocksToString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := request.ConvertTextBlocksToString(tt.blocks)
+			result := ConvertTextBlocksToString(tt.blocks)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -401,7 +416,7 @@ func TestConvertOpenAIToGoogleRequestComplex(t *testing.T) {
 			TopP:        openai.Opt(float64(0.9)),
 		}
 
-		model, contents, config := request.ConvertOpenAIToGoogleRequest(req, 4096)
+		model, contents, config := ConvertOpenAIToGoogleRequest(req, 4096)
 
 		// Verify basic structure
 		assert.Equal(t, "gpt-4", model)
@@ -446,7 +461,7 @@ func TestConvertOpenAIToGoogleRequestComplex(t *testing.T) {
 			MaxTokens: openai.Opt(int64(100)),
 		}
 
-		_, _, config := request.ConvertOpenAIToGoogleRequest(req, 4096)
+		_, _, config := ConvertOpenAIToGoogleRequest(req, 4096)
 
 		// System instruction should be set
 		require.NotNil(t, config.SystemInstruction)
@@ -480,7 +495,7 @@ func TestConvertOpenAIToGoogleRequestComplex(t *testing.T) {
 			MaxTokens: openai.Opt(int64(100)),
 		}
 
-		_, _, config := request.ConvertOpenAIToGoogleRequest(req, 4096)
+		_, _, config := ConvertOpenAIToGoogleRequest(req, 4096)
 
 		// Tools should be converted
 		require.NotNil(t, config.Tools)
@@ -516,7 +531,7 @@ func TestConvertOpenAIToGoogleRequestComplex(t *testing.T) {
 			MaxTokens: openai.Opt(int64(100)),
 		}
 
-		_, contents, _ := request.ConvertOpenAIToGoogleRequest(req, 4096)
+		_, contents, _ := ConvertOpenAIToGoogleRequest(req, 4096)
 
 		// Should concatenate text parts
 		assert.Len(t, contents, 1)
@@ -559,7 +574,7 @@ func TestConvertOpenAIToGoogleRequestComplex(t *testing.T) {
 			MaxTokens: openai.Opt(int64(100)),
 		}
 
-		_, contents, _ := request.ConvertOpenAIToGoogleRequest(req, 4096)
+		_, contents, _ := ConvertOpenAIToGoogleRequest(req, 4096)
 
 		// Assistant message should have 2 function calls
 		assert.Len(t, contents, 2)
@@ -589,7 +604,7 @@ func TestConvertAnthropicToGoogleRequestComplex(t *testing.T) {
 			},
 		}
 
-		_, contents, _ := request.ConvertAnthropicToGoogleRequest(req, 4096)
+		_, contents, _ := ConvertAnthropicToGoogleRequest(req, 4096)
 
 		// Should have 3 contents
 		assert.Len(t, contents, 3)
@@ -622,7 +637,7 @@ func TestConvertAnthropicToGoogleRequestComplex(t *testing.T) {
 			},
 		}
 
-		_, _, config := request.ConvertAnthropicToGoogleRequest(req, 4096)
+		_, _, config := ConvertAnthropicToGoogleRequest(req, 4096)
 
 		// System instruction should be set with concatenated text
 		require.NotNil(t, config.SystemInstruction)
@@ -645,7 +660,7 @@ func TestConvertAnthropicToGoogleRequestComplex(t *testing.T) {
 			},
 		}
 
-		_, contents, _ := request.ConvertAnthropicToGoogleRequest(req, 4096)
+		_, contents, _ := ConvertAnthropicToGoogleRequest(req, 4096)
 
 		// Assistant message should have both text and function call
 		assert.Len(t, contents, 2)
@@ -674,7 +689,7 @@ func TestConvertAnthropicToGoogleRequestComplex(t *testing.T) {
 			},
 		}
 
-		_, contents, _ := request.ConvertAnthropicToGoogleRequest(req, 4096)
+		_, contents, _ := ConvertAnthropicToGoogleRequest(req, 4096)
 
 		// Tool result should be properly formatted
 		assert.Equal(t, "user", contents[2].Role)
@@ -713,7 +728,7 @@ func TestConvertAnthropicToGoogleRequestComplex(t *testing.T) {
 			},
 		}
 
-		_, _, config := request.ConvertAnthropicToGoogleRequest(req, 4096)
+		_, _, config := ConvertAnthropicToGoogleRequest(req, 4096)
 
 		// Tools should be converted
 		require.NotNil(t, config.Tools)
@@ -741,7 +756,7 @@ func TestNormalizeSchemaTypes(t *testing.T) {
 			},
 		}
 
-		request.NormalizeSchemaTypes(schema)
+		NormalizeSchemaTypes(schema)
 
 		assert.Equal(t, genai.TypeObject, schema.Type)
 		assert.Equal(t, genai.TypeString, schema.Properties["name"].Type)
@@ -762,7 +777,7 @@ func TestNormalizeSchemaTypes(t *testing.T) {
 			},
 		}
 
-		request.NormalizeSchemaTypes(schema)
+		NormalizeSchemaTypes(schema)
 
 		assert.Equal(t, genai.TypeArray, schema.Type)
 		assert.Equal(t, genai.TypeObject, schema.Items.Type)
@@ -782,7 +797,7 @@ func TestNormalizeSchemaTypes(t *testing.T) {
 			},
 		}
 
-		request.NormalizeSchemaTypes(schema)
+		NormalizeSchemaTypes(schema)
 
 		assert.Equal(t, genai.TypeObject, schema.Type)
 		assert.Equal(t, genai.TypeString, schema.Properties["value"].AnyOf[0].Type)
@@ -790,7 +805,7 @@ func TestNormalizeSchemaTypes(t *testing.T) {
 	})
 
 	t.Run("nil schema", func(t *testing.T) {
-		request.NormalizeSchemaTypes(nil)
+		NormalizeSchemaTypes(nil)
 		// Should not panic
 	})
 }
@@ -827,7 +842,7 @@ func TestConvertOpenAIToGoogleTools(t *testing.T) {
 			}),
 		}
 
-		result := request.ConvertOpenAIToGoogleTools(tools)
+		result := ConvertOpenAIToGoogleTools(tools)
 
 		assert.Len(t, result, 2)
 		assert.Equal(t, "get_weather", result[0].Name)
@@ -838,7 +853,7 @@ func TestConvertOpenAIToGoogleTools(t *testing.T) {
 	})
 
 	t.Run("empty tools", func(t *testing.T) {
-		result := request.ConvertOpenAIToGoogleTools([]openai.ChatCompletionToolUnionParam{})
+		result := ConvertOpenAIToGoogleTools([]openai.ChatCompletionToolUnionParam{})
 		assert.Nil(t, result)
 	})
 }
@@ -850,7 +865,7 @@ func TestConvertOpenAIToGoogleToolChoice(t *testing.T) {
 			OfAuto: openai.Opt("auto"),
 		}
 
-		result := request.ConvertOpenAIToGoogleToolChoice(tc)
+		result := ConvertOpenAIToGoogleToolChoice(tc)
 
 		assert.Equal(t, genai.FunctionCallingConfigModeAuto, result.FunctionCallingConfig.Mode)
 	})
@@ -862,7 +877,7 @@ func TestConvertOpenAIToGoogleToolChoice(t *testing.T) {
 		}
 		tc := openai.ToolChoiceOptionFunctionToolChoice(function)
 
-		result := request.ConvertOpenAIToGoogleToolChoice(&tc)
+		result := ConvertOpenAIToGoogleToolChoice(&tc)
 
 		assert.Equal(t, genai.FunctionCallingConfigModeAny, result.FunctionCallingConfig.Mode)
 		assert.Equal(t, []string{"get_weather"}, result.FunctionCallingConfig.AllowedFunctionNames)
@@ -890,7 +905,7 @@ func TestConvertAnthropicToGoogleTools(t *testing.T) {
 			},
 		}
 
-		result := request.ConvertAnthropicToGoogleTools(tools)
+		result := ConvertAnthropicToGoogleTools(tools)
 
 		assert.Len(t, result, 1)
 		assert.Equal(t, "search", result[0].Name)

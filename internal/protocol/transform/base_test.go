@@ -68,7 +68,7 @@ func TestBaseTransform_ConvertAnthropicV1ToOpenAIChat(t *testing.T) {
 	config := ctx.Config.OpenAIConfig
 	require.NotNil(t, config)
 	assert.False(t, config.HasThinking)
-	assert.Equal(t, "low", string(config.ReasoningEffort))
+	assert.Equal(t, "medium", string(config.ReasoningEffort))
 }
 
 func TestBaseTransform_ConvertAnthropicBetaToOpenAIChat(t *testing.T) {

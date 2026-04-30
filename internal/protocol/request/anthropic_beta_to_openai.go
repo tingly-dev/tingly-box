@@ -58,11 +58,11 @@ func ConvertAnthropicBetaToOpenAIRequest(anthropicReq *anthropic.BetaMessageNewP
 	// thinking
 	config := &protocol.OpenAIConfig{
 		HasThinking:     false,
-		ReasoningEffort: "", // Default to "low" for OpenAI-compatible APIs
+		ReasoningEffort: "medium", // Default to "medium" for OpenAI-compatible APIs
 	}
 	if anthropicReq.Thinking.OfEnabled != nil || anthropicReq.Thinking.OfAdaptive != nil || isThinking {
 		config.HasThinking = true
-		config.ReasoningEffort = "low"
+		config.ReasoningEffort = "medium"
 	}
 	if anthropicReq.OutputConfig.Effort != "" {
 		config.ReasoningEffort = shared.ReasoningEffort(anthropicReq.OutputConfig.Effort)

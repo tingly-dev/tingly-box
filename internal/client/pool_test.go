@@ -537,7 +537,7 @@ func TestSessionBoundTransport_RefCountedBodyRelease(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     ai.IssuerClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
@@ -584,7 +584,7 @@ func TestSessionBoundTransport_RefCountedBodyDoubleClose(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     ai.IssuerClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 

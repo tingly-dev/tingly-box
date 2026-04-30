@@ -104,19 +104,19 @@ func TestAPITokenManager_GenerateToken(t *testing.T) {
 			wantErr:   false,
 		},
 		{
-			name:      "empty user UUID",
-			userUUID:  "",
-			tokenID:   "token-abc",
-			expiresAt: time.Now().Add(24 * time.Hour),
-			wantErr:   true,
+			name:       "empty user UUID",
+			userUUID:   "",
+			tokenID:    "token-abc",
+			expiresAt:  time.Now().Add(24 * time.Hour),
+			wantErr:    true,
 			errMessage: "user UUID cannot be empty",
 		},
 		{
-			name:      "empty token ID",
-			userUUID:  "user-123",
-			tokenID:   "",
-			expiresAt: time.Now().Add(24 * time.Hour),
-			wantErr:   true,
+			name:       "empty token ID",
+			userUUID:   "user-123",
+			tokenID:    "",
+			expiresAt:  time.Now().Add(24 * time.Hour),
+			wantErr:    true,
 			errMessage: "token ID cannot be empty",
 		},
 	}
@@ -168,11 +168,11 @@ func TestAPITokenManager_ValidateToken(t *testing.T) {
 		checkID   string
 	}{
 		{
-			name:    "valid token",
-			token:   validToken,
-			wantErr: false,
+			name:      "valid token",
+			token:     validToken,
+			wantErr:   false,
 			checkUser: userUUID,
-			checkID: tokenID,
+			checkID:   tokenID,
 		},
 		{
 			name:    "expired token",
@@ -205,7 +205,7 @@ func TestAPITokenManager_ValidateToken(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, claims)
-				assert.Equal(t, tt.checkUser, claims.UserUUID)
+				assert.Equal(t, tt.checkUser, claims.UserID)
 				assert.Equal(t, tt.checkID, claims.TokenID)
 				assert.Equal(t, "tingly-box", claims.Issuer)
 			}
