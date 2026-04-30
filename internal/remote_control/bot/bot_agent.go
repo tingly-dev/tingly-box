@@ -42,12 +42,8 @@ func (c *CompletionCallback) OnComplete(result *agentboot.CompletionResult) {
 
 	doneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(c.meta.AgentType, c.meta.ProjectPath)
 	_, err := c.hCtx.Bot.SendMessage(context.Background(), c.hCtx.ChatID, &imbot.SendMessageOptions{
-		Text: doneText,
-		Metadata: func() map[string]interface{} {
-			metadata := buildActionMenuMetadata(c.hCtx, tgKeyboard, actionCard)
-			metadata["_trackActionMenuID"] = true
-			return metadata
-		}(),
+		Text:     doneText,
+		Metadata: buildTrackedActionMenuMetadata(c.hCtx, tgKeyboard, actionCard),
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send action keyboard")
@@ -82,7 +78,7 @@ type SmartGuideCompletionCallback struct {
 // messageTrackingWrapper wraps a message handler and tracks assistant messages
 // This is used to detect silent completions (Issue #3)
 type messageTrackingWrapper struct {
-	delegate           *streamingMessageHandler // Concrete type, not interface
+	delegate           *streamingMessageHandler
 	completionCallback *SmartGuideCompletionCallback
 }
 
@@ -218,9 +214,7 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionRe
 	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 	actionCard := feature.BuildActionCard()
 
-	// Build metadata with platform-specific card rendering
-	metadata := buildActionMenuMetadata(c.hCtx, tgKeyboard, actionCard)
-	metadata["_trackActionMenuID"] = true
+	metadata := buildTrackedActionMenuMetadata(c.hCtx, tgKeyboard, actionCard)
 	// Forward context_token from incoming message metadata (required by Weixin)
 	if c.hCtx.Message.Metadata != nil {
 		if ct, ok := c.hCtx.Message.Metadata["context_token"].(string); ok {

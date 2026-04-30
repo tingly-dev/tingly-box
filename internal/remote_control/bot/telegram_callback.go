@@ -222,10 +222,7 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 	result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      BuildCustomPathPrompt(),
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata: map[string]interface{}{
-			"replyMarkup":        tgKeyboard,
-			"_trackActionMenuID": true,
-		},
+		Metadata:  buildTrackedReplyMetadata(tgKeyboard),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send custom path prompt")
@@ -355,10 +352,7 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata: map[string]interface{}{
-			"replyMarkup":        tgKeyboard,
-			"_trackActionMenuID": true,
-		},
+		Metadata:  buildTrackedReplyMetadata(tgKeyboard),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send create confirmation")

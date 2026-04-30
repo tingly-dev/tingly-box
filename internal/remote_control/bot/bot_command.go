@@ -221,10 +221,7 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      buf.String(),
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata: map[string]interface{}{
-			"replyMarkup":        tgKeyboard,
-			"_trackActionMenuID": true,
-		},
+		Metadata:  buildTrackedReplyMetadata(tgKeyboard),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send project list")

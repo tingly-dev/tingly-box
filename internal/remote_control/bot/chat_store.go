@@ -163,9 +163,55 @@ type ChatStoreInterface interface {
 var _ ChatStoreInterface = (*ChatStoreJSON)(nil)
 
 // ChatStoreJSON handles unified chat persistence using JSON file storage
-// This is the new implementation replacing the SQLite-based ChatStore
 type ChatStoreJSON struct {
 	store *jsonstore.Store[Chat]
+}
+
+func (s *ChatStoreJSON) ensureStore() error {
+	if s == nil || s.store == nil {
+		return ErrStoreNotInitialized
+	}
+	return nil
+}
+
+func normalizeChat(chat *Chat) error {
+	if chat == nil || chat.ChatID == "" {
+		return fmt.Errorf("chat_id is required")
+	}
+
+	now := time.Now().UTC()
+	if chat.CreatedAt.IsZero() {
+		chat.CreatedAt = now
+	}
+	chat.UpdatedAt = now
+	if chat.CurrentAgent == "" {
+		chat.CurrentAgent = AgentNameTinglyBox
+	}
+	return nil
+}
+
+func (s *ChatStoreJSON) forceSave() {
+	if err := s.store.ForceSave(); err != nil {
+		logrus.WithError(err).Error("Failed to force save chat store to disk")
+	}
+}
+
+func (s *ChatStoreJSON) saveChat(chat *Chat) error {
+	if err := normalizeChat(chat); err != nil {
+		return err
+	}
+	if err := s.store.Set(chat.ChatID, chat); err != nil {
+		return err
+	}
+	s.forceSave()
+	return nil
+}
+
+func defaultCurrentAgent(chat *Chat) string {
+	if chat == nil || chat.CurrentAgent == "" {
+		return AgentNameTinglyBox
+	}
+	return chat.CurrentAgent
 }
 
 // NewChatStoreJSON creates a new JSON-based chat store
@@ -184,31 +230,30 @@ func NewChatStoreJSON(filePath string) (*ChatStoreJSON, error) {
 
 // Close ensures data is persisted before closing
 func (s *ChatStoreJSON) Close() error {
-	if s == nil || s.store == nil {
-		return nil
+	if err := s.ensureStore(); err != nil {
+		return err
 	}
 	return s.store.Close()
 }
 
 // GetChat retrieves a chat by ID
 func (s *ChatStoreJSON) GetChat(chatID string) (*Chat, error) {
-	if s == nil || s.store == nil {
-		return nil, nil
+	if err := s.ensureStore(); err != nil {
+		return nil, err
 	}
 	return s.store.Get(chatID), nil
 }
 
 // GetOrCreateChat gets a chat or creates it if not exists
 func (s *ChatStoreJSON) GetOrCreateChat(chatID, platform string) (*Chat, error) {
-	if s == nil || s.store == nil {
-		return nil, fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return nil, err
 	}
 
 	if chat := s.store.Get(chatID); chat != nil {
 		return chat, nil
 	}
 
-	// Create new chat
 	now := time.Now().UTC()
 	newChat := &Chat{
 		ChatID:    chatID,
@@ -226,107 +271,63 @@ func (s *ChatStoreJSON) GetOrCreateChat(chatID, platform string) (*Chat, error) 
 
 // UpsertChat creates or updates a chat
 func (s *ChatStoreJSON) UpsertChat(chat *Chat) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
-	}
-	if chat == nil || chat.ChatID == "" {
-		return fmt.Errorf("chat_id is required")
-	}
-
-	now := time.Now().UTC()
-	if chat.CreatedAt.IsZero() {
-		chat.CreatedAt = now
-	}
-	chat.UpdatedAt = now
-
-	// Set default agent if not specified
-	if chat.CurrentAgent == "" {
-		chat.CurrentAgent = "tingly-box"
-	}
-
-	if err := s.store.Set(chat.ChatID, chat); err != nil {
+	if err := s.ensureStore(); err != nil {
 		return err
 	}
-
-	// Force immediate write to disk
-	if saveErr := s.store.ForceSave(); saveErr != nil {
-		logrus.WithError(saveErr).Error("Failed to force save chat store to disk after upsert")
-	}
-
-	return nil
+	return s.saveChat(chat)
 }
 
 // UpdateChat updates specific fields of a chat
 func (s *ChatStoreJSON) UpdateChat(chatID string, fn func(*Chat)) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return err
 	}
 	if fn == nil {
 		return fmt.Errorf("update function is required")
 	}
 
+	var normalizeErr error
+	var updated bool
 	err := s.store.Update(chatID, func(chat *Chat) *Chat {
 		if chat == nil {
 			return nil
 		}
-		// Update timestamp
-		chat.UpdatedAt = time.Now().UTC()
 		fn(chat)
+		normalizeErr = normalizeChat(chat)
+		updated = true
 		return chat
 	})
-
-	// Immediately persist to disk
-	if err == nil {
-		chat := s.store.Get(chatID)
-		if chat != nil {
-			if saveErr := s.store.Set(chatID, chat); saveErr != nil {
-				logrus.WithError(saveErr).Error("Failed to mark chat as dirty for save")
-			} else {
-				// Force immediate write to disk
-				if forceSaveErr := s.store.ForceSave(); forceSaveErr != nil {
-					logrus.WithError(forceSaveErr).Error("Failed to force save chat store to disk")
-				}
-			}
-		}
+	if err != nil {
+		return err
 	}
-
-	return err
+	if normalizeErr != nil {
+		return normalizeErr
+	}
+	if updated {
+		s.forceSave()
+	}
+	return nil
 }
 
 // ============== Project Binding ==============
 
 // BindProject binds a project to a chat (creates chat if not exists)
 func (s *ChatStoreJSON) BindProject(chatID, platform, projectPath, ownerID string) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
+	chat, err := s.GetOrCreateChat(chatID, platform)
+	if err != nil {
+		return err
 	}
 
-	chat := s.store.Get(chatID)
-	if chat == nil {
-		// Create new chat
-		now := time.Now().UTC()
-		chat = &Chat{
-			ChatID:      chatID,
-			Platform:    platform,
-			ProjectPath: projectPath,
-			OwnerID:     ownerID,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}
-		return s.UpsertChat(chat)
-	}
-	// Update existing chat
 	chat.Platform = platform
 	chat.ProjectPath = projectPath
 	chat.OwnerID = ownerID
-	chat.UpdatedAt = time.Now().UTC()
-	return s.store.Set(chatID, chat)
+	return s.UpsertChat(chat)
 }
 
 // GetProjectPath retrieves the project path for a chat
 func (s *ChatStoreJSON) GetProjectPath(chatID string) (string, bool, error) {
-	if s == nil || s.store == nil {
-		return "", false, nil
+	if err := s.ensureStore(); err != nil {
+		return "", false, err
 	}
 	chat := s.store.Get(chatID)
 	if chat == nil || chat.ProjectPath == "" {
@@ -337,8 +338,8 @@ func (s *ChatStoreJSON) GetProjectPath(chatID string) (string, bool, error) {
 
 // ListChatsByOwner lists all chats owned by a user
 func (s *ChatStoreJSON) ListChatsByOwner(ownerID, platform string) ([]*Chat, error) {
-	if s == nil || s.store == nil {
-		return nil, nil
+	if err := s.ensureStore(); err != nil {
+		return nil, err
 	}
 
 	items := s.store.List()
@@ -418,16 +419,9 @@ func (s *ChatStoreJSON) SetCurrentAgent(chatID, agentType string) error {
 // Returns "tingly-box" as default (Smart Guide is the entry point)
 func (s *ChatStoreJSON) GetCurrentAgent(chatID string) (string, error) {
 	if s == nil || s.store == nil {
-		return "tingly-box", nil // Default to Smart Guide
+		return AgentNameTinglyBox, nil
 	}
-	chat := s.store.Get(chatID)
-	if chat == nil {
-		return "tingly-box", nil // Default to Smart Guide
-	}
-	if chat.CurrentAgent == "" {
-		return "tingly-box", nil // Default to Smart Guide
-	}
-	return chat.CurrentAgent, nil
+	return defaultCurrentAgent(s.store.Get(chatID)), nil
 }
 
 // SetAgentState sets the agent-specific state for a chat
@@ -491,9 +485,6 @@ func (s *ChatStoreJSON) ListWhitelistedGroups() ([]struct {
 
 // SetPaired marks the given chat as paired with botUUID/senderID.
 func (s *ChatStoreJSON) SetPaired(chatID, platform, botUUID, senderID string) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
-	}
 	if chatID == "" || botUUID == "" {
 		return fmt.Errorf("chat_id and bot_uuid are required")
 	}
@@ -515,9 +506,6 @@ func (s *ChatStoreJSON) SetPaired(chatID, platform, botUUID, senderID string) er
 
 // ClearPaired removes any pairing recorded on the chat.
 func (s *ChatStoreJSON) ClearPaired(chatID string) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
-	}
 	return s.UpdateChat(chatID, func(chat *Chat) {
 		chat.IsPaired = false
 		chat.PairedBotUUID = ""

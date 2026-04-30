@@ -19,18 +19,6 @@ var defaultBashAllowlist = map[string]struct{}{
 	"pwd": {},
 }
 
-// Platforms that do NOT support verbose mode (can only receive final messages)
-var nonVerbosePlatforms = map[string]struct{}{
-	"weixin": {},
-	"wecom":  {},
-}
-
-// Platforms with low-frequency sending limitations (need rate limiting)
-var lowFrequencyPlatforms = map[string]struct{}{
-	"weixin": {},
-	"wecom":  {},
-}
-
 // ResponseMeta contains metadata for response formatting
 type ResponseMeta struct {
 	ProjectPath string
@@ -67,18 +55,4 @@ type runningBot struct {
 	cancel   context.CancelFunc
 	stopped  bool          // marker to indicate if bot is being stopped
 	doneChan chan struct{} // closed when goroutine finishes
-}
-
-// SupportsVerboseMode checks if the platform supports verbose mode
-// Some platforms (e.g., Weixin) can only receive final messages, not intermediate ones
-func SupportsVerboseMode(platform string) bool {
-	_, nonVerbose := nonVerbosePlatforms[platform]
-	return !nonVerbose
-}
-
-// IsLowFrequencyPlatform checks if the platform has low-frequency sending limitations
-// Some platforms (e.g., Weixin) need rate limiting for message sending
-func IsLowFrequencyPlatform(platform string) bool {
-	_, isLowFreq := lowFrequencyPlatforms[platform]
-	return isLowFreq
 }
