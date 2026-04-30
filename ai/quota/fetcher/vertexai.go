@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -30,11 +30,11 @@ func (f *VertexAIFetcher) ProviderType() quota.ProviderType {
 	return quota.ProviderTypeVertexAI
 }
 
-func (f *VertexAIFetcher) RequiresAuth() typ.AuthType {
-	return typ.AuthTypeAPIKey
+func (f *VertexAIFetcher) RequiresAuth() ai.AuthType {
+	return ai.AuthTypeAPIKey
 }
 
-func (f *VertexAIFetcher) Validate(provider *typ.Provider) error {
+func (f *VertexAIFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -47,13 +47,13 @@ func (f *VertexAIFetcher) Validate(provider *typ.Provider) error {
 	return nil
 }
 
-func (f *VertexAIFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *VertexAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// Vertex AI 配额通过 Google Cloud Console 管理，没有公开的 API
 	return f.createDefaultUsage(provider), nil
 }
 
 // createDefaultUsage 创建默认配额信息
-func (f *VertexAIFetcher) createDefaultUsage(provider *typ.Provider) *quota.ProviderUsage {
+func (f *VertexAIFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
 	now := time.Now()
 
 	return &quota.ProviderUsage{

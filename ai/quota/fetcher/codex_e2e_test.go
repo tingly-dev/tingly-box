@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // Usage: CODEX_ACCESS_TOKEN=eyJ... go test -run TestCodexE2E -v
@@ -22,11 +22,11 @@ func TestCodexE2E(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 
 	fetcher := NewCodexFetcher(logger)
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "codex-e2e",
 		Name:     "Codex",
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: accessToken,
 			ExtraFields: map[string]interface{}{
 				"account_id": os.Getenv("CODEX_ACCOUNT_ID"),

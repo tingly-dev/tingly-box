@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -24,9 +24,9 @@ func NewOpenRouterFetcher(logger *logrus.Logger) *OpenRouterFetcher {
 
 func (f *OpenRouterFetcher) Name() string                     { return "openrouter" }
 func (f *OpenRouterFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeOpenRouter }
-func (f *OpenRouterFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeAPIKey }
+func (f *OpenRouterFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
-func (f *OpenRouterFetcher) Validate(provider *typ.Provider) error {
+func (f *OpenRouterFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -56,7 +56,7 @@ type openrouterKeyResponse struct {
 	} `json:"data"`
 }
 
-func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *OpenRouterFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

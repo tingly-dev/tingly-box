@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -30,11 +30,11 @@ func (f *CursorFetcher) ProviderType() quota.ProviderType {
 	return quota.ProviderTypeCursor
 }
 
-func (f *CursorFetcher) RequiresAuth() typ.AuthType {
-	return typ.AuthTypeAPIKey
+func (f *CursorFetcher) RequiresAuth() ai.AuthType {
+	return ai.AuthTypeAPIKey
 }
 
-func (f *CursorFetcher) Validate(provider *typ.Provider) error {
+func (f *CursorFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -47,13 +47,13 @@ func (f *CursorFetcher) Validate(provider *typ.Provider) error {
 	return nil
 }
 
-func (f *CursorFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *CursorFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// Cursor 没有公开的配额 API，返回默认值
 	return f.createDefaultUsage(provider), nil
 }
 
 // createDefaultUsage 创建默认配额信息
-func (f *CursorFetcher) createDefaultUsage(provider *typ.Provider) *quota.ProviderUsage {
+func (f *CursorFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
 	now := time.Now()
 
 	return &quota.ProviderUsage{

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // Usage: OPENROUTER_API_KEY=sk-... go test -run TestOpenRouterE2E -v
@@ -22,11 +22,11 @@ func TestOpenRouterE2E(t *testing.T) {
 	logger.SetLevel(logrus.DebugLevel)
 
 	fetcher := NewOpenRouterFetcher(logger)
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "openrouter-e2e",
 		Name:     "OpenRouter",
 		Token:    apiKey,
-		AuthType: typ.AuthTypeAPIKey,
+		AuthType: ai.AuthTypeAPIKey,
 		Enabled:  true,
 	}
 

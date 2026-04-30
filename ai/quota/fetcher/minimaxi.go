@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -24,9 +24,9 @@ func NewMiniMaxCNFetcher(logger *logrus.Logger) *MiniMaxCNFetcher {
 
 func (f *MiniMaxCNFetcher) Name() string                     { return "minimax-cn" }
 func (f *MiniMaxCNFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeMiniMaxCN }
-func (f *MiniMaxCNFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeAPIKey }
+func (f *MiniMaxCNFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
-func (f *MiniMaxCNFetcher) Validate(provider *typ.Provider) error {
+func (f *MiniMaxCNFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -38,7 +38,7 @@ func (f *MiniMaxCNFetcher) Validate(provider *typ.Provider) error {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *MiniMaxCNFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *MiniMaxCNFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

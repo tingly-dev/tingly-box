@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -25,9 +25,9 @@ func NewZaiFetcher(logger *logrus.Logger) *ZaiFetcher {
 
 func (f *ZaiFetcher) Name() string                     { return "zai" }
 func (f *ZaiFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeZai }
-func (f *ZaiFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeAPIKey }
+func (f *ZaiFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
-func (f *ZaiFetcher) Validate(provider *typ.Provider) error {
+func (f *ZaiFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -58,7 +58,7 @@ type zaiLimit struct {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *ZaiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *ZaiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

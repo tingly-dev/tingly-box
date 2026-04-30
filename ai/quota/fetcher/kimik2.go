@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -24,9 +24,9 @@ func NewKimiK2Fetcher(logger *logrus.Logger) *KimiK2Fetcher {
 
 func (f *KimiK2Fetcher) Name() string                     { return "kimi_k2" }
 func (f *KimiK2Fetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeKimiK2 }
-func (f *KimiK2Fetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeAPIKey }
+func (f *KimiK2Fetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
-func (f *KimiK2Fetcher) Validate(provider *typ.Provider) error {
+func (f *KimiK2Fetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -45,7 +45,7 @@ type kimiCreditsResponse struct {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *KimiK2Fetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -32,11 +32,11 @@ func (f *OpenAIFetcher) ProviderType() quota.ProviderType {
 	return quota.ProviderTypeOpenAI
 }
 
-func (f *OpenAIFetcher) RequiresAuth() typ.AuthType {
-	return typ.AuthTypeAPIKey
+func (f *OpenAIFetcher) RequiresAuth() ai.AuthType {
+	return ai.AuthTypeAPIKey
 }
 
-func (f *OpenAIFetcher) Validate(provider *typ.Provider) error {
+func (f *OpenAIFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -66,7 +66,7 @@ type openaiUsageResponse struct {
 	} `json:"data"`
 }
 
-func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 
 	// 创建带 proxy 支持的 HTTP client
@@ -142,7 +142,7 @@ func (f *OpenAIFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quo
 }
 
 // createDefaultUsage 创建默认配额信息（当 API 不可用时）
-func (f *OpenAIFetcher) createDefaultUsage(provider *typ.Provider) *quota.ProviderUsage {
+func (f *OpenAIFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
 	now := time.Now()
 
 	return &quota.ProviderUsage{

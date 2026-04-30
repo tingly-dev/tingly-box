@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -24,9 +24,9 @@ func NewMiniMaxFetcher(logger *logrus.Logger) *MiniMaxFetcher {
 
 func (f *MiniMaxFetcher) Name() string                     { return "minimax" }
 func (f *MiniMaxFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeMiniMax }
-func (f *MiniMaxFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeAPIKey }
+func (f *MiniMaxFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
-func (f *MiniMaxFetcher) Validate(provider *typ.Provider) error {
+func (f *MiniMaxFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -64,7 +64,7 @@ type minimaxRemainsResponse struct {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

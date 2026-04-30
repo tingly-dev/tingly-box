@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
@@ -27,9 +27,9 @@ func NewCodexFetcher(logger *logrus.Logger) *CodexFetcher {
 
 func (f *CodexFetcher) Name() string                     { return "codex" }
 func (f *CodexFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeCodex }
-func (f *CodexFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeOAuth }
+func (f *CodexFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeOAuth }
 
-func (f *CodexFetcher) Validate(provider *typ.Provider) error {
+func (f *CodexFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -122,7 +122,7 @@ type codexAdditionalRateLimit struct {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
