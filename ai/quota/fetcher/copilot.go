@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // CopilotFetcher GitHub Copilot 配额获取器
@@ -31,11 +30,11 @@ func (f *CopilotFetcher) ProviderType() quota.ProviderType {
 	return quota.ProviderTypeCopilot
 }
 
-func (f *CopilotFetcher) RequiresAuth() typ.AuthType {
-	return typ.AuthTypeOAuth
+func (f *CopilotFetcher) RequiresAuth() ai.AuthType {
+	return ai.AuthTypeOAuth
 }
 
-func (f *CopilotFetcher) Validate(provider *typ.Provider) error {
+func (f *CopilotFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -52,13 +51,13 @@ func (f *CopilotFetcher) Validate(provider *typ.Provider) error {
 	return nil
 }
 
-func (f *CopilotFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *CopilotFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	// GitHub Copilot 没有公开的配额 API，返回默认值
 	return f.createDefaultUsage(provider), nil
 }
 
 // createDefaultUsage 创建默认配额信息
-func (f *CopilotFetcher) createDefaultUsage(provider *typ.Provider) *quota.ProviderUsage {
+func (f *CopilotFetcher) createDefaultUsage(provider *ai.Provider) *quota.ProviderUsage {
 	now := time.Now()
 
 	return &quota.ProviderUsage{

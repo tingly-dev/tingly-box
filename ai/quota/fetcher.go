@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	typ "github.com/tingly-dev/tingly-box/ai"
 	"golang.org/x/net/proxy"
-
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Fetcher 配额获取器接口

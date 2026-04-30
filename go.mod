@@ -10,10 +10,19 @@ replace google.golang.org/genai => ./libs/go-genai
 
 replace github.com/tingly-dev/tingly-box/imbot => ./imbot
 
+replace github.com/tingly-dev/tingly-box/ai => ./ai
+
 //replace github.com/tingly-dev/tingly-agentscope => ./tingly-scope
 
 require (
+	github.com/tingly-dev/tingly-box/ai v0.1.0
+	github.com/tingly-dev/tingly-box/imbot v0.1.0
+	google.golang.org/genai v1.50.0
 	github.com/anthropics/anthropic-sdk-go v1.26.0
+	github.com/openai/openai-go/v3 v3.26.0
+)
+
+require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -28,7 +37,6 @@ require (
 	github.com/mark3labs/mcp-go v0.47.1
 	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/modelcontextprotocol/go-sdk v1.4.1
-	github.com/openai/openai-go/v3 v3.26.0
 	github.com/otiai10/copy v1.14.1
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/sirupsen/logrus v1.9.4
@@ -39,7 +47,6 @@ require (
 	github.com/tidwall/sjson v1.2.5
 	github.com/tiktoken-go/tokenizer v0.7.0
 	github.com/tingly-dev/tingly-agentscope v0.260327.1030
-	github.com/tingly-dev/tingly-box/imbot v0.1.0
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.42.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.42.0
@@ -49,7 +56,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.42.0
 	go.opentelemetry.io/otel/trace v1.42.0
 	golang.org/x/sync v0.20.0
-	google.golang.org/genai v1.50.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.6.0

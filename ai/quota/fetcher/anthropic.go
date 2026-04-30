@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // AnthropicFetcher Anthropic (Claude) 配额获取器
@@ -34,11 +33,11 @@ func (f *AnthropicFetcher) ProviderType() quota.ProviderType {
 	return quota.ProviderTypeAnthropic
 }
 
-func (f *AnthropicFetcher) RequiresAuth() typ.AuthType {
-	return typ.AuthTypeOAuth
+func (f *AnthropicFetcher) RequiresAuth() ai.AuthType {
+	return ai.AuthTypeOAuth
 }
 
-func (f *AnthropicFetcher) Validate(provider *typ.Provider) error {
+func (f *AnthropicFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -77,7 +76,7 @@ type anthropicUsageResponse struct {
 	} `json:"extra_usage"`
 }
 
-func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *AnthropicFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 
 	// 创建带 proxy 支持的 HTTP client

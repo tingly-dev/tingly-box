@@ -8,26 +8,25 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
-// MiniMaxFetcher MiniMax 配额获取器
-// Uses: GET https://api.minimax.io/v1/api/openplatform/coding_plan/remains
-type MiniMaxFetcher struct {
+// MiniMaxCNFetcher MiniMaxCN 配额获取器
+// Uses: GET https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains
+type MiniMaxCNFetcher struct {
 	logger *logrus.Logger
 }
 
-func NewMiniMaxFetcher(logger *logrus.Logger) *MiniMaxFetcher {
-	return &MiniMaxFetcher{logger: logger}
+func NewMiniMaxCNFetcher(logger *logrus.Logger) *MiniMaxCNFetcher {
+	return &MiniMaxCNFetcher{logger: logger}
 }
 
-func (f *MiniMaxFetcher) Name() string                     { return "minimax" }
-func (f *MiniMaxFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeMiniMax }
-func (f *MiniMaxFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeAPIKey }
+func (f *MiniMaxCNFetcher) Name() string                     { return "minimax-cn" }
+func (f *MiniMaxCNFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeMiniMaxCN }
+func (f *MiniMaxCNFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
-func (f *MiniMaxFetcher) Validate(provider *typ.Provider) error {
+func (f *MiniMaxCNFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -37,39 +36,13 @@ func (f *MiniMaxFetcher) Validate(provider *typ.Provider) error {
 	return nil
 }
 
-// ── API response ───────────────────────────────────────
-
-// minimaxModelRemain represents quota info for a single model
-type minimaxModelRemain struct {
-	ModelName                 string `json:"model_name"`
-	StartTime                 int64  `json:"start_time"`
-	EndTime                   int64  `json:"end_time"`
-	RemainsTime               int64  `json:"remains_time"`
-	CurrentIntervalTotalCount int    `json:"current_interval_total_count"`
-	CurrentIntervalUsageCount int    `json:"current_interval_usage_count"`
-	CurrentWeeklyTotalCount   int    `json:"current_weekly_total_count"`
-	CurrentWeeklyUsageCount   int    `json:"current_weekly_usage_count"`
-	WeeklyStartTime           int64  `json:"weekly_start_time"`
-	WeeklyEndTime             int64  `json:"weekly_end_time"`
-	WeeklyRemainsTime         int64  `json:"weekly_remains_time"`
-}
-
-// minimaxRemainsResponse from GET /v1/api/openplatform/coding_plan/remains
-type minimaxRemainsResponse struct {
-	ModelRemains []minimaxModelRemain `json:"model_remains"`
-	BaseResp     struct {
-		StatusCode int    `json:"status_code"`
-		StatusMsg  string `json:"status_msg"`
-	} `json:"base_resp"`
-}
-
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *MiniMaxCNFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.minimax.io/v1/api/openplatform/coding_plan/remains", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains", nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -103,7 +76,7 @@ func (f *MiniMaxFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*qu
 	usage := &quota.ProviderUsage{
 		ProviderUUID: provider.UUID,
 		ProviderName: provider.Name,
-		ProviderType: quota.ProviderTypeMiniMax,
+		ProviderType: quota.ProviderTypeMiniMaxCN,
 		FetchedAt:    now,
 		ExpiresAt:    now.Add(5 * time.Minute),
 	}

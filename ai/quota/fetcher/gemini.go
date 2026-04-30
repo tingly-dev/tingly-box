@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // GeminiFetcher Google Gemini 配额获取器
@@ -36,11 +35,11 @@ func (f *GeminiFetcher) ProviderType() quota.ProviderType {
 	return quota.ProviderTypeGemini
 }
 
-func (f *GeminiFetcher) RequiresAuth() typ.AuthType {
-	return typ.AuthTypeOAuth
+func (f *GeminiFetcher) RequiresAuth() ai.AuthType {
+	return ai.AuthTypeOAuth
 }
 
-func (f *GeminiFetcher) Validate(provider *typ.Provider) error {
+func (f *GeminiFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -68,7 +67,7 @@ type geminiQuotaBucket struct {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *GeminiFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

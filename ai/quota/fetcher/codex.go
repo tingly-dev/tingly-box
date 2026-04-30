@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // CodexFetcher OpenAI Codex 配额获取器
@@ -28,9 +27,9 @@ func NewCodexFetcher(logger *logrus.Logger) *CodexFetcher {
 
 func (f *CodexFetcher) Name() string                     { return "codex" }
 func (f *CodexFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeCodex }
-func (f *CodexFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeOAuth }
+func (f *CodexFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeOAuth }
 
-func (f *CodexFetcher) Validate(provider *typ.Provider) error {
+func (f *CodexFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -83,12 +82,12 @@ type codexUsageResponse struct {
 	CodeReviewRateLimit  *codexRateLimit            `json:"code_review_rate_limit"`
 	AdditionalRateLimits []codexAdditionalRateLimit `json:"additional_rate_limits"`
 	Credits              *struct {
-		HasCredits          bool     `json:"has_credits"`
-		Unlimited           bool     `json:"unlimited"`
-		OverageLimitReached bool     `json:"overage_limit_reached"`
+		HasCredits          bool          `json:"has_credits"`
+		Unlimited           bool          `json:"unlimited"`
+		OverageLimitReached bool          `json:"overage_limit_reached"`
 		Balance             *codexBalance `json:"balance"`
-		ApproxLocalMessages []int    `json:"approx_local_messages"`
-		ApproxCloudMessages []int    `json:"approx_cloud_messages"`
+		ApproxLocalMessages []int         `json:"approx_local_messages"`
+		ApproxCloudMessages []int         `json:"approx_cloud_messages"`
 	} `json:"credits"`
 	SpendControl *struct {
 		Reached bool `json:"reached"`
@@ -123,7 +122,7 @@ type codexAdditionalRateLimit struct {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *CodexFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

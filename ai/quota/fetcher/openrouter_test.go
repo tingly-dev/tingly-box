@@ -8,9 +8,8 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 func TestOpenRouterFetcher_Fetch(t *testing.T) {
@@ -45,7 +44,7 @@ func TestOpenRouterFetcher_Fetch(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &OpenRouterFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:    "test-uuid",
 		Name:    "OpenRouter",
 		Token:   "test-key",
@@ -137,7 +136,7 @@ func TestOpenRouterFetcher_FreeTier(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &OpenRouterFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:    "test-uuid",
 		Name:    "OpenRouter",
 		Token:   "test-key",
@@ -170,7 +169,7 @@ func TestOpenRouterFetcher_StatusError(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &OpenRouterFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:    "test-uuid",
 		Name:    "OpenRouter",
 		Token:   "bad-key",
@@ -193,12 +192,12 @@ func TestOpenRouterFetcher_Validate(t *testing.T) {
 	}
 
 	// no token
-	if err := fetcher.Validate(&typ.Provider{}); err == nil {
+	if err := fetcher.Validate(&ai.Provider{}); err == nil {
 		t.Fatal("expected error for empty token")
 	}
 
 	// valid
-	if err := fetcher.Validate(&typ.Provider{Token: "sk-xxx"}); err != nil {
+	if err := fetcher.Validate(&ai.Provider{Token: "sk-xxx"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

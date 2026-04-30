@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // GLMFetcher GLM (BigModel.cn) 配额获取器
@@ -26,9 +25,9 @@ func NewGLMFetcher(logger *logrus.Logger) *GLMFetcher {
 
 func (f *GLMFetcher) Name() string                     { return "glm" }
 func (f *GLMFetcher) ProviderType() quota.ProviderType { return quota.ProviderTypeGLM }
-func (f *GLMFetcher) RequiresAuth() typ.AuthType       { return typ.AuthTypeAPIKey }
+func (f *GLMFetcher) RequiresAuth() ai.AuthType        { return ai.AuthTypeAPIKey }
 
-func (f *GLMFetcher) Validate(provider *typ.Provider) error {
+func (f *GLMFetcher) Validate(provider *ai.Provider) error {
 	if provider == nil {
 		return fmt.Errorf("provider is nil")
 	}
@@ -70,7 +69,7 @@ type glmUsageDetail struct {
 
 // ── Fetch ──────────────────────────────────────────────
 
-func (f *GLMFetcher) Fetch(ctx context.Context, provider *typ.Provider) (*quota.ProviderUsage, error) {
+func (f *GLMFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.ProviderUsage, error) {
 	token := provider.GetAccessToken()
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 

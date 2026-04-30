@@ -8,9 +8,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/tingly-dev/tingly-box/ai/quota/fetcher"
 
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/quota/fetcher"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

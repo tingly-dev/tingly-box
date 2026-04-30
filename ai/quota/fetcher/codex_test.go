@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/quota"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/ai/quota"
 )
 
 // ── Codex E2E ───────────────────────────────────────────
@@ -67,12 +66,12 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &CodexFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "codex-uuid",
 		Name:     "Codex Pro",
 		Token:    "test-token",
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
 			AccessToken:  "test-token",
 			RefreshToken: "refresh-xyz",
 			ExtraFields: map[string]interface{}{
@@ -163,11 +162,11 @@ func TestCodexFetcher_Fetch_NoCredits(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &CodexFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
 		APIBase: server.URL,
@@ -196,9 +195,9 @@ func TestCodexFetcher_StatusError(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &CodexFetcher{logger: logger}
-	provider := &typ.Provider{
-		AuthType:    typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{AccessToken: "expired"},
+	provider := &ai.Provider{
+		AuthType:    ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{AccessToken: "expired"},
 		APIBase:     server.URL,
 	}
 
@@ -218,17 +217,17 @@ func TestCodexFetcher_Validate(t *testing.T) {
 	}
 
 	// no token via OAuth path
-	if err := fetcher.Validate(&typ.Provider{
-		AuthType:    typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{},
+	if err := fetcher.Validate(&ai.Provider{
+		AuthType:    ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{},
 	}); err == nil {
 		t.Fatal("expected error for empty token")
 	}
 
 	// valid
-	if err := fetcher.Validate(&typ.Provider{
-		AuthType:    typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{AccessToken: "valid-token"},
+	if err := fetcher.Validate(&ai.Provider{
+		AuthType:    ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{AccessToken: "valid-token"},
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -289,11 +288,11 @@ func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &CodexFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "codex-prolite",
 		Name:     "Codex ProLite",
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
 		APIBase: server.URL,
@@ -369,11 +368,11 @@ func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &CodexFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
 		APIBase: server.URL,
@@ -429,11 +428,11 @@ func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &CodexFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "codex-pro",
 		Name:     "Codex Pro",
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
 		APIBase: server.URL,
@@ -477,11 +476,11 @@ func TestCodexFetcher_Fetch_WithNilCreditsBalance(t *testing.T) {
 	defer server.Close()
 
 	fetcher := &CodexFetcher{logger: logger}
-	provider := &typ.Provider{
+	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
-		AuthType: typ.AuthTypeOAuth,
-		OAuthDetail: &typ.OAuthDetail{
+		AuthType: ai.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
 		APIBase: server.URL,

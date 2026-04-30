@@ -1,12 +1,13 @@
-// Package provider provides types for AI provider configuration and authentication.
+// Package ai provides types for AI provider configuration and authentication.
 // These types are used across multiple components and are part of the public API.
-package provider
+package ai
 
 import (
 	"time"
-
-	"github.com/tingly-dev/tingly-box/protocol"
 )
+
+// CodexAPIBase is the API base URL for ChatGPT/Codex OAuth provider
+const CodexAPIBase = "https://chatgpt.com/backend-api"
 
 // AuthType represents the authentication type for a provider
 type AuthType string
@@ -41,18 +42,18 @@ func (o *OAuthDetail) IsExpired() bool {
 
 // Provider represents an AI model api key and provider configuration
 type Provider struct {
-	UUID          string            `json:"uuid"`
-	Name          string            `json:"name"`
-	APIBase       string            `json:"api_base"`
-	APIStyle      protocol.APIStyle `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
-	Token         string            `json:"token"`     // API key for api_key auth type
-	NoKeyRequired bool              `json:"no_key_required"`
-	Enabled       bool              `json:"enabled"`
-	ProxyURL      string            `json:"proxy_url"`              // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
-	Timeout       int64             `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
-	Tags          []string          `json:"tags,omitempty"`         // Provider tags for categorization
-	Models        []string          `json:"models,omitempty"`       // Available models for this provider (cached)
-	LastUpdated   string            `json:"last_updated,omitempty"` // Last update timestamp
+	UUID          string   `json:"uuid"`
+	Name          string   `json:"name"`
+	APIBase       string   `json:"api_base"`
+	APIStyle      APIStyle `json:"api_style"` // "openai" or "anthropic", defaults to "openai"
+	Token         string   `json:"token"`     // API key for api_key auth type
+	NoKeyRequired bool     `json:"no_key_required"`
+	Enabled       bool     `json:"enabled"`
+	ProxyURL      string   `json:"proxy_url"`              // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
+	Timeout       int64    `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
+	Tags          []string `json:"tags,omitempty"`         // Provider tags for categorization
+	Models        []string `json:"models,omitempty"`       // Available models for this provider (cached)
+	LastUpdated   string   `json:"last_updated,omitempty"` // Last update timestamp
 
 	// Auth configuration
 	AuthType    AuthType     `json:"auth_type"`              // api_key or oauth
@@ -101,6 +102,17 @@ func (p *Provider) IsOAuthToken() bool {
 func (p *Provider) IsClaudeCodeProvider() bool {
 	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
 		return p.OAuthDetail.ProviderType == "claude_code"
+	}
+	return false
+}
+
+// IsCodexProvider checks if this provider is using Codex OAuth
+func (p *Provider) IsCodexProvider() bool {
+	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
+		return p.OAuthDetail.ProviderType == "codex"
+	}
+	if p.APIBase == CodexAPIBase {
+		return true
 	}
 	return false
 }

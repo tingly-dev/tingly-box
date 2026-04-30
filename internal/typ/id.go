@@ -67,7 +67,7 @@ func (k ClientKey) IsSessionScoped() bool { return k.SessionID.Value != "" }
 
 // NewClientKey builds a ClientKey applying OAuth session-scoping rules.
 // sessionID is only included in the key when:
-//   - provider.AuthType == AuthTypeOAuth
+//   - typ.AuthType == AuthTypeOAuth
 //   - session is not empty
 //   - session is not an IP-fallback (which would create one key per IP)
 func NewClientKey(provider *Provider, model string, session SessionID) ClientKey {
