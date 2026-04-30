@@ -38,23 +38,14 @@ func RegisterVModelExtension(extRegistry *ExtensionRegistry, vmRegistry *virtual
 			Config: make(map[string]interface{}),
 		}
 
-		// Add type-specific metadata
+		// Set icon based on type
 		switch vm.GetType() {
 		case virtualmodel.VirtualModelTypeStatic:
 			item.Icon = "message"
 		case virtualmodel.VirtualModelTypeProxy:
 			item.Icon = "compress"
-			// Add delegate model info if set
-			if delegate := vm.GetDelegateModel(); delegate != "" {
-				item.Metadata["delegateModel"] = delegate
-			}
 		case virtualmodel.VirtualModelTypeTool:
 			item.Icon = "build"
-			// Add tool call info if set
-			if toolCall := vm.GetToolCall(); toolCall != nil {
-				item.Metadata["toolName"] = toolCall.Name
-				item.Metadata["toolArguments"] = toolCall.Arguments
-			}
 		}
 
 		if err := extRegistry.RegisterItem(item); err != nil {

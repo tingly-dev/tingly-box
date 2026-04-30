@@ -57,9 +57,9 @@ func TestRegisterVModelExtension_RegistersAllDefaultModels(t *testing.T) {
 		t.Fatal("ListItems returned nil")
 	}
 
-	// Should have 9 default models
-	if len(items) != 9 {
-		t.Errorf("Expected 9 default models, got %d", len(items))
+	// Should have 11 default models
+	if len(items) != 11 {
+		t.Errorf("Expected 11 default models, got %d", len(items))
 	}
 
 	// Verify specific models exist

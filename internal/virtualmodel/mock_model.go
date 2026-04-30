@@ -48,6 +48,22 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 
 func (m *MockModel) GetID() string { return m.cfg.ID }
 
+func (m *MockModel) GetName() string { return m.cfg.Name }
+
+func (m *MockModel) GetDescription() string {
+	if m.cfg.Description != "" {
+		return m.cfg.Description
+	}
+	return "A virtual model that returns fixed responses for testing"
+}
+
+func (m *MockModel) GetType() VirtualModelType {
+	if m.cfg.ToolCall != nil {
+		return VirtualModelTypeTool
+	}
+	return VirtualModelTypeStatic
+}
+
 func (m *MockModel) SimulatedDelay() time.Duration { return m.cfg.Delay }
 
 // Protocols declares that MockModel supports both Anthropic and OpenAI Chat.
@@ -259,7 +275,18 @@ func NewMockModelFromScenario(s *MockScenario) VirtualModel {
 	return m
 }
 
-func (m *scenarioModel) GetID() string                 { return m.id }
+func (m *scenarioModel) GetID() string          { return m.id }
+func (m *scenarioModel) GetName() string        { return m.id } // Use ID as name for scenarios
+func (m *scenarioModel) GetDescription() string { return "A scenario-based virtual model" }
+func (m *scenarioModel) GetType() VirtualModelType {
+	if m.anthropic != nil && m.anthropic.ToolCall != nil {
+		return VirtualModelTypeTool
+	}
+	if m.openaiChat != nil && len(m.openaiChat.ToolCalls) > 0 {
+		return VirtualModelTypeTool
+	}
+	return VirtualModelTypeStatic
+}
 func (m *scenarioModel) SimulatedDelay() time.Duration { return m.delay }
 
 // Protocols returns the protocols for which this scenario has mock responses defined.
