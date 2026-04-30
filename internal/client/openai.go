@@ -55,7 +55,7 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	if provider.AuthType == typ.AuthTypeOAuth || provider.ProxyURL != "" {
 		// Use createSessionBoundTransport which applies OAuth hooks and uses shared transport
 		transport = createSessionBoundTransport(provider, sessionID)
-		issuer := ""
+		issuer := ai.IssuerUnknown
 		if provider.OAuthDetail != nil {
 			issuer = provider.OAuthDetail.GetIssuer()
 		}

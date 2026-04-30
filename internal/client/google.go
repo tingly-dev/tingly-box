@@ -34,12 +34,12 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 		// Use createSessionBoundTransport which applies OAuth hooks and uses shared transport
 		transport = createSessionBoundTransport(provider, sessionID)
 
-		providerType := ""
+		issuer := ""
 		if provider.OAuthDetail != nil {
-			providerType = provider.OAuthDetail.ProviderType
+			issuer = provider.OAuthDetail.ProviderType
 		}
-		if providerType != "" {
-			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", providerType, sessionID.Value)
+		if issuer != "" {
+			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", issuer, sessionID.Value)
 		}
 		if provider.ProxyURL != "" {
 			logrus.Infof("Using proxy for Google client: %s", provider.ProxyURL)

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -25,7 +26,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		// Setup
 		registry := oauth.NewRegistry()
 		registry.Register(&oauth.ProviderConfig{
-			Type:         oauth.ProviderClaudeCode,
+			Type:         ai.IssuerClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-secret",
@@ -49,7 +50,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		oauthSession := &oauth.SessionState{
 			SessionID: sessionID,
 			Status:    oauth.SessionStatusPending,
-			Provider:  oauth.ProviderClaudeCode,
+			Provider:  ai.IssuerClaudeCode,
 			UserID:    "user123",
 			CreatedAt: now,
 			ExpiresAt: now.Add(oauth.DefaultSessionExpiry),
@@ -57,7 +58,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		oauthManager.StoreSession(oauthSession)
 
 		// Create a state with sessionID
-		_, state, err := oauthManager.GetAuthURL("user123", oauth.ProviderClaudeCode, "", "", sessionID)
+		_, state, err := oauthManager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", sessionID)
 		require.NoError(t, err, "GetAuthURL should succeed")
 
 		// Verify session is pending
@@ -129,7 +130,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 	t.Run("CallbackWithExpiredState", func(t *testing.T) {
 		registry := oauth.NewRegistry()
 		registry.Register(&oauth.ProviderConfig{
-			Type:         oauth.ProviderClaudeCode,
+			Type:         ai.IssuerClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-secret",
@@ -152,7 +153,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		oauthSession := &oauth.SessionState{
 			SessionID: sessionID,
 			Status:    oauth.SessionStatusPending,
-			Provider:  oauth.ProviderClaudeCode,
+			Provider:  ai.IssuerClaudeCode,
 			UserID:    "user123",
 			CreatedAt: now,
 			ExpiresAt: now.Add(oauth.DefaultSessionExpiry),
@@ -160,7 +161,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		oauthManager.StoreSession(oauthSession)
 
 		// Create a state with sessionID
-		_, state, err := oauthManager.GetAuthURL("user123", oauth.ProviderClaudeCode, "", "", sessionID)
+		_, state, err := oauthManager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", sessionID)
 		require.NoError(t, err)
 
 		// Wait for state to expire
@@ -194,7 +195,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		// This test explicitly verifies the bugfix behavior: GetStateData is called BEFORE HandleCallback
 		registry := oauth.NewRegistry()
 		registry.Register(&oauth.ProviderConfig{
-			Type:         oauth.ProviderClaudeCode,
+			Type:         ai.IssuerClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-secret",
@@ -208,7 +209,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 
 		// Create a state with sessionID
 		testSessionID := "test-session-from-handler"
-		_, state, err := oauthManager.GetAuthURL("user123", oauth.ProviderClaudeCode, "", "", testSessionID)
+		_, state, err := oauthManager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", testSessionID)
 		require.NoError(t, err)
 
 		// Simulate what OAuthCallback does: retrieve state BEFORE HandleCallback
@@ -219,7 +220,7 @@ func TestHandler_OAuthCallback_ErrorHandling(t *testing.T) {
 		// Verify we have the sessionID (this is what the bugfix preserves)
 		assert.Equal(t, testSessionID, stateData.SessionID, "SessionID should be retrieved from state data")
 		assert.Equal(t, "user123", stateData.UserID, "UserID should match")
-		assert.Equal(t, oauth.ProviderClaudeCode, stateData.Provider, "Provider should match")
+		assert.Equal(t, ai.IssuerClaudeCode, stateData.Provider, "Provider should match")
 
 		// Now HandleCallback would delete the state, but we already have sessionID
 		// This simulates the bugfix scenario
@@ -232,7 +233,7 @@ func TestHandler_AuthorizeOAuth_SessionExpiry(t *testing.T) {
 	t.Run("SessionExpiryUsesDefaultConstant", func(t *testing.T) {
 		registry := oauth.NewRegistry()
 		registry.Register(&oauth.ProviderConfig{
-			Type:         oauth.ProviderClaudeCode,
+			Type:         ai.IssuerClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-secret",
@@ -303,7 +304,7 @@ func TestHandler_OAuthCallback_Integration(t *testing.T) {
 
 		registry := oauth.NewRegistry()
 		registry.Register(&oauth.ProviderConfig{
-			Type:         oauth.ProviderClaudeCode,
+			Type:         ai.IssuerClaudeCode,
 			DisplayName:  "Anthropic",
 			ClientID:     "test-client-id",
 			ClientSecret: "test-secret",
@@ -329,7 +330,7 @@ func TestHandler_OAuthCallback_Integration(t *testing.T) {
 		sessionID := authResp.Data.SessionID
 
 		// Step 2: Get auth URL
-		_, state, err := oauthManager.GetAuthURL("user123", oauth.ProviderClaudeCode, "", "", sessionID)
+		_, state, err := oauthManager.GetAuthURL("user123", ai.IssuerClaudeCode, "", "", sessionID)
 		require.NoError(t, err)
 
 		// Step 3: Simulate callback with code (will fail at token exchange)
@@ -360,7 +361,7 @@ func TestGenerateProviderName(t *testing.T) {
 				"name":  "John Doe",
 			},
 		}
-		result := generateProviderName(oauth.ProviderClaudeCode, token, "my-custom-name")
+		result := generateProviderName(ai.IssuerClaudeCode, token, "my-custom-name")
 		assert.Equal(t, "my-custom-name", result, "Custom name should take priority")
 	})
 
@@ -370,7 +371,7 @@ func TestGenerateProviderName(t *testing.T) {
 				"email": "alice.smith@company.com",
 			},
 		}
-		result := generateProviderName(oauth.ProviderGemini, token, "")
+		result := generateProviderName(ai.IssuerGemini, token, "")
 		assert.Equal(t, "alice.smith@company.com", result, "Should use full email")
 	})
 
@@ -380,7 +381,7 @@ func TestGenerateProviderName(t *testing.T) {
 				"name": "Jane Johnson",
 			},
 		}
-		result := generateProviderName(oauth.ProviderClaudeCode, token, "")
+		result := generateProviderName(ai.IssuerClaudeCode, token, "")
 		assert.Equal(t, "Jane-Johnson", result, "Should use display name with spaces replaced")
 	})
 
@@ -388,7 +389,7 @@ func TestGenerateProviderName(t *testing.T) {
 		token := &oauth.Token{
 			Metadata: nil,
 		}
-		result := generateProviderName(oauth.ProviderCodex, token, "")
+		result := generateProviderName(ai.IssuerCodex, token, "")
 		// Should match format: codex-YYYYMMDD-HHMM
 		assert.Contains(t, result, "codex-", "Should have provider prefix")
 		assert.Regexp(t, `codex-\d{8}-\d{4}`, result, "Should match timestamp format")
@@ -398,7 +399,7 @@ func TestGenerateProviderName(t *testing.T) {
 		token := &oauth.Token{
 			Metadata: map[string]any{},
 		}
-		result := generateProviderName(oauth.ProviderQwenCode, token, "")
+		result := generateProviderName(ai.IssuerQwenCode, token, "")
 		assert.Contains(t, result, "qwen_code-", "Should have provider prefix")
 		assert.Regexp(t, `qwen_code-\d{8}-\d{4}`, result, "Should match timestamp format")
 	})

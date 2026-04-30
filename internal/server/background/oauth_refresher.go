@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -22,7 +23,7 @@ const (
 
 // tokenManager defines the interface for token refresh operations
 type tokenManager interface {
-	RefreshToken(ctx context.Context, userID string, providerType oauth.ProviderType, refreshToken string, opts ...oauth.Option) (*oauth.Token, error)
+	RefreshToken(ctx context.Context, userID string, issuer ai.Issuer, refreshToken string, opts ...oauth.Option) (*oauth.Token, error)
 }
 
 // providerConfig defines the interface for provider config operations used by OAuthRefresher
@@ -194,7 +195,7 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 		"provider":  provider.Name,
 	})
 
-	providerType, err := oauth.ParseProviderType(provider.OAuthDetail.ProviderType)
+	issuer, err := oauth.ParseProviderType(provider.OAuthDetail.ProviderType)
 	if err != nil {
 		logger.WithError(err).Error("Invalid provider type")
 		return
@@ -203,7 +204,7 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 	token, err := tr.manager.RefreshToken(
 		context.Background(),
 		provider.OAuthDetail.UserID,
-		providerType,
+		issuer,
 		provider.OAuthDetail.RefreshToken,
 		oauth.WithProxyString(provider.ProxyURL),
 	)

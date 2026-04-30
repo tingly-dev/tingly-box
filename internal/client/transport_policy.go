@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -17,24 +17,24 @@ const (
 
 // ProviderTransportPolicy defines transport reuse behavior per provider type
 // OAuth providers generally require per-session transports for proper isolation
-var ProviderTransportPolicy = map[oauth.ProviderType]TransportReusePolicy{
-	oauth.ProviderClaudeCode:  TransportPerSession,
-	oauth.ProviderOpenAI:      TransportPerSession,
-	oauth.ProviderGoogle:      TransportPerSession,
-	oauth.ProviderCodex:       TransportPerSession,
-	oauth.ProviderGemini:      TransportPerSession,
-	oauth.ProviderGitHub:      TransportPerSession,
-	oauth.ProviderQwenCode:    TransportPerSession,
-	oauth.ProviderAntigravity: TransportPerSession,
-	oauth.ProviderIFlow:       TransportPerSession,
-	oauth.ProviderKimi:        TransportPerSession,
-	oauth.ProviderMock:        TransportReusable, // Mock for testing
+var ProviderTransportPolicy = map[ai.Issuer]TransportReusePolicy{
+	ai.IssuerClaudeCode:  TransportPerSession,
+	ai.IssuerOpenAI:      TransportPerSession,
+	ai.IssuerGoogle:      TransportPerSession,
+	ai.IssuerCodex:       TransportPerSession,
+	ai.IssuerGemini:      TransportPerSession,
+	ai.IssuerGitHub:      TransportPerSession,
+	ai.IssuerQwenCode:    TransportPerSession,
+	ai.IssuerAntigravity: TransportPerSession,
+	ai.IssuerIFlow:       TransportPerSession,
+	ai.IssuerKimiCode:    TransportPerSession,
+	ai.IssuerMock:        TransportReusable, // Mock for testing
 }
 
 // GetTransportReusePolicy returns the transport reuse policy for a provider type
 // Returns TransportPerSession for unknown provider types (safer default)
-func GetTransportReusePolicy(providerType oauth.ProviderType) TransportReusePolicy {
-	if policy, ok := ProviderTransportPolicy[providerType]; ok {
+func GetTransportReusePolicy(issuer ai.Issuer) TransportReusePolicy {
+	if policy, ok := ProviderTransportPolicy[issuer]; ok {
 		return policy
 	}
 	// Default to per-session for unknown providers (safer than sharing)
@@ -43,14 +43,14 @@ func GetTransportReusePolicy(providerType oauth.ProviderType) TransportReusePoli
 
 // NewTransportKey creates a TransportKey with optional session scoping.
 // sessionID is only included in the key when:
-//   - providerType requires per-session transports (TransportPerSession)
+//   - issuer requires per-session transports (TransportPerSession)
 //   - session is not empty
 //   - session is not an IP-fallback (which would create one transport per IP)
 //
 // Note: ProxyURL is NOT part of the key. Proxy is a provider configuration
 // that affects how the transport is created, but doesn't create a separate pool.
-func NewTransportKey(providerUUID string, proxyURL string, providerType oauth.ProviderType, session typ.SessionID) typ.TransportKey {
-	policy := GetTransportReusePolicy(providerType)
+func NewTransportKey(providerUUID string, proxyURL string, issuer ai.Issuer, session typ.SessionID) typ.TransportKey {
+	policy := GetTransportReusePolicy(issuer)
 
 	if policy == TransportPerSession && !session.IsEmpty() && !session.IsIPFallback() {
 		// Strip IPBackup: it's for logging only and must not affect transport keying.

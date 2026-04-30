@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -621,7 +622,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	registry := oauth.DefaultRegistry()
 	oauthConfig := &oauth.Config{
 		BaseURL:           fmt.Sprintf("http://localhost:%d", cfg.GetServerPort()),
-		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
 		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,

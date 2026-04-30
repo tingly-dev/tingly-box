@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/ai"
 	"golang.org/x/net/proxy"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -144,8 +144,8 @@ func SetTransportConfig(config *TransportConfig) {
 //
 // Note: For in-flight request tracking (preventing cleanup of active transports),
 // use AcquireTransport instead.
-func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport {
-	key := NewTransportKey(providerUUID, "", oauthType, sessionID).String()
+func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) *http.Transport {
+	key := NewTransportKey(providerUUID, "", issuer, sessionID).String()
 
 	// Try to get existing transport with read lock
 	tp.mutex.RLock()
@@ -170,7 +170,7 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 
 	// Create new transport
 	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s, session: %s",
-		providerUUID, model, proxyURL, oauthType, sessionID.Value)
+		providerUUID, model, proxyURL, issuer, sessionID.Value)
 	transport := tp.createTransport(proxyURL)
 	pt := &pooledTransport{transport: transport}
 	pt.setLastAccess()
@@ -183,8 +183,8 @@ func (tp *TransportPool) GetTransport(providerUUID, model, proxyURL string, oaut
 // reference count. The caller MUST call the returned release function exactly once
 // when the request is complete (typically by wrapping the response body).
 // This prevents the cleanup task from evicting a transport that has active in-flight requests.
-func (tp *TransportPool) AcquireTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) (*http.Transport, func()) {
-	key := NewTransportKey(providerUUID, "", oauthType, sessionID).String()
+func (tp *TransportPool) AcquireTransport(providerUUID, model, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) (*http.Transport, func()) {
+	key := NewTransportKey(providerUUID, "", issuer, sessionID).String()
 
 	// Fast path: read lock for cache hit
 	tp.mutex.RLock()
@@ -211,7 +211,7 @@ func (tp *TransportPool) AcquireTransport(providerUUID, model, proxyURL string, 
 
 	// Create new transport
 	logrus.Infof("Creating new transport for provider: %s, model: %s, proxy: %s, oauth: %s, session: %s",
-		providerUUID, model, proxyURL, oauthType, sessionID.Value)
+		providerUUID, model, proxyURL, issuer, sessionID.Value)
 	transport := tp.createTransport(proxyURL)
 	pt := &pooledTransport{transport: transport}
 	pt.setLastAccess()
@@ -229,8 +229,8 @@ func (tp *TransportPool) AcquireTransport(providerUUID, model, proxyURL string, 
 // - OAuth providers + different sessions = separate transports
 //
 // Note: ProxyURL is NOT part of the key - it's a provider configuration.
-func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) string {
-	return NewTransportKey(providerUUID, "", oauthType, sessionID).String()
+func (tp *TransportPool) generateTransportKey(providerUUID, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) string {
+	return NewTransportKey(providerUUID, "", issuer, sessionID).String()
 }
 
 // newDirectTransport returns a transport with env proxy disabled (direct connection).

@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/ai"
 	"golang.org/x/net/proxy"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -23,8 +23,8 @@ type HookFunc func(req *http.Request) error
 
 // oauthHookFunctions defines custom hooks for OAuth providers based on provider type
 // Each hook handles custom headers, query params, and any special request modifications
-var oauthHookFunctions = map[oauth.ProviderType]HookFunc{
-	oauth.ProviderAntigravity: antigravityHook,
+var oauthHookFunctions = map[ai.Issuer]HookFunc{
+	ai.IssuerAntigravity: antigravityHook,
 }
 
 func antigravityHook(req *http.Request) error {
@@ -388,8 +388,8 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 // TransportPoolInterface defines the interface for transport pools.
 // This allows both the real TransportPool and test doubles to be used.
 type TransportPoolInterface interface {
-	GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport
-	AcquireTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) (*http.Transport, func())
+	GetTransport(providerUUID, model, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) *http.Transport
+	AcquireTransport(providerUUID, model, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) (*http.Transport, func())
 }
 
 // refCountedBody wraps an io.ReadCloser and calls onclose exactly once when closed.
@@ -414,7 +414,7 @@ type SessionBoundTransport struct {
 	transportPool TransportPoolInterface
 	providerUUID  string
 	proxyURL      string
-	oauthType     oauth.ProviderType
+	issuer        ai.Issuer
 	sessionID     typ.SessionID // Bound at creation time
 
 	// Optional: provider-specific response wrapper (e.g., for tool prefix stripping)
@@ -429,7 +429,7 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 		t.providerUUID,
 		"", // model - not used for transport keying
 		t.proxyURL,
-		t.oauthType,
+		t.issuer,
 		t.sessionID,
 	)
 
@@ -460,9 +460,9 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 // optional provider-specific wrapping (claudeRoundTripper, codexRoundTripper, etc.).
 // This helper builds the layered transport chain based on provider configuration.
 func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID) http.RoundTripper {
-	var oauthType oauth.ProviderType
+	var issuer ai.Issuer
 	if provider.OAuthDetail != nil {
-		oauthType = oauth.ProviderType(provider.OAuthDetail.GetIssuer())
+		issuer = ai.Issuer(provider.OAuthDetail.GetIssuer())
 	}
 
 	// Base: SessionBoundTransport
@@ -470,24 +470,24 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 		transportPool: GetGlobalTransportPool(),
 		providerUUID:  provider.UUID,
 		proxyURL:      provider.ProxyURL,
-		oauthType:     oauthType,
+		issuer:        issuer,
 		sessionID:     sessionID,
 	}
 
 	// Layer provider-specific transformations
 	if provider.AuthType == typ.AuthTypeOAuth {
-		switch oauthType {
-		case oauth.ProviderClaudeCode:
+		switch issuer {
+		case ai.IssuerClaudeCode:
 			// Claude Code OAuth needs request/response transformations
 			return &claudeRoundTripper{
 				RoundTripper: baseTransport,
 			}
-		case oauth.ProviderCodex:
+		case ai.IssuerCodex:
 			// Codex (ChatGPT backend API) needs path rewriting and response transformation
 			return &codexRoundTripper{
 				RoundTripper: baseTransport,
 			}
-		case oauth.ProviderAntigravity:
+		case ai.IssuerAntigravity:
 			// Antigravity needs extra config (project_id) and special wrapping
 			project := ""
 			model := ""
@@ -504,7 +504,7 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 			}
 		default:
 			// Generic OAuth with hooks (if any are defined)
-			if hook := oauthHookFunctions[oauthType]; hook != nil {
+			if hook := oauthHookFunctions[issuer]; hook != nil {
 				return &requestModifier{
 					RoundTripper: baseTransport,
 					hooks:        []HookFunc{hook},
@@ -526,22 +526,22 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 //
 // Returns a configured http.Client
 func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID typ.SessionID) *http.Client {
-	var providerType oauth.ProviderType
+	var issuer ai.Issuer
 	if provider.OAuthDetail != nil {
-		providerType = oauth.ProviderType(provider.OAuthDetail.GetIssuer())
+		issuer = ai.Issuer(provider.OAuthDetail.GetIssuer())
 	}
 
 	// Get shared transport from transport pool (keyed by providerUUID + sessionID for OAuth)
 	// proxyURL is used to configure the transport but is NOT part of the key
-	transport := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, providerType, sessionID)
+	transport := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, issuer, sessionID)
 
 	client := &http.Client{
 		Transport: transport,
 	}
 
 	if provider.AuthType == typ.AuthTypeOAuth {
-		switch providerType {
-		case oauth.ProviderAntigravity:
+		switch issuer {
+		case ai.IssuerAntigravity:
 			// For Antigravity, create a specialized RoundTripper with provider-specific config
 			if provider.OAuthDetail == nil {
 				return nil
@@ -571,7 +571,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 				proxyURL:     effectiveProxy,
 			}
 			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, effectiveProxy)
-		case oauth.ProviderClaudeCode:
+		case ai.IssuerClaudeCode:
 			// For Claude Code OAuth, use claudeRoundTripper for request/response transformations
 			var claudeTransport http.RoundTripper = transport
 			if ep := provider.ProxyURL; ep != "" {
@@ -585,7 +585,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 				RoundTripper: claudeTransport,
 			}
 			logrus.Infof("Created Claude Code RoundTripper with proxy=%s", provider.ProxyURL)
-		case oauth.ProviderCodex:
+		case ai.IssuerCodex:
 			// Create base transport with proxy support if needed
 			var baseTransport http.RoundTripper = transport
 			if ep := provider.ProxyURL; ep != "" {
@@ -593,7 +593,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 				proxyClient := CreateHTTPClientWithProxy(ep)
 				if proxyClient.Transport != nil {
 					baseTransport = proxyClient.Transport
-					logrus.Infof("Created proxy transport for %s: %s", providerType, ep)
+					logrus.Infof("Created proxy transport for %s: %s", issuer, ep)
 				}
 			}
 
@@ -607,7 +607,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 			client.Transport = baseTransport
 		default:
 			// For other OAuth providers, use the hook-based approach
-			hook, ok := oauthHookFunctions[providerType]
+			hook, ok := oauthHookFunctions[issuer]
 			if ok {
 				// Create base transport with proxy support if needed
 				var baseTransport http.RoundTripper = transport
@@ -616,7 +616,7 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 					proxyClient := CreateHTTPClientWithProxy(ep)
 					if proxyClient.Transport != nil {
 						baseTransport = proxyClient.Transport
-						logrus.Infof("Created proxy transport for %s: %s", providerType, ep)
+						logrus.Infof("Created proxy transport for %s: %s", issuer, ep)
 					}
 				}
 

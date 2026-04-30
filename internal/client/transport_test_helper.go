@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -26,8 +26,8 @@ func NewTestTransportPool() *TestTransportPool {
 
 // GetTransport returns or creates a transport for the given configuration.
 // It tracks the key for test verification.
-func (p *TestTransportPool) GetTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) *http.Transport {
-	key := NewTransportKey(providerUUID, proxyURL, oauthType, sessionID).String()
+func (p *TestTransportPool) GetTransport(providerUUID, model, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) *http.Transport {
+	key := NewTransportKey(providerUUID, proxyURL, issuer, sessionID).String()
 
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -48,8 +48,8 @@ func (p *TestTransportPool) GetTransport(providerUUID, model, proxyURL string, o
 
 // AcquireTransport returns a transport for the given configuration.
 // The release function is a no-op for tests (no reference counting).
-func (p *TestTransportPool) AcquireTransport(providerUUID, model, proxyURL string, oauthType oauth.ProviderType, sessionID typ.SessionID) (*http.Transport, func()) {
-	transport := p.GetTransport(providerUUID, model, proxyURL, oauthType, sessionID)
+func (p *TestTransportPool) AcquireTransport(providerUUID, model, proxyURL string, issuer ai.Issuer, sessionID typ.SessionID) (*http.Transport, func()) {
+	transport := p.GetTransport(providerUUID, model, proxyURL, issuer, sessionID)
 	return transport, func() {} // no-op for tests
 }
 

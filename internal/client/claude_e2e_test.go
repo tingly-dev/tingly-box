@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/ai/oauth"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -42,7 +41,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 	oauthProvider := ""
 	if IsClaudeOAuthToken(accessToken) {
 		authType = typ.AuthTypeOAuth
-		oauthProvider = string(oauth.ProviderClaudeCode)
+		oauthProvider = string(ai.IssuerClaudeCode)
 	}
 
 	// Create provider for Anthropic API
@@ -374,7 +373,7 @@ func TestE2E_ClaudeOAuthRoundTripper(t *testing.T) {
 		AuthType: typ.AuthTypeOAuth,
 		Timeout:  int64((60 * time.Second).Seconds()),
 		OAuthDetail: &typ.OAuthDetail{
-			ProviderType: string(oauth.ProviderClaudeCode),
+			ProviderType: string(ai.IssuerClaudeCode),
 			AccessToken:  oauthToken,
 			ExtraFields:  make(map[string]interface{}),
 		},
@@ -492,7 +491,7 @@ func TestE2E_BetaStreaming(t *testing.T) {
 
 	if authType == typ.AuthTypeOAuth {
 		provider.OAuthDetail = &typ.OAuthDetail{
-			ProviderType: string(oauth.ProviderClaudeCode),
+			ProviderType: string(ai.IssuerClaudeCode),
 			AccessToken:  accessToken,
 			ExtraFields:  make(map[string]interface{}),
 		}

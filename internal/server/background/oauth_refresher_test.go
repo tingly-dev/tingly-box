@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -47,7 +48,7 @@ func (m *mockConfig) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 
 // tokenRefresher is a minimal interface for the refresh functionality
 type tokenRefresher interface {
-	RefreshToken(ctx context.Context, userID string, providerType oauth.ProviderType, refreshToken string, opts ...oauth.Option) (*oauth.Token, error)
+	RefreshToken(ctx context.Context, userID string, issuer ai.Issuer, refreshToken string, opts ...oauth.Option) (*oauth.Token, error)
 }
 
 // mockTokenRefresher tracks RefreshToken calls for testing
@@ -55,14 +56,14 @@ type mockTokenRefresher struct {
 	refreshCalled bool
 	refreshToken  string
 	userID        string
-	providerType  oauth.ProviderType
+	issuer  ai.Issuer
 }
 
-func (m *mockTokenRefresher) RefreshToken(ctx context.Context, userID string, providerType oauth.ProviderType, refreshToken string, opts ...oauth.Option) (*oauth.Token, error) {
+func (m *mockTokenRefresher) RefreshToken(ctx context.Context, userID string, issuer ai.Issuer, refreshToken string, opts ...oauth.Option) (*oauth.Token, error) {
 	m.refreshCalled = true
 	m.refreshToken = refreshToken
 	m.userID = userID
-	m.providerType = providerType
+	m.issuer = issuer
 	// Return a dummy token with extended expiry
 	return &oauth.Token{
 		AccessToken:  "new_access_token",
@@ -77,7 +78,7 @@ func TestNewOAuthRefresher(t *testing.T) {
 	registry := oauth.DefaultRegistry()
 	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
 		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
@@ -113,7 +114,7 @@ func TestOAuthRefresherSetters(t *testing.T) {
 	registry := oauth.DefaultRegistry()
 	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
 		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
@@ -143,7 +144,7 @@ func TestOAuthRefresherStartStop(t *testing.T) {
 	registry := oauth.DefaultRegistry()
 	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
 		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
@@ -198,7 +199,7 @@ func TestOAuthRefresherStopIdle(t *testing.T) {
 	registry := oauth.DefaultRegistry()
 	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
 		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
@@ -217,7 +218,7 @@ func TestOAuthRefresherCheckAndRefreshTokens(t *testing.T) {
 	registry := oauth.DefaultRegistry()
 	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
 		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
@@ -236,7 +237,7 @@ func TestOAuthRefresherStartTwice(t *testing.T) {
 	registry := oauth.DefaultRegistry()
 	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		ProviderConfigs:   make(map[ai.Issuer]*oauth.ProviderConfig),
 		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,

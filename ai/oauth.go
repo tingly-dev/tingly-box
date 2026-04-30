@@ -21,4 +21,5 @@ const (
 	IssuerAntigravity Issuer = "antigravity" // Antigravity OAuth issuer
 	IssuerIFlow       Issuer = "iflow"       // IFlow OAuth issuer
 	IssuerMock        Issuer = "mock"        // Mock provider for testing
+	IssuerUnknown     Issuer = ""
 )

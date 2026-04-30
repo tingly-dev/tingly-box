@@ -48,9 +48,9 @@ func WithProviderURL(url string) TransformOption {
 	return func(ctx *TransformContext) { ctx.ProviderURL = url }
 }
 
-// WithProviderType sets the provider type (e.g., "claude_code", "codex") in the transform context.
-func WithProviderType(providerType string) TransformOption {
-	return func(ctx *TransformContext) { ctx.ProviderType = providerType }
+// WithIssuer sets the provider type (e.g., "claude_code", "codex") in the transform context.
+func WithIssuer(issuer string) TransformOption {
+	return func(ctx *TransformContext) { ctx.ProviderType = issuer }
 }
 
 // WithScenarioFlags sets the scenario flags in the transform context.

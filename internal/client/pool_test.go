@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -347,13 +347,13 @@ func TestTransportPool_AcquireReleaseRefCount(t *testing.T) {
 	providerUUID := "test-provider-refcount"
 
 	// Acquire transport
-	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+	_, release := pool.AcquireTransport(providerUUID, "", "", ai.IssuerClaudeCode, sessionID)
 	if release == nil {
 		t.Fatal("Expected non-nil release callback")
 	}
 
 	// Verify refCount == 1
-	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	key := NewTransportKey(providerUUID, "", ai.IssuerClaudeCode, sessionID).String()
 	pool.mutex.RLock()
 	pooled, exists := pool.transports[key]
 	pool.mutex.RUnlock()
@@ -381,10 +381,10 @@ func TestTransportPool_CleanupSkipsActiveTransports(t *testing.T) {
 	providerUUID := "test-provider-cleanup-skip"
 
 	// Acquire transport (refCount = 1)
-	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+	_, release := pool.AcquireTransport(providerUUID, "", "", ai.IssuerClaudeCode, sessionID)
 
 	// Set lastAccess to far in the past so it's "expired"
-	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	key := NewTransportKey(providerUUID, "", ai.IssuerClaudeCode, sessionID).String()
 	pool.mutex.RLock()
 	pooled := pool.transports[key]
 	pool.mutex.RUnlock()
@@ -413,9 +413,9 @@ func TestTransportPool_CleanupEvictsAfterRelease(t *testing.T) {
 	providerUUID := "test-provider-cleanup-evict"
 
 	// Acquire and set lastAccess to far past
-	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+	_, release := pool.AcquireTransport(providerUUID, "", "", ai.IssuerClaudeCode, sessionID)
 
-	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	key := NewTransportKey(providerUUID, "", ai.IssuerClaudeCode, sessionID).String()
 	pool.mutex.RLock()
 	pooled := pool.transports[key]
 	pool.mutex.RUnlock()
@@ -449,9 +449,9 @@ func TestTransportPool_InvalidateSessionDefersActive(t *testing.T) {
 	providerUUID := "test-provider-invalidate-defer"
 
 	// Acquire transport (refCount = 1)
-	_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+	_, release := pool.AcquireTransport(providerUUID, "", "", ai.IssuerClaudeCode, sessionID)
 
-	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	key := NewTransportKey(providerUUID, "", ai.IssuerClaudeCode, sessionID).String()
 
 	// Invalidate session while active
 	pool.InvalidateSession(providerUUID, sessionID.Value)
@@ -500,7 +500,7 @@ func TestTransportPool_AcquireReleaseConcurrentRace(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, release := pool.AcquireTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+			_, release := pool.AcquireTransport(providerUUID, "", "", ai.IssuerClaudeCode, sessionID)
 			// Simulate some work
 			time.Sleep(time.Microsecond * 10)
 			release()
@@ -510,7 +510,7 @@ func TestTransportPool_AcquireReleaseConcurrentRace(t *testing.T) {
 	wg.Wait()
 
 	// All releases done; refCount should be 0
-	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	key := NewTransportKey(providerUUID, "", ai.IssuerClaudeCode, sessionID).String()
 	pool.mutex.RLock()
 	pooled := pool.transports[key]
 	pool.mutex.RUnlock()
@@ -537,13 +537,13 @@ func TestSessionBoundTransport_RefCountedBodyRelease(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		oauthType:     ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
 	client := &http.Client{Transport: transport}
 
-	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	key := NewTransportKey(providerUUID, "", ai.IssuerClaudeCode, sessionID).String()
 
 	req, _ := http.NewRequest("GET", server.URL, nil)
 	resp, err := client.Do(req)
@@ -584,12 +584,12 @@ func TestSessionBoundTransport_RefCountedBodyDoubleClose(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		oauthType:     ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
 	client := &http.Client{Transport: sbt}
-	key := NewTransportKey(providerUUID, "", oauth.ProviderClaudeCode, sessionID).String()
+	key := NewTransportKey(providerUUID, "", ai.IssuerClaudeCode, sessionID).String()
 
 	req, _ := http.NewRequest("GET", server.URL, nil)
 	resp, err := client.Do(req)
@@ -623,7 +623,7 @@ func TestTransportPool_LastAccessAtomicRace(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pool.GetTransport(providerUUID, "", "", oauth.ProviderClaudeCode, sessionID)
+			pool.GetTransport(providerUUID, "", "", ai.IssuerClaudeCode, sessionID)
 		}()
 	}
 

@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/ai/oauth"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -27,7 +27,7 @@ func TestSessionBoundTransport_BasicRoundTrip(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "test-provider-uuid",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderMock,
+		issuer:        ai.IssuerMock,
 		sessionID:     sessionID,
 	}
 
@@ -74,7 +74,7 @@ func TestSessionBoundTransport_SessionIsolation(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     session1,
 	}
 
@@ -82,7 +82,7 @@ func TestSessionBoundTransport_SessionIsolation(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     session2,
 	}
 
@@ -131,7 +131,7 @@ func TestSessionBoundTransport_SameSessionReusesTransport(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "test-provider-uuid",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
@@ -139,7 +139,7 @@ func TestSessionBoundTransport_SameSessionReusesTransport(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "test-provider-uuid",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
@@ -195,7 +195,7 @@ func TestSessionBoundTransport_IPFallbackNotScoped(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionIP1,
 	}
 
@@ -203,7 +203,7 @@ func TestSessionBoundTransport_IPFallbackNotScoped(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  providerUUID,
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionIP2,
 	}
 
@@ -246,7 +246,7 @@ func TestSessionBoundTransport_ProxyURL(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "test-provider-uuid",
 		proxyURL:      "http://proxy1.example.com:8080",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
@@ -254,13 +254,13 @@ func TestSessionBoundTransport_ProxyURL(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "test-provider-uuid",
 		proxyURL:      "http://proxy2.example.com:8080",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
 	// Trigger transport creation by calling GetTransport directly
-	_ = pool.GetTransport("test-provider-uuid", "", "http://proxy1.example.com:8080", oauth.ProviderClaudeCode, sessionID)
-	_ = pool.GetTransport("test-provider-uuid", "", "http://proxy2.example.com:8080", oauth.ProviderClaudeCode, sessionID)
+	_ = pool.GetTransport("test-provider-uuid", "", "http://proxy1.example.com:8080", ai.IssuerClaudeCode, sessionID)
+	_ = pool.GetTransport("test-provider-uuid", "", "http://proxy2.example.com:8080", ai.IssuerClaudeCode, sessionID)
 
 	keys := pool.Keys()
 	if len(keys) != 2 {
@@ -278,7 +278,7 @@ func TestSessionBoundTransport_DifferentProviders(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "provider-uuid-1",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
@@ -286,13 +286,13 @@ func TestSessionBoundTransport_DifferentProviders(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "provider-uuid-2",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
 	// Trigger transport creation by calling GetTransport directly
-	_ = pool.GetTransport("provider-uuid-1", "", "", oauth.ProviderClaudeCode, sessionID)
-	_ = pool.GetTransport("provider-uuid-2", "", "", oauth.ProviderClaudeCode, sessionID)
+	_ = pool.GetTransport("provider-uuid-1", "", "", ai.IssuerClaudeCode, sessionID)
+	_ = pool.GetTransport("provider-uuid-2", "", "", ai.IssuerClaudeCode, sessionID)
 
 	keys := pool.Keys()
 	if len(keys) != 2 {
@@ -309,12 +309,12 @@ func TestSessionBoundTransport_EmptySession(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "test-provider-apikey",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderMock, // Mock provider uses reusable transport
-		sessionID:     typ.SessionID{},    // Empty session
+		issuer:        ai.IssuerMock,   // Mock provider uses reusable transport
+		sessionID:     typ.SessionID{}, // Empty session
 	}
 
 	// Trigger transport creation by calling GetTransport directly
-	_ = pool.GetTransport("test-provider-apikey", "", "", oauth.ProviderMock, typ.SessionID{})
+	_ = pool.GetTransport("test-provider-apikey", "", "", ai.IssuerMock, typ.SessionID{})
 
 	keys := pool.Keys()
 	if len(keys) != 1 {
@@ -354,7 +354,7 @@ func TestSessionBoundTransport_ResponseWrapper(t *testing.T) {
 		transportPool:   pool,
 		providerUUID:    "test-provider-uuid",
 		proxyURL:        "",
-		oauthType:       oauth.ProviderClaudeCode,
+		issuer:          ai.IssuerClaudeCode,
 		sessionID:       sessionID,
 		responseWrapper: testWrapper,
 	}
@@ -393,7 +393,7 @@ func TestSessionBoundTransport_ConcurrentAccess(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "test-provider-uuid",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
@@ -454,24 +454,24 @@ func TestSessionBoundTransport_OAuthProviderTypes(t *testing.T) {
 	pool := NewTestTransportPool()
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "oauth-type-test"}
 
-	providers := []oauth.ProviderType{
-		oauth.ProviderClaudeCode,
-		oauth.ProviderCodex,
-		oauth.ProviderAntigravity,
-		oauth.ProviderOpenAI,
-		oauth.ProviderGoogle,
+	providers := []ai.Issuer{
+		ai.IssuerClaudeCode,
+		ai.IssuerCodex,
+		ai.IssuerAntigravity,
+		ai.IssuerOpenAI,
+		ai.IssuerGoogle,
 	}
 
-	for _, providerType := range providers {
+	for _, issuer := range providers {
 		_ = &SessionBoundTransport{
 			transportPool: pool,
-			providerUUID:  "provider-" + string(providerType),
+			providerUUID:  "provider-" + string(issuer),
 			proxyURL:      "",
-			oauthType:     providerType,
+			issuer:        issuer,
 			sessionID:     sessionID,
 		}
 		// Trigger transport creation
-		_ = pool.GetTransport("provider-"+string(providerType), "", "", providerType, sessionID)
+		_ = pool.GetTransport("provider-"+string(issuer), "", "", issuer, sessionID)
 	}
 
 	keys := pool.Keys()
@@ -609,12 +609,12 @@ func TestTransportPoolWithSessionBound(t *testing.T) {
 		transportPool: pool,
 		providerUUID:  "global-test-provider",
 		proxyURL:      "",
-		oauthType:     oauth.ProviderClaudeCode,
+		issuer:        ai.IssuerClaudeCode,
 		sessionID:     sessionID,
 	}
 
 	// Get the underlying transport - this should use the pool
-	underlyingTransport := pool.GetTransport("global-test-provider", "", "", oauth.ProviderClaudeCode, sessionID)
+	underlyingTransport := pool.GetTransport("global-test-provider", "", "", ai.IssuerClaudeCode, sessionID)
 
 	if underlyingTransport == nil {
 		t.Error("Expected non-nil underlying transport from pool")

@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/ai"
 	oauth3 "github.com/tingly-dev/tingly-box/ai/oauth"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -48,8 +49,8 @@ func (h *Handler) SetCallbackServerManager(csm CallbackServerManager) {
 }
 
 // CreateProviderFromToken is exported for use by the server's root OAuth callback
-func (h *Handler) CreateProviderFromToken(token *oauth3.Token, providerType oauth3.ProviderType, customName, sessionID string) (string, error) {
-	return h.createProviderFromToken(token, providerType, customName, sessionID)
+func (h *Handler) CreateProviderFromToken(token *oauth3.Token, issuer ai.Issuer, customName, sessionID string) (string, error) {
+	return h.createProviderFromToken(token, issuer, customName, sessionID)
 }
 
 // =============================================
@@ -80,8 +81,8 @@ func (h *Handler) ListOAuthProviders(c *gin.Context) {
 // GetOAuthProvider returns a specific OAuth provider configuration
 // GET /api/v1/oauth/providers/:type
 func (h *Handler) GetOAuthProvider(c *gin.Context) {
-	providerType := oauth3.ProviderType(c.Param("type"))
-	config, ok := h.oauthManager.GetRegistry().Get(providerType)
+	issuer := ai.Issuer(c.Param("type"))
+	config, ok := h.oauthManager.GetRegistry().Get(issuer)
 	if !ok {
 		c.JSON(http.StatusNotFound, OAuthErrorResponse{
 			Success: false,
@@ -105,7 +106,7 @@ func (h *Handler) GetOAuthProvider(c *gin.Context) {
 // UpdateOAuthProvider updates an OAuth provider configuration
 // PUT /api/v1/oauth/providers/:type
 func (h *Handler) UpdateOAuthProvider(c *gin.Context) {
-	providerType := oauth3.ProviderType(c.Param("type"))
+	issuer := ai.Issuer(c.Param("type"))
 
 	var req OAuthUpdateProviderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -116,7 +117,7 @@ func (h *Handler) UpdateOAuthProvider(c *gin.Context) {
 		return
 	}
 
-	config, ok := h.oauthManager.GetRegistry().Get(providerType)
+	config, ok := h.oauthManager.GetRegistry().Get(issuer)
 	if !ok {
 		c.JSON(http.StatusNotFound, OAuthErrorResponse{
 			Success: false,
@@ -145,22 +146,22 @@ func (h *Handler) UpdateOAuthProvider(c *gin.Context) {
 	// Log the action
 	logrus.WithFields(logrus.Fields{
 		"action":   "update_oauth_provider",
-		"provider": providerType,
+		"provider": issuer,
 	}).Info("OAuth provider updated")
 
 	c.JSON(http.StatusOK, OAuthUpdateProviderResponse{
 		Success: true,
 		Message: "Provider configuration updated",
-		Type:    string(providerType),
+		Type:    string(issuer),
 	})
 }
 
 // DeleteOAuthProvider deletes an OAuth provider configuration
 // DELETE /api/v1/oauth/providers/:type
 func (h *Handler) DeleteOAuthProvider(c *gin.Context) {
-	providerType := oauth3.ProviderType(c.Param("type"))
+	issuer := ai.Issuer(c.Param("type"))
 
-	config, ok := h.oauthManager.GetRegistry().Get(providerType)
+	config, ok := h.oauthManager.GetRegistry().Get(issuer)
 	if !ok {
 		c.JSON(http.StatusNotFound, OAuthErrorResponse{
 			Success: false,
@@ -187,13 +188,13 @@ func (h *Handler) DeleteOAuthProvider(c *gin.Context) {
 	// Log the action
 	logrus.WithFields(logrus.Fields{
 		"action":   "delete_oauth_provider",
-		"provider": providerType,
+		"provider": issuer,
 	}).Info("OAuth provider deleted")
 
 	c.JSON(http.StatusOK, OAuthUpdateProviderResponse{
 		Success: true,
 		Message: "Provider configuration deleted",
-		Type:    string(providerType),
+		Type:    string(issuer),
 	})
 }
 
@@ -236,7 +237,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		}
 	}
 
-	providerType, err := oauth3.ParseProviderType(req.Provider)
+	issuer, err := oauth3.ParseProviderType(req.Provider)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -246,7 +247,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	}
 
 	// Check if provider uses device code flow
-	config, ok := h.oauthManager.GetRegistry().Get(providerType)
+	config, ok := h.oauthManager.GetRegistry().Get(issuer)
 	if !ok {
 		c.JSON(http.StatusNotFound, OAuthErrorResponse{
 			Success: false,
@@ -261,16 +262,16 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 
 	// If no manual proxy URL, try to auto-detect from existing providers
 	if proxyURL == "" {
-		providerToBase := map[oauth3.ProviderType]string{
-			oauth3.ProviderCodex:       "openai",
-			oauth3.ProviderKimi:        "moonshot",
-			oauth3.ProviderOpenAI:      "openai",
-			oauth3.ProviderClaudeCode:  "anthropic",
-			oauth3.ProviderGemini:      "google",
-			oauth3.ProviderAntigravity: "google",
+		providerToBase := map[ai.Issuer]string{
+			ai.IssuerCodex:       "openai",
+			ai.IssuerKimiCode:    "moonshot",
+			ai.IssuerOpenAI:      "openai",
+			ai.IssuerClaudeCode:  "anthropic",
+			ai.IssuerGemini:      "google",
+			ai.IssuerAntigravity: "google",
 		}
 
-		if baseProvider, ok := providerToBase[providerType]; ok {
+		if baseProvider, ok := providerToBase[issuer]; ok {
 			providers := h.config.ListProviders()
 			for _, p := range providers {
 				isOpenAIProvider := p.APIStyle == protocol.APIStyleOpenAI ||
@@ -322,7 +323,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	oauthSession := &oauth3.SessionState{
 		SessionID: sessionID,
 		Status:    oauth3.SessionStatusPending,
-		Provider:  providerType,
+		Provider:  issuer,
 		UserID:    userID,
 		CreatedAt: now,
 		ExpiresAt: now.Add(oauth3.DefaultSessionExpiry), // Use unified session expiration
@@ -350,7 +351,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 
 	// Handle device code flow
 	if config.OAuthMethod == oauth3.OAuthMethodDeviceCode || config.OAuthMethod == oauth3.OAuthMethodDeviceCodePKCE {
-		deviceCodeData, err := h.oauthManager.InitiateDeviceCodeFlow(c.Request.Context(), userID, providerType, req.Redirect, req.Name)
+		deviceCodeData, err := h.oauthManager.InitiateDeviceCodeFlow(c.Request.Context(), userID, issuer, req.Redirect, req.Name)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 				Success: false,
@@ -360,7 +361,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		}
 
 		// Start polling for token in background
-		go h.pollForDeviceCodeToken(c.Request.Context(), deviceCodeData, providerType, req.Name, sessionID)
+		go h.pollForDeviceCodeToken(c.Request.Context(), deviceCodeData, issuer, req.Name, sessionID)
 
 		// Return device code flow response
 		resp := OAuthAuthorizeResponse{
@@ -374,14 +375,14 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		resp.Data.VerificationURIComplete = deviceCodeData.VerificationURIComplete
 		resp.Data.ExpiresIn = deviceCodeData.ExpiresIn
 		resp.Data.Interval = deviceCodeData.Interval
-		resp.Data.Provider = string(providerType)
+		resp.Data.Provider = string(issuer)
 
 		c.JSON(http.StatusOK, resp)
 		return
 	}
 
 	// Handle standard authorization code flow
-	authURL, state, err := h.oauthManager.GetAuthURL(userID, providerType, req.Redirect, req.Name, sessionID)
+	authURL, state, err := h.oauthManager.GetAuthURL(userID, issuer, req.Redirect, req.Name, sessionID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -403,22 +404,22 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 }
 
 // pollForDeviceCodeToken polls for token in background after device code flow initiation
-func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oauth3.DeviceCodeData, providerType oauth3.ProviderType, customName, sessionID string) {
-	fmt.Printf("[OAuth] Starting device code polling for %s in background\n", providerType)
+func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oauth3.DeviceCodeData, issuer ai.Issuer, customName, sessionID string) {
+	fmt.Printf("[OAuth] Starting device code polling for %s in background\n", issuer)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	token, err := h.oauthManager.PollForToken(ctx, deviceCodeData, nil)
 	if err != nil {
-		fmt.Printf("[OAuth] Device code polling failed for %s: %v\n", providerType, err)
+		fmt.Printf("[OAuth] Device code polling failed for %s: %v\n", issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth3.SessionStatusFailed, "", err.Error())
 		return
 	}
 
-	fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", providerType)
-	providerUUID, err := h.createProviderFromToken(token, providerType, customName, sessionID)
+	fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", issuer)
+	providerUUID, err := h.createProviderFromToken(token, issuer, customName, sessionID)
 	if err != nil {
-		fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", providerType, err)
+		fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth3.SessionStatusFailed, "", err.Error())
 		return
 	}
@@ -474,8 +475,8 @@ func (h *Handler) GetOAuthToken(c *gin.Context) {
 	}
 
 	// Fall back to old API (provider + user_id) for backward compatibility
-	providerType := oauth3.ProviderType(c.Query("provider"))
-	if providerType == "" {
+	issuer := ai.Issuer(c.Query("provider"))
+	if issuer == "" {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
 			Error:   "provider parameter is required",
@@ -485,7 +486,7 @@ func (h *Handler) GetOAuthToken(c *gin.Context) {
 
 	userID := c.Query("user_id")
 
-	token, err := h.oauthManager.GetToken(c.Request.Context(), userID, providerType)
+	token, err := h.oauthManager.GetToken(c.Request.Context(), userID, issuer)
 	if err != nil {
 		if err == oauth3.ErrTokenNotFound {
 			c.JSON(http.StatusNotFound, OAuthErrorResponse{
@@ -552,7 +553,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 		return
 	}
 
-	providerType, err := oauth3.ParseProviderType(provider.OAuthDetail.ProviderType)
+	issuer, err := oauth3.ParseProviderType(provider.OAuthDetail.ProviderType)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -565,7 +566,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	token, err := h.oauthManager.RefreshToken(
 		c.Request.Context(),
 		provider.OAuthDetail.UserID,
-		providerType,
+		issuer,
 		provider.OAuthDetail.RefreshToken,
 		oauth3.WithProxyString(provider.ProxyURL),
 	)
@@ -642,8 +643,8 @@ func (h *Handler) RevokeOAuthToken(c *gin.Context) {
 	}
 
 	// Fall back to old API (provider + user_id) for backward compatibility
-	providerType := oauth3.ProviderType(c.Query("provider"))
-	if providerType == "" {
+	issuer := ai.Issuer(c.Query("provider"))
+	if issuer == "" {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
 			Error:   "provider parameter is required",
@@ -653,7 +654,7 @@ func (h *Handler) RevokeOAuthToken(c *gin.Context) {
 
 	userID := c.Query("user_id")
 
-	err := h.oauthManager.RevokeToken(userID, providerType)
+	err := h.oauthManager.RevokeToken(userID, issuer)
 	if err != nil {
 		if err == oauth3.ErrTokenNotFound {
 			c.JSON(http.StatusNotFound, OAuthErrorResponse{
@@ -672,7 +673,7 @@ func (h *Handler) RevokeOAuthToken(c *gin.Context) {
 	// Log the action
 	logrus.WithFields(logrus.Fields{
 		"action":   "revoke_oauth_token",
-		"provider": providerType,
+		"provider": issuer,
 	}).Info("OAuth token revoked")
 
 	c.JSON(http.StatusOK, OAuthMessageResponse{
@@ -924,7 +925,7 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 // =============================================
 
 // createProviderFromToken creates a provider from OAuth token
-func (h *Handler) createProviderFromToken(token *oauth3.Token, providerType oauth3.ProviderType, customName, sessionID string) (string, error) {
+func (h *Handler) createProviderFromToken(token *oauth3.Token, issuer ai.Issuer, customName, sessionID string) (string, error) {
 	// Get custom name from token (stored in state during authorize)
 	if customName == "" {
 		customName = token.Name
@@ -944,7 +945,7 @@ func (h *Handler) createProviderFromToken(token *oauth3.Token, providerType oaut
 
 	// Generate provider name using smart naming strategy
 	// Priority: customName > email username > display name > timestamp
-	providerName := generateProviderName(providerType, token, customName)
+	providerName := generateProviderName(issuer, token, customName)
 
 	// Generate UUID for the provider
 	providerUUID, err := uuid.NewUUID()
@@ -957,30 +958,30 @@ func (h *Handler) createProviderFromToken(token *oauth3.Token, providerType oaut
 	var apiStyle protocol.APIStyle
 
 	// If token contains ResourceURL from OAuth response, use it
-	if token.ResourceURL != "" && providerType == oauth3.ProviderQwenCode {
+	if token.ResourceURL != "" && issuer == ai.IssuerQwenCode {
 		apiBase = normalizeAPIBase(token.ResourceURL, "/v1")
 		apiStyle = protocol.APIStyleOpenAI
 	} else {
-		switch providerType {
-		case oauth3.ProviderClaudeCode:
+		switch issuer {
+		case ai.IssuerClaudeCode:
 			apiBase = "https://api.anthropic.com"
 			apiStyle = protocol.APIStyleAnthropic
-		case oauth3.ProviderQwenCode:
+		case ai.IssuerQwenCode:
 			apiBase = "https://portal.qwen.ai/v1"
 			apiStyle = protocol.APIStyleOpenAI
-		case oauth3.ProviderGoogle:
+		case ai.IssuerGoogle:
 			apiBase = "https://generativelanguage.googleapis.com"
 			apiStyle = protocol.APIStyleOpenAI
-		case oauth3.ProviderAntigravity:
+		case ai.IssuerAntigravity:
 			apiBase = "https://cloudcode-pa.googleapis.com"
 			apiStyle = protocol.APIStyleGoogle
-		case oauth3.ProviderOpenAI:
+		case ai.IssuerOpenAI:
 			apiBase = "https://api.openai.com/v1"
 			apiStyle = protocol.APIStyleOpenAI
-		case oauth3.ProviderCodex:
+		case ai.IssuerCodex:
 			apiBase = protocol.CodexAPIBase
 			apiStyle = protocol.APIStyleOpenAI
-		case oauth3.ProviderKimi:
+		case ai.IssuerKimiCode:
 			apiBase = "https://api.moonshot.cn/v1"
 			apiStyle = protocol.APIStyleOpenAI
 		default:
@@ -1005,7 +1006,7 @@ func (h *Handler) createProviderFromToken(token *oauth3.Token, providerType oaut
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  token.AccessToken,
-			ProviderType: string(providerType),
+			ProviderType: string(issuer),
 			UserID:       uuid.New().String(),
 			RefreshToken: token.RefreshToken,
 			ExpiresAt:    expiresAt,
@@ -1049,7 +1050,7 @@ func (h *Handler) createProviderFromToken(token *oauth3.Token, providerType oaut
 // generateProviderName generates a human-readable provider name from token metadata
 // Priority: customName > email > display name > timestamp
 // Note: Account ID is NOT used for naming (sensitive information)
-func generateProviderName(providerType oauth3.ProviderType, token *oauth3.Token, customName string) string {
+func generateProviderName(issuer ai.Issuer, token *oauth3.Token, customName string) string {
 	// Priority 1: Custom name from user
 	if customName != "" {
 		return customName
@@ -1074,7 +1075,7 @@ func generateProviderName(providerType oauth3.ProviderType, token *oauth3.Token,
 
 	// Priority 4: Timestamp-based fallback (format: YYYYMMDD-HHMM)
 	timestamp := time.Now().Format("20060102-1504")
-	return fmt.Sprintf("%s-%s", providerType, timestamp)
+	return fmt.Sprintf("%s-%s", issuer, timestamp)
 }
 
 // generateRandomSuffix generates a random alphanumeric suffix of specified length
