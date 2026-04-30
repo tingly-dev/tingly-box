@@ -12,6 +12,7 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -50,8 +51,8 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		transport = createSessionBoundTransport(provider, sessionID)
 
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s",
-				provider.OAuthDetail.ProviderType, sessionID.Value)
+			logrus.Infof("Using session-bound transport for OAuth issuer: %s, session: %s",
+				provider.OAuthDetail.GetIssuer(), sessionID.Value)
 		}
 		if provider.ProxyURL != "" {
 			logrus.Infof("Using proxy for Anthropic client: %s", provider.ProxyURL)
@@ -180,7 +181,7 @@ func (c *AnthropicClient) ProbeChatEndpoint(ctx context.Context, model string) P
 		},
 	}
 	if c.provider.AuthType == typ.AuthTypeOAuth && c.provider.OAuthDetail != nil &&
-		c.provider.OAuthDetail.ProviderType == "claude_code" {
+		c.provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
 		// Prepend Claude Code system message as the first block
 		systemMessages = append([]anthropic.TextBlockParam{{
 			Text: ClaudeCodeSystemHeader,

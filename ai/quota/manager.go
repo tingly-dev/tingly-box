@@ -288,21 +288,24 @@ func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider
 
 // inferProviderType 从 Provider 的 API Base 域名或 OAuth 信息推断供应商类型
 func inferProviderType(provider *typ.Provider) ProviderType {
-	// OAuth providers: use OAuthDetail.ProviderType directly
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.ProviderType != "" {
-		switch provider.OAuthDetail.ProviderType {
-		case "anthropic", "claude_code":
-			return ProviderTypeAnthropic
-		case "google":
-			return ProviderTypeGemini
-		case "openai":
-			return ProviderTypeOpenAI
-		case "copilot":
-			return ProviderTypeCopilot
-		case "cursor":
-			return ProviderTypeCursor
-		case "codex":
-			return ProviderTypeCodex
+	// OAuth providers: use OAuthDetail.GetIssuer() which handles backward compatibility
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
+		issuer := provider.OAuthDetail.GetIssuer()
+		if issuer != "" {
+			switch issuer {
+			case typ.IssuerAnthropic, typ.IssuerClaudeCode:
+				return ProviderTypeAnthropic
+			case typ.IssuerGoogle:
+				return ProviderTypeGemini
+			case typ.IssuerOpenAI:
+				return ProviderTypeOpenAI
+			case typ.IssuerCopilot:
+				return ProviderTypeCopilot
+			case typ.IssuerCursor:
+				return ProviderTypeCursor
+			case typ.IssuerCodex:
+				return ProviderTypeCodex
+			}
 		}
 	}
 

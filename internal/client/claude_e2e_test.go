@@ -11,6 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -111,7 +112,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 		// Add Claude Code system header if using OAuth
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil &&
-			provider.OAuthDetail.ProviderType == "claude_code" {
+			provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
 			systemMessages = append([]anthropic.TextBlockParam{{
 				Text: ClaudeCodeSystemHeader,
 			}}, systemMessages...)
@@ -237,7 +238,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 		// Add Claude Code system header if using OAuth
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil &&
-			provider.OAuthDetail.ProviderType == "claude_code" {
+			provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
 			systemMessages = append([]anthropic.TextBlockParam{{
 				Text: ClaudeCodeSystemHeader,
 			}}, systemMessages...)
@@ -311,7 +312,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 		// Add Claude Code system header if using OAuth
 		if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil &&
-			provider.OAuthDetail.ProviderType == "claude_code" {
+			provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
 			systemMessages = append([]anthropic.TextBlockParam{{
 				Text: ClaudeCodeSystemHeader,
 			}}, systemMessages...)

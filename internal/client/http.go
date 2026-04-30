@@ -462,7 +462,7 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID) http.RoundTripper {
 	var oauthType oauth.ProviderType
 	if provider.OAuthDetail != nil {
-		oauthType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
+		oauthType = oauth.ProviderType(provider.OAuthDetail.GetIssuer())
 	}
 
 	// Base: SessionBoundTransport
@@ -528,7 +528,7 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID typ.SessionID) *http.Client {
 	var providerType oauth.ProviderType
 	if provider.OAuthDetail != nil {
-		providerType = oauth.ProviderType(provider.OAuthDetail.ProviderType)
+		providerType = oauth.ProviderType(provider.OAuthDetail.GetIssuer())
 	}
 
 	// Get shared transport from transport pool (keyed by providerUUID + sessionID for OAuth)

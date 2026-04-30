@@ -17,6 +17,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -54,14 +55,14 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	if provider.AuthType == typ.AuthTypeOAuth || provider.ProxyURL != "" {
 		// Use createSessionBoundTransport which applies OAuth hooks and uses shared transport
 		transport = createSessionBoundTransport(provider, sessionID)
-		providerType := ""
+		issuer := ""
 		if provider.OAuthDetail != nil {
-			providerType = provider.OAuthDetail.ProviderType
+			issuer = provider.OAuthDetail.GetIssuer()
 		}
-		if providerType == "codex" {
+		if issuer == ai.IssuerCodex {
 			logrus.Infof("[Codex] Using session-bound transport for ChatGPT backend API path rewriting, session: %s", sessionID.Value)
-		} else if providerType != "" {
-			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", providerType, sessionID.Value)
+		} else if issuer != "" {
+			logrus.Infof("Using session-bound transport for OAuth issuer: %s, session: %s", issuer, sessionID.Value)
 		} else if provider.ProxyURL != "" {
 			logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
 		}
@@ -156,7 +157,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 	// because it's a ChatGPT web interface token, not an OpenAI API token.
 	// It lacks the required api.model.read scope.
 	// Return ErrModelsEndpointNotSupported to signal the caller to use template fallback.
-	if c.provider.OAuthDetail != nil && c.provider.OAuthDetail.ProviderType == "codex" {
+	if c.provider.OAuthDetail != nil && c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
 		return nil, &ErrModelsEndpointNotSupported{
 			Provider: c.provider.Name,
 			Reason:   "ChatGPT OAuth token cannot access /models endpoint",
@@ -292,7 +293,7 @@ func (c *OpenAIClient) ProbeChatEndpoint(ctx context.Context, model string) Prob
 	// Codex OAuth requires the Responses API, not Chat Completions
 	if c.provider.AuthType == typ.AuthTypeOAuth &&
 		c.provider.OAuthDetail != nil &&
-		c.provider.OAuthDetail.ProviderType == "codex" {
+		c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
 		return c.probeResponsesEndpoint(ctx, model)
 	}
 
