@@ -3,6 +3,8 @@ module github.com/tingly-dev/tingly-box/ai
 go 1.25.6
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/google/uuid v1.6.0
 	github.com/openai/openai-go/v3 v3.33.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/tingly-dev/tingly-box v0.260423.0
