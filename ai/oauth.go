@@ -3,7 +3,7 @@ package ai
 // CodexAPIBase is the API base URL for ChatGPT/Codex OAuth provider
 const CodexAPIBase = "https://chatgpt.com/backend-api"
 
-// OAuth issuer constants - represent the OAuth identity providers
+// Issuer - represent the OAuth identity providers
 type Issuer string
 
 const (
@@ -16,8 +16,8 @@ const (
 	IssuerGemini      Issuer = "gemini"      // Gemini CLI OAuth issuer
 	IssuerCopilot     Issuer = "copilot"     // GitHub Copilot OAuth issuer
 	IssuerCursor      Issuer = "cursor"      // Cursor OAuth issuer
-	IssuerKimi        Issuer = "kimi_code"   // Kimi OAuth issuer
-	IssuerQwen        Issuer = "qwen_code"   // Qwen OAuth issuer
+	IssuerKimiCode    Issuer = "kimi_code"   // Kimi Code OAuth issuer
+	IssuerQwenCode    Issuer = "qwen_code"   // Qwen Code OAuth issuer
 	IssuerAntigravity Issuer = "antigravity" // Antigravity OAuth issuer
 	IssuerIFlow       Issuer = "iflow"       // IFlow OAuth issuer
 	IssuerMock        Issuer = "mock"        // Mock provider for testing
