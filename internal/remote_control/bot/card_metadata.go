@@ -5,12 +5,29 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 )
 
-// buildActionMenuMetadata builds metadata for action menu with platform-specific card rendering
-func buildActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card imbot.Card) map[string]interface{} {
-	metadata := map[string]interface{}{
+const trackActionMenuIDKey = "_trackActionMenuID"
+
+func buildReplyMetadata(tgKeyboard interface{}) map[string]interface{} {
+	return map[string]interface{}{
 		"replyMarkup": tgKeyboard,
-		"card":        card,
 	}
+}
+
+func buildTrackedReplyMetadata(tgKeyboard interface{}) map[string]interface{} {
+	metadata := buildReplyMetadata(tgKeyboard)
+	metadata[trackActionMenuIDKey] = true
+	return metadata
+}
+
+// buildActionMenuMetadata builds metadata for action menu with platform-specific card rendering
+func buildActionCardMetadata(tgKeyboard interface{}, card imbot.Card) map[string]interface{} {
+	metadata := buildReplyMetadata(tgKeyboard)
+	metadata["card"] = card
+	return metadata
+}
+
+func buildActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card imbot.Card) map[string]interface{} {
+	metadata := buildActionCardMetadata(tgKeyboard, card)
 
 	// For Feishu/Lark, add card_json
 	if hCtx.Platform == imbot.PlatformFeishu || hCtx.Platform == imbot.PlatformLark {
@@ -24,7 +41,11 @@ func buildActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card i
 }
 
 func (h *BotHandler) buildTrackedActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card imbot.Card) map[string]interface{} {
+	return buildTrackedActionMenuMetadata(hCtx, tgKeyboard, card)
+}
+
+func buildTrackedActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card imbot.Card) map[string]interface{} {
 	metadata := buildActionMenuMetadata(hCtx, tgKeyboard, card)
-	metadata["_trackActionMenuID"] = true
+	metadata[trackActionMenuIDKey] = true
 	return metadata
 }

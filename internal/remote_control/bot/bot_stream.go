@@ -122,11 +122,8 @@ func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult)
 	}
 
 	_, err := f.bot.SendMessage(context.Background(), f.chatID, &imbot.SendMessageOptions{
-		Text: completionText,
-		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
-			"card":        feature.BuildActionCard(),
-		},
+		Text:     completionText,
+		Metadata: buildActionCardMetadata(tgKeyboard, feature.BuildActionCard()),
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send action keyboard")
@@ -155,7 +152,7 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 
 	case agentboot.EventTypePermissionRequest:
 		// Permission requests are handled by IMPrompter directly
-		// In verbose mode, log for visibility; in noverbose mode, silently handle
+		// In verbose mode, log for visibility; in quiet mode, silently handle
 		if permMsg, ok := msg.(*agentboot.PermissionRequestMessage); ok {
 			logrus.WithFields(logrus.Fields{
 				"request_id": permMsg.RequestID,
@@ -163,7 +160,7 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 				"step":       permMsg.Step,
 				"total":      permMsg.Total,
 			}).Info("Permission request received (handled by IMPrompter)")
-			// In noverbose mode, don't show anything to user - IMPrompter will handle it
+			// In quiet mode, don't show anything to user - IMPrompter will handle it
 		}
 		return nil
 
@@ -177,7 +174,7 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 				"request_id": permResultMsg.RequestID,
 				"status":     status,
 			}).Debug("Permission result received")
-			// In noverbose mode, don't show permission results to user
+			// In quiet mode, don't show permission results to user
 		}
 		return nil
 
@@ -188,7 +185,7 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 				"status":  resultMsg.Status,
 				"message": resultMsg.Message,
 			}).Info("Agent result event received")
-			// In noverbose mode, result is shown by OnComplete, not here
+			// In quiet mode, result is shown by OnComplete, not here
 		}
 		return nil
 
@@ -199,7 +196,7 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 	case agentboot.EventTypeStreamDelta:
 		if deltaMsg, ok := msg.(*agentboot.StreamDeltaMessage); ok {
 			// For streaming, we could accumulate or send directly
-			// In noverbose mode, don't show stream deltas
+			// In quiet mode, don't show stream deltas
 			logrus.WithField("delta", deltaMsg.Delta).Debug("Stream delta received")
 		}
 		return nil
