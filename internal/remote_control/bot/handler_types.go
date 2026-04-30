@@ -11,6 +11,9 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/command"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
+	secpermission "github.com/tingly-dev/tingly-box/internal/remote_control/bot/security/permission"
+	secpairing "github.com/tingly-dev/tingly-box/internal/remote_control/bot/security/pairing"
+	secaudit "github.com/tingly-dev/tingly-box/internal/remote_control/bot/security/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
@@ -64,6 +67,15 @@ type BotHandler struct {
 
 	// newCommandDispatcher is the new command dispatcher (Phase 1 refactoring)
 	newCommandDispatcher *command.Dispatcher
+
+	// permissionHandler is the security permission handler (Phase 2 refactoring)
+	permissionHandler *secpermission.Handler
+
+	// pairingIntegration wraps pairing with bot-specific logic (Phase 2 refactoring)
+	pairingIntegration *secpairing.BotIntegration
+
+	// botAuditLogger wraps audit logging for bot events (Phase 2 refactoring)
+	botAuditLogger *secaudit.Logger
 
 	// feishuCardRenderer converts imbot.Card to Feishu card JSON
 	feishuCardRenderer *feature.FeishuCardRenderer

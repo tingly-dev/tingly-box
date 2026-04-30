@@ -137,6 +137,11 @@ func NewBotHandler(
 	// Initialize the new command system (Phase 1 refactoring)
 	if err := handler.InitNewCommandSystem(); err != nil {
 		logrus.WithError(err).Warn("Failed to initialize new command system, will use legacy system")
+
+	// Initialize the security system (Phase 2 refactoring)
+	if err := handler.InitSecuritySystem(); err != nil {
+		logrus.WithError(err).Warn("Failed to initialize security system")
+	}
 	}
 
 	return handler
