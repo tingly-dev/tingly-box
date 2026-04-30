@@ -8,16 +8,12 @@ import {
     InputAdornment,
     Stack,
     TextField,
-    ToggleButton,
-    ToggleButtonGroup,
     Typography,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ProviderIcon from '@/components/ProviderIcon';
 import {useProviderTemplates, type UniqueProvider} from '@/services/serviceProviders';
 import type {EnhancedProviderFormData} from '@/components/ProviderFormDialog';
-
-type ProtocolFilter = 'all' | 'openai' | 'anthropic' | 'both';
 
 interface BrowseProvidersProps {
     onPick: (prefill: EnhancedProviderFormData) => void;
@@ -27,27 +23,15 @@ const BrowseProviders: React.FC<BrowseProvidersProps> = ({onPick}) => {
     const {t} = useTranslation();
     const providers = useProviderTemplates();
     const [search, setSearch] = useState('');
-    const [protocolFilter, setProtocolFilter] = useState<ProtocolFilter>('all');
 
     const filtered = useMemo(() => {
         const term = search.trim().toLowerCase();
+        if (!term) return providers;
         return providers.filter(p => {
-            if (term) {
-                const haystack = `${p.name} ${p.alias || ''}`.toLowerCase();
-                if (!haystack.includes(term)) return false;
-            }
-            switch (protocolFilter) {
-                case 'openai':
-                    return p.supportsOpenAI && !p.supportsAnthropic;
-                case 'anthropic':
-                    return p.supportsAnthropic && !p.supportsOpenAI;
-                case 'both':
-                    return p.supportsOpenAI && p.supportsAnthropic;
-                default:
-                    return true;
-            }
+            const haystack = `${p.name} ${p.alias || ''}`.toLowerCase();
+            return haystack.includes(term);
         });
-    }, [providers, search, protocolFilter]);
+    }, [providers, search]);
 
     const handlePick = (p: UniqueProvider) => {
         const apiStyle: 'openai' | 'anthropic' = p.supportsOpenAI ? 'openai' : 'anthropic';
@@ -71,7 +55,7 @@ const BrowseProviders: React.FC<BrowseProvidersProps> = ({onPick}) => {
 
     return (
         <Box>
-            <Stack direction={{xs: 'column', sm: 'row'}} spacing={2} sx={{mb: 2}}>
+            <Box sx={{mb: 2}}>
                 <TextField
                     size="small"
                     fullWidth
@@ -86,18 +70,7 @@ const BrowseProviders: React.FC<BrowseProvidersProps> = ({onPick}) => {
                         ),
                     }}
                 />
-                <ToggleButtonGroup
-                    size="small"
-                    exclusive
-                    value={protocolFilter}
-                    onChange={(_, v) => v && setProtocolFilter(v)}
-                >
-                    <ToggleButton value="all">{t('onboarding.browse.all', {defaultValue: 'All'})}</ToggleButton>
-                    <ToggleButton value="openai">OpenAI</ToggleButton>
-                    <ToggleButton value="anthropic">Anthropic</ToggleButton>
-                    <ToggleButton value="both">{t('onboarding.browse.both', {defaultValue: 'Both'})}</ToggleButton>
-                </ToggleButtonGroup>
-            </Stack>
+            </Box>
 
             {filtered.length === 0 ? (
                 <Box sx={{py: 6, textAlign: 'center'}}>

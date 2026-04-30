@@ -821,9 +821,7 @@ export default {
     },
     "browse": {
       "searchPlaceholder": "Search providers",
-      "all": "All",
-      "both": "Both",
-      "empty": "No providers match your filters."
+      "empty": "No providers match your search."
     },
     "paste": {
       "detectButton": "Detect",

@@ -821,8 +821,6 @@ export default {
     },
     "browse": {
       "searchPlaceholder": "搜索提供商",
-      "all": "全部",
-      "both": "双协议",
       "empty": "没有匹配的提供商。"
     },
     "paste": {
