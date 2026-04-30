@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // TestClientPool_BasicCreation tests basic client creation

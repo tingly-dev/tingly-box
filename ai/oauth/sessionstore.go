@@ -25,8 +25,8 @@ type SessionStorage interface {
 
 // MemorySessionStorage is an in-memory implementation of SessionStorage
 type MemorySessionStorage struct {
-	mu        sync.RWMutex
-	sessions  map[string]*SessionState
+	mu       sync.RWMutex
+	sessions map[string]*SessionState
 }
 
 // NewMemorySessionStorage creates a new in-memory session storage

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 var errProviderNotFound = errors.New("provider not found")
@@ -47,7 +47,7 @@ func (m *mockConfig) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 
 // tokenRefresher is a minimal interface for the refresh functionality
 type tokenRefresher interface {
-	RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string, opts ...oauth2.Option) (*oauth2.Token, error)
+	RefreshToken(ctx context.Context, userID string, providerType oauth.ProviderType, refreshToken string, opts ...oauth.Option) (*oauth.Token, error)
 }
 
 // mockTokenRefresher tracks RefreshToken calls for testing
@@ -55,16 +55,16 @@ type mockTokenRefresher struct {
 	refreshCalled bool
 	refreshToken  string
 	userID        string
-	providerType  oauth2.ProviderType
+	providerType  oauth.ProviderType
 }
 
-func (m *mockTokenRefresher) RefreshToken(ctx context.Context, userID string, providerType oauth2.ProviderType, refreshToken string, opts ...oauth2.Option) (*oauth2.Token, error) {
+func (m *mockTokenRefresher) RefreshToken(ctx context.Context, userID string, providerType oauth.ProviderType, refreshToken string, opts ...oauth.Option) (*oauth.Token, error) {
 	m.refreshCalled = true
 	m.refreshToken = refreshToken
 	m.userID = userID
 	m.providerType = providerType
 	// Return a dummy token with extended expiry
-	return &oauth2.Token{
+	return &oauth.Token{
 		AccessToken:  "new_access_token",
 		RefreshToken: refreshToken,
 		Expiry:       time.Now().Add(1 * time.Hour),
@@ -74,15 +74,15 @@ func (m *mockTokenRefresher) RefreshToken(ctx context.Context, userID string, pr
 // TestNewOAuthRefresher tests creating a new OAuth refresher
 func TestNewOAuthRefresher(t *testing.T) {
 	cfg := &config.Config{}
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := oauth.DefaultRegistry()
+	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 
 	refresher := NewTokenRefresher(manager, cfg)
 
@@ -110,15 +110,15 @@ func TestNewOAuthRefresher(t *testing.T) {
 // TestOAuthRefresherSetters tests setting check interval and refresh buffer
 func TestOAuthRefresherSetters(t *testing.T) {
 	cfg := &config.Config{}
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := oauth.DefaultRegistry()
+	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 
 	refresher := NewTokenRefresher(manager, cfg)
 
@@ -140,15 +140,15 @@ func TestOAuthRefresherSetters(t *testing.T) {
 // TestOAuthRefresherStartStop tests starting and stopping the refresher
 func TestOAuthRefresherStartStop(t *testing.T) {
 	cfg := &config.Config{}
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := oauth.DefaultRegistry()
+	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 
 	refresher := NewTokenRefresher(manager, cfg)
 	// Set short interval for testing
@@ -195,15 +195,15 @@ func TestOAuthRefresherStartStop(t *testing.T) {
 // TestOAuthRefresherStop tests stopping an idle refresher
 func TestOAuthRefresherStopIdle(t *testing.T) {
 	cfg := &config.Config{}
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := oauth.DefaultRegistry()
+	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 
 	refresher := NewTokenRefresher(manager, cfg)
 
@@ -214,15 +214,15 @@ func TestOAuthRefresherStopIdle(t *testing.T) {
 // TestOAuthRefresherCheckAndRefreshTokens tests checking tokens with empty config
 func TestOAuthRefresherCheckAndRefreshTokens(t *testing.T) {
 	cfg := &config.Config{}
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := oauth.DefaultRegistry()
+	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 
 	refresher := NewTokenRefresher(manager, cfg)
 
@@ -233,15 +233,15 @@ func TestOAuthRefresherCheckAndRefreshTokens(t *testing.T) {
 // TestOAuthRefresherStartTwice tests that starting twice doesn't cause issues
 func TestOAuthRefresherStartTwice(t *testing.T) {
 	cfg := &config.Config{}
-	registry := oauth2.DefaultRegistry()
-	oauthConfig := &oauth2.Config{
+	registry := oauth.DefaultRegistry()
+	oauthConfig := &oauth.Config{
 		BaseURL:           "http://localhost:8080",
-		ProviderConfigs:   make(map[oauth2.ProviderType]*oauth2.ProviderConfig),
-		TokenStorage:      oauth2.NewMemoryTokenStorage(),
+		ProviderConfigs:   make(map[oauth.ProviderType]*oauth.ProviderConfig),
+		TokenStorage:      oauth.NewMemoryTokenStorage(),
 		StateExpiry:       10 * time.Minute,
 		TokenExpiryBuffer: 5 * time.Minute,
 	}
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 
 	refresher := NewTokenRefresher(manager, cfg)
 	refresher.SetCheckInterval(100 * time.Millisecond)

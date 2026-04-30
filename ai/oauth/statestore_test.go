@@ -11,12 +11,12 @@ func TestMemoryStateStorage(t *testing.T) {
 
 	state := "test-state-123"
 	data := &StateData{
-		State:     state,
-		UserID:    "user123",
+		State:      state,
+		UserID:     "user123",
 		Provider:   ProviderClaudeCode,
 		RedirectTo: "http://example.com/callback",
 		Name:       "My Provider",
-		SessionID:   "session-456",
+		SessionID:  "session-456",
 	}
 
 	t.Run("SaveState", func(t *testing.T) {

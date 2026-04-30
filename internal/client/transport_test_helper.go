@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // TestTransportPool is a test double for TransportPool that tracks

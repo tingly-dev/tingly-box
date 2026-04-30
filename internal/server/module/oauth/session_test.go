@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	oauth2 "github.com/tingly-dev/tingly-box/ai/oauth"
 )
 
 func TestNewSessionManager(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 )
 
 // SessionManager manages OAuth session state

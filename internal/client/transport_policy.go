@@ -1,8 +1,8 @@
 package client
 
 import (
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // TransportReusePolicy defines whether transports can be shared across sessions

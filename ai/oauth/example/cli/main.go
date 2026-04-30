@@ -35,7 +35,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	oauth2 "github.com/tingly-dev/tingly-box/pkg/oauth"
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 )
 
 const (
@@ -95,7 +95,7 @@ func main() {
 	showToken := flag.Bool("show-token", false, "Show full token (default false for security)")
 	flag.Parse()
 
-	providerType, err := oauth2.ParseProviderType(*provider)
+	providerType, err := oauth.ParseProviderType(*provider)
 	if err != nil {
 		log.Fatalf("Invalid provider: %v", err)
 	}
@@ -105,7 +105,7 @@ func main() {
 	clientSecret := os.Getenv("OAUTH_CLIENT_SECRET")
 
 	if clientID == "" || clientSecret == "" {
-		defaultConfig, hasDefault := oauth2.DefaultRegistry().Get(providerType)
+		defaultConfig, hasDefault := oauth.DefaultRegistry().Get(providerType)
 		if hasDefault && defaultConfig.ClientID != "" {
 			clientID = defaultConfig.ClientID
 			clientSecret = defaultConfig.ClientSecret
@@ -146,8 +146,8 @@ func main() {
 	log.Println("OAuth test completed successfully!")
 }
 
-func printDemoInfo(providerType oauth2.ProviderType, port int) {
-	providerConfig, ok := oauth2.DefaultRegistry().Get(providerType)
+func printDemoInfo(providerType oauth.ProviderType, port int) {
+	providerConfig, ok := oauth.DefaultRegistry().Get(providerType)
 	if !ok {
 		log.Fatalf("Provider %s not found", providerType)
 	}
@@ -161,7 +161,7 @@ func printDemoInfo(providerType oauth2.ProviderType, port int) {
 	fmt.Printf("Scopes: %v\n", providerConfig.Scopes)
 
 	oauthMethod := "Standard Authorization Code"
-	if providerConfig.OAuthMethod == oauth2.OAuthMethodPKCE {
+	if providerConfig.OAuthMethod == oauth.OAuthMethodPKCE {
 		oauthMethod = "PKCE (RFC 7636) - Proof Key for Code Exchange"
 	}
 	fmt.Printf("OAuth Method: %s\n", oauthMethod)
@@ -194,7 +194,7 @@ func printDemoInfo(providerType oauth2.ProviderType, port int) {
 
 type ExampleConfig struct {
 	ServerPort    int
-	ProviderType  oauth2.ProviderType
+	ProviderType  oauth.ProviderType
 	UserID        string
 	BaseURL       string
 	ShowFullToken bool
@@ -210,7 +210,7 @@ func RunExample(config *ExampleConfig) error {
 		config.ServerPort = 14890
 	}
 	if config.ProviderType == "" {
-		config.ProviderType = oauth2.ProviderClaudeCode
+		config.ProviderType = oauth.ProviderClaudeCode
 	}
 	if config.UserID == "" {
 		config.UserID = "test-user-manual"
@@ -225,17 +225,17 @@ func RunExample(config *ExampleConfig) error {
 	}
 
 	switch providerConfig.OAuthMethod {
-	case oauth2.OAuthMethodDeviceCode, oauth2.OAuthMethodDeviceCodePKCE:
+	case oauth.OAuthMethodDeviceCode, oauth.OAuthMethodDeviceCodePKCE:
 		return runDeviceCodeFlow(config, registry, providerConfig)
 	default:
 		return runAuthCodeFlow(config, registry, providerConfig)
 	}
 }
 
-func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderConfig, error) {
-	registry := oauth2.NewRegistry()
+func setupProvider(config *ExampleConfig) (*oauth.Registry, *oauth.ProviderConfig, error) {
+	registry := oauth.NewRegistry()
 
-	defaultConfig, ok := oauth2.DefaultRegistry().Get(config.ProviderType)
+	defaultConfig, ok := oauth.DefaultRegistry().Get(config.ProviderType)
 	if !ok {
 		return nil, nil, fmt.Errorf("provider %s not found in defaults", config.ProviderType)
 	}
@@ -255,7 +255,7 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 		log.Printf("[OAuth] PKCE/public client detected, using empty client_secret")
 	}
 
-	providerConfig := &oauth2.ProviderConfig{
+	providerConfig := &oauth.ProviderConfig{
 		Type:               defaultConfig.Type,
 		DisplayName:        defaultConfig.DisplayName,
 		ClientID:           config.ClientID,
@@ -282,24 +282,24 @@ func setupProvider(config *ExampleConfig) (*oauth2.Registry, *oauth2.ProviderCon
 
 // shouldSkipClientSecret determines if a provider should skip client_secret generation
 // Returns true for PKCE public clients and AuthStyleInNone clients
-func shouldSkipClientSecret(config *oauth2.ProviderConfig) bool {
+func shouldSkipClientSecret(config *oauth.ProviderConfig) bool {
 	// PKCE clients (standard and device code) don't need client_secret
-	if config.OAuthMethod == oauth2.OAuthMethodPKCE ||
-		config.OAuthMethod == oauth2.OAuthMethodDeviceCode ||
-		config.OAuthMethod == oauth2.OAuthMethodDeviceCodePKCE {
+	if config.OAuthMethod == oauth.OAuthMethodPKCE ||
+		config.OAuthMethod == oauth.OAuthMethodDeviceCode ||
+		config.OAuthMethod == oauth.OAuthMethodDeviceCodePKCE {
 		return true
 	}
 	// Public clients with AuthStyleInNone don't need client_secret
-	if config.AuthStyle == oauth2.AuthStyleInNone {
+	if config.AuthStyle == oauth.AuthStyleInNone {
 		return true
 	}
 	return false
 }
 
-func newOAuthConfig(baseURL string) *oauth2.Config {
-	cfg := oauth2.DefaultConfig()
+func newOAuthConfig(baseURL string) *oauth.Config {
+	cfg := oauth.DefaultConfig()
 	cfg.BaseURL = baseURL
-	cfg.ProviderConfigs = make(map[oauth2.ProviderType]*oauth2.ProviderConfig)
+	cfg.ProviderConfigs = make(map[oauth.ProviderType]*oauth.ProviderConfig)
 	return cfg
 }
 
@@ -309,9 +309,9 @@ func newSignalChan() chan os.Signal {
 	return sigChan
 }
 
-func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
+func runAuthCodeFlow(config *ExampleConfig, registry *oauth.Registry, providerConfig *oauth.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 	manager.Debug = true
 
 	resultChan := make(chan *CallbackResult, 1)
@@ -423,9 +423,9 @@ func runAuthCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerC
 	}
 }
 
-func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, providerConfig *oauth2.ProviderConfig) error {
+func runDeviceCodeFlow(config *ExampleConfig, registry *oauth.Registry, providerConfig *oauth.ProviderConfig) error {
 	oauthConfig := newOAuthConfig(config.BaseURL)
-	manager := oauth2.NewManager(oauthConfig, registry)
+	manager := oauth.NewManager(oauthConfig, registry)
 	manager.Debug = true
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
@@ -456,11 +456,11 @@ func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, provide
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Duration(data.ExpiresIn)*time.Second)
 	defer cancel()
 
-	tokenChan := make(chan *oauth2.Token, 1)
+	tokenChan := make(chan *oauth.Token, 1)
 	errorChan := make(chan error, 1)
 
 	go func() {
-		token, err := manager.PollForToken(timeoutCtx, data, func(t *oauth2.Token) {
+		token, err := manager.PollForToken(timeoutCtx, data, func(t *oauth.Token) {
 			fmt.Println("\n\n>>> Authentication completed! Token received.")
 		})
 		if err != nil {
@@ -484,12 +484,12 @@ func runDeviceCodeFlow(config *ExampleConfig, registry *oauth2.Registry, provide
 	}
 }
 
-func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Config, providerType oauth2.ProviderType, showFullToken bool) {
+func printTokenResult(token *oauth.Token, userID string, oauthConfig *oauth.Config, providerType oauth.ProviderType, showFullToken bool) {
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("OAUTH SUCCESSFUL")
 	fmt.Println(strings.Repeat("=", 80))
 
-	displayToken := oauth2.Token{
+	displayToken := oauth.Token{
 		TokenType:   token.TokenType,
 		ExpiresIn:   token.Expiry.UTC().Unix(),
 		ResourceURL: token.ResourceURL,
@@ -552,7 +552,7 @@ func printTokenResult(token *oauth2.Token, userID string, oauthConfig *oauth2.Co
 }
 
 type CallbackResult struct {
-	Token      *oauth2.Token
+	Token      *oauth.Token
 	RedirectTo string
 }
 

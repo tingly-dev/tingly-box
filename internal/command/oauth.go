@@ -16,10 +16,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
+	oauth2 "github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // OAuthCommand returns the oauth command group
@@ -190,7 +190,7 @@ func runAddFlow(appConfig *config.AppConfig, config *ProviderOAuthConfig, custom
 	ctx := context.Background()
 
 	// Create OAuth manager
-	oauthConfig := oauth.DefaultConfig()
+	oauthConfig := oauth2.DefaultConfig()
 	oauthConfig.BaseURL = fmt.Sprintf("http://localhost:%d", callbackPort)
 
 	// Set proxy if provided
@@ -202,7 +202,7 @@ func runAddFlow(appConfig *config.AppConfig, config *ProviderOAuthConfig, custom
 		oauthConfig.ProxyURL = proxy
 	}
 
-	manager := oauth.NewManager(oauthConfig, oauth.DefaultRegistry())
+	manager := oauth2.NewManager(oauthConfig, oauth2.DefaultRegistry())
 
 	// Determine provider name
 	providerName := customName
@@ -225,8 +225,8 @@ func runAddFlow(appConfig *config.AppConfig, config *ProviderOAuthConfig, custom
 }
 
 // runDeviceCodeFlow handles device code flow (e.g., qwen_code)
-func runDeviceCodeFlow(ctx context.Context, manager *oauth.Manager, appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string) error {
-	providerType := oauth.ProviderType(config.Type)
+func runDeviceCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string) error {
+	providerType := oauth2.ProviderType(config.Type)
 
 	// Initiate device code flow
 	fmt.Println("\n📱 Initiating Device Code Flow...")
@@ -251,7 +251,7 @@ func runDeviceCodeFlow(ctx context.Context, manager *oauth.Manager, appConfig *c
 	fmt.Println("\n⏳ Waiting for authentication to complete...")
 
 	// Poll for token with callback
-	callback := func(token *oauth.Token) {
+	callback := func(token *oauth2.Token) {
 		fmt.Println("\n✅ Authentication successful!")
 	}
 
@@ -265,11 +265,11 @@ func runDeviceCodeFlow(ctx context.Context, manager *oauth.Manager, appConfig *c
 }
 
 // runAuthCodeFlow handles authorization code flow with PKCE
-func runAuthCodeFlow(ctx context.Context, manager *oauth.Manager, appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string, callbackPort int) error {
-	providerType := oauth.ProviderType(config.Type)
+func runAuthCodeFlow(ctx context.Context, manager *oauth2.Manager, appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string, callbackPort int) error {
+	providerType := oauth2.ProviderType(config.Type)
 
 	// Create callback server
-	callbackChan := make(chan *oauth.Token, 1)
+	callbackChan := make(chan *oauth2.Token, 1)
 	errorChan := make(chan error, 1)
 
 	callbackHandler := func(w http.ResponseWriter, r *http.Request) {
@@ -306,7 +306,7 @@ func runAuthCodeFlow(ctx context.Context, manager *oauth.Manager, appConfig *con
 </html>`)
 	}
 
-	callbackServer := oauth.NewCallbackServer(callbackHandler)
+	callbackServer := oauth2.NewCallbackServer(callbackHandler)
 
 	// Start callback server
 	fmt.Printf("\n🌐 Starting callback server on port %d...\n", callbackPort)
@@ -358,7 +358,7 @@ func runAuthCodeFlow(ctx context.Context, manager *oauth.Manager, appConfig *con
 }
 
 // createProviderFromToken creates and saves a provider from OAuth token
-func createProviderFromToken(appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string, token *oauth.Token) error {
+func createProviderFromToken(appConfig *config.AppConfig, config *ProviderOAuthConfig, providerName string, token *oauth2.Token) error {
 	// Determine API style
 	var apiStyle protocol.APIStyle = protocol.APIStyleOpenAI
 	if config.APIStyle == "anthropic" {
@@ -463,16 +463,16 @@ func printProviderJSONL(provider *typ.Provider) {
 
 // supportedProviders returns the list of supported OAuth providers from registry
 func supportedProviders() []ProviderInfo {
-	registry := oauth.DefaultRegistry()
+	registry := oauth2.DefaultRegistry()
 	infoList := registry.GetProviderInfo()
 
 	// Providers to exclude (testing, internal, etc.)
-	excludedProviders := map[oauth.ProviderType]bool{
-		oauth.ProviderMock:   true,
-		oauth.ProviderIFlow:  true,
-		oauth.ProviderOpenAI: true, // Requires custom client ID
-		oauth.ProviderGoogle: true, // Requires custom client ID
-		oauth.ProviderGitHub: true, // Requires custom client ID
+	excludedProviders := map[oauth2.ProviderType]bool{
+		oauth2.ProviderMock:   true,
+		oauth2.ProviderIFlow:  true,
+		oauth2.ProviderOpenAI: true, // Requires custom client ID
+		oauth2.ProviderGoogle: true, // Requires custom client ID
+		oauth2.ProviderGitHub: true, // Requires custom client ID
 	}
 
 	result := make([]ProviderInfo, 0, len(infoList))
@@ -493,9 +493,9 @@ func supportedProviders() []ProviderInfo {
 		var description string
 		if providerCfg != nil {
 			switch providerCfg.OAuthMethod {
-			case oauth.OAuthMethodDeviceCode, oauth.OAuthMethodDeviceCodePKCE:
+			case oauth2.OAuthMethodDeviceCode, oauth2.OAuthMethodDeviceCodePKCE:
 				description = "Device Code flow - requires manual code entry"
-			case oauth.OAuthMethodPKCE:
+			case oauth2.OAuthMethodPKCE:
 				description = "PKCE flow"
 			default:
 				description = "Authorization Code flow"
@@ -526,14 +526,14 @@ type ProviderInfo struct {
 
 // isProviderSupported checks if a provider is supported
 func isProviderSupported(providerType string) bool {
-	registry := oauth.DefaultRegistry()
-	return registry.IsRegistered(oauth.ProviderType(providerType))
+	registry := oauth2.DefaultRegistry()
+	return registry.IsRegistered(oauth2.ProviderType(providerType))
 }
 
 // getProviderConfig returns OAuth configuration for a provider from registry
 func getProviderConfig(providerType string) (*ProviderOAuthConfig, error) {
-	registry := oauth.DefaultRegistry()
-	providerCfg, ok := registry.Get(oauth.ProviderType(providerType))
+	registry := oauth2.DefaultRegistry()
+	providerCfg, ok := registry.Get(oauth2.ProviderType(providerType))
 	if !ok {
 		return nil, fmt.Errorf("unsupported provider: %s", providerType)
 	}
@@ -541,9 +541,9 @@ func getProviderConfig(providerType string) (*ProviderOAuthConfig, error) {
 	// Map OAuth method to string
 	var oauthMethod string
 	switch providerCfg.OAuthMethod {
-	case oauth.OAuthMethodDeviceCode, oauth.OAuthMethodDeviceCodePKCE:
+	case oauth2.OAuthMethodDeviceCode, oauth2.OAuthMethodDeviceCodePKCE:
 		oauthMethod = "device_code"
-	case oauth.OAuthMethodPKCE:
+	case oauth2.OAuthMethodPKCE:
 		oauthMethod = "pkce"
 	default:
 		oauthMethod = "pkce"
@@ -556,17 +556,17 @@ func getProviderConfig(providerType string) (*ProviderOAuthConfig, error) {
 
 	// Map provider type to API base and style
 	var apiBase string
-	switch oauth.ProviderType(providerType) {
-	case oauth.ProviderClaudeCode:
+	switch oauth2.ProviderType(providerType) {
+	case oauth2.ProviderClaudeCode:
 		apiBase = "https://api.anthropic.com/v1"
 		apiStyle = "anthropic"
-	case oauth.ProviderQwenCode:
+	case oauth2.ProviderQwenCode:
 		apiBase = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 		apiStyle = "openai"
-	case oauth.ProviderCodex:
+	case oauth2.ProviderCodex:
 		apiBase = "https://api.openai.com/v1"
 		apiStyle = "openai"
-	case oauth.ProviderAntigravity:
+	case oauth2.ProviderAntigravity:
 		apiBase = "https://api.antigravity.com/v1"
 		apiStyle = "openai"
 	default:

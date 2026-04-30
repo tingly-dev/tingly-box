@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"golang.org/x/net/proxy"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/pkg/oauth"
 )
 
 // HookFunc is a function that can modify the request before it's sent
