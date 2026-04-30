@@ -871,8 +871,16 @@ const ProviderFormDialog = ({
                         variant="outlined"
                         color="warning"
                         size="small"
-                        disabled={!hasAnyProtocol}
-                        onClick={() => onForceAdd?.()}
+                        disabled={!hasAnyProtocol || verifying}
+                        onClick={async () => {
+                            // Make sure any free-form text in the provider input is committed
+                            if (!selectedProvider && data.apiBase !== providerInputValue) {
+                                onChangeRef.current('apiBase', providerInputValue);
+                                onChangeRef.current('providerBaseUrls', undefined);
+                            }
+                            onClose();
+                            await onForceAdd?.();
+                        }}
                         title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
                         sx={{
                             '&.Mui-disabled': {

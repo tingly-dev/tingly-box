@@ -7,6 +7,11 @@ import {
     Button,
     Card,
     CardContent,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
     Stack,
     Snackbar,
     Tab,
@@ -47,6 +52,7 @@ const Onboarding: React.FC = () => {
         message: '',
         severity: 'info',
     });
+    const [successDialogOpen, setSuccessDialogOpen] = useState(false);
 
     const showMessage = (message: string, severity: 'success' | 'error' | 'info' = 'info') => {
         setSnackbar({open: true, message, severity});
@@ -75,10 +81,8 @@ const Onboarding: React.FC = () => {
         };
         const result = await api.addProvider(payload, force);
         if (result?.success) {
-            showMessage('Provider added', 'success');
             setDialogOpen(false);
-            const target = formData.apiStyle === 'anthropic' ? '/agent/anthropic' : '/agent/openai';
-            navigate(target, {replace: true});
+            setSuccessDialogOpen(true);
         } else {
             showMessage(`Failed to add provider: ${result?.error || 'unknown error'}`, 'error');
         }
@@ -91,6 +95,16 @@ const Onboarding: React.FC = () => {
 
     const handleForceAdd = async () => {
         await submitProvider(true);
+    };
+
+    const handleGoToAgents = () => {
+        setSuccessDialogOpen(false);
+        navigate('/agent');
+    };
+
+    const handleStayOnOnboarding = () => {
+        setSuccessDialogOpen(false);
+        showMessage(t('onboarding.success', {defaultValue: 'Provider added successfully! You can now create scenarios.'}), 'success');
     };
 
     return (
@@ -148,6 +162,30 @@ const Onboarding: React.FC = () => {
                 mode="add"
                 isFirstProvider
             />
+
+            <Dialog
+                open={successDialogOpen}
+                onClose={() => setSuccessDialogOpen(false)}
+                aria-labelledby="success-dialog-title"
+                aria-describedby="success-dialog-description"
+            >
+                <DialogTitle id="success-dialog-title">
+                    {t('onboarding.dialog.title', {defaultValue: 'Provider Added'})}
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="success-dialog-description">
+                        {t('onboarding.dialog.message', {defaultValue: 'Your AI provider has been added successfully. Would you like to go to the agents page to start using it?'})}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleStayOnOnboarding}>
+                        {t('onboarding.dialog.stay', {defaultValue: 'Stay Here'})}
+                    </Button>
+                    <Button onClick={handleGoToAgents} variant="contained" autoFocus>
+                        {t('onboarding.dialog.goToAgents', {defaultValue: 'Go to Agents'})}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             <Snackbar
                 open={snackbar.open}
