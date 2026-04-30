@@ -168,6 +168,13 @@ type ChatStoreJSON struct {
 	store *jsonstore.Store[Chat]
 }
 
+func (s *ChatStoreJSON) ensureStore() error {
+	if s == nil || s.store == nil {
+		return fmt.Errorf("chat store is not initialized")
+	}
+	return nil
+}
+
 // NewChatStoreJSON creates a new JSON-based chat store
 func NewChatStoreJSON(filePath string) (*ChatStoreJSON, error) {
 	if filePath == "" {
@@ -200,8 +207,8 @@ func (s *ChatStoreJSON) GetChat(chatID string) (*Chat, error) {
 
 // GetOrCreateChat gets a chat or creates it if not exists
 func (s *ChatStoreJSON) GetOrCreateChat(chatID, platform string) (*Chat, error) {
-	if s == nil || s.store == nil {
-		return nil, fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return nil, err
 	}
 
 	if chat := s.store.Get(chatID); chat != nil {
@@ -226,8 +233,8 @@ func (s *ChatStoreJSON) GetOrCreateChat(chatID, platform string) (*Chat, error) 
 
 // UpsertChat creates or updates a chat
 func (s *ChatStoreJSON) UpsertChat(chat *Chat) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return err
 	}
 	if chat == nil || chat.ChatID == "" {
 		return fmt.Errorf("chat_id is required")
@@ -258,8 +265,8 @@ func (s *ChatStoreJSON) UpsertChat(chat *Chat) error {
 
 // UpdateChat updates specific fields of a chat
 func (s *ChatStoreJSON) UpdateChat(chatID string, fn func(*Chat)) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return err
 	}
 	if fn == nil {
 		return fmt.Errorf("update function is required")
@@ -297,30 +304,20 @@ func (s *ChatStoreJSON) UpdateChat(chatID string, fn func(*Chat)) error {
 
 // BindProject binds a project to a chat (creates chat if not exists)
 func (s *ChatStoreJSON) BindProject(chatID, platform, projectPath, ownerID string) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return err
 	}
 
-	chat := s.store.Get(chatID)
-	if chat == nil {
-		// Create new chat
-		now := time.Now().UTC()
-		chat = &Chat{
-			ChatID:      chatID,
-			Platform:    platform,
-			ProjectPath: projectPath,
-			OwnerID:     ownerID,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		}
-		return s.UpsertChat(chat)
+	chat, err := s.GetOrCreateChat(chatID, platform)
+	if err != nil {
+		return err
 	}
+
 	// Update existing chat
 	chat.Platform = platform
 	chat.ProjectPath = projectPath
 	chat.OwnerID = ownerID
-	chat.UpdatedAt = time.Now().UTC()
-	return s.store.Set(chatID, chat)
+	return s.UpsertChat(chat)
 }
 
 // GetProjectPath retrieves the project path for a chat
@@ -491,8 +488,8 @@ func (s *ChatStoreJSON) ListWhitelistedGroups() ([]struct {
 
 // SetPaired marks the given chat as paired with botUUID/senderID.
 func (s *ChatStoreJSON) SetPaired(chatID, platform, botUUID, senderID string) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return err
 	}
 	if chatID == "" || botUUID == "" {
 		return fmt.Errorf("chat_id and bot_uuid are required")
@@ -515,8 +512,8 @@ func (s *ChatStoreJSON) SetPaired(chatID, platform, botUUID, senderID string) er
 
 // ClearPaired removes any pairing recorded on the chat.
 func (s *ChatStoreJSON) ClearPaired(chatID string) error {
-	if s == nil || s.store == nil {
-		return fmt.Errorf("chat store is not initialized")
+	if err := s.ensureStore(); err != nil {
+		return err
 	}
 	return s.UpdateChat(chatID, func(chat *Chat) {
 		chat.IsPaired = false
