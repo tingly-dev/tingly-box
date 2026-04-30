@@ -824,7 +824,8 @@ export default {
     },
     "browse": {
       "searchPlaceholder": "Search providers",
-      "empty": "No providers match your search."
+      "empty": "No providers match your search.",
+      "selectProvider": "Select this provider"
     },
     "paste": {
       "detectButton": "Detect",
@@ -836,6 +837,9 @@ export default {
       "noURL": "No URLs detected.",
       "noToken": "No tokens detected.",
       "useSelected": "Use selected"
-    }
+    },
+    "quickLinks": "Quick Links",
+    "goToDashboard": "Dashboard",
+    "goToHelp": "Help & Docs"
   }
 };

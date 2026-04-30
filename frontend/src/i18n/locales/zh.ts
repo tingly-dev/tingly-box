@@ -824,7 +824,8 @@ export default {
     },
     "browse": {
       "searchPlaceholder": "搜索提供商",
-      "empty": "没有匹配的提供商。"
+      "empty": "没有匹配的提供商。",
+      "selectProvider": "选择此提供商"
     },
     "paste": {
       "detectButton": "识别",
@@ -836,6 +837,9 @@ export default {
       "noURL": "未识别到 URL。",
       "noToken": "未识别到 Token。",
       "useSelected": "使用所选"
-    }
+    },
+    "quickLinks": "快速链接",
+    "goToDashboard": "控制台",
+    "goToHelp": "帮助与文档"
   }
 };

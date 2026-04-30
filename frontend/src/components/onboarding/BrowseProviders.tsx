@@ -5,12 +5,15 @@ import {
     Card,
     CardActionArea,
     Chip,
+    IconButton,
     InputAdornment,
     Stack,
     TextField,
     Typography,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import LanguageIcon from '@mui/icons-material/Language';
+import DescriptionIcon from '@mui/icons-material/Description';
 import ProviderIcon from '@/components/ProviderIcon';
 import {useProviderTemplates, type UniqueProvider} from '@/services/serviceProviders';
 import type {EnhancedProviderFormData} from '@/components/ProviderFormDialog';
@@ -93,35 +96,63 @@ const BrowseProviders: React.FC<BrowseProvidersProps> = ({onPick}) => {
                 >
                     {filtered.map(p => (
                         <Card key={p.id} variant="outlined" sx={{borderRadius: 2}}>
-                            <CardActionArea onClick={() => handlePick(p)} sx={{p: 1.5, height: '100%'}}>
-                                <Stack direction="row" spacing={1.5} alignItems="center">
-                                    <ProviderIcon identifier={p.icon || p.id} size={28}/>
-                                    <Box sx={{minWidth: 0}}>
-                                        <Typography
-                                            variant="subtitle2"
-                                            fontWeight={600}
-                                            noWrap
-                                            title={p.alias || p.name}
-                                        >
-                                            {p.alias || p.name}
-                                        </Typography>
-                                        <Stack direction="row" spacing={0.5} sx={{mt: 0.5}}>
-                                            {p.supportsOpenAI && (
-                                                <Chip
-                                                    label="OpenAI"
-                                                    size="small"
-                                                    sx={{height: 18, fontSize: '0.65rem'}}
-                                                />
-                                            )}
-                                            {p.supportsAnthropic && (
-                                                <Chip
-                                                    label="Anthropic"
-                                                    size="small"
-                                                    sx={{height: 18, fontSize: '0.65rem'}}
-                                                />
-                                            )}
-                                        </Stack>
-                                    </Box>
+                            <CardActionArea onClick={() => handlePick(p)} sx={{p: 1.5}}>
+                                <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" width="100%">
+                                    <Stack direction="row" spacing={1.5} alignItems="center">
+                                        <ProviderIcon identifier={p.icon || p.id} size={32}/>
+                                        <Box>
+                                            <Typography
+                                                variant="subtitle2"
+                                                fontWeight={600}
+                                                noWrap
+                                                title={p.alias || p.name}
+                                            >
+                                                {p.alias || p.name}
+                                            </Typography>
+                                            <Stack direction="row" spacing={0.5} sx={{mt: 0.5}}>
+                                                {p.supportsOpenAI && (
+                                                    <Chip
+                                                        label="OpenAI"
+                                                        size="small"
+                                                        sx={{height: 18, fontSize: '0.65rem'}}
+                                                    />
+                                                )}
+                                                {p.supportsAnthropic && (
+                                                    <Chip
+                                                        label="Anthropic"
+                                                        size="small"
+                                                        sx={{height: 18, fontSize: '0.65rem'}}
+                                                    />
+                                                )}
+                                            </Stack>
+                                        </Box>
+                                    </Stack>
+                                    <Stack direction="row" spacing={0.3}>
+                                        {p.website && (
+                                            <IconButton
+                                                size="small"
+                                                href={p.website}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                title="Official Website"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <LanguageIcon fontSize="small" />
+                                            </IconButton>
+                                        )}
+                                        {p.apiDoc && (
+                                            <IconButton
+                                                size="small"
+                                                href={p.apiDoc}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                title="API Documentation"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <DescriptionIcon fontSize="small" />
+                                            </IconButton>
+                                        )}
+                                    </Stack>
                                 </Stack>
                             </CardActionArea>
                         </Card>

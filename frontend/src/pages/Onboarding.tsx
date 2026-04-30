@@ -1,14 +1,22 @@
 import {useState} from 'react';
-import {useNavigate} from 'react-router-dom';
+import {Link, useNavigate} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {
     Alert,
     Box,
+    Button,
+    Card,
+    CardContent,
+    Stack,
     Snackbar,
     Tab,
     Tabs,
     Typography,
 } from '@mui/material';
+import {
+    Home as HomeIcon,
+    Help as HelpIcon,
+} from '@mui/icons-material';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import ProviderFormDialog, {type EnhancedProviderFormData} from '@/components/ProviderFormDialog';
