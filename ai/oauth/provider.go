@@ -13,7 +13,7 @@ func DefaultRegistry() *Registry {
 	// TokenURL verified: https://api.anthropic.com/v1/oauth/token (not console.anthropic.com)
 	// PKCE is required: code_verifier must be included in token request
 	registry.Register(&ProviderConfig{
-		Type:               ProviderClaudeCode,
+		Type:               ai.IssuerClaudeCode,
 		DisplayName:        "Anthropic Claude Code",
 		ClientID:           "9d1c250a-e61b-44d9-88ed-5944d1962f5e", // Public client ID for Claude Code
 		ClientSecret:       "",                                     // No secret required for public client
@@ -30,7 +30,7 @@ func DefaultRegistry() *Registry {
 
 	// OpenAI OAuth
 	registry.Register(&ProviderConfig{
-		Type:         ProviderOpenAI,
+		Type:         ai.IssuerOpenAI,
 		DisplayName:  "OpenAI",
 		ClientID:     "", // Must be configured
 		ClientSecret: "",
@@ -44,7 +44,7 @@ func DefaultRegistry() *Registry {
 
 	// TODO: Google OAuth (for Gemini/Vertex AI)
 	registry.Register(&ProviderConfig{
-		Type:         ProviderGoogle,
+		Type:         ai.IssuerGoogle,
 		DisplayName:  "Google",
 		ClientID:     "", // Must be configured
 		ClientSecret: "",
@@ -59,7 +59,7 @@ func DefaultRegistry() *Registry {
 	// Gemini CLI OAuth (Google OAuth with Gemini CLI's built-in credentials)
 	// Based on: https://github.com/google-gemini/gemini-cli
 	registry.Register(&ProviderConfig{
-		Type:         ProviderGemini,
+		Type:         ai.IssuerGemini,
 		DisplayName:  "Gemini CLI",
 		ClientID:     "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
 		ClientSecret: "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",
@@ -80,7 +80,7 @@ func DefaultRegistry() *Registry {
 	// Note: You need to create your own OAuth app at https://github.com/settings/developers
 	// This is a demo configuration for testing the authorize URL
 	registry.Register(&ProviderConfig{
-		Type:         ProviderGitHub,
+		Type:         ai.IssuerGitHub,
 		DisplayName:  "GitHub",
 		ClientID:     "demo-github-client-id", // Replace with your own OAuth app's Client ID
 		ClientSecret: "",                      // No secret required for demo
@@ -95,7 +95,7 @@ func DefaultRegistry() *Registry {
 	// Antigravity OAuth (Google OAuth with Antigravity credentials)
 	// Scopes include cloud-platform, userinfo, and additional Google services
 	registry.Register(&ProviderConfig{
-		Type:         ProviderAntigravity,
+		Type:         ai.IssuerAntigravity,
 		DisplayName:  "Antigravity",
 		ClientID:     "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
 		ClientSecret: "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",
@@ -117,7 +117,7 @@ func DefaultRegistry() *Registry {
 	// Mock OAuth provider for testing
 	// Uses https://oauth-mock.mock.beeceptor.com for testing OAuth flow
 	registry.Register(&ProviderConfig{
-		Type:         ProviderMock,
+		Type:         ai.IssuerMock,
 		DisplayName:  "Mock OAuth (Testing)",
 		ClientID:     "mock-client-id",
 		ClientSecret: "mock-client-secret",
@@ -133,7 +133,7 @@ func DefaultRegistry() *Registry {
 	// https://chat.qwen.ai/
 	// Uses device code flow with PKCE for authentication (RFC 8628 + RFC 7636)
 	registry.Register(&ProviderConfig{
-		Type:               ProviderQwenCode,
+		Type:               ai.IssuerQwenCode,
 		GrantType:          "urn:ietf:params:oauth:grant-type:device_code",
 		DisplayName:        "Qwen",
 		ClientID:           "f0304373b74a44d2b584a3fb70ca9e56",
@@ -153,7 +153,7 @@ func DefaultRegistry() *Registry {
 	// Uses custom OAuth with phone-based login and Basic Auth for token requests
 	// Reference: https://github.com/router-for-me/CLIProxyAPI
 	registry.Register(&ProviderConfig{
-		Type:         ProviderIFlow,
+		Type:         ai.IssuerIFlow,
 		DisplayName:  "iFlow",
 		ClientID:     "10009311001",
 		ClientSecret: "4Z3YjXycVsQvyGF1etiNlIBB4RsqSDtW",
@@ -174,7 +174,7 @@ func DefaultRegistry() *Registry {
 	// Reference: https://github.com/openai/openai-cli
 	// Emulates Codex CLI to use their client ID - requires callback on port 1455
 	registry.Register(&ProviderConfig{
-		Type:               ProviderCodex,
+		Type:               ai.IssuerCodex,
 		DisplayName:        "Codex",
 		ClientID:           "app_EMoamEEZ73f0CkXaXp7hrann", // OpenAI Codex CLI client ID
 		ClientSecret:       "",                             // Public client, no secret required
@@ -192,7 +192,7 @@ func DefaultRegistry() *Registry {
 	})
 
 	registry.Register(&ProviderConfig{
-		Type:               ProviderKimi,
+		Type:               ai.IssuerKimiCode,
 		DisplayName:        "Kimi CLI",
 		ClientID:           "17e5f671-d194-4dfb-9706-5516cb48c098",
 		ClientSecret:       "", // No ClientSecret for Device Authorization Flow

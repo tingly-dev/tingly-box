@@ -408,9 +408,9 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	// Add client_secret if possible
 
 	switch config.Type {
-	case ProviderCodex:
+	case ai.IssuerCodex:
 		// ignore client secret for codex
-	case ProviderClaudeCode:
+	case ai.IssuerClaudeCode:
 		// require state for claude code
 		params["state"] = state
 		if config.ClientSecret != "" {
@@ -498,7 +498,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 	}
 
 	// For Codex provider, parse ID token to extract user info
-	if config.Type == ProviderCodex && token.IDToken != "" {
+	if config.Type == ai.IssuerCodex && token.IDToken != "" {
 		if claims := parseIDToken(token.IDToken); claims != nil {
 			if token.Metadata == nil {
 				token.Metadata = make(map[string]any)
@@ -515,7 +515,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		} else {
 			logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
 		}
-	} else if config.Type == ProviderCodex {
+	} else if config.Type == ai.IssuerCodex {
 		logrus.Warnf("[OAuth] Codex provider token has no ID token (id_token field is empty)")
 	}
 
@@ -590,7 +590,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 
 	// ref: https://github.com/openai/codex/blob/d807d44a/codex-rs/core/tests/suite/auth_refresh.rs#L35-L94
 	// codex DO NOT require client_secret
-	if providerType != ProviderCodex {
+	if providerType != ai.IssuerCodex {
 		params["client_secret"] = config.ClientSecret
 	}
 
@@ -654,7 +654,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 	}
 
 	// For Codex provider, parse ID token to extract user info
-	if providerType == ProviderCodex && token.IDToken != "" {
+	if providerType == ai.IssuerCodex && token.IDToken != "" {
 		if claims := parseIDToken(token.IDToken); claims != nil {
 			if token.Metadata == nil {
 				token.Metadata = make(map[string]any)

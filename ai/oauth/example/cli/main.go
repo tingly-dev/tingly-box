@@ -211,7 +211,7 @@ func RunExample(config *ExampleConfig) error {
 		config.ServerPort = 14890
 	}
 	if config.ProviderType == "" {
-		config.ProviderType = oauth.ProviderClaudeCode
+		config.ProviderType = ai.IssuerClaudeCode
 	}
 	if config.UserID == "" {
 		config.UserID = "test-user-manual"

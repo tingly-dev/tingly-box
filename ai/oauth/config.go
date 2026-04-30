@@ -12,23 +12,6 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 )
 
-// Deprecated: Use ai.Issuer constants directly
-const (
-	ProviderClaudeCode  = ai.IssuerClaudeCode
-	ProviderOpenAI      = ai.IssuerOpenAI
-	ProviderGoogle      = ai.IssuerGoogle
-	ProviderGemini      = ai.IssuerGemini
-	ProviderGitHub      = ai.IssuerGitHub
-	ProviderQwenCode    = ai.IssuerQwen
-	ProviderAntigravity = ai.IssuerAntigravity
-	ProviderIFlow       = ai.IssuerIFlow
-	ProviderCodex       = ai.IssuerCodex
-	ProviderMock        = ai.IssuerMock
-	ProviderKimi        = ai.IssuerKimi
-	ProviderCursor      = ai.IssuerCursor
-	ProviderCopilot     = ai.IssuerCopilot
-)
-
 // DefaultSessionExpiry is the default expiration time for OAuth sessions
 // This constant is used by both the OAuth manager and session manager
 const DefaultSessionExpiry = 10 * time.Minute
@@ -38,7 +21,7 @@ func ParseProviderType(s string) (ai.Issuer, error) {
 	p := ai.Issuer(s)
 	// Validate by checking against known providers
 	switch p {
-	case ProviderClaudeCode, ProviderOpenAI, ProviderGoogle, ProviderGemini, ProviderGitHub, ProviderQwenCode, ProviderAntigravity, ProviderIFlow, ProviderCodex, ProviderMock, ProviderKimi, ProviderCursor, ProviderCopilot:
+	case ai.IssuerClaudeCode, ai.IssuerOpenAI, ai.IssuerGoogle, ai.IssuerGemini, ai.IssuerGitHub, ai.IssuerQwenCode, ai.IssuerAntigravity, ai.IssuerIFlow, ai.IssuerCodex, ai.IssuerMock, ai.IssuerKimiCode, ai.IssuerCursor, ai.IssuerCopilot:
 		return p, nil
 	default:
 		return "", fmt.Errorf("unknown provider type: %s", s)

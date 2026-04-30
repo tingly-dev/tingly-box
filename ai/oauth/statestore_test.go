@@ -3,6 +3,8 @@ package oauth
 import (
 	"testing"
 	"time"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // TestMemoryStateStorage tests the in-memory state storage implementation
@@ -13,7 +15,7 @@ func TestMemoryStateStorage(t *testing.T) {
 	data := &StateData{
 		State:      state,
 		UserID:     "user123",
-		Provider:   ProviderClaudeCode,
+		Provider:   ai.IssuerClaudeCode,
 		RedirectTo: "http://example.com/callback",
 		Name:       "My Provider",
 		SessionID:  "session-456",
@@ -78,7 +80,7 @@ func TestMemoryStateStorageExpiry(t *testing.T) {
 	data := &StateData{
 		State:    state,
 		UserID:   "user123",
-		Provider: ProviderClaudeCode,
+		Provider: ai.IssuerClaudeCode,
 	}
 
 	// Save with short expiry
@@ -113,7 +115,7 @@ func TestMemoryStateStorageCleanup(t *testing.T) {
 			data: &StateData{
 				State:     "valid-state-1",
 				UserID:    "user1",
-				Provider:  ProviderClaudeCode,
+				Provider:  ai.IssuerClaudeCode,
 				ExpiresAt: now.Add(1 * time.Hour),
 			},
 		},
@@ -122,7 +124,7 @@ func TestMemoryStateStorageCleanup(t *testing.T) {
 			data: &StateData{
 				State:     "expired-state-1",
 				UserID:    "user2",
-				Provider:  ProviderOpenAI,
+				Provider:  ai.IssuerOpenAI,
 				ExpiresAt: now.Add(-1 * time.Hour),
 			},
 		},
@@ -131,7 +133,7 @@ func TestMemoryStateStorageCleanup(t *testing.T) {
 			data: &StateData{
 				State:     "expired-state-2",
 				UserID:    "user3",
-				Provider:  ProviderGemini,
+				Provider:  ai.IssuerGemini,
 				ExpiresAt: now.Add(-1 * time.Minute),
 			},
 		},
