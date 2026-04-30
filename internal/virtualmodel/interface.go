@@ -17,6 +17,9 @@ import (
 // performing type assertions themselves.
 type VirtualModel interface {
 	GetID() string
+	GetName() string
+	GetDescription() string
+	GetType() VirtualModelType
 	SimulatedDelay() time.Duration
 	ToModel() Model
 

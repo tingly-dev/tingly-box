@@ -35,6 +35,12 @@ func NewTransformModel(cfg *TransformModelConfig) *TransformModel {
 
 func (m *TransformModel) GetID() string { return m.cfg.ID }
 
+func (m *TransformModel) GetName() string { return m.cfg.Name }
+
+func (m *TransformModel) GetDescription() string { return m.cfg.Description }
+
+func (m *TransformModel) GetType() VirtualModelType { return VirtualModelTypeProxy }
+
 // SimulatedDelay is always 0 — transform models don't simulate latency.
 func (m *TransformModel) SimulatedDelay() time.Duration { return 0 }
 

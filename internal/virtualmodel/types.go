@@ -1,5 +1,19 @@
 package virtualmodel
 
+// VirtualModelType represents the type/category of a virtual model.
+type VirtualModelType string
+
+const (
+	// VirtualModelTypeStatic represents static mock models that return fixed responses.
+	VirtualModelTypeStatic VirtualModelType = "static"
+
+	// VirtualModelTypeProxy represents proxy/transform models that modify requests before forwarding.
+	VirtualModelTypeProxy VirtualModelType = "proxy"
+
+	// VirtualModelTypeTool represents tool models that return tool_use blocks.
+	VirtualModelTypeTool VirtualModelType = "tool"
+)
+
 // Model represents a virtual model in the models list (OpenAI-compatible format).
 type Model struct {
 	ID      string `json:"id"`
