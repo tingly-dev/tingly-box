@@ -126,11 +126,14 @@ const ProviderFormDialog = ({
         [selectedProvider]
     );
 
-    // Find the matching template only when the dialog opens in edit mode.
-    // Depend on `open` (a stable boolean transition) rather than `data.apiBase`
-    // so that typing in the field doesn't recompute this and re-trigger init.
+    // Find the matching template only when the dialog opens. Depend on
+    // `open` (a stable boolean transition) rather than `data.apiBase` so that
+    // typing in the field doesn't recompute this and re-trigger init.
+    // We resolve in both modes so prefilled add-mode data (e.g. picked from
+    // onboarding) shows the provider in the Autocomplete instead of blank.
     const matchingProvider = useMemo(() => {
-        if (!open || mode !== 'edit') return null;
+        if (!open) return null;
+        if (!data.apiBase) return null;
         return (
             allProviders.find(
                 p =>
@@ -139,7 +142,7 @@ const ProviderFormDialog = ({
             ) || null
         );
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, mode, allProviders]);
+    }, [open, allProviders]);
 
     const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({url}) => {
         if (!url) return null;
@@ -208,8 +211,15 @@ const ProviderFormDialog = ({
                 setProtocolOpenAI(false);
                 setProtocolAnthropic(false);
             }
-            setSelectedProvider(null);
-            setProviderInputValue('');
+            // If the parent prefilled apiBase to a known provider (onboarding
+            // browse / paste-detect), seed the Autocomplete with it so users
+            // see the picked provider rather than a blank field.
+            setSelectedProvider(matchingProvider);
+            setProviderInputValue(
+                matchingProvider
+                    ? matchingProvider.alias || matchingProvider.name
+                    : data.apiBase || ''
+            );
         }
 
         // Restore "use global proxy" checkbox state from localStorage (add mode only)
