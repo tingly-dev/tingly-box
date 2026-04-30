@@ -110,7 +110,10 @@ export default {
     "userRequest": "用户请求",
     "skills": "技能",
     "addProfile": "添加配置文件",
-    "default": "默认"
+    "default": "默认",
+    "onboarding": "快速添加提供商",
+    "onboardingHint": "浏览或粘贴配置",
+    "onboardingShort": "入门"
   },
   "health": {
     "connected": "已连接",
@@ -810,5 +813,33 @@ export default {
       "savedError": "保存 MCP 配置失败"
     },
     "currentConfig": "当前配置"
+  },
+  "onboarding": {
+    "title": "欢迎使用 Tingly Box",
+    "subtitle": "添加你的第一个 AI 提供商。可以从清单里挑一个，也可以粘贴一段配置文本让系统自动识别。",
+    "hint": "识别完全在本地完成，粘贴的内容不会发送到任何第三方。",
+    "tab": {
+      "browse": "浏览提供商",
+      "paste": "粘贴并识别"
+    },
+    "browse": {
+      "searchPlaceholder": "搜索提供商",
+      "empty": "没有匹配的提供商。",
+      "selectProvider": "选择此提供商"
+    },
+    "paste": {
+      "detectButton": "识别",
+      "manualFill": "手动填写",
+      "noMatch": "没有识别到 URL 或 API Key，可以手动填写。",
+      "pickHint": "选择想用的 URL 和 Token，然后点击「使用所选」。",
+      "urlsTitle": "识别到的 URL",
+      "tokensTitle": "识别到的 Token",
+      "noURL": "未识别到 URL。",
+      "noToken": "未识别到 Token。",
+      "useSelected": "使用所选"
+    },
+    "quickLinks": "快速链接",
+    "goToDashboard": "控制台",
+    "goToHelp": "帮助与文档"
   }
 };

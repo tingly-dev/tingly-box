@@ -110,7 +110,10 @@ export default {
     "userRequest": "User Request",
     "skills": "Skills",
     "addProfile": "Add Profile",
-    "default": "default"
+    "default": "default",
+    "onboarding": "Quick Add Provider",
+    "onboardingHint": "Browse or paste config",
+    "onboardingShort": "Onboard"
   },
   "health": {
     "connected": "Connected",
@@ -810,5 +813,33 @@ export default {
       "savedError": "Failed to save MCP configuration"
     },
     "currentConfig": "Current Configuration"
+  },
+  "onboarding": {
+    "title": "Welcome to Tingly Box",
+    "subtitle": "Add your first AI provider to get started. Browse the catalog or paste a config snippet — we’ll figure out the rest.",
+    "hint": "Detection runs locally in the box; pasted text is not sent to any third party.",
+    "tab": {
+      "browse": "Browse providers",
+      "paste": "Paste & detect"
+    },
+    "browse": {
+      "searchPlaceholder": "Search providers",
+      "empty": "No providers match your search.",
+      "selectProvider": "Select this provider"
+    },
+    "paste": {
+      "detectButton": "Detect",
+      "manualFill": "Fill in manually",
+      "noMatch": "No URL or API key detected. You can fill in the form manually.",
+      "pickHint": "Pick the URL and the token you want to use, then click \"Use selected\".",
+      "urlsTitle": "Detected URLs",
+      "tokensTitle": "Detected tokens",
+      "noURL": "No URLs detected.",
+      "noToken": "No tokens detected.",
+      "useSelected": "Use selected"
+    },
+    "quickLinks": "Quick Links",
+    "goToDashboard": "Dashboard",
+    "goToHelp": "Help & Docs"
   }
 };

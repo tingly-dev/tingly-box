@@ -126,20 +126,22 @@ const ProviderFormDialog = ({
         [selectedProvider]
     );
 
-    // Find the matching template only when the dialog opens in edit mode.
-    // Depend on `open` (a stable boolean transition) rather than `data.apiBase`
-    // so that typing in the field doesn't recompute this and re-trigger init.
+    // Find the matching template only when the dialog opens. Depend on
+    // `open` (a stable boolean transition) rather than `data.apiBase` so that
+    // typing in the field doesn't recompute this and re-trigger init.
+    // We resolve in both modes so prefilled add-mode data (e.g. picked from
+    // onboarding) shows the provider in the Autocomplete instead of blank.
     const matchingProvider = useMemo(() => {
-        if (!open || mode !== 'edit') return null;
+        if (!open) return null;
+        if (!data.apiBase) return null;
+        // Match by apiBase alone - this handles onboarding prefills where apiStyle is undefined
         return (
             allProviders.find(
-                p =>
-                    (p.baseUrlOpenAI === data.apiBase && data.apiStyle === 'openai') ||
-                    (p.baseUrlAnthropic === data.apiBase && data.apiStyle === 'anthropic')
+                p => p.baseUrlOpenAI === data.apiBase || p.baseUrlAnthropic === data.apiBase
             ) || null
         );
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, mode, allProviders]);
+    }, [open, allProviders]);
 
     const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({url}) => {
         if (!url) return null;
@@ -204,12 +206,24 @@ const ProviderFormDialog = ({
             } else if (data.apiStyle) {
                 setProtocolOpenAI(data.apiStyle === 'openai');
                 setProtocolAnthropic(data.apiStyle === 'anthropic');
+            } else if (matchingProvider) {
+                // When apiBase matches a known provider (e.g., from onboarding),
+                // auto-select the provider's supported protocols
+                setProtocolOpenAI(!!matchingProvider.baseUrlOpenAI);
+                setProtocolAnthropic(!!matchingProvider.baseUrlAnthropic);
             } else {
                 setProtocolOpenAI(false);
                 setProtocolAnthropic(false);
             }
-            setSelectedProvider(null);
-            setProviderInputValue('');
+            // If the parent prefilled apiBase to a known provider (onboarding
+            // browse / paste-detect), seed the Autocomplete with it so users
+            // see the picked provider rather than a blank field.
+            setSelectedProvider(matchingProvider);
+            setProviderInputValue(
+                matchingProvider
+                    ? matchingProvider.alias || matchingProvider.name
+                    : data.apiBase || ''
+            );
         }
 
         // Restore "use global proxy" checkbox state from localStorage (add mode only)
@@ -857,8 +871,16 @@ const ProviderFormDialog = ({
                         variant="outlined"
                         color="warning"
                         size="small"
-                        disabled={!hasAnyProtocol}
-                        onClick={() => onForceAdd?.()}
+                        disabled={!hasAnyProtocol || verifying}
+                        onClick={async () => {
+                            // Make sure any free-form text in the provider input is committed
+                            if (!selectedProvider && data.apiBase !== providerInputValue) {
+                                onChangeRef.current('apiBase', providerInputValue);
+                                onChangeRef.current('providerBaseUrls', undefined);
+                            }
+                            onClose();
+                            await onForceAdd?.();
+                        }}
                         title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
                         sx={{
                             '&.Mui-disabled': {

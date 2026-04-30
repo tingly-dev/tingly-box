@@ -161,7 +161,19 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
               </Box>
             </Box>
             {subtitle && (
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary',
+                  maxWidth: '800px',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  lineHeight: 1.5,
+                }}
+              >
                 {subtitle}
               </Typography>
             )}

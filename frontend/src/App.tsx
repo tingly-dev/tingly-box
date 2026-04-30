@@ -3,7 +3,7 @@ import { ContentCopy, Error as ErrorIcon, GitHub, AppRegistration as NPM, Refres
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, Paper, Stack, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -19,6 +19,8 @@ import createAppTheme from './theme';
 
 import Login from './pages/Login';
 import Guiding from './pages/Guiding';
+import Onboarding from './pages/Onboarding';
+import { api } from './services/api';
 import APITokensPage from './pages/APITokensPage';
 import UseOpenAIPage from './pages/scenario/UseOpenAIPage';
 import UseAnthropicPage from './pages/scenario/UseAnthropicPage';
@@ -269,6 +271,43 @@ const AppDialogs = () => {
     );
 };
 
+// OnboardingGate decides where a freshly-authenticated user lands. Brand-new
+// installs (no provider configured) get sent to /onboarding; everyone else
+// returns to the last visited activity, with the existing /agent/claude_code
+// fallback. We hit /api/v2/providers once on mount; while in flight we render
+// nothing to avoid a flash of the default agent page.
+const OnboardingGate: React.FC = () => {
+    const [target, setTarget] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const result = await api.getProviders();
+                if (cancelled) return;
+                const providers = Array.isArray(result?.data) ? result.data : [];
+                // No providers? Force onboarding, regardless of previous activity
+                if (providers.length === 0) {
+                    setTarget('/onboarding');
+                    // Clear the previous activity path to avoid redirect loops
+                    localStorage.removeItem('layout.activeActivity');
+                    return;
+                }
+            } catch {
+                // Swallow the error and fall through to the default activity —
+                // failing the gate should never lock the user out of the app.
+            }
+            const activeActivity = localStorage.getItem('layout.activeActivity') || 'scenario';
+            const fallback = localStorage.getItem(`layout.activityPath.${activeActivity}`) || '/agent/claude_code';
+            if (!cancelled) setTarget(fallback);
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    if (target === null) return null;
+    return <Navigate to={target} replace />;
+};
+
 function AppContent() {
     const navigate = useNavigate();
 
@@ -296,13 +335,11 @@ function AppContent() {
                         </ProtectedRoute>
                     }
                 >
-                    {/* Default redirect - use layout memory (localStorage), fallback to agent page */}
-                    <Route index element={<Navigate to={
-                        (() => {
-                            const activeActivity = localStorage.getItem('layout.activeActivity') || 'scenario';
-                            return localStorage.getItem(`layout.activityPath.${activeActivity}`) || '/agent/claude_code';
-                        })()
-                    } replace />} />
+                    {/* Default landing: send first-time users (no providers) to onboarding,
+                        everyone else to their last-active activity. */}
+                    <Route index element={<OnboardingGate />} />
+                    {/* Onboarding for new installs */}
+                    <Route path="/onboarding" element={<Onboarding />} />
                     {/* Function panel routes */}
                     <Route path="/agent/openai" element={<UseOpenAIPage />} />
                     <Route path="/agent/anthropic" element={<UseAnthropicPage />} />

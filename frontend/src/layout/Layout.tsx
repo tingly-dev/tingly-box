@@ -59,8 +59,10 @@ const Layout = ({ children }: LayoutProps) => {
             if (item.path && isActive(item.path)) return item.key;
             if (item.children && isChildActive(item.children)) return item.key;
         }
+        // Check if saved activity is still valid
         const saved = sessionStorage.getItem('layout.activeActivity') || localStorage.getItem('layout.activeActivity');
         if (saved && activityItems.some(item => item.key === saved)) return saved;
+        // Fallback to 'scenario' (which is valid - it's the agent activity)
         return 'scenario';
     }, [activityItems, location.pathname]);
 
@@ -186,13 +188,29 @@ const Layout = ({ children }: LayoutProps) => {
         sessionStorage.setItem('layout.activeActivity', item.key);
 
         // Priority: saved path > defaultPath > item.path > first non-divider child
-        const savedPath = sessionStorage.getItem(`layout.activityPath.${item.key}`);
+        // But validate that saved path is still valid (exists in current item's children)
+        const savedPath = sessionStorage.getItem(`layout.activityPath.${item.key}`) || localStorage.getItem(`layout.activityPath.${item.key}`);
         const firstNavChild = item.children?.find(c => c.type !== 'divider');
-        const targetPath =
-            savedPath ||
-            item.defaultPath ||
-            item.path ||
-            firstNavChild?.path;
+
+        // Validate saved path - check if it still exists in this activity's children
+        let targetPath: string | undefined;
+        if (savedPath && item.children) {
+            const isValidPath = item.children.some(c => c.type !== 'divider' && c.path === savedPath);
+            if (isValidPath) {
+                targetPath = savedPath;
+            }
+        }
+
+        // Fall back to default options if saved path is invalid
+        if (!targetPath) {
+            targetPath = item.defaultPath || item.path || firstNavChild?.path;
+        }
+
+        // Ultimate fallback to prevent navigation to invalid paths
+        if (!targetPath && firstNavChild) {
+            targetPath = firstNavChild.path;
+        }
+
         if (targetPath) navigate(targetPath);
     };
 

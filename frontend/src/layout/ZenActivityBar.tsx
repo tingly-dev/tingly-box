@@ -10,6 +10,7 @@ import {
     IconYinYang,
     IconDots,
     IconLanguage,
+    IconWand,
 } from '@tabler/icons-react';
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
@@ -490,6 +491,47 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         </ListItemButton>
                     </Tooltip>
                 )}
+            </Box>
+
+            {/* Onboarding Quick Add Button - above user icon */}
+            <Box
+                sx={{
+                    py: 0.5,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                }}
+            >
+                <Tooltip title={t('layout.onboarding', { defaultValue: 'Quick Add Provider' })} placement="right" arrow>
+                    <ListItemButton
+                        component={RouterLink}
+                        to="/onboarding"
+                        sx={{
+                            minHeight: 48,
+                            mx: 0.5,
+                            px: activityItemPaddingX,
+                            py: 0.75,
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.25,
+                            position: 'relative',
+                            color: 'text.secondary',
+                            borderRadius: activityItemRadius,
+                            cursor: 'pointer',
+                            '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
+                            <IconWand size={22} />
+                        </ListItemIcon>
+                        <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'inherit', textAlign: 'center', lineHeight: 1.1 }}>
+                            {t('layout.onboardingShort', { defaultValue: 'Onboard' })}
+                        </Typography>
+                    </ListItemButton>
+                </Tooltip>
             </Box>
 
             {/* Bottom: User icon */}

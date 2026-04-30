@@ -299,12 +299,17 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
             return null;
         }
 
+        // First-run path: send users to the onboarding flow rather than the
+        // bare provider dialog — they get to browse the catalog or paste a
+        // config snippet for auto-detection.
         return (
             <UnifiedCard size="full" title={title}>
                 <EmptyStateGuide
                     title={"No Providers Configured"}
                     description={"Add an API key provider to start routing requests"}
-                    onAddApiKeyClick={onAddApiKeyClick || handleAddApiKeyClick}
+                    primaryButtonLabel={"Get started"}
+                    showOAuthButton={false}
+                    onAddApiKeyClick={onAddApiKeyClick || (() => navigate('/onboarding'))}
                 />
             </UnifiedCard>
         );

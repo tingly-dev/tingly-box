@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Alert, Box, Button, Container, Paper, Snackbar, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Container, Paper, TextField, Typography } from '@mui/material';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,7 +12,6 @@ const Login: React.FC = () => {
     const [token, setToken] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [showSuccess, setShowSuccess] = useState(false);
     const { login } = useAuth();
 
     // Get the redirect path from router state or sessionStorage, default to '/'
@@ -34,11 +33,10 @@ const Login: React.FC = () => {
 
             if (response.ok) {
                 await login(urlToken);
-                setShowSuccess(true);
                 sessionStorage.removeItem('redirectAfterLogin');
-                setTimeout(() => {
-                    navigate(from, { replace: true });
-                }, 500);
+                // Use window.location.href to trigger a full page reload
+                // This ensures all contexts and states are properly initialized
+                window.location.href = from;
             } else {
                 setError(t('login.errors.invalidToken'));
                 setLoading(false);
@@ -77,13 +75,11 @@ const Login: React.FC = () => {
 
             if (response.ok) {
                 await login(token);
-                setShowSuccess(true);
                 // Clear the saved redirect path
                 sessionStorage.removeItem('redirectAfterLogin');
-                // Navigate to the original path after successful login
-                setTimeout(() => {
-                    navigate(from, { replace: true });
-                }, 500);
+                // Use window.location.href to trigger a full page reload
+                // This ensures all contexts and states are properly initialized
+                window.location.href = from;
             } else {
                 setError(t('login.errors.invalidToken'));
             }
@@ -146,16 +142,6 @@ const Login: React.FC = () => {
                     </Box>
                 </Paper>
             </Box>
-
-            <Snackbar
-                open={showSuccess}
-                autoHideDuration={2000}
-                onClose={() => setShowSuccess(false)}
-            >
-                <Alert onClose={() => setShowSuccess(false)} severity="success">
-                    {t('login.success.loginSuccess')}
-                </Alert>
-            </Snackbar>
         </Container>
     );
 };

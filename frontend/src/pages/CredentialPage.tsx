@@ -1,4 +1,14 @@
-import { Add, Upload, VpnKey, ListAlt } from '@mui/icons-material';
+import ApiKeyTable from '@/components/ApiKeyTable.tsx';
+import EmptyStateGuide from '@/components/EmptyStateGuide';
+import ImportModal from '@/components/ImportModal';
+import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
+import OAuthDialog from '@/components/OAuthDialog.tsx';
+import OAuthTable from '@/components/OAuthTable.tsx';
+import { PageLayout } from '@/components/PageLayout';
+import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
+import UnifiedCard from '@/components/UnifiedCard';
+import { useProviderQuota } from '@/hooks/useProviderQuota';
+import { Add, ListAlt, Upload, VpnKey } from '@mui/icons-material';
 import {
     Alert,
     Box,
@@ -10,19 +20,8 @@ import {
     Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { PageLayout } from '@/components/PageLayout';
-import ProviderFormDialog from '@/components/ProviderFormDialog.tsx';
-import { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
-import UnifiedCard from '@/components/UnifiedCard';
-import ImportModal from '@/components/ImportModal';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
-import ApiKeyTable from '@/components/ApiKeyTable.tsx';
-import OAuthTable from '@/components/OAuthTable.tsx';
-import EmptyStateGuide from '@/components/EmptyStateGuide';
-import OAuthDialog from '@/components/OAuthDialog.tsx';
-import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
-import { useProviderQuota } from '@/hooks/useProviderQuota';
 
 type ProviderFormData = EnhancedProviderFormData;
 
@@ -405,13 +404,13 @@ const CredentialPage = () => {
                     <Stack direction="row" spacing={1}>
                         <Button
                             component={Link}
-                            to="/credentials/providers"
+                            to="/onboarding"
                             variant="outlined"
                             startIcon={<ListAlt />}
                             size="small"
                             sx={{ minWidth: 130 }}
                         >
-                            Browse Providers
+                            Providers
                         </Button>
                         <Button
                             variant="outlined"

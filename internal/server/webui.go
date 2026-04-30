@@ -26,6 +26,7 @@ import (
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
 	rulemodule "github.com/tingly-dev/tingly-box/internal/server/module/rule"
@@ -912,6 +913,11 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithRequestModel(ProbeRequest{}),
 		swagger.WithResponseModel(ProbeResponse{}),
 	)
+
+	// Onboarding: extract URLs and possible API tokens from arbitrary pasted
+	// text. Vendor-agnostic — the user picks which URL/token to use.
+	onboardingHandler := onboarding.NewHandler(onboarding.NewRuleExtractor())
+	onboarding.RegisterRoutes(apiV1, onboardingHandler)
 
 	apiV1.POST("/probe/provider", s.HandleProbeProvider,
 		swagger.WithDescription("Test api key for the provider"),

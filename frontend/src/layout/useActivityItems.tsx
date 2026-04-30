@@ -18,9 +18,7 @@ import {
     IconKey,
     IconShield,
     IconLock,
-    IconSparkles,
     IconMessageCircle,
-    IconList,
 } from '@tabler/icons-react';
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw } from '../components/BrandIcons';
 import { SettingsApplications } from '@mui/icons-material';
@@ -156,7 +154,6 @@ export function useActivityItems(): ActivityItem[] {
                 defaultPath: '/credentials',
                 children: [
                     { path: '/credentials', label: t('layout.modelKey'), icon: <IconLock size={20} /> },
-                    { path: '/credentials/providers', label: t('layout.providerList', { defaultValue: 'Provider List' }), icon: <IconList size={20} /> },
                     { path: '/tingly-box-token', label: t('layout.tinglyBox'), icon: <IconKey size={20} /> },
                 ],
             },
