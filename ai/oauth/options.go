@@ -15,6 +15,9 @@ type Options struct {
 	// ProxyURL overrides the default proxy for this request
 	ProxyURL *url.URL
 
+	// BaseURL overrides the default callback base URL for this request
+	BaseURL string
+
 	// HTTPClient allows passing a custom HTTP client
 	HTTPClient *http.Client
 }
@@ -57,6 +60,13 @@ func WithProxyURLString(proxyURL string) Option {
 func WithHTTPClient(client *http.Client) Option {
 	return func(o *Options) {
 		o.HTTPClient = client
+	}
+}
+
+// WithBaseURL sets a callback base URL for the request
+func WithBaseURL(baseURL string) Option {
+	return func(o *Options) {
+		o.BaseURL = baseURL
 	}
 }
 

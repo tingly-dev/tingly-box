@@ -910,9 +910,11 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
 		logrus.Debugf("[OAuth] Callback received: %s %s", r.Method, r.URL.Path)
 		logrus.Debugf("[OAuth] Query params: %v", r.URL.Query())
 
+		callbackOpts := oauthmodule.OAuthOptionsForSession(s.oauthManager, sessionID, fmt.Sprintf("http://localhost:%d", port))
+
 		// Delegate to the OAuth callback handler
 		// We need to directly call the oauth manager since gin won't work here
-		token, err := s.oauthManager.HandleCallback(r.Context(), r)
+		token, err := s.oauthManager.HandleCallback(r.Context(), r, callbackOpts...)
 		if err != nil {
 			logrus.Debugf("[OAuth] Callback error: %v", err)
 			if sessionID != "" {
@@ -970,10 +972,10 @@ func (s *Server) startDynamicCallbackServer(sessionID string, port int) error {
         <h1>OAuth Authorization Successful!</h1>
         <p>You can close this window and return to the application.</p>
         <h2>Provider: %s</h2>
-        <p>Token: %s...</p>
+        <p>Token: %s</p>
     </div>
 </body>
-</html>`, string(token.Provider), token.AccessToken[:20])
+</html>`, string(token.Provider), oauthmodule.SafeTokenPreview(token.AccessToken))
 	}
 
 	// Create a new callback server with the handler
@@ -1025,9 +1027,6 @@ func (s *Server) stopDynamicCallbackServer(sessionID string) {
 
 	// Remove from map
 	delete(s.callbackServers, sessionID)
-
-	// Reset proxy URL after OAuth flow completes
-	s.oauthManager.ResetProxyURL()
 
 	logrus.Debugf("[OAuth] Stopped dynamic callback server for session %s", sessionID)
 }

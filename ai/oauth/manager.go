@@ -183,7 +183,8 @@ func (m *Manager) deleteState(state string) {
 // cleanupExpiredStates is removed - now handled by cleanupPeriodically
 
 // GetAuthURL generates the OAuth authorization URL for a provider
-func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo string, name string, sessionID string) (string, string, error) {
+func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo string, name string, sessionID string, opts ...Option) (string, string, error) {
+	options := applyOptions(opts...)
 	config, ok := m.registry.Get(providerType)
 	if !ok {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalidProvider, providerType)
@@ -209,7 +210,7 @@ func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo s
 	}
 
 	// Build authorization URL
-	authURL, redirectURI, err := m.buildAuthURL(config, state, codeVerifier)
+	authURL, redirectURI, err := m.buildAuthURL(config, state, codeVerifier, options)
 	if err != nil {
 		m.deleteState(state)
 		return "", "", err
@@ -234,7 +235,7 @@ func (m *Manager) GetAuthURL(userID string, providerType ai.Issuer, redirectTo s
 
 // buildAuthURL builds the authorization URL with all required parameters
 // Returns the auth URL and the actual redirect_uri used
-func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifier string) (string, string, error) {
+func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifier string, opts *Options) (string, string, error) {
 	u, err := url.Parse(config.AuthURL)
 	if err != nil {
 		return "", "", err
@@ -242,7 +243,7 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 
 	// Validate port constraint if specified
 	if len(config.CallbackPorts) > 0 {
-		baseURL, err := url.Parse(m.config.BaseURL)
+		baseURL, err := url.Parse(m.callbackBaseURL(opts))
 		if err == nil {
 			port := baseURL.Port()
 			if port == "" {
@@ -278,7 +279,7 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 	if callbackPath == "" {
 		callbackPath = "/callback"
 	}
-	redirectURL := fmt.Sprintf("%s%s", m.config.BaseURL, callbackPath)
+	redirectURL := fmt.Sprintf("%s%s", m.callbackBaseURL(opts), callbackPath)
 
 	query := u.Query()
 	query.Set("client_id", config.ClientID)
@@ -317,6 +318,14 @@ func (m *Manager) buildAuthURL(config *ProviderConfig, state string, codeVerifie
 	u.RawQuery = query.Encode()
 
 	return u.String(), redirectURL, nil
+}
+
+// callbackBaseURL returns the per-request callback base URL or the manager default.
+func (m *Manager) callbackBaseURL(opts *Options) string {
+	if opts != nil && opts.BaseURL != "" {
+		return opts.BaseURL
+	}
+	return m.config.BaseURL
 }
 
 // getHTTPClient returns appropriate HTTP client based on options and config
@@ -431,7 +440,6 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		"state":                state,
 		"provider":             config.Type,
 		"code_verifier_length": len(codeVerifier),
-		"code_verifier":        codeVerifier,
 		"redirect_uri":         redirectURI,
 		"grant_type":           params["grant_type"],
 		"has_client_secret":    config.ClientSecret != "",
@@ -846,8 +854,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 }
 
 // PollForToken polls the token endpoint until the user completes authentication
-// or the device code expires
-// Polling timeout is limited to 5 minutes (user needs time to complete auth)
+// or the device code expires.
 func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callback func(*Token), opts ...Option) (*Token, error) {
 	options := applyOptions(opts...)
 	config, ok := m.registry.Get(data.Provider)
@@ -864,18 +871,21 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Create a timeout context with 2 minute limit for polling
-	// User needs time to: open link, enter code, and complete authorization
-	const pollTimeout = 2 * time.Minute
-	timeoutCtx, cancel := context.WithTimeout(ctx, pollTimeout)
+	// Poll until the provider's device code expires, falling back to the
+	// standard OAuth session expiry when the provider did not return one.
+	pollDeadline := data.ExpiresAt
+	if pollDeadline.IsZero() {
+		pollDeadline = time.Now().Add(DefaultSessionExpiry)
+	}
+	timeoutCtx, cancel := context.WithDeadline(ctx, pollDeadline)
 	defer cancel()
 
-	fmt.Printf("[OAuth] Device code polling started for %s, timeout: %v\n", data.Provider, pollTimeout)
+	fmt.Printf("[OAuth] Device code polling started for %s, expires at: %s\n", data.Provider, pollDeadline.Format(time.RFC3339))
 
 	for {
 		select {
 		case <-timeoutCtx.Done():
-			return nil, fmt.Errorf("authentication timed out after %v", pollTimeout)
+			return nil, fmt.Errorf("authentication timed out at %s", pollDeadline.Format(time.RFC3339))
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-ticker.C:
