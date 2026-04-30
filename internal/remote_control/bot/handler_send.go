@@ -81,20 +81,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		}
 		// Only attach keyboard to the last chunk
 		if i == len(chunks)-1 {
-			metadata := map[string]interface{}{
-				"replyMarkup":        tgKeyboard,
-				"card":               actionCard,
-				"_trackActionMenuID": true,
-			}
-
-			// For Feishu/Lark, add card_json
-			if hCtx.Platform == imbot.PlatformFeishu || hCtx.Platform == imbot.PlatformLark {
-				if cardJSON, err := h.feishuCardRenderer.Render(actionCard); err == nil {
-					metadata["card_json"] = cardJSON
-				}
-			}
-
-			opts.Metadata = metadata
+			opts.Metadata = h.buildTrackedActionMenuMetadata(hCtx, tgKeyboard, actionCard)
 		}
 		// Forward context_token for Weixin
 		if contextToken != "" {

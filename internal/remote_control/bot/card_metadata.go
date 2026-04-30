@@ -22,3 +22,9 @@ func buildActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card i
 
 	return metadata
 }
+
+func (h *BotHandler) buildTrackedActionMenuMetadata(hCtx HandlerContext, tgKeyboard interface{}, card imbot.Card) map[string]interface{} {
+	metadata := buildActionMenuMetadata(hCtx, tgKeyboard, card)
+	metadata["_trackActionMenuID"] = true
+	return metadata
+}
