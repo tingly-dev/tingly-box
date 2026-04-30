@@ -134,6 +134,11 @@ func NewBotHandler(
 	handler.agentRouter = NewAgentRouter(deps)
 	handler.InitCommandRegistry()
 
+	// Initialize the new command system (Phase 1 refactoring)
+	if err := handler.InitNewCommandSystem(); err != nil {
+		logrus.WithError(err).Warn("Failed to initialize new command system, will use legacy system")
+	}
+
 	return handler
 }
 
