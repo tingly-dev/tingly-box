@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+// CodexAPIBase is the API base URL for ChatGPT/Codex OAuth provider
+const CodexAPIBase = "https://chatgpt.com/backend-api"
+
 // AuthType represents the authentication type for a provider
 type AuthType string
 
@@ -99,6 +102,17 @@ func (p *Provider) IsOAuthToken() bool {
 func (p *Provider) IsClaudeCodeProvider() bool {
 	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
 		return p.OAuthDetail.ProviderType == "claude_code"
+	}
+	return false
+}
+
+// IsCodexProvider checks if this provider is using Codex OAuth
+func (p *Provider) IsCodexProvider() bool {
+	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
+		return p.OAuthDetail.ProviderType == "codex"
+	}
+	if p.APIBase == CodexAPIBase {
+		return true
 	}
 	return false
 }
