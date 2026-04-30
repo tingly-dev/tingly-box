@@ -100,8 +100,9 @@ func TestExtractor_PlainKey(t *testing.T) {
 	if len(d.Tokens) == 0 {
 		t.Fatalf("expected at least one token, got none")
 	}
-	if d.Tokens[0].Source != "key_prefix" {
-		t.Fatalf("expected key_prefix source, got %q", d.Tokens[0].Source)
+	// source is now "token_like" after simplification
+	if !strings.HasPrefix(d.Tokens[0].Source, "token") {
+		t.Fatalf("expected token_like source, got %q", d.Tokens[0].Source)
 	}
 	if !strings.HasPrefix(d.Tokens[0].Preview, "sk-a") {
 		t.Fatalf("expected masked preview, got %q", d.Tokens[0].Preview)
@@ -208,5 +209,96 @@ OPENAI_API_KEY=sk-proj-abcdef1234567890abcdef`
 	// And the real key still made it through.
 	if !contains(tokenValues(d.Tokens), "sk-proj-abcdef1234567890abcdef") {
 		t.Fatalf("expected OPENAI_API_KEY value in tokens, got %v", tokenValues(d.Tokens))
+	}
+}
+
+func TestExtractor_UUIDToken(t *testing.T) {
+	// Test UUID not in env var (env has higher priority, so it would override source)
+	input := `Here is my token: 550e8400-e29b-41d4-a716-446655440000`
+	d, err := newExt().Extract(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !contains(tokenValues(d.Tokens), "550e8400-e29b-41d4-a716-446655440000") {
+		t.Fatalf("expected UUID token, got %v", tokenValues(d.Tokens))
+	}
+	// source is now "token_like" after simplification
+	found := false
+	for _, tok := range d.Tokens {
+		if tok.Value == "550e8400-e29b-41d4-a716-446655440000" && tok.Source == "token_like" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected source=token_like for UUID token, got %v", d.Tokens)
+	}
+}
+
+func TestExtractor_UUIDInEnvVar(t *testing.T) {
+	// When UUID is in env var, env source takes priority (higher priority)
+	input := `API_TOKEN=550e8400-e29b-41d4-a716-446655440000`
+	d, err := newExt().Extract(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !contains(tokenValues(d.Tokens), "550e8400-e29b-41d4-a716-446655440000") {
+		t.Fatalf("expected UUID token, got %v", tokenValues(d.Tokens))
+	}
+	// Should have env:API_TOKEN source (higher priority than uuid)
+	found := false
+	for _, tok := range d.Tokens {
+		if tok.Value == "550e8400-e29b-41d4-a716-446655440000" && tok.Source == "env:API_TOKEN" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected source=env:API_TOKEN for UUID in env var, got %v", d.Tokens)
+	}
+}
+
+func TestExtractor_UUIDNoHyphen(t *testing.T) {
+	// UUID without hyphens: 32 hex chars
+	input := `token: 550e8400e29b41d4a716446655440000`
+	d, err := newExt().Extract(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !contains(tokenValues(d.Tokens), "550e8400e29b41d4a716446655440000") {
+		t.Fatalf("expected UUID without hyphens, got %v", tokenValues(d.Tokens))
+	}
+}
+
+func TestExtractor_GenericLongToken(t *testing.T) {
+	// Generic long alphanumeric token that doesn't match specific patterns
+	input := `Authorization: abc123XYZdef456GHI789jklMNO012`
+	d, err := newExt().Extract(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should be caught by bearer regex first
+	if !contains(tokenValues(d.Tokens), "abc123XYZdef456GHI789jklMNO012") {
+		t.Fatalf("expected generic token, got %v", tokenValues(d.Tokens))
+	}
+}
+
+func TestExtractor_ShortPrefixToken(t *testing.T) {
+	// Short vendor prefix tokens like 火山 engine's ant-6e2a70f0
+	input := `{"token":"ant-6e2a70f0"}`
+	d, err := newExt().Extract(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !contains(tokenValues(d.Tokens), "ant-6e2a70f0") {
+		t.Fatalf("expected short_prefix token, got %v", tokenValues(d.Tokens))
+	}
+	// source is now "token_like" after simplification
+	found := false
+	for _, tok := range d.Tokens {
+		if tok.Value == "ant-6e2a70f0" && tok.Source == "token_like" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected source=token_like, got %v", d.Tokens)
 	}
 }

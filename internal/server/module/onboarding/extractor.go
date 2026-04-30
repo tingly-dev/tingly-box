@@ -19,9 +19,10 @@ var (
 	envVarRegex   = regexp.MustCompile(`\b([A-Z][A-Z0-9_]{3,})\s*[:=]\s*['"]?([^\s'"\x60]+)`)
 	bearerRegex   = regexp.MustCompile(`(?i)Bearer\s+([A-Za-z0-9_\-\.]{12,})`)
 	xApiKeyRegex  = regexp.MustCompile(`(?i)x-api-key\s*[:=]\s*['"]?([A-Za-z0-9_\-\.]{12,})`)
-	keyPrefixRe   = regexp.MustCompile(`\b(sk-ant-[A-Za-z0-9_\-]+|sk-or-[A-Za-z0-9_\-]+|sk-proj-[A-Za-z0-9_\-]+|sk-[A-Za-z0-9_\-]{16,}|gsk_[A-Za-z0-9_\-]+|xai-[A-Za-z0-9_\-]+|AIza[A-Za-z0-9_\-]{30,}|ds-[A-Za-z0-9_\-]{16,})\b`)
 	jsonAPIKeyRe  = regexp.MustCompile(`(?i)"api[_-]?key"\s*:\s*"([^"]+)"`)
 	jsonBaseURLRe = regexp.MustCompile(`(?i)"base[_-]?url"\s*:\s*"([^"]+)"`)
+	// Catch-all: alphanumeric strings 12+ chars that look like API tokens
+	tokenLikeRegex = regexp.MustCompile(`\b[A-Za-z0-9_\-\.]{12,}\b`)
 )
 
 // Heuristic minimum length for env-var values to qualify as token candidates.
@@ -101,8 +102,14 @@ func (e *RuleExtractor) Extract(_ context.Context, input string) (ExtractData, e
 			tokens = append(tokens, TokenCandidate{Value: m[1], Source: "json:api_key"})
 		}
 	}
-	for _, k := range keyPrefixRe.FindAllString(input, -1) {
-		tokens = append(tokens, TokenCandidate{Value: k, Source: "key_prefix"})
+	for _, tok := range tokenLikeRegex.FindAllString(input, -1) {
+		if isURLString(tok) {
+			continue
+		}
+		if isLowEntropy(tok) {
+			continue
+		}
+		tokens = append(tokens, TokenCandidate{Value: tok, Source: "token_like"})
 	}
 	for _, m := range envVarRegex.FindAllStringSubmatch(input, -1) {
 		if len(m) < 3 {
@@ -140,6 +147,61 @@ func (e *RuleExtractor) Extract(_ context.Context, input string) (ExtractData, e
 func isURLString(s string) bool {
 	low := strings.ToLower(s)
 	return strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://")
+}
+
+// isLowEntropy filters out strings that definitely aren't API tokens.
+// Since users can pick from candidates, we only filter obvious garbage.
+func isLowEntropy(s string) bool {
+	if len(s) == 0 {
+		return true
+	}
+
+	// Skip all-digit strings (timestamps, simple IDs)
+	allDigits := true
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			allDigits = false
+			break
+		}
+	}
+	if allDigits {
+		return true
+	}
+
+	// Skip strings with < 2 unique characters (obvious repetition like "aaaaa...")
+	unique := make(map[rune]bool, len(s))
+	for _, c := range s {
+		unique[c] = true
+	}
+	if len(unique) < 2 {
+		return true
+	}
+
+	// Skip things that look like domain names (contain dots but no other token-like chars)
+	if strings.Contains(s, ".") && !strings.ContainsAny(s, "_-") {
+		// Check if it looks like a domain
+		parts := strings.Split(s, ".")
+		if len(parts) >= 2 {
+			allAlpha := true
+			for _, part := range parts {
+				if len(part) == 0 {
+					allAlpha = false
+					break
+				}
+				for _, c := range part {
+					if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+						allAlpha = false
+						break
+					}
+				}
+			}
+			if allAlpha {
+				return true // looks like a domain name
+			}
+		}
+	}
+
+	return false
 }
 
 // cleanURL trims trailing punctuation that often follows URLs in prose
@@ -206,7 +268,7 @@ func sourcePriority(src string) int {
 		return 3
 	case src == "json:api_key":
 		return 2
-	case src == "key_prefix":
+	case src == "token_like":
 		return 1
 	}
 	return 0
