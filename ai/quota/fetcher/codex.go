@@ -189,8 +189,8 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 			resetsAt := time.Unix(w.ResetAt, 0)
 			usage.Primary = &quota.UsageWindow{
 				Type:          quota.WindowTypeSession,
-				Used:          0, // API only provides percentage
-				Limit:         0, // API doesn't provide limit
+				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
+				Limit:         100,                    // Normalize to 0-100 scale
 				UsedPercent:   float64(w.UsedPercent),
 				Unit:          quota.UsageUnitPercent,
 				ResetsAt:      &resetsAt,
@@ -203,8 +203,8 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 			resetsAt := time.Unix(w.ResetAt, 0)
 			usage.Secondary = &quota.UsageWindow{
 				Type:          quota.WindowTypeWeekly,
-				Used:          0, // API only provides percentage
-				Limit:         0, // API doesn't provide limit
+				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
+				Limit:         100,                    // Normalize to 0-100 scale
 				UsedPercent:   float64(w.UsedPercent),
 				Unit:          quota.UsageUnitPercent,
 				ResetsAt:      &resetsAt,
@@ -227,6 +227,8 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 			}
 			extraWindows = append(extraWindows, &quota.UsageWindow{
 				Type:          quota.WindowTypeModel,
+				Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
+				Limit:         100,                    // Normalize to 0-100 scale
 				UsedPercent:   float64(w.UsedPercent),
 				Unit:          quota.UsageUnitPercent,
 				ResetsAt:      &resetsAt,
@@ -245,6 +247,8 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		resetsAt := time.Unix(w.ResetAt, 0)
 		codeReviewWindow := &quota.UsageWindow{
 			Type:          quota.WindowTypeCodeReview,
+			Used:          float64(w.UsedPercent), // Normalize to 0-100 scale
+			Limit:         100,                    // Normalize to 0-100 scale
 			UsedPercent:   float64(w.UsedPercent),
 			Unit:          quota.UsageUnitPercent,
 			ResetsAt:      &resetsAt,

@@ -291,8 +291,8 @@ func (f *GLMFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota.P
 		} else {
 			usage.Primary = &quota.UsageWindow{
 				Type:        windowType,
-				Used:        0,
-				Limit:       0,
+				Used:        usedPercent, // Normalize to 0-100 scale
+				Limit:       100,         // Normalize to 0-100 scale
 				UsedPercent: usedPercent,
 				Unit:        unit,
 				Label:       label,

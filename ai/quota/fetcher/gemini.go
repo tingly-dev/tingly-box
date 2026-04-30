@@ -105,8 +105,8 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 
 		window := &quota.UsageWindow{
 			Type:        quota.WindowTypeDaily,
-			Used:        0, // API only provides remaining fraction, not actual count
-			Limit:       0, // API doesn't provide limit
+			Used:        usedPercent, // Normalize to 0-100 scale
+			Limit:       100,         // Normalize to 0-100 scale
 			UsedPercent: usedPercent,
 			Unit:        quota.UsageUnitPercent,
 			Label:       "Daily",
@@ -135,8 +135,8 @@ func (f *GeminiFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quot
 	avgUsedPercent := totalUsedPercent / float64(len(quotaResp.Buckets))
 	usage.Primary = &quota.UsageWindow{
 		Type:        quota.WindowTypeDaily,
-		Used:        0, // API only provides percentage
-		Limit:       0, // API doesn't provide limit
+		Used:        avgUsedPercent, // Normalize to 0-100 scale
+		Limit:       100,            // Normalize to 0-100 scale
 		UsedPercent: avgUsedPercent,
 		Unit:        quota.UsageUnitPercent,
 		Label:       "Average Usage",
