@@ -8,6 +8,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
 	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/setup"
 )
 
 // TelegramBot is an interface for Telegram-specific bot operations
@@ -441,4 +442,10 @@ func NewCommandRegistry() *command.CommandRegistry {
 // NewHandlerContext creates a new handler context.
 func NewHandlerContext(bot Bot, chatID, senderID string, platform Platform) *command.HandlerContext {
 	return command.NewHandlerContext(bot, chatID, senderID, core.Platform(platform))
+}
+
+// SetupCommandMenus configures the command menu for a bot using the CommandRegistry.
+// This dispatches to the platform-specific setup implementation.
+func SetupCommandMenus(bot Bot, cmdRegistry *command.CommandRegistry) error {
+	return setup.Setup(bot, cmdRegistry)
 }

@@ -9,8 +9,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
-	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 
@@ -102,21 +100,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	// This is called here so it applies to all code paths using runBotWithSettings
 	bot := manager.GetBotByUUID(setting.UUID)
 	if bot != nil {
-		platform := bot.PlatformInfo().ID
-		cmdRegistry := handler.GetCommandRegistry()
-
-		var err error
-		switch platform {
-		case imbot.PlatformTelegram:
-			err = imbottelegram.SetupMenuButton(bot, cmdRegistry)
-		case imbot.PlatformFeishu, imbot.PlatformLark:
-			err = imbotfeishu.SetupQuickActions(bot, cmdRegistry)
-		default:
-			// Other platforms don't support menu configuration
-			err = nil
-		}
-
-		if err != nil {
+		if err := imbot.SetupCommandMenus(bot, handler.GetCommandRegistry()); err != nil {
 			// Log warning but don't fail startup
 			logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
 		} else {
