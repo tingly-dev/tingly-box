@@ -623,7 +623,7 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	}
 
 	// Add Weixin-specific options
-	if setting.Platform == "weixin" {
+	if setting.Platform == string(imbot.PlatformWebChat) {
 		if userID, ok := setting.Auth["user_id"]; ok {
 			options["user_id"] = userID
 		}
