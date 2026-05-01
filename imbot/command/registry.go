@@ -42,6 +42,15 @@ type Command struct {
 	// Platforms restricts this command to specific platforms.
 	// If nil/empty, the command is available on all platforms.
 	Platforms []core.Platform
+
+	// MenuLabel overrides the display text in menus (optional, defaults to Name)
+	MenuLabel string
+
+	// MenuIcon for platforms that support icons (e.g., Feishu/Lark)
+	MenuIcon string
+
+	// MenuGroup for grouping related commands in menus
+	MenuGroup string
 }
 
 // Match checks if a name matches this command (name or alias).
@@ -69,6 +78,15 @@ func (c *Command) AllNames() []string {
 	names = append(names, c.Name)
 	names = append(names, c.Aliases...)
 	return names
+}
+
+// MenuDisplayName returns the display name for menus.
+// If MenuLabel is set, returns that; otherwise returns the Name with slash prefix.
+func (c *Command) MenuDisplayName() string {
+	if c.MenuLabel != "" {
+		return c.MenuLabel
+	}
+	return "/" + c.Name
 }
 
 // Validate checks if the command is valid.
@@ -312,4 +330,41 @@ func (r *CommandRegistry) BuildPlatformCommands(platform core.Platform) []map[st
 		})
 	}
 	return result
+}
+
+// BuildTelegramMenuCommands returns commands formatted as []models.BotCommand
+// for Telegram's SetCommandList API. Commands are sorted by priority.
+func (r *CommandRegistry) BuildTelegramMenuCommands() []map[string]string {
+	return r.BuildPlatformCommands(core.PlatformTelegram)
+}
+
+// BuildFeishuQuickActions returns quick actions formatted for Feishu/Lark.
+// Each action includes id, label, description, command, and optional icon.
+func (r *CommandRegistry) BuildFeishuQuickActions() []map[string]interface{} {
+	commands := r.ForPlatform(core.PlatformFeishu)
+	result := make([]map[string]interface{}, 0, len(commands))
+
+	for _, cmd := range commands {
+		action := map[string]interface{}{
+			"id":          cmd.ID,
+			"label":       cmd.MenuDisplayName(),
+			"description": cmd.Description,
+			"command":     "/" + cmd.Name,
+		}
+		if cmd.MenuIcon != "" {
+			action["icon"] = cmd.MenuIcon
+		}
+		if cmd.MenuGroup != "" {
+			action["group"] = cmd.MenuGroup
+		}
+		result = append(result, action)
+	}
+
+	return result
+}
+
+// GetCommandsForMenu returns commands filtered for menu display on a platform.
+// Returns visible commands sorted by priority, respecting platform restrictions.
+func (r *CommandRegistry) GetCommandsForMenu(platform core.Platform) []*Command {
+	return r.ForPlatform(platform)
 }
