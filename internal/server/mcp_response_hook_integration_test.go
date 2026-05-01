@@ -702,7 +702,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	rule := &typ.Rule{}
 	SetTrackingContext(c, rule, provider, reqCtx.RequestModel, reqCtx.ResponseModel, true)
 
-	s.dispatchAnthropicToAnthropicV1(c, reqCtx, rule, provider, true, nil)
+	s.dispatchGenericAnthropicV1Stream(c, reqCtx, rule, provider, nil)
 
 	require.Equal(t, 1, advisorCalls)
 	require.Equal(t, 2, workerCalls)

@@ -192,7 +192,7 @@ func runQuotaGet(appManager *AppManager, providerName string, refresh bool) erro
 		if err != nil {
 			fmt.Printf("⚠️  Refresh failed: %v\n", err)
 		} else {
-			fmt.Println("✅ Refresh complete\n")
+			fmt.Println("✅ Refresh complete")
 		}
 	}
 
@@ -317,7 +317,7 @@ func runQuotaRefreshProvider(appManager *AppManager, providerName string) error 
 		return fmt.Errorf("failed to refresh quota: %w", err)
 	}
 
-	fmt.Println("✅ Refresh complete\n")
+	fmt.Println("✅ Refresh complete")
 	printQuotaDetails(usage)
 
 	return nil

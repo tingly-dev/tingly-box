@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/ai"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -81,6 +82,7 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		provider.OAuthDetail = &typ.OAuthDetail{
 			AccessToken:  r.Token,
 			ProviderType: r.OAuthProviderType,
+			Issuer:       ai.Issuer(r.OAuthProviderType),
 			UserID:       r.OAuthUserID,
 			RefreshToken: r.OAuthRefreshToken,
 			ExpiresAt:    r.OAuthExpiresAt,
@@ -117,7 +119,7 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 
 	// Initialize OAuth fields if OAuthDetail exists
 	if p.OAuthDetail != nil {
-		record.OAuthProviderType = p.OAuthDetail.ProviderType
+		record.OAuthProviderType = string(p.OAuthDetail.Issuer)
 		record.OAuthUserID = p.OAuthDetail.UserID
 		record.OAuthExpiresAt = p.OAuthDetail.ExpiresAt
 	}
@@ -172,7 +174,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 	case typ.AuthTypeOAuth:
 		if p.OAuthDetail != nil {
 			record.Token = p.OAuthDetail.AccessToken
-			record.OAuthProviderType = p.OAuthDetail.ProviderType
+			record.OAuthProviderType = string(p.OAuthDetail.Issuer)
 			record.OAuthUserID = p.OAuthDetail.UserID
 			record.OAuthRefreshToken = p.OAuthDetail.RefreshToken
 			record.OAuthExpiresAt = p.OAuthDetail.ExpiresAt
@@ -401,7 +403,7 @@ func (ps *ProviderStore) UpdateCredential(uuid string, token string, oauthDetail
 	// Update credential fields based on auth type
 	if record.AuthType == string(typ.AuthTypeOAuth) && oauthDetail != nil {
 		record.Token = oauthDetail.AccessToken
-		record.OAuthProviderType = oauthDetail.ProviderType
+		record.OAuthProviderType = string(oauthDetail.Issuer)
 		record.OAuthUserID = oauthDetail.UserID
 		record.OAuthRefreshToken = oauthDetail.RefreshToken
 		record.OAuthExpiresAt = oauthDetail.ExpiresAt
