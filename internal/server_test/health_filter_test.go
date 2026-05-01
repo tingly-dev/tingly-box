@@ -176,12 +176,16 @@ func TestHealthFilter_Recovery(t *testing.T) {
 	assert.Equal(t, "provider1", service.Provider)
 }
 
-// TestHealthFilter_SuccessRecovery tests that services recover immediately on success
+// TestHealthFilter_SuccessRecovery tests that services can recover after consecutive errors
 func TestHealthFilter_SuccessRecovery(t *testing.T) {
 	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
 	require.NoError(t, err)
 
-	healthConfig := loadbalance.DefaultHealthMonitorConfig()
+	// Use low threshold for testing
+	healthConfig := loadbalance.HealthMonitorConfig{
+		ConsecutiveErrorThreshold: 2,
+		RecoveryTimeoutSeconds:    300,
+	}
 	healthMonitor := loadbalance.NewHealthMonitor(healthConfig)
 	healthFilter := typ.NewHealthFilter(healthMonitor)
 
@@ -210,13 +214,16 @@ func TestHealthFilter_SuccessRecovery(t *testing.T) {
 
 	serviceID := rule.Services[0].ServiceID()
 
-	// Mark service as unhealthy
-	healthMonitor.ReportRateLimit(serviceID)
-	assert.False(t, healthMonitor.IsHealthy(serviceID))
+	// Report errors to mark service as unhealthy (threshold = 2)
+	healthMonitor.ReportError(serviceID, assert.AnError)
+	assert.True(t, healthMonitor.IsHealthy(serviceID), "Service should still be healthy after 1 error")
+
+	healthMonitor.ReportError(serviceID, assert.AnError)
+	assert.False(t, healthMonitor.IsHealthy(serviceID), "Service should be unhealthy after 2 errors")
 
 	// Report success - should recover immediately
 	healthMonitor.ReportSuccess(serviceID)
-	assert.True(t, healthMonitor.IsHealthy(serviceID))
+	assert.True(t, healthMonitor.IsHealthy(serviceID), "Service should recover immediately after success")
 
 	// Should be able to select service
 	service, err := lb.SelectService(rule)

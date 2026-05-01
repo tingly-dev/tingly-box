@@ -107,13 +107,18 @@ func TestHealthMonitor_ReportError_ConsecutiveThreshold(t *testing.T) {
 
 func TestHealthMonitor_ReportSuccess_ImmediateRecovery(t *testing.T) {
 	config := DefaultHealthMonitorConfig()
+	config.ConsecutiveErrorThreshold = 2
 	hm := NewHealthMonitor(config)
 
 	serviceID := "provider-a:gpt-4o"
 
-	// Make service unhealthy
-	hm.ReportRateLimit(serviceID)
-	assert.False(t, hm.IsHealthy(serviceID))
+	// Make service unhealthy via consecutive errors (not rate limit)
+	testErr := errors.New("connection error")
+	hm.ReportError(serviceID, testErr) // error 1
+	assert.True(t, hm.IsHealthy(serviceID), "Should still be healthy after 1 error")
+
+	hm.ReportError(serviceID, testErr) // error 2 - marks unhealthy
+	assert.False(t, hm.IsHealthy(serviceID), "Should be unhealthy after 2 errors")
 
 	// Report success
 	hm.ReportSuccess(serviceID)
