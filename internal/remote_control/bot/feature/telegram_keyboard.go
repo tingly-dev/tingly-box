@@ -7,6 +7,10 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
+// Deprecated: Use platform/telegram/keyboard instead.
+// This package is deprecated and will be removed in a future release.
+// See: internal/remote_control/bot/platform/telegram
+
 // BindFlowState represents the state of an ongoing bind flow
 type BindFlowState struct {
 	ChatID       string

@@ -1,4 +1,4 @@
-package feature
+package telegram
 
 import (
 	"context"
@@ -15,14 +15,24 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-// Deprecated: Use platform/telegram/dir_browser instead.
-// This package is deprecated and will be removed in a future release.
-// See: internal/remote_control/bot/platform/telegram
-
 const (
 	defaultPageSize = 8
 	stateExpiry     = 5 * time.Minute
 )
+
+// BindFlowState represents the state of an ongoing bind flow
+type BindFlowState struct {
+	ChatID       string
+	CurrentPath  string
+	Page         int
+	TotalDirs    int
+	PageSize     int
+	MessageID    string // Message ID to edit
+	ExpiresAt    time.Time
+	WaitingInput bool     // Waiting for custom path input
+	PromptMsgID  string   // Prompt message ID for cleanup
+	Dirs         []string // Current directory list (for navigation by index)
+}
 
 // DirectoryBrowser manages directory navigation for bind flow
 type DirectoryBrowser struct {
@@ -257,60 +267,83 @@ func (b *DirectoryBrowser) BuildKeyboard(chatID string) (*BindFlowState, *imbot.
 		endIdx = len(dirs)
 	}
 
-	// Build keyboard
-	kb := imbot.NewKeyboardBuilder()
-
-	// Directory buttons (use index instead of path to avoid 64-byte limit)
-	for i := startIdx; i < endIdx; i++ {
-		dirName := filepath.Base(dirs[i])
-		buttonText := imbot.FormatDirButton(dirName, 20)
-		callbackData := imbot.FormatCallbackData("bind", "dir", fmt.Sprintf("%d", i))
-		kb.AddRow(imbot.CallbackButton(buttonText, callbackData))
+	// Build keyboard using Telegram keyboard builder
+	kbBuilder := NewKeyboardBuilder()
+	browserState := &DirectoryBrowserState{
+		CurrentPath: state.CurrentPath,
+		Page:        state.Page,
+		PageSize:    state.PageSize,
+		TotalPages:  totalPages,
+		StartIdx:    startIdx,
+		EndIdx:      endIdx,
+		HasParent:   hasParent(state.CurrentPath),
+		Dirs:        dirs,
 	}
-
-	// Navigation row
-	var navButtons []imbot.InlineKeyboardButton
-
-	// Parent directory button
-	if hasParent(state.CurrentPath) {
-		navButtons = append(navButtons, imbot.CallbackButton("📁 ..", imbot.FormatCallbackData("bind", "up")))
+	kb, text, err := kbBuilder.BuildDirectoryKeyboard(browserState)
+	if err != nil {
+		return nil, nil, "", err
 	}
-
-	// Pagination buttons
-	if state.Page > 0 {
-		navButtons = append(navButtons, imbot.CallbackButton("◀ Prev", imbot.FormatCallbackData("bind", "prev")))
-	}
-	if state.Page < totalPages-1 && len(dirs) > endIdx {
-		navButtons = append(navButtons, imbot.CallbackButton("Next ▶", imbot.FormatCallbackData("bind", "next")))
-	}
-
-	if len(navButtons) > 0 {
-		kb.AddRow(navButtons...)
-	}
-
-	// Select current directory button and custom path button
-	kb.AddRow(
-		imbot.CallbackButton("✓ Select This", imbot.FormatCallbackData("bind", "select")),
-		imbot.CallbackButton("✏️ Custom", imbot.FormatCallbackData("bind", "custom")),
-	)
-
-	// Cancel button
-	kb.AddRow(imbot.CallbackButton("❌ Cancel", imbot.FormatCallbackData("bind", "cancel")))
-
-	// Build message text
-	shortPath := state.CurrentPath
-	if len(shortPath) > 40 {
-		shortPath = "..." + shortPath[len(shortPath)-37:]
-	}
-
-	pageInfo := ""
-	if totalPages > 1 {
-		pageInfo = fmt.Sprintf(" (Page %d/%d)", state.Page+1, totalPages)
-	}
-
-	text := fmt.Sprintf("📁 *Current:*\n`%s`\n\n📂 *Select a directory:*%s", shortPath, pageInfo)
 
 	return state, kb, text, nil
+}
+
+// SendDirectoryBrowser sends or updates the directory browser message
+func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *DirectoryBrowser, chatID string, editMessageID string) (string, error) {
+	state, kb, text, err := browser.BuildKeyboard(chatID)
+	if err != nil {
+		return "", err
+	}
+
+	// Try to cast bot to TelegramBot for editing
+	tgBot, ok := imbot.AsTelegramBot(bot)
+	if ok && editMessageID != "" && state.MessageID != "" {
+		// Edit existing message
+		tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, &tgKeyboard); err != nil {
+			logrus.WithError(err).Warn("Failed to edit message, sending new one")
+			// Fall through to send new message
+		} else {
+			return editMessageID, nil
+		}
+	}
+
+	// Convert keyboard for Telegram
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+
+	// Send new message with keyboard
+	result, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
+		Text:      text,
+		ParseMode: imbot.ParseModeMarkdown,
+		Metadata: map[string]interface{}{
+			"replyMarkup": tgKeyboard,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// Store message ID for future edits
+	browser.SetMessageID(chatID, result.MessageID)
+
+	return result.MessageID, nil
+}
+
+// EditDirectoryBrowserMessage edits the directory browser message to show status and remove keyboard
+func EditDirectoryBrowserMessage(ctx context.Context, bot imbot.Bot, chatID, msgID, text string) {
+	tgBot, ok := imbot.AsTelegramBot(bot)
+	if !ok {
+		return
+	}
+
+	// Remove the keyboard first
+	if err := tgBot.RemoveMessageKeyboard(ctx, chatID, msgID); err != nil {
+		logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to remove directory browser keyboard")
+	} else {
+		// Successfully removed keyboard, now edit the text
+		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, msgID, text, nil); err != nil {
+			logrus.WithError(err).WithField("chatID", chatID).WithField("messageID", msgID).Debug("Failed to edit directory browser text")
+		}
+	}
 }
 
 // Helper functions
@@ -360,43 +393,7 @@ func hasParent(path string) bool {
 	return parent != path && parent != ""
 }
 
-// SendDirectoryBrowser sends or updates the directory browser message
-func SendDirectoryBrowser(ctx context.Context, bot imbot.Bot, browser *DirectoryBrowser, chatID string, editMessageID string) (string, error) {
-	state, kb, text, err := browser.BuildKeyboard(chatID)
-	if err != nil {
-		return "", err
-	}
-
-	// Try to cast bot to TelegramBot for editing
-	tgBot, ok := imbot.AsTelegramBot(bot)
-	if ok && editMessageID != "" && state.MessageID != "" {
-		// Edit existing message
-		tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-		if err := tgBot.EditMessageWithKeyboard(ctx, chatID, editMessageID, text, &tgKeyboard); err != nil {
-			logrus.WithError(err).Warn("Failed to edit message, sending new one")
-			// Fall through to send new message
-		} else {
-			return editMessageID, nil
-		}
-	}
-
-	// Convert keyboard for Telegram
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-
-	// Send new message with keyboard
-	result, err := bot.SendMessage(ctx, chatID, &imbot.SendMessageOptions{
-		Text:      text,
-		ParseMode: imbot.ParseModeMarkdown,
-		Metadata: map[string]interface{}{
-			"replyMarkup": tgKeyboard,
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	// Store message ID for future edits
-	browser.SetMessageID(chatID, result.MessageID)
-
-	return result.MessageID, nil
+// BuildCustomPathPrompt builds the custom path input prompt text
+func BuildCustomPathPrompt() string {
+	return "📝 *Enter the project path:*\n\nUse `~` for home directory or absolute path.\n\nExample: `~/projects/myapp`"
 }

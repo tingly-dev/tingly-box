@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/command"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/platform"
 	secpermission "github.com/tingly-dev/tingly-box/internal/remote_control/bot/security/permission"
 	secpairing "github.com/tingly-dev/tingly-box/internal/remote_control/bot/security/pairing"
 	secaudit "github.com/tingly-dev/tingly-box/internal/remote_control/bot/security/audit"
@@ -85,6 +86,9 @@ type BotHandler struct {
 
 	// audit emits security events (pairing attempts, rejections, …).
 	audit *audit.Logger
+
+	// platformRegistry manages platform-specific handlers (Phase 4 refactoring)
+	platformRegistry *platform.Registry
 }
 
 // PendingBind represents a pending bind confirmation request

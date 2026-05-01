@@ -1,4 +1,4 @@
-package feature
+package weixin
 
 import (
 	"context"
@@ -12,10 +12,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 )
-
-// Deprecated: Use platform/weixin/qr_client instead.
-// This package is deprecated and will be removed in a future release.
-// See: internal/remote_control/bot/platform/weixin
 
 // QRCodeResponse represents the QR code response from Weixin API
 type QRCodeResponse struct {
@@ -32,18 +28,18 @@ type QRStatusResponse struct {
 	IlinkUserID string `json:"ilink_user_id,omitempty"`
 }
 
-// WeChatQRClient is a CLI-friendly wrapper for Weixin QR authentication
-type WeChatQRClient struct {
+// QRClient is a CLI-friendly wrapper for Weixin QR authentication
+type QRClient struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
-// NewWeChatQRClient creates a new Weixin QR client
-func NewWeChatQRClient(baseURL string) *WeChatQRClient {
+// NewQRClient creates a new Weixin QR client
+func NewQRClient(baseURL string) *QRClient {
 	if baseURL == "" {
 		baseURL = "https://ilinkai.weixin.qq.com"
 	}
-	return &WeChatQRClient{
+	return &QRClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -52,7 +48,7 @@ func NewWeChatQRClient(baseURL string) *WeChatQRClient {
 }
 
 // GetBotQRCode fetches a QR code for Weixin bot login
-func (c *WeChatQRClient) GetBotQRCode(ctx context.Context, botType string) (*QRCodeResponse, error) {
+func (c *QRClient) GetBotQRCode(ctx context.Context, botType string) (*QRCodeResponse, error) {
 	if botType == "" {
 		botType = "3" // Default bot type
 	}
@@ -115,7 +111,7 @@ func (c *WeChatQRClient) GetBotQRCode(ctx context.Context, botType string) (*QRC
 }
 
 // GetQRStatus polls the QR code status
-func (c *WeChatQRClient) GetQRStatus(ctx context.Context, qrcode string) (*QRStatusResponse, error) {
+func (c *QRClient) GetQRStatus(ctx context.Context, qrcode string) (*QRStatusResponse, error) {
 	// Build URL with query params
 	u, err := url.Parse(c.baseURL + "/ilink/bot/get_qrcode_status")
 	if err != nil {
@@ -179,7 +175,7 @@ func (c *WeChatQRClient) GetQRStatus(ctx context.Context, qrcode string) (*QRSta
 }
 
 // buildHeaders creates the required headers for Weixin API
-func (c *WeChatQRClient) buildHeaders() map[string]string {
+func (c *QRClient) buildHeaders() map[string]string {
 	// Simplified headers for QR flow (no auth token needed initially)
 	return map[string]string{
 		"Content-Type": "application/json",
@@ -188,8 +184,13 @@ func (c *WeChatQRClient) buildHeaders() map[string]string {
 
 // PollQRStatus polls the QR status until confirmed or expired
 // Returns the confirmed credentials or error
-func PollQRStatus(ctx context.Context, client *WeChatQRClient, qrID string, pollInterval time.Duration) (*QRStatusResponse, error) {
-	ticker := time.NewTicker(pollInterval)
+func PollQRStatus(ctx context.Context, client *QRClient, qrID string, pollInterval int) (*QRStatusResponse, error) {
+	interval := time.Duration(pollInterval) * time.Second
+	if interval == 0 {
+		interval = 2 * time.Second
+	}
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	// Retry counter for transient failures

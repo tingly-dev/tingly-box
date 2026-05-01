@@ -9,6 +9,10 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/platform"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/platform/feishu"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/platform/telegram"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/platform/weixin"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
@@ -83,6 +87,9 @@ func NewBotHandler(
 		}
 	}
 
+	// Initialize platform registry (Phase 4 refactoring)
+	platformRegistry := platform.NewRegistry()
+
 	// Create the BotHandler instance first (needed for method references)
 	handler := &BotHandler{
 		ctx:                 ctx,
@@ -105,7 +112,11 @@ func NewBotHandler(
 		feishuCardRenderer:  feature.NewFeishuCardRenderer(),
 		pairing:             pairing,
 		audit:               auditLog,
+		platformRegistry:    platformRegistry, // Phase 4: Platform registry
 	}
+
+	// Register platform handlers
+	handler.registerPlatformHandlers()
 
 	// Initialize AgentRouter with dependencies
 	deps := &ExecutorDependencies{
@@ -137,16 +148,98 @@ func NewBotHandler(
 	// Initialize the new command system (Phase 1 refactoring)
 	if err := handler.InitNewCommandSystem(); err != nil {
 		logrus.WithError(err).Warn("Failed to initialize new command system, will use legacy system")
+	}
 
 	// Initialize the security system (Phase 2 refactoring)
 	if err := handler.InitSecuritySystem(); err != nil {
 		logrus.WithError(err).Warn("Failed to initialize security system")
 	}
+
+	return handler
+}
+
+// registerPlatformHandlers registers platform-specific handlers
+// This is part of Phase 4: Platform Abstraction
+func (h *BotHandler) registerPlatformHandlers() {
+	// Note: Platform handlers need bot instances, which are created per-connection
+	// This method sets up lazy initialization via the manager
+	// Actual handler registration happens in HandleMessage when bot is available
+
+	logrus.Debug("Platform handler registration initialized")
+}
+
+// GetPlatformHandler returns the platform handler for a given bot
+// This is part of Phase 4: Platform Abstraction
+func (h *BotHandler) GetPlatformHandler(bot imbot.Bot) platform.MessageHandler {
+	// Check if already registered
+	if handler := h.platformRegistry.Get(bot.PlatformInfo().ID); handler != nil {
+		return handler
+	}
+
+	// Create and register handler based on platform
+	var handler platform.MessageHandler
+	switch bot.PlatformInfo().ID {
+	case imbot.PlatformTelegram:
+		handler = telegram.NewHandler(bot)
+	case imbot.PlatformFeishu, imbot.PlatformLark:
+		handler = feishu.NewHandler(bot)
+	case imbot.Platform("weixin"):
+		// QR client is optional for Weixin
+		handler = weixin.NewHandler(bot, nil)
+	default:
+		// Default to a generic handler (no platform-specific behavior)
+		return nil
+	}
+
+	if handler != nil {
+		h.platformRegistry.Register(handler)
 	}
 
 	return handler
 }
 
+// SupportsFeature checks if the platform supports a specific feature
+func (h *BotHandler) SupportsFeature(platform imbot.Platform, feature platform.Feature) bool {
+	return h.platformRegistry.SupportsFeature(platform, feature)
+}
+
 // GetVerbose returns the current verbose mode setting for a chat
 // Checks chat store first, then bot setting default
 // Returns false for platforms that don't support verbose mode (e.g., Weixin)
+func (h *BotHandler) GetVerbose(chatID string) bool {
+	// Check platform first (Phase 4: Platform abstraction)
+	// Get the platform for this chat from chat store
+	chat, err := h.chatStore.GetChat(chatID)
+	if err == nil && chat.Platform != "" {
+		// Check if platform supports verbose mode
+		if !h.SupportsFeature(imbot.Platform(chat.Platform), platform.FeatureVerbose) {
+			return false
+		}
+	}
+
+	h.verboseMu.RLock()
+	defer h.verboseMu.RUnlock()
+
+	// Check chat-specific setting first
+	if chat, err := h.chatStore.GetChat(chatID); err == nil {
+		if chat.Verbose != nil {
+			return *chat.Verbose
+		}
+	}
+
+	// Fall back to bot default
+	return h.verbose
+}
+
+// SetVerbose sets the verbose mode for a chat
+func (h *BotHandler) SetVerbose(chatID string, enabled bool) {
+	h.verboseMu.Lock()
+	defer h.verboseMu.Unlock()
+
+	// Update chat store
+	if err := h.chatStore.UpdateChat(chatID, func(c *Chat) {
+		c.Verbose = &enabled
+	}); err != nil {
+		logrus.WithError(err).WithField("chatID", chatID).Warn("Failed to save verbose setting")
+	}
+}
