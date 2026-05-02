@@ -196,11 +196,14 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	m.logger.Info("Bot manager started")
 
-	// Start a goroutine to watch for context cancellation and auto-cleanup
+	// Watch for external context cancellation (e.g. OS signal).
+	// Shutdown is owned by Stop(); this goroutine only triggers it once.
 	go func() {
 		<-ctx.Done()
 		m.logger.Info("Context cancelled, shutting down manager...")
-		m.shutdown()
+		if !m.stopping.Load() {
+			m.Stop(context.Background()) //nolint:errcheck
+		}
 	}()
 
 	return nil
