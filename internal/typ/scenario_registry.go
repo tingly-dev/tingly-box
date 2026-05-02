@@ -12,6 +12,7 @@ type ScenarioTransport string
 const (
 	TransportOpenAI    ScenarioTransport = "openai"
 	TransportAnthropic ScenarioTransport = "anthropic"
+	TransportEmbed     ScenarioTransport = "embed"
 )
 
 type ScenarioDescriptor struct {
@@ -49,7 +50,14 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 	case ScenarioOpenAI:
 		return ScenarioDescriptor{
 			ID:                 scenario,
-			SupportedTransport: []ScenarioTransport{TransportOpenAI},
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportEmbed},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioEmbed:
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportEmbed},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
@@ -160,6 +168,16 @@ func CanBindRulesToScenario(scenario RuleScenario) bool {
 func CanUseScenarioInPath(scenario RuleScenario) bool {
 	descriptor, ok := GetScenarioDescriptor(scenario)
 	return ok && descriptor.AllowDirectPathUse
+}
+
+// ScenarioSupportsTransport reports whether the given scenario's descriptor
+// declares support for the specified transport.
+func ScenarioSupportsTransport(scenario RuleScenario, transport ScenarioTransport) bool {
+	descriptor, ok := GetScenarioDescriptor(scenario)
+	if !ok {
+		return false
+	}
+	return slices.Contains(descriptor.SupportedTransport, transport)
 }
 
 // ProfileSeparator is used to split "scenario:profile_id" strings.

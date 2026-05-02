@@ -43,6 +43,7 @@ export default {
       "useOpenCode": "OpenCode",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
+      "useEmbed": "Embed 嵌入",
       "apiKeys": "API 密钥",
       "oauth": "OAuth 凭证",
       "credential": "凭证",

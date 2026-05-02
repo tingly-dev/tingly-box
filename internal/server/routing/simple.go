@@ -79,3 +79,14 @@ func (s *SimpleSelector) SelectService(
 
 	return result.Provider, result.Service, nil
 }
+
+// SelectServiceForEmbeddings is a variant of SelectService for embedding requests.
+// Embedding requests don't carry chat-style context, so content-based smart routing
+// is skipped (load balancing, affinity, and health filters still apply).
+func (s *SimpleSelector) SelectServiceForEmbeddings(
+	c *gin.Context,
+	scenario typ.RuleScenario,
+	rule *typ.Rule,
+) (*typ.Provider, *loadbalance.Service, error) {
+	return s.SelectService(c, scenario, rule, nil)
+}

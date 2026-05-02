@@ -34,6 +34,23 @@ func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *op
 	return resp, cancel, err
 }
 
+// ForwardOpenAIEmbeddings sends an OpenAI embeddings request.
+// Embeddings have no streaming and skip the chat transform chain.
+func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, context.CancelFunc, error) {
+	if wrapper == nil {
+		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
+	}
+
+	ctx, cancel := fc.PrepareContext(req)
+
+	logrus.Infof("provider: %s, model: %s (embeddings)", fc.Provider.Name, req.Model)
+
+	resp, err := wrapper.EmbeddingsNew(ctx, *req)
+	fc.Complete(ctx, resp, err)
+
+	return resp, cancel, err
+}
+
 // ForwardOpenAIChatStream sends a streaming OpenAI chat completion request.
 // IMPORTANT: All transformations (protocol conversion + vendor-specific) should
 // be applied by the transform chain BEFORE calling this function.

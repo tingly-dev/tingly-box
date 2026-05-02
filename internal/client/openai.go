@@ -119,6 +119,11 @@ func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req open
 	return c.client.Chat.Completions.NewStreaming(ctx, req)
 }
 
+// EmbeddingsNew creates a new embeddings request
+func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
+	return c.client.Embeddings.New(ctx, req)
+}
+
 // ResponsesNew creates a new Responses API request
 func (c *OpenAIClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
 	return c.client.Responses.New(ctx, req)

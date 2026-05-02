@@ -52,6 +52,16 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		return
 	}
 
+	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportAnthropic) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("scenario %s does not support Anthropic messages", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
 	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
 	var recorder *ProtocolRecorder
 	if s.ApplyRecording(scenarioType) {
