@@ -1,92 +1,81 @@
 // Bot platform authentication types
 
-export interface BotPlatformConfig {
-	platform: string;
-	display_name: string;
-	auth_type: string;
-	category: string;
-	fields: FieldSpec[];
-}
+// Re-export bot-related types from codegen
+import type {
+    Settings,
+    SettingsResponse,
+    PlatformConfig,
+    FieldSpec,
+    PlatformsResponse,
+    DeleteResponse,
+} from '@/client';
 
-export interface FieldSpec {
-	key: string;
-	label: string;
-	placeholder?: string;
-	required: boolean;
-	secret: boolean;
-	helperText?: string;
-}
+// Re-export Skill-related types from codegen
+import type {
+    Skill,
+    SkillLocation,
+    GroupingStrategy,
+} from '@/client';
 
-export interface BotSettings {
-    uuid?: string;
-    name?: string;
-    platform: string;
-    auth_type: string;
-    auth: Record<string, string>;
-    proxy_url?: string;
-    chat_id?: string;
-    bash_allowlist?: string[];
-    enabled?: boolean;
+// BotSettings is an alias for Settings from codegen
+export type BotSettings = Settings;
 
-    // Agent configuration fields
-    default_agent?: string;       // Default Agent UUID (points to remote_agents table)
-    default_cwd?: string;         // Default working directory
+// BotPlatformConfig is an alias for PlatformConfig from codegen
+export type BotPlatformConfig = PlatformConfig;
 
-    token?: string; // Legacy field for backward compatibility
-    // SmartGuide model configuration
-    smartguide_provider?: string; // Provider UUID
-    smartguide_model?: string; // Model identifier
-
-    created_at?: string;
-    updated_at?: string;
-}
-
-export interface BotPlatformCategory {
-	key: string;
-	label: string;
-	platforms: BotPlatformConfig[];
-}
+// Re-export for consumers
+export type {
+    Settings,
+    SettingsResponse,
+    PlatformConfig,
+    FieldSpec,
+    PlatformsResponse,
+    DeleteResponse,
+    Skill,
+    SkillLocation,
+    GroupingStrategy,
+};
 
 // Category display labels
 export const CategoryLabels: Record<string, string> = {
-	im: 'IM Platforms',
-	enterprise: 'Enterprise',
-	business: 'Business',
+    im: 'IM Platforms',
+    enterprise: 'Enterprise',
+    business: 'Business',
 };
 
 // Auth type display labels
 export const AuthTypeLabels: Record<string, string> = {
-	token: 'Token',
-	oauth: 'OAuth',
-	qr: 'QR Code',
-	basic: 'Basic Auth',
+    token: 'Token',
+    oauth: 'OAuth',
+    qr: 'QR Code',
+    basic: 'Basic Auth',
 };
 
 // Helper to mask secret values for display
 export function maskSecret(value: string, visible = false): string {
-	if (!value) return '-';
-	if (visible) return value;
-	if (value.length <= 8) return '*'.repeat(value.length);
-	return value.substring(0, 4) + '*'.repeat(Math.min(8, value.length - 4)) + value.substring(value.length - 4);
+    if (!value) return '-';
+    if (visible) return value;
+    if (value.length <= 8) return '*'.repeat(value.length);
+    return value.substring(0, 4) + '*'.repeat(Math.min(8, value.length - 4)) + value.substring(value.length - 4);
 }
 
 // Helper to get display name for auth field value
 export function getAuthDisplayValue(settings: BotSettings, config: BotPlatformConfig): string {
-	if (!settings.auth || Object.keys(settings.auth).length === 0) {
-		return '-';
-	}
+    if (!settings.auth || Object.keys(settings.auth).length === 0) {
+        return '-';
+    }
 
-	// For token auth, show masked token
-	if (config.auth_type === 'token') {
-		const token = settings.auth['token'];
-		return token ? maskSecret(token) : '-';
-	}
+    // For token auth, show masked token
+    if (config.auth_type === 'token') {
+        const token = settings.auth['token'];
+        return token ? maskSecret(token) : '-';
+    }
 
-	// For OAuth, show clientId
-	if (config.auth_type === 'oauth') {
-		const clientId = settings.auth['clientId'];
-		return clientId ? maskSecret(clientId) : '-';
-	}
+    // For OAuth, show clientId
+    if (config.auth_type === 'oauth') {
+        const clientId = settings.auth['clientId'];
+        return clientId ? maskSecret(clientId) : '-';
+    }
 
-	return 'Configured';
+    return 'Configured';
 }
