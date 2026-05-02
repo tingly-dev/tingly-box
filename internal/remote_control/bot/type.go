@@ -53,6 +53,6 @@ type Lifecycle interface {
 // runningBot tracks a running bot instance
 type runningBot struct {
 	cancel   context.CancelFunc
-	stopped  bool          // marker to indicate if bot is being stopped
-	doneChan chan struct{} // closed when goroutine finishes
+	stopped  bool          // marker to indicate if the bot is being stopped
+	doneChan chan struct{} // closed when the goroutine finishes
 }

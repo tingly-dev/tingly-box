@@ -34,6 +34,9 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	projectPath := req.ProjectPath
 	meta := req.Meta
 
+	// Get current bot settings (dynamic lookup for latest config)
+	botSetting := e.deps.GetBotSettingOrCache()
+
 	// 1. Load messages from session store
 	var messages []*message.Msg
 	if e.deps.TBSessionStore != nil {
@@ -86,7 +89,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 				},
 				Reason:    prompt,
 				SessionID: hCtx.ChatID,
-				BotUUID:   e.deps.BotSetting.UUID,
+				BotUUID:   botSetting.UUID,
 				ChatID:    hCtx.ChatID,
 				Platform:  string(hCtx.Platform),
 			}
@@ -102,12 +105,12 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		SmartGuideConfig: smart_guide.LoadSmartGuideConfig(),
 		BaseURL:          baseURL,
 		APIKey:           apiKey,
-		Provider:         e.deps.BotSetting.SmartGuideProvider,
-		Model:            e.deps.BotSetting.SmartGuideModel,
+		Provider:         botSetting.SmartGuideProvider,
+		Model:            botSetting.SmartGuideModel,
 		Handler:          agentboot.NewCompositeHandler().SetApprovalHandler(e.deps.IMPrompter),
 		ChatID:           hCtx.ChatID,
 		Platform:         string(hCtx.Platform),
-		BotUUID:          e.deps.BotSetting.UUID,
+		BotUUID:          botSetting.UUID,
 		ToolCtx:          toolCtx,
 		GetStatusFunc: func(chatID string) (*smart_guide.StatusInfo, error) {
 			projectPath, _, _ := e.deps.ChatStore.GetProjectPath(chatID)
@@ -184,7 +187,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		agent:          agent,
 		projectPath:    projectPath,
 		meta:           meta,
-		behavior:       e.deps.BotSetting.GetOutputBehavior(),
+		behavior:       botSetting.GetOutputBehavior(),
 		formatResponse: e.deps.FormatResponse,
 		sendText:       e.deps.SendText,
 		messagesSent:   0,

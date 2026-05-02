@@ -298,20 +298,25 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 
 	logrus.WithField("uuid", uuid).Info("ImBot settings updated")
 
-	// Handle bot lifecycle if enabled status changed
+	// Handle enabled status changes only
+	// Config changes (provider, model, etc.) take effect automatically via dynamic lookup
 	if currentSettings.Enabled != settings.Enabled {
 		if h.botMgr != nil {
 			ctx := context.Background()
 			if settings.Enabled {
-				// Enable -> start the bot
-				if err := h.botMgr.StartBot(ctx, uuid); err != nil {
-					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to start bot after update")
-				}
+				// Disabled -> Enabled: start the bot
+				go func() {
+					if err := h.botMgr.StartBot(ctx, uuid); err != nil {
+						logrus.WithError(err).WithField("uuid", uuid).Error("Failed to start bot after enabling")
+					}
+				}()
 			} else {
-				// Disable -> stop the bot
-				if err := h.botMgr.StopBot(uuid); err != nil {
-					logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after update")
-				}
+				// Enabled -> Disabled: stop the bot
+				go func() {
+					if err := h.botMgr.StopBot(uuid); err != nil {
+						logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to stop bot after disabling")
+					}
+				}()
 			}
 		}
 	}

@@ -57,7 +57,11 @@ type ExecutionResult struct {
 
 // ExecutorDependencies holds shared dependencies for agent executors and router.
 type ExecutorDependencies struct {
-	BotSetting                 BotSetting
+	// GetBotSetting dynamically retrieves the current bot settings from the store.
+	// This ensures that any configuration changes (provider, model, etc.) are reflected
+	// immediately without requiring a bot restart.
+	GetBotSetting func() (BotSetting, error)
+
 	ChatStore                  ChatStoreInterface
 	SessionMgr                 *SessionManager
 	AgentBoot                  *agentboot.AgentBoot
@@ -78,6 +82,15 @@ type ExecutorDependencies struct {
 	NewStreamingMessageHandler func(hCtx HandlerContext, meta *ResponseMeta) *streamingMessageHandler
 }
 
+// GetBotSettingOrCache returns the current bot setting.
+// If dynamic lookup fails, returns an empty setting.
+func (d *ExecutorDependencies) GetBotSettingOrCache() BotSetting {
+	if setting, err := d.GetBotSetting(); err == nil {
+		return setting
+	}
+	return BotSetting{}
+}
+
 // resolveProjectPath resolves project path: override > ChatStore > default.
 func (d *ExecutorDependencies) resolveProjectPath(chatID string, override string) string {
 	if override != "" {
@@ -89,14 +102,14 @@ func (d *ExecutorDependencies) resolveProjectPath(chatID string, override string
 	return d.ResolveDefaultProjectPath()
 }
 
-// ResolveDefaultProjectPath returns the default project path.
-// Priority: 1. DefaultCwd from bot setting, 2. Current working directory, 3. User home directory
+// ResolveDefaultProjectPath returns the default project path from bot settings.
 func (d *ExecutorDependencies) ResolveDefaultProjectPath() string {
-	if d.BotSetting.DefaultCwd != "" {
-		if expanded, err := ExpandPath(d.BotSetting.DefaultCwd); err == nil {
+	setting := d.GetBotSettingOrCache()
+	if setting.DefaultCwd != "" {
+		if expanded, err := ExpandPath(setting.DefaultCwd); err == nil {
 			return expanded
 		}
-		logrus.WithField("path", d.BotSetting.DefaultCwd).Warn("Failed to expand DefaultCwd")
+		logrus.WithField("path", setting.DefaultCwd).Warn("Failed to expand DefaultCwd")
 	}
 	if cwd, err := os.Getwd(); err == nil {
 		return cwd

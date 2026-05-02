@@ -668,7 +668,8 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	pairing := bot.NewPairingManager(auditLog)
 
 	// Register unified message handler
-	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, directoryBrowser, manager, tbClient, pairing, auditLog)
+	// Pass nil as SettingsStore - standalone bots don't have dynamic config updates
+	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, directoryBrowser, manager, tbClient, pairing, auditLog, nil)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {

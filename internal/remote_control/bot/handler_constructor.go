@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
@@ -25,6 +26,7 @@ func NewBotHandler(
 	tbClient tbclient.TBClient,
 	pairing *PairingManager,
 	auditLog *audit.Logger,
+	store SettingsStore,
 ) *BotHandler {
 	// Create IM prompter for permission requests
 	imPrompter := NewIMPrompter(manager)
@@ -109,7 +111,6 @@ func NewBotHandler(
 
 	// Initialize AgentRouter with dependencies
 	deps := &ExecutorDependencies{
-		BotSetting:                 botSetting,
 		ChatStore:                  chatStore,
 		SessionMgr:                 sessionMgr,
 		AgentBoot:                  agentBoot,
@@ -130,6 +131,36 @@ func NewBotHandler(
 			return handler.SendFile(context.Background(), hCtx, filePath, caption)
 		},
 		NewStreamingMessageHandler: handler.newStreamingMessageHandler,
+		// GetBotSetting dynamically fetches the current bot settings from the store
+		GetBotSetting: func() (BotSetting, error) {
+			if store == nil {
+				return botSetting, nil
+			}
+			settingsAny, err := store.GetSettingsByUUIDInterface(botSetting.UUID)
+			if err != nil {
+				return botSetting, err
+			}
+			// Handle both bot.Settings and db.Settings types
+			if record, ok := settingsAny.(db.Settings); ok {
+				return BotSetting{
+					UUID:               record.UUID,
+					Name:               record.Name,
+					Token:              record.Auth["token"],
+					Platform:           record.Platform,
+					AuthType:           record.AuthType,
+					Auth:               record.Auth,
+					ProxyURL:           record.ProxyURL,
+					ChatIDLock:         record.ChatIDLock,
+					BashAllowlist:      record.BashAllowlist,
+					DefaultCwd:         record.DefaultCwd,
+					Enabled:            record.Enabled,
+					SmartGuideProvider: record.SmartGuideProvider,
+					SmartGuideModel:    record.SmartGuideModel,
+					RequirePairing:     record.RequirePairing,
+				}, nil
+			}
+			return botSetting, nil
+		},
 	}
 	handler.agentRouter = NewAgentRouter(deps)
 	handler.InitCommandRegistry()
