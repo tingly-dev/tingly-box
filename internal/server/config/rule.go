@@ -69,7 +69,7 @@ func (c *Config) EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, mode
 		newRule := typ.Rule{
 			UUID:          ruleUUID,
 			Scenario:      typ.ScenarioSmartGuide,
-			RequestModel:  WildcardRuleName,
+			RequestModel:  botUUID, // Use actual bot UUID instead of wildcard
 			ResponseModel: modelID,
 			Description:   fmt.Sprintf("Auto-generated rule for SmartGuide bot '%s' (DO NOT EDIT)", displayName),
 			Services: []*loadbalance.Service{
