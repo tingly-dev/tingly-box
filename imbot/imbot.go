@@ -135,6 +135,9 @@ const (
 	PlatformLark        = core.PlatformLark
 	PlatformWebChat     = core.PlatformWebChat
 	PlatformDingTalk    = core.PlatformDingTalk
+	PlatformWeixin      = core.PlatformWeixin
+	PlatformWecom       = core.PlatformWecom
+	PlatformTingly      = core.PlatformTingly
 
 	// Chat types
 	ChatTypeDirect  = core.ChatTypeDirect

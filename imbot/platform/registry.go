@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/imbot/core"
@@ -11,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/platform/lark"
 	"github.com/tingly-dev/tingly-box/imbot/platform/slack"
 	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 	"github.com/tingly-dev/tingly-box/imbot/platform/wecom"
 	"github.com/tingly-dev/tingly-box/imbot/platform/weixin"
 	"github.com/tingly-dev/tingly-box/imbot/platform/whatsapp"
@@ -98,10 +98,12 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 		return whatsapp.NewWhatsAppBot(config)
 	})
 
-	// WebChat (mock for testing)
-	r.Register(core.PlatformWebChat, func(config *core.Config) (core.Bot, error) {
-		return NewMockBot(config)
-	})
+	// Tingly: full-featured platform that doubles as the E2E test harness.
+	r.Register(core.PlatformTingly, tingly.NewBotFromConfig)
+
+	// WebChat: legacy mock platform name; delegates to tingly so any code
+	// still using "webchat" gets the new full-featured implementation.
+	r.Register(core.PlatformWebChat, tingly.NewBotFromConfig)
 
 	// DingTalk
 	r.Register(core.PlatformDingTalk, func(config *core.Config) (core.Bot, error) {
@@ -119,7 +121,7 @@ func (r *Registry) RegisterBuiltinPlatforms() {
 	})
 
 	// Add more platforms as they are implemented
-	// WhatsApp, Google Chat, Signal, BlueBubbles
+	// Google Chat, Signal, BlueBubbles
 }
 
 // Global registry instance
@@ -143,152 +145,4 @@ func IsSupported(platform core.Platform) bool {
 // SupportedPlatforms returns all supported platforms from the global registry
 func SupportedPlatforms() []core.Platform {
 	return globalRegistry.SupportedPlatforms()
-}
-
-// Mock platform for testing
-
-// MockBot is a mock bot implementation for testing
-type MockBot struct {
-	*core.BaseBot
-	connected bool
-	messages  []core.Message
-	ctx       context.Context
-	cancel    context.CancelFunc
-}
-
-// NewMockBot creates a new mock bot
-func NewMockBot(config *core.Config) (*MockBot, error) {
-	base := core.NewBaseBot(config)
-	return &MockBot{
-		BaseBot:  base,
-		messages: make([]core.Message, 0),
-	}, nil
-}
-
-// Connect connects the mock bot
-func (m *MockBot) Connect(ctx context.Context) error {
-	m.ctx, m.cancel = context.WithCancel(ctx)
-	m.connected = true
-	m.UpdateConnected(true)
-	m.UpdateAuthenticated(true)
-	m.UpdateReady(true)
-	m.EmitConnected()
-	m.EmitReady()
-	m.Logger().Info("Mock bot connected")
-	return nil
-}
-
-// Disconnect disconnects the mock bot
-func (m *MockBot) Disconnect(ctx context.Context) error {
-	if m.cancel != nil {
-		m.cancel()
-	}
-	m.connected = false
-	m.UpdateConnected(false)
-	m.UpdateReady(false)
-	m.EmitDisconnected()
-	m.Logger().Info("Mock bot disconnected")
-	return nil
-}
-
-// SendMessage sends a message
-func (m *MockBot) SendMessage(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
-	if !m.IsReady() {
-		return nil, core.NewBotError(core.ErrConnectionFailed, "bot is not ready", false)
-	}
-
-	m.UpdateLastActivity()
-
-	// Create result
-	result := &core.SendResult{
-		MessageID: fmt.Sprintf("mock-%d", len(m.messages)),
-	}
-
-	// Use timestamp from context if available, otherwise use current time
-	if ts, ok := ctx.Value("timestamp").(int64); ok {
-		result.Timestamp = ts
-	} else {
-		result.Timestamp = 0 // Will be set by caller
-	}
-
-	return result, nil
-}
-
-// SendText sends a text message
-func (m *MockBot) SendText(ctx context.Context, target string, text string) (*core.SendResult, error) {
-	return m.SendMessage(ctx, target, &core.SendMessageOptions{
-		Text: text,
-	})
-}
-
-// SendMedia sends media
-func (m *MockBot) SendMedia(ctx context.Context, target string, media []core.MediaAttachment) (*core.SendResult, error) {
-	return m.SendMessage(ctx, target, &core.SendMessageOptions{
-		Media: media,
-	})
-}
-
-// React reacts to a message
-func (m *MockBot) React(ctx context.Context, messageID string, emoji string) error {
-	if !m.IsReady() {
-		return core.NewBotError(core.ErrConnectionFailed, "bot is not ready", false)
-	}
-	m.UpdateLastActivity()
-	return nil
-}
-
-// EditMessage edits a message
-func (m *MockBot) EditMessage(ctx context.Context, messageID string, text string) error {
-	if !m.IsReady() {
-		return core.NewBotError(core.ErrConnectionFailed, "bot is not ready", false)
-	}
-	m.UpdateLastActivity()
-	return nil
-}
-
-// DeleteMessage deletes a message
-func (m *MockBot) DeleteMessage(ctx context.Context, messageID string) error {
-	if !m.IsReady() {
-		return core.NewBotError(core.ErrConnectionFailed, "bot is not ready", false)
-	}
-	m.UpdateLastActivity()
-	return nil
-}
-
-// PlatformInfo returns platform info
-func (m *MockBot) PlatformInfo() *core.PlatformInfo {
-	return core.NewPlatformInfo(m.Config().Platform, "Mock Platform")
-}
-
-// StartReceiving starts receiving messages
-func (m *MockBot) StartReceiving(ctx context.Context) error {
-	return nil
-}
-
-// StopReceiving stops receiving messages
-func (m *MockBot) StopReceiving(ctx context.Context) error {
-	return nil
-}
-
-// ReceiveMessage simulates receiving a message
-func (m *MockBot) ReceiveMessage(msg core.Message) {
-	m.messages = append(m.messages, msg)
-	m.EmitMessage(msg)
-}
-
-// GetMessages returns all received messages
-func (m *MockBot) GetMessages() []core.Message {
-	return m.messages
-}
-
-// ClearMessages clears all received messages
-func (m *MockBot) ClearMessages() {
-	m.messages = make([]core.Message, 0)
-}
-
-// Register mock platform for testing
-func init() {
-	Register(core.PlatformWebChat, func(config *core.Config) (core.Bot, error) {
-		return NewMockBot(config)
-	})
 }

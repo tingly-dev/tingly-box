@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot/platform/discord"
 	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	"github.com/tingly-dev/tingly-box/imbot/platform/telegram"
+	"github.com/tingly-dev/tingly-box/imbot/platform/tingly"
 )
 
 // Handler manages interaction requests and responses
@@ -66,6 +67,8 @@ func NewHandler(manager BotManager) *Handler {
 	h.RegisterAdapter(core.PlatformDingTalk, NewDingTalkAdapter())
 	h.RegisterAdapter(core.PlatformDiscord, NewDiscordAdapter())
 	h.RegisterAdapter(core.PlatformFeishu, NewFeishuAdapter())
+	h.RegisterAdapter(core.PlatformTingly, NewTinglyAdapter())
+	h.RegisterAdapter(core.PlatformWebChat, NewTinglyAdapter())
 
 	return h
 }
@@ -483,4 +486,9 @@ func NewDiscordAdapter() Adapter {
 // NewFeishuAdapter creates a new Feishu interaction adapter
 func NewFeishuAdapter() Adapter {
 	return feishu.NewInteractionAdapter()
+}
+
+// NewTinglyAdapter creates a new Tingly interaction adapter
+func NewTinglyAdapter() Adapter {
+	return tingly.NewInteractionAdapter()
 }

@@ -19,6 +19,7 @@ const (
 	PlatformDingTalk    Platform = "dingtalk"
 	PlatformWeixin      Platform = "weixin"
 	PlatformWecom       Platform = "wecom"
+	PlatformTingly      Platform = "tingly"
 )
 
 // ChatType represents the type of chat
@@ -251,6 +252,13 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 			TextLimit:  4000,
 			RateLimit:  50,
 		},
+		PlatformTingly: {
+			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
+			MediaTypes: []string{"image", "video", "audio", "document", "sticker", "gif"},
+			Features:   []string{"reactions", "edit", "delete", "threads", "polls", "inlineKeyboards", "callbackQueries", "messageEditing", "mentions", "streaming", "interactiveCards"},
+			TextLimit:  65536,
+			RateLimit:  1000,
+		},
 	}
 
 	if caps, ok := capabilities[platform]; ok {
@@ -329,6 +337,14 @@ var reactionMap = map[Platform]map[ReactionToken]string{
 		ReactionLaugh:    "LOL",
 	},
 	PlatformDingTalk: {
+		ReactionReceived: "👨‍💻",
+		ReactionDone:     "✅",
+		ReactionError:    "❌",
+		ReactionLike:     "👍",
+		ReactionLove:     "❤️",
+		ReactionLaugh:    "😂",
+	},
+	PlatformTingly: {
 		ReactionReceived: "👨‍💻",
 		ReactionDone:     "✅",
 		ReactionError:    "❌",
