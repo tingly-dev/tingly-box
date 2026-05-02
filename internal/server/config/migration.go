@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -36,6 +37,7 @@ func Migrate(c *Config) error {
 	migrate20260306(c)
 	migrate20260416(c) // Enable multi-tenant by default
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
+	migrate20260502(c) // Remove wildcard (*) rules for smart_guide scenario
 	return nil
 }
 
@@ -401,5 +403,34 @@ func migrate20260421(c *Config) {
 
 	if needsSave {
 		_ = c.Save()
+	}
+}
+
+// migrate20260502 removes wildcard (*) rules for smart_guide scenario
+// This cleans up legacy wildcard rules that are no longer needed
+// as SmartGuide now uses bot-specific rules with UUID pattern: _internal_smart_guide_{botUUID}
+func migrate20260502(c *Config) {
+	needsSave := false
+
+	// Filter out smart_guide rules with wildcard RequestModel
+	var filteredRules []typ.Rule
+	for _, rule := range c.Rules {
+		// Skip smart_guide rules with wildcard RequestModel
+		if rule.Scenario == typ.ScenarioSmartGuide && rule.RequestModel == "*" {
+			logrus.WithFields(logrus.Fields{
+				"rule_uuid":      rule.UUID,
+				"request_model":  rule.RequestModel,
+				"response_model": rule.ResponseModel,
+			}).Info("Removing smart_guide wildcard rule")
+			needsSave = true
+			continue
+		}
+		filteredRules = append(filteredRules, rule)
+	}
+
+	if needsSave {
+		c.Rules = filteredRules
+		_ = c.Save()
+		logrus.Info("Migration 2026-05-02 completed: removed smart_guide wildcard rules")
 	}
 }
