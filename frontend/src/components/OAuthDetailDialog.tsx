@@ -20,7 +20,7 @@ import {type Provider } from '../types/provider';
 interface OAuthEditFormData {
     name: string;
     apiBase: string;
-    apiStyle: 'openai' | 'anthropic';
+    apiStyle: string; // 'openai' | 'anthropic' | 'google'
     enabled: boolean;
     proxyUrl?: string;
 }
@@ -193,7 +193,7 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                                 size="small"
                                 fullWidth
                                 label="Provider Type"
-                                value={provider.oauth_detail?.provider_type || 'N/A'}
+                                value={provider.oauth_detail?.issuer || 'N/A'}
                                 disabled
                             />
 

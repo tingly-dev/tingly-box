@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -119,7 +120,7 @@ func TestProviderSaveOAuth(t *testing.T) {
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "test-access-token",
-			ProviderType: "anthropic",
+			Issuer:       ai.IssuerAnthropic,
 			UserID:       "test-user-id",
 			RefreshToken: "test-refresh-token",
 			ExpiresAt:    expiresAt.Format(time.RFC3339),
@@ -150,8 +151,8 @@ func TestProviderSaveOAuth(t *testing.T) {
 	if retrieved.OAuthDetail.AccessToken != provider.OAuthDetail.AccessToken {
 		t.Errorf("AccessToken mismatch: got %s, want %s", retrieved.OAuthDetail.AccessToken, provider.OAuthDetail.AccessToken)
 	}
-	if retrieved.OAuthDetail.ProviderType != provider.OAuthDetail.ProviderType {
-		t.Errorf("ProviderType mismatch: got %s, want %s", retrieved.OAuthDetail.ProviderType, provider.OAuthDetail.ProviderType)
+	if retrieved.OAuthDetail.Issuer != provider.OAuthDetail.Issuer {
+		t.Errorf("Issuer mismatch: got %s, want %s", retrieved.OAuthDetail.Issuer, provider.OAuthDetail.Issuer)
 	}
 	if retrieved.OAuthDetail.UserID != provider.OAuthDetail.UserID {
 		t.Errorf("UserID mismatch: got %s, want %s", retrieved.OAuthDetail.UserID, provider.OAuthDetail.UserID)
@@ -281,8 +282,8 @@ func TestProviderList(t *testing.T) {
 			APIStyle: protocol.APIStyleOpenAI,
 			AuthType: typ.AuthTypeOAuth,
 			OAuthDetail: &typ.OAuthDetail{
-				AccessToken:  "oauth-token-3",
-				ProviderType: "anthropic",
+				AccessToken: "oauth-token-3",
+				Issuer:      ai.IssuerAnthropic,
 			},
 			Enabled: true,
 		},
@@ -410,7 +411,7 @@ func TestProviderUpdateOAuthCredential(t *testing.T) {
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  "original-access-token",
-			ProviderType: "anthropic",
+			Issuer:       ai.IssuerAnthropic,
 			UserID:       "user-123",
 			RefreshToken: "original-refresh-token",
 			ExpiresAt:    expiresAt.Format(time.RFC3339),
@@ -426,7 +427,7 @@ func TestProviderUpdateOAuthCredential(t *testing.T) {
 	newExpiresAt := time.Now().Add(2 * time.Hour)
 	newOAuthDetail := &typ.OAuthDetail{
 		AccessToken:  "new-access-token",
-		ProviderType: "anthropic",
+		Issuer:       ai.IssuerAnthropic,
 		UserID:       "user-123",
 		RefreshToken: "new-refresh-token",
 		ExpiresAt:    newExpiresAt.Format(time.RFC3339),
@@ -463,10 +464,10 @@ func TestProviderIsOAuthExpired(t *testing.T) {
 		APIStyle: protocol.APIStyleAnthropic,
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
-			AccessToken:  "test-token",
-			ProviderType: "anthropic",
-			UserID:       "user-123",
-			ExpiresAt:    pastTime.Format(time.RFC3339),
+			AccessToken: "test-token",
+			Issuer:      ai.IssuerAnthropic,
+			UserID:      "user-123",
+			ExpiresAt:   pastTime.Format(time.RFC3339),
 		},
 		Enabled: true,
 	}
@@ -488,10 +489,10 @@ func TestProviderIsOAuthExpired(t *testing.T) {
 	// Update with future expiration
 	futureTime := time.Now().Add(1 * time.Hour)
 	newOAuthDetail := &typ.OAuthDetail{
-		AccessToken:  "new-token",
-		ProviderType: "anthropic",
-		UserID:       "user-123",
-		ExpiresAt:    futureTime.Format(time.RFC3339),
+		AccessToken: "new-token",
+		Issuer:      ai.IssuerAnthropic,
+		UserID:      "user-123",
+		ExpiresAt:   futureTime.Format(time.RFC3339),
 	}
 
 	if err := store.UpdateCredential("expired-oauth-uuid", "", newOAuthDetail); err != nil {
@@ -521,9 +522,9 @@ func TestProviderUpdateOAuthAccessToken(t *testing.T) {
 		APIStyle: protocol.APIStyleAnthropic,
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
-			AccessToken:  "old-access-token",
-			ProviderType: "anthropic",
-			UserID:       "user-123",
+			AccessToken: "old-access-token",
+			Issuer:      ai.IssuerAnthropic,
+			UserID:      "user-123",
 		},
 		Enabled: true,
 	}
@@ -548,8 +549,8 @@ func TestProviderUpdateOAuthAccessToken(t *testing.T) {
 	}
 
 	// Verify other OAuth fields are preserved
-	if retrieved.OAuthDetail.ProviderType != "anthropic" {
-		t.Errorf("ProviderType not preserved: got %s, want %s", retrieved.OAuthDetail.ProviderType, "anthropic")
+	if retrieved.OAuthDetail.Issuer != ai.IssuerAnthropic {
+		t.Errorf("Issuer not preserved: got %s, want %s", retrieved.OAuthDetail.Issuer, ai.IssuerAnthropic)
 	}
 	if retrieved.OAuthDetail.UserID != "user-123" {
 		t.Errorf("UserID not preserved: got %s, want %s", retrieved.OAuthDetail.UserID, "user-123")

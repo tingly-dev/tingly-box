@@ -292,6 +292,50 @@
         }
       }
     },
+    "/api/v1/config/restore/claude": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Restore Claude Code configuration from the most recent backup",
+        "description": "Restore Claude Code configuration from the most recent backup",
+        "operationId": "apiV1ConfigRestoreClaudePost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/restore/opencode": {
+      "post": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Restore OpenCode configuration from the most recent backup",
+        "description": "Restore OpenCode configuration from the most recent backup",
+        "operationId": "apiV1ConfigRestoreOpencodePost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreConfigResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/guardrails/builtins": {
       "get": {
         "tags": [
@@ -1412,6 +1456,83 @@
         }
       }
     },
+    "/api/v1/log/request": {
+      "delete": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Clear all stored request bodies",
+        "description": "Clear all stored request bodies",
+        "operationId": "apiV1LogRequestDelete",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/log/request/stats": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Get request body store statistics",
+        "description": "Get request body store statistics",
+        "operationId": "apiV1LogRequestStatsGet",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/log/request/{id}": {
+      "get": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Get a stored request body by its reference ID",
+        "description": "Get a stored request body by its reference ID",
+        "operationId": "apiV1LogRequestIdGet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Resource ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestBodyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/log/stats": {
       "get": {
         "tags": [
@@ -1703,14 +1824,25 @@
         }
       }
     },
-    "/api/v1/mcp/mode": {
+    "/api/v1/mcp/{client_name}": {
       "get": {
         "tags": [
-          "mcp"
+          "mcp-transport"
         ],
-        "summary": "Get MCP runtime mode (intercept or local)",
-        "description": "Get MCP runtime mode (intercept or local)",
-        "operationId": "apiV1McpModeGet",
+        "summary": "MCP HTTP transport endpoint (GET compatibility)",
+        "description": "MCP HTTP transport endpoint (GET compatibility)",
+        "operationId": "apiV1McpClient_nameGet",
+        "parameters": [
+          {
+            "name": "client_name",
+            "in": "path",
+            "description": "Path parameter 'client_name'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1724,28 +1856,6 @@
           }
         }
       },
-      "put": {
-        "tags": [
-          "mcp"
-        ],
-        "summary": "Set MCP runtime mode (intercept or local)",
-        "description": "Set MCP runtime mode (intercept or local)",
-        "operationId": "apiV1McpModePut",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/mcp/{client_name}": {
       "post": {
         "tags": [
           "mcp-transport"
@@ -2135,6 +2245,39 @@
         }
       }
     },
+    "/api/v1/onboarding/extract": {
+      "post": {
+        "tags": [
+          "onboarding"
+        ],
+        "summary": "Extract provider candidates from arbitrary text input",
+        "description": "Extract provider candidates from arbitrary text input",
+        "operationId": "apiV1OnboardingExtractPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/probe": {
       "post": {
         "tags": [
@@ -2161,6 +2304,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProbeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/probe-models": {
+      "post": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Fetch model list from an arbitrary OpenAI-compatible endpoint",
+        "description": "Fetch model list from an arbitrary OpenAI-compatible endpoint",
+        "operationId": "apiV1Probe-modelsPost",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -4350,6 +4515,38 @@
           "message"
         ]
       },
+      "AdvisorConfig": {
+        "type": "object",
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "description": "Field api_key"
+          },
+          "base_url": {
+            "type": "string",
+            "description": "Field base_url"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_tokens"
+          },
+          "max_uses_per_request": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_uses_per_request"
+          },
+          "model": {
+            "type": "string",
+            "description": "Field model"
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field timeout_seconds"
+          }
+        }
+      },
       "AggregatedStat": {
         "type": "object",
         "properties": {
@@ -5020,6 +5217,61 @@
           "type"
         ]
       },
+      "ExtractData": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "type": "array",
+            "description": "Field tokens",
+            "items": {
+              "$ref": "#/components/schemas/TokenCandidate"
+            }
+          },
+          "urls": {
+            "type": "array",
+            "description": "Field urls",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "urls",
+          "tokens"
+        ]
+      },
+      "ExtractRequest": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "description": "Field input"
+          }
+        },
+        "required": [
+          "input"
+        ]
+      },
+      "ExtractResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "Field data",
+            "$ref": "#/components/schemas/ExtractData"
+          },
+          "error": {
+            "description": "Field error",
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
       "FieldSpec": {
         "type": "object",
         "properties": {
@@ -5594,6 +5846,10 @@
             "items": {
               "$ref": "#/components/schemas/MCPSourceConfig"
             }
+          },
+          "strip_disabled_mcp_tools": {
+            "type": "boolean",
+            "description": "Field strip_disabled_mcp_tools"
           }
         }
       },
@@ -5620,6 +5876,10 @@
       "MCPSourceConfig": {
         "type": "object",
         "properties": {
+          "advisor": {
+            "description": "Field advisor",
+            "$ref": "#/components/schemas/AdvisorConfig"
+          },
           "allowed_extra_headers": {
             "type": "array",
             "description": "Field allowed_extra_headers",
@@ -5679,6 +5939,10 @@
           "id": {
             "type": "string",
             "description": "Field id"
+          },
+          "is_client_tool": {
+            "type": "boolean",
+            "description": "Field is_client_tool"
           },
           "is_ping_available": {
             "type": "boolean",
@@ -5755,6 +6019,28 @@
         },
         "required": [
           "command"
+        ]
+      },
+      "ModelInfo": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field context"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "max_output": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field max_output"
+          }
+        },
+        "required": [
+          "id"
         ]
       },
       "ModelProbeData": {
@@ -5984,6 +6270,10 @@
               "type": "object"
             }
           },
+          "issuer": {
+            "type": "string",
+            "description": "Field issuer"
+          },
           "provider_type": {
             "type": "string",
             "description": "Field provider_type"
@@ -5999,11 +6289,11 @@
         },
         "required": [
           "access_token",
-          "provider_type",
+          "issuer",
           "user_id",
           "refresh_token",
           "expires_at",
-          "extra_fields"
+          "provider_type"
         ]
       },
       "OAuthMessageResponse": {
@@ -7070,6 +7360,10 @@
             "type": "string",
             "description": "Field base_url_openai"
           },
+          "canonical_domain": {
+            "type": "string",
+            "description": "Field canonical_domain"
+          },
           "default_model_capacity": {
             "type": "integer",
             "format": "int64",
@@ -7087,13 +7381,6 @@
             "type": "string",
             "description": "Field id"
           },
-          "metadata": {
-            "type": "object",
-            "description": "Field metadata",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
           "model_capacities": {
             "type": "object",
             "description": "Field model_capacities",
@@ -7106,19 +7393,11 @@
             "type": "string",
             "description": "Field model_doc"
           },
-          "model_limits": {
-            "type": "object",
-            "description": "Field model_limits",
-            "additionalProperties": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
           "models": {
             "type": "array",
             "description": "Field models",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ModelInfo"
             }
           },
           "name": {
@@ -7129,9 +7408,17 @@
             "type": "string",
             "description": "Field oauth_provider"
           },
+          "plan": {
+            "type": "string",
+            "description": "Field plan"
+          },
           "pricing_doc": {
             "type": "string",
             "description": "Field pricing_doc"
+          },
+          "region": {
+            "type": "string",
+            "description": "Field region"
           },
           "status": {
             "type": "string",
@@ -7141,25 +7428,18 @@
             "type": "boolean",
             "description": "Field supports_models_endpoint"
           },
-          "tags": {
-            "type": "array",
-            "description": "Field tags",
-            "items": {
-              "type": "string"
-            }
-          },
           "total_capacity": {
             "type": "integer",
             "format": "int64",
             "description": "Field total_capacity"
           },
-          "type": {
-            "type": "string",
-            "description": "Field type"
-          },
           "valid": {
             "type": "boolean",
             "description": "Field valid"
+          },
+          "vendor_family": {
+            "type": "string",
+            "description": "Field vendor_family"
           },
           "web_search_schema": {
             "type": "string",
@@ -7176,8 +7456,11 @@
           "status",
           "valid",
           "website",
+          "canonical_domain",
+          "vendor_family",
+          "region",
+          "plan",
           "description",
-          "type",
           "api_doc",
           "model_doc",
           "pricing_doc",
@@ -7207,6 +7490,13 @@
             "type": "string",
             "format": "date-time",
             "description": "Field expires_at"
+          },
+          "extra_windows": {
+            "type": "array",
+            "description": "Field extra_windows",
+            "items": {
+              "$ref": "#/components/schemas/UsageWindow"
+            }
           },
           "fetched_at": {
             "type": "string",
@@ -7423,6 +7713,83 @@
         },
         "required": [
           "success",
+          "message"
+        ]
+      },
+      "RequestBodyResponse": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Field body"
+          },
+          "id": {
+            "type": "string",
+            "description": "Field id"
+          },
+          "method": {
+            "type": "string",
+            "description": "Field method"
+          },
+          "path": {
+            "type": "string",
+            "description": "Field path"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Field truncated"
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "path",
+          "body",
+          "truncated"
+        ]
+      },
+      "RestoreConfigResponse": {
+        "type": "object",
+        "properties": {
+          "agentType": {
+            "type": "string",
+            "description": "Field agentType"
+          },
+          "failures": {
+            "type": "array",
+            "description": "Field failures",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "preRestoreBackups": {
+            "type": "array",
+            "description": "Field preRestoreBackups",
+            "items": {
+              "type": "string"
+            }
+          },
+          "restoredFiles": {
+            "type": "array",
+            "description": "Field restoredFiles",
+            "items": {
+              "type": "string"
+            }
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "agentType",
+          "restoredFiles",
+          "preRestoreBackups",
           "message"
         ]
       },
@@ -7682,10 +8049,6 @@
           "recording_v2": {
             "type": "string",
             "description": "Field recording_v2"
-          },
-          "recording": {
-            "type": "boolean",
-            "description": "Field recording"
           },
           "separate": {
             "type": "boolean",
@@ -8110,6 +8473,10 @@
           "proxy_url": {
             "type": "string",
             "description": "Field proxy_url"
+          },
+          "require_pairing": {
+            "type": "boolean",
+            "description": "Field require_pairing"
           },
           "smartguide_model": {
             "type": "string",
@@ -8700,6 +9067,28 @@
           "enabled"
         ]
       },
+      "TokenCandidate": {
+        "type": "object",
+        "properties": {
+          "preview": {
+            "type": "string",
+            "description": "Field preview"
+          },
+          "source": {
+            "type": "string",
+            "description": "Field source"
+          },
+          "value": {
+            "type": "string",
+            "description": "Field value"
+          }
+        },
+        "required": [
+          "value",
+          "preview",
+          "source"
+        ]
+      },
       "TokenInfo": {
         "type": "object",
         "properties": {
@@ -9037,6 +9426,10 @@
             "type": "string",
             "description": "Field organization_id"
           },
+          "spend_control_reached": {
+            "type": "boolean",
+            "description": "Field spend_control_reached"
+          },
           "tier": {
             "type": "string",
             "description": "Field tier"
@@ -9328,6 +9721,10 @@
       "UsageWindow": {
         "type": "object",
         "properties": {
+          "allowed": {
+            "type": "boolean",
+            "description": "Field allowed"
+          },
           "description": {
             "type": "string",
             "description": "Field description"
@@ -9340,6 +9737,10 @@
             "type": "number",
             "format": "double",
             "description": "Field limit"
+          },
+          "limit_reached": {
+            "type": "boolean",
+            "description": "Field limit_reached"
           },
           "resets_at": {
             "type": "string",
@@ -9430,84 +9831,28 @@
   },
   "tags": [
     {
-      "name": "weixin",
-      "description": "Operations related to weixin"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
+      "name": "auth",
+      "description": "Operations related to auth"
     },
     {
       "name": "logs",
       "description": "Operations related to logs"
     },
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "rules",
+      "description": "Operations related to rules"
     },
     {
       "name": "token",
       "description": "Operations related to token"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
     },
     {
       "name": "info",
@@ -9518,8 +9863,68 @@
       "description": "Operations related to system-logs"
     },
     {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
       "name": "skills",
       "description": "Operations related to skills"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
+    },
+    {
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
     }
   ]
 }

@@ -195,7 +195,7 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 		"provider":  provider.Name,
 	})
 
-	issuer, err := oauth.ParseProviderType(provider.OAuthDetail.ProviderType)
+	issuer, err := oauth.ParseProviderType(provider.OAuthDetail.Issuer)
 	if err != nil {
 		logger.WithError(err).Error("Invalid provider type")
 		return

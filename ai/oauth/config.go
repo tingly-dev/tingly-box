@@ -17,14 +17,13 @@ import (
 const DefaultSessionExpiry = 10 * time.Minute
 
 // ParseProviderType parses a provider type from string, case-insensitive
-func ParseProviderType(s string) (ai.Issuer, error) {
-	p := ai.Issuer(s)
+func ParseProviderType(i ai.Issuer) (ai.Issuer, error) {
 	// Validate by checking against known providers
-	switch p {
+	switch i {
 	case ai.IssuerClaudeCode, ai.IssuerOpenAI, ai.IssuerGoogle, ai.IssuerGemini, ai.IssuerGitHub, ai.IssuerQwenCode, ai.IssuerAntigravity, ai.IssuerIFlow, ai.IssuerCodex, ai.IssuerMock, ai.IssuerKimiCode, ai.IssuerCursor, ai.IssuerCopilot:
-		return p, nil
+		return i, nil
 	default:
-		return "", fmt.Errorf("unknown provider type: %s", s)
+		return "", fmt.Errorf("unknown provider type: %s", i)
 	}
 }
 

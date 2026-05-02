@@ -248,7 +248,7 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                 {/* Provider Type */}
                                 <TableCell>
                                     <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
-                                        {provider.oauth_detail?.provider_type || 'N/A'}
+                                        {provider.oauth_detail?.issuer || 'N/A'}
                                     </Typography>
                                 </TableCell>
                                 {/* Expires At */}

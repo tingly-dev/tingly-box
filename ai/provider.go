@@ -25,7 +25,7 @@ type OAuthDetail struct {
 	ExtraFields  map[string]interface{} `json:"extra_fields,omitempty"` // Any extra field for some special clients
 
 	// Deprecated: Use Issuer instead. Kept for backward compatibility.
-	ProviderType string `json:"provider_type,omitempty"`
+	ProviderType string `json:"provider_type"`
 }
 
 // UnmarshalJSON implements json.Unmarshaler for OAuthDetail to handle backward compatibility.

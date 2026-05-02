@@ -1,56 +1,26 @@
 
-export interface Provider {
-    uuid: string;
-    name: string;
-    enabled: boolean;
-    api_base: string;
-    api_style: "openai" | "anthropic"; // "openai" or "anthropic", defaults to "openai"
-    token?: string;
-    auth_type?: "api_key" | "oauth"; // "api_key" or "oauth"
-    oauth_detail?: OAuthDetail;
-    proxy_url?: string;
-}
+// Re-export provider-related types from codegen
+import type {
+    ProviderResponse,
+    ProviderModelInfo,
+    OAuthDetail,
+} from '@/client';
 
-export interface OAuthDetail {
-    access_token: string;
-    provider_type: string; // anthropic, google, etc.
-    user_id: string;
-    refresh_token?: string;
-    expires_at?: string;
-}
+// Type aliases for convenience
+// Provider is an alias for ProviderResponse from codegen
+export type Provider = ProviderResponse;
 
-export interface ProviderModelData {
-    uuid: string;
-    models: string[];
-    star_models?: string[];
-    last_updated?: string;
-    custom_model?: string;
-    quota?: {
-        primary?: {
-            type: string;
-            used: number;
-            limit: number;
-            used_percent: number;
-            resets_at?: string;
-            unit: string;
-            label: string;
-            description?: string;
-        };
-        cost?: {
-            used: number;
-            limit: number;
-            currency_code: string;
-            label?: string;
-        };
-    };
-}
+// Provider models data indexed by provider UUID
+// Note: ProviderModelInfo from codegen is the new format
+export type ProviderModelData = ProviderModelInfo;
 
-// Provider models data indexed by provider name (legacy)
-export interface ProviderModelsData {
-    [providerName: string]: ProviderModelData;
-}
-
-// Provider models data indexed by provider UUID (new)
 export interface ProviderModelsDataByUuid {
     [providerUuid: string]: ProviderModelData;
 }
+
+// Legacy index types (deprecated, use ProviderModelsDataByUuid)
+// @deprecated Use ProviderModelsDataByUuid instead
+export type ProviderModelsData = Record<string, ProviderModelData>;
+
+// Re-export for consumers
+export type { ProviderResponse, ProviderModelInfo, OAuthDetail };

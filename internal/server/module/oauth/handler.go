@@ -237,7 +237,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		}
 	}
 
-	issuer, err := oauth.ParseProviderType(req.Provider)
+	issuer, err := oauth.ParseProviderType(ai.Issuer(req.Provider))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -455,7 +455,7 @@ func (h *Handler) GetOAuthToken(c *gin.Context) {
 		resp.Data.RefreshToken = provider.OAuthDetail.RefreshToken
 		resp.Data.TokenType = "Bearer"
 		resp.Data.ExpiresAt = provider.OAuthDetail.ExpiresAt
-		resp.Data.Provider = provider.OAuthDetail.ProviderType
+		resp.Data.Provider = string(provider.OAuthDetail.Issuer)
 
 		// Check if token is valid
 		if provider.OAuthDetail.ExpiresAt != "" {
@@ -548,7 +548,7 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 		return
 	}
 
-	issuer, err := oauth.ParseProviderType(provider.OAuthDetail.ProviderType)
+	issuer, err := oauth.ParseProviderType(provider.OAuthDetail.Issuer)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, OAuthErrorResponse{
 			Success: false,
@@ -1004,6 +1004,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  token.AccessToken,
 			ProviderType: string(issuer),
+			Issuer:       issuer,
 			UserID:       uuid.New().String(),
 			RefreshToken: token.RefreshToken,
 			ExpiresAt:    expiresAt,

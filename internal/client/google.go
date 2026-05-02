@@ -36,7 +36,7 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 
 		issuer := ""
 		if provider.OAuthDetail != nil {
-			issuer = provider.OAuthDetail.ProviderType
+			issuer = string(provider.OAuthDetail.Issuer)
 		}
 		if issuer != "" {
 			logrus.Infof("Using session-bound transport for OAuth provider type: %s, session: %s", issuer, sessionID.Value)
