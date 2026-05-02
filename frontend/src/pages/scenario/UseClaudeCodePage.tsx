@@ -247,6 +247,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                     agentKey={SCENARIO}
                     agentName="Claude Code"
                     installCommand="npm install -g @anthropic-ai/claude-code"
+                    installMirrorCommand="npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com"
                     onApply={handleApply}
                     onApplyWithStatusLine={handleApplyWithStatusLine}
                     isApplyLoading={isApplyLoading}

@@ -73,6 +73,7 @@ const UseCodexPageContent: React.FC = () => {
                     agentKey={scenario}
                     agentName="Codex"
                     installCommand="npm install -g @openai/codex"
+                    installMirrorCommand="npm install -g @openai/codex --registry=https://registry.npmmirror.com"
                     onApply={handleApply}
                     onViewConfig={() => setConfigModalOpen(true)}
                 />

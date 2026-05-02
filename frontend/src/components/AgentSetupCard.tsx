@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import { copyableTextStyle } from '@/styles/textStyles';
 
 export interface AgentApplyResult {
     success: boolean;
@@ -30,6 +31,7 @@ export interface AgentSetupCardProps {
     agentKey: string;
     agentName: string;
     installCommand: string;
+    installMirrorCommand?: string;
     onApply: () => Promise<AgentApplyResult>;
     onApplyWithStatusLine?: () => Promise<AgentApplyResult>;
     isApplyLoading?: boolean;
@@ -50,6 +52,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     agentKey,
     agentName,
     installCommand,
+    installMirrorCommand,
     onApply,
     onApplyWithStatusLine,
     isApplyLoading = false,
@@ -69,6 +72,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const [providerLoading, setProviderLoading] = useState(true);
     const [applyResult, setApplyResult] = useState<AgentApplyResult | null>(null);
     const [copied, setCopied] = useState(false);
+    const [copiedMirror, setCopiedMirror] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -109,6 +113,13 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         await navigator.clipboard.writeText(installCommand);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
+    };
+
+    const handleCopyMirror = async () => {
+        if (!installMirrorCommand) return;
+        await navigator.clipboard.writeText(installMirrorCommand);
+        setCopiedMirror(true);
+        setTimeout(() => setCopiedMirror(false), 1500);
     };
 
     const handleApply = async () => {
@@ -204,32 +215,77 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             <Typography variant="body2" fontWeight={500} color={step2Done ? 'text.primary' : 'primary.main'}>
                                 Step 2 — Install {agentName}
                             </Typography>
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1,
-                                    mt: 0.75,
-                                    px: 1.5,
-                                    py: 0.75,
-                                    bgcolor: 'background.default',
-                                    borderRadius: 1,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                }}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    sx={{ fontFamily: 'monospace', flex: 1, color: 'text.primary', fontSize: '0.8rem' }}
-                                >
-                                    {installCommand}
+
+                            {/* npm official */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>
+                                    npm official
                                 </Typography>
-                                <Tooltip title={copied ? 'Copied!' : 'Copy'}>
-                                    <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0 }}>
-                                        <ContentCopyIcon sx={{ fontSize: 16 }} />
-                                    </IconButton>
-                                </Tooltip>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                    <Tooltip title={copied ? 'Copied!' : 'Copy'}>
+                                        <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}>
+                                            <ContentCopyIcon sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Typography
+                                        variant="body2"
+                                        onClick={handleCopy}
+                                        sx={{
+                                            fontFamily: 'monospace',
+                                            flex: 1,
+                                            fontSize: '0.8rem',
+                                            color: 'text.primary',
+                                            cursor: 'pointer',
+                                            '&:hover': {
+                                                color: 'primary.main',
+                                            },
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                        title={installCommand}
+                                    >
+                                        {installCommand}
+                                    </Typography>
+                                </Box>
                             </Box>
+
+                            {/* npm mirror */}
+                            {installMirrorCommand && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800, mt: 0.75 }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>
+                                        npm mirror
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                        <Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}>
+                                            <IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}>
+                                                <ContentCopyIcon sx={{ fontSize: 14 }} />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Typography
+                                            variant="body2"
+                                            onClick={handleCopyMirror}
+                                            sx={{
+                                                fontFamily: 'monospace',
+                                                flex: 1,
+                                                fontSize: '0.8rem',
+                                                color: 'text.primary',
+                                                cursor: 'pointer',
+                                                '&:hover': {
+                                                    color: 'primary.main',
+                                                },
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                            title={installMirrorCommand}
+                                        >
+                                            {installMirrorCommand}
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            )}
+
                             {!step2Done && (
                                 <Button
                                     size="small"

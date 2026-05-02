@@ -121,6 +121,7 @@ const UseOpenCodePageContent: React.FC = () => {
                     agentKey={scenario}
                     agentName="OpenCode"
                     installCommand="npm install -g opencode-ai"
+                    installMirrorCommand="npm install -g opencode-ai --registry=https://registry.npmmirror.com"
                     onApply={handleApply}
                     isApplyLoading={isApplyLoading}
                     onViewConfig={handleOpenConfigModal}
