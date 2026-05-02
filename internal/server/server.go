@@ -1374,19 +1374,19 @@ func (s *Server) GetLoadBalancer() *LoadBalancer {
 	return s.loadBalancer
 }
 
-// GetPreferredEndpointForModel returns the preferred endpoint (chat or responses) for a model
-// Returns "responses" if the model supports the Responses API, otherwise returns "chat"
+// GetPreferredEndpointForModel returns the preferred endpoint (chat or responses) for a model.
+// This is the canonical entry point for endpoint selection.
+//
+// The decision is based on:
+// 1. Live probe results (cached in memory with TTL)
+// 2. Fallback to database-stored capability status
+// 3. Default to "chat" if no information is available
+//
+// NOTE: Database stores only raw state (availability, latency, errors),
+// not the PreferredEndpoint conclusion. This ensures behavior changes
+// take effect immediately upon restart.
 func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID string) string {
-	// For now, all models with "codex" in their name (case insensitive) prefer completions
-	// In the future, this can be extended to support more models or be configured per-model
-	if strings.Contains(strings.ToLower(modelID), "codex") {
-		return string(db.EndpointTypeResponses)
-	}
-	if strings.Contains(strings.ToLower(provider.APIBase), "chatgpt.com") {
-		return string(db.EndpointTypeResponses)
-	}
-	adaptiveProbe := NewAdaptiveProbe(s)
-	return adaptiveProbe.GetPreferredEndpoint(provider, modelID)
+	return NewAdaptiveProbe(s).GetPreferredEndpoint(provider, modelID)
 }
 
 // HealthMonitor returns the server's health monitor

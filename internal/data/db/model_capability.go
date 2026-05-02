@@ -187,12 +187,12 @@ func (mcs *ModelCapabilityStore) GetModelCapability(providerUUID, modelID string
 
 	capability.LastVerified = maxLastChecked
 
-	// Determine preferred endpoint
-	if capability.SupportsResponses {
-		capability.PreferredEndpoint = string(EndpointTypeResponses)
-	} else if capability.SupportsChat {
-		capability.PreferredEndpoint = string(EndpointTypeChat)
-	}
+	// NOTE: PreferredEndpoint is NOT calculated here.
+	// The database stores only raw state (availability, latency, errors).
+	// PreferredEndpoint is calculated by AdaptiveProbe.determinePreferredEndpoint()
+	// which has access to more information (like streaming support) and can be
+	// updated without database migrations.
+	// The PreferredEndpoint field in the returned struct will be set by the caller.
 
 	return capability, true
 }
@@ -243,11 +243,10 @@ func (mcs *ModelCapabilityStore) GetProviderCapabilities(providerUUID string) ma
 		capability.LastVerified = maxLastChecked
 
 		// Determine preferred endpoint
-		if capability.SupportsResponses {
-			capability.PreferredEndpoint = string(EndpointTypeResponses)
-		} else if capability.SupportsChat {
-			capability.PreferredEndpoint = string(EndpointTypeChat)
-		}
+		// NOTE: This is REMOVED - PreferredEndpoint is now calculated by
+		// AdaptiveProbe.determinePreferredEndpoint() which has access to
+		// streaming support information. The database only stores raw state.
+		// The PreferredEndpoint field will remain empty ("") here.
 
 		result[modelID] = capability
 	}

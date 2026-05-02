@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -419,6 +420,10 @@ func (ap *AdaptiveProbe) cachedCapabilityToResult(capability *ModelEndpointCapab
 }
 
 // GetModelCapability retrieves cached capability for a model, or triggers a probe if not cached
+// IMPORTANT: This no longer reads PreferredEndpoint from database - it only reads the raw
+// capability status (SupportsChat, SupportsResponses) and recalculates PreferredEndpoint
+// using the current determinePreferredEndpoint logic. This ensures that behavior changes
+// take effect immediately upon restart, without stale database data.
 func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*ModelEndpointCapability, error) {
 	// Check cache first
 	if ap.server.probeCache != nil {
@@ -427,26 +432,27 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 		}
 	}
 
-	// Check database
+	// Check database for raw capability status (but NOT PreferredEndpoint)
 	if ap.server.capabilityStore != nil {
 		if dbCapability, found := ap.server.capabilityStore.GetModelCapability(providerUUID, modelID); found {
-			// Check if database record is stale
-			if ap.server.probeCache != nil && time.Since(dbCapability.LastVerified) > ap.server.probeCache.ttl {
-				// Database record is stale, trigger async probe refresh
-				go func() {
-					ctx, cancel := context.WithTimeout(context.Background(), DefaultProbeTimeout)
-					defer cancel()
-					ap.ProbeModelEndpoints(ctx, ModelProbeRequest{
-						ProviderUUID: providerUUID,
-						ModelID:      modelID,
-					})
-				}()
-
-				// Return nil to trigger default behavior, or return stale data with expectation of refresh
-				// For now, return stale data but trigger refresh
+			// Reconstruct endpoint status from database
+			chatStatus := EndpointStatus{
+				Available:    dbCapability.SupportsChat,
+				LatencyMs:    dbCapability.ChatLatencyMs,
+				ErrorMessage: dbCapability.ChatError,
+				LastChecked:  dbCapability.LastVerified,
+			}
+			responsesStatus := EndpointStatus{
+				Available:    dbCapability.SupportsResponses,
+				LatencyMs:    dbCapability.ResponsesLatencyMs,
+				ErrorMessage: dbCapability.ResponsesError,
+				LastChecked:  dbCapability.LastVerified,
 			}
 
-			// Convert DB capability to internal capability type
+			// Recalculate PreferredEndpoint using current logic (NOT from database)
+			// This ensures behavior changes take effect immediately
+			preferredEndpoint := ap.determinePreferredEndpoint(&chatStatus, &responsesStatus)
+
 			capability := &ModelEndpointCapability{
 				ProviderUUID:       dbCapability.ProviderUUID,
 				ModelID:            dbCapability.ModelID,
@@ -456,14 +462,27 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 				SupportsResponses:  dbCapability.SupportsResponses,
 				ResponsesLatencyMs: dbCapability.ResponsesLatencyMs,
 				ResponsesError:     dbCapability.ResponsesError,
-				PreferredEndpoint:  dbCapability.PreferredEndpoint,
+				PreferredEndpoint:  preferredEndpoint, // Recalculated, not from DB
 				LastVerified:       dbCapability.LastVerified,
 			}
 
-			// Also cache it (even if stale, will be refreshed soon)
+			// Cache the recalculated capability
 			if ap.server.probeCache != nil {
 				ap.server.probeCache.Set(providerUUID, modelID, capability)
 			}
+
+			// If data is stale, trigger async probe refresh
+			if ap.server.probeCache != nil && time.Since(dbCapability.LastVerified) > ap.server.probeCache.ttl {
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), DefaultProbeTimeout)
+					defer cancel()
+					ap.ProbeModelEndpoints(ctx, ModelProbeRequest{
+						ProviderUUID: providerUUID,
+						ModelID:      modelID,
+					})
+				}()
+			}
+
 			return capability, nil
 		}
 	}
@@ -471,11 +490,30 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 	return nil, fmt.Errorf("model capability not found for provider %s, model %s", providerUUID, modelID)
 }
 
-// GetPreferredEndpoint returns the preferred endpoint for a model
+// GetPreferredEndpoint returns the preferred endpoint for a model.
+//
+// Resolution order:
+// 1. Check memory cache (fast, includes PreferredEndpoint)
+// 2. Check database for raw state, recalculate PreferredEndpoint
+// 3. Trigger synchronous probe if no cached data
+// 4. Default to "chat" if probe fails (safe fallback)
+//
+// NOTE: The PreferredEndpoint is ALWAYS calculated by determinePreferredEndpoint(),
+// never read from database. This ensures behavior changes take effect immediately.
 func (ap *AdaptiveProbe) GetPreferredEndpoint(provider *typ.Provider, modelID string) string {
+	// For now, all models with "codex" in their name (case insensitive) prefer completions
+	// In the future, this can be extended to support more models or be configured per-model
+	if strings.Contains(strings.ToLower(modelID), "codex") {
+		return string(db.EndpointTypeResponses)
+	}
+	if strings.Contains(strings.ToLower(provider.APIBase), "chatgpt.com") {
+		return string(db.EndpointTypeResponses)
+	}
+
 	capability, err := ap.GetModelCapability(provider.UUID, modelID)
 	if err != nil || capability.PreferredEndpoint == "" {
-		// Trigger async probe refresh
+		// No cached data - trigger synchronous probe
+		// This is the cold start path
 		ctx, cancel := context.WithTimeout(context.Background(), DefaultProbeTimeout)
 		defer cancel()
 		res, err := ap.ProbeModelEndpoints(ctx, ModelProbeRequest{
@@ -484,13 +522,14 @@ func (ap *AdaptiveProbe) GetPreferredEndpoint(provider *typ.Provider, modelID st
 		})
 
 		if err != nil {
-			logrus.Warnf("Failed to get model capability: %v", err)
+			logrus.Warnf("Failed to get model capability for %s/%s: %v", provider.Name, modelID, err)
+			// Safe fallback: default to chat endpoint
 			return string(db.EndpointTypeChat)
 		}
 		return res.PreferredEndpoint
 	}
 
-	// Return the preferred endpoint that was determined during probing
+	// Return the cached preferred endpoint
 	return capability.PreferredEndpoint
 }
 
