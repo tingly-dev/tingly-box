@@ -545,9 +545,9 @@ func (tm *TemplateManager) findTemplateByProvider(provider *typ.Provider) *Provi
 
 	// OAuth providers: match by OAuthProvider only, no fallback
 	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
-		oauthProviderType := provider.OAuthDetail.ProviderType
+		issuer := provider.OAuthDetail.Issuer
 		return tm.searchTemplates(func(tmpl *ProviderTemplate) bool {
-			return tmpl.OAuthProvider == oauthProviderType
+			return tmpl.OAuthProvider == string(issuer)
 		})
 	}
 
