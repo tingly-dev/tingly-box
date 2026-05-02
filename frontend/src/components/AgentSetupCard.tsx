@@ -68,7 +68,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         () => localStorage.getItem(STEP3_KEY(agentKey)) === 'true'
     );
     const [hasProvider, setHasProvider] = useState(false);
-    const [providerName, setProviderName] = useState('');
+    const [providerCount, setProviderCount] = useState(0);
     const [providerLoading, setProviderLoading] = useState(true);
     const [applyResult, setApplyResult] = useState<AgentApplyResult | null>(null);
     const [copied, setCopied] = useState(false);
@@ -81,7 +81,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
             const providers = Array.isArray(result?.data) ? result.data : [];
             const enabled = providers.filter((p: any) => p.enabled);
             setHasProvider(enabled.length > 0);
-            setProviderName(enabled[0]?.name ?? '');
+            setProviderCount(enabled.length);
             setProviderLoading(false);
         }).catch(() => {
             if (!cancelled) setProviderLoading(false);
@@ -187,7 +187,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             </Typography>
                             {step1Done ? (
                                 <Typography variant="caption" color="text.secondary">
-                                    {providerName} is ready
+                                    {providerCount === 1
+                                        ? `${providerCount} provider ready`
+                                        : `${providerCount} providers ready`}
                                 </Typography>
                             ) : (
                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
