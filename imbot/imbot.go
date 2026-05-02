@@ -73,7 +73,6 @@ type (
 	// Bot types
 	Bot                  = core.Bot
 	BotStatus            = core.BotStatus
-	BotInfo              = core.PlatformInfo
 	SendMessageOptions   = core.SendMessageOptions
 	SendResult           = core.SendResult
 	PlatformCapabilities = core.PlatformCapabilities
@@ -340,7 +339,7 @@ type (
 	// Adapter converts platform-agnostic interactions to platform-specific format
 	Adapter = interaction.Adapter
 
-	// InteractionHandler manages interaction requests and responses (concrete type)
+	// InteractionHandler manages interaction requests and responses
 	InteractionHandler = Handler
 
 	// InteractionBuilder builds platform-agnostic interactions
