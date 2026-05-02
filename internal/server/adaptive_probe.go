@@ -337,20 +337,34 @@ func (ap *AdaptiveProbe) probeResponsesEndpoint(ctx context.Context, provider *t
 	}
 }
 
-// determinePreferredEndpoint determines which endpoint to prefer based on streaming support.
-// Priority: Responses with streaming > Chat with streaming
+// determinePreferredEndpoint determines which endpoint to prefer based on availability and streaming support.
+// Priority:
+// 1. Chat API with streaming support (most stable and widely supported)
+// 2. Responses API with streaming support (for specialized models like Codex)
+// 3. Chat API without streaming (fallback for compatibility)
+// 4. Responses API without streaming (last resort)
 func (ap *AdaptiveProbe) determinePreferredEndpoint(chat, responses *EndpointStatus) string {
-	// Priority 1: Responses API with streaming support (preferred)
-	if responses.Available && responses.SupportsStream {
-		return string(db.EndpointTypeResponses)
-	}
-
-	// Priority 2: Chat API with streaming support
+	// Priority 1: Chat API with streaming (most stable option)
 	if chat.Available && chat.SupportsStream {
 		return string(db.EndpointTypeChat)
 	}
 
-	return "" // Neither available with streaming
+	// Priority 2: Responses API with streaming (only when Chat doesn't support streaming)
+	if responses.Available && responses.SupportsStream {
+		return string(db.EndpointTypeResponses)
+	}
+
+	// Priority 3: Chat API without streaming (better compatibility than Responses)
+	if chat.Available {
+		return string(db.EndpointTypeChat)
+	}
+
+	// Priority 4: Responses API without streaming (last resort)
+	if responses.Available {
+		return string(db.EndpointTypeResponses)
+	}
+
+	return string(db.EndpointTypeChat) // Neither available, use chat as default
 }
 
 // persistResult persists probe result to database
