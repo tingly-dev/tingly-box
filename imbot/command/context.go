@@ -2,6 +2,8 @@
 package command
 
 import (
+	"context"
+
 	"github.com/tingly-dev/tingly-box/imbot/core"
 )
 
@@ -60,7 +62,7 @@ func (c *HandlerContext) WithMessageID(msgID string) *HandlerContext {
 
 // SendText sends a text message to the chat.
 func (c *HandlerContext) SendText(text string) error {
-	_, err := c.Bot.SendText(nil, c.ChatID, text)
+	_, err := c.Bot.SendText(context.Background(), c.ChatID, text)
 	return err
 }
 
