@@ -45,7 +45,7 @@ func setupTestRouter(cfg *config.Config) *gin.Engine {
 }
 
 func TestNewHandler(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	cache := NewCache()
 	lb := &mockLoadBalancer{}
 
@@ -66,7 +66,7 @@ func TestNewHandler(t *testing.T) {
 }
 
 func TestGetClaudeCodeStatus_Success(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
 	_ = `{
@@ -107,7 +107,7 @@ func TestGetClaudeCodeStatus_Success(t *testing.T) {
 }
 
 func TestGetClaudeCodeStatus_EmptyBody(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
 	req, _ := http.NewRequest("POST", "/status/claude_code", nil)
@@ -123,7 +123,7 @@ func TestGetClaudeCodeStatus_EmptyBody(t *testing.T) {
 }
 
 func TestGetClaudeCodeStatusLine_Success(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
 	req, _ := http.NewRequest("POST", "/statusline/claude_code", nil)

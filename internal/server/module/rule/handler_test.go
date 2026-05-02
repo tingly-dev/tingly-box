@@ -41,7 +41,7 @@ func registerTestRuleScenario(t *testing.T, scenario typ.RuleScenario) {
 func TestNewHandler(t *testing.T) {
 	handler := NewHandler(nil)
 
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 	router.GET("/rules", handler.GetRules)
 
@@ -49,8 +49,9 @@ func TestNewHandler(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	// Handler has nil config, so it returns 500 (internal server error)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status %d, got %d", http.StatusInternalServerError, w.Code)
 	}
 
 	var response map[string]interface{}
@@ -59,13 +60,13 @@ func TestNewHandler(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	if !response["success"].(bool) {
-		t.Error("expected success to be false")
+	if response["success"].(bool) {
+		t.Error("expected success to be false, got true")
 	}
 }
 
 func TestGetRules_WithScenario(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
 	handler := NewHandler(cfg)
@@ -121,7 +122,7 @@ func TestGetRules_NilConfig(t *testing.T) {
 }
 
 func TestGetRule_Success(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
 	handler := NewHandler(cfg)
@@ -147,7 +148,7 @@ func TestGetRule_Success(t *testing.T) {
 }
 
 func TestGetRule_NotFound(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
 	handler := NewHandler(cfg)
@@ -164,7 +165,7 @@ func TestGetRule_NotFound(t *testing.T) {
 }
 
 func TestGetRule_EmptyUUID(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	router := setupTestRouter(cfg)
 
 	handler := NewHandler(cfg)
@@ -175,8 +176,9 @@ func TestGetRule_EmptyUUID(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	// Gin returns 404 for empty path parameters
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, w.Code)
 	}
 }
 
@@ -200,7 +202,7 @@ func TestGetRule_NilConfig(t *testing.T) {
 func TestCreateRule_Success(t *testing.T) {
 	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
 
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -230,7 +232,7 @@ func TestCreateRule_Success(t *testing.T) {
 }
 
 func TestCreateRule_NoScenario(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -261,7 +263,7 @@ func TestCreateRule_NoScenario(t *testing.T) {
 func TestUpdateRule_Success(t *testing.T) {
 	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
 
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -314,7 +316,7 @@ func TestUpdateRule_Success(t *testing.T) {
 }
 
 func TestDeleteRule_Success(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -356,7 +358,7 @@ func TestDeleteRule_Success(t *testing.T) {
 
 // TestImportRule_JSONL tests importing a rule from JSONL format
 func TestImportRule_JSONL(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -396,7 +398,7 @@ func TestImportRule_JSONL(t *testing.T) {
 
 // TestImportRule_Base64 tests importing a rule from Base64 format
 func TestImportRule_Base64(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -433,18 +435,20 @@ func TestImportRule_Base64(t *testing.T) {
 }
 
 // TestImportRule_ProviderConflictUse tests using existing provider on conflict
+// This test verifies that when a provider with the same UUID is imported,
+// the existing provider is used instead of creating a new one.
 func TestImportRule_ProviderConflictUse(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
 
 	router.POST("/rules/import", handler.ImportRule)
 
-	// First create an existing provider with the same name
+	// First create an existing provider with UUID "prov-1" (same as in the import)
 	existingProvider := &typ.Provider{
-		UUID:     uuid.New().String(),
-		Name:     "TestProvider",
+		UUID:     "prov-1", // Same UUID as in the import data
+		Name:     "ExistingProvider",
 		APIBase:  "https://api.existing.com",
 		APIStyle: protocol.APIStyleOpenAI,
 		AuthType: typ.AuthTypeAPIKey,
@@ -453,7 +457,7 @@ func TestImportRule_ProviderConflictUse(t *testing.T) {
 	}
 	cfg.AddProvider(existingProvider)
 
-	// Import a rule that references a provider with the same name
+	// Import a rule that references a provider with the same UUID but different name
 	jsonlData := `{"type":"metadata","version":"1.0","exported_at":"2024-01-01T00:00:00Z"}
 {"type":"provider","uuid":"prov-1","name":"TestProvider","api_base":"https://api.test.com","api_style":"openai","auth_type":"api_key","token":"sk-test","enabled":true}
 {"type":"rule","uuid":"rule-1","scenario":"general","request_model":"gpt-4","response_model":"gpt-4","description":"Test","services":[{"provider":"prov-1","model":"gpt-4"}],"lb_tactic":{"type":"round_robin","params":{}},"active":true,"smart_enabled":false,"smart_routing":[]}`
@@ -493,7 +497,7 @@ func TestImportRule_ProviderConflictUse(t *testing.T) {
 
 // TestImportRule_RuleConflictSkip tests skipping rule on conflict
 func TestImportRule_RuleConflictSkip(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -557,7 +561,7 @@ func TestImportRule_RuleConflictSkip(t *testing.T) {
 
 // TestImportRule_InvalidData tests importing with invalid data
 func TestImportRule_InvalidData(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -585,7 +589,7 @@ func TestImportRule_InvalidData(t *testing.T) {
 
 // TestImportRule_ProviderUUIDConflict tests real UUID conflict scenario
 func TestImportRule_ProviderUUIDConflict(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
@@ -656,7 +660,7 @@ func TestImportRule_ProviderUUIDConflict(t *testing.T) {
 
 // TestImportRule_MissingData tests importing with missing data field
 func TestImportRule_MissingData(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	handler := NewHandler(cfg)
