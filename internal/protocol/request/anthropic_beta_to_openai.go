@@ -90,19 +90,7 @@ func ConvertAnthropicBetaToolsToOpenAI(tools []anthropic.BetaToolUnionParam) []o
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			parameters = make(map[string]interface{})
-			parameters["type"] = "object"
-
-			if tool.InputSchema.Properties != nil {
-				parameters["properties"] = tool.InputSchema.Properties
-			}
-
-			if len(tool.InputSchema.Required) > 0 {
-				parameters["required"] = tool.InputSchema.Required
-			}
-		}
+		parameters := convertAnthropicInputSchemaToOpenAIParameters(tool.InputSchema.Properties, tool.InputSchema.Required)
 
 		// Create function with parameters
 		fn := shared.FunctionDefinitionParam{

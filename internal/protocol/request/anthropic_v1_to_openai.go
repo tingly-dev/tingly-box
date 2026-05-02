@@ -90,19 +90,7 @@ func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.Ch
 		}
 
 		// Convert Anthropic input schema to OpenAI function parameters
-		var parameters map[string]interface{}
-		if tool.InputSchema.Properties != nil || len(tool.InputSchema.Required) > 0 {
-			parameters = make(map[string]interface{})
-			parameters["type"] = "object"
-
-			if tool.InputSchema.Properties != nil {
-				parameters["properties"] = tool.InputSchema.Properties
-			}
-
-			if len(tool.InputSchema.Required) > 0 {
-				parameters["required"] = tool.InputSchema.Required
-			}
-		}
+		parameters := convertAnthropicInputSchemaToOpenAIParameters(tool.InputSchema.Properties, tool.InputSchema.Required)
 
 		// Create function with parameters
 		fn := shared.FunctionDefinitionParam{
@@ -115,6 +103,39 @@ func ConvertAnthropicToolsToOpenAI(tools []anthropic.ToolUnionParam) []openai.Ch
 	}
 
 	return out
+}
+
+func convertAnthropicInputSchemaToOpenAIParameters(properties any, required []string) shared.FunctionParameters {
+	if properties == nil && len(required) == 0 {
+		return nil
+	}
+
+	if schema, ok := properties.(map[string]any); ok {
+		if _, hasNestedProperties := schema["properties"]; hasNestedProperties {
+			parameters := make(shared.FunctionParameters, len(schema)+1)
+			for key, value := range schema {
+				parameters[key] = value
+			}
+			if _, ok := parameters["type"]; !ok {
+				parameters["type"] = "object"
+			}
+			if len(required) > 0 {
+				parameters["required"] = required
+			}
+			return parameters
+		}
+	}
+
+	parameters := shared.FunctionParameters{
+		"type": "object",
+	}
+	if properties != nil {
+		parameters["properties"] = properties
+	}
+	if len(required) > 0 {
+		parameters["required"] = required
+	}
+	return parameters
 }
 
 // ConvertAnthropicToolsToOpenAIWithTransformedSchema is an alias for ConvertAnthropicToolsToOpenAI
