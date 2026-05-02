@@ -38,6 +38,7 @@ export interface AgentSetupCardProps {
 
 const COLLAPSED_KEY = (agentKey: string) => `setup-card-collapsed-${agentKey}`;
 const STEP2_KEY = (agentKey: string) => `setup-card-step2-done-${agentKey}`;
+const STEP3_KEY = (agentKey: string) => `setup-card-step3-done-${agentKey}`;
 
 const StepIcon: React.FC<{ done: boolean; active: boolean }> = ({ done, active }) => {
     if (done) return <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />;
@@ -60,11 +61,13 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const [step2Done, setStep2Done] = useState(
         () => localStorage.getItem(STEP2_KEY(agentKey)) === 'true'
     );
+    const [step3Done, setStep3Done] = useState(
+        () => localStorage.getItem(STEP3_KEY(agentKey)) === 'true'
+    );
     const [hasProvider, setHasProvider] = useState(false);
     const [providerName, setProviderName] = useState('');
     const [providerLoading, setProviderLoading] = useState(true);
     const [applyResult, setApplyResult] = useState<AgentApplyResult | null>(null);
-    const [step3ManualDone, setStep3ManualDone] = useState(false);
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
@@ -83,7 +86,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     }, []);
 
     const step1Done = hasProvider;
-    const step3Done = applyResult?.success === true || step3ManualDone;
     const allDone = step1Done && step2Done && step3Done;
     const doneCount = [step1Done, step2Done, step3Done].filter(Boolean).length;
 
@@ -98,6 +100,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         setStep2Done(true);
     };
 
+    const handleStep3Done = () => {
+        localStorage.setItem(STEP3_KEY(agentKey), 'true');
+        setStep3Done(true);
+    };
+
     const handleCopy = async () => {
         await navigator.clipboard.writeText(installCommand);
         setCopied(true);
@@ -107,12 +114,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const handleApply = async () => {
         const result = await onApply();
         setApplyResult(result);
+        if (result.success) {
+            handleStep3Done();
+        }
     };
 
     const handleApplyWithStatusLine = async () => {
         if (!onApplyWithStatusLine) return;
         const result = await onApplyWithStatusLine();
         setApplyResult(result);
+        if (result.success) {
+            handleStep3Done();
+        }
     };
 
     const progressLabel = allDone ? 'Done' : `${doneCount}/3`;
@@ -279,7 +292,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         variant="text"
                                         size="small"
                                         disabled={!step2Done}
-                                        onClick={() => setStep3ManualDone(true)}
+                                        onClick={handleStep3Done}
                                         sx={{ fontSize: '0.75rem' }}
                                     >
                                         ✓ Already configured / Done

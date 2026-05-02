@@ -63,23 +63,6 @@ export function useActivityItems(): ActivityItem[] {
 
         const items: ActivityItem[] = [
             {
-                key: 'dashboard',
-                icon: <IconChartBar size={22} />,
-                label: t('layout.dashboard'),
-                path: '/dashboard/7d',
-                defaultPath: '/dashboard/7d',
-                children: [
-                    { path: '/overview/90d', label: t('layout.heatmap'), icon: <IconGridDots size={20} /> },
-                    { type: 'divider' },
-                    { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock size={20} /> },
-                    { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar size={20} /> },
-                    { path: '/dashboard/3d', label: `3 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
-                    { path: '/dashboard/7d', label: `7 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
-                    { path: '/dashboard/30d', label: `30 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
-                    { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
-                ],
-            },
-            {
                 key: 'scenario',
                 icon: <IconAiAgents size={22} />,
                 label: t('layout.nav.home'),
@@ -103,6 +86,23 @@ export function useActivityItems(): ActivityItem[] {
                     { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> },
                     { type: 'divider' },
                     { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> },
+                ],
+            },
+            {
+                key: 'dashboard',
+                icon: <IconChartBar size={22} />,
+                label: t('layout.usage', { defaultValue: 'Usage' }),
+                path: '/dashboard/7d',
+                defaultPath: '/dashboard/7d',
+                children: [
+                    { path: '/overview/90d', label: t('layout.heatmap'), icon: <IconGridDots size={20} /> },
+                    { type: 'divider' },
+                    { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock size={20} /> },
+                    { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar size={20} /> },
+                    { path: '/dashboard/3d', label: `3 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
+                    { path: '/dashboard/7d', label: `7 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
+                    { path: '/dashboard/30d', label: `30 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
+                    { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
                 ],
             },
             ...(isFullEdition && promptMenuItems.length > 0 ? [{
