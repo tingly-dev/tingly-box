@@ -294,7 +294,7 @@ func (b *BaseBot) emitErrorHandlers(handlers []func(error), err error, event str
 			defer b.recoverHandler(event)
 			h(err)
 		}(handler)
-		}
+	}
 }
 
 func (b *BaseBot) emitVoidHandlers(handlers []func(), event string) {
@@ -433,6 +433,31 @@ func (b *BaseBot) findBreakPoint(text string, limit int) int {
 
 	// Hard break at limit
 	return limit
+}
+
+// ChunkTextForPlatform splits text into chunks within the platform's message size limit.
+// It uses the same code-block-aware break-point logic as BaseBot.ChunkText.
+func ChunkTextForPlatform(platform Platform, text string) []string {
+	caps := GetPlatformCapabilities(platform)
+	if caps == nil || caps.TextLimit <= 0 || len(text) <= caps.TextLimit {
+		return []string{text}
+	}
+
+	// Reuse the method logic via a temporary BaseBot with minimal config.
+	b := &BaseBot{config: &Config{Platform: platform}}
+	var chunks []string
+	remaining := text
+	limit := caps.TextLimit
+
+	for len(remaining) > limit {
+		breakPoint := b.findBreakPoint(remaining, limit)
+		chunks = append(chunks, remaining[:breakPoint])
+		remaining = remaining[breakPoint:]
+	}
+	if len(remaining) > 0 {
+		chunks = append(chunks, remaining)
+	}
+	return chunks
 }
 
 // Close closes the base bot resources

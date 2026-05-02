@@ -21,7 +21,7 @@ func GetMessageLimit(platform Platform) int {
 }
 
 // ChunkText splits text into chunks based on the platform's message limit.
-// It uses smart break-point detection to avoid breaking words in the middle.
+// It uses smart break-point detection to avoid breaking words or code blocks.
 //
 // Parameters:
 //   - platform: The platform identifier (e.g., "telegram", "discord", "slack")
@@ -29,55 +29,8 @@ func GetMessageLimit(platform Platform) int {
 //
 // Returns:
 //   - []string: Array of text chunks, each within the platform's limit
-//
-// Example:
-//
-//	chunks := ChunkText("telegram", longText)
-//	for i, chunk := range chunks {
-//	    fmt.Printf("Chunk %d: %s\n", i+1, chunk)
-//	}
 func ChunkText(platform string, text string) []string {
-	caps := core.GetPlatformCapabilities(core.Platform(platform))
-	if caps == nil || caps.TextLimit <= 0 || len(text) <= caps.TextLimit {
-		return []string{text}
-	}
-
-	var chunks []string
-	remaining := text
-	limit := caps.TextLimit
-
-	for len(remaining) > limit {
-		breakPoint := findBreakPoint(remaining, limit)
-		chunks = append(chunks, remaining[:breakPoint])
-		remaining = remaining[breakPoint:]
-	}
-
-	if len(remaining) > 0 {
-		chunks = append(chunks, remaining)
-	}
-
-	return chunks
-}
-
-// findBreakPoint finds a good break point for chunking text.
-// It tries to break at newline first, then space, and falls back to hard break at limit.
-func findBreakPoint(text string, limit int) int {
-	// Try to break at newline
-	for i := limit - 1; i >= limit*7/10 && i >= 0; i-- {
-		if text[i] == '\n' {
-			return i + 1
-		}
-	}
-
-	// Try to break at space
-	for i := limit - 1; i >= limit*7/10 && i >= 0; i-- {
-		if text[i] == ' ' {
-			return i + 1
-		}
-	}
-
-	// Hard break at limit
-	return limit
+	return core.ChunkTextForPlatform(core.Platform(platform), text)
 }
 
 // BuildTelegramActionKeyboard converts imbot.InlineKeyboardMarkup to models.InlineKeyboardMarkup
