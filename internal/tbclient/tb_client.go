@@ -10,6 +10,12 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// SmartGuideRuleUUID generates the rule UUID for a specific bot
+// Uses the bot UUID directly as the rule UUID for consistency
+func SmartGuideRuleUUID(botUUID string) string {
+	return botUUID
+}
+
 // TBClient defines the interface for remote control interactions
 type TBClient interface {
 
@@ -38,8 +44,11 @@ type TBClient interface {
 	EnsureSmartGuideRule(ctx context.Context, providerUUID, modelID string) error
 
 	// EnsureSmartGuideRuleForBot ensures the _smart_guide rule exists for a specific bot
-	// Each bot gets its own rule with UUID: _internal_smart_guide_{botUUID}
+	// Each bot gets its own rule with UUID equal to botUUID
 	EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error
+
+	// DeleteSmartGuideRuleForBot removes the _smart_guide rule for a specific bot
+	DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error
 
 	// SelectModel returns model configuration for @tb execution
 	SelectModel(ctx context.Context, req ModelSelectionRequest) (*ModelConfig, error)
@@ -261,4 +270,10 @@ func (c *TBClientImpl) EnsureSmartGuideRule(ctx context.Context, providerUUID, m
 // Each bot gets its own rule with UUID: _internal_smart_guide_{botUUID}
 func (c *TBClientImpl) EnsureSmartGuideRuleForBot(ctx context.Context, botUUID, botName, providerUUID, modelID string) error {
 	return c.config.EnsureSmartGuideRuleForBot(botUUID, botName, providerUUID, modelID)
+}
+
+// DeleteSmartGuideRuleForBot removes the _smart_guide rule for a specific bot
+func (c *TBClientImpl) DeleteSmartGuideRuleForBot(ctx context.Context, botUUID string) error {
+	ruleUUID := SmartGuideRuleUUID(botUUID)
+	return c.config.DeleteRule(ruleUUID)
 }

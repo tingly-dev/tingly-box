@@ -337,7 +337,26 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	tbClient := m.tbClient
 	dataPath := m.dataPath
 
-	if s.SmartGuideProvider == "" || s.SmartGuideModel == "" {
+	// Update SmartGuide routing rule when bot starts
+	// This ensures the route rule is always in sync with the current settings
+	if s.SmartGuideProvider != "" && s.SmartGuideModel != "" && tbClient != nil {
+		if err := tbClient.EnsureSmartGuideRuleForBot(parentCtx, s.UUID, s.Name, s.SmartGuideProvider, s.SmartGuideModel); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"uuid":     uuid,
+				"name":     name,
+				"provider": s.SmartGuideProvider,
+				"model":    s.SmartGuideModel,
+			}).Error("Failed to update SmartGuide routing rule during bot start")
+			// Don't fail startup, SmartGuide will use fallback or error at execution time
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"uuid":     uuid,
+				"name":     name,
+				"provider": s.SmartGuideProvider,
+				"model":    s.SmartGuideModel,
+			}).Info("SmartGuide routing rule updated during bot start")
+		}
+	} else if s.SmartGuideProvider == "" || s.SmartGuideModel == "" {
 		logrus.WithFields(logrus.Fields{
 			"uuid":     uuid,
 			"name":     name,
@@ -384,6 +403,15 @@ func (m *Manager) Stop(uuid string) {
 		logrus.WithField("uuid", uuid).Info("Stopping bot")
 		rb.stopped = true // Mark as stopping
 		rb.cancel()
+
+		// Clean up SmartGuide routing rule when bot stops
+		if m.tbClient != nil {
+			if err := m.tbClient.DeleteSmartGuideRuleForBot(context.Background(), uuid); err != nil {
+				logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to delete SmartGuide routing rule")
+			} else {
+				logrus.WithField("uuid", uuid).Info("SmartGuide routing rule deleted")
+			}
+		}
 		// Don't delete from map yet - let the goroutine clean up
 	}
 }
