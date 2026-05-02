@@ -1,4 +1,5 @@
 import CardGrid from "@/components/CardGrid.tsx";
+import AgentSetupCard, { type AgentApplyResult } from '@/components/AgentSetupCard';
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
@@ -16,7 +17,6 @@ import {
     DialogContent,
     DialogTitle,
     IconButton,
-    TextField,
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
@@ -52,10 +52,8 @@ const UseClaudeCodePageContent: React.FC = () => {
     const [configMode, setConfigMode] = useState<ConfigMode>('unified');
     const [pendingMode, setPendingMode] = useState<ConfigMode | null>(null);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-
-    // Claude Code config modal state
-    const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
+    const [configModalOpen, setConfigModalOpen] = useState(false);
 
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
@@ -99,7 +97,6 @@ const UseClaudeCodePageContent: React.FC = () => {
 
             if (result.success) {
                 setConfigMode(pendingMode);
-                setConfigModalOpen(true);
 
                 showNotification(
                     `Configuration mode changed to ${pendingMode}. Please reapply the configuration to Claude Code.`,
@@ -120,11 +117,6 @@ const UseClaudeCodePageContent: React.FC = () => {
     const cancelModeChange = () => {
         setConfirmDialogOpen(false);
         setPendingMode(null);
-    };
-
-    // Show config guide modal
-    const handleShowConfigGuide = () => {
-        setConfigModalOpen(true);
     };
 
     useEffect(() => {
@@ -160,55 +152,34 @@ const UseClaudeCodePageContent: React.FC = () => {
         loadScenarioConfig();
     }, []);
 
-    // Apply handler - calls backend to generate and write config
-    const handleApply = async () => {
+    // Apply handlers returning AgentApplyResult for AgentSetupCard
+    const handleApply = async (): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
             const result = await api.applyClaudeConfig(configMode, false);
-
             if (result.success) {
-                const createdFiles = result.createdFiles || [];
-                const updatedFiles = result.updatedFiles || [];
-                const backupPaths = result.backupPaths || [];
-
-                const allFiles = [...createdFiles, ...updatedFiles];
-                let successMsg = `Configuration files written: ${allFiles.join(', ')}`;
-                if (backupPaths.length > 0) {
-                    successMsg += `\nBackups created: ${backupPaths.join(', ')}`;
-                }
-                showNotification(successMsg, 'success');
-            } else {
-                showNotification(`Failed to apply configurations: ${result.message || 'Unknown error'}`, 'error');
+                const files = [...(result.createdFiles || []), ...(result.updatedFiles || [])];
+                return { success: true, files };
             }
-        } catch (err) {
-            showNotification('Failed to apply configurations', 'error');
+            return { success: false, error: result.message || 'Unknown error' };
+        } catch {
+            return { success: false, error: 'Failed to apply configurations' };
         } finally {
             setIsApplyLoading(false);
         }
     };
 
-    // Apply handler with status line
-    const handleApplyWithStatusLine = async () => {
+    const handleApplyWithStatusLine = async (): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
             const result = await api.applyClaudeConfig(configMode, true);
-
             if (result.success) {
-                const createdFiles = result.createdFiles || [];
-                const updatedFiles = result.updatedFiles || [];
-                const backupPaths = result.backupPaths || [];
-
-                const allFiles = [...createdFiles, ...updatedFiles];
-                let successMsg = `Configuration files written: ${allFiles.join(', ')}`;
-                if (backupPaths.length > 0) {
-                    successMsg += `\nBackups created: ${backupPaths.join(', ')}`;
-                }
-                showNotification(successMsg, 'success');
-            } else {
-                showNotification(`Failed to apply configurations: ${result.message || 'Unknown error'}`, 'error');
+                const files = [...(result.createdFiles || []), ...(result.updatedFiles || [])];
+                return { success: true, files };
             }
-        } catch (err) {
-            showNotification('Failed to apply configurations', 'error');
+            return { success: false, error: result.message || 'Unknown error' };
+        } catch {
+            return { success: false, error: 'Failed to apply configurations' };
         } finally {
             setIsApplyLoading(false);
         }
@@ -250,7 +221,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                                 ))}
                             </ToggleButtonGroup>
                             <Button
-                                onClick={handleShowConfigGuide}
+                                onClick={() => setConfigModalOpen(true)}
                                 variant="contained"
                                 color="primary"
                                 size="small"
@@ -271,6 +242,17 @@ const UseClaudeCodePageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
+
+                <AgentSetupCard
+                    agentKey={SCENARIO}
+                    agentName="Claude Code"
+                    installCommand="npm install -g @anthropic-ai/claude-code"
+                    installMirrorCommand="npm install -g @anthropic-ai/claude-code --registry=https://registry.npmmirror.com"
+                    onApply={handleApply}
+                    onApplyWithStatusLine={handleApplyWithStatusLine}
+                    isApplyLoading={isApplyLoading}
+                    onViewConfig={() => setConfigModalOpen(true)}
+                />
 
                 <TemplatePage
                     title="Models and Forwarding Rules"
@@ -309,15 +291,13 @@ const UseClaudeCodePageContent: React.FC = () => {
 
                 <ClaudeCodeConfigModal
                     open={configModalOpen}
-                    onClose={() => {
-                        setConfigModalOpen(false);
-                    }}
+                    onClose={() => setConfigModalOpen(false)}
                     configMode={configMode}
                     baseUrl={baseUrl}
                     rules={rules}
                     copyToClipboard={copyToClipboard}
-                    onApply={handleApply}
-                    onApplyWithStatusLine={handleApplyWithStatusLine}
+                    onApply={async () => { await handleApply(); }}
+                    onApplyWithStatusLine={async () => { await handleApplyWithStatusLine(); }}
                     isApplyLoading={isApplyLoading}
                 />
 

@@ -20,7 +20,7 @@ func setupTestRouter(cfg *config.Config) *gin.Engine {
 }
 
 func TestNewHandler(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	handler := NewHandler(cfg, "localhost")
 
 	if handler == nil {

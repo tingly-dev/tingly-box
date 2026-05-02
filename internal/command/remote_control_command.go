@@ -16,6 +16,8 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
+	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
+	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
@@ -691,11 +693,28 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 	}
 
 	// Setup menu button after bot is connected
-	if err := bot.SetupMenuButtonForBot(manager, setting.UUID, handler.GetCommandRegistry()); err != nil {
-		// Log warning but don't fail startup
-		logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
-	} else {
-		logrus.WithField("platform", setting.Platform).Info("Menu button configured successfully")
+	bot := manager.GetBotByUUID(setting.UUID)
+	if bot != nil {
+		platform := bot.PlatformInfo().ID
+		cmdRegistry := handler.GetCommandRegistry()
+
+		var err error
+		switch platform {
+		case imbot.PlatformTelegram:
+			err = imbottelegram.SetupMenuButton(bot, cmdRegistry)
+		case imbot.PlatformFeishu, imbot.PlatformLark:
+			err = imbotfeishu.SetupQuickActions(bot, cmdRegistry)
+		default:
+			// Other platforms don't support menu configuration
+			err = nil
+		}
+
+		if err != nil {
+			// Log warning but don't fail startup
+			logrus.WithError(err).WithField("platform", setting.Platform).Warn("Failed to setup menu button")
+		} else {
+			logrus.WithField("platform", setting.Platform).Info("Menu button configured successfully")
+		}
 	}
 
 	logrus.Info("Bot started successfully. Press Ctrl+C to stop.")

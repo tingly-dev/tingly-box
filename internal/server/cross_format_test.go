@@ -12,7 +12,7 @@ import (
 // OpenAI Chat -> Anthropic Beta streaming path can use the unified architecture
 func TestCrossFormatStreaming_OpenAIChatToAnthropicBeta(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Enable the generic Anthropic Beta streaming path
@@ -28,7 +28,7 @@ func TestCrossFormatStreaming_OpenAIChatToAnthropicBeta(t *testing.T) {
 // TestAllSevenPaths_WithCrossFormat verifies that all 7 paths are covered
 func TestAllSevenPaths_WithCrossFormat(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Enable all generic paths

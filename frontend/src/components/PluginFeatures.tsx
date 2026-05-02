@@ -240,6 +240,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                     sx={{
                         minWidth: 110,
                         textTransform: 'none',
+                        whiteSpace: 'nowrap',
                         bgcolor: effort && effort !== '' ? 'primary.main' : 'transparent',
                         color: effort && effort !== '' ? 'primary.contrastText' : 'text.primary',
                         border: effort && effort !== '' ? 'none' : '1px solid',
@@ -271,6 +272,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                     sx={{
                         minWidth: 110,
                         textTransform: 'none',
+                        whiteSpace: 'nowrap',
                         bgcolor: thinkingMode && thinkingMode !== 'default' ? 'primary.main' : 'transparent',
                         color: thinkingMode && thinkingMode !== 'default' ? 'primary.contrastText' : 'text.primary',
                         border: thinkingMode && thinkingMode !== 'default' ? 'none' : '1px solid',
@@ -289,7 +291,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
 
     // Helper to render plugin feature buttons
     const renderPluginButtons = () => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1 }}>
             {visibleFeatures.map((feature) => {
                 const isEnabled = features[feature.key] || false;
                 const isUpdating = updating[feature.key] || false;
@@ -304,6 +306,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             sx={{
                                 minWidth: 100,
                                 textTransform: 'none',
+                                whiteSpace: 'nowrap',
                                 bgcolor: isEnabled ? 'primary.main' : 'transparent',
                                 color: isEnabled ? 'primary.contrastText' : 'text.primary',
                                 fontWeight: isEnabled ? 600 : 400,
@@ -343,6 +346,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                     sx={{
                         minWidth: 110,
                         textTransform: 'none',
+                        whiteSpace: 'nowrap',
                         bgcolor: isRecordV2Enabled ? 'primary.main' : 'transparent',
                         color: isRecordV2Enabled ? 'primary.contrastText' : 'text.primary',
                         fontWeight: isRecordV2Enabled ? 600 : 400,
@@ -379,7 +383,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                         key: 'thinking',
                         label: 'Thinking',
                         content: (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1 }}>
                                 {renderEffortButton()}
                                 {renderThinkingModeButton()}
                             </Box>
@@ -397,7 +401,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                         key: 'plugin',
                         label: 'Plugin',
                         content: (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1 }}>
                                 {renderPluginButtons()}
                                 {renderRecordV2Button()}
                             </Box>

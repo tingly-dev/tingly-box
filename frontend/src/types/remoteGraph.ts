@@ -6,6 +6,9 @@
  * Most types have been moved to use BotSettings.default_agent directly.
  */
 
+// Note: These are legacy types not in the codegen schema
+// They should not be used in new code
+
 /**
  * Agent Configuration - detailed settings for an agent
  */

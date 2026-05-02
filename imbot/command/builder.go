@@ -58,6 +58,24 @@ func (b *CommandBuilder) WithPlatforms(platforms ...core.Platform) *CommandBuild
 	return b
 }
 
+// WithMenuLabel sets the display text for menus (optional).
+func (b *CommandBuilder) WithMenuLabel(label string) *CommandBuilder {
+	b.cmd.MenuLabel = label
+	return b
+}
+
+// WithMenuIcon sets the icon for platforms that support it (e.g., Feishu/Lark).
+func (b *CommandBuilder) WithMenuIcon(icon string) *CommandBuilder {
+	b.cmd.MenuIcon = icon
+	return b
+}
+
+// WithMenuGroup sets the group for organizing related commands in menus.
+func (b *CommandBuilder) WithMenuGroup(group string) *CommandBuilder {
+	b.cmd.MenuGroup = group
+	return b
+}
+
 // Build validates and returns the command.
 func (b *CommandBuilder) Build() (Command, error) {
 	if err := b.cmd.Validate(); err != nil {

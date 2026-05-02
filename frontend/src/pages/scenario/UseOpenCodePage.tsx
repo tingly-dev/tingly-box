@@ -1,12 +1,13 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, Tooltip, IconButton } from '@mui/material';
+import AgentSetupCard, { type AgentApplyResult } from '@/components/AgentSetupCard';
+import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
+import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
-import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
@@ -22,8 +23,8 @@ const UseOpenCodePageContent: React.FC = () => {
         baseUrl,
     } = useScenarioPageInternal(scenario);
 
-    const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
+    const [configModalOpen, setConfigModalOpen] = useState(false);
     const [configJson, setConfigJson] = useState('');
     const [scriptWindows, setScriptWindows] = useState('');
     const [scriptUnix, setScriptUnix] = useState('');
@@ -62,28 +63,19 @@ const UseOpenCodePageContent: React.FC = () => {
         setConfigModalOpen(true);
     };
 
-    const handleApply = async () => {
+    const handleApply = async (): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
             const result = await api.applyOpenCodeConfig();
-
             if (result.success) {
-                const configPath = '~/.config/opencode/opencode.json';
-                let successMsg = `Configuration file written: ${configPath}`;
-                if (result.created) {
-                    successMsg += ' (created)';
-                } else if (result.updated) {
-                    successMsg += ' (updated)';
-                }
-                if (result.backupPath) {
-                    successMsg += `\nBackup created: ${result.backupPath}`;
-                }
-                showNotification(successMsg, 'success');
-            } else {
-                showNotification(`Failed to apply opencode.json: ${result.message || 'Unknown error'}`, 'error');
+                return {
+                    success: true,
+                    files: ['~/.config/opencode/opencode.json'],
+                };
             }
-        } catch (err) {
-            showNotification('Failed to apply OpenCode config', 'error');
+            return { success: false, error: result.message || 'Unknown error' };
+        } catch {
+            return { success: false, error: 'Failed to apply OpenCode config' };
         } finally {
             setIsApplyLoading(false);
         }
@@ -125,6 +117,16 @@ const UseOpenCodePageContent: React.FC = () => {
                     />
                 </UnifiedCard>
 
+                <AgentSetupCard
+                    agentKey={scenario}
+                    agentName="OpenCode"
+                    installCommand="npm install -g opencode-ai"
+                    installMirrorCommand="npm install -g opencode-ai --registry=https://registry.npmmirror.com"
+                    onApply={handleApply}
+                    isApplyLoading={isApplyLoading}
+                    onViewConfig={handleOpenConfigModal}
+                />
+
                 <TemplatePage
                     scenario={scenario}
                     title="Models and Forwarding Rules"
@@ -139,7 +141,7 @@ const UseOpenCodePageContent: React.FC = () => {
                     generateScriptWindows={() => scriptWindows}
                     generateScriptUnix={() => scriptUnix}
                     copyToClipboard={copyToClipboard}
-                    onApply={handleApply}
+                    onApply={async () => { await handleApply(); }}
                     isApplyLoading={isApplyLoading}
                     isLoading={isConfigLoading}
                 />

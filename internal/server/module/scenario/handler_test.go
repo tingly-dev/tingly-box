@@ -43,7 +43,7 @@ func setupTestRouter(cfg *config.Config, rcCtrl RemoteControlController) *gin.En
 }
 
 func TestNewHandler(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	mockRC := &mockRemoteControlController{}
 
 	handler := NewHandler(cfg, mockRC)
@@ -60,7 +60,7 @@ func TestNewHandler(t *testing.T) {
 }
 
 func TestGetScenarios_Success(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)
@@ -100,7 +100,7 @@ func TestGetScenarios_NilConfig(t *testing.T) {
 }
 
 func TestGetScenarioConfig_Success(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)
@@ -131,7 +131,7 @@ func TestGetScenarioConfig_Success(t *testing.T) {
 }
 
 func TestGetScenarioConfig_NotFound(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)
@@ -152,7 +152,7 @@ func TestGetScenarioConfig_NotFound(t *testing.T) {
 }
 
 func TestGetScenarioConfig_EmptyScenario(t *testing.T) {
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	mockRC := &mockRemoteControlController{}
 	router := setupTestRouter(cfg, mockRC)
 	handler := NewHandler(cfg, mockRC)

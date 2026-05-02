@@ -42,7 +42,7 @@ func maskProviderForResponse(provider *typ.Provider) ProviderResponse {
 				//AccessToken:  maskToken(provider.OAuthDetail.AccessToken),
 				AccessToken:  provider.OAuthDetail.AccessToken,
 				RefreshToken: provider.OAuthDetail.RefreshToken,
-				ProviderType: provider.OAuthDetail.ProviderType,
+				Issuer:       provider.OAuthDetail.Issuer,
 				UserID:       provider.OAuthDetail.UserID,
 				ExpiresAt:    provider.OAuthDetail.ExpiresAt,
 				// Don't return refresh_token in responses

@@ -1,4 +1,5 @@
 import CardGrid from "@/components/CardGrid.tsx";
+import AgentSetupCard, { type AgentApplyResult } from '@/components/AgentSetupCard';
 import CodexConfigModal from "@/components/CodexConfigModal.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
@@ -22,8 +23,15 @@ const UseCodexPageContent: React.FC = () => {
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
 
-    const handleOpenConfigModal = () => {
-        setConfigModalOpen(true);
+    // Codex has no backend apply — copy config.toml to clipboard as a convenience
+    const handleApply = async (): Promise<AgentApplyResult> => {
+        const codexBaseUrl = `${baseUrl}/tingly/codex`;
+        const config = `model = "tingly-codex"\nmodel_provider = "tingly-box"\n\n[model_providers.tingly-box]\nname = "OpenAI using Tingly Box"\nbase_url = "${codexBaseUrl}"\npreferred_auth_method = "apikey"\nwire_api = "responses"`;
+        await navigator.clipboard.writeText(config);
+        return {
+            success: true,
+            files: ['~/.codex/config.toml (copied to clipboard — paste manually)'],
+        };
     };
 
     return (
@@ -43,7 +51,7 @@ const UseCodexPageContent: React.FC = () => {
                     size="full"
                     rightAction={
                         <Button
-                            onClick={handleOpenConfigModal}
+                            onClick={() => setConfigModalOpen(true)}
                             variant="contained"
                             size="small"
                         >
@@ -60,6 +68,16 @@ const UseCodexPageContent: React.FC = () => {
                         compact={true}
                     />
                 </UnifiedCard>
+
+                <AgentSetupCard
+                    agentKey={scenario}
+                    agentName="Codex"
+                    installCommand="npm install -g @openai/codex"
+                    installMirrorCommand="npm install -g @openai/codex --registry=https://registry.npmmirror.com"
+                    onApply={handleApply}
+                    onViewConfig={() => setConfigModalOpen(true)}
+                />
+
                 <TemplatePage
                     scenario={scenario}
                     title="Models and Forwarding Rules"

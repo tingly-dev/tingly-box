@@ -15,7 +15,7 @@ import (
 // TestShouldUseGenericMCPForProvider tests the provider limit checking logic
 func TestShouldUseGenericMCPForProvider(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	tests := []struct {
@@ -63,7 +63,7 @@ func TestShouldUseGenericMCPForProvider(t *testing.T) {
 // TestGenericMCPConfigDefaults tests that the GenericMCP config has safe defaults
 func TestGenericMCPConfigDefaults(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 
 	// By default, all generic paths should be disabled (safe default)
 	assert.False(t, cfg.GenericMCP.UseGenericAnthropicV1NonStream)
@@ -79,7 +79,7 @@ func TestGenericMCPConfigDefaults(t *testing.T) {
 // logic works correctly for different scenarios
 func TestDispatchGenericAnthropicV1NonStream_BasicRouting(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Register a test virtual tool
@@ -104,7 +104,7 @@ func TestDispatchGenericAnthropicV1NonStream_BasicRouting(t *testing.T) {
 // TestDispatchGenericOpenAIChatNonStream_BasicRouting tests that O→O routing works correctly
 func TestDispatchGenericOpenAIChatNonStream_BasicRouting(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Verify OpenAI Chat adapter can be created
@@ -119,7 +119,7 @@ func TestDispatchGenericOpenAIChatNonStream_BasicRouting(t *testing.T) {
 // TestDispatchGenericOpenAIChat_FeatureFlagIndependence tests that O→O flags work independently from A→A flags
 func TestDispatchGenericOpenAIChat_FeatureFlagIndependence(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Enable only O→O paths
@@ -138,7 +138,7 @@ func TestDispatchGenericOpenAIChat_FeatureFlagIndependence(t *testing.T) {
 // TestAllGenericPaths_CanBeEnabledIndependently tests that all four paths can be enabled separately
 func TestAllGenericPaths_CanBeEnabledIndependently(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Test enabling each path independently
@@ -241,7 +241,7 @@ func TestAllGenericPaths_CanBeEnabledIndependently(t *testing.T) {
 // the generic streaming path is disabled by default (safe default)
 func TestDispatchGenericAnthropicV1NonStream_StreamingDisabledByDefault(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 
 	// By default, streaming should be disabled
 	assert.False(t, cfg.GenericMCP.UseGenericAnthropicV1Stream,
@@ -252,7 +252,7 @@ func TestDispatchGenericAnthropicV1NonStream_StreamingDisabledByDefault(t *testi
 // both streaming and non-streaming flags are checked independently
 func TestDispatchGenericAnthropicV1NonStream_FeatureFlagChecks(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	tests := []struct {
@@ -311,7 +311,7 @@ func TestDispatchGenericAnthropicV1NonStream_FeatureFlagChecks(t *testing.T) {
 // TestDispatchGenericAnthropicBetaNonStream_BasicRouting tests that Beta routing works
 func TestDispatchGenericAnthropicBetaNonStream_BasicRouting(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Verify Beta feature flags exist and default to false (safe default)
@@ -335,7 +335,7 @@ func TestDispatchGenericAnthropicBetaNonStream_BasicRouting(t *testing.T) {
 // TestAllSixGenericPaths_CanBeEnabledIndependently tests that all 6 paths can be enabled separately
 func TestAllSixGenericPaths_CanBeEnabledIndependently(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig()
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	s := NewServer(cfg)
 
 	// Test enabling each path independently

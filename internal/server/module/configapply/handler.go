@@ -204,14 +204,12 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 		port = 12580
 	}
 	baseURL := getBaseURLFromRequest(c, port)
-	configBaseURL := baseURL + "/tingly/claude_code"
-
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
 	// Generate env vars based on mode
 	unified := req.Mode != "separate"
-	env := agent.GenerateClaudeCodeEnv(configBaseURL, apiKey, unified)
+	env := agent.GenerateClaudeCodeEnv(baseURL, apiKey, unified)
 
 	// Install status line script if requested (before applying settings)
 	var statusLineInstalled bool
