@@ -105,8 +105,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		SmartGuideConfig: smart_guide.LoadSmartGuideConfig(),
 		BaseURL:          baseURL,
 		APIKey:           apiKey,
-		Provider:         botSetting.SmartGuideProvider,
-		Model:            botSetting.SmartGuideModel,
+		Model:            botSetting.UUID, // use bot uuid as model (rule)
 		Handler:          agentboot.NewCompositeHandler().SetApprovalHandler(e.deps.IMPrompter),
 		ChatID:           hCtx.ChatID,
 		Platform:         string(hCtx.Platform),

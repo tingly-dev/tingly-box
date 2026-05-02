@@ -56,7 +56,6 @@ func TestNewTinglyBoxAgent_DefaultConfig(t *testing.T) {
 		SmartGuideConfig: DefaultSmartGuideConfig(),
 		BaseURL:          "http://localhost:12580/tingly/_smart_guide",
 		APIKey:           "test-api-key",
-		Provider:         "test-provider",
 		Model:            "claude-sonnet-4-6",
 		GetStatusFunc: func(chatID string) (*StatusInfo, error) {
 			return &StatusInfo{}, nil
@@ -79,7 +78,6 @@ func TestNewTinglyBoxAgent_NoAPIKey(t *testing.T) {
 		SmartGuideConfig: DefaultSmartGuideConfig(),
 		BaseURL:          "http://localhost:12580/tingly/_smart_guide",
 		APIKey:           "", // Empty API key
-		Provider:         "test-provider",
 		Model:            "claude-sonnet-4-6",
 	}
 	agent, err := NewTinglyBoxAgent(cfg)
@@ -93,7 +91,6 @@ func TestNewTinglyBoxAgent_NoBaseURL(t *testing.T) {
 		SmartGuideConfig: DefaultSmartGuideConfig(),
 		BaseURL:          "", // Empty BaseURL
 		APIKey:           "test-api-key",
-		Provider:         "test-provider",
 		Model:            "claude-sonnet-4-6",
 	}
 	agent, err := NewTinglyBoxAgent(cfg)
@@ -108,7 +105,6 @@ func TestNewTinglyBoxAgent_CustomToolExecutor(t *testing.T) {
 		SmartGuideConfig: DefaultSmartGuideConfig(),
 		BaseURL:          "http://localhost:12580/tingly/_smart_guide",
 		APIKey:           "test-api-key",
-		Provider:         "test-provider",
 		Model:            "claude-sonnet-4-6",
 		ToolExecutor:     customExecutor,
 	}
@@ -203,32 +199,6 @@ func TestTinglyBoxAgent_GetConfig(t *testing.T) {
 	cfg := DefaultSmartGuideConfig()
 	agent := &TinglyBoxAgent{config: cfg}
 	assert.Same(t, cfg, agent.GetConfig())
-}
-
-func TestNewAgentFactory(t *testing.T) {
-	cfg := DefaultSmartGuideConfig()
-	factory := NewAgentFactory(cfg, "http://localhost:12580/tingly/_smart_guide", "test-api-key", "test-provider", "test-model")
-	assert.NotNil(t, factory)
-	assert.Same(t, cfg, factory.config)
-	assert.Equal(t, "http://localhost:12580/tingly/_smart_guide", factory.baseURL)
-	assert.Equal(t, "test-api-key", factory.apiKey)
-}
-
-func TestAgentFactory_CreateAgent(t *testing.T) {
-	cfg := DefaultSmartGuideConfig()
-	factory := NewAgentFactory(cfg, "http://localhost:12580/tingly/_smart_guide", "test-api-key", "test-provider", "test-model")
-
-	getStatus := func(chatID string) (*StatusInfo, error) { return &StatusInfo{}, nil }
-	getProject := func(chatID string) (string, bool, error) { return "", false, nil }
-	updateProject := func(chatID string, projectPath string) error { return nil }
-
-	testAgent, err := factory.CreateAgent(getStatus, getProject, updateProject)
-	assert.NoError(t, err)
-	assert.NotNil(t, testAgent)
-	assert.NotNil(t, testAgent.ReActAgent)
-	assert.NotNil(t, testAgent.config)
-	assert.NotNil(t, testAgent.executor)
-	assert.NotNil(t, testAgent.toolkit)
 }
 
 func TestToolExecutor_SetWorkingDirectory(t *testing.T) {

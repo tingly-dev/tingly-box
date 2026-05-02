@@ -54,13 +54,13 @@ type TinglyBoxAgent struct {
 // AgentConfig holds the configuration for creating a TinglyBoxAgent
 type AgentConfig struct {
 	SmartGuideConfig *SmartGuideConfig
+	ToolExecutor     *ToolExecutor
+
 	// HTTP endpoint configuration (resolved from TBClient by caller)
-	BaseURL      string // e.g., "http://localhost:12580/tingly/_smart_guide"
-	APIKey       string // Tingly-box authentication token
-	ToolExecutor *ToolExecutor
-	// SmartGuide model configuration (required from bot setting)
-	Provider string // Provider UUID
-	Model    string // Model identifier
+	BaseURL string // e.g., "http://localhost:12580/tingly/_smart_guide"
+	APIKey  string // Tingly-box authentication token
+	Model   string // Model identifier
+
 	// Callback functions for internal tools
 	GetStatusFunc     func(chatID string) (*StatusInfo, error)
 	GetProjectFunc    func(chatID string) (string, bool, error)
@@ -96,7 +96,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 	var modelConfig *anthropic.Config
 
 	// Validate that SmartGuide config is provided
-	if config.Provider == "" || config.Model == "" {
+	if config.Model == "" {
 		return nil, fmt.Errorf("smartguide_provider and smartguide_model are required in bot setting")
 	}
 
@@ -112,7 +112,6 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 		BaseURL: config.BaseURL,
 	}
 	logrus.WithFields(logrus.Fields{
-		"provider": config.Provider,
 		"model":    config.Model,
 		"endpoint": config.BaseURL,
 	}).Info("Using HTTP endpoint for smartguide agent")
@@ -322,43 +321,6 @@ func (a *TinglyBoxAgent) IsEnabled() bool {
 // GetConfig returns the agent's configuration
 func (a *TinglyBoxAgent) GetConfig() *SmartGuideConfig {
 	return a.config
-}
-
-// AgentFactory creates TinglyBoxAgent instances
-type AgentFactory struct {
-	config             *SmartGuideConfig
-	baseURL            string // HTTP endpoint URL
-	apiKey             string // Authentication token
-	smartGuideProvider string // Provider UUID
-	smartGuideModel    string // Model identifier
-}
-
-// NewAgentFactory creates a new agent factory
-func NewAgentFactory(config *SmartGuideConfig, baseURL, apiKey string, smartGuideProvider, smartGuideModel string) *AgentFactory {
-	return &AgentFactory{
-		config:             config,
-		baseURL:            baseURL,
-		apiKey:             apiKey,
-		smartGuideProvider: smartGuideProvider,
-		smartGuideModel:    smartGuideModel,
-	}
-}
-
-// CreateAgent creates a new TinglyBoxAgent with the given callbacks
-func (f *AgentFactory) CreateAgent(getStatusFunc func(chatID string) (*StatusInfo, error),
-	getProjectFunc func(chatID string) (string, bool, error),
-	updateProjectFunc func(chatID string, projectPath string) error) (*TinglyBoxAgent, error) {
-
-	return NewTinglyBoxAgent(&AgentConfig{
-		SmartGuideConfig:  f.config,
-		BaseURL:           f.baseURL,
-		APIKey:            f.apiKey,
-		Provider:          f.smartGuideProvider,
-		Model:             f.smartGuideModel,
-		GetStatusFunc:     getStatusFunc,
-		GetProjectFunc:    getProjectFunc,
-		UpdateProjectFunc: updateProjectFunc,
-	})
 }
 
 // CanCreateAgent checks if a SmartGuide agent can be created with the given configuration
