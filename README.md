@@ -28,6 +28,7 @@ Tingly Box **serves agents, coordinates AI models, optimizes context, and routes
 
 - **Unified API Gateway** – One mixin endpoint to rule them all — seamlessly bridge OpenAI, Anthropic, Google Gemini, and more with automatic protocol translation
 - **Agent Integration** – One-click config for Claude Code, OpenCode, Codex, Xcode, and more — transparent proxying for SDKs and CLI tools
+- **Agent Profiles** - Run agent like Claude Code with individual profiles, each profile can work with different model and agent config
 - **Remote Control via IM Bots** – Control AI agents remotely through Telegram, DingTalk, Feishu, Lark, Weixin, WeCom, Slack, and Discord
 - **Multi-Tenant API Tokens** – Isolate data per user with dedicated API tokens — each user gets their own usage tracking, provider access, and configuration
 - **Smart Routing Engine** – Intelligently route requests across models and tokens based on cost, speed, or custom policies — far beyond simple load balancing
