@@ -165,15 +165,15 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
-	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("scenario %s does not support OpenAI chat completions", scenario),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
+	//if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) {
+	//	c.JSON(http.StatusBadRequest, ErrorResponse{
+	//		Error: ErrorDetail{
+	//			Message: fmt.Sprintf("scenario %s does not support OpenAI chat completions", scenario),
+	//			Type:    "invalid_request_error",
+	//		},
+	//	})
+	//	return
+	//}
 
 	// Check if this is the request model name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
