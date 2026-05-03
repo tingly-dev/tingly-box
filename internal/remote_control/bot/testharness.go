@@ -129,6 +129,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		nil, // tbClient — SmartGuide path not exercised by tests; falls back to mock/claude as configured
 		pairing,
 		auditLog,
+		nil,
 	)
 
 	manager.OnMessage(handler.HandleMessage)
