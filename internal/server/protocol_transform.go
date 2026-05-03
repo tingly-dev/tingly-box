@@ -46,14 +46,16 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
 	}
 
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
 		&req.BetaMessageNewParams,
 		opts...,
 	)
+	transformCtx.HasNativeAdvisor = hasNativeAdvisorBeta(req)
 	transformCtx.SourceAPI = protocol.TypeAnthropicBeta
 	transformCtx.TargetAPI = target
 
@@ -111,8 +113,9 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
 	}
 
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
@@ -164,8 +167,9 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
 	}
 
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
@@ -212,8 +216,9 @@ func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseC
 		transform.WithDevice(s.config.ClaudeCodeDeviceID),
 		transform.WithMaxTokens(int64(maxAllowed)),
 	}
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
