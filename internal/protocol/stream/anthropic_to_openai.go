@@ -17,9 +17,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type AnthropicToOpenAIToolCall struct {
+	ID        string
+	Name      string
+	Arguments string
+}
+
+type AnthropicToOpenAIMCPHooks struct {
+	ShouldSuppressTool func(name string) bool
+	OnToolCallsFinal   func(calls []AnthropicToOpenAIToolCall) error
+}
+
 // AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format
 // Returns inputTokens, outputTokens, and error for usage tracking
 func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
+	return AnthropicToOpenAIStreamWithMCPHooks(c, req, stream, responseModel, disableStreamUsage, nil)
+}
+
+func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (int, int, error) {
 	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -55,11 +70,14 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 		inputTokens  int
 		outputTokens int
 		finished     bool
+		hookErr      error
 		// Track tool call state for proper streaming
-		toolCallID   string
-		toolCallName string
-		toolCallArgs strings.Builder
-		hasToolCalls bool
+		toolCallID       string
+		toolCallName     string
+		toolCallArgs     strings.Builder
+		hasToolCalls     bool
+		suppressToolCall bool
+		pendingToolCalls []AnthropicToOpenAIToolCall
 		// Track thinking state for extended thinking support
 		thinkingText strings.Builder
 	)
@@ -110,7 +128,13 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 				toolCallID = event.ContentBlock.ID
 				toolCallName = event.ContentBlock.Name
 				toolCallArgs.Reset()
-				hasToolCalls = true
+				suppressToolCall = hooks != nil && hooks.ShouldSuppressTool != nil && hooks.ShouldSuppressTool(toolCallName)
+				if !suppressToolCall {
+					hasToolCalls = true
+				}
+				if suppressToolCall {
+					return true
+				}
 
 				// Send initial tool_call chunk with id, type, and name
 				chunk := openai.ChatCompletionChunk{
@@ -172,6 +196,9 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 				// Tool call arguments delta
 				args := event.Delta.PartialJSON
 				toolCallArgs.WriteString(args)
+				if suppressToolCall {
+					return true
+				}
 
 				// Send subsequent tool_call chunks with only arguments (no id, no name, no type)
 				chunk := openai.ChatCompletionChunk{
@@ -208,6 +235,13 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 			// Note: signature_delta is intentionally ignored as OpenAI doesn't have an equivalent
 
 		case "content_block_stop":
+			if toolCallID != "" {
+				pendingToolCalls = append(pendingToolCalls, AnthropicToOpenAIToolCall{ID: toolCallID, Name: toolCallName, Arguments: toolCallArgs.String()})
+				toolCallID = ""
+				toolCallName = ""
+				toolCallArgs.Reset()
+				suppressToolCall = false
+			}
 			// Content block finished - no specific action needed
 
 		case "message_delta":
@@ -219,6 +253,15 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 			}
 
 		case "message_stop":
+			if hooks != nil && hooks.OnToolCallsFinal != nil && len(pendingToolCalls) > 0 {
+				if err := hooks.OnToolCallsFinal(pendingToolCalls); err != nil {
+					hookErr = err
+					return false
+				}
+			}
+			if errors.Is(hookErr, ErrMCPStreamContinue) {
+				return false
+			}
 			// Determine the correct finish_reason
 			// "tool_calls" if we had tool use, "stop" otherwise
 			// Any of "stop", "length", "tool_calls", "content_filter", "function_call".
@@ -267,6 +310,9 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 		return true
 	})
 
+	if errors.Is(hookErr, ErrMCPStreamContinue) {
+		return inputTokens, outputTokens, hookErr
+	}
 	if finished {
 		return inputTokens, outputTokens, nil
 	}

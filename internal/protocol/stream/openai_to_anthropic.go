@@ -34,6 +34,8 @@ type OpenAIToAnthropicMCPHooks struct {
 	OnToolCallsFinal   func(calls []OpenAIToAnthropicToolCall) error
 }
 
+var ErrMCPStreamContinue = errors.New("mcp stream should continue")
+
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
@@ -114,24 +116,30 @@ func handleOpenAIToAnthropicStreamResponse(
 		}
 	}
 
-	// Send message_start event first
-	messageStartEvent := map[string]interface{}{
-		"type": eventTypeMessageStart,
-		"message": map[string]interface{}{
-			"id":            messageID,
-			"type":          "message",
-			"role":          "assistant",
-			"content":       []interface{}{},
-			"model":         responseModel,
-			"stop_reason":   nil,
-			"stop_sequence": nil,
-			"usage": map[string]interface{}{
-				"input_tokens":  estimatedInputTokens,
-				"output_tokens": 0,
+	messageStarted := false
+	ensureMessageStart := func() {
+		if messageStarted {
+			return
+		}
+		messageStartEvent := map[string]interface{}{
+			"type": eventTypeMessageStart,
+			"message": map[string]interface{}{
+				"id":            messageID,
+				"type":          "message",
+				"role":          "assistant",
+				"content":       []interface{}{},
+				"model":         responseModel,
+				"stop_reason":   nil,
+				"stop_sequence": nil,
+				"usage": map[string]interface{}{
+					"input_tokens":  estimatedInputTokens,
+					"output_tokens": 0,
+				},
 			},
-		},
+		}
+		sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
+		messageStarted = true
 	}
-	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
 
 	// Process the stream with context cancellation checking
 	chunkCount := 0
@@ -152,7 +160,7 @@ func handleOpenAIToAnthropicStreamResponse(
 		chunkCount++
 		chunk := stream.Current()
 
-		logrus.Infof("[Stream] Got chunk #%d: len(choices)=%d", chunkCount, len(chunk.Choices))
+		logrus.Debugf("[Stream] Got chunk #%d: len(choices)=%d", chunkCount, len(chunk.Choices))
 
 		// Skip empty chunks (no choices)
 		if len(chunk.Choices) == 0 {
@@ -204,6 +212,7 @@ func handleOpenAIToAnthropicStreamResponse(
 						state.thinkingBlockIndex = state.nextBlockIndex
 						state.nextBlockIndex++
 						state.thinkingBlocks[state.thinkingBlockIndex] = true
+						ensureMessageStart()
 						sendContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
 							"thinking": "",
 						}, flusher)
@@ -213,6 +222,7 @@ func handleOpenAIToAnthropicStreamResponse(
 					thinkingText := extractString(v)
 					if thinkingText != "" {
 						// Send content_block_delta with thinking_delta
+						ensureMessageStart()
 						sendContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
 							"type":     deltaTypeThinkingDelta,
 							"thinking": thinkingText,
@@ -236,12 +246,14 @@ func handleOpenAIToAnthropicStreamResponse(
 				closeOpenBlock(c, state, flusher)
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
+				ensureMessageStart()
 				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
 					"text": "",
 				}, flusher)
 			}
 			state.hasTextContent = true
 
+			ensureMessageStart()
 			sendContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Refusal,
@@ -258,12 +270,14 @@ func handleOpenAIToAnthropicStreamResponse(
 				closeOpenBlock(c, state, flusher)
 				state.textBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
+				ensureMessageStart()
 				sendContentBlockStart(c, state.textBlockIndex, blockTypeText, map[string]interface{}{
 					"text": "",
 				}, flusher)
 			}
 
 			// Send content_block_delta with only text - no OpenAI fields merged in
+			ensureMessageStart()
 			sendContentBlockDelta(c, state.textBlockIndex, map[string]interface{}{
 				"type": deltaTypeTextDelta,
 				"text": delta.Content,
@@ -297,6 +311,7 @@ func handleOpenAIToAnthropicStreamResponse(
 
 					// Send content_block_start for tool_use unless suppressed by MCP hook.
 					if state.pendingToolCalls[anthropicIndex].emit {
+						ensureMessageStart()
 						sendContentBlockStart(c, anthropicIndex, blockTypeToolUse, map[string]interface{}{
 							"id":    truncatedID,
 							"name":  toolCall.Function.Name,
@@ -317,6 +332,7 @@ func handleOpenAIToAnthropicStreamResponse(
 
 					// Send content_block_delta unless suppressed by MCP hook.
 					if state.pendingToolCalls[anthropicIndex].emit {
+						ensureMessageStart()
 						sendContentBlockDelta(c, anthropicIndex, map[string]interface{}{
 							"type":         deltaTypeInputJSONDelta,
 							"partial_json": toolCall.Function.Arguments,
@@ -361,6 +377,10 @@ func handleOpenAIToAnthropicStreamResponse(
 				}
 			}
 
+			if !messageStarted && errors.Is(hookErr, ErrMCPStreamContinue) {
+				return false
+			}
+			ensureMessageStart()
 			sendStopEvents(c, state, flusher)
 			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
 			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
