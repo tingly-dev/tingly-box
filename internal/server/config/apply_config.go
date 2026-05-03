@@ -436,20 +436,31 @@ func InstallStatusLineScript() (scriptPath string, created bool, err error) {
 	return scriptPath, !fileExists, nil
 }
 
-// InstallNotifyScript installs the claude-notify.sh script to ~/.claude/
+// InstallNotifyScript installs the tingly-notify.sh script (push-only) to ~/.claude/
 // Returns the path to the installed script and whether it was newly created
 func InstallNotifyScript() (scriptPath string, created bool, err error) {
+	return installScript("tingly-notify.sh", "script/tingly-notify.sh")
+}
+
+// InstallIMHookScript installs the tingly-im-hook.sh script (interactive approval) to ~/.claude/
+// Returns the path to the installed script and whether it was newly created
+func InstallIMHookScript() (scriptPath string, created bool, err error) {
+	return installScript("tingly-im-hook.sh", "script/tingly-im-hook.sh")
+}
+
+// installScript is a helper that installs a script from embedded assets to ~/.claude/
+func installScript(targetName, assetPath string) (scriptPath string, created bool, err error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", false, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	scriptPath = filepath.Join(homeDir, ".claude", "tingly-notify.sh")
+	scriptPath = filepath.Join(homeDir, ".claude", targetName)
 
 	// Read script from embedded assets
-	content, err := internal.ScriptAssets.ReadFile("script/claude-notify.sh")
+	content, err := internal.ScriptAssets.ReadFile(assetPath)
 	if err != nil {
-		return "", false, fmt.Errorf("failed to read notify script from assets: %w", err)
+		return "", false, fmt.Errorf("failed to read script from assets: %w", err)
 	}
 
 	// Ensure directory exists
@@ -469,8 +480,9 @@ func InstallNotifyScript() (scriptPath string, created bool, err error) {
 	return scriptPath, !fileExists, nil
 }
 
-// NotifyHookEntries defines the Claude Code hooks to install for notifications.
-// This can be passed to ApplyNotifyHooks or used directly in settings.json.
+// NotifyHookEntries defines the Claude Code hooks to install for PUSH-ONLY notifications.
+// This includes Stop events and completion-type notifications.
+// For interactive approval hooks (PreToolUse, permission notifications), use ImHookEntries instead.
 func NotifyHookEntries() map[string]interface{} {
 	scriptCmd := "~/.claude/tingly-notify.sh"
 	return map[string]interface{}{
@@ -479,6 +491,19 @@ func NotifyHookEntries() map[string]interface{} {
 				{"type": "command", "command": scriptCmd},
 			}},
 		},
+		"Notification": []map[string]interface{}{
+			{"matcher": "completion", "hooks": []map[string]interface{}{
+				{"type": "command", "command": scriptCmd},
+			}},
+		},
+	}
+}
+
+// ImHookEntries defines the Claude Code hooks to install for INTERACTIVE approval via IM.
+// This includes PreToolUse (all tool calls) and permission-type notifications.
+func ImHookEntries() map[string]interface{} {
+	scriptCmd := "~/.claude/tingly-im-hook.sh"
+	return map[string]interface{}{
 		"Notification": []map[string]interface{}{
 			{"matcher": "permission", "hooks": []map[string]interface{}{
 				{"type": "command", "command": scriptCmd},
@@ -559,6 +584,84 @@ func ApplyNotifyHooks() (*ApplyResult, error) {
 	}
 	if err := os.WriteFile(targetPath, output, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write settings.json: %w", err)
+	}
+
+	result.Success = true
+	if result.Created {
+		result.Message = "Created " + targetPath
+	} else {
+		result.Message = "Updated " + targetPath
+	}
+	return result, nil
+}
+
+// ApplyImHooks installs the IM hook script (interactive approval) and merges IM hooks into settings.json.
+// This is independent of the agent apply flow — it can be called standalone.
+// Existing hooks with different matchers are preserved.
+func ApplyImHooks() (*ApplyResult, error) {
+	_, _, err := InstallIMHookScript()
+	if err != nil {
+		return nil, fmt.Errorf("failed to install IM hook script: %w", err)
+	}
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	targetPath := filepath.Join(homeDir, ".claude", "settings.json")
+
+	result := &ApplyResult{}
+
+	// Read existing or create new
+	var existingConfig map[string]interface{}
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		existingConfig = make(map[string]interface{})
+		result.Created = true
+	} else {
+		if err := json.Unmarshal(data, &existingConfig); err != nil {
+			return nil, fmt.Errorf("failed to parse settings.json: %w", err)
+		}
+		backupPath, err := backupFile(targetPath)
+		if err != nil {
+			return nil, err
+		}
+		result.BackupPath = backupPath
+		result.Updated = true
+	}
+
+	// Merge hooks: append tingly-box entries, skip if same event+matcher+command already exists
+	newHooks := ImHookEntries()
+	existingHooks, ok := existingConfig["hooks"].(map[string]interface{})
+	if !ok {
+		existingHooks = make(map[string]interface{})
+	}
+	for event, newEntries := range newHooks {
+		// Preserve existing entries for this event
+		var merged []interface{}
+		if cur, ok := existingHooks[event]; ok {
+			if arr, ok := cur.([]interface{}); ok {
+				merged = arr
+			}
+		}
+		// Append new entries that don't already exist (matched by event+matcher+command)
+		for _, ne := range newEntries.([]map[string]interface{}) {
+			if hasHookEntry(merged, ne) {
+				continue // already configured, skip
+			}
+			merged = append(merged, ne)
+		}
+		existingHooks[event] = merged
+	}
+	existingConfig["hooks"] = existingHooks
+
+	// Write
+	output, err := json.MarshalIndent(existingConfig, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	if err := os.WriteFile(targetPath, output, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write file: %w", err)
 	}
 
 	result.Success = true

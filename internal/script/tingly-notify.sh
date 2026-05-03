@@ -1,41 +1,25 @@
 #!/bin/bash
-# Tingly Box Notify Hook for Claude Code
+# Tingly Box Notify Hook for Claude Code (Push Only)
 #
-# Claude Code hooks pass context via stdin as JSON:
-#   {
-#     "session_id": "...",
-#     "transcript_path": "...",
-#     "cwd": "...",
-#     "permission_mode": "default",
-#     "hook_event_name": "Stop|Notification|PreToolUse",
-#     "stop_hook_active": false,
-#     "last_assistant_message": "...",
-#     "tool_name": "...",
-#     "tool_input": "..."
-#   }
+# This script handles PUSH-ONLY notifications that do NOT require user approval.
+# It forwards the event to Tingly Box for desktop or IM delivery and exits immediately.
 #
-# Push events (Stop, PostToolUse, plain Notification) are forwarded to
-# Tingly Box for delivery (desktop or IM, depending on scenario binding).
+# Supported events:
+#   - Stop (task completion notification)
+#   - PostToolUse (tool finished notification)
+#   - Notification with "completion" or other non-permission messages
 #
-# Interactive events (PreToolUse, AskUserQuestion, permission Notification)
-# are routed to a bound IM bot. The bot sends an Approve/Deny card or a
-# question; this script long-polls until the user responds and writes the
-# result to stdout in Claude Code's hook output JSON schema so the agent
-# either runs the tool or skips it.
+# For INTERACTIVE approval hooks, use tingly-im-hook.sh instead.
 #
 # Usage (from Claude Code settings.json hooks):
 #   {
 #     "hooks": {
-#       "Notification": [{
-#         "matcher": "permission",
-#         "hooks": [{ "type": "command", "command": "~/.claude/tingly-notify.sh" }]
-#       }],
-#       "PreToolUse": [{
-#         "matcher": "AskUserQuestion",
-#         "hooks": [{ "type": "command", "command": "~/.claude/tingly-notify.sh" }]
-#       }],
 #       "Stop": [{
 #         "matcher": "",
+#         "hooks": [{ "type": "command", "command": "~/.claude/tingly-notify.sh" }]
+#       }],
+#       "Notification": [{
+#         "matcher": "completion",
 #         "hooks": [{ "type": "command", "command": "~/.claude/tingly-notify.sh" }]
 #       }]
 #     }
@@ -47,125 +31,13 @@ CC_INPUT=$(cat)
 
 TINGLY_API_URL="${TINGLY_API_URL:-http://localhost:12580}"
 TINGLY_SCENARIO="${TINGLY_SCENARIO:-claude_code}"
-TINGLY_HOOK_POLL_SECONDS="${TINGLY_HOOK_POLL_SECONDS:-45}"
-TINGLY_HOOK_TOTAL_BUDGET_SECONDS="${TINGLY_HOOK_TOTAL_BUDGET_SECONDS:-300}"
 
-# json_field <key> < json   -> echoes the string value of the top-level
-# key (or empty if missing). Avoids a hard jq dependency.
-json_field() {
-  local key="$1"
-  if command -v jq >/dev/null 2>&1; then
-    jq -r --arg k "$key" '.[$k] // empty' 2>/dev/null
-  else
-    # Best-effort grep fallback for our own server response shape.
-    sed -n "s/.*\"${key}\":\"\\([^\"]*\\)\".*/\\1/p" | head -n 1
-  fi
-}
+# Forward the full Claude Code hook input to Tingly Box.
+# This is fire-and-forget: we don't care about the response.
+# The server will deliver desktop notification or forward to IM if configured.
+echo "$CC_INPUT" | curl -s -X POST \
+  -H "Content-Type: application/json" \
+  -d @- \
+  "${TINGLY_API_URL}/tingly/${TINGLY_SCENARIO}/notify" 2>/dev/null || true
 
-# Extract a nested .decision JSON object as a single line. Falls back to
-# an empty body when jq is unavailable so we never block Claude.
-json_decision() {
-  if command -v jq >/dev/null 2>&1; then
-    jq -c '.decision // empty' 2>/dev/null
-  else
-    cat
-  fi
-}
-
-POST_BODY=$(mktemp)
-trap 'rm -f "$POST_BODY"' EXIT
-
-printf '%s' "$CC_INPUT" >"$POST_BODY"
-
-# POST the hook event. -w '%{http_code}' lets us split body from status
-# without having to invoke curl twice.
-RESP=$(curl -sS -o - -w '\n%{http_code}' \
-  -X POST \
-  -H 'Content-Type: application/json' \
-  --data-binary "@$POST_BODY" \
-  "${TINGLY_API_URL}/tingly/${TINGLY_SCENARIO}/notify" 2>/dev/null) || {
-  # Network failure: do not block Claude.
-  exit 0
-}
-
-HTTP_CODE="${RESP##*$'\n'}"
-BODY="${RESP%$'\n'*}"
-
-case "$HTTP_CODE" in
-  200)
-    # Push delivered (or no binding + desktop fallback). Continue.
-    exit 0
-    ;;
-  202)
-    : # interactive — fall through to long-poll
-    ;;
-  404)
-    # No scenario binding configured; let Claude proceed.
-    exit 0
-    ;;
-  *)
-    # Unexpected error; log to stderr but never deny.
-    printf 'tingly-notify: HTTP %s from notify endpoint\n' "$HTTP_CODE" >&2
-    exit 0
-    ;;
-esac
-
-REQUEST_ID=$(printf '%s' "$BODY" | json_field request_id)
-WAIT_URL=$(printf '%s' "$BODY" | json_field wait_url)
-if [ -z "$REQUEST_ID" ] || [ -z "$WAIT_URL" ]; then
-  printf 'tingly-notify: malformed interactive response\n' >&2
-  exit 0
-fi
-
-START_TS=$(date +%s)
-while :; do
-  NOW=$(date +%s)
-  ELAPSED=$((NOW - START_TS))
-  if [ "$ELAPSED" -ge "$TINGLY_HOOK_TOTAL_BUDGET_SECONDS" ]; then
-    # Total budget exceeded — server should have already emitted a
-    # fallback decision via 410, but if we got here with no answer we
-    # let Claude proceed without blocking.
-    exit 0
-  fi
-
-  WAIT_RESP=$(curl -sS -o - -w '\n%{http_code}' \
-    --max-time "$TINGLY_HOOK_POLL_SECONDS" \
-    "${TINGLY_API_URL}${WAIT_URL}?timeout=${TINGLY_HOOK_POLL_SECONDS}s" 2>/dev/null) || {
-    # Transient network error; back off briefly and retry.
-    sleep 1
-    continue
-  }
-  WAIT_CODE="${WAIT_RESP##*$'\n'}"
-  WAIT_BODY="${WAIT_RESP%$'\n'*}"
-
-  case "$WAIT_CODE" in
-    200)
-      # answered or cancelled — both carry a `decision` we forward.
-      DECISION=$(printf '%s' "$WAIT_BODY" | json_decision)
-      if [ -n "$DECISION" ] && [ "$DECISION" != "null" ]; then
-        printf '%s\n' "$DECISION"
-      fi
-      exit 0
-      ;;
-    410)
-      # Timeout fallback: server has computed a policy decision.
-      DECISION=$(printf '%s' "$WAIT_BODY" | json_decision)
-      if [ -n "$DECISION" ] && [ "$DECISION" != "null" ]; then
-        printf '%s\n' "$DECISION"
-      fi
-      exit 0
-      ;;
-    504)
-      # Long-poll timed out without an answer; reconnect.
-      continue
-      ;;
-    404)
-      # Request unknown server-side; let Claude proceed.
-      exit 0
-      ;;
-    *)
-      printf 'tingly-notify: HTTP %s from wait endpoint\n' "$WAIT_CODE" >&2
-      exit 0
-      ;;
-  esac
-done
+exit 0

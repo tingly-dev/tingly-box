@@ -38,7 +38,11 @@ import (
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 	"github.com/tingly-dev/tingly-box/remote/audit"
+	"github.com/tingly-dev/tingly-box/remote/binding"
+	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/interaction"
 	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
+	"github.com/tingly-dev/tingly-box/remote/scenario/builtin/claudecode"
 )
 
 // GlobalServerManager manages the global server instance for web UI control
@@ -82,7 +86,28 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	statusHandler := statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), quotaMgr)
 	statusline.RegisterRoutes(s.engine, statusHandler)
 
-	notifyHandler := notifymodule.NewHandler()
+	// Remote middle-layer wiring for /tingly/:scenario hook events.
+	// When the bot settings store is reachable we set up:
+	//   - channelRegistry: running bots register imbot-backed Channels
+	//     (see internal/remote/channel/imchannel)
+	//   - interactionRegistry: shared long-poll registry the wait
+	//     endpoint reads from
+	//   - scenarioRegistry: name → plugin (Phase 1 ships claudecode)
+	// Everything stays nil for setups without imbot settings; in that
+	// case the notify HTTP module falls back to desktop notifications.
+	var notifyHandler *notifymodule.Handler
+	if sm := s.config.StoreManager(); sm != nil && sm.ImBotSettings() != nil {
+		s.channelRegistry = channel.NewRegistry()
+		s.interactionRegistry = interaction.New[interaction.Result](30 * time.Second)
+		s.scenarioRegistry = remotescenario.NewRegistry()
+		s.scenarioRegistry.Register(claudecode.New(s.interactionRegistry))
+		resolver := binding.NewResolver(sm.ImBotSettings())
+		auditLog := audit.NewLogger(audit.Config{Console: true, MaxEntries: 1000})
+		runtime := remotescenario.NewDefaultRuntime(s.channelRegistry, resolver, runtimeAuditSink(auditLog))
+		notifyHandler = notifymodule.NewHandlerWithRouting(s.scenarioRegistry, s.interactionRegistry, runtime)
+	} else {
+		notifyHandler = notifymodule.NewHandler()
+	}
 	notifymodule.RegisterRoutes(s.engine, notifyHandler)
 
 	// Create route manager

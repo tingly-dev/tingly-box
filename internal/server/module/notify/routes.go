@@ -6,4 +6,5 @@ import "github.com/gin-gonic/gin"
 func RegisterRoutes(engine *gin.Engine, handler *Handler) {
 	ccGroup := engine.Group("/tingly/:scenario")
 	ccGroup.POST("/notify", handler.Notify)
+	ccGroup.GET("/wait/:request_id", handler.Wait)
 }
