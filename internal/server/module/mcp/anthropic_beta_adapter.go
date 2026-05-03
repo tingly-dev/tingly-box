@@ -124,6 +124,37 @@ func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (
 	return &newReq, nil
 }
 
+func (a *AnthropicBetaAdapter) BuildContinuationSegment(resp any, results []ToolExecutionResult) (any, error) {
+	msg, ok := resp.(*anthropic.BetaMessage)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.BetaMessage, got %T", resp)
+	}
+	segment := make([]anthropic.BetaMessageParam, 0, 2)
+	segment = append(segment, betaMessageToParamPreservingThinking(msg))
+	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(results))
+	for _, r := range results {
+		resultBlocks = append(resultBlocks, anthropic.NewBetaToolResultBlock(r.ToolUseID, r.Content, r.IsError))
+	}
+	if len(resultBlocks) > 0 {
+		segment = append(segment, anthropic.NewBetaUserMessage(resultBlocks...))
+	}
+	return segment, nil
+}
+
+func (a *AnthropicBetaAdapter) ApplyContinuation(req any, segment any) (any, error) {
+	reqParams, ok := req.(*anthropic.BetaMessageNewParams)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.BetaMessageNewParams, got %T", req)
+	}
+	seg, ok := segment.([]anthropic.BetaMessageParam)
+	if !ok || len(seg) == 0 {
+		return req, nil
+	}
+	newReq := *reqParams
+	newReq.Messages = append(append([]anthropic.BetaMessageParam{}, seg...), reqParams.Messages...)
+	return &newReq, nil
+}
+
 func betaMessageToParamPreservingThinking(msg *anthropic.BetaMessage) anthropic.BetaMessageParam {
 	if msg == nil {
 		return anthropic.BetaMessageParam{}
@@ -160,9 +191,15 @@ func (a *AnthropicBetaAdapter) FilterVirtualTools(response any, externalTools []
 			if externalIDs[string(tu.ID)] {
 				filtered = append(filtered, block)
 			}
-		} else {
-			filtered = append(filtered, block)
+			continue
 		}
+		if stu, ok := block.AsAny().(anthropic.BetaServerToolUseBlock); ok {
+			if externalIDs[string(stu.ID)] {
+				filtered = append(filtered, block)
+			}
+			continue
+		}
+		filtered = append(filtered, block)
 	}
 
 	msg.Content = filtered
@@ -179,7 +216,17 @@ func (a *AnthropicBetaAdapter) SetupSSEHeaders(c *gin.Context) {
 }
 
 func (a *AnthropicBetaAdapter) SendEvent(c *gin.Context, eventType string, payload []byte) error {
-	c.SSEvent("", payload)
+	name := eventType
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err == nil {
+		if typ, ok := raw["type"].(string); ok && typ != "" {
+			name = typ
+		}
+	}
+	if name == "" {
+		name = "message"
+	}
+	fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", name, payload)
 	c.Writer.Flush()
 	return nil
 }
@@ -191,10 +238,18 @@ func (a *AnthropicBetaAdapter) SendKeepAlive(c *gin.Context) error {
 }
 
 func (a *AnthropicBetaAdapter) SendFinalMessage(c *gin.Context) error {
+	deltaJSON, _ := json.Marshal(map[string]interface{}{
+		"type": "message_delta",
+		"delta": map[string]interface{}{
+			"stop_reason":   "end_turn",
+			"stop_sequence": nil,
+		},
+	})
+	if err := a.SendEvent(c, "message_delta", deltaJSON); err != nil {
+		return err
+	}
 	stopJSON, _ := json.Marshal(map[string]interface{}{"type": "message_stop"})
-	c.SSEvent("", string(stopJSON))
-	c.Writer.Flush()
-	return nil
+	return a.SendEvent(c, "message_stop", stopJSON)
 }
 
 // Event processing
@@ -219,6 +274,9 @@ func (a *AnthropicBetaAdapter) ClassifyEvent(event any) EventType {
 
 	case anthropic.BetaRawContentBlockStartEvent:
 		if _, ok := v.ContentBlock.AsAny().(anthropic.BetaToolUseBlock); ok {
+			return EventToolStart
+		}
+		if stu, ok := v.ContentBlock.AsAny().(anthropic.BetaServerToolUseBlock); ok && stu.Name == "advisor" {
 			return EventToolStart
 		}
 		return EventText
@@ -267,7 +325,6 @@ func (a *AnthropicBetaAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 	if !ok {
 		return nil, false
 	}
-
 	return &AnthropicBetaTool{ToolUseBlock: tu}, true
 }
 

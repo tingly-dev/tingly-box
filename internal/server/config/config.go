@@ -192,16 +192,6 @@ type GenericMCPConfig struct {
 	// UseGenericOpenAIChatStream enables generic path for O→O streaming
 	UseGenericOpenAIChatStream bool `json:"use_generic_openai_chat_stream,omitempty" yaml:"use_generic_openai_chat_stream,omitempty"`
 
-	// UseGenericAnthropicBetaNonStream enables generic path for Aβ→Aβ non-streaming
-	// When false: uses existing dispatch implementation
-	// When true: uses GenericLoopProcessor
-	UseGenericAnthropicBetaNonStream bool `json:"use_generic_anthropic_beta_non_stream,omitempty" yaml:"use_generic_anthropic_beta_non_stream,omitempty"`
-
-	// UseGenericAnthropicBetaStream enables generic path for Aβ→Aβ streaming
-	// When false: uses existing dispatch implementation
-	// When true: uses GenericStreamInterceptor
-	UseGenericAnthropicBetaStream bool `json:"use_generic_anthropic_beta_stream,omitempty" yaml:"use_generic_anthropic_beta_stream,omitempty"`
-
 	// ProviderLimits limits which providers use generic path
 	// Empty means all providers can use generic path
 	// Format: comma-separated provider names (e.g., "provider1,provider2")

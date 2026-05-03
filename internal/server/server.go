@@ -111,8 +111,6 @@ type Server struct {
 
 	// mcp runtime for external MCP tools
 	mcpRuntime *mcpruntime.Runtime
-	// pending virtual tool results for mixed server+client tool-use follow-up merge
-	pendingVirtualToolResults *pendingVirtualToolResultStore
 
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
@@ -560,7 +558,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.engine = gin.New()
 	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
 	server.errorMW = errorMW
-	server.pendingVirtualToolResults = newPendingVirtualToolResultStore()
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))
 	grRuntime := server.currentGuardrailsRuntime()

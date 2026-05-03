@@ -55,6 +55,18 @@ func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments 
 	return result, err
 }
 
+func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error) {
+	callCtx := ctx
+	if a.advisorCtx != nil {
+		callCtx = mcpruntime.WithAdvisorContext(ctx, a.advisorCtx)
+	}
+	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
+	if ac, ok := mcpruntime.GetAdvisorContext(updatedCtx); ok {
+		a.advisorCtx = ac
+	}
+	return updatedCtx, result, err
+}
+
 func (a *serverOpsAdapter) GetRecorder() mcp.ProtocolRecorder {
 	if a.recorder == nil {
 		return nil
@@ -114,7 +126,6 @@ func (s *Server) runGenericOpenAIChatNonStream(
 	forwarder := mcp.NewOpenAIChatForwarder(s.clientPool, &forwardContextProvider{server: s})
 	virtualRegistry := s.mcpRuntime.VirtualRegistry()
 	serverOps := newServerOpsAdapter(s, recorder)
-	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	var recorderAdapter mcp.ProtocolRecorder
@@ -132,7 +143,6 @@ func (s *Server) runGenericOpenAIChatNonStream(
 		adapter,
 		forwarder,
 		toolExecutor,
-		pendingManager,
 		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
@@ -163,7 +173,6 @@ func (s *Server) runGenericAnthropicV1NonStream(
 	forwarder := mcp.NewAnthropicV1Forwarder(s.clientPool, &forwardContextProvider{server: s})
 	virtualRegistry := s.mcpRuntime.VirtualRegistry()
 	serverOps := newServerOpsAdapter(s, recorder)
-	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	var recorderAdapter mcp.ProtocolRecorder
@@ -181,7 +190,6 @@ func (s *Server) runGenericAnthropicV1NonStream(
 		adapter,
 		forwarder,
 		toolExecutor,
-		pendingManager,
 		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
@@ -208,11 +216,11 @@ func (s *Server) runGenericAnthropicBetaNonStream(
 	req *anthropic.BetaMessageNewParams,
 	recorder *ProtocolRecorder,
 ) (*anthropic.BetaMessage, *mcp.TokenUsage, error) {
+
 	adapter := mcp.NewAnthropicBetaAdapter()
 	forwarder := mcp.NewAnthropicBetaForwarder(s.clientPool, &forwardContextProvider{server: s})
 	virtualRegistry := s.mcpRuntime.VirtualRegistry()
 	serverOps := newServerOpsAdapter(s, recorder)
-	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	var recorderAdapter mcp.ProtocolRecorder
@@ -230,7 +238,6 @@ func (s *Server) runGenericAnthropicBetaNonStream(
 		adapter,
 		forwarder,
 		toolExecutor,
-		pendingManager,
 		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
@@ -262,9 +269,6 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 	req := reqCtx.Request.(*anthropic.MessageNewParams)
 	actualModel := reqCtx.RequestModel
 
-	// Inject pending results if any
-	s.injectPendingVirtualResultsAnthropicV1(req)
-
 	ctx := c.Request.Context()
 
 	// Create adapter
@@ -278,7 +282,6 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
-	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create tool executor
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
@@ -300,7 +303,6 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 		adapter,
 		forwarder,
 		toolExecutor,
-		pendingManager,
 		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
@@ -352,9 +354,6 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 	actualModel := reqCtx.RequestModel
 	responseModel := reqCtx.ResponseModel
 
-	// Inject pending results if any
-	s.injectPendingVirtualResultsAnthropicV1(req)
-
 	// Create adapter
 	adapter := mcp.NewAnthropicV1Adapter()
 
@@ -366,7 +365,6 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
-	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -429,10 +427,10 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 		forwarder,
 		interceptorCfg,
 	)
-	interceptor.SetPendingResultsManager(pendingManager)
 
 	if err := interceptor.Run(req); err != nil {
 		recordMCPError(s, c, err, recorder)
+		return
 	}
 }
 
@@ -445,9 +443,6 @@ func (s *Server) dispatchGenericOpenAIChatNonStream(
 	recorder *ProtocolRecorder,
 ) {
 	req := reqCtx.Request.(*openai.ChatCompletionNewParams)
-
-	// Inject pending results if any
-	s.injectPendingVirtualResultsOpenAI(req)
 
 	response, usage, err := s.runGenericOpenAIChatNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
@@ -479,9 +474,6 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 	actualModel := reqCtx.RequestModel
 	responseModel := reqCtx.ResponseModel
 
-	// Inject pending results if any
-	s.injectPendingVirtualResultsOpenAI(req)
-
 	// Create adapter
 	adapter := mcp.NewOpenAIChatAdapter()
 
@@ -493,7 +485,6 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
-	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -540,7 +531,6 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 		forwarder,
 		mcp.InterceptorConfig{MaxRounds: 3},
 	)
-	interceptor.SetPendingResultsManager(pendingManager)
 
 	if err := interceptor.Run(req); err != nil {
 		recordMCPError(s, c, err, recorder)
@@ -558,8 +548,6 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 	req := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 	actualModel := reqCtx.RequestModel
 
-	// Inject pending results if any
-	s.injectPendingVirtualResultsAnthropicBeta(req)
 	response, usage, err := s.runGenericAnthropicBetaNonStream(c.Request.Context(), provider, req, recorder)
 	if err != nil {
 		recordMCPError(s, c, err, recorder)
@@ -596,9 +584,6 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 	actualModel := reqCtx.RequestModel
 	responseModel := reqCtx.ResponseModel
 
-	// Inject pending results if any
-	s.injectPendingVirtualResultsAnthropicBeta(req)
-
 	// Create adapter
 	adapter := mcp.NewAnthropicBetaAdapter()
 
@@ -610,7 +595,6 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
-	pendingManager := mcp.NewServerPendingResultsManager(s, s, s, s)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -673,7 +657,6 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 		forwarder,
 		interceptorCfg,
 	)
-	interceptor.SetPendingResultsManager(pendingManager)
 
 	if err := interceptor.Run(req); err != nil {
 		recordMCPError(s, c, err, recorder)

@@ -49,10 +49,9 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", true))
 
 	return &Server{
-		clientPool:                cp,
-		mcpRuntime:                rt,
-		config:                    conf,
-		pendingVirtualToolResults: newPendingVirtualToolResultStore(),
+		clientPool: cp,
+		mcpRuntime: rt,
+		config:     conf,
 	}
 }
 
@@ -693,6 +692,8 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	require.True(t, hasDeclaredMCPAnthropicV1Tools(&req))
 
 	reqCtx := transform.NewTransformContext(&req)
+	reqCtx.SourceAPI = protocol.TypeAnthropicV1
+	reqCtx.TargetAPI = protocol.TypeAnthropicV1
 	reqCtx.RequestModel = "claude-worker-v1"
 	reqCtx.ResponseModel = "proxy-model"
 
@@ -702,7 +703,7 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	rule := &typ.Rule{}
 	SetTrackingContext(c, rule, provider, reqCtx.RequestModel, reqCtx.ResponseModel, true)
 
-	s.dispatchGenericAnthropicV1Stream(c, reqCtx, rule, provider, nil)
+	s.dispatchChainResult(c, reqCtx, rule, provider, true, nil)
 
 	require.Equal(t, 1, advisorCalls)
 	require.Equal(t, 2, workerCalls)
@@ -711,7 +712,9 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	require.Contains(t, w.Header().Get("Content-Type"), "text/event-stream")
 
 	body := w.Body.String()
-	require.Contains(t, body, "event:message_start")
+	require.Contains(t, body, `"type":"message_start"`)
 	require.Contains(t, body, `"text":"final answer uses stream-advisor-plan"`)
+	require.Contains(t, body, `"type":"message_delta"`)
 	require.Contains(t, body, `"stop_reason":"end_turn"`)
+	require.Contains(t, body, `"type":"message_stop"`)
 }

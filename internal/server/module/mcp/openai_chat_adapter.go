@@ -124,6 +124,33 @@ func (o *OpenAIChatAdapter) AppendToolResults(req, resp any, results []any) (any
 	return &newReq, nil
 }
 
+func (o *OpenAIChatAdapter) BuildContinuationSegment(resp any, results []ToolExecutionResult) (any, error) {
+	completion, ok := resp.(*openai.ChatCompletion)
+	if !ok {
+		return nil, fmt.Errorf("expected *openai.ChatCompletion, got %T", resp)
+	}
+	segment := make([]openai.ChatCompletionMessageParamUnion, 0, 1+len(results))
+	segment = append(segment, completion.Choices[0].Message.ToParam())
+	for _, r := range results {
+		segment = append(segment, openai.ToolMessage(r.Content, r.ToolUseID))
+	}
+	return segment, nil
+}
+
+func (o *OpenAIChatAdapter) ApplyContinuation(req any, segment any) (any, error) {
+	reqParams, ok := req.(*openai.ChatCompletionNewParams)
+	if !ok {
+		return nil, fmt.Errorf("expected *openai.ChatCompletionNewParams, got %T", req)
+	}
+	seg, ok := segment.([]openai.ChatCompletionMessageParamUnion)
+	if !ok || len(seg) == 0 {
+		return req, nil
+	}
+	newReq := *reqParams
+	newReq.Messages = append(append([]openai.ChatCompletionMessageParamUnion{}, seg...), reqParams.Messages...)
+	return &newReq, nil
+}
+
 func (o *OpenAIChatAdapter) FilterVirtualTools(response any, externalTools []Tool) (any, error) {
 	completion, ok := response.(*openai.ChatCompletion)
 	if !ok {

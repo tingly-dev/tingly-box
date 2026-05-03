@@ -10,11 +10,28 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/client"
 )
 
+func logAnthropicForward(fc *ForwardContext, model string, mode string) {
+	if fc == nil || fc.Provider == nil {
+		return
+	}
+	logrus.Debugf(
+		"[anthropic-forward] mode=%s provider=%s api_base=%s api_style=%s model=%s timeout=%s",
+		mode,
+		fc.Provider.Name,
+		fc.Provider.APIBase,
+		fc.Provider.APIStyle,
+		model,
+		fc.Timeout,
+	)
+}
+
 // ForwardAnthropicV1 sends a non-streaming Anthropic v1 message request.
 func ForwardAnthropicV1(fc *ForwardContext, wrapper *client.AnthropicClient, req *anthropic.MessageNewParams) (*anthropic.Message, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
+
+	logAnthropicForward(fc, string(req.Model), "v1-nonstream")
 
 	ctx, cancel := fc.PrepareContext(req)
 	message, err := wrapper.MessagesNew(ctx, req)
@@ -35,6 +52,8 @@ func ForwardAnthropicV1Stream(fc *ForwardContext, wrapper *client.AnthropicClien
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
 
+	logAnthropicForward(fc, string(req.Model), "v1-stream")
+
 	ctx, cancel := fc.PrepareContext(req)
 	logrus.Debugln("Creating Anthropic v1 streaming request")
 	stream := wrapper.MessagesNewStreaming(ctx, req)
@@ -46,6 +65,8 @@ func ForwardAnthropicV1Beta(fc *ForwardContext, wrapper *client.AnthropicClient,
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
+
+	logAnthropicForward(fc, string(req.Model), "beta-nonstream")
 
 	ctx, cancel := fc.PrepareContext(req)
 	message, err := wrapper.BetaMessagesNew(ctx, req)
@@ -65,6 +86,8 @@ func ForwardAnthropicV1BetaStream(fc *ForwardContext, wrapper *client.AnthropicC
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
+
+	logAnthropicForward(fc, string(req.Model), "beta-stream")
 
 	ctx, cancel := fc.PrepareContext(req)
 	logrus.Debugln("Creating Anthropic v1 beta streaming request")

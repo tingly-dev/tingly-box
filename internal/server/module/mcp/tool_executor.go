@@ -11,6 +11,7 @@ type ServerToolExecutor struct {
 
 // ToolExecutorServer defines the server methods needed for tool execution
 type ToolExecutorServer interface {
+	CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error)
 	CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error)
 }
 
@@ -25,18 +26,31 @@ func (e *ServerToolExecutor) ExecuteTool(
 	tool Tool,
 	messages []map[string]any,
 ) (ToolExecutionResult, error) {
-	result, err := e.server.CallMCPTool(
+	_, result, err := e.ExecuteToolWithContext(ctx, tool, messages)
+	return result, err
+}
+
+func (e *ServerToolExecutor) ExecuteToolWithContext(
+	ctx context.Context,
+	tool Tool,
+	messages []map[string]any,
+) (context.Context, ToolExecutionResult, error) {
+	nextCtx, result, err := e.server.CallMCPToolWithHooks(
 		ctx,
 		tool.Name(),
 		tool.Arguments(),
 		messages,
 	)
+	if nextCtx == nil {
+		nextCtx = ctx
+	}
 
-	return ToolExecutionResult{
+	toolResult := ToolExecutionResult{
 		ToolUseID: tool.ID(),
 		Content:   result,
 		IsError:   err != nil,
-	}, err
+	}
+	return nextCtx, toolResult, err
 }
 
 func (e *ServerToolExecutor) ExecuteTools(
@@ -47,7 +61,8 @@ func (e *ServerToolExecutor) ExecuteTools(
 	results := make([]ToolExecutionResult, len(tools))
 
 	for i, tool := range tools {
-		result, err := e.ExecuteTool(ctx, tool, messages)
+		nextCtx, result, err := e.ExecuteToolWithContext(ctx, tool, messages)
+		ctx = nextCtx
 		results[i] = result
 
 		// Log errors but continue with other tools

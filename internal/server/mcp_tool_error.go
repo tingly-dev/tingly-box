@@ -67,6 +67,10 @@ func remapLegacyAdvisorToolName(toolName string) string {
 }
 
 func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (string, error) {
+	if !mcpruntime.IsMCPToolName(toolName) {
+		return disabledMCPToolErrorPayload(toolName), fmt.Errorf("non-MCP tool routed to MCP executor: %s", toolName)
+	}
+
 	resolvedToolName := remapLegacyAdvisorToolName(toolName)
 	if !s.isEnabledMCPToolName(ctx, resolvedToolName) {
 		return disabledMCPToolErrorPayload(toolName), fmt.Errorf("calling disabled tools: %s", toolName)
@@ -138,4 +142,8 @@ func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments s
 	// Restore depth after call so it doesn't accumulate across sequential tool calls.
 	ctx = mcpruntime.WithAdvisorDepth(ctx, prevDepth)
 	return ctx, result, err
+}
+
+func (s *Server) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error) {
+	return s.callMCPToolWithHooks(ctx, toolName, arguments, messages)
 }

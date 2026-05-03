@@ -124,6 +124,37 @@ func (a *AnthropicV1Adapter) AppendToolResults(req, resp any, results []any) (an
 	return &newReq, nil
 }
 
+func (a *AnthropicV1Adapter) BuildContinuationSegment(resp any, results []ToolExecutionResult) (any, error) {
+	msg, ok := resp.(*anthropic.Message)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.Message, got %T", resp)
+	}
+	segment := make([]anthropic.MessageParam, 0, 2)
+	segment = append(segment, messageToParamPreservingThinking(msg))
+	resultBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(results))
+	for _, r := range results {
+		resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(r.ToolUseID, r.Content, r.IsError))
+	}
+	if len(resultBlocks) > 0 {
+		segment = append(segment, anthropic.NewUserMessage(resultBlocks...))
+	}
+	return segment, nil
+}
+
+func (a *AnthropicV1Adapter) ApplyContinuation(req any, segment any) (any, error) {
+	reqParams, ok := req.(*anthropic.MessageNewParams)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.MessageNewParams, got %T", req)
+	}
+	seg, ok := segment.([]anthropic.MessageParam)
+	if !ok || len(seg) == 0 {
+		return req, nil
+	}
+	newReq := *reqParams
+	newReq.Messages = append(append([]anthropic.MessageParam{}, seg...), reqParams.Messages...)
+	return &newReq, nil
+}
+
 func messageToParamPreservingThinking(msg *anthropic.Message) anthropic.MessageParam {
 	if msg == nil {
 		return anthropic.MessageParam{}
@@ -191,6 +222,14 @@ func (a *AnthropicV1Adapter) SendKeepAlive(c *gin.Context) error {
 }
 
 func (a *AnthropicV1Adapter) SendFinalMessage(c *gin.Context) error {
+	deltaJSON, _ := json.Marshal(map[string]interface{}{
+		"type": "message_delta",
+		"delta": map[string]interface{}{
+			"stop_reason":   "end_turn",
+			"stop_sequence": nil,
+		},
+	})
+	c.SSEvent("", string(deltaJSON))
 	stopJSON, _ := json.Marshal(map[string]interface{}{"type": "message_stop"})
 	c.SSEvent("", string(stopJSON))
 	c.Writer.Flush()
