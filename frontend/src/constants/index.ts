@@ -16,6 +16,7 @@ export const SCENARIOS = {
   CLAUDE_CODE: 'claude_code',
   OPENCODE: 'opencode',
   VSCODE: 'vscode',
+  EMBED: 'embed', // Embedding application scenario
   GLOBAL: '_global', // Global flags that apply to all scenarios
 } as const;
 

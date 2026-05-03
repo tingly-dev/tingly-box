@@ -59,6 +59,7 @@ const (
 	ScenarioVSCode     RuleScenario = "vscode"
 	ScenarioSmartGuide RuleScenario = "_smart_guide"
 	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
+	ScenarioEmbed      RuleScenario = "embed"   // Embedding application scenario; only serves /embeddings
 )
 
 func BuiltinScenarios() []RuleScenario {
@@ -73,6 +74,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioVSCode,
 		ScenarioSmartGuide,
 		ScenarioGlobal,
+		ScenarioEmbed,
 	}
 }
 

@@ -39,6 +39,40 @@ func TestRegisterScenario_IsIdempotentForSameDescriptor(t *testing.T) {
 	}
 }
 
+func TestEmbedScenarioDescriptor(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioEmbed)
+	if !ok {
+		t.Fatalf("expected %q descriptor to be registered", ScenarioEmbed)
+	}
+	if !d.AllowRuleBinding || !d.AllowDirectPathUse {
+		t.Fatalf("expected embed descriptor to allow rule binding and path use, got %+v", d)
+	}
+	if !ScenarioSupportsTransport(ScenarioEmbed, TransportEmbed) {
+		t.Fatalf("expected embed scenario to support TransportEmbed")
+	}
+	if ScenarioSupportsTransport(ScenarioEmbed, TransportOpenAI) {
+		t.Fatalf("embed scenario must NOT support TransportOpenAI (chat must be rejected)")
+	}
+	if ScenarioSupportsTransport(ScenarioEmbed, TransportAnthropic) {
+		t.Fatalf("embed scenario must NOT support TransportAnthropic")
+	}
+}
+
+func TestOpenAIScenarioSupportsBothTransports(t *testing.T) {
+	if !ScenarioSupportsTransport(ScenarioOpenAI, TransportOpenAI) {
+		t.Fatalf("openai scenario should support TransportOpenAI")
+	}
+	if !ScenarioSupportsTransport(ScenarioOpenAI, TransportEmbed) {
+		t.Fatalf("openai scenario should also support TransportEmbed (mixin extension)")
+	}
+}
+
+func TestScenarioSupportsTransport_UnknownScenario(t *testing.T) {
+	if ScenarioSupportsTransport(RuleScenario("does_not_exist"), TransportOpenAI) {
+		t.Fatalf("unknown scenario must not report transport support")
+	}
+}
+
 func TestRegisterScenario_RejectsConflictingDescriptor(t *testing.T) {
 	scenario := RuleScenario("test_registry_conflict")
 

@@ -85,6 +85,16 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
+	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("scenario %s does not support OpenAI responses", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
 	// Check if this is the request model name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
 	if err != nil {

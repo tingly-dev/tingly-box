@@ -31,6 +31,7 @@ import UseAgentPage from './pages/scenario/UseAgentPage';
 import UseOpenCodePage from './pages/scenario/UseOpenCodePage';
 import UseXcodePage from './pages/scenario/UseXcodePage';
 import UseVSCodePage from './pages/scenario/UseVSCodePage';
+import UseEmbedPage from './pages/scenario/UseEmbedPage';
 import CredentialPage from './pages/CredentialPage';
 import ProviderListPage from './pages/ProviderListPage';
 import System from './pages/System';
@@ -350,6 +351,7 @@ function AppContent() {
                     <Route path="/agent/opencode" element={<UseOpenCodePage />} />
                     <Route path="/agent/xcode" element={<UseXcodePage />} />
                     <Route path="/agent/vscode" element={<UseVSCodePage />} />
+                    <Route path="/agent/embed" element={<UseEmbedPage />} />
                     {/* Legacy redirects */}
                     <Route path="/use-openai" element={<Navigate to="/agent/openai" replace />} />
                     <Route path="/use-anthropic" element={<Navigate to="/agent/anthropic" replace />} />
