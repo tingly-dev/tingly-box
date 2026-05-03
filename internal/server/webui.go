@@ -37,6 +37,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
+	"github.com/tingly-dev/tingly-box/remote/audit"
+	remotescenario "github.com/tingly-dev/tingly-box/remote/scenario"
 )
 
 // GlobalServerManager manages the global server instance for web UI control
@@ -80,7 +82,6 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	statusHandler := statusline.NewHandler(s.config, s.loadBalancer, statusline.NewCache(), quotaMgr)
 	statusline.RegisterRoutes(s.engine, statusHandler)
 
-	// Claude Code notification hook endpoint (no auth required)
 	notifyHandler := notifymodule.NewHandler()
 	notifymodule.RegisterRoutes(s.engine, notifyHandler)
 
@@ -113,6 +114,14 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		imbot.RegisterRoutes(apiV1, imbotHandler)
 		// Store handler reference for shutdown
 		s.imbotSettingsHandler = imbotHandler
+		// Wire the channel registry so each running bot exposes itself
+		// as a remote.channel.Channel reachable from /tingly/:scenario
+		// scenario plugins.
+		if s.channelRegistry != nil {
+			if bm := imbotHandler.BotManager(); bm != nil {
+				bm.SetChannelRegistry(s.channelRegistry)
+			}
+		}
 	}
 
 	// Config apply API routes
@@ -1043,6 +1052,29 @@ func (s *Server) useWebStaticEndpoints(engine *gin.Engine) {
 
 		s.UseIndexHTML(c)
 	})
+}
+
+// runtimeAuditSink adapts an audit.Logger into the AuditFunc the
+// scenario runtime hands to plugins. Plugin actions (e.g.
+// claude_code.interactive.start / .done / .error) land here as audit
+// entries with structured details.
+func runtimeAuditSink(log *audit.Logger) remotescenario.AuditFunc {
+	if log == nil {
+		return nil
+	}
+	return func(action string, fields map[string]any) {
+		details := map[string]interface{}{}
+		for k, v := range fields {
+			details[k] = v
+		}
+		log.Log(audit.Entry{
+			Timestamp: time.Now(),
+			Level:     audit.LevelInfo,
+			Action:    action,
+			Success:   true,
+			Details:   details,
+		})
+	}
 }
 
 // GetShutdownChannel returns the shutdown channel for the main process to listen on

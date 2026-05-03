@@ -35,9 +35,13 @@ type Settings struct {
 	SmartGuideProvider string `json:"smartguide_provider,omitempty"` // Provider UUID
 	SmartGuideModel    string `json:"smartguide_model,omitempty"`    // Model identifier
 	// RequirePairing enforces TOFU pairing for DMs. Nil = legacy/opt-in.
-	RequirePairing *bool     `json:"require_pairing,omitempty"`
-	CreatedAt      time.Time `json:"created_at,omitempty"`
-	UpdatedAt      time.Time `json:"updated_at,omitempty"`
+	RequirePairing *bool `json:"require_pairing,omitempty"`
+	// Scenarios is the raw JSON-encoded list of hook scenarios this bot
+	// serves. The notify module parses it into typed bindings; the
+	// settings store keeps it opaque to avoid a cross-package dependency.
+	Scenarios string    `json:"scenarios,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
 // ImBotSettingsStore persists ImBot settings in SQLite using GORM.
@@ -186,6 +190,7 @@ func (s *ImBotSettingsStore) CreateSettings(settings Settings) (Settings, error)
 		SmartGuideProvider: settings.SmartGuideProvider,
 		SmartGuideModel:    settings.SmartGuideModel,
 		RequirePairing:     settings.RequirePairing,
+		Scenarios:          settings.Scenarios,
 		CreatedAt:          settings.CreatedAt,
 		UpdatedAt:          settings.UpdatedAt,
 	}
@@ -255,6 +260,9 @@ func (s *ImBotSettingsStore) UpdateSettings(uuid string, settings Settings) erro
 	if settings.RequirePairing != nil {
 		updates["require_pairing"] = settings.RequirePairing
 	}
+	// Scenarios is intentionally allowed to be cleared (empty string) so
+	// callers can unbind a bot from all scenarios.
+	updates["scenarios"] = settings.Scenarios
 
 	// Always update enabled and updated_at if explicitly set
 	updates["enabled"] = settings.Enabled
@@ -333,6 +341,7 @@ func recordToSettings(record ImBotSettingsRecord) (Settings, error) {
 		SmartGuideProvider: record.SmartGuideProvider,
 		SmartGuideModel:    record.SmartGuideModel,
 		RequirePairing:     record.RequirePairing,
+		Scenarios:          record.Scenarios,
 		CreatedAt:          record.CreatedAt,
 		UpdatedAt:          record.UpdatedAt,
 		Auth:               make(map[string]string),

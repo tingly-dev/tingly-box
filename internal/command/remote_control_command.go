@@ -19,12 +19,12 @@ import (
 	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/remote/audit"
+	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // RemoteCommand creates the `remote` subcommand for bot management.

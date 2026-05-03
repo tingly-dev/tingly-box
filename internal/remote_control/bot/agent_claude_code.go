@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
+	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // ClaudeCodeExecutor executes messages through Claude Code agent

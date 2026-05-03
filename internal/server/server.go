@@ -44,6 +44,9 @@ import (
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	pkgotel "github.com/tingly-dev/tingly-box/pkg/otel"
 	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
+	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/interaction"
+	"github.com/tingly-dev/tingly-box/remote/scenario"
 )
 
 // Server represents the HTTP server
@@ -76,6 +79,16 @@ type Server struct {
 
 	// ImBot settings handler (module)
 	imbotSettingsHandler interface{}
+
+	// remote middle-layer state. The channel registry holds running
+	// imbot Channel adapters; the interaction registry stores pending
+	// long-poll results; the scenario registry routes /tingly/:scenario
+	// events to plugins (claudecode is the first one). All three are
+	// lazily constructed in UseUIEndpoints; the notify HTTP module
+	// falls back to desktop notifications when they're absent.
+	channelRegistry     *channel.Registry
+	interactionRegistry *interaction.Registry[interaction.Result]
+	scenarioRegistry    *scenario.Registry
 
 	// OAuth refresher for OAuth auto-refresh
 	oauthRefresher *background.OAuthRefresher

@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	mock "github.com/tingly-dev/tingly-box/agentboot/mockagent"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
+	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 // MockAgentExecutor executes messages through Mock Agent (for testing)

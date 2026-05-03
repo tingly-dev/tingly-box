@@ -9,7 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
+	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
 func (h *BotHandler) handleBindConfirm(hCtx HandlerContext) {

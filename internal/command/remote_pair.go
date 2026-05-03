@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot"
+	"github.com/tingly-dev/tingly-box/remote/audit"
 )
 
 // remotePairCommand creates the `remote pair` subcommand and its children.
@@ -17,11 +17,11 @@ import (
 // reachable from a separate CLI invocation. The CLI here is for the
 // persistent half of the workflow:
 //
-//   tingly-box remote pair enable  <bot-uuid>      # turn RequirePairing on
-//   tingly-box remote pair disable <bot-uuid>      # turn RequirePairing off
-//   tingly-box remote pair revoke  <bot-uuid> <chat-id>
-//                                                  # forget a paired chat
-//   tingly-box remote pair status  <bot-uuid>      # show pairing status
+//	tingly-box remote pair enable  <bot-uuid>      # turn RequirePairing on
+//	tingly-box remote pair disable <bot-uuid>      # turn RequirePairing off
+//	tingly-box remote pair revoke  <bot-uuid> <chat-id>
+//	                                               # forget a paired chat
+//	tingly-box remote pair status  <bot-uuid>      # show pairing status
 func remotePairCommand(appManager *AppManager) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pair",

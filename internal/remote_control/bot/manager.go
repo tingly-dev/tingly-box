@@ -11,17 +11,19 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/audit"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
+	"github.com/tingly-dev/tingly-box/remote/audit"
+	"github.com/tingly-dev/tingly-box/remote/channel"
+	"github.com/tingly-dev/tingly-box/remote/channel/imchannel"
+	"github.com/tingly-dev/tingly-box/remote/session"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/session"
 	"github.com/tingly-dev/tingly-box/internal/tbclient"
 )
 
 // runBotWithSettings starts a bot using JSON file storage for chat state
-func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient, pairing *PairingManager, auditLog *audit.Logger, store SettingsStore) error {
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient, pairing *PairingManager, auditLog *audit.Logger, store SettingsStore, channels *channel.Registry) error {
 	// Create a JSON-based chat store
 	chatStore, err := NewChatStoreJSON(dataPath)
 	if err != nil {
@@ -104,6 +106,15 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	if bot != nil {
 		platform := bot.PlatformInfo().ID
 		cmdRegistry := handler.GetCommandRegistry()
+
+		// Register this bot's imbot-backed remote.channel.Channel so
+		// scenario plugins routed through /tingly/:scenario/notify can
+		// reach the same prompter machinery used for the SmartGuide
+		// flow. Unregistered on context cancellation below.
+		if channels != nil && handler.imPrompter != nil {
+			channels.Register(imchannel.New(setting.UUID, setting.Platform, bot, handler.imPrompter))
+			defer channels.Unregister(setting.UUID)
+		}
 
 		var err error
 		switch platform {
@@ -199,6 +210,7 @@ type Manager struct {
 	tbClient   tbclient.TBClient // TB Client for SmartGuide model configuration
 	pairing    *PairingManager   // Pairing-code (TOFU) manager
 	audit      *audit.Logger     // Audit logger for security events
+	channels   *channel.Registry // Remote channel registry for /tingly/:scenario routing (optional)
 }
 
 // NewManager creates a new bot manager with a settings store
@@ -213,6 +225,16 @@ func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *age
 		audit:      auditLog,
 		pairing:    NewPairingManager(auditLog),
 	}
+}
+
+// SetChannelRegistry wires a remote channel registry so each running
+// bot exposes itself as a remote.channel.Channel reachable from
+// /tingly/:scenario scenario plugins. Safe to call once at startup
+// before any bot is started.
+func (m *Manager) SetChannelRegistry(reg *channel.Registry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.channels = reg
 }
 
 // PairingManager returns the manager's PairingManager instance. Used by CLI
@@ -388,9 +410,10 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	pairing := m.pairing
 	auditLog := m.audit
 	store := m.store
+	channels := m.channels
 	go func() {
 		defer close(doneChan) // Signal that goroutine is done
-		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient, pairing, auditLog, store); err != nil {
+		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient, pairing, auditLog, store, channels); err != nil {
 			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 		}
 

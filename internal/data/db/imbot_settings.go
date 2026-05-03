@@ -31,6 +31,11 @@ type ImBotSettingsRecord struct {
 	// create wizard sets this to true for newly created bots.
 	RequirePairing *bool `gorm:"column:require_pairing"`
 
+	// Scenarios is a JSON-encoded list of scenario bindings declaring
+	// which Claude Code hook scenarios this bot serves and the IM target.
+	// Schema: see internal/server/module/notify/binding.go ScenarioBinding.
+	Scenarios string `gorm:"column:scenarios;type:text"`
+
 	CreatedAt time.Time `gorm:"column:created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
