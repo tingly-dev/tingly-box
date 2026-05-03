@@ -161,6 +161,12 @@ func buildAuthConfig(setting BotSetting) imbot.AuthConfig {
 			AccountID: auth["bot_id"],
 			AuthDir:   auth["user_id"], // Store user_id in AuthDir for Weixin
 		}
+	case "tingly":
+		// Tingly is tokenless.
+		return imbot.AuthConfig{
+			Type:  "none",
+			Token: auth["token"], // optional shared secret, may be empty
+		}
 	default:
 		return imbot.AuthConfig{
 			Type:  "token",
@@ -321,6 +327,9 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	case "whatsapp":
 		// WhatsApp requires token, phoneNumberId is optional
 		hasValidAuth = token != ""
+	case "tingly":
+		// Tingly does not require credentials.
+		hasValidAuth = true
 	default:
 		// Token-based platforms (telegram, discord, slack, etc.)
 		hasValidAuth = token != ""

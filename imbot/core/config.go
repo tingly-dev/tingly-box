@@ -97,6 +97,8 @@ func (a *AuthConfig) Validate() error {
 		}
 	case "qr":
 		// QR auth has no required fields
+	case "none":
+		// Tokenless auth (e.g. tingly): no fields required.
 	default:
 		return fmt.Errorf("unknown auth type: %s", a.Type)
 	}

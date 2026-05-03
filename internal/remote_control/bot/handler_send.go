@@ -9,6 +9,11 @@ import (
 )
 
 func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
+	bot := h.botFromCtx(hCtx)
+	if bot == nil {
+		logrus.WithField("chatID", hCtx.ChatID).Warn("SendText: no bot available")
+		return
+	}
 	opts := &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
@@ -22,16 +27,35 @@ func (h *BotHandler) SendText(hCtx HandlerContext, text string) {
 			opts.Metadata["context_token"] = ct
 		}
 	}
-	resp, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)
+	resp, err := bot.SendMessage(context.Background(), hCtx.ChatID, opts)
 	_ = resp
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send message")
 	}
 }
 
+// botFromCtx returns the bot from the handler context, falling back to
+// looking it up via the manager when commands routed through the registry
+// adapter (command_integration.go) construct a HandlerContext without
+// populating Bot.
+func (h *BotHandler) botFromCtx(hCtx HandlerContext) imbot.Bot {
+	if hCtx.Bot != nil {
+		return hCtx.Bot
+	}
+	if h.manager == nil {
+		return nil
+	}
+	return h.manager.GetBotByUUID(h.botSetting.UUID)
+}
+
 // sendTextWithReply sends a text message as a reply to another message
 // Note: Platform handles chunking internally via BaseBot.ChunkText()
 func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo string) {
+	bot := h.botFromCtx(hCtx)
+	if bot == nil {
+		logrus.WithField("chatID", hCtx.ChatID).Warn("sendTextWithReply: no bot available")
+		return
+	}
 	opts := &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
@@ -46,7 +70,7 @@ func (h *BotHandler) sendTextWithReply(hCtx HandlerContext, text string, replyTo
 			opts.Metadata["context_token"] = ct
 		}
 	}
-	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)
+	_, err := bot.SendMessage(context.Background(), hCtx.ChatID, opts)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to send message")
 	}
@@ -70,8 +94,14 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 
 	actionCard := feature.BuildActionCard()
 
+	bot := h.botFromCtx(hCtx)
+	if bot == nil {
+		logrus.WithField("chatID", hCtx.ChatID).Warn("sendTextWithActionKeyboard: no bot available")
+		return
+	}
+
 	// Use public ChunkText API with smart break-point detection
-	chunks := hCtx.Bot.ChunkText(text)
+	chunks := bot.ChunkText(text)
 	for i, chunk := range chunks {
 		opts := &imbot.SendMessageOptions{
 			Text: chunk,
@@ -91,7 +121,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 			opts.Metadata["context_token"] = contextToken
 		}
 
-		result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, opts)
+		result, err := bot.SendMessage(context.Background(), hCtx.ChatID, opts)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to send message")
 			return

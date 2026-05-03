@@ -196,6 +196,13 @@ var PlatformConfigs = map[string]PlatformAuthConfig{
 			},
 		},
 	},
+	"tingly": {
+		Platform:    "tingly",
+		AuthType:    "none",
+		DisplayName: "Tingly",
+		Category:    "im",
+		Fields:      []FieldSpec{}, // No required credentials
+	},
 }
 
 // GetPlatformConfig returns the auth config for a given platform

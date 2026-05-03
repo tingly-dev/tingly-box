@@ -15,10 +15,10 @@ const (
 	PlatformBlueBubbles Platform = "bluebubbles"
 	PlatformFeishu      Platform = "feishu"
 	PlatformLark        Platform = "lark"
-	PlatformWebChat     Platform = "webchat"
 	PlatformDingTalk    Platform = "dingtalk"
 	PlatformWeixin      Platform = "weixin"
 	PlatformWecom       Platform = "wecom"
+	PlatformTingly      Platform = "tingly"
 )
 
 // ChatType represents the type of chat
@@ -230,13 +230,6 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 			TextLimit:  40000,
 			RateLimit:  50,
 		},
-		PlatformWebChat: {
-			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup},
-			MediaTypes: []string{"image", "video", "audio", "document", "sticker"},
-			Features:   []string{"reactions", "edit", "delete", "threads", "polls", "inlineKeyboards", "messageEditing"},
-			TextLimit:  4096,
-			RateLimit:  60,
-		},
 		PlatformDingTalk: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup},
 			MediaTypes: []string{"image", "video", "audio", "document"},
@@ -250,6 +243,13 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 			Features:   []string{"streaming"},
 			TextLimit:  4000,
 			RateLimit:  50,
+		},
+		PlatformTingly: {
+			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
+			MediaTypes: []string{"image", "video", "audio", "document", "sticker", "gif"},
+			Features:   []string{"reactions", "edit", "delete", "threads", "polls", "inlineKeyboards", "callbackQueries", "messageEditing", "mentions", "streaming", "interactiveCards"},
+			TextLimit:  65536,
+			RateLimit:  1000,
 		},
 	}
 
@@ -329,6 +329,14 @@ var reactionMap = map[Platform]map[ReactionToken]string{
 		ReactionLaugh:    "LOL",
 	},
 	PlatformDingTalk: {
+		ReactionReceived: "👨‍💻",
+		ReactionDone:     "✅",
+		ReactionError:    "❌",
+		ReactionLike:     "👍",
+		ReactionLove:     "❤️",
+		ReactionLaugh:    "😂",
+	},
+	PlatformTingly: {
 		ReactionReceived: "👨‍💻",
 		ReactionDone:     "✅",
 		ReactionError:    "❌",

@@ -18,7 +18,7 @@ func TestPlatformConstants(t *testing.T) {
 		{"Signal", PlatformSignal, "signal"},
 		{"BlueBubbles", PlatformBlueBubbles, "bluebubbles"},
 		{"Feishu", PlatformFeishu, "feishu"},
-		{"WebChat", PlatformWebChat, "webchat"},
+		{"Tingly", PlatformTingly, "tingly"},
 	}
 
 	for _, tt := range tests {
@@ -135,7 +135,7 @@ func TestGetPlatformName(t *testing.T) {
 		{"Signal", PlatformSignal, "Signal"},
 		{"BlueBubbles", PlatformBlueBubbles, "BlueBubbles (iMessage)"},
 		{"Feishu", PlatformFeishu, "Feishu"},
-		{"WebChat", PlatformWebChat, "WebChat"},
+		{"Tingly", PlatformTingly, "Tingly"},
 	}
 
 	for _, tt := range tests {

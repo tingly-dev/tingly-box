@@ -12,7 +12,7 @@ func TestManagerRemoveBotDeletesEntry(t *testing.T) {
 	manager := NewManager()
 	cfg := &core.Config{
 		UUID:     "bot-remove",
-		Platform: core.PlatformWebChat,
+		Platform: core.PlatformTingly,
 		Enabled:  false,
 		Auth: core.AuthConfig{
 			Type:  "token",
@@ -38,7 +38,7 @@ func TestManagerRemoveBotDeletesEntry(t *testing.T) {
 func TestManagerAddBotRequiresUUID(t *testing.T) {
 	manager := NewManager()
 	cfg := &core.Config{
-		Platform: core.PlatformWebChat,
+		Platform: core.PlatformTingly,
 		Enabled:  false,
 		Auth: core.AuthConfig{
 			Type:  "token",
@@ -55,7 +55,7 @@ func TestManagerStopDisconnectsBot(t *testing.T) {
 	manager := NewManager()
 	cfg := &core.Config{
 		UUID:     "bot-stop",
-		Platform: core.PlatformWebChat,
+		Platform: core.PlatformTingly,
 		Enabled:  false,
 		Auth: core.AuthConfig{
 			Type:  "token",
