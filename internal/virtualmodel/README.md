@@ -272,8 +272,6 @@ See `benchmark/examples/` for runnable server and client programs.
 - `internal/server_validate` — Test-only httptest provider mock. Stores
   `Scenario` objects in `GenericRegistry[Scenario]`; serves pre-rendered
   byte/SSE payloads for wire-format protocol testing.
-- `internal/extension` — Exposes registered vmodels as extension items
-  with a `provider` metadata key for the UI split.
 - `internal/protocol/transform` — Transform chain types used by
   `anthropic.TransformModel` (e.g. compact-thinking).
 - `internal/smart_compact` — Concrete transform implementations.
