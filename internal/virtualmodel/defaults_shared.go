@@ -5,6 +5,12 @@ import "time"
 // SharedMockSpec describes a built-in mock that is identical across
 // protocols (anthropic + openai). Each protocol's RegisterDefaults converts
 // a SharedMockSpec into its own protocol-specific MockModelConfig.
+//
+// Entries returned by SharedDefaultMocks are user-facing demo defaults:
+// they are mounted into the production /virtual/v1/* endpoint and visible
+// to end users via the virtual provider. Test-only fixtures must NOT be
+// added here; tests should build their own GenericRegistry rather than
+// pollute the production defaults set.
 type SharedMockSpec struct {
 	ID       string
 	Name     string

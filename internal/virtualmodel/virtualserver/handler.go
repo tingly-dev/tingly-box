@@ -1,6 +1,12 @@
 // Package virtualserver provides the HTTP handler for virtual model endpoints.
 // It serves OpenAI Chat and Anthropic Messages API formats backed by separate
 // per-provider virtual model registries.
+//
+// This is the production HTTP surface for internal/virtualmodel: the parent
+// server mounts it under /virtual/v1/* so end users can reach the synthetic
+// provider for onboarding, demos, and dry-runs without configuring a real
+// upstream provider. Test consumers do not depend on this package; they use
+// the registry primitives in internal/virtualmodel directly.
 package virtualserver
 
 import (

@@ -1,9 +1,14 @@
 # `internal/virtualmodel`
 
-Virtual models — synthetic, in-process model implementations used for
-testing, request shaping, and tool simulation without calling a real
-upstream provider. They are wired into the virtual server at
-`internal/virtualmodel/virtualserver` and exposed under `/virtual/v1/...`.
+Virtual models — synthetic, protocol-compliant provider implementations
+that power the production `/virtual/v1/*` endpoint (used for onboarding,
+demos, and dry-runs without configuring a real upstream provider). They
+are wired into the virtual server at `internal/virtualmodel/virtualserver`
+and shipped in the production binary via `server.UseVirtualModelEndpoints`.
+
+The same primitives are reused as an in-process LLM substitute by test
+packages that need wire-format-correct fixtures (see
+`internal/server_validate`).
 
 ## Layout
 
@@ -27,6 +32,31 @@ The root package contains provider-neutral primitives shared by all sub-packages
 Concrete models, protocol-specific request/response types, stream events, and the
 `Registry` alias live in the `anthropic` and `openai` sub-packages. The two
 sub-packages do **not** import each other.
+
+## Positioning & registration discipline
+
+`internal/virtualmodel` is a **business-first** package: it ships in production
+to back the public `/virtual/v1/*` endpoint, and it is the single source of
+truth for synthetic, protocol-compliant model behavior across the codebase.
+Test packages are **secondary consumers** that reuse the same primitives.
+
+| Role | Surface | Consumer |
+|------|---------|----------|
+| Primary (production) | `/virtual/v1/messages`, `/virtual/v1/chat/completions` | `internal/server` mounts `virtualserver.Service` for end-user demos / onboarding / dry-runs |
+| Secondary (tests)    | In-process `GenericRegistry[T]`                       | `internal/server_validate.Scenario`, `internal/protocol_validate`, `cli/harness --mock` |
+
+**Registration discipline.** Anything added to `anthropic.RegisterDefaults` or
+`openai.RegisterDefaults` is visible to **end users** of the production
+endpoint. Therefore the defaults registry must contain only **user-facing
+demo entries** — protocol-compliant, named clearly, useful for onboarding and
+dry-runs (`echo-model`, `ask-user-question`, `virtual-claude-3`,
+`virtual-gpt-4`, the compact transforms, etc.).
+
+Test-only fixtures (protocol corner cases, wire-format edge cases,
+scenario-specific stubs) **must not** be added to `RegisterDefaults`. Tests
+that need bespoke synthetic models should construct their own
+`GenericRegistry[T]` (the way `server_validate` does for `Scenario`) and
+register fixtures there — keeping the production defaults clean.
 
 ## Design
 
@@ -269,9 +299,11 @@ See `benchmark/examples/` for runnable server and client programs.
 
 - `internal/virtualmodel/virtualserver` — Production Gin HTTP handler, routes,
   request/response shaping. Owns the v1 → beta lift for Anthropic.
-- `internal/server_validate` — Test-only httptest provider mock. Stores
-  `Scenario` objects in `GenericRegistry[Scenario]`; serves pre-rendered
-  byte/SSE payloads for wire-format protocol testing.
+- `internal/server_validate` — Test-only consumer that **reuses**
+  `GenericRegistry[Scenario]` as a primitive (its `Scenario` type satisfies
+  `virtualmodel.VirtualModel`). Serves pre-rendered byte/SSE payloads for
+  wire-format protocol testing. It does **not** inherit production defaults
+  from `RegisterDefaults`; it owns its own registry of test fixtures.
 - `internal/protocol/transform` — Transform chain types used by
   `anthropic.TransformModel` (e.g. compact-thinking).
 - `internal/smart_compact` — Concrete transform implementations.
