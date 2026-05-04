@@ -9,6 +9,80 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
+// ============== Kong Command Structures ==============
+
+// ProviderCmdKong is the Kong version of provider command with subcommands.
+// The default behavior (no subcommand) is to list providers.
+type ProviderCmdKong struct {
+	List    ProviderListCmdKong    `kong:"cmd,name='list',default='1',hidden,help='List all providers (default)'"`
+	Add     ProviderAddCmdKong     `kong:"cmd,help='Add a new provider'"`
+	Delete  ProviderDeleteCmdKong  `kong:"cmd,help='Delete a provider (interactive)'"`
+	Update  ProviderUpdateCmdKong  `kong:"cmd,help='Update a provider (interactive)'"`
+	Details ProviderDetailsCmdKong `kong:"cmd,help='View provider details'"`
+}
+
+// ProviderListCmdKong lists all providers
+type ProviderListCmdKong struct{}
+
+func (p *ProviderListCmdKong) Run(appManager *AppManager) error {
+	return runProviderList(appManager)
+}
+
+// ProviderAddCmdKong adds a new provider with optional positional args
+type ProviderAddCmdKong struct {
+	Name     string `kong:"arg,optional,help='Provider name'"`
+	BaseURL  string `kong:"arg,optional,help='API base URL'"`
+	Token    string `kong:"arg,optional,help='API token'"`
+	APIStyle string `kong:"arg,optional,help='API style (openai, anthropic)'"`
+}
+
+func (p *ProviderAddCmdKong) Run(appManager *AppManager) error {
+	args := []string{}
+	if p.Name != "" {
+		args = append(args, p.Name)
+	}
+	if p.BaseURL != "" {
+		args = append(args, p.BaseURL)
+	}
+	if p.Token != "" {
+		args = append(args, p.Token)
+	}
+	if p.APIStyle != "" {
+		args = append(args, p.APIStyle)
+	}
+	return runAdd(appManager, args)
+}
+
+// ProviderDeleteCmdKong deletes a provider in interactive mode
+type ProviderDeleteCmdKong struct{}
+
+func (p *ProviderDeleteCmdKong) Run(appManager *AppManager) error {
+	return runProviderDeleteInteractive(appManager, bufio.NewReader(os.Stdin))
+}
+
+// ProviderUpdateCmdKong updates a provider in interactive mode
+type ProviderUpdateCmdKong struct{}
+
+func (p *ProviderUpdateCmdKong) Run(appManager *AppManager) error {
+	return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
+}
+
+// ProviderDetailsCmdKong displays provider details (without name drops to interactive)
+type ProviderDetailsCmdKong struct {
+	Name string `kong:"arg,optional,help='Provider name'"`
+}
+
+func (p *ProviderDetailsCmdKong) Run(appManager *AppManager) error {
+	if p.Name == "" {
+		return runProviderGetInteractive(appManager, bufio.NewReader(os.Stdin))
+	}
+	return runProviderGet(appManager, p.Name)
+}
+
+// ============== Business Logic Functions ==============
+
+type APIStyle = protocol.APIStyle
+
 // runProviderInteractiveMode runs the interactive provider management interface
 func runProviderInteractiveMode(appManager *AppManager) error {
 	reader := bufio.NewReader(os.Stdin)

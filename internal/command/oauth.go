@@ -22,6 +22,29 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// ============== Kong Command Structures ==============
+
+// OAuthCmdKong handles OAuth authentication
+type OAuthCmdKong struct {
+	// Positional argument (optional)
+	Provider string `kong:"arg,optional,help='Provider type (e.g., claude_code, qwen_code, codex)'"`
+
+	// Flags
+	Name     string `kong:"flag,name='name',short='n',help='Custom name for the provider'"`
+	Port     int    `kong:"flag,name='port',short='p',help='Callback server port'"`
+	ProxyURL string `kong:"flag,name='proxy',short='x',help='Proxy URL for OAuth requests'"`
+}
+
+func (o *OAuthCmdKong) Run(appManager *AppManager) error {
+	appConfig := appManager.AppConfig()
+	if o.Provider == "" {
+		return runInteractiveMode(appConfig, o.Name, o.Port, o.ProxyURL)
+	}
+	return runOAuthFlow(appConfig, o.Provider, o.Name, o.Port, o.ProxyURL)
+}
+
+// ============== Business Logic Functions ==============
+
 // buildOAuthHelp generates the help text with provider list
 func buildOAuthHelp() string {
 	providers := supportedProviders()

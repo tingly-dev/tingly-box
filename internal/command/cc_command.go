@@ -16,6 +16,24 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// ============== Kong Command Structures ==============
+
+// CCmdKong launches Claude Code with passthrough mode
+// Kong's passthrough mode requires at least one positional arg
+type CCmdKong struct {
+	Args []string `kong:"arg,optional,passthrough"`
+}
+
+func (c *CCmdKong) Run(appManager *AppManager) error {
+	profile, claudeArgs, err := parseCCFlags(c.Args)
+	if err != nil {
+		return err
+	}
+	return runCC(appManager, profile, claudeArgs)
+}
+
+// ============== Business Logic Functions ==============
+
 // parseCCFlags consumes tingly-box-specific flags from the beginning of args
 // and returns the remaining args verbatim for claude.
 //

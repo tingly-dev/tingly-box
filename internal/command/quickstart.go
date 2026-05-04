@@ -16,6 +16,25 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// ============== Kong Command Structures ==============
+
+// QuickstartCmdKong runs the guided setup wizard
+type QuickstartCmdKong struct {
+	UseTUI bool `kong:"flag,name='tui',short='t',default='true',help='Use interactive TUI mode'"`
+}
+
+func (q *QuickstartCmdKong) Run(appManager *AppManager) error {
+	if q.UseTUI {
+		// Import wizards package for TUI
+		// wizards.RunQuickstartWizard(appManager)
+		// For now, fall back to CLI mode
+		return runQuickstart(appManager)
+	}
+	return runQuickstart(appManager)
+}
+
+// ============== Business Logic Functions ==============
+
 func runQuickstart(appManager *AppManager) error {
 	reader := bufio.NewReader(os.Stdin)
 
