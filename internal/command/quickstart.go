@@ -9,41 +9,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/tui/wizards"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// QuickstartCommand creates the quickstart subcommand for guided setup
-func QuickstartCommand(appManager *AppManager) *cobra.Command {
-	var useTUI bool
-
-	cmd := &cobra.Command{
-		Use:   "quickstart",
-		Short: "Guided setup wizard for first-time users",
-		Long: `Interactive setup wizard that guides you through:
-  1. Adding your first AI provider
-  2. Fetching and selecting a model
-  3. Configuring all default routing rules
-
-This is the recommended way to get started with Tingly Box.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if useTUI {
-				return wizards.RunQuickstartWizard(appManager)
-			}
-			return runQuickstart(appManager)
-		},
-	}
-
-	cmd.Flags().BoolVarP(&useTUI, "tui", "t", true, "Use interactive TUI mode (default: true)")
-
-	return cmd
-}
 
 func runQuickstart(appManager *AppManager) error {
 	reader := bufio.NewReader(os.Stdin)

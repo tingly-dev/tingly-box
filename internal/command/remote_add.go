@@ -4,102 +4,129 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 )
 
-// remoteAddCommand creates the `remote add` subcommand
-func remoteAddCommand(appManager *AppManager) *cobra.Command {
-	return &cobra.Command{
-		Use:   "add",
-		Short: "Add a new bot configuration",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if appManager == nil || appManager.AppConfig() == nil {
-				return fmt.Errorf("app configuration is not initialized")
-			}
+// runRemoteAddInteractive runs the interactive flow for adding a new bot
+func runRemoteAddInteractive(reader *bufio.Reader, appManager *AppManager) error {
+	fmt.Println()
+	fmt.Println("╔═══════════════════════════════════════════════════════════════╗")
+	fmt.Println("║                    Add New Remote Bot                         ║")
+	fmt.Println("╚═══════════════════════════════════════════════════════════════╝")
+	fmt.Println()
 
-			cfg := appManager.AppConfig().GetGlobalConfig()
-			if cfg == nil {
-				return fmt.Errorf("global config not available")
-			}
+	ctx := context.Background()
+	cfg := appManager.AppConfig().GetGlobalConfig()
 
-			// Create ImBot settings store
-			store, err := db.NewImBotSettingsStore(cfg.ConfigDir)
-			if err != nil {
-				return fmt.Errorf("failed to create bot settings store: %w", err)
-			}
-
-			reader := bufio.NewReader(os.Stdin)
-
-			// Select platform
-			platform, err := promptForPlatform(reader)
-			if err != nil {
-				return err
-			}
-
-			// Prompt for bot name
-			name, err := promptForBotName(reader)
-			if err != nil {
-				return err
-			}
-
-			// Collect auth config based on platform
-			var authType string
-			var authConfig map[string]string
-
-			switch platform {
-			case "telegram", "discord", "slack":
-				authType = "token"
-				authConfig, err = promptForTokenAuth(reader, platform)
-			case "whatsapp":
-				authType = "token"
-				authConfig, err = promptForWhatsAppAuth(reader)
-			case "dingtalk", "feishu":
-				authType = "oauth"
-				authConfig, err = promptForOAuthAuth(reader, platform)
-			case "weixin":
-				authType = "qr"
-				authConfig, err = runWeChatQRFlow(cmd.Context(), reader)
-			default:
-				return fmt.Errorf("unsupported platform: %s", platform)
-			}
-
-			if err != nil {
-				return err
-			}
-
-			// Create settings
-			setting := db.Settings{
-				Name:     name,
-				Platform: platform,
-				AuthType: authType,
-				Auth:     authConfig,
-				Enabled:  true,
-			}
-
-			// Save to database
-			created, err := store.CreateSettings(setting)
-			if err != nil {
-				return fmt.Errorf("failed to create bot settings: %w", err)
-			}
-
-			fmt.Println()
-			fmt.Println("Bot added successfully!")
-			fmt.Printf("UUID: %s\n", created.UUID)
-			fmt.Printf("Name: %s\n", created.Name)
-			fmt.Printf("Platform: %s\n", created.Platform)
-			fmt.Println()
-			fmt.Printf("Start with: tingly-box remote start %s\n", created.UUID)
-
-			return nil
-		},
+	// Prompt for platform
+	platform, err := promptForPlatform(reader)
+	if err != nil {
+		return err
 	}
+
+	// Prompt for bot name
+	botName, err := promptForBotName(reader)
+	if err != nil {
+		return err
+	}
+
+	// Prompt for authentication based on platform type
+	var auth map[string]string
+	var authType string
+
+	pInfo := getPlatformInfo(platform)
+	authType = pInfo.authType
+
+	switch authType {
+	case "token":
+		if platform == "whatsapp" {
+			auth, err = promptForWhatsAppAuth(reader)
+		} else {
+			auth, err = promptForTokenAuth(reader, platform)
+		}
+	case "oauth":
+		auth, err = promptForOAuthAuth(reader, platform)
+	case "qr":
+		auth, err = runWeChatQRFlow(ctx, reader)
+	default:
+		return fmt.Errorf("unsupported auth type: %s", authType)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// Create the bot setting
+	store, err := db.NewImBotSettingsStore(cfg.ConfigDir)
+	if err != nil {
+		return fmt.Errorf("failed to create settings store: %w", err)
+	}
+
+	setting := db.Settings{
+		Name:     botName,
+		Platform: platform,
+		AuthType: authType,
+		Auth:     auth,
+		Enabled:  true,
+	}
+
+	// Ask if user wants to configure SmartGuide
+	fmt.Println()
+	fmt.Print("Configure SmartGuide for this bot? (y/N): ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	if input == "y" || input == "yes" {
+		provider, model, err := promptForSmartGuideModel(reader, appManager)
+		if err != nil {
+			fmt.Printf("Warning: failed to configure SmartGuide: %v\n", err)
+		} else {
+			setting.SmartGuideProvider = provider
+			setting.SmartGuideModel = model
+		}
+	}
+
+	// Ask if user wants to enable pairing
+	fmt.Println()
+	fmt.Print("Require TOFU pairing for this bot? (y/N): ")
+	input, _ = reader.ReadString('\n')
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	if input == "y" || input == "yes" {
+		requirePairing := true
+		setting.RequirePairing = &requirePairing
+	}
+
+	// Save the bot configuration
+	created, err := store.CreateSettings(setting)
+	if err != nil {
+		return fmt.Errorf("failed to save bot configuration: %w", err)
+	}
+
+	fmt.Println()
+	PrintSuccess("Bot configuration saved successfully!")
+	fmt.Printf("UUID: %s\n", created.UUID)
+	fmt.Println()
+	fmt.Println("To start this bot, run:")
+	fmt.Printf("  tingly-box remote start %s\n", created.UUID)
+	fmt.Println()
+
+	return nil
+}
+
+// getPlatformInfo returns platform info by name
+func getPlatformInfo(name string) platformInfo {
+	for _, p := range supportedPlatforms {
+		if p.name == name {
+			return p
+		}
+	}
+	return platformInfo{name: name, authType: "token"}
 }
 
 // platformInfo represents a platform and its auth type

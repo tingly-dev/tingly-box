@@ -6,41 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	dataimportpkg "github.com/tingly-dev/tingly-box/internal/dataio"
 )
 
-// ImportCommand represents the import rule command
-func ImportCommand(appManager *AppManager) *cobra.Command {
-	var format string
-
-	cmd := &cobra.Command{
-		Use:   "import [file.jsonl]",
-		Short: "Import a rule with providers from a file or stdin",
-		Long: `Import a routing rule with its associated providers from a file or stdin.
-The file can be in JSONL format (default) or Base64 format.
-The format is automatically detected based on the content.
-
-Supported formats:
-  - JSONL: Line-delimited JSON with type="metadata", type="rule", type="provider"
-  - Base64: Single-line Base64-encoded JSONL with TGB64:1.0: prefix
-
-If no file is specified, reads from stdin for pipe-friendly operation:
-  cat export.jsonl | tingly-box import
-  tingly-box export --request-model gpt-4 --scenario general | tingly-box import
-
-You can also paste Base64 exports directly:
-  tingly-box import <<< "TGB64:1.0:..."`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runImport(appManager, format, args)
-		},
-	}
-
-	cmd.Flags().String("format", "auto", "Import format: auto, jsonl, or base64 (default: auto)")
-
-	return cmd
-}
-
+// runImport imports a rule with providers from file or stdin
 func runImport(appManager *AppManager, formatStr string, args []string) error {
 	var data string
 

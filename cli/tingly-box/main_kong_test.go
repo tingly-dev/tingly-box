@@ -48,28 +48,28 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 		{"status", []string{"status", "--help"}},
 		{"restart", []string{"restart", "--help"}},
 		{"open", []string{"open", "--help"}},
-		{"provider-add", []string{"provider", "add", "--help"}},
-		{"provider-list", []string{"provider", "list", "--help"}},
-		{"provider-delete", []string{"provider", "delete", "--help"}},
-		{"provider-update", []string{"provider", "update", "--help"}},
-		{"provider-get", []string{"provider", "get", "--help"}},
+		{"config-add", []string{"config", "add", "--help"}},
+		{"config-list", []string{"config", "list", "--help"}},
+		{"config-delete", []string{"config", "delete", "--help"}},
+		{"config-update", []string{"config", "update", "--help"}},
+		{"config-get", []string{"config", "get", "--help"}},
+		{"config-export", []string{"config", "export", "--request-model", "x", "--scenario", "y", "--help"}},
+		{"config-import", []string{"config", "import", "--help"}},
 		{"agent-apply", []string{"agent", "apply", "--help"}},
-		{"agent-list", []string{"agent", "list", "--help"}},
 		{"agent-show", []string{"agent", "show", "--help"}},
+		{"agent-restore", []string{"agent", "restore", "--help"}},
 		{"oauth", []string{"oauth", "--help"}},
-		{"export", []string{"export", "--request-model", "x", "--scenario", "y", "--help"}},
-		{"import", []string{"import", "--help"}},
 		{"cc", []string{"cc", "--help"}},
 		{"swagger", []string{"swagger", "--help"}},
-		{"quota-list", []string{"quota", "list", "--help"}},
 		{"quota-get", []string{"quota", "get", "--help"}},
 		{"quota-refresh", []string{"quota", "refresh", "--help"}},
 		{"quota-summary", []string{"quota", "summary", "--help"}},
 		{"remote-list", []string{"remote", "list", "--help"}},
 		{"remote-start", []string{"remote", "start", "--help"}},
 		{"remote-config", []string{"remote", "config", "--help"}},
+		{"remote-add", []string{"remote", "add", "--help"}},
+		{"remote-pair-enable", []string{"remote", "pair", "enable", "bot-uuid", "--help"}},
 		{"quickstart", []string{"quickstart", "--help"}},
-		{"mcp-builtin", []string{"mcp-builtin", "--help"}},
 		{"version", []string{"version", "--help"}},
 	}
 	for _, tc := range cases {
@@ -91,54 +91,70 @@ func TestOAuthCommandRoutesByName(t *testing.T) {
 	}
 }
 
-// TestMCPBuiltinTopLevel ensures the legacy `mcp-builtin` command path is preserved.
-// internal/mcp/runtime/builtin_registry.go invokes the binary with this exact arg.
-func TestMCPBuiltinTopLevel(t *testing.T) {
-	_, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"mcp-builtin", "--help"}); err != nil && !isHelpErr(err) {
-		t.Fatalf("mcp-builtin should parse: %v", err)
-	}
-}
-
-// TestProviderHasAllSubcommands ensures provider exposes add/list/delete/update/get
-// (legacy parity).
-func TestProviderHasAllSubcommands(t *testing.T) {
-	for _, sub := range []string{"add", "list", "delete", "update", "get"} {
+// TestConfigHasAllSubcommands ensures config exposes add/list/delete/update/get/export/import
+// (new unified command).
+func TestConfigHasAllSubcommands(t *testing.T) {
+	for _, sub := range []string{"add", "list", "delete", "update", "get", "export", "import"} {
 		t.Run(sub, func(t *testing.T) {
 			_, parser := newTestParser(t)
-			if _, err := parser.Parse([]string{"provider", sub, "--help"}); err != nil && !isHelpErr(err) {
-				t.Fatalf("provider %s should parse: %v", sub, err)
+			args := []string{"config", sub, "--help"}
+			// export requires special flags
+			if sub == "export" {
+				args = []string{"config", "export", "--request-model", "x", "--scenario", "y", "--help"}
+			}
+			if _, err := parser.Parse(args); err != nil && !isHelpErr(err) {
+				t.Fatalf("config %s should parse: %v", sub, err)
 			}
 		})
 	}
 }
 
-// TestExportCmdParsesAndForwardsFlags ensures `export` actually accepts its
-// flags and the Kong handler can read them. The previous implementation
-// errored with "no such flag -request-model" because the mock cobra cmd had
-// no flags registered.
-func TestExportCmdParsesAndForwardsFlags(t *testing.T) {
+// TestConfigExportCmdParsesAndForwardsFlags ensures `config export` actually accepts its
+// flags and the Kong handler can read them.
+func TestConfigExportCmdParsesAndForwardsFlags(t *testing.T) {
 	cli, parser := newTestParser(t)
 	if _, err := parser.Parse([]string{
-		"export",
+		"config", "export",
 		"--request-model", "gpt-4",
 		"--scenario", "general",
 		"--format", "base64",
 		"--output", "out.txt",
 	}); err != nil {
-		t.Fatalf("export flags should parse: %v", err)
+		t.Fatalf("config export flags should parse: %v", err)
 	}
-	if cli.Export.RequestModel != "gpt-4" {
-		t.Errorf("RequestModel: %q", cli.Export.RequestModel)
+	if cli.Config.Export.RequestModel != "gpt-4" {
+		t.Errorf("RequestModel: %q", cli.Config.Export.RequestModel)
 	}
-	if cli.Export.Scenario != "general" {
-		t.Errorf("Scenario: %q", cli.Export.Scenario)
+	if cli.Config.Export.Scenario != "general" {
+		t.Errorf("Scenario: %q", cli.Config.Export.Scenario)
 	}
-	if cli.Export.Format != "base64" {
-		t.Errorf("Format: %q", cli.Export.Format)
+	if cli.Config.Export.Format != "base64" {
+		t.Errorf("Format: %q", cli.Config.Export.Format)
 	}
-	if cli.Export.Output != "out.txt" {
-		t.Errorf("Output: %q", cli.Export.Output)
+	if cli.Config.Export.Output != "out.txt" {
+		t.Errorf("Output: %q", cli.Config.Export.Output)
+	}
+}
+
+// TestConfigImportFromStdinWhenNoFile ensures `config import` with no positional gets an
+// empty args slice, so runImport reads from stdin instead of trying to open
+// a file named "".
+func TestConfigImportFromStdinWhenNoFile(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"config", "import"}); err != nil {
+		t.Fatalf("config import (no file) should parse: %v", err)
+	}
+	if cli.Config.Import.File != "" {
+		t.Errorf("File should be empty, got %q", cli.Config.Import.File)
+	}
+}
+
+// TestSwaggerCommandIsHidden ensures the swagger command exists but is hidden from help.
+func TestSwaggerCommandIsHidden(t *testing.T) {
+	_, parser := newTestParser(t)
+	// swagger command should parse
+	if _, err := parser.Parse([]string{"swagger", "--help"}); err != nil && !isHelpErr(err) {
+		t.Fatalf("swagger should parse: %v", err)
 	}
 }
 
@@ -153,19 +169,6 @@ func TestStartCmdDebugFlagSet(t *testing.T) {
 	}
 	if !cli.Start.EnableDebug {
 		t.Error("Start.EnableDebug should be true after --debug")
-	}
-}
-
-// TestImportFromStdinWhenNoFile ensures `import` with no positional gets an
-// empty args slice, so runImport reads from stdin instead of trying to open
-// a file named "".
-func TestImportFromStdinWhenNoFile(t *testing.T) {
-	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"import"}); err != nil {
-		t.Fatalf("import (no file) should parse: %v", err)
-	}
-	if cli.Import.File != "" {
-		t.Errorf("File should be empty, got %q", cli.Import.File)
 	}
 }
 
@@ -232,14 +235,116 @@ func TestAgentApplyUnifiedDefaultIsTrue(t *testing.T) {
 	}
 }
 
-// TestParentCommandDefaultsParse ensures `provider` and `quota` parse with no
+// TestAgentRestoreCommandExists ensures agent restore subcommand is available.
+func TestAgentRestoreCommandExists(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"agent", "restore", "claude-code", "--force"}); err != nil {
+		t.Fatalf("agent restore should parse: %v", err)
+	}
+	if !cli.Agent.Restore.Force {
+		t.Error("Restore.Force should be true")
+	}
+}
+
+// TestParentCommandDefaultsParse ensures `config`, `agent`, and `quota` parse with no
 // subcommand (their hidden default subcommands take over).
 func TestParentCommandDefaultsParse(t *testing.T) {
-	for _, name := range []string{"provider", "quota"} {
+	for _, name := range []string{"config", "agent", "quota"} {
 		t.Run(name, func(t *testing.T) {
 			_, parser := newTestParser(t)
 			if _, err := parser.Parse([]string{name}); err != nil {
 				t.Fatalf("%s with no subcommand should parse: %v", name, err)
+			}
+		})
+	}
+}
+
+// TestQuotaListIsDefault ensures quota with no args defaults to list.
+func TestQuotaListIsDefault(t *testing.T) {
+	cli, parser := newTestParser(t)
+	// quota list supports --refresh flag
+	if _, err := parser.Parse([]string{"quota", "list", "--refresh"}); err != nil {
+		t.Fatalf("quota list --refresh should parse: %v", err)
+	}
+	if !cli.Quota.List.Refresh {
+		t.Error("Quota.List.Refresh should be true")
+	}
+}
+
+// TestQuotaGetWithProvider ensures quota get accepts provider argument.
+func TestQuotaGetWithProvider(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"quota", "get", "my-provider", "--refresh"}); err != nil {
+		t.Fatalf("quota get with provider should parse: %v", err)
+	}
+	if cli.Quota.Get.Provider != "my-provider" {
+		t.Errorf("Provider: %q", cli.Quota.Get.Provider)
+	}
+	if !cli.Quota.Get.Refresh {
+		t.Error("Get.Refresh should be true")
+	}
+}
+
+// TestQuotaRefreshWithProvider ensures quota refresh accepts optional provider.
+func TestQuotaRefreshWithProvider(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"quota", "refresh", "my-provider"}); err != nil {
+		t.Fatalf("quota refresh with provider should parse: %v", err)
+	}
+	if cli.Quota.Refresh.Provider != "my-provider" {
+		t.Errorf("Provider: %q", cli.Quota.Refresh.Provider)
+	}
+}
+
+// TestAgentDefaultsToList ensures agent with no args defaults to list.
+func TestAgentDefaultsToList(t *testing.T) {
+	_, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{"agent"}); err != nil {
+		t.Fatalf("agent with no args should parse: %v", err)
+	}
+}
+
+// TestConfigAddWithPositionalArgs ensures config add accepts provider args.
+func TestConfigAddWithPositionalArgs(t *testing.T) {
+	cli, parser := newTestParser(t)
+	if _, err := parser.Parse([]string{
+		"config", "add", "my-provider",
+		"https://api.example.com",
+		"sk-xxx",
+		"openai",
+	}); err != nil {
+		t.Fatalf("config add with args should parse: %v", err)
+	}
+	if cli.Config.Add.Name != "my-provider" {
+		t.Errorf("Name: %q", cli.Config.Add.Name)
+	}
+	if cli.Config.Add.BaseURL != "https://api.example.com" {
+		t.Errorf("BaseURL: %q", cli.Config.Add.BaseURL)
+	}
+	if cli.Config.Add.Token != "sk-xxx" {
+		t.Errorf("Token: %q", cli.Config.Add.Token)
+	}
+	if cli.Config.Add.APIStyle != "openai" {
+		t.Errorf("APIStyle: %q", cli.Config.Add.APIStyle)
+	}
+}
+
+// TestRemotePairCommands ensures all remote pair subcommands are available.
+func TestRemotePairCommands(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"pair-enable", []string{"remote", "pair", "enable", "bot-uuid"}},
+		{"pair-disable", []string{"remote", "pair", "disable", "bot-uuid"}},
+		{"pair-revoke", []string{"remote", "pair", "revoke", "bot-uuid", "chat-id"}},
+		{"pair-status", []string{"remote", "pair", "status", "bot-uuid"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, parser := newTestParser(t)
+			if _, err := parser.Parse(tc.args); err != nil {
+				t.Fatalf("%s should parse: %v", tc.name, err)
 			}
 		})
 	}

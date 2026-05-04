@@ -1,6 +1,5 @@
-//go:build !legacy
 
-// Default Kong-based CLI. Build the legacy Cobra CLI with: go build -tags legacy ./cli/tingly-box
+// Tingly Box CLI - Kong-based implementation
 
 package main
 
@@ -36,8 +35,8 @@ type CLI struct {
 	Restart command.RestartCmdKong `kong:"cmd,help='Restart the server'"`
 	Open    command.OpenCmdKong    `kong:"cmd,help='Open web UI'"`
 
-	// Provider commands
-	Provider command.ProviderCmdKong `kong:"cmd,help='Manage providers'"`
+	// Configuration management (unified)
+	Config command.ConfigCmdKong `kong:"cmd,help='Manage configuration (providers, import/export)'"`
 
 	// Agent commands
 	Agent command.AgentCmdKong `kong:"cmd,help='Agent configuration'"`
@@ -45,18 +44,16 @@ type CLI struct {
 	// OAuth
 	OAuth command.OAuthCmdKong `kong:"cmd,name='oauth',help='OAuth authentication'"`
 
-	// Import/Export
-	Export command.ExportCmdKong `kong:"cmd,help='Export configuration'"`
-	Import command.ImportCmdKong `kong:"cmd,help='Import configuration'"`
-
 	// Claude Code
 	CC command.CCmdKong `kong:"cmd,help='Launch Claude Code',passthrough"`
 
 	// Other commands
-	Swagger    command.SwaggerCmdKong    `kong:"cmd,help='Generate OpenAPI schema'"`
+	Swagger    command.SwaggerCmdKong    `kong:"cmd,hidden,help='Generate OpenAPI schema'"`
 	Quota      command.QuotaCmdKong      `kong:"cmd,help='Quota information'"`
 	Remote     command.RemoteCmdKong     `kong:"cmd,help='Remote control'"`
 	Quickstart command.QuickstartCmdKong `kong:"cmd,help='Guided setup'"`
+
+	// MCP builtin (hidden)
 	MCPBuiltin command.MCPBuiltinCmdKong `kong:"cmd,name='mcp-builtin',hidden,help='Start the builtin MCP server (internal use)'"`
 
 	// Version

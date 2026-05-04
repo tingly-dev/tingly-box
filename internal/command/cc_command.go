@@ -10,59 +10,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// CCCommand creates the `cc` subcommand that configures and launches Claude Code.
-func CCCommand(appManager *AppManager) *cobra.Command {
-	return &cobra.Command{
-		Use:   "cc",
-		Short: "Launch Claude Code with tingly-box routing",
-		Long: `Launch Claude Code with tingly-box as the API proxy.
-
-A settings file is created at ~/.tingly-box/claude/default.json (or per-profile
-for profile mode) and passed to Claude Code via --settings. This file includes:
-- Your existing Claude settings (copied from ~/.claude/settings.json)
-- Tingly-box routing environment variables
-- Status line integration
-
-Profiles can be used to switch between different rule sets for the same scenario.
-If a profile name or ID is not found, an interactive list will be shown.
-
-Tingly-box flags must come before any Claude Code arguments. Everything after
-the last recognized tingly-box flag is forwarded verbatim to Claude Code.
-
-Flags:
-  -p, --profile <id>     Profile ID or name (e.g., p1, Premium)
-
-Examples:
-  tingly-box cc                                     # launch without profile (uses scenario flag)
-  tingly-box cc -p Premium                          # launch with named profile
-  tingly-box cc -p p1 resume                        # pass "resume" to claude
-  tingly-box cc -p p1 --print "hello"               # pass --print to claude
-  tingly-box cc --dangerously-skip-permissions       # forwarded to claude
-
-Unified mode:
-  Use "tingly-box scenario set-flag claude-code unified true" to enable unified mode
-  (single model for all requests). Default is separate mode (individual models).`,
-		DisableFlagParsing: true,
-		Args:               cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Consume only tingly-box flags from the front of args.
-			// Everything after the last recognized tingly-box flag is passed
-			// verbatim to claude — no "--" separator required.
-			profile, claudeArgs, err := parseCCFlags(args)
-			if err != nil {
-				return err
-			}
-			return runCC(appManager, profile, claudeArgs)
-		},
-	}
-}
 
 // parseCCFlags consumes tingly-box-specific flags from the beginning of args
 // and returns the remaining args verbatim for claude.

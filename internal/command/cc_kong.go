@@ -1,5 +1,3 @@
-//go:build !legacy
-
 package command
 
 // CCmdKong launches Claude Code with passthrough mode

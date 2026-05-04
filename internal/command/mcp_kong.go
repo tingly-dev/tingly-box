@@ -1,6 +1,8 @@
-//go:build !legacy
-
 package command
+
+import (
+	"github.com/tingly-dev/tingly-box/internal/mcp/builtin_server"
+)
 
 // MCPBuiltinCmdKong starts the builtin MCP server. Registered at the top level
 // as "mcp-builtin" to match the legacy command path, which is consumed by
@@ -8,6 +10,5 @@ package command
 type MCPBuiltinCmdKong struct{}
 
 func (m *MCPBuiltinCmdKong) Run(appManager *AppManager) error {
-	cmd := MCPBuiltinCommand()
-	return cmd.Execute()
+	return builtinserver.Serve()
 }

@@ -1,5 +1,3 @@
-//go:build !legacy
-
 package command
 
 // OAuthCmdKong handles OAuth authentication

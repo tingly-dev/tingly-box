@@ -15,54 +15,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/browser"
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/ai"
 	oauth2 "github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// OAuthCommand returns the oauth command group
-func OAuthCommand(appManager interface{}) interface{} {
-	// Extract the AppConfig from AppManager
-	if am, ok := appManager.(*AppManager); ok {
-		return innerOAuthCommand(am.AppConfig())
-	}
-	// Otherwise assume it's already an AppConfig (shouldn't happen)
-	return innerOAuthCommand(appManager.(*AppManager).AppConfig())
-}
-
-// OAuthCommand represents the oauth command
-func innerOAuthCommand(appConfig *config.AppConfig) *cobra.Command {
-	var (
-		providerName string
-		callbackPort int
-		proxyURL     string
-	)
-
-	cmd := &cobra.Command{
-		Use:   "oauth [provider]",
-		Short: "OAuth authentication for AI providers",
-		Long:  buildOAuthHelp(),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// No args - interactive mode
-			if len(args) == 0 {
-				return runInteractiveMode(appConfig, providerName, callbackPort, proxyURL)
-			}
-			// Provider arg - direct mode
-			issuer := args[0]
-			return runOAuthFlow(appConfig, issuer, providerName, callbackPort, proxyURL)
-		},
-	}
-
-	// Flags
-	cmd.Flags().StringVarP(&providerName, "name", "n", "", "Custom name for the provider (defaults to provider type)")
-	cmd.Flags().IntVarP(&callbackPort, "port", "p", 0, "Callback server port (default: 12580, codex requires 1455)")
-	cmd.Flags().StringVarP(&proxyURL, "proxy", "x", "", "Proxy URL for OAuth requests (e.g., http://proxy.example.com:8080)")
-
-	return cmd
-}
 
 // buildOAuthHelp generates the help text with provider list
 func buildOAuthHelp() string {
@@ -469,11 +427,11 @@ func supportedProviders() []ProviderInfo {
 
 	// Providers to exclude (testing, internal, etc.)
 	excludedProviders := map[ai.Issuer]bool{
-		ai.IssuerMock:    true,
-		ai.IssuerIFlow:   true,
-		ai.IssuerOpenAI:  true, // Requires custom client ID
-		ai.IssuerGoogle:  true, // Requires custom client ID
-		ai.IssuerGitHub:  true, // Requires custom client ID
+		ai.IssuerMock:   true,
+		ai.IssuerIFlow:  true,
+		ai.IssuerOpenAI: true, // Requires custom client ID
+		ai.IssuerGoogle: true, // Requires custom client ID
+		ai.IssuerGitHub: true, // Requires custom client ID
 	}
 
 	result := make([]ProviderInfo, 0, len(infoList))

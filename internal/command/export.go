@@ -5,51 +5,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/dataio"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ExportCommand represents the export rule command
-func ExportCommand(appManager *AppManager) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "export --request-model <model> --scenario <scenario>",
-		Short: "Export a rule with providers to a file or stdout",
-		Long: `Export a routing rule with its associated providers to a file or stdout.
-The export can be in JSONL format (default) or Base64 format for easy copy-paste.
-
-Examples:
-  # Export to file in JSONL format
-  tingly-box export --request-model gpt-4 --scenario general --output export.jsonl
-
-  # Export to file in Base64 format
-  tingly-box export --request-model gpt-4 --scenario general --format base64 --output export.txt
-
-  # Export to stdout (for piping)
-  tingly-box export --request-model gpt-4 --scenario general > export.jsonl
-
-  # Export to clipboard-friendly Base64 format
-  tingly-box export --request-model gpt-4 --scenario general --format base64`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			formatStr, _ := cmd.Flags().GetString("format")
-			outputFile, _ := cmd.Flags().GetString("output")
-			requestModel, _ := cmd.Flags().GetString("request-model")
-			scenarioStr, _ := cmd.Flags().GetString("scenario")
-			return runExport(appManager, requestModel, scenarioStr, formatStr, outputFile)
-		},
-	}
-
-	cmd.Flags().String("request-model", "", "Request model name (required)")
-	cmd.Flags().String("scenario", "", "Rule scenario (required)")
-	cmd.Flags().String("format", "jsonl", "Export format: jsonl or base64 (default: jsonl)")
-	cmd.Flags().String("output", "", "Output file path (default: stdout)")
-
-	cmd.MarkFlagRequired("request-model")
-	cmd.MarkFlagRequired("scenario")
-
-	return cmd
-}
-
+// runExport exports a rule with providers to file or stdout
 func runExport(appManager *AppManager, requestModel, scenarioStr, formatStr, outputFile string) error {
 	var format dataio.Format
 	switch strings.ToLower(formatStr) {
