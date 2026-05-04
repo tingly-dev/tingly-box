@@ -2,7 +2,9 @@ package mock
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
@@ -98,6 +100,192 @@ func Example_mockAgentWithAskUserQuestion() {
 	// Completed: true
 	// Events: 14
 }
+
+// Test_ScriptedMockAgent_PlaybackOrder verifies that explicit script playback
+// emits init / per-step / result events in declared order.
+func Test_ScriptedMockAgent_PlaybackOrder(t *testing.T) {
+	ag := NewAgent(Config{
+		AutoApprove: true,
+		Script: NewScript().
+			Assistant("hello").
+			Permission("Read", map[string]any{"path": "/tmp/x"}).
+			ToolResult("hello\n").
+			Assistant("done").
+			Success("ok").
+			Build(),
+	})
+
+	result, err := ag.Execute(context.Background(), "go", agentboot.ExecutionOptions{})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	wantTypes := []string{
+		agentboot.EventTypeInit,
+		agentboot.EventTypeAssistant,
+		agentboot.EventTypePermissionRequest,
+		agentboot.EventTypePermissionResult,
+		agentboot.EventTypeToolResult,
+		agentboot.EventTypeAssistant,
+		agentboot.EventTypeResult,
+	}
+	if len(result.Events) != len(wantTypes) {
+		t.Fatalf("expected %d events, got %d (%v)", len(wantTypes), len(result.Events), eventTypes(result.Events))
+	}
+	for i, want := range wantTypes {
+		if result.Events[i].Type != want {
+			t.Errorf("event %d: want %q got %q", i, want, result.Events[i].Type)
+		}
+	}
+	if result.Error != "" {
+		t.Errorf("expected no Result.Error, got %q", result.Error)
+	}
+}
+
+// Test_ScriptedMockAgent_DenyHalts verifies that PermissionStep with
+// OnDenyTerminate (the default) terminates with permission_denied.
+func Test_ScriptedMockAgent_DenyHalts(t *testing.T) {
+	ag := NewAgent(Config{
+		Script: NewScript().
+			Permission("Bash", map[string]any{"cmd": "rm -rf /"}).
+			Assistant("never reached").
+			Success("never").
+			Build(),
+	})
+
+	handler := agentboot.NewCompositeHandler().SetApprovalHandler(denyHandler{})
+	result, err := ag.Execute(context.Background(), "go", agentboot.ExecutionOptions{Handler: handler})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	last := result.Events[len(result.Events)-1]
+	if last.Type != agentboot.EventTypeResult {
+		t.Fatalf("expected last event %q, got %q", agentboot.EventTypeResult, last.Type)
+	}
+	if status, _ := last.Data["status"].(string); status != "permission_denied" {
+		t.Fatalf("expected status permission_denied, got %q", status)
+	}
+	for _, e := range result.Events {
+		if e.Type == agentboot.EventTypeAssistant {
+			if msg, _ := e.Data["message"].(string); msg == "never reached" {
+				t.Fatalf("script kept running past denial")
+			}
+		}
+	}
+}
+
+// Test_ScriptedMockAgent_ExpectMismatch verifies that ExpectApproved mismatch
+// surfaces via Result.Error and a handler.OnError call.
+func Test_ScriptedMockAgent_ExpectMismatch(t *testing.T) {
+	ag := NewAgent(Config{
+		Script: NewScript().
+			Permission("Bash", nil, WithExpectApproved(true)).
+			Build(),
+	})
+
+	rec := &errorRecorder{}
+	handler := agentboot.NewCompositeHandler().
+		SetStreamer(rec).
+		SetApprovalHandler(denyHandler{})
+
+	result, err := ag.Execute(context.Background(), "go", agentboot.ExecutionOptions{Handler: handler})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if result.Error == "" {
+		t.Fatalf("expected Result.Error from mismatch, got empty")
+	}
+	if len(rec.errs) == 0 {
+		t.Fatalf("expected handler.OnError to be called for mismatch")
+	}
+}
+
+// Test_ScriptedMockAgent_ErrorStep verifies that an ErrorStep delivers via
+// handler.OnError and is surfaced in Result.Events.
+func Test_ScriptedMockAgent_ErrorStep(t *testing.T) {
+	ag := NewAgent(Config{
+		Script: NewScript().
+			Assistant("trying").
+			FailWith(errors.New("boom")).
+			Build(),
+	})
+
+	rec := &errorRecorder{}
+	handler := agentboot.NewCompositeHandler().SetStreamer(rec)
+	_, err := ag.Execute(context.Background(), "go", agentboot.ExecutionOptions{Handler: handler})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if len(rec.errs) != 1 || rec.errs[0].Error() != "boom" {
+		t.Fatalf("expected exactly one OnError(\"boom\"), got %v", rec.errs)
+	}
+}
+
+// Test_ScriptedMockAgent_AskAnswers verifies that AskStep records expected
+// answer mismatches via Result.Error.
+func Test_ScriptedMockAgent_AskAnswers(t *testing.T) {
+	questions := []AskQuestion{
+		{
+			Question: "color?",
+			Options: []AskOption{
+				{Label: "red"},
+				{Label: "green"},
+			},
+		},
+	}
+	ag := NewAgent(Config{
+		Script: NewScript().
+			Ask(questions, WithAskExpectAnswers(map[int]int{0: 1})). // expect "green"
+			Build(),
+	})
+
+	// autoAskHandler always picks Option A → label "red" for the legacy script
+	// paths; here it returns "Option A" which doesn't match either label, so
+	// we wire a handler that explicitly returns "red".
+	handler := agentboot.NewCompositeHandler().SetAskHandler(fixedAskHandler{label: "red"})
+
+	result, err := ag.Execute(context.Background(), "go", agentboot.ExecutionOptions{Handler: handler})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if result.Error == "" {
+		t.Fatalf("expected mismatch on ask answer, got no Result.Error")
+	}
+}
+
+func eventTypes(evs []agentboot.Event) []string {
+	out := make([]string, len(evs))
+	for i, e := range evs {
+		out[i] = e.Type
+	}
+	return out
+}
+
+type denyHandler struct{}
+
+func (denyHandler) OnApproval(_ context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	return agentboot.PermissionResult{Approved: false, Reason: "test denial"}, nil
+}
+
+type fixedAskHandler struct{ label string }
+
+func (h fixedAskHandler) OnAsk(_ context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	answers := map[string]interface{}{"0": h.label}
+	updated := map[string]interface{}{}
+	for k, v := range req.Input {
+		updated[k] = v
+	}
+	updated["answers"] = answers
+	return agentboot.AskResult{ID: req.ID, Approved: true, UpdatedInput: updated}, nil
+}
+
+type errorRecorder struct {
+	errs []error
+}
+
+func (r *errorRecorder) OnMessage(interface{}) error { return nil }
+func (r *errorRecorder) OnError(err error)           { r.errs = append(r.errs, err) }
 
 // autoApprovalHandler is a simple handler that auto-approves all permissions
 type autoApprovalHandler struct{}
