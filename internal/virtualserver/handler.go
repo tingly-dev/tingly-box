@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 
 	anthropicvm "github.com/tingly-dev/tingly-box/internal/virtualmodel/anthropic"
@@ -75,14 +76,40 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 }
 
 // Messages handles POST /virtual/v1/messages (Anthropic format).
+//
+// Accepts both Anthropic v1 and beta wire formats. The query parameter
+// "beta=true" mirrors the real Anthropic API gating used in
+// internal/server/anthropic.go. Internally everything is canonicalized to
+// the beta superset struct so vmodel implementations only deal with one
+// request shape.
 func (h *Handler) Messages(c *gin.Context) {
 	var req AnthropicMessageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
-			"type":    "invalid_request_error",
-			"message": "Invalid request body: " + err.Error(),
-		}})
-		return
+	if c.Query("beta") == "true" {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "Invalid request body: " + err.Error(),
+			}})
+			return
+		}
+	} else {
+		var v1 protocol.AnthropicMessagesRequest
+		if err := c.ShouldBindJSON(&v1); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "Invalid request body: " + err.Error(),
+			}})
+			return
+		}
+		lifted, err := liftAnthropicV1ToBeta(v1)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "Invalid request body: " + err.Error(),
+			}})
+			return
+		}
+		req = lifted
 	}
 	if req.Model == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{
@@ -360,6 +387,22 @@ func vmodelContentToAnthropic(resp anthropicvm.VModelResponse) []AnthropicConten
 		}
 	}
 	return out
+}
+
+// liftAnthropicV1ToBeta canonicalizes an Anthropic v1 request into the beta
+// superset struct via JSON round-trip. Beta extends v1 strictly (extra fields
+// like Container, Speed, ServiceTier), so the v1 wire format is a valid subset
+// of the beta one.
+func liftAnthropicV1ToBeta(v1 protocol.AnthropicMessagesRequest) (AnthropicMessageRequest, error) {
+	raw, err := json.Marshal(v1)
+	if err != nil {
+		return AnthropicMessageRequest{}, err
+	}
+	var beta AnthropicMessageRequest
+	if err := json.Unmarshal(raw, &beta); err != nil {
+		return AnthropicMessageRequest{}, err
+	}
+	return beta, nil
 }
 
 // vmodelToolCallsToOpenAI converts VToolCall slice to OpenAI SDK tool call format.

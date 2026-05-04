@@ -134,6 +134,19 @@ func (vc *VirtualClient) SendAnthropicV1Model(t *testing.T, modelID string, stre
 	return vc.doRequest(t, "POST", vc.baseURL+"/v1/messages", body, streaming, protocol.APIStyleAnthropic)
 }
 
+// SendAnthropicBetaModel sends a request to the Anthropic Messages endpoint
+// with the ?beta=true query flag to exercise the beta wire format.
+func (vc *VirtualClient) SendAnthropicBetaModel(t *testing.T, modelID string, streaming bool) *ParsedResponse {
+	t.Helper()
+	body := map[string]interface{}{
+		"model":      modelID,
+		"max_tokens": 1024,
+		"messages":   []map[string]string{{"role": "user", "content": "What is the capital of France?"}},
+		"stream":     streaming,
+	}
+	return vc.doRequest(t, "POST", vc.baseURL+"/v1/messages?beta=true", body, streaming, protocol.APIStyleAnthropic)
+}
+
 // ─── Internals ─────────────────────────────────────────────────────────────────
 
 // maybeRegister registers the scenario on the bound server, if any.

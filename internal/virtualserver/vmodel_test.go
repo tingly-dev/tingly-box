@@ -266,6 +266,20 @@ func TestVirtualServer_VModel_VirtualClaude3_Anthropic(t *testing.T) {
 	assert.NotEmpty(t, resp.Content[0].Text)
 }
 
+// TestVirtualServer_VModel_VirtualClaude3_AnthropicBeta verifies the
+// /v1/messages?beta=true path decodes via the BetaMessageNewParams superset.
+func TestVirtualServer_VModel_VirtualClaude3_AnthropicBeta(t *testing.T) {
+	vc := newTestServer(t)
+	result := vc.SendAnthropicBetaModel(t, "virtual-claude-3", false)
+	require.Equal(t, 200, result.HTTPStatus)
+
+	resp := parseAnthropic(t, result)
+	assert.Equal(t, "assistant", resp.Role)
+	require.NotEmpty(t, resp.Content)
+	assert.Equal(t, "text", resp.Content[0].Type)
+	assert.NotEmpty(t, resp.Content[0].Text)
+}
+
 func TestVirtualServer_VModel_EchoModel_OpenAI(t *testing.T) {
 	vc := newTestServer(t)
 	result := vc.SendOpenAIChatModel(t, "echo-model", false)
