@@ -3,7 +3,7 @@
 Virtual models — synthetic, in-process model implementations used for
 testing, request shaping, and tool simulation without calling a real
 upstream provider. They are wired into the virtual server at
-`internal/virtualserver` and exposed under `/virtual/v1/...`.
+`internal/virtualmodel/virtualserver` and exposed under `/virtual/v1/...`.
 
 ## Layout
 
@@ -11,17 +11,38 @@ upstream provider. They are wired into the virtual server at
 internal/virtualmodel/
 ├── interface.go        // base VirtualModel interface (provider-neutral)
 ├── types.go            // VirtualModelType, Model, ToolCallConfig, helpers
+├── registry.go         // GenericRegistry[T] — shared thread-safe registry
+├── base_mock.go        // BaseMockModel — shared identity/metadata methods
+├── stream.go           // ResolveChunkDelay, EmitChunks — shared stream helpers
+├── defaults_shared.go  // SharedDefaultMocks() — configs shared by both protocols
 ├── README.md
-├── anthropic/          // Anthropic-protocol models + Registry
-└── openai/             // OpenAI Chat-protocol models + Registry
+├── anthropic/          // Anthropic-protocol models + Registry alias
+├── openai/             // OpenAI Chat-protocol models + Registry alias
+├── virtualserver/      // Production Gin HTTP handler + Service wiring
+└── benchmark/          // Load-test client + local server factory
+    └── examples/       // Runnable server/client examples
 ```
 
-The root package contains only provider-neutral primitives. Concrete
-models, protocol-specific request/response types, stream events, and
-the `Registry` itself live in the `anthropic` and `openai`
-sub-packages. The two sub-packages do **not** import each other.
+The root package contains provider-neutral primitives shared by all sub-packages.
+Concrete models, protocol-specific request/response types, stream events, and the
+`Registry` alias live in the `anthropic` and `openai` sub-packages. The two
+sub-packages do **not** import each other.
 
 ## Design
+
+### GenericRegistry
+
+`GenericRegistry[T VirtualModel]` is a thread-safe, generic registry that
+underpins all per-protocol registries in this module:
+
+```go
+// anthropic.Registry and openai.Registry are type aliases:
+type Registry = virtualmodel.GenericRegistry[VirtualModel]
+```
+
+Any package that needs to store objects satisfying `virtualmodel.VirtualModel`
+can instantiate its own `GenericRegistry` directly — `server_validate.Scenario`
+does this for test scenarios.
 
 ### One registry per protocol
 
@@ -57,14 +78,13 @@ about which protocols it speaks.
 The real Anthropic API distinguishes `MessageNewParams` (v1) and
 `BetaMessageNewParams` (beta) on the wire, gated by `?beta=true`. The
 virtual server accepts both and canonicalizes to the beta superset at
-the HTTP boundary (`internal/virtualserver/handler.go`). Vmodels see
-exactly one request type — `*protocol.AnthropicBetaMessagesRequest` —
-so the protocol-version distinction does not leak into the
-`VirtualModel` interface.
+the HTTP boundary (`virtualserver/handler.go`). Vmodels see exactly one
+request type — `*protocol.AnthropicBetaMessagesRequest` — so the
+protocol-version distinction does not leak into the `VirtualModel` interface.
 
 ## Interfaces
 
-### Base (`internal/virtualmodel/interface.go`)
+### Base (`interface.go`)
 
 ```go
 type VirtualModel interface {
@@ -97,16 +117,54 @@ type VirtualModel interface {
 }
 ```
 
+## Shared root-package primitives
+
+### BaseMockModel
+
+`BaseMockModel` implements the six identity/metadata methods of the base
+`VirtualModel` interface (`GetID`, `GetName`, `GetDescription`, `GetType`,
+`SimulatedDelay`, `ToModel`). Protocol-specific mock types embed it and only
+add their `Handle*` methods:
+
+```go
+type MockModel struct {
+    virtualmodel.BaseMockModel
+    cfg *MockModelConfig
+}
+```
+
+### ResolveChunkDelay / EmitChunks
+
+`ResolveChunkDelay(totalDelay, chunkCount)` distributes a model's simulated
+latency evenly across stream chunks. `EmitChunks` is the shared inner loop —
+it calls the emit closure once per chunk with the appropriate sleep in between.
+Both the anthropic and openai `DefaultStream` helpers use these.
+
+### SharedDefaultMocks
+
+`SharedDefaultMocks()` returns the specs for the four mocks that are registered
+in **both** default registries. Each protocol's `RegisterDefaults` calls this
+and wraps each spec in its own `MockModel`:
+
+```go
+for _, spec := range virtualmodel.SharedDefaultMocks() {
+    _ = reg.Register(NewMockModel(&MockModelConfig{
+        ID: spec.ID, Name: spec.Name, Content: spec.Content,
+        ToolCall: spec.ToolCall, Delay: spec.Delay,
+    }))
+}
+```
+
 ## Model categories
 
 `VirtualModelType` (declared in `types.go`) tags every vmodel so the
 extension UI and registry consumers can group by behavior:
 
-| Type     | Meaning                                               | Examples                                    |
-| -------- | ----------------------------------------------------- | ------------------------------------------- |
-| `static` | Returns a fixed text response                          | `virtual-claude-3`, `virtual-gpt-4`, `echo-model` |
-| `tool`   | Returns a `tool_use` / `tool_calls` block              | `ask-user-question`, `ask-confirmation`, `web-search-example` |
-| `proxy`  | Applies a transform chain (no upstream call here, but the same model also runs in real proxy paths) | `compact-thinking`, `claude-code-compact`   |
+| Type     | Meaning                                                                                             | Examples                                    |
+| -------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `static` | Returns a fixed text response                                                                        | `virtual-claude-3`, `virtual-gpt-4`, `echo-model` |
+| `tool`   | Returns a `tool_use` / `tool_calls` block                                                           | `ask-user-question`, `ask-confirmation`, `web-search-example` |
+| `proxy`  | Applies a transform chain (no upstream call; same model also runs in real proxy paths)              | `compact-thinking`, `claude-code-compact`   |
 
 ## Default model allocation
 
@@ -129,12 +187,15 @@ Anthropic message shape. They could be ported to OpenAI by adding an
 OpenAI-side `TransformModel`, but no production use case currently
 calls for it.
 
+The four shared mocks (`echo-model`, `ask-user-question`, `ask-confirmation`,
+`web-search-example`) are defined once in `defaults_shared.go` and registered
+by both `anthropic.RegisterDefaults` and `openai.RegisterDefaults`.
+
 ## Adding a model
 
 ### Single protocol
 
 ```go
-// in your wiring code
 reg := service.GetAnthropicRegistry()
 _ = reg.Register(anthropic.NewMockModel(&anthropic.MockModelConfig{
     ID:      "my-mock",
@@ -172,25 +233,47 @@ interface.
 ## Streaming
 
 Each sub-package defines its own stream event types, used by the
-`Handle*Stream` methods to emit deltas via the `emit func(any)`
-callback:
+`Handle*Stream` methods to emit deltas via the `emit func(any)` callback:
 
 - `anthropic`: `StreamStartEvent`, `TextDeltaEvent`, `ToolUseEvent`, `DoneEvent`
 - `openai`:    `DeltaEvent`, `ToolEvent`, `DoneEvent`
 
-The virtual server (`internal/virtualserver/handler.go`) translates
-these into the wire-format SSE frames expected by each protocol.
+The virtual server (`virtualserver/handler.go`) translates these into the
+wire-format SSE frames expected by each protocol.
 
-A `DefaultStream` helper in each sub-package converts a non-streaming
-`Handle*` response into a sequence of stream events, so static and tool
-mocks get streaming for free.
+`DefaultStream` in each sub-package converts a non-streaming `Handle*`
+response into a stream event sequence using the shared `EmitChunks` helper,
+so static and tool mocks get streaming for free.
+
+## Benchmarking (`benchmark/`)
+
+`benchmark.NewLocalServer()` boots a `virtualserver.Service` with the
+default registries as an in-process HTTP server. `BenchmarkClient` drives
+load against any HTTP endpoint that speaks the virtual server API.
+
+```go
+srv := benchmark.NewLocalServer()
+defer srv.Close()
+
+client := benchmark.NewBenchmarkClient(srv.URL())
+result, _ := client.RunChatBenchmark(ctx, benchmark.BenchmarkConfig{
+    Concurrency: 10,
+    Requests:    100,
+})
+fmt.Printf("TPS: %.1f  p99: %v\n", result.TPS, result.P99Latency)
+```
+
+See `benchmark/examples/` for runnable server and client programs.
 
 ## Related packages
 
-- `internal/virtualserver` — HTTP handler, routes, request/response
-  shaping. Owns the v1 → beta lift for Anthropic.
-- `internal/extension` — exposes registered vmodels as extension items
+- `internal/virtualmodel/virtualserver` — Production Gin HTTP handler, routes,
+  request/response shaping. Owns the v1 → beta lift for Anthropic.
+- `internal/server_validate` — Test-only httptest provider mock. Stores
+  `Scenario` objects in `GenericRegistry[Scenario]`; serves pre-rendered
+  byte/SSE payloads for wire-format protocol testing.
+- `internal/extension` — Exposes registered vmodels as extension items
   with a `provider` metadata key for the UI split.
-- `internal/protocol/transform` — transform chain types used by
+- `internal/protocol/transform` — Transform chain types used by
   `anthropic.TransformModel` (e.g. compact-thinking).
-- `internal/smart_compact` — concrete transform implementations.
+- `internal/smart_compact` — Concrete transform implementations.
