@@ -21,8 +21,7 @@ type MockScenario struct {
 }
 
 type scenarioModel struct {
-	id           string
-	delay        time.Duration
+	virtualmodel.BaseMockModel
 	chunks       []string
 	content      string
 	toolCalls    []VToolCall
@@ -39,28 +38,23 @@ func NewMockFromScenario(s *MockScenario) VirtualModel {
 			finish = "stop"
 		}
 	}
+	typ := virtualmodel.VirtualModelTypeStatic
+	if len(s.ToolCalls) > 0 {
+		typ = virtualmodel.VirtualModelTypeTool
+	}
 	return &scenarioModel{
-		id:           s.ID,
-		delay:        s.Delay,
+		BaseMockModel: virtualmodel.BaseMockModel{
+			ID:          s.ID,
+			Name:        s.ID,
+			Description: "A scenario-based virtual model",
+			Type:        typ,
+			Delay:       s.Delay,
+		},
 		chunks:       s.StreamChunks,
 		content:      s.Content,
 		toolCalls:    s.ToolCalls,
 		finishReason: finish,
 	}
-}
-
-func (m *scenarioModel) GetID() string          { return m.id }
-func (m *scenarioModel) GetName() string        { return m.id }
-func (m *scenarioModel) GetDescription() string { return "A scenario-based virtual model" }
-func (m *scenarioModel) GetType() virtualmodel.VirtualModelType {
-	if len(m.toolCalls) > 0 {
-		return virtualmodel.VirtualModelTypeTool
-	}
-	return virtualmodel.VirtualModelTypeStatic
-}
-func (m *scenarioModel) SimulatedDelay() time.Duration { return m.delay }
-func (m *scenarioModel) ToModel() virtualmodel.Model {
-	return virtualmodel.Model{ID: m.id, Object: "model", OwnedBy: "tingly-box-virtual"}
 }
 
 func (m *scenarioModel) streamChunks() []string {

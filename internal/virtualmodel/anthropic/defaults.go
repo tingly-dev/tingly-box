@@ -9,72 +9,26 @@ import (
 )
 
 // RegisterDefaults registers the default Anthropic-protocol virtual models
-// into r: the static "virtual-claude-3" / "echo-model" mocks, the tool-call
-// mocks ("ask-user-question", "ask-confirmation", "web-search-example"),
+// into r: the Anthropic-only "virtual-claude-3" mock, the shared mocks
+// ("echo-model", "ask-user-question", "ask-confirmation", "web-search-example"),
 // and the compact transform models ("compact-thinking", "compact-round-only",
 // "compact-round-files", "claude-code-compact", "claude-code-strategy").
 func RegisterDefaults(r *Registry) {
-	staticModels := []MockModelConfig{
-		{
-			ID:      "virtual-claude-3",
-			Name:    "Virtual Claude 3",
-			Content: "Greetings! I'm a virtual Claude 3 model, providing fixed responses for testing and development purposes.",
-			Delay:   150 * time.Millisecond,
-		},
-		{
-			ID:      "echo-model",
-			Name:    "Echo Model",
-			Content: "Echo: Your message has been received by the virtual model.",
-			Delay:   50 * time.Millisecond,
-		},
-	}
-	for i := range staticModels {
-		_ = r.Register(NewMockModel(&staticModels[i]))
-	}
+	_ = r.Register(NewMockModel(&MockModelConfig{
+		ID:      "virtual-claude-3",
+		Name:    "Virtual Claude 3",
+		Content: "Greetings! I'm a virtual Claude 3 model, providing fixed responses for testing and development purposes.",
+		Delay:   150 * time.Millisecond,
+	}))
 
-	toolModels := []MockModelConfig{
-		{
-			ID:   "ask-user-question",
-			Name: "Ask User Question",
-			ToolCall: &virtualmodel.ToolCallConfig{
-				Name: "ask_user_question",
-				Arguments: map[string]interface{}{
-					"question": "Which approach would you prefer?",
-					"options": []map[string]string{
-						{"label": "Fast Mode", "value": "fast", "description": "Quick results with less accuracy"},
-						{"label": "Accurate Mode", "value": "accurate", "description": "Slower but more accurate results"},
-					},
-				},
-			},
-			Delay: 100 * time.Millisecond,
-		},
-		{
-			ID:   "ask-confirmation",
-			Name: "Ask Confirmation",
-			ToolCall: &virtualmodel.ToolCallConfig{
-				Name: "ask_user_question",
-				Arguments: map[string]interface{}{
-					"question": "Please confirm to proceed:",
-					"options": []map[string]string{
-						{"label": "Yes", "value": "yes", "description": "Proceed with the action"},
-						{"label": "No", "value": "no", "description": "Cancel the action"},
-					},
-				},
-			},
-			Delay: 50 * time.Millisecond,
-		},
-		{
-			ID:   "web-search-example",
-			Name: "Web Search Example",
-			ToolCall: &virtualmodel.ToolCallConfig{
-				Name:      "web_search",
-				Arguments: map[string]interface{}{"query": "latest AI developments"},
-			},
-			Delay: 50 * time.Millisecond,
-		},
-	}
-	for i := range toolModels {
-		_ = r.Register(NewMockModel(&toolModels[i]))
+	for _, spec := range virtualmodel.SharedDefaultMocks() {
+		_ = r.Register(NewMockModel(&MockModelConfig{
+			ID:       spec.ID,
+			Name:     spec.Name,
+			Content:  spec.Content,
+			ToolCall: spec.ToolCall,
+			Delay:    spec.Delay,
+		}))
 	}
 
 	compactModels := []TransformModelConfig{

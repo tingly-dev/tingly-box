@@ -2,10 +2,10 @@ package anthropic
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 )
 
 // StreamStartEvent signals the start of a message stream.
@@ -44,10 +44,10 @@ func DefaultStream(vm VirtualModel, req *protocol.AnthropicBetaMessagesRequest, 
 	emit(StreamStartEvent{MsgID: "msg_virtual", Model: ""})
 	for i, blk := range resp.Content {
 		if blk.OfText != nil {
-			for _, chunk := range token.SplitIntoChunks(blk.OfText.Text) {
-				time.Sleep(50 * time.Millisecond)
+			chunks := token.SplitIntoChunks(blk.OfText.Text)
+			virtualmodel.EmitChunks(chunks, virtualmodel.DefaultStreamChunkDelay, func(_ int, chunk string) {
 				emit(TextDeltaEvent{Index: i, Text: chunk})
-			}
+			})
 		} else if blk.OfToolUse != nil {
 			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
 			emit(ToolUseEvent{

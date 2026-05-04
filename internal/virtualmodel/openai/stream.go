@@ -1,10 +1,9 @@
 package openai
 
 import (
-	"time"
-
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 )
 
 // DeltaEvent carries a text content chunk.
@@ -32,10 +31,9 @@ func DefaultStream(vm VirtualModel, req *protocol.OpenAIChatCompletionRequest, e
 		return err
 	}
 	chunks := token.SplitIntoChunks(resp.Content)
-	for i, chunk := range chunks {
-		time.Sleep(50 * time.Millisecond)
+	virtualmodel.EmitChunks(chunks, virtualmodel.DefaultStreamChunkDelay, func(i int, chunk string) {
 		emit(DeltaEvent{Index: i, Content: chunk})
-	}
+	})
 	for i, tc := range resp.ToolCalls {
 		emit(ToolEvent{Index: i, ToolCall: tc})
 	}

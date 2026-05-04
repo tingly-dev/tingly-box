@@ -2,7 +2,6 @@ package anthropic
 
 import (
 	"fmt"
-	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -23,6 +22,7 @@ type TransformModelConfig struct {
 // applies Chain and Transformer in-place on req and returns the resulting
 // last-message text.
 type TransformModel struct {
+	virtualmodel.BaseMockModel
 	cfg *TransformModelConfig
 }
 
@@ -31,28 +31,15 @@ var _ VirtualModel = (*TransformModel)(nil)
 
 // NewTransformModel creates a TransformModel.
 func NewTransformModel(cfg *TransformModelConfig) *TransformModel {
-	return &TransformModel{cfg: cfg}
-}
-
-func (m *TransformModel) GetID() string { return m.cfg.ID }
-
-func (m *TransformModel) GetName() string { return m.cfg.Name }
-
-func (m *TransformModel) GetDescription() string { return m.cfg.Description }
-
-func (m *TransformModel) GetType() virtualmodel.VirtualModelType {
-	return virtualmodel.VirtualModelTypeProxy
-}
-
-// SimulatedDelay is always 0 — transform models don't simulate latency.
-func (m *TransformModel) SimulatedDelay() time.Duration { return 0 }
-
-func (m *TransformModel) ToModel() virtualmodel.Model {
-	return virtualmodel.Model{
-		ID:      m.cfg.ID,
-		Object:  "model",
-		Created: 0,
-		OwnedBy: "tingly-box-virtual",
+	return &TransformModel{
+		BaseMockModel: virtualmodel.BaseMockModel{
+			ID:          cfg.ID,
+			Name:        cfg.Name,
+			Description: cfg.Description,
+			Type:        virtualmodel.VirtualModelTypeProxy,
+			// Delay is always 0 — transform models don't simulate latency.
+		},
+		cfg: cfg,
 	}
 }
 

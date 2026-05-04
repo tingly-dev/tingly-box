@@ -5,6 +5,7 @@ import (
 	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
@@ -29,6 +30,7 @@ type MockModelConfig struct {
 // content block (or tool_use block) and supports streaming via per-chunk
 // token splitting.
 type MockModel struct {
+	virtualmodel.BaseMockModel
 	cfg *MockModelConfig
 }
 
@@ -45,35 +47,23 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 			cfg.StopReason = "stop"
 		}
 	}
-	return &MockModel{cfg: cfg}
-}
-
-func (m *MockModel) GetID() string { return m.cfg.ID }
-
-func (m *MockModel) GetName() string { return m.cfg.Name }
-
-func (m *MockModel) GetDescription() string {
-	if m.cfg.Description != "" {
-		return m.cfg.Description
+	description := cfg.Description
+	if description == "" {
+		description = virtualmodel.DefaultMockDescription
 	}
-	return "A virtual model that returns fixed responses for testing"
-}
-
-func (m *MockModel) GetType() virtualmodel.VirtualModelType {
-	if m.cfg.ToolCall != nil {
-		return virtualmodel.VirtualModelTypeTool
+	typ := virtualmodel.VirtualModelTypeStatic
+	if cfg.ToolCall != nil {
+		typ = virtualmodel.VirtualModelTypeTool
 	}
-	return virtualmodel.VirtualModelTypeStatic
-}
-
-func (m *MockModel) SimulatedDelay() time.Duration { return m.cfg.Delay }
-
-func (m *MockModel) ToModel() virtualmodel.Model {
-	return virtualmodel.Model{
-		ID:      m.cfg.ID,
-		Object:  "model",
-		Created: 0,
-		OwnedBy: "tingly-box-virtual",
+	return &MockModel{
+		BaseMockModel: virtualmodel.BaseMockModel{
+			ID:          cfg.ID,
+			Name:        cfg.Name,
+			Description: description,
+			Type:        typ,
+			Delay:       cfg.Delay,
+		},
+		cfg: cfg,
 	}
 }
 
@@ -126,18 +116,13 @@ func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesReq
 		return err
 	}
 	emit(StreamStartEvent{MsgID: "msg_virtual", Model: m.cfg.ID})
-	delay := m.cfg.Delay
 	chunks := m.streamChunks()
+	perChunk := virtualmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
 	for i, blk := range resp.Content {
 		if blk.OfText != nil {
-			for _, chunk := range chunks {
-				if delay > 0 {
-					time.Sleep(delay / time.Duration(len(chunks)))
-				} else {
-					time.Sleep(50 * time.Millisecond)
-				}
+			virtualmodel.EmitChunks(chunks, perChunk, func(_ int, chunk string) {
 				emit(TextDeltaEvent{Index: i, Text: chunk})
-			}
+			})
 		} else if blk.OfToolUse != nil {
 			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
 			emit(ToolUseEvent{

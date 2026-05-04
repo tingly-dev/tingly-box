@@ -26,6 +26,7 @@ type MockModelConfig struct {
 
 // MockModel is an OpenAI-Chat-only mock virtual model.
 type MockModel struct {
+	virtualmodel.BaseMockModel
 	cfg *MockModelConfig
 }
 
@@ -42,35 +43,23 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 			cfg.FinishReason = "stop"
 		}
 	}
-	return &MockModel{cfg: cfg}
-}
-
-func (m *MockModel) GetID() string { return m.cfg.ID }
-
-func (m *MockModel) GetName() string { return m.cfg.Name }
-
-func (m *MockModel) GetDescription() string {
-	if m.cfg.Description != "" {
-		return m.cfg.Description
+	description := cfg.Description
+	if description == "" {
+		description = virtualmodel.DefaultMockDescription
 	}
-	return "A virtual model that returns fixed responses for testing"
-}
-
-func (m *MockModel) GetType() virtualmodel.VirtualModelType {
-	if m.cfg.ToolCall != nil {
-		return virtualmodel.VirtualModelTypeTool
+	typ := virtualmodel.VirtualModelTypeStatic
+	if cfg.ToolCall != nil {
+		typ = virtualmodel.VirtualModelTypeTool
 	}
-	return virtualmodel.VirtualModelTypeStatic
-}
-
-func (m *MockModel) SimulatedDelay() time.Duration { return m.cfg.Delay }
-
-func (m *MockModel) ToModel() virtualmodel.Model {
-	return virtualmodel.Model{
-		ID:      m.cfg.ID,
-		Object:  "model",
-		Created: 0,
-		OwnedBy: "tingly-box-virtual",
+	return &MockModel{
+		BaseMockModel: virtualmodel.BaseMockModel{
+			ID:          cfg.ID,
+			Name:        cfg.Name,
+			Description: description,
+			Type:        typ,
+			Delay:       cfg.Delay,
+		},
+		cfg: cfg,
 	}
 }
 
@@ -111,16 +100,11 @@ func (m *MockModel) HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionReq
 	if err != nil {
 		return err
 	}
-	delay := m.cfg.Delay
 	chunks := m.streamChunks()
-	for i, chunk := range chunks {
-		if delay > 0 {
-			time.Sleep(delay / time.Duration(len(chunks)))
-		} else {
-			time.Sleep(50 * time.Millisecond)
-		}
+	perChunk := virtualmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
+	virtualmodel.EmitChunks(chunks, perChunk, func(i int, chunk string) {
 		emit(DeltaEvent{Index: i, Content: chunk})
-	}
+	})
 	for i, tc := range resp.ToolCalls {
 		emit(ToolEvent{Index: i, ToolCall: tc})
 	}
