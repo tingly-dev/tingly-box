@@ -27,8 +27,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
 )
 
 // ResponseFormat represents the format of the mock response for different endpoints.
@@ -50,6 +52,15 @@ type MockResponseBuilder struct {
 }
 
 // Scenario is a named test scenario describing what the mock provider returns.
+//
+// Scenario also satisfies virtualmodel.VirtualModel via stub identity methods
+// so that scenario storage can reuse virtualmodel.GenericRegistry, the same
+// thread-safe registry primitive used by the production virtualmodel sub-
+// packages. The byte-replay handlers in this file are intentionally NOT
+// wired through virtualserver/handler.go — that handler operates on
+// structured request/response shapes, while protocol_validate scenarios are
+// pre-rendered byte / SSE-line payloads. Sharing the registry primitive is
+// the cleanest reuse available without losing wire-format control.
 type Scenario struct {
 	Name        string
 	Description string
@@ -61,6 +72,36 @@ type Scenario struct {
 	MockResponses map[ResponseFormat]MockResponseBuilder
 }
 
+// Compile-time check: Scenario satisfies virtualmodel.VirtualModel.
+var _ virtualmodel.VirtualModel = Scenario{}
+
+// GetID returns the scenario name; scenarios are looked up by name.
+func (s Scenario) GetID() string { return s.Name }
+
+// GetName returns the scenario name.
+func (s Scenario) GetName() string { return s.Name }
+
+// GetDescription returns the scenario description.
+func (s Scenario) GetDescription() string { return s.Description }
+
+// GetType is always Static — scenarios serve fixed pre-rendered responses.
+func (s Scenario) GetType() virtualmodel.VirtualModelType {
+	return virtualmodel.VirtualModelTypeStatic
+}
+
+// SimulatedDelay is always 0 — protocol-validate scenarios do not simulate latency.
+func (s Scenario) SimulatedDelay() time.Duration { return 0 }
+
+// ToModel returns the OpenAI-compatible models-list entry for this scenario.
+func (s Scenario) ToModel() virtualmodel.Model {
+	return virtualmodel.Model{
+		ID:      s.Name,
+		Object:  "model",
+		Created: 0,
+		OwnedBy: virtualmodel.DefaultMockOwnedBy,
+	}
+}
+
 // VirtualServer is a mock provider server backed by httptest.Server.
 // It speaks OpenAI, Anthropic, and Google response formats and returns
 // pre-configured scenario responses.
@@ -70,7 +111,7 @@ type Scenario struct {
 // The gateway transforms requests to provider format before forwarding to this server.
 type VirtualServer struct {
 	server    *httptest.Server
-	scenarios map[string]Scenario // keyed by scenario name
+	scenarios *virtualmodel.GenericRegistry[Scenario]
 
 	mu        sync.RWMutex
 	callCount int
@@ -80,7 +121,7 @@ type VirtualServer struct {
 func NewVirtualServer(t *testing.T) *VirtualServer {
 	t.Helper()
 	vs := &VirtualServer{
-		scenarios: make(map[string]Scenario),
+		scenarios: virtualmodel.NewGenericRegistry[Scenario](),
 	}
 
 	mux := http.NewServeMux()
@@ -102,7 +143,7 @@ func NewVirtualServer(t *testing.T) *VirtualServer {
 // requests to provider format before forwarding to this server.
 func NewVirtualServerForCLI() *VirtualServer {
 	vs := &VirtualServer{
-		scenarios: make(map[string]Scenario),
+		scenarios: virtualmodel.NewGenericRegistry[Scenario](),
 	}
 
 	mux := http.NewServeMux()
@@ -121,11 +162,13 @@ func NewVirtualServerForCLI() *VirtualServer {
 	return vs
 }
 
-// RegisterScenario registers a scenario so the virtual server can serve its mock responses.
+// RegisterScenario registers a scenario so the virtual server can serve its
+// mock responses. If a scenario with the same name was previously registered
+// it is replaced (the registry ordinarily errors on duplicate IDs, so we
+// pre-clear).
 func (vs *VirtualServer) RegisterScenario(s Scenario) {
-	vs.mu.Lock()
-	defer vs.mu.Unlock()
-	vs.scenarios[s.Name] = s
+	vs.scenarios.Unregister(s.Name)
+	_ = vs.scenarios.Register(s)
 }
 
 // URL returns the base URL of the virtual server.
@@ -158,8 +201,8 @@ func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
 	scenario := vs.detectScenario(bodyBytes)
 
-	resp, ok := vs.scenarios[scenario]
-	if !ok {
+	resp := vs.scenarios.Get(scenario)
+	if resp.Name == "" {
 		resp = vs.firstScenario()
 	}
 
@@ -190,8 +233,8 @@ func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Re
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
 	scenario := vs.detectScenario(bodyBytes)
 
-	resp, ok := vs.scenarios[scenario]
-	if !ok {
+	resp := vs.scenarios.Get(scenario)
+	if resp.Name == "" {
 		resp = vs.firstScenario()
 	}
 
@@ -226,8 +269,8 @@ func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
 	scenario := vs.detectScenario(bodyBytes)
 
-	resp, ok := vs.scenarios[scenario]
-	if !ok {
+	resp := vs.scenarios.Get(scenario)
+	if resp.Name == "" {
 		resp = vs.firstScenario()
 	}
 
@@ -258,8 +301,8 @@ func (vs *VirtualServer) handleGoogle(w http.ResponseWriter, r *http.Request) {
 	streaming := strings.Contains(r.URL.Path, "streamGenerateContent")
 	scenario := vs.detectScenarioFromURLOrBody(r.URL.Path, bodyBytes)
 
-	resp, ok := vs.scenarios[scenario]
-	if !ok {
+	resp := vs.scenarios.Get(scenario)
+	if resp.Name == "" {
 		resp = vs.firstScenario()
 	}
 
@@ -311,10 +354,7 @@ func (vs *VirtualServer) detectScenarioFromURLOrBody(urlPath string, body []byte
 			if idx := strings.IndexByte(name, ':'); idx >= 0 {
 				name = name[:idx]
 			}
-			vs.mu.RLock()
-			_, exists := vs.scenarios[name]
-			vs.mu.RUnlock()
-			if exists {
+			if vs.scenarios.Has(name) {
 				return name
 			}
 		}
@@ -340,10 +380,7 @@ func (vs *VirtualServer) detectScenario(body []byte) string {
 				lastDash := strings.LastIndex(remaining, "-")
 				if lastDash > 0 {
 					name := remaining[lastDash+1:]
-					vs.mu.RLock()
-					_, exists := vs.scenarios[name]
-					vs.mu.RUnlock()
-					if exists {
+					if vs.scenarios.Has(name) {
 						return name
 					}
 				}
@@ -351,18 +388,14 @@ func (vs *VirtualServer) detectScenario(body []byte) string {
 		}
 	}
 	// Fallback: return first registered scenario name
-	vs.mu.RLock()
-	defer vs.mu.RUnlock()
-	for name := range vs.scenarios {
-		return name
+	for _, s := range vs.scenarios.List() {
+		return s.Name
 	}
 	return ""
 }
 
 func (vs *VirtualServer) firstScenario() Scenario {
-	vs.mu.RLock()
-	defer vs.mu.RUnlock()
-	for _, s := range vs.scenarios {
+	for _, s := range vs.scenarios.List() {
 		return s
 	}
 	return Scenario{}

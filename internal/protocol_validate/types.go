@@ -11,9 +11,14 @@
 //
 //  3. Matrix — executes the full cross-product of sources × targets × scenarios × streaming modes.
 //
-// Note: The existing virtualmodel package is a production Gin server.
-// This package (protocoltest) is the test-only framework. Future integration with
-// virtualmodel is planned once both stabilize.
+// Note: This package (protocol_validate) is the test-only framework, while
+// internal/virtualmodel is the production Gin server. They share the
+// virtualmodel.GenericRegistry primitive for scenario / model storage —
+// server_validate.Scenario implements virtualmodel.VirtualModel — but their
+// HTTP handlers remain separate by design: virtualserver/handler.go operates
+// on structured request/response shapes, while protocol_validate scenarios
+// serve pre-rendered byte / SSE-line payloads that exercise the gateway
+// transform pipeline at the wire-format level.
 //
 // # Usage
 //
