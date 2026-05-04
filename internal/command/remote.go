@@ -782,4 +782,3 @@ func runRemoteConfig(appManager *AppManager, uuid string, show bool, provider, m
 
 	return nil
 }
-

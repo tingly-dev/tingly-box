@@ -1,4 +1,3 @@
-
 // Tingly Box CLI - Kong-based implementation
 
 package main
