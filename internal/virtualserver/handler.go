@@ -1,6 +1,6 @@
 // Package virtualserver provides the HTTP handler for virtual model endpoints.
-// It serves OpenAI Chat and Anthropic Messages API formats backed by a
-// virtualmodel.Registry of deterministic VirtualModel instances.
+// It serves OpenAI Chat and Anthropic Messages API formats backed by separate
+// per-provider virtual model registries.
 package virtualserver
 
 import (
@@ -15,22 +15,25 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	anthropicvm "github.com/tingly-dev/tingly-box/internal/virtualmodel/anthropic"
+	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
 )
 
 // Handler handles HTTP requests for virtual model endpoints.
 type Handler struct {
-	registry *virtualmodel.Registry
+	anthropicReg *anthropicvm.Registry
+	openaiReg    *openaivm.Registry
 }
 
-// NewHandler creates a new Handler backed by the given registry.
-func NewHandler(registry *virtualmodel.Registry) *Handler {
-	return &Handler{registry: registry}
+// NewHandler creates a new Handler backed by the given per-provider registries.
+func NewHandler(anthropicReg *anthropicvm.Registry, openaiReg *openaivm.Registry) *Handler {
+	return &Handler{anthropicReg: anthropicReg, openaiReg: openaiReg}
 }
 
-// ListModels handles GET /virtual/v1/models.
+// ListModels handles GET /virtual/v1/models — returns the union of both registries.
 func (h *Handler) ListModels(c *gin.Context) {
-	models := h.registry.ListModels()
+	models := h.anthropicReg.ListModels()
+	models = append(models, h.openaiReg.ListModels()...)
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
 		Object: "list",
 		Data:   models,
@@ -55,7 +58,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	vm := h.registry.Get(req.Model)
+	vm := h.openaiReg.Get(req.Model)
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{
 			"message": fmt.Sprintf("Model not found: %s", req.Model),
@@ -64,19 +67,10 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	openaiVM := h.registry.GetOpenAIChatVM(req.Model)
-	if openaiVM == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": gin.H{
-			"message": fmt.Sprintf("Model %q does not support OpenAI Chat. Use the Anthropic Messages endpoint (/virtual/v1/messages) instead.", req.Model),
-			"type":    "not_implemented_error",
-		}})
-		return
-	}
-
 	if req.Stream {
-		h.handleOpenAIStreaming(c, &req, openaiVM)
+		h.handleOpenAIStreaming(c, &req, vm)
 	} else {
-		h.handleOpenAINonStreaming(c, &req, openaiVM)
+		h.handleOpenAINonStreaming(c, &req, vm)
 	}
 }
 
@@ -98,7 +92,7 @@ func (h *Handler) Messages(c *gin.Context) {
 		return
 	}
 
-	vm := h.registry.Get(req.Model)
+	vm := h.anthropicReg.Get(req.Model)
 	if vm == nil {
 		c.JSON(http.StatusNotFound, gin.H{"type": "error", "error": gin.H{
 			"type":    "not_found_error",
@@ -107,25 +101,16 @@ func (h *Handler) Messages(c *gin.Context) {
 		return
 	}
 
-	anthropicVM := h.registry.GetAnthropicVM(req.Model)
-	if anthropicVM == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{"type": "error", "error": gin.H{
-			"type":    "not_implemented_error",
-			"message": fmt.Sprintf("Model %q does not support the Anthropic Messages protocol.", req.Model),
-		}})
-		return
-	}
-
 	if req.Stream {
-		h.handleAnthropicStreaming(c, &req, anthropicVM)
+		h.handleAnthropicStreaming(c, &req, vm)
 	} else {
-		h.handleAnthropicNonStreaming(c, &req, anthropicVM)
+		h.handleAnthropicNonStreaming(c, &req, vm)
 	}
 }
 
 // ── Anthropic handlers ────────────────────────────────────────────────────────
 
-func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm virtualmodel.AnthropicVirtualModel) {
+func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMessageRequest, vm anthropicvm.VirtualModel) {
 	if d := vm.SimulatedDelay(); d > 0 {
 		time.Sleep(d)
 	}
@@ -155,7 +140,7 @@ func (h *Handler) handleAnthropicNonStreaming(c *gin.Context, req *AnthropicMess
 	})
 }
 
-func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm virtualmodel.AnthropicVirtualModel) {
+func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessageRequest, vm anthropicvm.VirtualModel) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -169,7 +154,7 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 
 		err := vm.HandleAnthropicStream(req, func(ev any) {
 			switch e := ev.(type) {
-			case virtualmodel.AnthropicStreamStartEvent:
+			case anthropicvm.StreamStartEvent:
 				id := e.MsgID
 				if id == "" {
 					id = msgID
@@ -179,14 +164,14 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 					Message: &AnthropicMessageResponse{ID: id, Type: "message", Role: "assistant", Model: req.Model},
 				})
 				fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", data)
-			case virtualmodel.AnthropicTextDeltaEvent:
+			case anthropicvm.TextDeltaEvent:
 				data, _ := json.Marshal(AnthropicStreamEvent{
 					Type:  "content_block_delta",
 					Index: e.Index,
 					Delta: &AnthropicDelta{Type: "text_delta", Text: e.Text},
 				})
 				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
-			case virtualmodel.AnthropicToolUseEvent:
+			case anthropicvm.ToolUseEvent:
 				data, _ := json.Marshal(map[string]interface{}{
 					"type":  "content_block_start",
 					"index": e.Index,
@@ -198,7 +183,7 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 					},
 				})
 				fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", data)
-			case virtualmodel.AnthropicDoneEvent:
+			case anthropicvm.DoneEvent:
 				data, _ := json.Marshal(AnthropicStreamEvent{Type: "message_stop"})
 				fmt.Fprintf(w, "event: message_stop\ndata: %s\n\n", data)
 			}
@@ -221,7 +206,7 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 
 // ── OpenAI handlers ───────────────────────────────────────────────────────────
 
-func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRequest, vm virtualmodel.OpenAIChatVirtualModel) {
+func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRequest, vm openaivm.VirtualModel) {
 	if d := vm.SimulatedDelay(); d > 0 {
 		time.Sleep(d)
 	}
@@ -256,7 +241,7 @@ func (h *Handler) handleOpenAINonStreaming(c *gin.Context, req *ChatCompletionRe
 	})
 }
 
-func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionRequest, vm virtualmodel.OpenAIChatVirtualModel) {
+func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionRequest, vm openaivm.VirtualModel) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -288,7 +273,7 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 			default:
 			}
 			switch e := ev.(type) {
-			case virtualmodel.OpenAIChatDeltaEvent:
+			case openaivm.DeltaEvent:
 				chunkIndex = e.Index + 1
 				data, _ := json.Marshal(ChatCompletionStreamResponse{
 					ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
@@ -301,8 +286,8 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 					}},
 				})
 				c.SSEvent("", string(data))
-			case virtualmodel.OpenAIChatToolEvent:
-				tc := vmodelToolCallsToOpenAI([]virtualmodel.VToolCall{e.ToolCall})
+			case openaivm.ToolEvent:
+				tc := vmodelToolCallsToOpenAI([]openaivm.VToolCall{e.ToolCall})
 				if len(tc) > 0 {
 					data, _ := json.Marshal(ChatCompletionStreamResponse{
 						ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
@@ -320,7 +305,7 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 					})
 					c.SSEvent("", string(data))
 				}
-			case virtualmodel.OpenAIChatDoneEvent:
+			case openaivm.DoneEvent:
 				finishReason = e.FinishReason
 				data, _ := json.Marshal(ChatCompletionStreamResponse{
 					ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
@@ -349,7 +334,7 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 // ── response conversion helpers ───────────────────────────────────────────────
 
 // vmodelTextContent extracts concatenated text from Anthropic response content blocks.
-func vmodelTextContent(resp virtualmodel.VModelResponse) string {
+func vmodelTextContent(resp anthropicvm.VModelResponse) string {
 	s := ""
 	for _, blk := range resp.Content {
 		if blk.OfText != nil {
@@ -359,7 +344,7 @@ func vmodelTextContent(resp virtualmodel.VModelResponse) string {
 	return s
 }
 
-func vmodelContentToAnthropic(resp virtualmodel.VModelResponse) []AnthropicContent {
+func vmodelContentToAnthropic(resp anthropicvm.VModelResponse) []AnthropicContent {
 	out := make([]AnthropicContent, 0, len(resp.Content))
 	for _, blk := range resp.Content {
 		if blk.OfText != nil {
@@ -378,7 +363,7 @@ func vmodelContentToAnthropic(resp virtualmodel.VModelResponse) []AnthropicConte
 }
 
 // vmodelToolCallsToOpenAI converts VToolCall slice to OpenAI SDK tool call format.
-func vmodelToolCallsToOpenAI(calls []virtualmodel.VToolCall) []openai.ChatCompletionMessageToolCallUnion {
+func vmodelToolCallsToOpenAI(calls []openaivm.VToolCall) []openai.ChatCompletionMessageToolCallUnion {
 	if len(calls) == 0 {
 		return nil
 	}

@@ -1,4 +1,4 @@
-package virtualmodel_test
+package openai_test
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
 )
 
 // metricsTestServer is a minimal test harness that wraps the proxy server.
@@ -48,8 +48,7 @@ func newMetricsTestServer(t *testing.T) *metricsTestServer {
 }
 
 // addDelayProvider registers a DelayProvider as a provider + routing rule.
-// Returns the *loadbalance.Service pointer for stats inspection.
-func (ts *metricsTestServer) addDelayProvider(t *testing.T, requestModel string, dp *virtualmodel.DelayProvider) *loadbalance.Service {
+func (ts *metricsTestServer) addDelayProvider(t *testing.T, requestModel string, dp *openaivm.DelayProvider) *loadbalance.Service {
 	t.Helper()
 
 	provider := dp.Provider("dp-" + requestModel)
@@ -84,10 +83,8 @@ func (ts *metricsTestServer) modelToken() string {
 }
 
 // delayModelResponseID is the model name that the DelayProvider reports in responses.
-// Keep in sync with delay_provider.go.
 const delayModelResponseID = "delay-model"
 
-// startHTTP wraps the gin engine in a real httptest.Server so streaming works.
 func (ts *metricsTestServer) startHTTP() *httptest.Server {
 	return httptest.NewServer(ts.ginEngine)
 }
@@ -131,11 +128,9 @@ func sendNonStreamingRequest(t *testing.T, ts *metricsTestServer, model string) 
 	assert.Equal(t, http.StatusOK, w.Code, "non-streaming request failed: %s", w.Body.String())
 }
 
-// TestDelayProvider_TTFTCaptured verifies that TTFT is recorded in ServiceStats
-// after a streaming request flows through the full proxy metrics pipeline.
 func TestDelayProvider_TTFTCaptured(t *testing.T) {
 	const delayMs = 200
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: delayMs,
 		MaxFirstTokenDelayMs: delayMs,
 		MinEndDelayMs:        50,
@@ -159,9 +154,8 @@ func TestDelayProvider_TTFTCaptured(t *testing.T) {
 		stats.AvgTTFTMs, stats.P50TTFTMs, stats.P95TTFTMs, stats.P99TTFTMs, delayMs)
 }
 
-// TestDelayProvider_TPSCaptured verifies that TPS is recorded after a streaming request.
 func TestDelayProvider_TPSCaptured(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 50,
 		MaxFirstTokenDelayMs: 50,
 		MinEndDelayMs:        300,
@@ -183,10 +177,8 @@ func TestDelayProvider_TPSCaptured(t *testing.T) {
 		stats.AvgTokenSpeed, stats.AvgLatencyMs, stats.AvgTTFTMs)
 }
 
-// TestDelayProvider_LatencyPercentiles verifies P50/P95/P99 are populated and ordered
-// after multiple streaming requests.
 func TestDelayProvider_LatencyPercentiles(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 20,
 		MaxFirstTokenDelayMs: 200,
 		MinEndDelayMs:        20,
@@ -215,10 +207,8 @@ func TestDelayProvider_LatencyPercentiles(t *testing.T) {
 		stats.AvgLatencyMs, stats.P50LatencyMs, stats.P95LatencyMs, stats.P99LatencyMs)
 }
 
-// TestDelayProvider_NonStreamingMetrics verifies latency is captured for non-streaming
-// requests (TTFT falls back to total latency, TPS is 0).
 func TestDelayProvider_NonStreamingMetrics(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 100,
 		MaxFirstTokenDelayMs: 100,
 	})
@@ -236,16 +226,14 @@ func TestDelayProvider_NonStreamingMetrics(t *testing.T) {
 		stats.AvgLatencyMs, stats.AvgTokenSpeed, stats.AvgTTFTMs)
 }
 
-// TestDelayProvider_MultiServiceLatencyRouting verifies that after warmup requests the
-// fast delay provider has lower latency stats than the slow one.
 func TestDelayProvider_MultiServiceLatencyRouting(t *testing.T) {
-	dpFast := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dpFast := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 5, MaxFirstTokenDelayMs: 15,
 		MinEndDelayMs: 5, MaxEndDelayMs: 15,
 	})
 	defer dpFast.Close()
 
-	dpSlow := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dpSlow := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 150, MaxFirstTokenDelayMs: 250,
 		MinEndDelayMs: 150, MaxEndDelayMs: 250,
 	})
@@ -274,7 +262,6 @@ func TestDelayProvider_MultiServiceLatencyRouting(t *testing.T) {
 		Active: true,
 	}))
 
-	// Warmup: a few requests populate latency stats on both services.
 	for i := 0; i < 4; i++ {
 		code, body := sendStreamingRequest(t, httpSrv.URL, ts.modelToken(), "dp-routing")
 		assert.Equal(t, http.StatusOK, code, "warmup %d failed: %s", i+1, body)
@@ -295,11 +282,8 @@ func TestDelayProvider_MultiServiceLatencyRouting(t *testing.T) {
 	}
 }
 
-// --- helpers ------------------------------------------------------------------
-
 func init() {
 	gin.SetMode(gin.TestMode)
 	logrus.SetOutput(io.Discard)
-	// ensure constant package is imported (for DefaultRequestTimeout used in delay_provider.go)
 	_ = constant.DefaultRequestTimeout
 }

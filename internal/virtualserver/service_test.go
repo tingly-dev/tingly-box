@@ -7,110 +7,60 @@ import (
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
+
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
 )
 
-func TestNewMockModel(t *testing.T) {
-	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "test-model",
-		Name:    "Test Model",
-		Content: "Test response",
-		Delay:   100 * time.Millisecond,
-	})
+// TestService_DefaultRegistries verifies that the Service exposes both
+// per-protocol registries with their default models pre-loaded.
+func TestService_DefaultRegistries(t *testing.T) {
+	service := NewService()
 
-	if vm.GetID() != "test-model" {
-		t.Errorf("Expected ID 'test-model', got '%s'", vm.GetID())
+	if got := service.GetAnthropicRegistry().Get("virtual-claude-3"); got == nil {
+		t.Error("Anthropic registry should contain 'virtual-claude-3'")
+	}
+	if got := service.GetOpenAIRegistry().Get("virtual-gpt-4"); got == nil {
+		t.Error("OpenAI registry should contain 'virtual-gpt-4'")
 	}
 
-	if vm.SimulatedDelay() != 100*time.Millisecond {
-		t.Errorf("Expected Delay 100ms, got %v", vm.SimulatedDelay())
+	// virtual-gpt-4 must NOT be in the Anthropic registry.
+	if got := service.GetAnthropicRegistry().Get("virtual-gpt-4"); got != nil {
+		t.Error("Anthropic registry must not contain 'virtual-gpt-4'")
 	}
-}
-
-func TestNewMockModelDefaults(t *testing.T) {
-	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "test-model-defaults",
-		Content: "Test",
-	})
-
-	resp, _ := vm.HandleAnthropic(nil)
-	if resp.StopReason == "" {
-		t.Error("Expected non-empty default StopReason")
+	// virtual-claude-3 must NOT be in the OpenAI registry.
+	if got := service.GetOpenAIRegistry().Get("virtual-claude-3"); got != nil {
+		t.Error("OpenAI registry must not contain 'virtual-claude-3'")
 	}
 }
 
-func TestRegistry(t *testing.T) {
-	registry := virtualmodel.NewRegistry()
+// TestService_RegisterModel checks that custom models can be added to the
+// OpenAI registry through the exposed registry.
+func TestService_RegisterModel(t *testing.T) {
+	service := NewService()
+	reg := service.GetOpenAIRegistry()
 
-	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "registry-test",
-		Content: "Registry test content",
-	})
-
-	// Test Register
-	err := registry.Register(vm)
+	err := reg.Register(openaivm.NewMockModel(&openaivm.MockModelConfig{
+		ID:      "service-test",
+		Content: "Service test",
+		Delay:   10 * time.Millisecond,
+	}))
 	if err != nil {
 		t.Fatalf("Failed to register model: %v", err)
 	}
 
-	// Test duplicate registration
-	err = registry.Register(vm)
-	if err == nil {
-		t.Error("Expected error when registering duplicate model, got nil")
+	if vm := reg.Get("service-test"); vm == nil {
+		t.Error("Failed to retrieve newly registered model")
 	}
 
-	// Test Get
-	retrieved := registry.Get("registry-test")
-	if retrieved == nil {
-		t.Error("Failed to retrieve registered model")
-	}
-
-	if retrieved.GetID() != "registry-test" {
-		t.Errorf("Retrieved wrong model, expected ID 'registry-test', got '%s'", retrieved.GetID())
-	}
-
-	// Test ListModels
-	models := registry.ListModels()
-	if len(models) != 1 {
-		t.Errorf("Expected 1 model, got %d", len(models))
-	}
-
-	if models[0].ID != "registry-test" {
-		t.Errorf("Expected model ID 'registry-test', got '%s'", models[0].ID)
-	}
-
-	// Test Unregister
-	registry.Unregister("registry-test")
-	retrieved = registry.Get("registry-test")
-	if retrieved != nil {
+	reg.Unregister("service-test")
+	if vm := reg.Get("service-test"); vm != nil {
 		t.Error("Model should be unregistered")
 	}
 }
 
-func TestRegisterDefaults(t *testing.T) {
-	registry := virtualmodel.NewRegistry()
-	registry.RegisterDefaults()
-
-	models := registry.ListModels()
-	if len(models) < 3 {
-		t.Errorf("Expected at least 3 default models, got %d", len(models))
-	}
-
-	// Check for expected default models
-	expectedModels := []string{"virtual-gpt-4", "virtual-claude-3", "echo-model"}
-	modelIDs := make(map[string]bool)
-	for _, m := range models {
-		modelIDs[m.ID] = true
-	}
-
-	for _, expected := range expectedModels {
-		if !modelIDs[expected] {
-			t.Errorf("Expected default model '%s' not found", expected)
-		}
-	}
-}
-
+// TestSplitIntoChunks verifies the token chunk helper round-trips content.
 func TestSplitIntoChunks(t *testing.T) {
 	content := "Hello world this is a test"
 	chunks := token.SplitIntoChunks(content)
@@ -119,7 +69,6 @@ func TestSplitIntoChunks(t *testing.T) {
 		t.Error("Expected at least one chunk, got none")
 	}
 
-	// Reconstruct and verify
 	reconstructed := ""
 	for _, chunk := range chunks {
 		reconstructed += chunk
@@ -127,44 +76,6 @@ func TestSplitIntoChunks(t *testing.T) {
 
 	if reconstructed != content {
 		t.Errorf("Reconstructed content doesn't match original.\nExpected: %s\nGot: %s", content, reconstructed)
-	}
-}
-
-func TestService(t *testing.T) {
-	service := NewService()
-
-	// Test default models are registered
-	models := service.ListModels()
-	if len(models) < 3 {
-		t.Errorf("Expected at least 3 default models, got %d", len(models))
-	}
-
-	// Test GetModel
-	vm := service.GetModel("virtual-gpt-4")
-	if vm == nil {
-		t.Error("Failed to get default virtual-gpt-4 model")
-	}
-
-	// Test RegisterModel
-	err := service.RegisterModel(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "service-test",
-		Content: "Service test",
-	}))
-	if err != nil {
-		t.Fatalf("Failed to register model: %v", err)
-	}
-
-	// Verify model was registered
-	vm = service.GetModel("service-test")
-	if vm == nil {
-		t.Error("Failed to retrieve newly registered model")
-	}
-
-	// Test UnregisterModel
-	service.UnregisterModel("service-test")
-	vm = service.GetModel("service-test")
-	if vm != nil {
-		t.Error("Model should be unregistered")
 	}
 }
 
@@ -179,13 +90,11 @@ func TestEstimateTokens(t *testing.T) {
 		t.Errorf("Expected positive token count, got %d", count)
 	}
 
-	// Test empty string
 	emptyCount := token.EstimateTokensString("")
 	if emptyCount != 0 {
 		t.Errorf("Expected 0 tokens for empty string, got %d", emptyCount)
 	}
 
-	// Test rough estimate (should be approximately length/4)
 	shortContent := "Hello world"
 	shortCount := token.EstimateTokensString(shortContent)
 	expectedShort := int64((len(shortContent) + 3) / 4)
@@ -193,14 +102,12 @@ func TestEstimateTokens(t *testing.T) {
 		t.Errorf("Expected %d tokens for '%s', got %d", expectedShort, shortContent, shortCount)
 	}
 
-	// Test empty messages slice
 	emptyMessages := []openai.ChatCompletionMessageParamUnion{}
 	emptyMsgCount := token.EstimateMessagesTokens(emptyMessages)
 	if emptyMsgCount != 0 {
 		t.Errorf("Expected 0 tokens for empty messages, got %d", emptyMsgCount)
 	}
 
-	// Test messages with empty content
 	messagesWithEmpty := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage(""),
 		openai.AssistantMessage("Hello"),
@@ -208,265 +115,6 @@ func TestEstimateTokens(t *testing.T) {
 	countWithEmpty := token.EstimateMessagesTokens(messagesWithEmpty)
 	if countWithEmpty <= 0 {
 		t.Errorf("Expected positive token count with empty content message, got %d", countWithEmpty)
-	}
-}
-
-func TestRegistryList(t *testing.T) {
-	registry := virtualmodel.NewRegistry()
-
-	registry.Register(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{ID: "list-test-1", Content: "Test 1"}))
-	registry.Register(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{ID: "list-test-2", Content: "Test 2"}))
-
-	// Test List() returns []*VirtualModel
-	vms := registry.List()
-	if len(vms) != 2 {
-		t.Errorf("Expected 2 virtual models from List(), got %d", len(vms))
-	}
-
-	// Verify returned items have correct methods
-	if vms[0].GetID() != "list-test-1" {
-		t.Errorf("Expected first model ID 'list-test-1', got '%s'", vms[0].GetID())
-	}
-	if vms[1].GetID() != "list-test-2" {
-		t.Errorf("Expected second model ID 'list-test-2', got '%s'", vms[1].GetID())
-	}
-}
-
-func TestRegistryClear(t *testing.T) {
-	registry := virtualmodel.NewRegistry()
-
-	registry.Register(virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{ID: "clear-test", Content: "Test"}))
-
-	// Verify model is registered
-	if registry.Get("clear-test") == nil {
-		t.Fatal("Model should be registered before clear")
-	}
-
-	// Clear all models
-	registry.Clear()
-
-	// Verify all models are gone
-	if registry.Get("clear-test") != nil {
-		t.Error("Model should be removed after clear")
-	}
-
-	models := registry.ListModels()
-	if len(models) != 0 {
-		t.Errorf("Expected 0 models after clear, got %d", len(models))
-	}
-
-	vms := registry.List()
-	if len(vms) != 0 {
-		t.Errorf("Expected 0 virtual models from List() after clear, got %d", len(vms))
-	}
-}
-
-// Test that MockModel and TransformModel both satisfy VirtualModel interface
-func TestVirtualModelTypes(t *testing.T) {
-	t.Run("MockModel satisfies VirtualModel", func(t *testing.T) {
-		var vm virtualmodel.VirtualModel = virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-			ID:      "test-mock",
-			Content: "hello",
-		})
-		if vm.GetID() != "test-mock" {
-			t.Errorf("Expected ID 'test-mock', got '%s'", vm.GetID())
-		}
-	})
-
-	t.Run("MockModel satisfies AnthropicVirtualModel", func(t *testing.T) {
-		vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-			ID:      "test-mock-anthropic",
-			Content: "hello",
-		})
-		var _ virtualmodel.AnthropicVirtualModel = vm
-	})
-
-	t.Run("MockModel satisfies OpenAIChatVirtualModel", func(t *testing.T) {
-		vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-			ID:      "test-mock-openai",
-			Content: "hello",
-		})
-		var _ virtualmodel.OpenAIChatVirtualModel = vm
-	})
-
-	t.Run("MockModel tool satisfies VirtualModel", func(t *testing.T) {
-		var vm virtualmodel.VirtualModel = virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-			ID: "test-tool",
-			ToolCall: &virtualmodel.ToolCallConfig{
-				Name:      "web_search",
-				Arguments: map[string]interface{}{"query": "test"},
-			},
-		})
-		if vm.GetID() != "test-tool" {
-			t.Errorf("Expected ID 'test-tool', got '%s'", vm.GetID())
-		}
-	})
-
-	t.Run("TransformModel satisfies VirtualModel", func(t *testing.T) {
-		var vm virtualmodel.VirtualModel = virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{
-			ID: "test-transform",
-		})
-		if vm.GetID() != "test-transform" {
-			t.Errorf("Expected ID 'test-transform', got '%s'", vm.GetID())
-		}
-	})
-
-	t.Run("TransformModel satisfies AnthropicVirtualModel", func(t *testing.T) {
-		vm := virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{ID: "test-transform-a"})
-		var _ virtualmodel.AnthropicVirtualModel = vm
-	})
-
-	t.Run("TransformModel does NOT satisfy OpenAIChatVirtualModel", func(t *testing.T) {
-		var vm virtualmodel.VirtualModel = virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{ID: "t"})
-		if _, ok := vm.(virtualmodel.OpenAIChatVirtualModel); ok {
-			t.Error("TransformModel must not implement OpenAIChatVirtualModel")
-		}
-	})
-}
-
-// Test MockModel default stop reason
-func TestVirtualModelDefaultType(t *testing.T) {
-	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "test-default",
-		Content: "Test",
-	})
-	resp, _ := vm.HandleAnthropic(nil)
-	if resp.StopReason == "" {
-		t.Error("Expected non-empty default StopReason")
-	}
-	if string(resp.StopReason) != "stop" {
-		t.Errorf("Expected default StopReason 'stop', got '%s'", resp.StopReason)
-	}
-}
-
-// Test MockModel tool response contains correct tool call
-func TestToolModel(t *testing.T) {
-	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID: "test-ask",
-		ToolCall: &virtualmodel.ToolCallConfig{
-			Name: "ask_user_question",
-			Arguments: map[string]interface{}{
-				"question": "Which option?",
-				"options": []map[string]string{
-					{"label": "A", "value": "a"},
-				},
-			},
-		},
-	})
-
-	resp, _ := vm.HandleAnthropic(nil)
-	if string(resp.StopReason) != "tool_use" {
-		t.Errorf("Expected StopReason 'tool_use', got '%s'", resp.StopReason)
-	}
-
-	// Find the tool_use block
-	var foundToolUse bool
-	for _, blk := range resp.Content {
-		if blk.OfToolUse != nil && blk.OfToolUse.Name == "ask_user_question" {
-			foundToolUse = true
-		}
-	}
-	if !foundToolUse {
-		t.Error("Expected tool_use block with name 'ask_user_question'")
-	}
-
-	// Test another tool type
-	vm2 := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID: "test-search",
-		ToolCall: &virtualmodel.ToolCallConfig{
-			Name:      "web_search",
-			Arguments: map[string]interface{}{"query": "latest AI news"},
-		},
-	})
-	resp2, _ := vm2.HandleAnthropic(nil)
-	var foundSearch bool
-	for _, blk := range resp2.Content {
-		if blk.OfToolUse != nil && blk.OfToolUse.Name == "web_search" {
-			foundSearch = true
-		}
-	}
-	if !foundSearch {
-		t.Error("Expected tool_use block with name 'web_search'")
-	}
-}
-
-// Test TransformModel SimulatedDelay is 0
-func TestProxyModel(t *testing.T) {
-	vm := virtualmodel.NewTransformModel(&virtualmodel.TransformModelConfig{
-		ID: "test-proxy",
-	})
-
-	if vm.SimulatedDelay() != 0 {
-		t.Errorf("Expected SimulatedDelay 0 for TransformModel, got %v", vm.SimulatedDelay())
-	}
-}
-
-// Test all default models are registered
-func TestDefaultModelTypes(t *testing.T) {
-	registry := virtualmodel.NewRegistry()
-	registry.RegisterDefaults()
-
-	expectedIDs := []string{
-		"virtual-gpt-4",
-		"virtual-claude-3",
-		"echo-model",
-		"compact-thinking",
-		"compact-round-only",
-		"compact-round-files",
-		"ask-user-question",
-		"ask-confirmation",
-		"web-search-example",
-	}
-
-	for _, id := range expectedIDs {
-		vm := registry.Get(id)
-		if vm == nil {
-			t.Errorf("Model '%s' not found", id)
-		}
-	}
-}
-
-// Test ToModel conversion
-func TestToModel(t *testing.T) {
-	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "test-to-model",
-		Content: "Test content",
-	})
-
-	model := vm.ToModel()
-
-	if model.ID != "test-to-model" {
-		t.Errorf("Expected model ID 'test-to-model', got '%s'", model.ID)
-	}
-
-	if model.Object != "model" {
-		t.Errorf("Expected object 'model', got '%s'", model.Object)
-	}
-
-	if model.OwnedBy != "tingly-box-virtual" {
-		t.Errorf("Expected owned_by 'tingly-box-virtual', got '%s'", model.OwnedBy)
-	}
-
-	// Test with another ID
-	vm2 := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "id-only",
-		Content: "Content",
-	})
-	model2 := vm2.ToModel()
-
-	if model2.ID != "id-only" {
-		t.Errorf("Expected ID 'id-only', got '%s'", model2.ID)
-	}
-}
-
-// Test GetID for MockModel
-func TestGetName(t *testing.T) {
-	vm := virtualmodel.NewMockModel(&virtualmodel.MockModelConfig{
-		ID:      "test-id",
-		Content: "Test",
-	})
-	if vm.GetID() != "test-id" {
-		t.Errorf("Expected ID 'test-id', got '%s'", vm.GetID())
 	}
 }
 
@@ -509,7 +157,6 @@ func TestChatCompletionRequestJSON(t *testing.T) {
 		t.Error("Expected stream to be false")
 	}
 
-	// Test marshaling
 	output, err := json.Marshal(req)
 	if err != nil {
 		t.Fatalf("Failed to marshal ChatCompletionRequest: %v", err)

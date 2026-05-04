@@ -238,62 +238,20 @@ func TestVirtualServer_VModel_VirtualGPT4_OpenAI_Stream(t *testing.T) {
 	assert.Equal(t, "stop", finishReason)
 }
 
-func TestVirtualServer_VModel_VirtualGPT4_Anthropic(t *testing.T) {
+func TestVirtualServer_VModel_VirtualGPT4_Anthropic_NotFound(t *testing.T) {
+	// virtual-gpt-4 lives only in the OpenAI registry; the Anthropic endpoint must 404.
 	vc := newTestServer(t)
 	result := vc.SendAnthropicV1Model(t, "virtual-gpt-4", false)
-	require.Equal(t, 200, result.HTTPStatus)
-
-	resp := parseAnthropic(t, result)
-	assert.Equal(t, "message", resp.Type)
-	assert.Equal(t, "assistant", resp.Role)
-	assert.Equal(t, "stop", resp.StopReason)
-	require.NotEmpty(t, resp.Content)
-	assert.Equal(t, "text", resp.Content[0].Type)
-	assert.NotEmpty(t, resp.Content[0].Text)
-	assert.Greater(t, resp.Usage.OutputTokens, int64(0))
+	assert.Equal(t, 404, result.HTTPStatus)
+	t.Logf("[Anthropic 404] body=%s", result.RawBody)
 }
 
-func TestVirtualServer_VModel_VirtualGPT4_Anthropic_Stream(t *testing.T) {
-	vc := newTestServer(t)
-	result := vc.SendAnthropicV1Model(t, "virtual-gpt-4", true)
-	require.Equal(t, 200, result.HTTPStatus)
-
-	events := parseAnthropicStream(t, result)
-	require.NotEmpty(t, events)
-
-	// Must have a message_start event
-	var hasStart bool
-	for _, ev := range events {
-		if ev.Type == "message_start" {
-			hasStart = true
-			require.NotNil(t, ev.Message)
-			assert.Equal(t, "assistant", ev.Message.Role)
-		}
-	}
-	assert.True(t, hasStart, "expected message_start event")
-
-	// Must have at least one content_block_delta with text
-	var assembled strings.Builder
-	for _, ev := range events {
-		if ev.Type == "content_block_delta" && ev.Delta != nil {
-			assembled.WriteString(ev.Delta.Text)
-		}
-	}
-	assert.NotEmpty(t, assembled.String())
-
-	// Must end with message_stop
-	last := events[len(events)-1]
-	assert.Equal(t, "message_stop", last.Type)
-}
-
-func TestVirtualServer_VModel_VirtualClaude3_OpenAI(t *testing.T) {
+func TestVirtualServer_VModel_VirtualClaude3_OpenAI_NotFound(t *testing.T) {
+	// virtual-claude-3 lives only in the Anthropic registry; the OpenAI endpoint must 404.
 	vc := newTestServer(t)
 	result := vc.SendOpenAIChatModel(t, "virtual-claude-3", false)
-	require.Equal(t, 200, result.HTTPStatus)
-
-	resp := parseOpenAI(t, result)
-	require.Len(t, resp.Choices, 1)
-	assert.NotEmpty(t, resp.Choices[0].Message.Content)
+	assert.Equal(t, 404, result.HTTPStatus)
+	t.Logf("[OpenAI 404] body=%s", result.RawBody)
 }
 
 func TestVirtualServer_VModel_VirtualClaude3_Anthropic(t *testing.T) {
@@ -492,11 +450,12 @@ func TestVirtualServer_VModel_ClaudeCodeStrategy_Anthropic(t *testing.T) {
 
 // ─── TransformModels must reject OpenAI Chat requests ─────────────────────────
 
-func TestVirtualServer_VModel_CompactThinking_OpenAI_NotImplemented(t *testing.T) {
+func TestVirtualServer_VModel_CompactThinking_OpenAI_NotFound(t *testing.T) {
+	// Transform models live in the Anthropic registry only; OpenAI endpoint must 404.
 	vc := newTestServer(t)
 	result := vc.SendOpenAIChatModel(t, "compact-thinking", false)
-	assert.Equal(t, 501, result.HTTPStatus)
-	t.Logf("[OpenAI 501] body=%s", result.RawBody)
+	assert.Equal(t, 404, result.HTTPStatus)
+	t.Logf("[OpenAI 404] body=%s", result.RawBody)
 }
 
 // ─── Unknown model returns 404 ────────────────────────────────────────────────

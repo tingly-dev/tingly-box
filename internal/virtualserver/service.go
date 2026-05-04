@@ -2,53 +2,48 @@ package virtualserver
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+
+	anthropicvm "github.com/tingly-dev/tingly-box/internal/virtualmodel/anthropic"
+	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
 )
 
 // Service manages the virtual model service.
+//
+// Each protocol has its own registry. A model registered in the Anthropic
+// registry is callable only via /messages; a model in the OpenAI registry
+// is callable only via /chat/completions. ID collisions across the two
+// registries are intentional and legal — the registry IS the protocol context.
 type Service struct {
-	registry *virtualmodel.Registry
-	handler  *Handler
+	anthropicReg *anthropicvm.Registry
+	openaiReg    *openaivm.Registry
+	handler      *Handler
 }
 
-// NewService creates a fully initialized Service with default models registered.
+// NewService creates a fully initialized Service with default models registered
+// in both protocol registries.
 func NewService() *Service {
-	registry := virtualmodel.NewRegistry()
-	registry.RegisterDefaults()
+	a := anthropicvm.NewRegistry()
+	anthropicvm.RegisterDefaults(a)
+
+	o := openaivm.NewRegistry()
+	openaivm.RegisterDefaults(o)
+
 	return &Service{
-		registry: registry,
-		handler:  NewHandler(registry),
+		anthropicReg: a,
+		openaiReg:    o,
+		handler:      NewHandler(a, o),
 	}
 }
 
-// GetRegistry returns the model registry.
-func (s *Service) GetRegistry() *virtualmodel.Registry {
-	return s.registry
-}
+// GetAnthropicRegistry returns the Anthropic-protocol model registry.
+func (s *Service) GetAnthropicRegistry() *anthropicvm.Registry { return s.anthropicReg }
+
+// GetOpenAIRegistry returns the OpenAI Chat-protocol model registry.
+func (s *Service) GetOpenAIRegistry() *openaivm.Registry { return s.openaiReg }
 
 // GetHandler returns the HTTP handler.
 func (s *Service) GetHandler() *Handler {
 	return s.handler
-}
-
-// RegisterModel registers a new virtual model.
-func (s *Service) RegisterModel(vm virtualmodel.VirtualModel) error {
-	return s.registry.Register(vm)
-}
-
-// UnregisterModel unregisters a virtual model.
-func (s *Service) UnregisterModel(id string) {
-	s.registry.Unregister(id)
-}
-
-// GetModel retrieves a virtual model by ID.
-func (s *Service) GetModel(id string) virtualmodel.VirtualModel {
-	return s.registry.Get(id)
-}
-
-// ListModels returns all registered models.
-func (s *Service) ListModels() []virtualmodel.Model {
-	return s.registry.ListModels()
 }
 
 // SetupRoutes sets up virtual model routes on a Gin router group.

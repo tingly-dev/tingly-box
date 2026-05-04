@@ -4,23 +4,30 @@ import (
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	anthropicvm "github.com/tingly-dev/tingly-box/internal/virtualmodel/anthropic"
+	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
 )
+
+// newDefaultRegistries returns Anthropic + OpenAI registries pre-populated
+// with their default models.
+func newDefaultRegistries() (*anthropicvm.Registry, *openaivm.Registry) {
+	a := anthropicvm.NewRegistry()
+	anthropicvm.RegisterDefaults(a)
+	o := openaivm.NewRegistry()
+	openaivm.RegisterDefaults(o)
+	return a, o
+}
 
 // TestRegisterVModelExtension_RegistersExtension tests that VModel extension is registered
 func TestRegisterVModelExtension_RegistersExtension(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	// Register default VModels
-	vmRegistry.RegisterDefaults()
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
-
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}
 
-	// Verify extension is registered
 	vmodelExt := extRegistry.GetExtension("vmodel")
 	if vmodelExt == nil {
 		t.Fatal("VModel extension not registered")
@@ -39,30 +46,29 @@ func TestRegisterVModelExtension_RegistersExtension(t *testing.T) {
 	}
 }
 
-// TestRegisterVModelExtension_RegistersAllDefaultModels tests that all 9 default models are registered
+// TestRegisterVModelExtension_RegistersAllDefaultModels asserts the union of
+// both registries (after dedup on shared IDs) covers the expected default models.
 func TestRegisterVModelExtension_RegistersAllDefaultModels(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	vmRegistry.RegisterDefaults()
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}
 
-	// Get all items for vmodel
 	items := extRegistry.ListItems("vmodel")
 	if items == nil {
 		t.Fatal("ListItems returned nil")
 	}
 
-	// Should have 11 default models
+	// Anthropic registry contributes 10 (claude-3, echo, ask×2, web-search, compact×5).
+	// OpenAI registry adds virtual-gpt-4 — the rest dedupe with anthropic.
+	// Total: 11.
 	if len(items) != 11 {
 		t.Errorf("Expected 11 default models, got %d", len(items))
 	}
 
-	// Verify specific models exist
 	expectedIDs := []string{
 		"virtual-gpt-4",
 		"virtual-claude-3",
@@ -90,16 +96,13 @@ func TestRegisterVModelExtension_RegistersAllDefaultModels(t *testing.T) {
 // TestRegisterVModelExtension_MapsStaticModels tests mapping of static VModels
 func TestRegisterVModelExtension_MapsStaticModels(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	vmRegistry.RegisterDefaults()
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}
 
-	// Check static model mapping
 	item := extRegistry.GetItem("vmodel", "virtual-gpt-4")
 	if item == nil {
 		t.Fatal("virtual-gpt-4 item not found")
@@ -116,21 +119,22 @@ func TestRegisterVModelExtension_MapsStaticModels(t *testing.T) {
 	if item.ExtensionID != "vmodel" {
 		t.Errorf("Expected ExtensionID 'vmodel', got '%s'", item.ExtensionID)
 	}
+
+	if item.Metadata["provider"] != "openai" {
+		t.Errorf("Expected provider 'openai', got %v", item.Metadata["provider"])
+	}
 }
 
 // TestRegisterVModelExtension_MapsProxyModels tests mapping of proxy VModels
 func TestRegisterVModelExtension_MapsProxyModels(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	vmRegistry.RegisterDefaults()
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}
 
-	// Check proxy model mapping
 	item := extRegistry.GetItem("vmodel", "compact-thinking")
 	if item == nil {
 		t.Fatal("compact-thinking item not found")
@@ -144,25 +148,25 @@ func TestRegisterVModelExtension_MapsProxyModels(t *testing.T) {
 		t.Errorf("Expected Name 'Compact Thinking', got '%s'", item.Name)
 	}
 
-	// Verify metadata contains transformer info
 	if item.Metadata == nil {
 		t.Error("Expected Metadata to be populated")
+	}
+
+	if item.Metadata["provider"] != "anthropic" {
+		t.Errorf("Expected provider 'anthropic', got %v", item.Metadata["provider"])
 	}
 }
 
 // TestRegisterVModelExtension_MapsToolModels tests mapping of tool VModels
 func TestRegisterVModelExtension_MapsToolModels(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	vmRegistry.RegisterDefaults()
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}
 
-	// Check tool model mapping
 	item := extRegistry.GetItem("vmodel", "ask-user-question")
 	if item == nil {
 		t.Fatal("ask-user-question item not found")
@@ -180,51 +184,47 @@ func TestRegisterVModelExtension_MapsToolModels(t *testing.T) {
 // TestRegisterVModelExtension_PreservesMetadata tests that VModel metadata is preserved
 func TestRegisterVModelExtension_PreservesMetadata(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	vmRegistry.RegisterDefaults()
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}
 
-	// Check proxy model has metadata
 	item := extRegistry.GetItem("vmodel", "compact-thinking")
 	if item == nil {
 		t.Fatal("compact-thinking item not found")
 	}
 
-	// Verify metadata contains delegate model info
 	if item.Metadata == nil {
 		t.Fatal("Expected Metadata to be non-nil for proxy models")
 	}
 
-	// Metadata should contain info about the VModel type
 	if _, ok := item.Metadata["vmType"]; !ok {
 		t.Error("Expected metadata to contain 'vmType'")
 	}
+
+	if _, ok := item.Metadata["provider"]; !ok {
+		t.Error("Expected metadata to contain 'provider'")
+	}
 }
 
-// TestRegisterVModelExtension_EmptyRegistry tests behavior with empty VModel registry
+// TestRegisterVModelExtension_EmptyRegistry tests behavior with empty VModel registries
 func TestRegisterVModelExtension_EmptyRegistry(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a := anthropicvm.NewRegistry()
+	o := openaivm.NewRegistry()
 
-	// Don't register any defaults
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}
 
-	// Extension should still be registered
 	vmodelExt := extRegistry.GetExtension("vmodel")
 	if vmodelExt == nil {
 		t.Fatal("VModel extension not registered")
 	}
 
-	// But should have no items
 	items := extRegistry.ListItems("vmodel")
 	if len(items) != 0 {
 		t.Errorf("Expected 0 items for empty registry, got %d", len(items))
@@ -234,29 +234,21 @@ func TestRegisterVModelExtension_EmptyRegistry(t *testing.T) {
 // TestRegisterVModelExtension_Idempotent tests that calling twice doesn't cause errors
 func TestRegisterVModelExtension_Idempotent(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	vmRegistry.RegisterDefaults()
-
-	// Register once
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("First registration failed: %v", err)
 	}
 
-	// Count items after first registration
 	items1 := extRegistry.ListItems("vmodel")
 	count1 := len(items1)
 
-	// Register again - should handle gracefully or return error for duplicate
-	err = RegisterVModelExtension(extRegistry, vmRegistry)
-	// Either success (idempotent) or error (duplicate) is acceptable
-	// The key is that it shouldn't panic
+	_ = RegisterVModelExtension(extRegistry, a, o)
 
 	items2 := extRegistry.ListItems("vmodel")
 	count2 := len(items2)
 
-	// Item count should not have increased (no duplicates)
 	if count2 > count1 {
 		t.Errorf("Item count increased after second registration: %d -> %d", count1, count2)
 	}
@@ -265,11 +257,9 @@ func TestRegisterVModelExtension_Idempotent(t *testing.T) {
 // TestRegisterVModelExtension_DescriptionMapping tests that descriptions are mapped correctly
 func TestRegisterVModelExtension_DescriptionMapping(t *testing.T) {
 	extRegistry := NewExtensionRegistry()
-	vmRegistry := virtualmodel.NewRegistry()
+	a, o := newDefaultRegistries()
 
-	vmRegistry.RegisterDefaults()
-
-	err := RegisterVModelExtension(extRegistry, vmRegistry)
+	err := RegisterVModelExtension(extRegistry, a, o)
 	if err != nil {
 		t.Fatalf("Failed to register VModel extension: %v", err)
 	}

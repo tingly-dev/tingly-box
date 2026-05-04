@@ -1,4 +1,4 @@
-package virtualmodel
+package openai
 
 import (
 	"encoding/json"
@@ -73,7 +73,6 @@ func NewDelayProviderWithConfig(cfg DelayConfig) *DelayProvider {
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	mux := http.NewServeMux()
-	// Handle both with and without /v1 prefix since the OpenAI SDK appends /chat/completions.
 	mux.HandleFunc("/v1/chat/completions", dp.handle)
 	mux.HandleFunc("/chat/completions", dp.handle)
 	dp.server = httptest.NewServer(mux)
@@ -143,11 +142,8 @@ func (dp *DelayProvider) handleStreaming(w http.ResponseWriter) {
 
 	now := time.Now().Unix()
 
-	// First-token delay — applied before any chunk so the proxy's OnStreamEvent
-	// hook records SetFirstTokenTime after the full delay, giving a meaningful TTFT.
 	dp.randDelay(dp.cfg.MinFirstTokenDelayMs, dp.cfg.MaxFirstTokenDelayMs)
 
-	// Role chunk — first event, triggers SetFirstTokenTime in the proxy.
 	dp.writeSSE(w, flusher, map[string]interface{}{
 		"id": delayModelID, "object": "chat.completion.chunk", "created": now, "model": delayModelResponseID,
 		"choices": []map[string]interface{}{
@@ -155,7 +151,6 @@ func (dp *DelayProvider) handleStreaming(w http.ResponseWriter) {
 		},
 	})
 
-	// Content chunks.
 	for _, text := range delayModelChunks {
 		dp.writeSSE(w, flusher, map[string]interface{}{
 			"id": delayModelID, "object": "chat.completion.chunk", "created": now, "model": delayModelResponseID,
@@ -165,7 +160,6 @@ func (dp *DelayProvider) handleStreaming(w http.ResponseWriter) {
 		})
 	}
 
-	// Final chunk with usage (finish_reason=stop).
 	dp.writeSSE(w, flusher, map[string]interface{}{
 		"id": delayModelID, "object": "chat.completion.chunk", "created": now, "model": delayModelResponseID,
 		"choices": []map[string]interface{}{
@@ -178,7 +172,6 @@ func (dp *DelayProvider) handleStreaming(w http.ResponseWriter) {
 		},
 	})
 
-	// End delay — determines effective TPS (delayOutputTokens / stream duration).
 	dp.randDelay(dp.cfg.MinEndDelayMs, dp.cfg.MaxEndDelayMs)
 
 	fmt.Fprintf(w, "data: [DONE]\n\n")
@@ -186,7 +179,6 @@ func (dp *DelayProvider) handleStreaming(w http.ResponseWriter) {
 }
 
 func (dp *DelayProvider) handleNonStreaming(w http.ResponseWriter) {
-	// Single delay before returning (TTFT falls back to total latency).
 	dp.randDelay(dp.cfg.MinFirstTokenDelayMs, dp.cfg.MaxFirstTokenDelayMs)
 
 	w.Header().Set("Content-Type", "application/json")

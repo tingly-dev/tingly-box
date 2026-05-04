@@ -19,10 +19,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
 )
 
-// delayModelResponseID must match virtualmodel.delayModelResponseID
+// delayModelResponseID must match openaivm.delayModelResponseID
 const delayModelResponseID = "delay-model"
 
 // routingTestServer wraps a real Server for E2E routing pipeline tests.
@@ -52,7 +52,7 @@ func newRoutingTestServer(t *testing.T) *routingTestServer {
 }
 
 // addDelayProvider registers a DelayProvider as a provider + service in the config.
-func (ts *routingTestServer) addDelayProvider(t *testing.T, name string, dp *virtualmodel.DelayProvider) *loadbalance.Service {
+func (ts *routingTestServer) addDelayProvider(t *testing.T, name string, dp *openaivm.DelayProvider) *loadbalance.Service {
 	t.Helper()
 
 	provider := dp.Provider(name)
@@ -146,7 +146,7 @@ func sendRequest(t *testing.T, baseURL, token, model, sessionID string) (int, st
 }
 
 func TestIntegration_BasicRouting(t *testing.T) {
-	dp := virtualmodel.NewDelayProvider()
+	dp := openaivm.NewDelayProvider()
 	defer dp.Close()
 
 	ts := newRoutingTestServer(t)
@@ -162,7 +162,7 @@ func TestIntegration_BasicRouting(t *testing.T) {
 }
 
 func TestIntegration_SmartRouting_Match(t *testing.T) {
-	dp := virtualmodel.NewDelayProvider()
+	dp := openaivm.NewDelayProvider()
 	defer dp.Close()
 
 	ts := newRoutingTestServer(t)
@@ -190,7 +190,7 @@ func TestIntegration_SmartRouting_Match(t *testing.T) {
 }
 
 func TestIntegration_SmartRouting_NoMatch(t *testing.T) {
-	dp := virtualmodel.NewDelayProvider()
+	dp := openaivm.NewDelayProvider()
 	defer dp.Close()
 
 	ts := newRoutingTestServer(t)
@@ -219,11 +219,11 @@ func TestIntegration_SmartRouting_NoMatch(t *testing.T) {
 }
 
 func TestIntegration_Affinity_LockAndReuse(t *testing.T) {
-	dpA := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dpA := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
-	dpB := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dpB := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
@@ -257,8 +257,8 @@ func TestIntegration_Affinity_LockAndReuse(t *testing.T) {
 }
 
 func TestIntegration_Affinity_DifferentSessions(t *testing.T) {
-	dpA := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10, MinEndDelayMs: 10, MaxEndDelayMs: 10})
-	dpB := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10, MinEndDelayMs: 10, MaxEndDelayMs: 10})
+	dpA := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10, MinEndDelayMs: 10, MaxEndDelayMs: 10})
+	dpB := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10, MinEndDelayMs: 10, MaxEndDelayMs: 10})
 	defer dpA.Close()
 	defer dpB.Close()
 
@@ -283,7 +283,7 @@ func TestIntegration_Affinity_DifferentSessions(t *testing.T) {
 }
 
 func TestIntegration_Affinity_WithSmartRouting(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
@@ -324,7 +324,7 @@ func TestIntegration_Affinity_WithSmartRouting(t *testing.T) {
 
 // TestIntegration_CapacityBased_Basic verifies capacity-based selection works end-to-end.
 func TestIntegration_CapacityBased_Basic(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
@@ -361,7 +361,7 @@ func TestIntegration_CapacityBased_Basic(t *testing.T) {
 // TestIntegration_CapacityBased_ProviderSharedPool verifies that provider total capacity
 // is shared across multiple models from the same provider.
 func TestIntegration_CapacityBased_ProviderSharedPool(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
@@ -423,7 +423,7 @@ func TestIntegration_CapacityBased_ProviderSharedPool(t *testing.T) {
 // TestIntegration_CapacityBased_ModelCapacity verifies that model-level capacity
 // is enforced independently from provider capacity.
 func TestIntegration_CapacityBased_ModelCapacity(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
@@ -459,7 +459,7 @@ func TestIntegration_CapacityBased_ModelCapacity(t *testing.T) {
 
 // TestIntegration_CapacityBased_IdleTimeout verifies that idle sessions are cleaned up.
 func TestIntegration_CapacityBased_IdleTimeout(t *testing.T) {
-	dp := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dp := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
@@ -496,11 +496,11 @@ func TestIntegration_CapacityBased_IdleTimeout(t *testing.T) {
 // TestIntegration_CapacityBased_SessionAffinity verifies that sessions maintain
 // affinity to the same service after initial selection.
 func TestIntegration_CapacityBased_SessionAffinity(t *testing.T) {
-	dpA := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dpA := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
-	dpB := virtualmodel.NewDelayProviderWithConfig(virtualmodel.DelayConfig{
+	dpB := openaivm.NewDelayProviderWithConfig(openaivm.DelayConfig{
 		MinFirstTokenDelayMs: 10, MaxFirstTokenDelayMs: 10,
 		MinEndDelayMs: 10, MaxEndDelayMs: 10,
 	})
