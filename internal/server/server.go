@@ -38,7 +38,7 @@ import (
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/virtualserver"
+	"github.com/tingly-dev/tingly-box/internal/virtualmodel/virtualserver"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"

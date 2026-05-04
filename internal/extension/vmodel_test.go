@@ -3,9 +3,9 @@ package extension
 import (
 	"testing"
 
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
-	anthropicvm "github.com/tingly-dev/tingly-box/internal/virtualmodel/anthropic"
-	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
+	"github.com/tingly-dev/tingly-box/virtualmodel"
+	anthropicvm "github.com/tingly-dev/tingly-box/virtualmodel/anthropic"
+	openaivm "github.com/tingly-dev/tingly-box/virtualmodel/openai"
 )
 
 // newDefaultRegistries returns Anthropic + OpenAI registries pre-populated

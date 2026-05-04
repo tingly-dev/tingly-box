@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	virtualserver2 "github.com/tingly-dev/tingly-box/internal/virtualmodel/virtualserver"
 
 	"github.com/tingly-dev/tingly-box/internal/server_validate"
-	"github.com/tingly-dev/tingly-box/internal/virtualserver"
 )
 
 // newTestServer spins up a real Gin httptest.Server with virtualserver routes
@@ -21,7 +21,7 @@ func newTestServer(t *testing.T) *server_validate.VirtualClient {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	svc := virtualserver.NewService()
+	svc := virtualserver2.NewService()
 
 	engine := gin.New()
 	group := engine.Group("/v1")
@@ -36,18 +36,18 @@ func newTestServer(t *testing.T) *server_validate.VirtualClient {
 // ─── Typed response parsers ────────────────────────────────────────────────────
 
 // parseOpenAI deserializes RawBody into ChatCompletionResponse and logs it.
-func parseOpenAI(t *testing.T, result *server_validate.ParsedResponse) virtualserver.ChatCompletionResponse {
+func parseOpenAI(t *testing.T, result *server_validate.ParsedResponse) virtualserver2.ChatCompletionResponse {
 	t.Helper()
-	var resp virtualserver.ChatCompletionResponse
+	var resp virtualserver2.ChatCompletionResponse
 	require.NoError(t, json.Unmarshal(result.RawBody, &resp), "unmarshal OpenAI response")
 	logOpenAI(t, &resp)
 	return resp
 }
 
 // parseAnthropic deserializes RawBody into AnthropicMessageResponse and logs it.
-func parseAnthropic(t *testing.T, result *server_validate.ParsedResponse) virtualserver.AnthropicMessageResponse {
+func parseAnthropic(t *testing.T, result *server_validate.ParsedResponse) virtualserver2.AnthropicMessageResponse {
 	t.Helper()
-	var resp virtualserver.AnthropicMessageResponse
+	var resp virtualserver2.AnthropicMessageResponse
 	require.NoError(t, json.Unmarshal(result.RawBody, &resp), "unmarshal Anthropic response")
 	logAnthropic(t, &resp)
 	return resp
@@ -55,7 +55,7 @@ func parseAnthropic(t *testing.T, result *server_validate.ParsedResponse) virtua
 
 // ─── Logging helpers ──────────────────────────────────────────────────────────
 
-func logOpenAI(t *testing.T, resp *virtualserver.ChatCompletionResponse) {
+func logOpenAI(t *testing.T, resp *virtualserver2.ChatCompletionResponse) {
 	t.Helper()
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "[OpenAI] id=%s model=%s", resp.ID, resp.Model)
@@ -76,7 +76,7 @@ func logOpenAI(t *testing.T, resp *virtualserver.ChatCompletionResponse) {
 	t.Log(sb.String())
 }
 
-func logAnthropic(t *testing.T, resp *virtualserver.AnthropicMessageResponse) {
+func logAnthropic(t *testing.T, resp *virtualserver2.AnthropicMessageResponse) {
 	t.Helper()
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "[Anthropic] id=%s model=%s role=%s stop=%s", resp.ID, resp.Model, resp.Role, resp.StopReason)
@@ -100,15 +100,15 @@ func logAnthropic(t *testing.T, resp *virtualserver.AnthropicMessageResponse) {
 
 // parseOpenAIStream deserializes each SSE data line into ChatCompletionStreamResponse chunks.
 // Lines that are "[DONE]" or event-type lines are skipped.
-func parseOpenAIStream(t *testing.T, result *server_validate.ParsedResponse) []virtualserver.ChatCompletionStreamResponse {
+func parseOpenAIStream(t *testing.T, result *server_validate.ParsedResponse) []virtualserver2.ChatCompletionStreamResponse {
 	t.Helper()
-	var chunks []virtualserver.ChatCompletionStreamResponse
+	var chunks []virtualserver2.ChatCompletionStreamResponse
 	for _, line := range result.StreamEvents {
 		payload, ok := extractSSEData(line)
 		if !ok || payload == "[DONE]" {
 			continue
 		}
-		var chunk virtualserver.ChatCompletionStreamResponse
+		var chunk virtualserver2.ChatCompletionStreamResponse
 		if err := json.Unmarshal([]byte(payload), &chunk); err == nil {
 			chunks = append(chunks, chunk)
 		}
@@ -118,15 +118,15 @@ func parseOpenAIStream(t *testing.T, result *server_validate.ParsedResponse) []v
 }
 
 // parseAnthropicStream deserializes each SSE data line into AnthropicStreamEvent items.
-func parseAnthropicStream(t *testing.T, result *server_validate.ParsedResponse) []virtualserver.AnthropicStreamEvent {
+func parseAnthropicStream(t *testing.T, result *server_validate.ParsedResponse) []virtualserver2.AnthropicStreamEvent {
 	t.Helper()
-	var events []virtualserver.AnthropicStreamEvent
+	var events []virtualserver2.AnthropicStreamEvent
 	for _, line := range result.StreamEvents {
 		payload, ok := extractSSEData(line)
 		if !ok {
 			continue
 		}
-		var ev virtualserver.AnthropicStreamEvent
+		var ev virtualserver2.AnthropicStreamEvent
 		if err := json.Unmarshal([]byte(payload), &ev); err == nil {
 			events = append(events, ev)
 		}
@@ -146,7 +146,7 @@ func extractSSEData(line string) (string, bool) {
 	return "", false
 }
 
-func logOpenAIStream(t *testing.T, chunks []virtualserver.ChatCompletionStreamResponse) {
+func logOpenAIStream(t *testing.T, chunks []virtualserver2.ChatCompletionStreamResponse) {
 	t.Helper()
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "[OpenAI stream] chunks=%d", len(chunks))
@@ -175,7 +175,7 @@ func logOpenAIStream(t *testing.T, chunks []virtualserver.ChatCompletionStreamRe
 	t.Log(sb.String())
 }
 
-func logAnthropicStream(t *testing.T, events []virtualserver.AnthropicStreamEvent) {
+func logAnthropicStream(t *testing.T, events []virtualserver2.AnthropicStreamEvent) {
 	t.Helper()
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "[Anthropic stream] events=%d", len(events))
@@ -330,7 +330,7 @@ func TestVirtualServer_VModel_AskUserQuestion_Anthropic(t *testing.T) {
 	resp := parseAnthropic(t, result)
 	assert.Equal(t, "tool_use", resp.StopReason)
 
-	var toolBlock *virtualserver.AnthropicContent
+	var toolBlock *virtualserver2.AnthropicContent
 	for i := range resp.Content {
 		if resp.Content[i].Type == "tool_use" {
 			toolBlock = &resp.Content[i]
@@ -355,7 +355,7 @@ func TestVirtualServer_VModel_AskConfirmation_Anthropic(t *testing.T) {
 	resp := parseAnthropic(t, result)
 	assert.Equal(t, "tool_use", resp.StopReason)
 
-	var toolBlock *virtualserver.AnthropicContent
+	var toolBlock *virtualserver2.AnthropicContent
 	for i := range resp.Content {
 		if resp.Content[i].Type == "tool_use" {
 			toolBlock = &resp.Content[i]
@@ -399,7 +399,7 @@ func TestVirtualServer_VModel_WebSearchExample_Anthropic(t *testing.T) {
 	resp := parseAnthropic(t, result)
 	assert.Equal(t, "tool_use", resp.StopReason)
 
-	var toolBlock *virtualserver.AnthropicContent
+	var toolBlock *virtualserver2.AnthropicContent
 	for i := range resp.Content {
 		if resp.Content[i].Type == "tool_use" {
 			toolBlock = &resp.Content[i]

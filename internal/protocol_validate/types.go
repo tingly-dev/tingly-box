@@ -11,7 +11,7 @@
 //
 //  3. Matrix — executes the full cross-product of sources × targets × scenarios × streaming modes.
 //
-// Note: The existing internal/virtualmodel package is a production Gin server.
+// Note: The existing virtualmodel package is a production Gin server.
 // This package (protocoltest) is the test-only framework. Future integration with
 // virtualmodel is planned once both stabilize.
 //
