@@ -1,3 +1,11 @@
+// Package benchmark provides a load-testing client and an in-process server
+// factory for the virtualmodel HTTP service. The server side is a thin
+// factory over virtualmodel/virtualserver.Service so benchmarks reuse the
+// same vmodel registries as production code; the client side is a pooled
+// HTTP load generator that collects throughput / latency metrics.
+//
+// This package replaces the former pkg/benchmark, whose mock-server half
+// duplicated virtualserver and whose Model type duplicated virtualmodel.Model.
 package benchmark
 
 import (
@@ -47,13 +55,17 @@ type RequestResult struct {
 	Bytes      int64
 }
 
-// Use simple structs for requests instead of importing from SDKs
+// OpenAIChatRequest is a minimal request body for /v1/chat/completions used
+// by the load tester. It is not a full SDK type — only the fields the
+// benchmark client needs to construct a request.
 type OpenAIChatRequest struct {
 	Model    string                   `json:"model"`
 	Messages []map[string]interface{} `json:"messages"`
 	Stream   bool                     `json:"stream,omitempty"`
 }
 
+// AnthropicMessageRequest is a minimal request body for /v1/messages used by
+// the load tester.
 type AnthropicMessageRequest struct {
 	Model     string                   `json:"model"`
 	MaxTokens int                      `json:"max_tokens"`
@@ -139,7 +151,6 @@ func (bc *BenchmarkClient) runBenchmark(endpoint, method string, body []byte, co
 
 	var wg sync.WaitGroup
 
-	// Start requests
 	for i := 0; i < totalRequests; i++ {
 		wg.Add(1)
 		go func() {
@@ -152,13 +163,11 @@ func (bc *BenchmarkClient) runBenchmark(endpoint, method string, body []byte, co
 		}()
 	}
 
-	// Wait for all requests to complete
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Collect results
 	return bc.collectResults(results, totalRequests), nil
 }
 
@@ -178,7 +187,6 @@ func (bc *BenchmarkClient) makeRequest(url, method string, body []byte) RequestR
 		}
 	}
 
-	// Set headers
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -201,7 +209,6 @@ func (bc *BenchmarkClient) makeRequest(url, method string, body []byte) RequestR
 	}
 	defer resp.Body.Close()
 
-	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return RequestResult{
