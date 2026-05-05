@@ -10,12 +10,26 @@ import (
 // caller of [RunWithPrompter]) provides to satisfy approval and ask
 // requests during agent execution.
 //
-// It mirrors the existing [MessageHandler] approval/ask shape so that
-// implementations like IMPrompter can drop in unchanged.
+// Contract:
 //
-// Phase 4 of the redesign formalizes this with documented timeout and
-// AlwaysAllow semantics; for Phase 2 it captures the minimum surface
-// needed by the [RunWithPrompter] helper.
+//   - Timeout / cancellation. The caller's ctx carries the deadline.
+//     On ctx.Done() the Prompter MUST return promptly with
+//     Approved=false (i.e., default-deny). Implementations are free to
+//     enforce an additional internal timeout (IMPrompter uses 5min by
+//     default) but ctx is authoritative.
+//
+//   - AlwaysAllow caching. If the user previously approved a tool with
+//     "remember", subsequent OnApproval calls for the same tool MUST
+//     short-circuit to Approved=true without prompting again. The
+//     Prompter owns this cache; executors do not maintain per-tool
+//     allowlists.
+//
+//   - No partial failures. On internal error the Prompter returns the
+//     error AND a deny result (Approved=false), so [RunWithPrompter]
+//     always has a safe response to send to the agent.
+//
+// Implementations: IMPrompter (production) and prompt.FakePrompter
+// (tests).
 type Prompter interface {
 	OnApproval(ctx context.Context, req PermissionRequest) (PermissionResult, error)
 	OnAsk(ctx context.Context, req AskRequest) (AskResult, error)
