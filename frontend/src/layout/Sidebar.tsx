@@ -16,7 +16,7 @@ import {
     Typography,
 } from '@mui/material';
 import React, { useCallback, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import {Trans, useTranslation} from 'react-i18next';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -226,6 +226,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 })}
             </List>
 
+            {/* Footer top row: version */}
+            <Box
+                sx={{
+                    py: 1.5, px: 2,
+                    borderColor: 'divider',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    height: footerHeight,
+                }}
+            >
+                <Typography
+                    sx={{
+                        color: 'text.secondary',
+                        fontSize: '0.7rem',
+                        textAlign: 'center',
+                        display: 'block',
+                        fontStyle: 'italic',
+                        cursor: 'default',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    <Trans i18nKey="layout.version" values={{ version: displayVersion }} />
+                </Typography>
+            </Box>
+
             {/* Add Profile Popover */}
             <Popover
                 open={Boolean(addProfileAnchorEl)}
@@ -272,46 +302,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 </Box>
             </Popover>
 
-            {/* Footer top row: version */}
-            <Box
-                sx={{
-                    py: 1,
-                    px: 2,
-                    borderTop: '1px solid',
-                    borderColor: 'divider',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                }}
-            >
-                <Typography
-                    sx={{
-                        fontSize: '0.65rem',
-                        lineHeight: 1.2,
-                        color: 'text.secondary',
-                        fontVariantNumeric: 'tabular-nums',
-                        userSelect: 'text',
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    {t('layout.version', { version: displayVersion })}
-                </Typography>
-            </Box>
-
             {/* Footer bottom row: slogan */}
             <Box
                 sx={{
-                    height: footerHeight,
-                    py: 1.5,
-                    px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
+                   height: footerHeight, py: 1.5, px: 2, borderTop: '1px solid', borderColor: 'divider'
                 }}
             >
                 <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>

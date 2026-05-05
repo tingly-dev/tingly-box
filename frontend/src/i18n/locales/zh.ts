@@ -31,7 +31,7 @@ export default {
   "layout": {
     "appTitle": "Tingly Box",
     "slogan": "智能，尽在掌握。",
-    "version": "版本 {{version}}",
+    "version": "版本<br/>{{version}}",
     "settings": "设置",
     "nav": {
       "home": "智能应用",

@@ -31,7 +31,7 @@ export default {
   "layout": {
     "appTitle": "Tingly Box",
     "slogan": "Your Intelligence, Orchestrated.",
-    "version": "version {{version}}",
+    "version": "version<br/>{{version}}",
     "settings": "Settings",
     "nav": {
       "home": "Agent",

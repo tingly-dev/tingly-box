@@ -1,6 +1,6 @@
 import { Box, Divider, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
 import React from 'react';
-import { useTranslation } from 'react-i18next';
+import {Trans, useTranslation} from 'react-i18next';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useVersion } from '@/contexts/VersionContext';
 import { sidebarWidth, headerHeight, footerHeight } from './constants';
@@ -161,43 +161,37 @@ export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActi
             {/* Footer top row: version */}
             <Box
                 sx={{
-                    py: 1,
-                    px: 2,
-                    borderTop: '1px solid',
+                    py: 1.5, px: 2,
                     borderColor: 'divider',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
+                    height: footerHeight,
                 }}
             >
                 <Typography
                     sx={{
-                        fontSize: '0.65rem',
-                        lineHeight: 1.2,
                         color: 'text.secondary',
-                        fontVariantNumeric: 'tabular-nums',
-                        userSelect: 'text',
+                        fontSize: '0.7rem',
+                        textAlign: 'center',
+                        display: 'block',
+                        fontStyle: 'italic',
+                        cursor: 'default',
                         maxWidth: '100%',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                     }}
                 >
-                    {t('layout.version', { version: displayVersion })}
+                    <Trans i18nKey="layout.version" values={{ version: displayVersion }} />
                 </Typography>
             </Box>
 
             {/* Footer bottom row: slogan */}
             <Box
                 sx={{
-                    height: footerHeight,
-                    py: 1.5,
-                    px: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
+                   height: footerHeight, py: 1.5, px: 2, borderTop: '1px solid', borderColor: 'divider'
                 }}
             >
                 <Tooltip title="For all Solo Builders, Dev Teams and Agents." placement="top" arrow>
