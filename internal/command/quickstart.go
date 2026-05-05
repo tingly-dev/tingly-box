@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tingly-dev/tingly-box/internal/command/tui"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -25,10 +26,7 @@ type QuickstartCmdKong struct {
 
 func (q *QuickstartCmdKong) Run(appManager *AppManager) error {
 	if q.UseTUI {
-		// Import wizards package for TUI
-		// wizards.RunQuickstartWizard(appManager)
-		// For now, fall back to CLI mode
-		return runQuickstart(appManager)
+		return tui.RunQuickstart(appManager)
 	}
 	return runQuickstart(appManager)
 }
