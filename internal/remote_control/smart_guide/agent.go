@@ -514,24 +514,6 @@ func uniqueStrings(slice []string) []string {
 	return result
 }
 
-// Execute implements agentboot.Agent interface for TinglyBoxAgent
-// This allows SmartGuide to be used with the same callback mechanism as Claude Code and Mock Agent
-func (a *TinglyBoxAgent) Execute(
-	ctx context.Context,
-	prompt string,
-	opts agentboot.ExecutionOptions,
-) (*agentboot.Result, error) {
-	// Build ToolContext from execution options
-	toolCtx := &ToolContext{
-		ProjectPath: opts.ProjectPath,
-		ChatID:      opts.ChatID,
-		SessionID:   opts.SessionID,
-	}
-
-	// Call ExecuteWithHandler with the handler from options
-	return a.ExecuteWithHandler(ctx, prompt, toolCtx, opts.Handler)
-}
-
 // ExecuteWithHandler executes the agent with callback support
 // This enables streaming messages, completion callbacks, and error handling
 func (a *TinglyBoxAgent) ExecuteWithHandler(

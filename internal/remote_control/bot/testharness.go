@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
-	mockagent "github.com/tingly-dev/tingly-box/agentboot/mockagent"
+	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/agentboot/claude/fixture"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/remote/audit"
@@ -50,15 +51,14 @@ type TestBootOptions struct {
 	// DataDir overrides the chat-store directory (default: t.TempDir()).
 	DataDir string
 
-	// MockAgent supplies the mock agent registered as
-	// agentboot.AgentTypeMockAgent. Pass nil to use a default 2-iteration
-	// mock (good enough for command-flow tests; deterministic enough for
-	// streaming-edit tests).
-	MockAgent *mockagent.Agent
-
-	// SkipMockAgent disables the default mock-agent registration. Use when
-	// the test wants a different default (e.g. its own stub agent).
-	SkipMockAgent bool
+	// FixtureScript, when non-nil, registers a Claude agent backed by a
+	// fixture.Factory(script). The fixture replaces the legacy mockagent —
+	// tests now drive the real claude.Driver + claude.Transport + Runner
+	// pipeline against scripted wire-format output.
+	//
+	// When nil (default), no Claude agent is registered and tests that
+	// depend on agent execution must register their own.
+	FixtureScript fixture.Script
 }
 
 // BootForTest spins up a production BotHandler against the given
@@ -102,15 +102,10 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 			t.Fatalf("BootForTest: agentboot: %v", err)
 		}
 	}
-	if !opt.SkipMockAgent {
-		mockAg := opt.MockAgent
-		if mockAg == nil {
-			mockAg = mockagent.NewAgent(mockagent.Config{
-				MaxIterations: 2,
-				StepDelay:     0,
-			})
-		}
-		ab.RegisterAgent(agentboot.AgentTypeMockAgent, mockAg)
+	if opt.FixtureScript != nil {
+		fixtureAgent := claude.NewAgentWithFactory(claude.Config{}, fixture.Factory(opt.FixtureScript))
+		ab.RegisterAgent(agentboot.AgentTypeClaude, fixtureAgent)
+		_ = ab.SetDefaultAgent(agentboot.AgentTypeClaude)
 	}
 
 	auditLog := audit.NewLogger(audit.Config{Console: false, MaxEntries: 1000})

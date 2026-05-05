@@ -9,25 +9,40 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
+	"github.com/tingly-dev/tingly-box/imbot"
+	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/remote/session"
 )
 
-// ClaudeCodeExecutor executes messages through Claude Code agent
+// ClaudeCodeExecutor executes messages through the Claude Code agent.
+//
+// It consumes the [agentboot.ExecutionHandle] returned by Agent.Execute
+// directly, dispatching MessageEvents to the streaming chat writer and
+// routing ApprovalRequestEvent / AskRequestEvent to IMPrompter.
 type ClaudeCodeExecutor struct {
 	deps *ExecutorDependencies
 }
 
-// NewClaudeCodeExecutor creates a new Claude Code executor
+// NewClaudeCodeExecutor creates a new Claude Code executor.
 func NewClaudeCodeExecutor(deps *ExecutorDependencies) *ClaudeCodeExecutor {
 	return &ClaudeCodeExecutor{deps: deps}
 }
 
-// GetAgentType returns the agent type identifier
+// GetAgentType returns the agent type identifier.
 func (e *ClaudeCodeExecutor) GetAgentType() agentboot.AgentType {
 	return agentClaudeCode
 }
 
-// Execute processes a user message through Claude Code
+// noApprovalModes are permission modes that auto-approve every tool request
+// without going through IMPrompter.
+var noApprovalModes = map[string]bool{
+	string(claude.PermissionModeAuto):              true,
+	string(claude.PermissionModeBypassPermissions): true,
+	string(claude.PermissionModeDontAsk):           true,
+	string(claude.PermissionModePlan):              true,
+}
+
+// Execute processes a user message through Claude Code.
 func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error) {
 	if strings.TrimSpace(req.Text) == "" {
 		e.deps.SendText(req.HCtx, "Please provide a message for Claude Code.")
@@ -38,12 +53,9 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	projectPath := req.ProjectPath
 	meta := req.Meta
 
-	// Refresh session activity
 	e.deps.SessionMgr.Update(sessionID, func(s *session.Session) {
 		s.LastActivity = time.Now()
 	})
-
-	// Append user message to session
 	e.deps.SessionMgr.AppendMessage(sessionID, session.Message{
 		Role:      "user",
 		Content:   req.Text,
@@ -51,16 +63,12 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	})
 	e.deps.SessionMgr.SetRunning(sessionID)
 
-	// Send status message
-	var statusMsg string
-	if req.IsNewSession {
-		statusMsg = "⏳ CC: Processing new session..."
-	} else {
+	statusMsg := "⏳ CC: Processing new session..."
+	if !req.IsNewSession {
 		statusMsg = "⏳ CC: Resuming session..."
 	}
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
 
-	// Get agent instance
 	agent, err := e.deps.AgentBoot.GetDefaultAgent()
 	if err != nil {
 		e.deps.SessionMgr.SetFailed(sessionID, "agent not available: "+err.Error())
@@ -73,54 +81,26 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		}, err
 	}
 
-	// Determine if we should resume
 	shouldResume := !req.IsNewSession
-
-	logrus.WithFields(logrus.Fields{
-		"chatID":       req.HCtx.ChatID,
-		"sessionID":    sessionID,
-		"projectPath":  projectPath,
-		"shouldResume": shouldResume,
-	}).Info("Starting Claude Code execution")
-
-	// Create streaming handler (shared meta pointer)
-	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
-
-	// Use resolved permission mode (default to "default" if not set)
 	permissionMode := req.PermissionMode
 	if permissionMode == "" {
 		permissionMode = string(claude.PermissionModeDefault)
 	}
+	autoApprove := noApprovalModes[permissionMode]
 
-	// Create composite handler
-	compositeHandler := agentboot.NewCompositeHandler().
-		SetStreamer(streamHandler).
-		SetCompletionCallback(&CompletionCallback{
-			hCtx:       req.HCtx,
-			sessionID:  sessionID,
-			sessionMgr: e.deps.SessionMgr,
-			meta:       meta,
-		})
+	logrus.WithFields(logrus.Fields{
+		"chatID":         req.HCtx.ChatID,
+		"sessionID":      sessionID,
+		"projectPath":    projectPath,
+		"shouldResume":   shouldResume,
+		"permissionMode": permissionMode,
+	}).Info("Starting Claude Code execution")
 
-	// Modes that don't need interactive approval handlers
-	// auto, bypassPermissions, dontAsk: fully auto-approve
-	// plan: read-only, no tool execution
-	noApprovalModes := map[string]bool{
-		string(claude.PermissionModeAuto):              true,
-		string(claude.PermissionModeBypassPermissions): true,
-		string(claude.PermissionModeDontAsk):           true,
-		string(claude.PermissionModePlan):              true,
-	}
-	if !noApprovalModes[permissionMode] {
-		compositeHandler.SetApprovalHandler(e.deps.IMPrompter).
-			SetAskHandler(e.deps.IMPrompter)
-	}
+	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
-	// Execute
 	startTime := time.Now()
-	result, err := agent.Execute(ctx, req.Text, agentboot.ExecutionOptions{
+	handle, err := agent.Execute(ctx, req.Text, agentboot.ExecutionOptions{
 		ProjectPath:          projectPath,
-		Handler:              compositeHandler,
 		SessionID:            sessionID,
 		Resume:               shouldResume,
 		ChatID:               req.HCtx.ChatID,
@@ -129,61 +109,128 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		PermissionPromptTool: "stdio",
 		PermissionMode:       permissionMode,
 	})
-	duration := time.Since(startTime)
-
-	logrus.WithFields(logrus.Fields{
-		"chatID":    req.HCtx.ChatID,
-		"sessionID": sessionID,
-		"hasError":  err != nil,
-		"hasResult": result != nil,
-		"duration":  duration,
-	}).Info("Claude Code execution completed")
-
-	// Get response text
-	response := streamHandler.GetOutput()
-	if response == "" {
-		if result != nil {
-			response = result.TextOutput()
-		}
-		if err != nil && response == "" {
-			response = fmt.Sprintf("Execution failed: %v", err)
-		}
-	}
-
-	// Handle errors
 	if err != nil {
-		e.deps.SessionMgr.SetFailed(sessionID, response)
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"chatID":    req.HCtx.ChatID,
-			"sessionID": sessionID,
-			"response":  response,
-		}).Warn("Claude Code execution failed")
-
-		if response == "" {
-			response = fmt.Sprintf("Execution failed: %v", err)
-		}
-
-		// Check for session ID conflict error and provide helpful message
-		errStr := err.Error()
-		if strings.Contains(errStr, "Session ID") && strings.Contains(errStr, "already in use") {
-			response = fmt.Sprintf("⚠️ Session ID conflict: This session is already active in another Claude Code process.\n\nSession ID: %s\n\nPossible solutions:\n• Wait for the other session to complete\n• Use /stop to end the current session and try again\n• If the other process is stuck, terminate it manually", sessionID)
-		}
-
-		e.deps.SendTextWithReply(req.HCtx, response, req.ReplyTo)
+		duration := time.Since(startTime)
+		errMsg := err.Error()
+		e.deps.SessionMgr.SetFailed(sessionID, errMsg)
+		e.deps.SendTextWithReply(req.HCtx, fmt.Sprintf("Execution failed: %v", err), req.ReplyTo)
 		return &ExecutionResult{
 			SessionID:    sessionID,
 			Success:      false,
 			Error:        err,
-			Response:     response,
+			Response:     errMsg,
 			Meta:         meta,
 			IsNewSession: req.IsNewSession,
 			Duration:     duration,
 		}, err
 	}
 
-	// Success - session completion and "Task done" keyboard already handled by CompletionCallback.OnComplete()
-	// Response text was streamed to user via OnMessage during execution.
-	// No need to send again here.
+	for ev := range handle.Events() {
+		switch e2 := ev.(type) {
+		case agentboot.MessageEvent:
+			if mErr := streamWriter.OnMessage(e2.Raw); mErr != nil {
+				streamWriter.OnError(mErr)
+			}
+
+		case agentboot.ApprovalRequestEvent:
+			if autoApprove {
+				_ = handle.Respond(e2.ID, agentboot.ApprovalResponse{Approved: true})
+				continue
+			}
+			permReq := agentboot.PermissionRequest{
+				RequestID: e2.ID,
+				AgentType: e2.AgentType,
+				ToolName:  e2.ToolName,
+				Input:     e2.Input,
+				Reason:    e2.Reason,
+				SessionID: e2.SessionID,
+				BotUUID:   e2.BotUUID,
+				ChatID:    e2.ChatID,
+				Platform:  e2.Platform,
+			}
+			res, perr := e.deps.IMPrompter.OnApproval(ctx, permReq)
+			if perr != nil {
+				logrus.WithError(perr).Warn("ClaudeCodeExecutor: IMPrompter.OnApproval error; denying")
+				res = agentboot.PermissionResult{Approved: false, Reason: perr.Error()}
+			}
+			_ = handle.Respond(e2.ID, agentboot.ApprovalResponse{
+				Approved:     res.Approved,
+				UpdatedInput: res.UpdatedInput,
+				Reason:       res.Reason,
+			})
+
+		case agentboot.AskRequestEvent:
+			askReq := agentboot.AskRequest{
+				ID:        e2.ID,
+				Type:      e2.Type,
+				AgentType: e2.AgentType,
+				Platform:  e2.Platform,
+				ChatID:    e2.ChatID,
+				BotUUID:   e2.BotUUID,
+				SessionID: e2.SessionID,
+				ToolName:  e2.ToolName,
+				Input:     e2.Input,
+				CallID:    e2.CallID,
+				Message:   e2.Message,
+				Reason:    e2.Reason,
+			}
+			res, aerr := e.deps.IMPrompter.OnAsk(ctx, askReq)
+			if aerr != nil {
+				logrus.WithError(aerr).Warn("ClaudeCodeExecutor: IMPrompter.OnAsk error; denying")
+				res = agentboot.AskResult{ID: e2.ID, Approved: false, Reason: aerr.Error()}
+			}
+			_ = handle.Respond(e2.ID, agentboot.AskResponse{
+				Approved:     res.Approved,
+				UpdatedInput: res.UpdatedInput,
+				Reason:       res.Reason,
+				Response:     res.Response,
+				Selection:    res.Selection,
+			})
+
+		case agentboot.ErrorEvent:
+			streamWriter.OnError(e2.Err)
+		}
+	}
+
+	result, werr := handle.Wait()
+	duration := time.Since(startTime)
+	logrus.WithFields(logrus.Fields{
+		"chatID":    req.HCtx.ChatID,
+		"sessionID": sessionID,
+		"hasError":  werr != nil,
+		"duration":  duration,
+	}).Info("Claude Code execution completed")
+
+	response := ""
+	if result != nil {
+		response = result.TextOutput()
+	}
+
+	if werr != nil {
+		errMsg := werr.Error()
+		if response == "" {
+			response = fmt.Sprintf("Execution failed: %v", werr)
+		}
+		if strings.Contains(errMsg, "Session ID") && strings.Contains(errMsg, "already in use") {
+			response = fmt.Sprintf("⚠️ Session ID conflict: This session is already active in another Claude Code process.\n\nSession ID: %s\n\nPossible solutions:\n• Wait for the other session to complete\n• Use /stop to end the current session and try again\n• If the other process is stuck, terminate it manually", sessionID)
+		}
+		e.deps.SessionMgr.SetFailed(sessionID, response)
+		e.deps.SendTextWithReply(req.HCtx, response, req.ReplyTo)
+		return &ExecutionResult{
+			SessionID:    sessionID,
+			Success:      false,
+			Error:        werr,
+			Response:     response,
+			Meta:         meta,
+			IsNewSession: req.IsNewSession,
+			Duration:     duration,
+		}, werr
+	}
+
+	// Success: send the "Task done" action keyboard inline (formerly
+	// CompletionCallback.OnComplete) and mark the session completed.
+	e.deps.SessionMgr.SetCompleted(sessionID, "")
+	e.sendTaskDoneCard(req.HCtx, meta)
 
 	return &ExecutionResult{
 		SessionID:    sessionID,
@@ -193,4 +240,20 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		IsNewSession: req.IsNewSession,
 		Duration:     duration,
 	}, nil
+}
+
+// sendTaskDoneCard emits the "Task done" action keyboard at the end of a
+// successful execution. Replaces the legacy CompletionCallback.OnComplete.
+func (e *ClaudeCodeExecutor) sendTaskDoneCard(hCtx HandlerContext, meta *ResponseMeta) {
+	kb := feature.BuildActionKeyboard()
+	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+	actionCard := feature.BuildActionCard()
+
+	doneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(meta.AgentType, meta.ProjectPath)
+	if _, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
+		Text:     doneText,
+		Metadata: buildTrackedActionMenuMetadata(hCtx, tgKeyboard, actionCard),
+	}); err != nil {
+		logrus.WithError(err).Warn("ClaudeCodeExecutor: failed to send Task done card")
+	}
 }

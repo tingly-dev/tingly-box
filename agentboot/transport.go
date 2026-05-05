@@ -1,44 +1,66 @@
 package agentboot
 
-import "context"
+import "github.com/tingly-dev/tingly-box/agentboot/common"
 
-// AgentEvent is an agent-agnostic parsed event produced by a transport's Decode call.
-// It wraps the raw Event and tags which categories of handling it requires.
-type AgentEvent struct {
-	// Raw is the original parsed event.
-	Raw Event
+// EventKind is the classification result returned by [AgentTransport.Classify].
+type EventKind int
 
-	// IsControl reports whether this event requires a bidirectional control response
-	// (e.g. permission prompt, AskUserQuestion).
-	IsControl bool
+const (
+	// EventKindIgnore: the event is fully consumed by the transport (e.g.
+	// internal-only system pings); the runner does not emit anything.
+	EventKindIgnore EventKind = iota
 
-	// IsTerminal reports whether this event signals the end of the agent run
-	// (e.g. Claude's "result" event).
-	IsTerminal bool
-}
+	// EventKindMessage: a streamable agent message. The runner calls
+	// [AgentTransport.AccumulateMessage] and emits a [MessageEvent] for each
+	// rich message returned.
+	EventKindMessage
 
-// AgentTransport knows how to communicate with a running agent process.
-// Each agent type (Claude, Codex, opencode, …) provides its own Transport.
+	// EventKindControl: an interactive control request (permission/ask).
+	// The corresponding parsed [StreamEvent] is returned alongside this
+	// kind by Classify; the runner emits it on the handle and waits for a
+	// response via [ExecutionHandle.Respond].
+	EventKindControl
+
+	// EventKindTerminalSuccess: the agent emitted a successful terminal
+	// event. The runner records success and stops processing further events.
+	EventKindTerminalSuccess
+
+	// EventKindTerminalError: the agent emitted a failed terminal event.
+	// The runner records failure and stops processing further events.
+	EventKindTerminalError
+)
+
+// AgentTransport is the per-agent protocol parser. It is pure: it consumes
+// [common.Event] values and produces classifications and encoded responses,
+// but performs no IO and owns no goroutines.
 //
-// A Transport is responsible for:
-//   - Decoding raw stdout values into AgentEvents
-//   - Handling interactive control events (permission requests, user questions)
-//     and writing the response payload back to the agent's stdin
-//   - Accumulating raw events into typed messages to forward to MessageHandler.OnMessage
-//
-// A Transport does NOT manage the process lifecycle.
+// Each agent type (Claude, Codex, …) provides its own AgentTransport.
 type AgentTransport interface {
-	// Decode parses one JSON-decoded output value (as delivered by the mitm.Runner
-	// in CodecJSON mode) into an AgentEvent.
-	Decode(raw any) (AgentEvent, error)
+	// Classify reports the kind of the event. For control events it also
+	// returns the parsed StreamEvent (ApprovalRequestEvent or
+	// AskRequestEvent) ready to emit on the handle.
+	//
+	// The execution-context fields (sessionID, chatID, platform, botUUID)
+	// previously set via SetExecutionContext are stamped onto the StreamEvent
+	// during Classify.
+	Classify(ev common.Event) (kind EventKind, parsed StreamEvent)
 
-	// HandleControl processes a control event and writes the response to the agent's
-	// stdin using write. Called only when AgentEvent.IsControl == true.
-	HandleControl(ctx context.Context, event AgentEvent, handler MessageHandler, write func(any) error) error
+	// AccumulateMessage feeds the event to the per-agent message accumulator
+	// and returns 0+ rich message values to emit as [MessageEvent.Raw]. The
+	// concrete type of each value is agent-specific (e.g.
+	// *claude.AssistantMessage). The runner does not introspect them.
+	AccumulateMessage(ev common.Event) []any
 
-	// AccumulateAndForward accumulates the event and returns:
-	//   - msgs: typed messages to forward to MessageHandler.OnMessage (nil for control/terminal events)
-	//   - isTerminal: whether the event signals execution end
-	//   - success: whether the terminal event indicates success
-	AccumulateAndForward(ae AgentEvent) (msgs []interface{}, isTerminal bool, success bool)
+	// EncodeControlResponse converts a [ControlResponse] into the wire value
+	// sent to the agent process's stdin via [protocol.Encoder].
+	//
+	// originalInput is the Input field of the corresponding
+	// ApprovalRequestEvent / AskRequestEvent; some agents (e.g. claude) use
+	// it when constructing the "allow" reply if the response did not supply
+	// an UpdatedInput.
+	EncodeControlResponse(reqID string, resp ControlResponse, originalInput map[string]any) any
+
+	// SetExecutionContext injects per-execution routing metadata that is
+	// stamped onto Approval/Ask events during Classify.
+	SetExecutionContext(sessionID, chatID, platform, botUUID string)
 }

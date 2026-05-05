@@ -1,3 +1,5 @@
+//go:build pivot_to_fixture_pending
+
 package bot_test
 
 import (

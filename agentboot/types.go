@@ -129,9 +129,6 @@ type ExecutionOptions struct {
 	OutputFormat OutputFormat
 	Timeout      time.Duration
 	Env          []string
-	// Handler is an optional message handler for real-time processing
-	// If provided, messages will be streamed to the handler during execution
-	Handler MessageHandler
 	// SessionID is the session ID to use or resume
 	// If Resume is true, --resume <session_id> is used to continue an existing session
 	// If Resume is false, --session-id <session_id> is used to create a new session with specific ID
@@ -377,20 +374,16 @@ type PermissionConfig struct {
 // Alias of common.Event — the two types are identical and interchangeable.
 type Event = common.Event
 
-// Agent is the interface for all agent types
+// Agent is the interface for all agent types.
+//
+// Execute returns an [ExecutionHandle]; the caller iterates handle.Events()
+// to consume the totally-ordered event stream, calls handle.Respond(...) to
+// answer Approval/Ask requests, and calls handle.Wait() to obtain the
+// aggregated [Result]. See the ExecutionHandle docs for lifecycle details.
 type Agent interface {
-	// Execute runs the agent with the given prompt
-	Execute(ctx context.Context, prompt string, opts ExecutionOptions) (*Result, error)
-
-	// IsAvailable checks if the agent is available
+	Execute(ctx context.Context, prompt string, opts ExecutionOptions) (ExecutionHandle, error)
 	IsAvailable() bool
-
-	// Type returns the agent type
 	Type() AgentType
-
-	// SetDefaultFormat sets the default output format
 	SetDefaultFormat(format OutputFormat)
-
-	// GetDefaultFormat returns the current default format
 	GetDefaultFormat() OutputFormat
 }

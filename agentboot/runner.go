@@ -4,46 +4,55 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/agentboot/mitm"
+	"github.com/tingly-dev/tingly-box/agentboot/common"
+	"github.com/tingly-dev/tingly-box/agentboot/process"
+	"github.com/tingly-dev/tingly-box/agentboot/protocol"
 )
 
-// Runner is a generic agent executor that composes an AgentDriver (process setup)
-// with an AgentTransport (protocol) to implement the Agent interface.
+// Runner is a generic agent executor that composes an [AgentDriver] (process
+// setup) with an [AgentTransport] (protocol parsing) and a [process.Factory]
+// (process supervision) to implement the [Agent] interface.
+//
+// The default Runner uses [process.NewOSExecFactory] to spawn real processes.
+// Tests inject [process.NewFakeFactory] via [NewRunnerWithFactory] to
+// substitute the binary while exercising the same driver and transport.
 type Runner struct {
 	mu            sync.RWMutex
 	driver        AgentDriver
 	transport     AgentTransport
+	procFactory   process.Factory
 	defaultFormat OutputFormat
 }
 
-// NewRunner creates a Runner from a driver and transport.
+// NewRunner creates a Runner backed by [process.NewOSExecFactory].
 func NewRunner(driver AgentDriver, transport AgentTransport) *Runner {
+	return NewRunnerWithFactory(driver, transport, process.NewOSExecFactory())
+}
+
+// NewRunnerWithFactory creates a Runner with a custom process factory. Use
+// [process.NewFakeFactory] in tests.
+func NewRunnerWithFactory(driver AgentDriver, transport AgentTransport, factory process.Factory) *Runner {
 	return &Runner{
 		driver:        driver,
 		transport:     transport,
+		procFactory:   factory,
 		defaultFormat: OutputFormatStreamJSON,
 	}
 }
 
-// Type returns the agent type from the underlying driver.
-func (r *Runner) Type() AgentType { return r.driver.Type() }
-
-// IsAvailable delegates to the driver.
+func (r *Runner) Type() AgentType   { return r.driver.Type() }
 func (r *Runner) IsAvailable() bool { return r.driver.IsAvailable() }
 
-// SetDefaultFormat sets the default output format.
 func (r *Runner) SetDefaultFormat(f OutputFormat) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.defaultFormat = f
 }
 
-// GetDefaultFormat returns the default output format.
 func (r *Runner) GetDefaultFormat() OutputFormat {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -53,17 +62,16 @@ func (r *Runner) GetDefaultFormat() OutputFormat {
 	return r.defaultFormat
 }
 
-// Execute runs the agent and blocks until completion.
+// Execute starts the agent and returns an [ExecutionHandle] for the caller
+// to consume events from and respond to control requests via.
 //
-//   - If opts.Handler is set, messages are streamed to the handler and (nil, err)
-//     is returned — the handler is responsible for collecting results.
-//   - Otherwise a ResultCollector is used internally and the collected result is
-//     returned when execution finishes.
-func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptions) (*Result, error) {
+// The returned handle's Events channel closes after the underlying process
+// has exited and all decoded events have been delivered. Wait then returns
+// the aggregated Result.
+func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptions) (ExecutionHandle, error) {
 	r.mu.RLock()
 	defaultFormat := r.defaultFormat
 	r.mu.RUnlock()
-
 	if opts.OutputFormat == "" {
 		opts.OutputFormat = defaultFormat
 	}
@@ -71,204 +79,227 @@ func (r *Runner) Execute(ctx context.Context, prompt string, opts ExecutionOptio
 		opts.OutputFormat = OutputFormatStreamJSON
 	}
 
-	timeout := opts.Timeout
-	logrus.Infof("runner.Execute: starting %s agent", r.driver.Type())
-
-	if opts.Handler != nil {
-		err := r.run(ctx, prompt, timeout, opts, opts.Handler)
-		return nil, err
-	}
-
-	return r.runCollect(ctx, prompt, timeout, opts)
-}
-
-// runCollect runs execution with an internal ResultCollector.
-func (r *Runner) runCollect(ctx context.Context, prompt string, timeout time.Duration, opts ExecutionOptions) (*Result, error) {
-	start := time.Now()
-
 	if !r.driver.IsAvailable() {
-		return &Result{Error: "agent CLI not found", Format: opts.OutputFormat}, exec.ErrNotFound
-	}
-
-	collector := newResultCollector()
-	if err := r.run(ctx, prompt, timeout, opts, collector); err != nil {
-		result := collector.result()
-		result.Duration = time.Since(start)
-		return result, err
-	}
-
-	result := collector.result()
-	result.Duration = time.Since(start)
-	if result.Error != "" {
-		return result, errors.New(result.Error)
-	}
-	return result, nil
-}
-
-// run is the core execution loop.
-func (r *Runner) run(
-	ctx context.Context,
-	prompt string,
-	timeout time.Duration,
-	opts ExecutionOptions,
-	handler MessageHandler,
-) error {
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-
-	if !r.driver.IsAvailable() {
-		return exec.ErrNotFound
+		return nil, errors.New("agent CLI not available")
 	}
 
 	spec, err := r.driver.Prepare(ctx, prompt, opts)
 	if err != nil {
-		return fmt.Errorf("prepare launch spec: %w", err)
+		return nil, fmt.Errorf("prepare launch spec: %w", err)
+	}
+	if len(spec.Command) == 0 {
+		return nil, errors.New("empty launch command")
 	}
 
-	cmd := spec.BuildCmd(ctx)
+	r.transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
 
-	mitmRunner := mitm.New(cmd, nil, nil)
-	mitmRunner.Codec = mitm.CodecJSON
+	runCtx, cancel := context.WithCancel(ctx)
+	if opts.Timeout > 0 {
+		runCtx, cancel = context.WithTimeout(runCtx, opts.Timeout)
+	}
 
-	// Feed initial input from the spec's bootstrap channel.
-	inputSource := mitm.NewChanSource(100)
-	feederDone := make(chan struct{})
-	go func() {
-		defer close(feederDone)
-		if spec.InitialInput == nil {
-			return
-		}
-		for {
-			select {
-			case m, ok := <-spec.InitialInput:
-				if !ok {
+	procSpec := process.LaunchSpec{
+		Path:    spec.Command[0],
+		Args:    spec.Command[1:],
+		Env:     spec.Env,
+		WorkDir: spec.WorkDir,
+	}
+
+	logrus.Infof("runner.Execute: starting %s", r.driver.Type())
+	proc, err := r.procFactory.Start(runCtx, procSpec)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("start process: %w", err)
+	}
+
+	decoder := protocol.NewDecoder(proc.Stdout())
+	encoder := protocol.NewEncoder(proc.Stdin())
+	decoderEvents, decoderErr := decoder.Stream(runCtx)
+
+	startTime := time.Now()
+
+	state := &runState{
+		opts:         opts,
+		startTime:    startTime,
+		pendingInput: make(map[string]map[string]any),
+	}
+
+	var handle *runnerHandle
+	handle = newRunnerHandle(
+		16,
+		// responseFn: encode and write the control response.
+		func(reqID string, resp ControlResponse) error {
+			state.mu.Lock()
+			input, ok := state.pendingInput[reqID]
+			if ok {
+				delete(state.pendingInput, reqID)
+			}
+			state.mu.Unlock()
+
+			wire := r.transport.EncodeControlResponse(reqID, resp, input)
+			if wire == nil {
+				return errors.New("transport produced nil control response")
+			}
+			return encoder.Encode(wire)
+		},
+		// cancelFn: cancel the run context. The pump goroutine will see
+		// ctx.Done(), kill the process, and close the stream.
+		cancel,
+		// waitFn: built below after we know the wg.
+		nil, // placeholder, filled in below
+	)
+
+	// Input feeder: consumes spec.InitialInput and writes via encoder.
+	var feederWG sync.WaitGroup
+	if spec.InitialInput != nil {
+		feederWG.Add(1)
+		go func() {
+			defer feederWG.Done()
+			for {
+				select {
+				case m, ok := <-spec.InitialInput:
+					if !ok {
+						return
+					}
+					if err := encoder.Encode(m); err != nil {
+						logrus.WithError(err).Debug("runner: input feeder encode error (process likely exited)")
+						return
+					}
+				case <-runCtx.Done():
 					return
 				}
-				inputSource.Write(m)
-			case <-ctx.Done():
-				return
 			}
+		}()
+	}
+
+	// Pump goroutine: classify decoded events, emit to handle, observe terminal.
+	var pumpWG sync.WaitGroup
+	pumpWG.Add(1)
+	go func() {
+		defer pumpWG.Done()
+		defer handle.closeStream()
+
+		for ev := range decoderEvents {
+			// Always append the raw event to result.Events for back-compat
+			// helpers (TextOutput, GetAssistantMessages, GetSessionID, …).
+			state.mu.Lock()
+			state.events = append(state.events, ev)
+			state.mu.Unlock()
+
+			kind, parsed := r.transport.Classify(ev)
+
+			switch kind {
+			case EventKindIgnore:
+				// Drop.
+
+			case EventKindMessage:
+				msgs := r.transport.AccumulateMessage(ev)
+				for _, m := range msgs {
+					handle.emit(runCtx, MessageEvent{Raw: m})
+				}
+
+			case EventKindControl:
+				// Stash the original input so EncodeControlResponse can use
+				// it later when no UpdatedInput is supplied by the consumer.
+				if parsed != nil {
+					var (
+						reqID string
+						input map[string]any
+					)
+					switch p := parsed.(type) {
+					case ApprovalRequestEvent:
+						reqID = p.ID
+						input = p.Input
+					case AskRequestEvent:
+						reqID = p.ID
+						input = p.Input
+					}
+					if reqID != "" {
+						state.mu.Lock()
+						state.pendingInput[reqID] = input
+						state.mu.Unlock()
+					}
+					handle.emit(runCtx, parsed)
+				}
+
+			case EventKindTerminalSuccess:
+				state.mu.Lock()
+				state.terminalSeen = true
+				state.terminalSuccess = true
+				state.mu.Unlock()
+				_ = proc.Kill()
+				// Continue draining; decoder loop ends after EOF.
+
+			case EventKindTerminalError:
+				state.mu.Lock()
+				state.terminalSeen = true
+				state.terminalSuccess = false
+				state.mu.Unlock()
+				_ = proc.Kill()
+			}
+		}
+
+		// Decoder closed (EOF, ctx, or error). Wait for the process to actually
+		// exit before considering execution done — this enforces the
+		// OnComplete-after-exit invariant the old runner violated.
+		_ = proc.Wait()
+
+		// Surface any decoder-level error as a tail ErrorEvent (non-fatal).
+		if dErr := decoderErr(); dErr != nil && !errors.Is(dErr, context.Canceled) {
+			handle.emit(runCtx, ErrorEvent{Err: dErr})
 		}
 	}()
-	mitmRunner.InputSource = inputSource
 
-	var processIntentionallyKilled bool
-	var inputSourceClosed bool
+	// Build the waitFn now that pumpWG / feederWG are spawned.
+	var waitOnce sync.Once
+	var waitResult *Result
+	var waitErr error
+	waitFn := func() (*Result, error) {
+		waitOnce.Do(func() {
+			pumpWG.Wait()
+			feederWG.Wait()
+			cancel()
 
-	write := func(msg any) error {
-		return inputSource.WriteWait(ctx, msg)
-	}
+			state.mu.Lock()
+			defer state.mu.Unlock()
 
-	mitmRunner.OutputHandler = func(octx context.Context, c *mitm.IOContext) (*mitm.OutputResult, error) {
-		ae, decErr := r.transport.Decode(c.Msg)
-		if decErr != nil {
-			return nil, fmt.Errorf("decode event: %w", decErr)
-		}
-
-		msgs, isTerminal, success := r.transport.AccumulateAndForward(ae)
-
-		switch {
-		case ae.IsControl:
-			if hErr := r.transport.HandleControl(octx, ae, handler, write); hErr != nil {
-				logrus.WithError(hErr).Error("runner: control handler error")
+			waitResult = &Result{
+				Format:   opts.OutputFormat,
+				Events:   append([]common.Event(nil), state.events...),
+				Duration: time.Since(state.startTime),
+				Metadata: map[string]any{},
 			}
-
-		case isTerminal:
-			handler.OnComplete(&CompletionResult{Success: success})
-			processIntentionallyKilled = true
-			_ = cmd.Process.Kill()
-			logrus.Debugf("runner: killed process %d after result event", cmd.Process.Pid)
-			// Close inputSource to unblock handleInput goroutine
-			if !inputSourceClosed {
-				inputSource.Close()
-				inputSourceClosed = true
+			if state.opts.SessionID != "" {
+				waitResult.Metadata["session_id"] = state.opts.SessionID
 			}
-			return &mitm.OutputResult{Action: mitm.Stop}, nil
-
-		default:
-			for _, msg := range msgs {
-				if msg == nil {
-					continue
-				}
-				if hErr := handler.OnMessage(msg); hErr != nil {
-					handler.OnError(hErr)
+			if state.terminalSeen && !state.terminalSuccess {
+				waitResult.Error = "agent reported error result"
+				waitErr = errors.New(waitResult.Error)
+			}
+			if rctxErr := runCtx.Err(); rctxErr != nil && !state.terminalSeen {
+				if errors.Is(rctxErr, context.DeadlineExceeded) {
+					waitResult.Error = "agent execution timed out"
+					waitErr = context.DeadlineExceeded
+				} else if errors.Is(rctxErr, context.Canceled) && ctx.Err() != nil {
+					waitErr = ctx.Err()
 				}
 			}
-		}
-
-		return &mitm.OutputResult{Action: mitm.Pass}, nil
+		})
+		return waitResult, waitErr
 	}
+	handle.waitFn = waitFn
 
-	runErr := mitmRunner.Run(ctx)
-	<-feederDone
-
-	// Close inputSource if not already closed
-	if !inputSourceClosed {
-		inputSource.Close()
-	}
-
-	if runErr != nil && processIntentionallyKilled {
-		if exitErr, ok := runErr.(*exec.ExitError); ok {
-			if exitErr.ProcessState != nil && !exitErr.ProcessState.Success() {
-				logrus.Debugf("runner: process terminated after intentional kill (expected)")
-				return nil
-			}
-		}
-	}
-
-	return runErr
+	return handle, nil
 }
 
-// --- internal ResultCollector -----------------------------------------------
+// runState is the shared accumulator driven by the pump goroutine.
+type runState struct {
+	mu sync.Mutex
 
-type resultCollector struct {
-	mu     sync.Mutex
-	events []Event
-	errStr string
-}
-
-func newResultCollector() *resultCollector { return &resultCollector{} }
-
-func (c *resultCollector) OnMessage(msg interface{}) error {
-	if e, ok := msg.(Event); ok {
-		c.mu.Lock()
-		c.events = append(c.events, e)
-		c.mu.Unlock()
-	}
-	return nil
-}
-
-func (c *resultCollector) OnError(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.errStr = err.Error()
-}
-
-func (c *resultCollector) OnComplete(r *CompletionResult) {
-	if r != nil && !r.Success && r.Error != "" {
-		c.mu.Lock()
-		c.errStr = r.Error
-		c.mu.Unlock()
-	}
-}
-
-func (c *resultCollector) OnApproval(_ context.Context, _ PermissionRequest) (PermissionResult, error) {
-	return PermissionResult{Approved: true}, nil
-}
-
-func (c *resultCollector) OnAsk(_ context.Context, req AskRequest) (AskResult, error) {
-	return AskResult{ID: req.ID, Approved: true}, nil
-}
-
-func (c *resultCollector) result() *Result {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return &Result{
-		Format: OutputFormatStreamJSON,
-		Events: c.events,
-		Error:  c.errStr,
-	}
+	opts            ExecutionOptions
+	startTime       time.Time
+	events          []common.Event
+	pendingInput    map[string]map[string]any
+	terminalSeen    bool
+	terminalSuccess bool
 }

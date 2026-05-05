@@ -15,11 +15,12 @@ import (
 // It is responsible for binary discovery, CLI argument construction,
 // and environment preparation. It does NOT communicate with the running process.
 type Driver struct {
-	mu        sync.RWMutex
-	config    Config
-	skipPerms bool
-	cliPath   string
-	discovery *CLIDiscovery
+	mu             sync.RWMutex
+	config         Config
+	skipPerms      bool
+	cliPath        string
+	discovery      *CLIDiscovery
+	forceAvailable bool
 }
 
 // NewDriver creates a new Claude Driver.
@@ -36,9 +37,22 @@ func (d *Driver) Type() agentboot.AgentType {
 	return agentboot.AgentTypeClaude
 }
 
+// SetForceAvailable bypasses binary-presence checks. Tests inject a
+// process.Factory that does not spawn the real claude binary; in that case
+// IsAvailable should return true regardless of what's on disk.
+func (d *Driver) SetForceAvailable(v bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.forceAvailable = v
+}
+
 // IsAvailable checks whether the Claude Code CLI binary is present and usable.
 func (d *Driver) IsAvailable() bool {
 	d.mu.RLock()
+	if d.forceAvailable {
+		d.mu.RUnlock()
+		return true
+	}
 	discovery := d.discovery
 	cliPath := d.cliPath
 	d.mu.RUnlock()

@@ -45,39 +45,21 @@ func (l *Launcher) GetDiscovery() *CLIDiscovery {
 	return l.driver.discovery
 }
 
-// Execute runs Claude Code with the given prompt.
-// If opts.Handler is set the result is delivered via the handler and nil is returned.
-func (l *Launcher) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*agentboot.Result, error) {
-	l.transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
+// Execute runs Claude Code and returns an [agentboot.ExecutionHandle].
+func (l *Launcher) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
 	return l.runner.Execute(ctx, prompt, opts)
 }
 
-// ExecuteWithTimeout runs Claude Code with a specific timeout.
+// ExecuteWithTimeout runs Claude Code with a specific timeout and returns an
+// [agentboot.ExecutionHandle].
 func (l *Launcher) ExecuteWithTimeout(
 	ctx context.Context,
 	prompt string,
 	timeout time.Duration,
 	opts agentboot.ExecutionOptions,
-) (*agentboot.Result, error) {
+) (agentboot.ExecutionHandle, error) {
 	opts.Timeout = timeout
-	l.transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
 	return l.runner.Execute(ctx, prompt, opts)
-}
-
-// ExecuteWithHandler runs Claude Code and streams events to handler.
-// Returns nil result; the handler receives all messages.
-func (l *Launcher) ExecuteWithHandler(
-	ctx context.Context,
-	prompt string,
-	timeout time.Duration,
-	opts agentboot.ExecutionOptions,
-	handler agentboot.MessageHandler,
-) error {
-	opts.Timeout = timeout
-	opts.Handler = handler
-	l.transport.SetExecutionContext(opts.SessionID, opts.ChatID, opts.Platform, opts.BotUUID)
-	_, err := l.runner.Execute(ctx, prompt, opts)
-	return err
 }
 
 // IsAvailable checks if Claude Code CLI is available.

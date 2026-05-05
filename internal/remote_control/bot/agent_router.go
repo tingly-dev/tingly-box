@@ -25,7 +25,6 @@ func NewAgentRouter(deps *ExecutorDependencies) *AgentRouter {
 
 	router.RegisterExecutor(NewClaudeCodeExecutor(deps))
 	router.RegisterExecutor(NewSmartGuideExecutor(deps))
-	router.RegisterExecutor(NewMockAgentExecutor(deps))
 
 	return router
 }
