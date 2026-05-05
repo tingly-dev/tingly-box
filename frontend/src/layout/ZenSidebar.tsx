@@ -1,6 +1,8 @@
 import { Box, Divider, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { useVersion } from '@/contexts/VersionContext';
 import { sidebarWidth, headerHeight, footerHeight } from './constants';
 import type { NavItem } from './types';
 
@@ -18,7 +20,10 @@ interface ZenSidebarProps {
  * - Add Profile button
  */
 export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActivityLabel }) => {
+    const { t } = useTranslation();
     const location = useLocation();
+    const { currentVersion } = useVersion();
+    const displayVersion = (currentVersion || 'Unknown').split('+')[0];
 
     const isActive = (path: string) => location.pathname === path;
 
@@ -153,8 +158,36 @@ export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActi
                 })}
             </List>
 
-            {/* Footer Slogan */}
-            <Box sx={{ height: footerHeight, py: 1.5, px: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+            {/* Footer: version + slogan */}
+            <Box
+                sx={{
+                    height: footerHeight,
+                    py: 1.5,
+                    px: 2,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 0.25,
+                }}
+            >
+                <Typography
+                    sx={{
+                        fontSize: '0.65rem',
+                        lineHeight: 1.2,
+                        color: 'text.secondary',
+                        fontVariantNumeric: 'tabular-nums',
+                        userSelect: 'text',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {t('layout.version', { version: displayVersion })}
+                </Typography>
                 <Tooltip title="For all Solo Builders, Dev Teams and Agents." placement="top" arrow>
                     <Typography
                         variant="caption"

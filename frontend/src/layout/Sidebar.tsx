@@ -35,8 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
     const location = useLocation();
     const { refresh } = useProfileContext();
     const { currentVersion } = useVersion();
-    const displayVersion = currentVersion.split('+')[0];
-    const showVersion = Boolean(currentVersion) && currentVersion !== 'Unknown';
+    const displayVersion = (currentVersion || 'Unknown').split('+')[0];
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
@@ -288,23 +287,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     gap: 0.25,
                 }}
             >
-                {showVersion && (
-                    <Typography
-                        sx={{
-                            fontSize: '0.65rem',
-                            lineHeight: 1.2,
-                            color: 'text.secondary',
-                            fontVariantNumeric: 'tabular-nums',
-                            userSelect: 'text',
-                            maxWidth: '100%',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
-                        {t('layout.version', { version: displayVersion })}
-                    </Typography>
-                )}
+                <Typography
+                    sx={{
+                        fontSize: '0.65rem',
+                        lineHeight: 1.2,
+                        color: 'text.secondary',
+                        fontVariantNumeric: 'tabular-nums',
+                        userSelect: 'text',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {t('layout.version', { version: displayVersion })}
+                </Typography>
                 <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
                     <Typography
                         variant="caption"
