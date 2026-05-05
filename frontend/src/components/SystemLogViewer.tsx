@@ -40,11 +40,12 @@ export interface SystemLogsResponse {
 interface SystemLogViewerProps {
     getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<SystemLogsResponse>;
     getRequestBody?: (bodyRef: string) => Promise<{ id: string; method: string; path: string; body: string; truncated: boolean } | null>;
+    pathPrefix?: string;
 }
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
-const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
+const SystemLogViewer = ({ getLogs, getRequestBody, pathPrefix }: SystemLogViewerProps) => {
     const [logs, setLogs] = useState<SystemLogEntry[]>([]);
     const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -162,20 +163,26 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
         }
     };
 
-    // Client-side filter
+    // Client-side filter: path prefix first, then level
     useEffect(() => {
-        if (selectedLevels.size === 0) {
-            setLogs(allLogs);
-        } else {
-            setLogs(allLogs.filter(log => {
+        let next = allLogs;
+        if (pathPrefix) {
+            next = next.filter(log => {
+                const p = (log.fields?.path as string | undefined) ?? '';
+                return p.startsWith(pathPrefix);
+            });
+        }
+        if (selectedLevels.size > 0) {
+            next = next.filter(log => {
                 const l = log.level?.toLowerCase() ?? '';
                 // match "warn" tag against "warn" or "warning"
                 return [...selectedLevels].some(sel =>
                     l === sel || (sel === 'warn' && l === 'warning')
                 );
-            }));
+            });
         }
-    }, [selectedLevels, allLogs]);
+        setLogs(next);
+    }, [selectedLevels, allLogs, pathPrefix]);
 
     useEffect(() => {
         loadLogs();

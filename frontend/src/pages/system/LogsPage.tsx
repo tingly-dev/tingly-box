@@ -1,5 +1,5 @@
 import { Box, FormControlLabel, Stack, Switch, Typography, Alert, Tabs, Tab } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import SystemLogViewer from '@/components/SystemLogViewer';
 import UnifiedCard from '@/components/UnifiedCard';
 
@@ -48,7 +48,6 @@ const LogsPage = () => {
                 const data = await response.json();
                 setDebugMode(data.level === 'debug');
             } else {
-                // Try to extract error message from response
                 let errorMsg = `Failed to fetch debug mode (${response.status})`;
                 try {
                     const errData = await response.json();
@@ -77,7 +76,6 @@ const LogsPage = () => {
             if (response.ok) {
                 setDebugMode(newDebugMode);
             } else {
-                // Try to extract error message from response
                 let errorMsg = `Failed to set debug mode (${response.status})`;
                 try {
                     const errData = await response.json();
@@ -91,6 +89,66 @@ const LogsPage = () => {
             setLoadingDebug(false);
         }
     };
+
+    const getLogs = useCallback(
+        async (params?: { limit?: number; level?: string; since?: string }) => {
+            setLogError(null);
+            try {
+                const queryParams = new URLSearchParams();
+                if (params?.limit) queryParams.append('limit', params.limit.toString());
+                if (params?.level) queryParams.append('level', params.level);
+                if (params?.since) queryParams.append('since', params.since);
+
+                const response = await fetch(`/api/v1/system/logs?${queryParams.toString()}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    let errorDetail = `HTTP error! status: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        if (errorData.error) {
+                            errorDetail = errorData.error;
+                        }
+                    } catch {
+                        errorDetail = response.statusText || errorDetail;
+                    }
+                    throw new Error(errorDetail);
+                }
+
+                const data = await response.json();
+                return {
+                    total: data.total || 0,
+                    logs: data.logs || [],
+                };
+            } catch (error: any) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                console.error('Failed to get logs:', errorMessage);
+                setLogError(`Failed to load logs: ${errorMessage}`);
+                return { total: 0, logs: [] };
+            }
+        },
+        [],
+    );
+
+    const getRequestBody = useCallback(async (bodyRef: string) => {
+        const response = await fetch(`/api/v1/log/request/${bodyRef}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
+            },
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                return null;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
+    }, []);
 
     return (
         <UnifiedCard
@@ -117,7 +175,7 @@ const LogsPage = () => {
                     onChange={(_, newValue) => setTabValue(newValue)}
                     sx={{ borderBottom: 1, borderColor: 'divider' }}
                 >
-                    <Tab label="HTTP Requests" />
+                    <Tab label="Model Requests" />
                     <Tab label="System Logs" />
                 </Tabs>
 
@@ -128,133 +186,21 @@ const LogsPage = () => {
                 )}
 
                 <TabPanel value={tabValue} index={0}>
-                    <HttpLogViewer
-                        token={localStorage.getItem('user_auth_token') || ''}
-                        onError={setLogError}
+                    <SystemLogViewer
+                        getLogs={getLogs}
+                        getRequestBody={getRequestBody}
+                        pathPrefix="/tingly/"
                     />
                 </TabPanel>
 
                 <TabPanel value={tabValue} index={1}>
                     <SystemLogViewer
-                        getLogs={async (params) => {
-                            setLogError(null);
-                            try {
-                                const queryParams = new URLSearchParams();
-                                if (params?.limit) queryParams.append('limit', params.limit.toString());
-                                if (params?.level) queryParams.append('level', params.level);
-                                if (params?.since) queryParams.append('since', params.since);
-
-                                const response = await fetch(`/api/v1/system/logs?${queryParams.toString()}`, {
-                                    headers: {
-                                        'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
-                                    },
-                                });
-
-                                if (!response.ok) {
-                                    let errorDetail = `HTTP error! status: ${response.status}`;
-                                    try {
-                                        const errorData = await response.json();
-                                        if (errorData.error) {
-                                            errorDetail = errorData.error;
-                                        }
-                                    } catch {
-                                        errorDetail = response.statusText || errorDetail;
-                                    }
-                                    throw new Error(errorDetail);
-                                }
-
-                                const data = await response.json();
-                                return {
-                                    total: data.total || 0,
-                                    logs: data.logs || [],
-                                };
-                            } catch (error: any) {
-                                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                                console.error('Failed to get system logs:', errorMessage);
-                                setLogError(`Failed to load system logs: ${errorMessage}`);
-                                return { total: 0, logs: [] };
-                            }
-                        }}
+                        getLogs={getLogs}
+                        getRequestBody={getRequestBody}
                     />
                 </TabPanel>
             </Stack>
         </UnifiedCard>
-    );
-};
-
-// HTTP Request Log Viewer Component
-interface HttpLogViewerProps {
-    token: string;
-    onError: (error: string | null) => void;
-}
-
-const HttpLogViewer = ({ token, onError }: HttpLogViewerProps) => {
-    const getLogs = async (params?: { limit?: number; level?: string; since?: string }) => {
-        try {
-            const queryParams = new URLSearchParams();
-            if (params?.limit) queryParams.append('limit', params.limit.toString());
-            if (params?.level) queryParams.append('level', params.level);
-            if (params?.since) queryParams.append('since', params.since);
-
-            const response = await fetch(`/api/v1/log?${queryParams.toString()}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                let errorDetail = `HTTP error! status: ${response.status}`;
-                try {
-                    const errorData = await response.json();
-                    if (errorData.error) {
-                        errorDetail = errorData.error;
-                    }
-                } catch {
-                    errorDetail = response.statusText || errorDetail;
-                }
-                throw new Error(errorDetail);
-            }
-
-            const data = await response.json();
-            return {
-                total: data.total || 0,
-                logs: data.logs || [],
-            };
-        } catch (error: any) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            console.error('Failed to get HTTP logs:', errorMessage);
-            onError(`Failed to load HTTP logs: ${errorMessage}`);
-            return { total: 0, logs: [] };
-        }
-    };
-
-    const getRequestBody = async (bodyRef: string) => {
-        try {
-            const response = await fetch(`/api/v1/log/request/${bodyRef}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    return null;
-                }
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            return await response.json();
-        } catch (error: any) {
-            console.error('Failed to get request body:', error);
-            throw error;
-        }
-    };
-
-    return (
-        <SystemLogViewer
-            getLogs={getLogs}
-            getRequestBody={getRequestBody}
-        />
     );
 };
 
