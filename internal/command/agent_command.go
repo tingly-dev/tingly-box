@@ -33,9 +33,9 @@ func (a *AgentListFlagCmdKong) Run(appManager *AppManager) error {
 
 // AgentApplyFlagCmdKong applies agent configuration via flags
 type AgentApplyFlagCmdKong struct {
-	AgentType  string `kong:"arg,optional,help='Agent type (claude-code, opencode, codex)'"`
-	Provider   string `kong:"flag,name='provider',help='Provider UUID'"`
-	Model      string `kong:"flag,name='model',help='Model name'"`
+	AgentType  string `kong:"arg,optional,help='Agent type (cc/claude-code, oc/opencode)'"`
+	Provider   string `kong:"flag,name='provider',help='Provider UUID (optional, uses routing rule if not specified)'"`
+	Model      string `kong:"flag,name='model',help='Model name (optional, uses routing rule if not specified)'"`
 	Unified    bool   `kong:"flag,name='unified',default='true',help='Unified mode (claude-code only)'"`
 	StatusLine bool   `kong:"flag,name='status-line',help='Install status line integration (claude-code only)'"`
 	Force      bool   `kong:"flag,name='force',help='Skip confirmation'"`
@@ -44,9 +44,6 @@ type AgentApplyFlagCmdKong struct {
 
 func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 	var req agent.ApplyAgentRequest
-	req.AgentType = agent.AgentType(a.AgentType)
-	req.Provider = a.Provider
-	req.Model = a.Model
 	req.Unified = a.Unified
 	req.InstallStatusLine = a.StatusLine
 	req.Force = a.Force
@@ -54,7 +51,7 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 
 	reader := bufio.NewReader(os.Stdin)
 
-	// Handle agent type: empty vs invalid vs valid
+	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
 		// No agent type specified, prompt for selection
 		agentType, err := promptForAgentTypeChoice(reader)
@@ -62,19 +59,23 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 			return err
 		}
 		req.AgentType = agentType
-	} else if !req.AgentType.IsValid() {
-		// Invalid agent type provided - fail fast
-		fmt.Fprintf(os.Stderr, "Unknown agent type: %s\n\n", a.AgentType)
-		fmt.Fprintln(os.Stderr, "Available agent types:")
-		fmt.Fprintln(os.Stderr, "  claude-code - Claude Code CLI agent (@cc)")
-		fmt.Fprintln(os.Stderr, "  opencode   - OpenCode editor agent (@oc)")
-		fmt.Fprintln(os.Stderr, "  codex      - Codex agent (@cx)")
-		return fmt.Errorf("unknown agent type: %s", a.AgentType)
+	} else {
+		// Parse agent type with alias support (cc, claude-code, etc.)
+		parsedType, err := agent.ParseAgentType(a.AgentType)
+		if err != nil {
+			// Invalid agent type provided - fail fast with helpful message
+			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+			fmt.Fprintln(os.Stderr, "Available agent types:")
+			fmt.Fprintln(os.Stderr, "  cc, claude-code - Claude Code CLI agent (@cc)")
+			fmt.Fprintln(os.Stderr, "  oc, opencode   - OpenCode editor agent (@oc)")
+			return fmt.Errorf("invalid agent type: %s", a.AgentType)
+		}
+		req.AgentType = parsedType
 	}
 
-	// Interactive prompts if provider/model not specified
+	// Resolve provider and model from routing rules if not explicitly specified
 	if req.Provider == "" || req.Model == "" {
-		if err := promptForAgentConfig(reader, appManager, &req); err != nil {
+		if err := resolveAgentConfigFromRules(appManager, &req); err != nil {
 			return err
 		}
 	}
@@ -103,7 +104,7 @@ type AgentShowFlagCmdKong struct {
 func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	// Handle agent type: empty vs invalid vs valid
+	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
 		// No agent type specified, prompt for selection
 		agentType, err := promptForAgentTypeChoice(reader)
@@ -113,11 +114,12 @@ func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
 		return showAgentConfig(appManager, agentType)
 	}
 
-	agentType := agent.AgentType(a.AgentType)
-	if !agentType.IsValid() {
-		// Invalid agent type provided - fail fast
-		fmt.Fprintf(os.Stderr, "Unknown agent type: %s\n\n", a.AgentType)
-		return fmt.Errorf("unknown agent type: %s", a.AgentType)
+	// Parse agent type with alias support (cc, claude-code, etc.)
+	agentType, err := agent.ParseAgentType(a.AgentType)
+	if err != nil {
+		// Invalid agent type provided - fail fast with helpful message
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return fmt.Errorf("invalid agent type: %s", a.AgentType)
 	}
 
 	return showAgentConfig(appManager, agentType)
@@ -131,12 +133,11 @@ type AgentRestoreFlagCmdKong struct {
 
 func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 	var req agent.RestoreAgentRequest
-	req.AgentType = agent.AgentType(a.AgentType)
 	req.Force = a.Force
 
 	reader := bufio.NewReader(os.Stdin)
 
-	// Handle agent type: empty vs invalid vs valid
+	// Handle agent type: empty vs invalid vs valid (with alias support)
 	if a.AgentType == "" {
 		// No agent type specified, prompt for selection
 		agentType, err := promptForAgentTypeChoice(reader)
@@ -144,10 +145,15 @@ func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 			return err
 		}
 		req.AgentType = agentType
-	} else if !req.AgentType.IsValid() {
-		// Invalid agent type provided - fail fast
-		fmt.Fprintf(os.Stderr, "Unknown agent type: %s\n\n", a.AgentType)
-		return fmt.Errorf("unknown agent type: %s", a.AgentType)
+	} else {
+		// Parse agent type with alias support (cc, claude-code, etc.)
+		parsedType, err := agent.ParseAgentType(a.AgentType)
+		if err != nil {
+			// Invalid agent type provided - fail fast with helpful message
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return fmt.Errorf("invalid agent type: %s", a.AgentType)
+		}
+		req.AgentType = parsedType
 	}
 
 	info, ok := agent.GetAgentInfo(req.AgentType)
@@ -274,6 +280,58 @@ func promptForAgentConfig(reader *bufio.Reader, appManager *AppManager, req *age
 	}
 
 	return nil
+}
+
+// resolveAgentConfigFromRules resolves provider and model from existing routing rules.
+// This is the preferred way for "agent apply" - use what was configured by quickstart.
+// Falls back to prompting if no rules are configured.
+func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRequest) error {
+	globalConfig := appManager.GetGlobalConfig()
+
+	// Determine request model and scenario based on agent type
+	var requestModel string
+	var scenario typ.RuleScenario
+
+	switch req.AgentType {
+	case agent.AgentTypeClaudeCode:
+		requestModel = "tingly/cc"
+		scenario = typ.ScenarioClaudeCode
+	case agent.AgentTypeOpenCode:
+		requestModel = "tingly-opencode"
+		scenario = typ.ScenarioOpenCode
+	default:
+		return fmt.Errorf("unsupported agent type: %s", req.AgentType)
+	}
+
+	// Look for existing routing rule
+	rule := globalConfig.GetRuleByRequestModelAndScenario(requestModel, scenario)
+
+	// If rule exists and has services, use provider/model from it
+	if rule != nil && len(rule.Services) > 0 {
+		service := rule.Services[0]
+		if service.Provider != "" && service.Model != "" {
+			// Verify the provider still exists
+			provider, err := globalConfig.GetProviderByUUID(service.Provider)
+			if err == nil && provider != nil {
+				// Use the provider and model from the routing rule
+				if req.Provider == "" {
+					req.Provider = service.Provider
+				}
+				if req.Model == "" {
+					req.Model = service.Model
+				}
+				fmt.Printf("Using existing routing rule '%s' with provider '%s' and model '%s'\n",
+					requestModel, provider.Name, service.Model)
+				return nil
+			}
+		}
+	}
+
+	// No rule found or rule is invalid - prompt for configuration
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Printf("\nNo routing rule found for '%s' in scenario '%s'.\n", requestModel, scenario)
+	fmt.Println("You may need to run 'tingly-box quickstart' first, or configure manually:")
+	return promptForAgentConfig(reader, appManager, req)
 }
 
 // promptForAgentProviderChoice prompts user to select a provider

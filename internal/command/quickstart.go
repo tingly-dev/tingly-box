@@ -241,22 +241,8 @@ func quickstartAddFromTemplate(reader *bufio.Reader, appManager *AppManager, tmp
 	name := tmpl.ID
 	fmt.Printf("\nConfiguring %s...\n", tmpl.Name)
 
-	// Check if provider with this name already exists
-	if existing, err := appManager.GetProvider(name); err == nil && existing != nil {
-		fmt.Printf("Provider '%s' already exists.\n", name)
-		useExisting, err := promptForConfirmation(reader, "Use existing provider? (Y/n): ")
-		if err != nil {
-			return nil, err
-		}
-		if useExisting {
-			return existing, nil
-		}
-		// Ask for new name
-		name, err = promptForInput(reader, "Enter a new provider name: ", true)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// Note: We don't check for existing provider by name anymore.
+	// Multiple providers can have the same name - they are distinguished by UUID.
 
 	// Determine base URL based on pre-selected API style
 	var apiBase string
@@ -288,12 +274,13 @@ func quickstartAddFromTemplate(reader *bufio.Reader, appManager *AppManager, tmp
 	}
 
 	// Add the provider using AppManager
-	if err := appManager.AddProvider(name, apiBase, token, apiStyle); err != nil {
+	providerUUID, err := appManager.AddProvider(name, apiBase, token, apiStyle)
+	if err != nil {
 		return nil, fmt.Errorf("failed to add provider: %w", err)
 	}
 
 	// Get the created provider and set proxy if provided
-	provider, err := appManager.GetProvider(name)
+	provider, err := appManager.GetProvider(providerUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -317,11 +304,8 @@ func quickstartAddCustomProviderWithStyle(reader *bufio.Reader, appManager *AppM
 		return nil, err
 	}
 
-	// Check if provider already exists
-	if existing, err := appManager.GetProvider(name); err == nil && existing != nil {
-		fmt.Printf("Provider '%s' already exists.\n", name)
-		return nil, fmt.Errorf("provider already exists")
-	}
+	// Note: We don't check for existing provider by name anymore.
+	// Multiple providers can have the same name - they are distinguished by UUID.
 
 	// Show suggested URL based on API style
 	var suggestedURL string
@@ -345,11 +329,12 @@ func quickstartAddCustomProviderWithStyle(reader *bufio.Reader, appManager *AppM
 	}
 
 	// Add the provider with pre-selected API style
-	if err := appManager.AddProvider(name, apiBase, token, apiStyle); err != nil {
+	providerUUID, err := appManager.AddProvider(name, apiBase, token, apiStyle)
+	if err != nil {
 		return nil, fmt.Errorf("failed to add provider: %w", err)
 	}
 
-	provider, err := appManager.GetProvider(name)
+	provider, err := appManager.GetProvider(providerUUID)
 	if err != nil {
 		return nil, err
 	}
