@@ -75,9 +75,18 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req PreparedRequest) (*
 	// Create streaming handler (shared meta pointer)
 	streamHandler := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
-	// Create composite handler
+	// Create composite handler. The CompletionCallback is what sends the
+	// "Task done" footer + action keyboard at the end of a successful run
+	// and writes the final session status. Mock and Claude Code share the
+	// same callback so both paths look identical to the user.
 	compositeHandler := agentboot.NewCompositeHandler().
 		SetStreamer(streamHandler).
+		SetCompletionCallback(&CompletionCallback{
+			hCtx:       req.HCtx,
+			sessionID:  sessionID,
+			sessionMgr: e.deps.SessionMgr,
+			meta:       meta,
+		}).
 		SetApprovalHandler(e.deps.IMPrompter).
 		SetAskHandler(e.deps.IMPrompter)
 
@@ -133,14 +142,14 @@ func (e *MockAgentExecutor) Execute(ctx context.Context, req PreparedRequest) (*
 		}, err
 	}
 
-	e.deps.SessionMgr.SetCompleted(sessionID, response)
+	// Persist the assistant turn to the session log. CompletionCallback
+	// already handled the "Task done" card and SetCompleted; the response
+	// text was streamed to chat by streamingMessageHandler during execution.
 	e.deps.SessionMgr.AppendMessage(sessionID, session.Message{
 		Role:      "assistant",
 		Content:   response,
 		Timestamp: time.Now(),
 	})
-
-	e.deps.SendTextWithActionKeyboard(req.HCtx, response, req.ReplyTo)
 
 	return &ExecutionResult{
 		SessionID:    sessionID,
