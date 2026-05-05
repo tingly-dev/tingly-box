@@ -1,5 +1,3 @@
-//go:build !legacy
-
 package main
 
 import (
@@ -56,7 +54,7 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 	}
 }
 
-func TestAgentKongParsesAllFlags(t *testing.T) {
+func TestAgentCmdParsesAllFlags(t *testing.T) {
 	cli, parser := newTestParser(t)
 	_, err := parser.Parse([]string{
 		"agent", "claude",
@@ -98,7 +96,7 @@ func TestAgentKongParsesAllFlags(t *testing.T) {
 	}
 }
 
-func TestAgentKongTimeoutDefaultIs2m(t *testing.T) {
+func TestAgentCmdTimeoutDefaultIs2m(t *testing.T) {
 	cli, parser := newTestParser(t)
 	if _, err := parser.Parse([]string{"agent", "--mock", "claude"}); err != nil {
 		t.Fatalf("parse failed: %v", err)
@@ -108,7 +106,7 @@ func TestAgentKongTimeoutDefaultIs2m(t *testing.T) {
 	}
 }
 
-func TestMatrixKongNonStreamingFlag(t *testing.T) {
+func TestMatrixCmdNonStreamingFlag(t *testing.T) {
 	cli, parser := newTestParser(t)
 	if _, err := parser.Parse([]string{"matrix", "--non-streaming"}); err != nil {
 		t.Fatalf("--non-streaming should parse: %v", err)
@@ -118,8 +116,8 @@ func TestMatrixKongNonStreamingFlag(t *testing.T) {
 	}
 }
 
-func TestProviderKongDefaultReturnsNotImplemented(t *testing.T) {
-	var p ProviderKong
+func TestProviderTestCmdReturnsNotImplemented(t *testing.T) {
+	var p ProviderTestCmd
 	err := p.Run()
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -129,13 +127,24 @@ func TestProviderKongDefaultReturnsNotImplemented(t *testing.T) {
 	}
 }
 
-func TestVersionKongPrintsAllFields(t *testing.T) {
+func TestProviderListCmdReturnsNotImplemented(t *testing.T) {
+	var p ProviderListCmd
+	err := p.Run()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "not yet implemented") {
+		t.Errorf("expected not-implemented error, got: %v", err)
+	}
+}
+
+func TestVersionCmdPrintsAllFields(t *testing.T) {
 	version = "test-version"
 	gitCommit = "test-commit"
 	buildTime = "test-time"
 
 	out := captureStdout(t, func() {
-		v := &VersionKong{}
+		v := &VersionCmd{}
 		if err := v.Run(); err != nil {
 			t.Fatalf("Run failed: %v", err)
 		}
