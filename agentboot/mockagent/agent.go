@@ -2,8 +2,6 @@ package mock
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
-// mockToolNames are the tool names used in mock permission requests
+// mockToolNames are the tool names used by the linear default script.
 var mockToolNames = []string{
 	"mock_tool_read",
 	"mock_tool_write",
@@ -22,8 +20,13 @@ var mockToolNames = []string{
 	"mock_tool_analyze",
 }
 
-// Agent implements the agentboot.Agent interface for testing purposes.
-// It simulates agent behavior by repeatedly requesting user permission confirmations.
+// Agent is a scriptable mock agentboot.Agent for tests.
+//
+// Two ways to drive it:
+//
+//   - Pass Config{Script: ...} to declare an explicit event sequence.
+//   - Pass legacy Config{MaxIterations, AskUserQuestionFrequency, ...} to
+//     fall back to the linear default script.
 type Agent struct {
 	config        Config
 	abConfig      agentboot.Config
@@ -31,7 +34,7 @@ type Agent struct {
 	mu            sync.RWMutex
 }
 
-// NewAgent creates a new mock agent with the given configuration
+// NewAgent creates a new mock agent with the given configuration.
 func NewAgent(config Config) *Agent {
 	config = config.Merge(DefaultConfig())
 	return &Agent{
@@ -40,351 +43,204 @@ func NewAgent(config Config) *Agent {
 	}
 }
 
-// NewAgentWithConfig creates a new mock agent with both mock and agentboot configs
+// NewAgentWithConfig creates a new mock agent with both mock and agentboot configs.
 func NewAgentWithConfig(mockConfig Config, abConfig agentboot.Config) *Agent {
-	agent := NewAgent(mockConfig)
-	agent.abConfig = abConfig
-	return agent
+	a := NewAgent(mockConfig)
+	a.abConfig = abConfig
+	return a
 }
 
-// Execute runs the mock agent, simulating permission request cycles
+// Execute plays the agent's script (explicit or linear-default) and returns
+// the captured event stream.
 func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*agentboot.Result, error) {
 	startTime := time.Now()
 	logrus.Infof("[MockAgent] Starting execution with prompt: %s", truncatePrompt(prompt))
 
-	var events []agentboot.Event
+	a.mu.RLock()
+	cfg := a.config
+	a.mu.RUnlock()
+
 	sessionID := opts.SessionID
 	if sessionID == "" {
 		sessionID = uuid.NewString()[:8]
 	}
 
-	// Generate session init event
-	initMsg := agentboot.NewInitMessage(agentboot.AgentTypeMockAgent, sessionID, a.config.MaxIterations)
-	events = append(events, initMsg.ToEvent())
-
-	// Send via handler if available
-	if opts.Handler != nil {
-		if err := opts.Handler.OnMessage(initMsg); err != nil {
-			opts.Handler.OnError(err)
-		}
+	script := cfg.Script
+	if len(script) == 0 {
+		script = defaultLinearScript(cfg)
 	}
 
-	// Process through iterations
-	for step := 1; step <= a.config.MaxIterations; step++ {
+	var events []agentboot.Event
+	state := &runState{
+		agentType:  agentboot.AgentTypeMockAgent,
+		sessionID:  sessionID,
+		prompt:     prompt,
+		handler:    opts.Handler,
+		opts:       opts,
+		cfg:        cfg,
+		events:     &events,
+		totalSteps: cfg.MaxIterations,
+	}
+
+	if err := state.emit(agentboot.NewInitMessage(state.agentType, sessionID, cfg.MaxIterations)); err != nil {
+		logrus.WithError(err).Warn("[MockAgent] init handler error")
+	}
+
+	for i, step := range script {
 		select {
 		case <-ctx.Done():
-			logrus.Infof("[MockAgent] Context cancelled at step %d", step)
-			resultMsg := agentboot.NewResultMessage(agentboot.AgentTypeMockAgent, sessionID, "cancelled", "Context cancelled by user")
-			events = append(events, resultMsg.ToEvent())
-
-			if opts.Handler != nil {
-				opts.Handler.OnComplete(&agentboot.CompletionResult{
-					Success:    false,
-					DurationMS: time.Since(startTime).Milliseconds(),
-					SessionID:  sessionID,
-					Error:      "Context cancelled",
-				})
-			}
-
-			return a.buildResult(events, startTime, sessionID), ctx.Err()
+			return a.finishCancelled(state, startTime, ctx.Err()), ctx.Err()
 		default:
 		}
-
-		// Generate tool name for this step
-		toolName := mockToolNames[(step-1)%len(mockToolNames)]
-
-		// Check if this should be an AskUserQuestion request
-		var isAskUserQuestion bool
-		var askInput map[string]interface{}
-
-		if a.config.AskUserQuestionFrequency > 0 && step%a.config.AskUserQuestionFrequency == 0 {
-			isAskUserQuestion = true
-			askInput = map[string]interface{}{
-				"questions": []map[string]interface{}{
-					{
-						"question": fmt.Sprintf("Mock question %d of %d", step, a.config.MaxIterations),
-						"header":   "Mock",
-						"options": []map[string]interface{}{
-							{
-								"label":       "Option A",
-								"description": "First option",
-							},
-							{
-								"label":       "Option B",
-								"description": "Second option",
-							},
-							{
-								"label":       "Option C",
-								"description": "Third option",
-							},
-						},
-					},
-				},
-			}
+		state.stepIdx = i + 1
+		if err := step.play(ctx, state); err != nil {
+			return a.finishWithError(state, startTime, err), err
 		}
-
-		var approved bool
-
-		if isAskUserQuestion {
-			// Handle AskUserQuestion
-			req := agentboot.AskRequest{
-				ID:        uuid.NewString()[:8],
-				Type:      "tool_use",
-				AgentType: agentboot.AgentTypeMockAgent,
-				Platform:  opts.Platform,
-				ChatID:    opts.ChatID,
-				SessionID: sessionID,
-				ToolName:  "AskUserQuestion",
-				Input:     askInput,
-			}
-
-			// Create unified permission request message
-			permReqMsg := agentboot.NewPermissionRequestMessage(
-				agentboot.AgentTypeMockAgent, sessionID, req.ID, req.ToolName, req.Input, "Mock AskUserQuestion",
-			)
-			permReqMsg.Step = step
-			permReqMsg.Total = a.config.MaxIterations
-			events = append(events, permReqMsg.ToEvent())
-
-			// Send via handler if available
-			if opts.Handler != nil {
-				if err := opts.Handler.OnMessage(permReqMsg); err != nil {
-					opts.Handler.OnError(err)
-				}
-			}
-
-			// Get decision
-			if a.config.AutoApprove {
-				approved = true
-			} else if opts.Handler != nil {
-				result, e := opts.Handler.OnAsk(ctx, req)
-				if e != nil {
-					logrus.Errorf("[MockAgent] Ask handler error: %v", e)
-					approved = false
-				} else {
-					approved = result.Approved
-				}
-			} else {
-				approved = true // Default to approved if no handler
-			}
-
-			// Create permission result message
-			if approved {
-				permResultMsg := agentboot.NewPermissionResultMessage(
-					agentboot.AgentTypeMockAgent, sessionID, req.ID, true, "Approved",
-				)
-				events = append(events, permResultMsg.ToEvent())
-			} else {
-				permResultMsg := agentboot.NewPermissionResultMessage(
-					agentboot.AgentTypeMockAgent, sessionID, req.ID, false, "Denied",
-				)
-				events = append(events, permResultMsg.ToEvent())
-
-				resultMsg := agentboot.NewResultMessage(
-					agentboot.AgentTypeMockAgent, sessionID, "ask_denied",
-					fmt.Sprintf("AskUserQuestion denied at step %d", step),
-				)
-				events = append(events, resultMsg.ToEvent())
-
-				if opts.Handler != nil {
-					opts.Handler.OnComplete(&agentboot.CompletionResult{
-						Success:    false,
-						DurationMS: time.Since(startTime).Milliseconds(),
-						SessionID:  sessionID,
-						Error:      "AskUserQuestion denied",
-					})
-				}
-
-				return a.buildResult(events, startTime, sessionID), nil
-			}
-		} else {
-			// Regular permission request
-			req := agentboot.PermissionRequest{
-				RequestID: uuid.NewString()[:8],
-				AgentType: agentboot.AgentTypeMockAgent,
-				ToolName:  toolName,
-				Input: map[string]interface{}{
-					"step":      step,
-					"total":     a.config.MaxIterations,
-					"prompt":    truncatePrompt(prompt),
-					"command":   fmt.Sprintf("mock_command --step %d --input %q", step, truncatePrompt(prompt)),
-					"_chat_id":  opts.ChatID,
-					"_platform": opts.Platform,
-				},
-				Reason:    fmt.Sprintf("Mock permission request %d of %d", step, a.config.MaxIterations),
-				Timestamp: time.Now(),
-				SessionID: sessionID,
-			}
-
-			// Create unified permission request message
-			permReqMsg := agentboot.NewPermissionRequestMessage(
-				agentboot.AgentTypeMockAgent, sessionID, req.RequestID, req.ToolName, req.Input, req.Reason,
-			)
-			permReqMsg.Step = step
-			permReqMsg.Total = a.config.MaxIterations
-			events = append(events, permReqMsg.ToEvent())
-
-			// Send via handler if available
-			if opts.Handler != nil {
-				if err := opts.Handler.OnMessage(permReqMsg); err != nil {
-					opts.Handler.OnError(err)
-				}
-			}
-
-			// Get permission decision using the new OnApproval method
-			if a.config.AutoApprove {
-				approved = true
-			} else if opts.Handler != nil {
-				result, e := opts.Handler.OnApproval(ctx, req)
-				if e != nil {
-					logrus.Errorf("[MockAgent] Permission handler error: %v", e)
-					approved = false
-				} else {
-					approved = result.Approved
-				}
-			} else {
-				approved = true // Default to approved if no handler
-			}
-
-			// Handle permission response
-			if !approved {
-				logrus.Infof("[MockAgent] Permission denied at step %d", step)
-
-				// Create unified permission result message (denied)
-				permResultMsg := agentboot.NewPermissionResultMessage(
-					agentboot.AgentTypeMockAgent, sessionID, req.RequestID, false, "Denied",
-				)
-				events = append(events, permResultMsg.ToEvent())
-
-				// Send result event
-				resultMsg := agentboot.NewResultMessage(
-					agentboot.AgentTypeMockAgent, sessionID, "permission_denied",
-					fmt.Sprintf("Permission denied at step %d", step),
-				)
-				events = append(events, resultMsg.ToEvent())
-
-				if opts.Handler != nil {
-					opts.Handler.OnComplete(&agentboot.CompletionResult{
-						Success:    false,
-						DurationMS: time.Since(startTime).Milliseconds(),
-						SessionID:  sessionID,
-						Error:      "Permission denied",
-					})
-				}
-
-				return a.buildResult(events, startTime, sessionID), nil
-			}
-
-			// Permission approved - create unified result message
-			permResultMsg := agentboot.NewPermissionResultMessage(
-				agentboot.AgentTypeMockAgent, sessionID, req.RequestID, true, "Approved",
-			)
-			events = append(events, permResultMsg.ToEvent())
+		if state.halt {
+			break
 		}
-
-		// Generate assistant response
-		responseText := a.formatResponse(step, prompt)
-		assistantMsg := agentboot.NewAssistantMessage(agentboot.AgentTypeMockAgent, sessionID, responseText)
-		events = append(events, assistantMsg.ToEvent())
-
-		// Send via handler if available
-		if opts.Handler != nil {
-			if err := opts.Handler.OnMessage(assistantMsg); err != nil {
-				opts.Handler.OnError(err)
-			}
-		}
-
-		// Add delay between steps (except for the last step)
-		if step < a.config.MaxIterations {
+		if cfg.StepDelay > 0 && i < len(script)-1 {
 			select {
-			case <-time.After(a.config.StepDelay):
-				// Continue to next step
+			case <-time.After(cfg.StepDelay):
 			case <-ctx.Done():
-				logrus.Infof("[MockAgent] Context cancelled during delay at step %d", step)
-
-				if opts.Handler != nil {
-					opts.Handler.OnComplete(&agentboot.CompletionResult{
-						Success:    false,
-						DurationMS: time.Since(startTime).Milliseconds(),
-						SessionID:  sessionID,
-						Error:      "Context cancelled",
-					})
-				}
-
-				return a.buildResult(events, startTime, sessionID), ctx.Err()
+				return a.finishCancelled(state, startTime, ctx.Err()), ctx.Err()
 			}
 		}
 	}
 
-	// All iterations completed successfully
-	resultMsg := agentboot.NewResultMessage(
-		agentboot.AgentTypeMockAgent, sessionID, "success", "Mock agent completed all iterations",
-	)
-	events = append(events, resultMsg.ToEvent())
+	if !hasFinalResult(events) {
+		_ = state.emit(agentboot.NewResultMessage(
+			state.agentType, sessionID, "success", "Mock agent completed all iterations",
+		))
+	}
 
-	// Notify handler of completion
-	if opts.Handler != nil {
-		opts.Handler.OnComplete(&agentboot.CompletionResult{
-			Success:    true,
+	if state.handler != nil {
+		successTerm := isSuccessTerminal(events)
+		completion := &agentboot.CompletionResult{
+			Success:    successTerm && len(state.mismatches) == 0,
 			DurationMS: time.Since(startTime).Milliseconds(),
 			SessionID:  sessionID,
-		})
+		}
+		if !successTerm {
+			completion.Error = lastResultMessage(events)
+		} else if len(state.mismatches) > 0 {
+			completion.Error = state.mismatches[0]
+		}
+		state.handler.OnComplete(completion)
 	}
 
-	return a.buildResult(events, startTime, sessionID), nil
+	return a.buildResult(events, startTime, sessionID, state.mismatches), nil
 }
 
-// formatResponse generates a mock response text
-func (a *Agent) formatResponse(step int, prompt string) string {
-	text := a.config.ResponseTemplate
-	text = strings.ReplaceAll(text, "{step}", fmt.Sprintf("%d", step))
-	text = strings.ReplaceAll(text, "{total}", fmt.Sprintf("%d", a.config.MaxIterations))
-	text = strings.ReplaceAll(text, "{prompt}", truncatePrompt(prompt))
-	return text
+func (a *Agent) finishCancelled(state *runState, startTime time.Time, err error) *agentboot.Result {
+	if !hasFinalResult(*state.events) {
+		_ = state.emit(agentboot.NewResultMessage(
+			state.agentType, state.sessionID, "cancelled", "Context cancelled by user",
+		))
+	}
+	if state.handler != nil {
+		state.handler.OnComplete(&agentboot.CompletionResult{
+			Success:    false,
+			DurationMS: time.Since(startTime).Milliseconds(),
+			SessionID:  state.sessionID,
+			Error:      err.Error(),
+		})
+	}
+	return a.buildResult(*state.events, startTime, state.sessionID, state.mismatches)
 }
 
-// buildResult constructs the final result
-func (a *Agent) buildResult(events []agentboot.Event, startTime time.Time, sessionID string) *agentboot.Result {
-	return &agentboot.Result{
-		Output:   "", // Text output is empty for stream-json mode
+func (a *Agent) finishWithError(state *runState, startTime time.Time, err error) *agentboot.Result {
+	if !hasFinalResult(*state.events) {
+		_ = state.emit(agentboot.NewResultMessage(
+			state.agentType, state.sessionID, "error", err.Error(),
+		))
+	}
+	if state.handler != nil {
+		state.handler.OnComplete(&agentboot.CompletionResult{
+			Success:    false,
+			DurationMS: time.Since(startTime).Milliseconds(),
+			SessionID:  state.sessionID,
+			Error:      err.Error(),
+		})
+	}
+	return a.buildResult(*state.events, startTime, state.sessionID, state.mismatches)
+}
+
+func (a *Agent) buildResult(events []agentboot.Event, startTime time.Time, sessionID string, mismatches []string) *agentboot.Result {
+	res := &agentboot.Result{
+		Output:   "",
 		ExitCode: 0,
-		Error:    "",
 		Duration: time.Since(startTime),
 		Format:   a.defaultFormat,
 		Events:   events,
 		Metadata: map[string]interface{}{
-			"session_id":     sessionID,
-			"agent_type":     "mock",
-			"max_iterations": a.config.MaxIterations,
+			"session_id": sessionID,
+			"agent_type": "mock",
 		},
 	}
+	if len(mismatches) > 0 {
+		res.Error = mismatches[0]
+		res.Metadata["expectation_failures"] = mismatches
+	}
+	return res
 }
 
-// IsAvailable always returns true for mock agent
-func (a *Agent) IsAvailable() bool {
-	return true
+func hasFinalResult(events []agentboot.Event) bool {
+	for _, e := range events {
+		if e.Type == agentboot.EventTypeResult {
+			return true
+		}
+	}
+	return false
 }
 
-// Type returns the mock agent type
-func (a *Agent) Type() agentboot.AgentType {
-	return agentboot.AgentTypeMockAgent
+func isSuccessTerminal(events []agentboot.Event) bool {
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Type == agentboot.EventTypeResult {
+			if status, _ := events[i].Data["status"].(string); status == "success" {
+				return true
+			}
+			return false
+		}
+	}
+	return false
 }
 
-// SetDefaultFormat sets the default output format
+func lastResultMessage(events []agentboot.Event) string {
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Type == agentboot.EventTypeResult {
+			if msg, _ := events[i].Data["message"].(string); msg != "" {
+				return msg
+			}
+			if st, _ := events[i].Data["status"].(string); st != "" {
+				return st
+			}
+		}
+	}
+	return ""
+}
+
+// IsAvailable always returns true for the mock agent.
+func (a *Agent) IsAvailable() bool { return true }
+
+// Type returns the mock agent type.
+func (a *Agent) Type() agentboot.AgentType { return agentboot.AgentTypeMockAgent }
+
+// SetDefaultFormat sets the default output format.
 func (a *Agent) SetDefaultFormat(format agentboot.OutputFormat) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.defaultFormat = format
 }
 
-// GetDefaultFormat returns the current default format
+// GetDefaultFormat returns the current default format.
 func (a *Agent) GetDefaultFormat() agentboot.OutputFormat {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.defaultFormat
 }
 
-// SetMaxIterations configures the maximum number of iterations
+// SetMaxIterations updates the linear-default iteration count.
 func (a *Agent) SetMaxIterations(max int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -393,7 +249,7 @@ func (a *Agent) SetMaxIterations(max int) {
 	}
 }
 
-// SetStepDelay configures the delay between steps
+// SetStepDelay updates the inter-step delay.
 func (a *Agent) SetStepDelay(delay time.Duration) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -402,14 +258,15 @@ func (a *Agent) SetStepDelay(delay time.Duration) {
 	}
 }
 
-// SetAutoApprove configures auto-approval mode
+// SetAutoApprove toggles auto-approval mode.
 func (a *Agent) SetAutoApprove(autoApprove bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.config.AutoApprove = autoApprove
 }
 
-// SetAskUserQuestionFrequency configures how often to send AskUserQuestion requests
+// SetAskUserQuestionFrequency configures how often the linear-default script
+// emits AskUserQuestion (every N steps).
 func (a *Agent) SetAskUserQuestionFrequency(freq int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -418,7 +275,15 @@ func (a *Agent) SetAskUserQuestionFrequency(freq int) {
 	}
 }
 
-// truncatePrompt truncates a prompt for display purposes
+// SetScript replaces the agent's script with the provided steps. Pass nil or
+// an empty slice to revert to the linear default.
+func (a *Agent) SetScript(steps []Step) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.config.Script = steps
+}
+
+// truncatePrompt truncates a prompt for display purposes.
 func truncatePrompt(prompt string) string {
 	const maxLen = 50
 	if len(prompt) <= maxLen {
