@@ -6,45 +6,7 @@ strings them together with a shared header, breadcrumb, and help line.
 
 ---
 
-## Why this package exists here
-
-The original code lived at `internal/tui/`. That location implies a
-shared facility — something used by many commands across the binary. In
-practice it was a leaf: only `internal/command/quickstart.go` ever imported
-it. Moving it under `internal/command/tui` makes the dependency explicit in
-the directory tree and prevents other commands from accidentally coupling to it.
-
-The package is still a leaf. To avoid an import cycle (`internal/command/tui`
-→ `internal/command` → `internal/command/tui`), the `QuickstartManager`
-interface is defined here rather than in `internal/command`. `AppManager`
-satisfies the interface implicitly — no adapter needed.
-
----
-
-## What was wrong with the old version
-
-The old `internal/tui` split across four subpackages (`components/`, `styles/`,
-`wizards/`, and the root `tea.go`). In practice each subpackage had exactly one
-file, so the hierarchy added navigation friction with no cohesion benefit.
-
-Worse, the runtime behaviour was jarring:
-
-| concern | old approach | effect |
-|---|---|---|
-| between-step headers | `fmt.Println` | plain text interleaved with tea output |
-| list picker | `bubbles/list` | title bar, status bar, filter chrome, pagination all visible at once |
-| colour | hard-coded hex, no dark/light switch | invisible on some terminals |
-| help text | inconsistent per component | users had to guess keys |
-| breadcrumb | dot row `● ● ○ ○` | no step names, no sense of progress |
-| trace | tea wipes output on quit | prior answers vanish |
-| `--tui` flag | wired but call commented out | flag did nothing |
-
-Every prompt launched its own `tea.NewProgram`, so the header had to be
-re-printed with `fmt.Println` before each one. The seams were visible.
-
----
-
-## Architecture
+## Structure
 
 ```
 internal/command/tui/
@@ -54,110 +16,112 @@ internal/command/tui/
   quickstart.go   Quickstart wizard — the only consumer
 ```
 
-Everything is in one flat package. There are no subpackages.
-
-### Generic types
-
-```go
-// Result wraps any prompt value with how the prompt was dismissed.
-type Result[T any] struct {
-    Value  T
-    Action Action  // ActionConfirm | ActionBack | ActionCancel
-}
-
-// Step is one phase in a wizard.
-type Step[S any] struct {
-    Name    string
-    Skip    func(state S) bool
-    Execute func(ctx StepContext, state S) (S, StepResult, error)
-}
-```
-
-Go generics let the wizard carry arbitrary application state `S` without
-interface boxing or type assertions. Each step receives the current state,
-returns a (possibly mutated) copy, and signals what the wizard should do next
-(`StepContinue`, `StepBack`, `StepDone`, `StepSkip`, `StepCancel`).
-
-### Back navigation
-
-The wizard keeps a `history []int` stack of step indices. `advance()` pushes
-the current index before moving forward; `retreat()` pops it. This means
-"back" always returns to wherever the user actually came from — even when some
-steps were auto-skipped — with no special-casing needed.
-
-### Header passing
-
-Every prompt option struct has a `Header string` field. The wizard renders its
-breadcrumb string once per step and passes it down:
-
-```go
-ctx := StepContext{Header: w.renderHeader(), ...}
-newState, result, err := step.Execute(ctx, w.state)
-```
-
-Inside the prompt's `View()`, `Header` is printed above the question. Because
-it's part of the same tea program (not a preceding `fmt.Println`), it stays
-perfectly aligned with the rest of the output and is erased cleanly when the
-prompt resolves.
-
-### Scrollback trace
-
-After a prompt resolves, its `View()` returns a single summary line instead of
-the full interactive UI:
-
-```
-✓ Pick a provider: OpenAI
-```
-
-Because bubbletea clears only the last rendered frame, this line stays visible
-in the terminal scrollback. Users can scroll up and see every answer they gave,
-which is especially useful when the wizard has many steps.
+Everything is in one flat package. The package is a leaf: only
+`internal/command/quickstart.go` imports it. To avoid a cycle, the
+`QuickstartManager` interface is defined here; `AppManager` satisfies it
+implicitly.
 
 ---
 
 ## Prompts
 
+Each prompt is a self-contained bubbletea program. All share the same
+`Header string` option — the wizard passes its rendered breadcrumb down so
+the step counter and progress crumbs appear above every question inside the
+same tea frame, not as a preceding `fmt.Println`.
+
+After a prompt resolves it collapses to a single trace line that stays in the
+terminal scrollback:
+
+```
+✓ Pick a provider: OpenAI
+```
+
+Users can scroll up and see every answer they gave.
+
 ### Confirm
 
 Two visible buttons (`Yes` / `No`) that the user can toggle with `←`/`→`,
-`Tab`, or `y`/`n`. `Enter` confirms the highlighted button. This is less
-surprising than a raw `y/n` prompt because the current selection is always
-visible.
+`Tab`, or `y`/`n`. `Enter` confirms the highlighted button. The current
+selection is always visible, so there is no ambiguity about what pressing
+`Enter` will do.
 
 ### Input
 
-Wraps `github.com/charmbracelet/bubbles/textinput` with an optional
-`Validate func(string) error`. Validation runs on every keystroke and displays
-an inline error below the field — no submit-and-fail cycle.
+Wraps `bubbles/textinput` with an optional `Validate func(string) error`.
+Validation runs on every keystroke; errors appear inline below the field.
+There is no submit-and-fail cycle.
 
 ### Select
 
-A flat list with a `❯` cursor. No title bar, no status bar, no filter chrome
-from `bubbles/list`.
+A flat list with a `❯` cursor and an instant fzf-style filter.
 
-**Instant filter (fzf-style):** typing any character narrows the list in
-real-time. A `filter:` hint appears above the list when active. `Esc` clears
-the filter (first press) or triggers back navigation (second press with empty
-filter). This two-stage Esc behaviour gives users a safe escape hatch without
-accidentally leaving the prompt.
+**Filter:** typing any printable character narrows the list in real-time. A
+`filter:` hint appears above the list while active. The list is never mutated —
+a `visible []int` slice (indices into the immutable `items`) is rebuilt on each
+keystroke. Moving the cursor moves through `visible`.
 
-The filter is implemented by maintaining a `visible []int` slice — indices
-into the immutable `items` slice that pass the current query (case-insensitive
-substring). Moving the cursor moves through `visible`, not `items` directly.
+**Esc is two-stage:** the first `Esc` clears the filter; a second `Esc` on an
+empty filter triggers back navigation. This gives users a clear escape hatch
+without accidentally leaving the prompt mid-search.
 
-**Key conflict avoidance:** `bubbles/key.Matches` checks key names, so binding
-`"k"` to navigate-up would intercept `k` typed as a filter character.
-`selectModel.Update` therefore uses a `tea.KeyMsg.Type` switch for navigation
-keys (`KeyUp`, `KeyDown`, `KeyEnter`, `KeyEsc`) and routes `tea.KeyRunes`
-directly to the filter string. The `k`/`j` vim aliases are intentionally absent
-from Select for this reason.
+**No vim aliases in Select.** Navigation uses `tea.KeyMsg.Type` directly
+(`KeyUp`, `KeyDown`, `KeyEnter`, `KeyEsc`) rather than `bubbles/key.Matches`.
+This means `tea.KeyRunes` always feeds the filter — pressing `k` to search for
+"kubernetes" works as expected and does not move the cursor up. The `k`/`j`
+aliases are intentionally absent here.
 
 ### MultiSelect
 
-Like Select but with `◉`/`○` checkboxes. Space toggles the item under the
-cursor. `Enter` confirms the full selection. `k`/`j` aliases are retained here
-because MultiSelect has no freeform filter — every keypress is a navigation
-command.
+Like Select but with `◉`/`○` checkboxes. `Space` toggles the item under the
+cursor; `Enter` confirms the full selection. `k`/`j` vim aliases are kept
+because there is no freeform filter input.
+
+### Spinner
+
+`WithSpinner[T](message, fn)` runs `fn` in a goroutine and renders an animated
+`spinner.Points` while it blocks. On completion: `✓ message` on success,
+`✗ message` on failure. The result line stays in the scrollback like other
+prompt traces.
+
+---
+
+## Wizard
+
+### Generic state
+
+```go
+type Step[S any] struct {
+    Name    string
+    Skip    func(state S) bool
+    Execute func(ctx StepContext, state S) (S, StepResult, error)
+}
+
+func RunWizard[S any](title string, initial S, steps []Step[S]) (S, error)
+```
+
+Each step receives the current state, returns a (possibly mutated) copy, and
+signals what the wizard should do next: `StepContinue`, `StepBack`, `StepSkip`,
+`StepDone`, or `StepCancel`. The wizard carries arbitrary application state `S`
+without interface boxing or type assertions.
+
+### Back navigation
+
+A `history []int` stack records step indices. `advance()` pushes before moving
+forward; `retreat()` pops. Back always returns to wherever the user actually
+came from, even when some steps were auto-skipped, with no special-casing.
+
+### Breadcrumb
+
+The header rendered above every prompt:
+
+```
+Tingly Box · Quickstart   Step 3/6
+✓ Welcome › ✓ Credential › ❯ Provider › · API Style › · Model › · Rules › · Done
+```
+
+`✓` done, `❯` active, `·` upcoming. Named steps tell users what is coming, not
+just how far along they are.
 
 ---
 
@@ -174,74 +138,47 @@ colMuted   = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9099B0"}
 colSubtle  = lipgloss.AdaptiveColor{Light: "#9CA3AF", Dark: "#585B70"}
 ```
 
-The palette leans toward Catppuccin Mocha on dark terminals and a neutral
-gray-purple on light ones. No colour is hard-coded outside `tui.go`.
-
-### Help line
-
-Every prompt renders a single footer line via `helpLine([2]string{key, action},
-...)`. The format is uniform:
-
-```
-↑/↓ navigate  ↵ select  esc back  ^c quit
-```
-
-One function, one format, consistent across all prompts.
+No colour is hard-coded outside `tui.go`. Every prompt renders its help footer
+through the same `helpLine` function, producing a uniform `key: action` format.
 
 ---
 
-## Wizard UX principles
+## Quickstart flow
 
-**Never auto-skip a step based on its own content.** If a provider template
-supports only one API style, the API Style step still appears — it just shows
-context ("only style supported by X") and lets the user confirm or go back.
-Auto-skipping hides information and breaks the back-navigation mental model:
-users wonder why a step they passed through isn't reachable via Esc.
+### Step order: Provider before API Style
 
-**Provider before API Style.** The original flow asked users to pick an API
-style first, then a provider filtered to that style. This forced users to know
-upfront whether a provider uses the OpenAI or Anthropic wire protocol — a
-prerequisite that most users lack. The new flow shows all providers first
-(description shows which styles each supports, e.g. `openai · anthropic`), then
-asks for the API style in context of the chosen provider.
+Users pick a provider template first. The description of each template lists
+which API styles it supports (`openai · anthropic`). Only after choosing a
+provider does the API Style step appear — at that point the choice is fully in
+context: the user knows which provider they picked and can see which styles it
+offers.
 
-**Skip Welcome for returning users.** The Welcome step (`Skip: qsHasProviders`)
-is only shown when no providers are configured. Returning users adding a second
-provider land directly on the Credential step. This avoids the awkward
-experience of reading onboarding text you've already seen.
+This avoids asking users to know upfront whether a provider speaks the OpenAI
+or Anthropic wire protocol — a prerequisite most users lack.
 
-**Breadcrumb shows named steps.** The header line rendered above every prompt:
+### Never auto-skip
 
-```
-Tingly Box · Quickstart   Step 3/6
-✓ Welcome › ✓ Credential › ❯ Provider › · API Style › · Model › · Rules › · Done
-```
+Even when a provider template supports only one API style, the API Style step
+is still shown. It presents the constraint as context ("only style supported
+by X") and lets the user confirm or go back. Auto-skipping hides information
+and breaks the back-navigation mental model: users wonder why a step they
+passed through is unreachable via Esc.
 
-`✓` means done, `❯` means active, `·` means upcoming. Step names are included
-so users understand what's coming, not just how far along they are.
+### Skip Welcome for returning users
+
+The Welcome step has `Skip: qsHasProviders`. Users who already have a provider
+configured land directly on the Credential step — they are adding a second
+provider, not being onboarded, and reading the onboarding copy again would
+be confusing.
 
 ---
 
-## Spinner
-
-`WithSpinner[T](message, fn)` runs `fn` in a goroutine and renders an
-animated `spinner.Points` spinner while it blocks. On completion:
-
-- success → `✓ message` (green)
-- failure → `✗ message` (red)
-
-The spinner result line stays in scrollback like other prompt traces.
-
----
-
-## Adding a new wizard step
+## Adding a step
 
 1. Add a field to your state struct.
-2. Write an `Execute` function with signature
-   `func(ctx StepContext, state S) (S, StepResult, error)`.
-3. Optionally write a `Skip` predicate `func(state S) bool`.
-4. Append a `Step[S]{Name: "...", Execute: ..., Skip: ...}` to the slice
-   passed to `RunWizard`.
+2. Write an `Execute` function: `func(ctx StepContext, state S) (S, StepResult, error)`.
+3. Optionally write a `Skip` predicate: `func(state S) bool`.
+4. Append `Step[S]{Name: "...", Execute: ..., Skip: ...}` to the slice passed
+   to `RunWizard`.
 
-No changes to the wizard runner are needed. The breadcrumb, step counter, and
-back navigation all update automatically.
+The breadcrumb, step counter, and back navigation update automatically.
