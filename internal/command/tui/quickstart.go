@@ -47,7 +47,7 @@ type quickstartState struct {
 // RunQuickstart runs the interactive Tingly Box quickstart wizard.
 func RunQuickstart(mgr QuickstartManager) error {
 	steps := []Step[quickstartState]{
-		{Name: "Welcome", Execute: qsWelcome},
+		{Name: "Welcome", Execute: qsWelcome, Skip: qsHasProviders},
 		{Name: "Credential", Execute: qsCredential, Skip: qsHasNoProviders},
 		{Name: "API Style", Execute: qsAPIStyle, Skip: qsUsingExisting},
 		{Name: "Provider", Execute: qsProvider, Skip: qsUsingExisting},
@@ -77,6 +77,7 @@ func RunQuickstart(mgr QuickstartManager) error {
 // ---------- skip predicates ----------
 
 func qsHasNoProviders(s quickstartState) bool { return len(s.mgr.ListProviders()) == 0 }
+func qsHasProviders(s quickstartState) bool   { return len(s.mgr.ListProviders()) > 0 }
 func qsUsingExisting(s quickstartState) bool  { return s.useExisting }
 
 // ---------- steps ----------
