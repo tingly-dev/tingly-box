@@ -56,7 +56,22 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
     }, []);
 
     useEffect(() => {
-        // Check on mount
+        // Always fetch the locally-known version first — independent of GitHub
+        // reachability. The /info/version/check endpoint returns 503 when the
+        // GitHub releases lookup fails (offline, rate-limited, dev networks),
+        // which would otherwise leave currentVersion stuck on 'Unknown'.
+        api.getVersion()
+            .then((version) => {
+                if (version && version !== 'Unknown') {
+                    setCurrentVersion(version);
+                }
+            })
+            .catch(() => {
+                /* leave as 'Unknown' */
+            });
+
+        // Then check GitHub for updates. May fail; that's fine — currentVersion
+        // is already populated from the local endpoint above.
         checkForUpdates(false);
 
         // Check every 24 hours
