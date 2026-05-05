@@ -7,34 +7,29 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/data"
 )
 
-// newInitConfigCommand creates the top-level `harness init-config` command.
-func newInitConfigCommand() *cobra.Command {
-	var output string
+// InitConfigCmd generates a pre-filled providers config file for use with
+// `harness agent <agent> --config <file>`.
+type InitConfigCmd struct {
+	Output string `kong:"name='output',short='o',help='Output file path (default: providers.yaml)'"`
+}
 
-	cmd := &cobra.Command{
-		Use:   "init-config",
-		Short: "Create a providers config file template",
-		Long: `Generate a template config file for use with 'harness agent <agent> --config <file>'.
-
-The template is pre-filled with all known providers from the embedded provider
+// Help returns extended help for `harness init-config --help`.
+func (*InitConfigCmd) Help() string {
+	return `The template is pre-filled with all known providers from the embedded provider
 templates (OAuth-only providers are skipped). Fill in the apikey and configure
 the models array for each provider you want to test.
 
 Examples:
   harness init-config
-  harness init-config --output providers.yaml`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInitConfig(output)
-		},
-	}
+  harness init-config --output providers.yaml`
+}
 
-	cmd.Flags().StringVar(&output, "output", "", "Output file path (default: providers.yaml)")
-
-	return cmd
+// Run writes the providers config template.
+func (c *InitConfigCmd) Run() error {
+	return runInitConfig(c.Output)
 }
 
 // runInitConfig writes a pre-filled providers config file built from embedded provider templates.

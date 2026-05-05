@@ -12,29 +12,29 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
 
-// newAgentCommand creates the agent test subcommand.
-func newAgentCommand() *cobra.Command {
-	var configFile string
-	var useMock bool
-	var prompt string
-	var summaryFile string
-	var outputDir string
-	var resumeFrom string
-	var filter []string
-	var timeout time.Duration
+// AgentCmd runs an agent CLI (claude, codex, opencode) end-to-end through the
+// tingly-box gateway. Use --mock for a virtual upstream or --config <file> for
+// real providers; exactly one of the two modes must be selected.
+type AgentCmd struct {
+	Mock      bool          `kong:"name='mock',help='Virtual-model mode: run against an in-process mock upstream'"`
+	Config    string        `kong:"name='config',help='Real-provider mode: path to provider config file (YAML)'"`
+	Prompt    string        `kong:"name='prompt',help='Prompt to send (overrides positional arg and default)'"`
+	Summary   string        `kong:"name='summary',default='harness-summary.csv',help='Path to CSV summary file (per-row results, written durably)'"`
+	OutputDir string        `kong:"name='output-dir',help='Directory for full output files (default: harness-output/)'"`
+	Resume    string        `kong:"name='resume',help='Resume — skip every (agent,entry) already recorded in the summary file'"`
+	Filter    []string      `kong:"name='filter',sep=',',help='Only run entries whose name matches (case-insensitive). Real-provider mode only.'"`
+	Timeout   time.Duration `kong:"name='timeout',short='t',default='2m',help='Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.'"`
+	AgentType string        `kong:"arg,optional,name='agent',help='Agent type: claude | codex | opencode | batch'"`
+	Args      []string      `kong:"arg,optional,name='prompt-args',help='Optional positional prompt parts (joined with spaces)'"`
+}
 
-	cmd := &cobra.Command{
-		Use:   "agent <claude|codex|opencode|batch> [prompt]",
-		Short: "Run end-to-end tests of an agent CLI through the tingly-box gateway",
-		Long: `Run an agent CLI (claude, codex, opencode) against a tingly-box gateway
-and validate that the full provider → rule → service routing works end-to-end.
-
-Agent argument:
+// Help returns the long usage for `harness agent --help`.
+func (*AgentCmd) Help() string {
+	return `Agent argument:
 
   claude | codex | opencode   Run a single agent
   batch                       Run every supported agent in sequence. Each agent
@@ -101,82 +101,75 @@ Timeouts:
   timeout the child process is killed and the row is recorded with status
   TIMEOUT in the summary. Pass --timeout 0 to disable.
 
-Generate a config template with: harness init-config`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			agentName := args[0]
-			if prompt == "" && len(args) > 1 {
-				prompt = strings.Join(args[1:], " ")
-			}
-			switch {
-			case useMock && configFile != "":
-				return fmt.Errorf("--mock and --config are mutually exclusive; pick exactly one")
-			case !useMock && configFile == "":
-				return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
-			}
+Generate a config template with: harness init-config`
+}
 
-			// Make the per-entry timeout visible to the executors (they read
-			// the package-level variable before launching the agent CLI).
-			agentRunTimeout = timeout
-			if timeout > 0 {
-				fmt.Printf("⏱  Per-entry timeout: %s\n", timeout)
-			}
-
-			// Open durable summary writer and load resume keys before any work runs.
-			// Note: --resume no longer needs to specify output directory since we use UUIDs.
-			writer, err := openSummaryWriter(summaryFile, outputDir)
-			if err != nil {
-				return err
-			}
-			defer writer.Close()
-			fmt.Printf("📒 Summary: %s (per-row, append-on-write)\n", summaryFile)
-			if outputDir != "" {
-				fmt.Printf("📁 Output: %s\n", outputDir)
-			} else {
-				fmt.Printf("📁 Output: %s\n", DefaultOutputDir)
-			}
-
-			var skip map[resumeKey]struct{}
-			if resumeFrom != "" {
-				skip, err = loadResumeKeys(summaryFile)
-				if err != nil {
-					return err
-				}
-				fmt.Printf("⏭  Resume: skipping %d previously-recorded (agent,entry) rows\n", len(skip))
-			}
-			fmt.Println()
-
-			if strings.EqualFold(agentName, "batch") {
-				return runBatchAgentTests(useMock, configFile, prompt, writer, skip, filter)
-			}
-
-			var results []*RealAgentTestResult
-			var runErr error
-			if configFile != "" {
-				results, runErr = runRealAgentTests(agentName, configFile, prompt, writer, skip, filter)
-			} else {
-				if len(filter) > 0 {
-					fmt.Printf("⚠️  --filter is ignored in --mock mode (no named entries)\n\n")
-				}
-				results, runErr = runVirtualAgentTest(agentName, prompt, writer, skip)
-			}
-			if len(results) > 0 {
-				printAgentSummary(results)
-			}
-			return runErr
-		},
+// Run executes the agent subcommand.
+func (a *AgentCmd) Run() error {
+	agentName := a.AgentType
+	if agentName == "" {
+		return fmt.Errorf("agent type is required (claude | codex | opencode | batch)")
+	}
+	prompt := a.Prompt
+	if prompt == "" && len(a.Args) > 0 {
+		prompt = strings.Join(a.Args, " ")
 	}
 
-	cmd.Flags().BoolVar(&useMock, "mock", false, "Virtual-model mode: run against an in-process mock upstream")
-	cmd.Flags().StringVar(&configFile, "config", "", "Real-provider mode: path to provider config file (YAML or CSV)")
-	cmd.Flags().StringVar(&prompt, "prompt", "", "Prompt to send (overrides positional arg and default)")
-	cmd.Flags().StringVar(&summaryFile, "summary", DefaultSummaryFile, "Path to CSV summary file (per-row results, written durably)")
-	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for full output files (default: harness-output/)")
-	cmd.Flags().StringVar(&resumeFrom, "resume", "", "Resume from a previous run: skip recorded (agent,entry) pairs from the summary file (output IDs are UUIDs, no directory needed)")
-	cmd.Flags().StringSliceVar(&filter, "filter", nil, "Only run entries whose name matches (comma-separated or repeat; case-insensitive). Real-provider mode only.")
-	cmd.Flags().DurationVar(&timeout, "timeout", 2*time.Minute, "Per-entry timeout for the agent CLI invocation (e.g. 30s, 2m). 0 disables.")
+	switch {
+	case a.Mock && a.Config != "":
+		return fmt.Errorf("--mock and --config are mutually exclusive; pick exactly one")
+	case !a.Mock && a.Config == "":
+		return fmt.Errorf("must specify a mode: --mock (virtual upstream) or --config <file> (real providers)")
+	}
 
-	return cmd
+	// Make the per-entry timeout visible to the executors (they read
+	// the package-level variable before launching the agent CLI).
+	agentRunTimeout = a.Timeout
+	if a.Timeout > 0 {
+		fmt.Printf("⏱  Per-entry timeout: %s\n", a.Timeout)
+	}
+
+	// Open durable summary writer and load resume keys before any work runs.
+	writer, err := openSummaryWriter(a.Summary, a.OutputDir)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+	fmt.Printf("📒 Summary: %s (per-row, append-on-write)\n", a.Summary)
+	if a.OutputDir != "" {
+		fmt.Printf("📁 Output: %s\n", a.OutputDir)
+	} else {
+		fmt.Printf("📁 Output: %s\n", DefaultOutputDir)
+	}
+
+	var skip map[resumeKey]struct{}
+	if a.Resume != "" {
+		skip, err = loadResumeKeys(a.Summary)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("⏭  Resume: skipping %d previously-recorded (agent,entry) rows\n", len(skip))
+	}
+	fmt.Println()
+
+	if strings.EqualFold(agentName, "batch") {
+		return runBatchAgentTests(a.Mock, a.Config, prompt, writer, skip, a.Filter)
+	}
+
+	var results []*RealAgentTestResult
+	var runErr error
+	if a.Config != "" {
+		results, runErr = runRealAgentTests(agentName, a.Config, prompt, writer, skip, a.Filter)
+	} else {
+		if len(a.Filter) > 0 {
+			fmt.Printf("⚠️  --filter is ignored in --mock mode (no named entries)\n\n")
+		}
+		results, runErr = runVirtualAgentTest(agentName, prompt, writer, skip)
+	}
+	if len(results) > 0 {
+		printAgentSummary(results)
+	}
+	return runErr
 }
 
 // Default test prompts for each profile type

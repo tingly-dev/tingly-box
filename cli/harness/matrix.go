@@ -2,44 +2,38 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
 )
 
-type matrixOptions struct {
-	scenarios  []string
-	sources    []string
-	targets    []string
-	streaming  bool
-	nonStream  bool
-	jsonOutput bool
-	verbose    int
-	recordDir  string // Directory for recording requests/responses
-	serverMode string // Server reuse mode: auto (per-scenario), all, pair
-	batchCount int    // Number of times to run each test (for batch testing)
-	mcpEnabled bool   // Enable MCP feature flag
+// MatrixCmd runs the protocol validation matrix tests.
+//
+// Tests all combinations of:
+//   - Source protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses)
+//   - Target protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses, google)
+//   - Scenarios (text, tool_use, tool_result, thinking, multi_turn, streaming_*)
+//   - Streaming modes (streaming, non-streaming)
+//
+// Use flags to filter specific combinations.
+type MatrixCmd struct {
+	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
+	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
+	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
+	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
+	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
+	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
+	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
+	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
+	ServerMode string   `kong:"name='server-mode',default='auto',help='Server reuse mode: auto (per-scenario), all (single server), pair (per source-target)'"`
+	BatchCount int      `kong:"name='batch',default='1',help='Number of times to run each test (for stability/performance testing)'"`
+	MCPEnabled bool     `kong:"name='mcp',help='Enable MCP feature flag in test env'"`
 }
 
-// newMatrixCommand creates the matrix test subcommand.
-func newMatrixCommand() *cobra.Command {
-	opts := &matrixOptions{}
-
-	cmd := &cobra.Command{
-		Use:   "matrix",
-		Short: "Run protocol validation matrix tests",
-		Long: `Run protocol validation matrix tests with virtual providers.
-
-Tests all combinations of:
-  - Source protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses)
-  - Target protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses, google)
-  - Scenarios (text, tool_use, tool_result, thinking, multi_turn, streaming_*)
-  - Streaming modes (streaming, non-streaming)
-
-Use flags to filter specific combinations.`,
-		Example: `  # Run all matrix tests
+// Help returns extended help text shown by `harness matrix --help`.
+func (*MatrixCmd) Help() string {
+	return `Examples:
+  # Run all matrix tests
   harness matrix
 
   # Run specific scenario only
@@ -55,34 +49,18 @@ Use flags to filter specific combinations.`,
   harness matrix --json
 
   # Verbose output with details
-  harness matrix -vv`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runMatrix(opts)
-		},
-	}
-
-	cmd.Flags().StringSliceVar(&opts.scenarios, "scenario", nil, "Filter by scenario name (can repeat)")
-	cmd.Flags().StringSliceVar(&opts.sources, "source", nil, "Filter by source protocol")
-	cmd.Flags().StringSliceVar(&opts.targets, "target", nil, "Filter by target protocol")
-	cmd.Flags().BoolVar(&opts.streaming, "streaming", false, "Run only streaming tests")
-	cmd.Flags().BoolVar(&opts.nonStream, "non-streaming", false, "Run only non-streaming tests")
-	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "Output results as JSON")
-	cmd.Flags().CountVarP(&opts.verbose, "verbose", "v", "Verbose output (can repeat for more detail)")
-	cmd.Flags().StringVar(&opts.recordDir, "record-dir", os.Getenv("HARNESS_RECORD_DIR"), "Directory for recording requests/responses (default: disabled)")
-	cmd.Flags().StringVar(&opts.serverMode, "server-mode", "auto", "Server reuse mode: auto (per-scenario), all (single server), pair (per source-target)")
-	cmd.Flags().IntVar(&opts.batchCount, "batch", 1, "Number of times to run each test (for stability/performance testing)")
-	cmd.Flags().BoolVar(&opts.mcpEnabled, "mcp", false, "Enable MCP feature flag in test env")
-
-	return cmd
+  harness matrix -vv`
 }
 
-// runMatrix executes the matrix tests with the given options.
-func runMatrix(opts *matrixOptions) error {
+// Run executes the matrix tests with the parsed flags.
+func (m *MatrixCmd) Run() error {
+	verbose := m.Verbose
+
 	// Set log level based on verbose flag
 	// Default (v=0): Warn level - minimal output
 	// v=1: Info level - normal output
 	// v=2+: Debug level - detailed output
-	switch opts.verbose {
+	switch verbose {
 	case 0:
 		logrus.SetLevel(logrus.WarnLevel)
 	case 1:
@@ -91,66 +69,55 @@ func runMatrix(opts *matrixOptions) error {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	// Build matrix with filters
-	matrix := protocol_validate.DefaultMatrix()
-
-	// Apply filters to limit execution (not just display)
-	if len(opts.scenarios) > 0 {
-		matrix = matrix.OnlyScenarios(opts.scenarios...)
-	}
-	if len(opts.sources) > 0 {
-		matrix = matrix.OnlySources(opts.sources...)
-	}
-	if len(opts.targets) > 0 {
-		matrix = matrix.OnlyTargets(opts.targets...)
-	}
-	if opts.streaming {
-		matrix = matrix.OnlyStreaming(true)
-	}
-	if opts.nonStream {
-		matrix = matrix.OnlyStreaming(false)
-	}
-
-	// Set record directory if provided
-	if opts.recordDir != "" {
-		matrix = matrix.WithRecordDir(opts.recordDir)
-	}
-
-	// Set server mode
-	if opts.serverMode != "" && opts.serverMode != "auto" {
-		matrix = matrix.WithServerMode(opts.serverMode)
-	}
-
-	// Set batch count
-	if opts.batchCount > 1 {
-		matrix = matrix.WithBatchCount(opts.batchCount)
-	}
-
-	// Enable MCP if requested
-	if opts.mcpEnabled {
-		matrix = matrix.WithMCPEnabled()
-	}
-
-	// Resolve streaming filter conflict
-	if opts.streaming && opts.nonStream {
+	// Resolve streaming filter conflict early.
+	if m.Streaming && m.NonStream {
 		return fmt.Errorf("cannot specify both --streaming and --non-streaming")
 	}
 
-	// Execute tests (only filtered combinations)
+	// Build matrix with filters
+	matrix := protocol_validate.DefaultMatrix()
+
+	if len(m.Scenarios) > 0 {
+		matrix = matrix.OnlyScenarios(m.Scenarios...)
+	}
+	if len(m.Sources) > 0 {
+		matrix = matrix.OnlySources(m.Sources...)
+	}
+	if len(m.Targets) > 0 {
+		matrix = matrix.OnlyTargets(m.Targets...)
+	}
+	if m.Streaming {
+		matrix = matrix.OnlyStreaming(true)
+	}
+	if m.NonStream {
+		matrix = matrix.OnlyStreaming(false)
+	}
+	if m.RecordDir != "" {
+		matrix = matrix.WithRecordDir(m.RecordDir)
+	}
+	if m.ServerMode != "" && m.ServerMode != "auto" {
+		matrix = matrix.WithServerMode(m.ServerMode)
+	}
+	if m.BatchCount > 1 {
+		matrix = matrix.WithBatchCount(m.BatchCount)
+	}
+	if m.MCPEnabled {
+		matrix = matrix.WithMCPEnabled()
+	}
+
+	// Execute tests (only filtered combinations).
 	results := matrix.ExecuteAll()
 
-	// Note: No need to filter results here since we filtered before execution
-	// But keep filterResults for backward compatibility in case results contain
-	// additional entries from skipPairs or skipSourceScenarios
-	results = filterResults(results, opts)
+	// Filter results for backward compatibility (skipPairs etc.).
+	results = filterResults(results, m)
 
 	// Output results
-	if opts.jsonOutput {
+	if m.JsonOutput {
 		if err := printJSON(results); err != nil {
 			return fmt.Errorf("failed to output JSON: %w", err)
 		}
 	} else {
-		printTable(results, opts.verbose)
+		printTable(results, verbose)
 	}
 
 	// Determine exit code
@@ -159,33 +126,26 @@ func runMatrix(opts *matrixOptions) error {
 			return fmt.Errorf("some tests failed")
 		}
 	}
-
 	return nil
 }
 
 // filterResults filters test results based on command options.
-func filterResults(results []protocol_validate.TestResult, opts *matrixOptions) []protocol_validate.TestResult {
+func filterResults(results []protocol_validate.TestResult, m *MatrixCmd) []protocol_validate.TestResult {
 	var filtered []protocol_validate.TestResult
 
 	for _, r := range results {
-		// Filter by source
-		if len(opts.sources) > 0 && !contains(opts.sources, string(r.Source)) {
+		if len(m.Sources) > 0 && !contains(m.Sources, string(r.Source)) {
 			continue
 		}
-
-		// Filter by target
-		if len(opts.targets) > 0 && !contains(opts.targets, string(r.Target)) {
+		if len(m.Targets) > 0 && !contains(m.Targets, string(r.Target)) {
 			continue
 		}
-
-		// Filter by streaming
-		if opts.streaming && !r.Streaming {
+		if m.Streaming && !r.Streaming {
 			continue
 		}
-		if opts.nonStream && r.Streaming {
+		if m.NonStream && r.Streaming {
 			continue
 		}
-
 		filtered = append(filtered, r)
 	}
 
@@ -201,3 +161,4 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
