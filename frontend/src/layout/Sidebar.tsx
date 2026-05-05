@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { api } from '@/services/api';
 import { useProfileContext } from '@/contexts/ProfileContext';
+import { useVersion } from '@/contexts/VersionContext';
 import { footerHeight, headerHeight, sidebarWidth } from './constants';
 import type { NavItem } from './types';
 
@@ -33,6 +34,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
     const { t } = useTranslation();
     const location = useLocation();
     const { refresh } = useProfileContext();
+    const { currentVersion } = useVersion();
+    const displayVersion = currentVersion.split('+')[0];
+    const showVersion = Boolean(currentVersion) && currentVersion !== 'Unknown';
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
@@ -269,8 +273,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 </Box>
             </Popover>
 
-            {/* Footer Slogan */}
-            <Box sx={{ height: footerHeight, py: 1.5, px: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+            {/* Footer: version + slogan */}
+            <Box
+                sx={{
+                    height: footerHeight,
+                    py: 1.5,
+                    px: 2,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 0.25,
+                }}
+            >
+                {showVersion && (
+                    <Typography
+                        sx={{
+                            fontSize: '0.65rem',
+                            lineHeight: 1.2,
+                            color: 'text.secondary',
+                            fontVariantNumeric: 'tabular-nums',
+                            userSelect: 'text',
+                            maxWidth: '100%',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        {t('layout.version', { version: displayVersion })}
+                    </Typography>
+                )}
                 <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
                     <Typography
                         variant="caption"
