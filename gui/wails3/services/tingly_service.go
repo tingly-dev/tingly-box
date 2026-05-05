@@ -179,7 +179,7 @@ func (s *TinglyService) ListProviders() []*typ.Provider {
 }
 
 // AddProvider adds a new AI provider
-func (s *TinglyService) AddProvider(name, apiBase, token, apiStyle string) error {
+func (s *TinglyService) AddProvider(name, apiBase, token, apiStyle string) (string, error) {
 	return s.appManager.AddProvider(name, apiBase, token, protocol.APIStyle(apiStyle))
 }
 

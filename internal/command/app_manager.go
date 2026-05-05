@@ -92,28 +92,31 @@ func (am *AppManager) StartServer() error {
 // ============
 
 // AddProvider adds a new AI provider with the given configuration.
-func (am *AppManager) AddProvider(name, apiBase, token string, apiStyle protocol.APIStyle) error {
-	// Check if provider already exists
-	if existingProvider, err := am.appConfig.GetProviderByName(name); err == nil && existingProvider != nil {
-		return fmt.Errorf("provider '%s' already exists", name)
+// Note: Provider name is not used as a unique identifier - multiple providers
+// can have the same name. The system automatically generates a unique UUID for each.
+// Returns the UUID of the newly created provider.
+func (am *AppManager) AddProvider(name, apiBase, token string, apiStyle protocol.APIStyle) (string, error) {
+	// Create provider with API style set from the start
+	provider := &typ.Provider{
+		Name:     name,
+		APIBase:  apiBase,
+		APIStyle: apiStyle,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    token,
+		Enabled:  true,
 	}
 
-	// Add the provider
-	if err := am.appConfig.AddProviderByName(name, apiBase, token); err != nil {
-		return fmt.Errorf("failed to add provider: %w", err)
+	// Add the provider (UUID will be generated automatically)
+	if err := am.appConfig.AddProvider(provider); err != nil {
+		return "", fmt.Errorf("failed to add provider: %w", err)
 	}
 
-	// Update the provider to set the API style
-	provider, err := am.appConfig.GetProviderByName(name)
-	if err == nil {
-		provider.APIStyle = apiStyle
-		// Save the configuration
-		if saveErr := am.appConfig.Save(); saveErr != nil {
-			return fmt.Errorf("failed to save API style configuration: %w", saveErr)
-		}
+	// Save the configuration
+	if err := am.appConfig.Save(); err != nil {
+		return "", fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	return nil
+	return provider.UUID, nil
 }
 
 // DeleteProvider removes an AI provider by name.
@@ -155,6 +158,11 @@ func (am *AppManager) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 // GetProvider returns a provider by UUID, or nil if not found.
 func (am *AppManager) GetProvider(uuid string) (*typ.Provider, error) {
 	return am.appConfig.GetProviderByUUID(uuid)
+}
+
+// GetProviderByName returns a provider by name, or nil if not found.
+func (am *AppManager) GetProviderByName(name string) (*typ.Provider, error) {
+	return am.appConfig.GetProviderByName(name)
 }
 
 // ============

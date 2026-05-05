@@ -18,7 +18,7 @@ import (
 type QuickstartManager interface {
 	ListProviders() []*typ.Provider
 	GetProvider(name string) (*typ.Provider, error)
-	AddProvider(name, apiBase, token string, apiStyle protocol.APIStyle) error
+	AddProvider(name, apiBase, token string, apiStyle protocol.APIStyle) (string, error)
 	SaveConfig() error
 
 	GetServerPort() int
@@ -387,10 +387,11 @@ func qsDetails(ctx StepContext, s quickstartState) (quickstartState, StepResult,
 	}
 	s.proxyURL = proxyR.Value
 
-	if err := s.mgr.AddProvider(s.providerName, s.apiBase, s.apiToken, s.apiStyle); err != nil {
+	uuid, err := s.mgr.AddProvider(s.providerName, s.apiBase, s.apiToken, s.apiStyle)
+	if err != nil {
 		return s, StepCancel, fmt.Errorf("failed to add provider: %w", err)
 	}
-	provider, err := s.mgr.GetProvider(s.providerName)
+	provider, err := s.mgr.GetProvider(uuid)
 	if err != nil {
 		return s, StepCancel, err
 	}

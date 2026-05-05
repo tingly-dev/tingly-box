@@ -377,11 +377,12 @@ func addProviderWithConfirmation(appManager *AppManager, reader *bufio.Reader, n
 	}
 
 	// Add the provider using AppManager
-	if err := appManager.AddProvider(name, apiBase, token, apiStyle); err != nil {
+	uuid, err := appManager.AddProvider(name, apiBase, token, apiStyle)
+	if err != nil {
 		return fmt.Errorf("failed to add provider: %w", err)
 	}
 
-	fmt.Printf("Successfully added provider '%s' with API style '%s'\n", name, apiStyle)
+	fmt.Printf("Successfully added provider '%s' (UUID: %s) with API style '%s'\n", name, uuid, apiStyle)
 	return nil
 }
 
