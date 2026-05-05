@@ -10,6 +10,8 @@ export interface NavItemBase {
     label: string;
     icon?: ReactNode;
     subtitle?: string;
+    /** Optional descriptive copy shown as a delayed hover tooltip on the sidebar item. */
+    tooltip?: string;
 }
 
 export interface NavDivider {

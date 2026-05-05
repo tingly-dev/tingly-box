@@ -196,6 +196,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                 <Tooltip title={t('layout.sidebar.createProfileTooltip')} arrow placement="right">
                                     {button}
                                 </Tooltip>
+                            ) : item.tooltip ? (
+                                <Tooltip
+                                    title={item.tooltip}
+                                    arrow
+                                    placement="right"
+                                    enterDelay={600}
+                                    enterNextDelay={600}
+                                    slotProps={{ tooltip: { sx: { maxWidth: 320 } } }}
+                                >
+                                    {button}
+                                </Tooltip>
                             ) : button}
                         </React.Fragment>
                     );

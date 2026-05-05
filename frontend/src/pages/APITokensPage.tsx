@@ -10,7 +10,6 @@ import {
     IconClock,
     IconUser,
     IconShield,
-    IconInfoCircle,
     IconEye,
     IconEyeOff,
 } from '@tabler/icons-react';
@@ -34,7 +33,6 @@ import {
     Typography,
     IconButton,
     Tooltip,
-    Alert,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -196,14 +194,8 @@ const APITokensPage = () => {
     return (
         <PageLayout loading={loading} notification={notification}>
             <Stack spacing={3}>
-                {/* Info Alert */}
-                <Alert severity="info" icon={<IconInfoCircle size={20} />}>
-                    <strong>Share Model Tokens</strong> let you distribute access to your Tingly Box models without sharing your credentials.
-                    Create multiple tokens for different clients or environments — each token tracks usage independently so you can monitor
-                    consumption per token and revoke any of them at any time without affecting others.
-                </Alert>
-
-                {/* Tokens Table */}
+                {/* Tokens Table — the page-level explanation now lives as a hover tooltip
+                    on the Sharing sidebar item (see useActivityItems.tsx). */}
                 <UnifiedCard
                     title="Tingly Box Share Model Tokens"
                     subtitle="Manage API tokens for sharing model access with clients and environments."
