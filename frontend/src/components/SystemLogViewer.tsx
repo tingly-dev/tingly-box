@@ -40,11 +40,12 @@ export interface SystemLogsResponse {
 interface SystemLogViewerProps {
     getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<SystemLogsResponse>;
     getRequestBody?: (bodyRef: string) => Promise<{ id: string; method: string; path: string; body: string; truncated: boolean } | null>;
+    pathPrefix?: string;
 }
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
-const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
+const SystemLogViewer = ({ getLogs, getRequestBody, pathPrefix }: SystemLogViewerProps) => {
     const [logs, setLogs] = useState<SystemLogEntry[]>([]);
     const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -162,20 +163,26 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
         }
     };
 
-    // Client-side filter
+    // Client-side filter: path prefix first, then level
     useEffect(() => {
-        if (selectedLevels.size === 0) {
-            setLogs(allLogs);
-        } else {
-            setLogs(allLogs.filter(log => {
+        let next = allLogs;
+        if (pathPrefix) {
+            next = next.filter(log => {
+                const p = (log.fields?.path as string | undefined) ?? '';
+                return p.startsWith(pathPrefix);
+            });
+        }
+        if (selectedLevels.size > 0) {
+            next = next.filter(log => {
                 const l = log.level?.toLowerCase() ?? '';
                 // match "warn" tag against "warn" or "warning"
                 return [...selectedLevels].some(sel =>
                     l === sel || (sel === 'warn' && l === 'warning')
                 );
-            }));
+            });
         }
-    }, [selectedLevels, allLogs]);
+        setLogs(next);
+    }, [selectedLevels, allLogs, pathPrefix]);
 
     useEffect(() => {
         loadLogs();
@@ -188,11 +195,15 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
         }
     }, [autoRefresh]);
 
-    // Scroll to bottom when logs update
+    // Scroll to bottom after logs render — double-RAF ensures layout is complete
     useEffect(() => {
-        if (tableContainerRef.current && logs.length > 0) {
-            tableContainerRef.current.scrollTop = tableContainerRef.current.scrollHeight;
-        }
+        if (!tableContainerRef.current || logs.length === 0) return;
+        const el = tableContainerRef.current;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                el.scrollTop = el.scrollHeight;
+            });
+        });
     }, [logs]);
 
     const formatRequestBody = (body: string): string => {
@@ -290,7 +301,7 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
                     borderColor: 'divider',
                 }}
             >
-                <TableContainer sx={{ maxHeight: 'none', height: '100%' }}>
+                <TableContainer sx={{ maxHeight: 'none' }}>
                     <Table stickyHeader size="small">
                         <TableHead>
                             <TableRow>
