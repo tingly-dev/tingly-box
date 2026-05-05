@@ -158,19 +158,17 @@ export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActi
                 })}
             </List>
 
-            {/* Footer: version + slogan */}
+            {/* Footer top row: version */}
             <Box
                 sx={{
-                    height: footerHeight,
-                    py: 1.5,
+                    py: 1,
                     px: 2,
                     borderTop: '1px solid',
                     borderColor: 'divider',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 0.25,
+                    flexShrink: 0,
                 }}
             >
                 <Typography
@@ -188,6 +186,20 @@ export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActi
                 >
                     {t('layout.version', { version: displayVersion })}
                 </Typography>
+            </Box>
+
+            {/* Footer bottom row: slogan */}
+            <Box
+                sx={{
+                    height: footerHeight,
+                    py: 1.5,
+                    px: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                }}
+            >
                 <Tooltip title="For all Solo Builders, Dev Teams and Agents." placement="top" arrow>
                     <Typography
                         variant="caption"

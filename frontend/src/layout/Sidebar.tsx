@@ -272,19 +272,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 </Box>
             </Popover>
 
-            {/* Footer: version + slogan */}
+            {/* Footer top row: version */}
             <Box
                 sx={{
-                    height: footerHeight,
-                    py: 1.5,
+                    py: 1,
                     px: 2,
                     borderTop: '1px solid',
                     borderColor: 'divider',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 0.25,
+                    flexShrink: 0,
                 }}
             >
                 <Typography
@@ -302,6 +300,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 >
                     {t('layout.version', { version: displayVersion })}
                 </Typography>
+            </Box>
+
+            {/* Footer bottom row: slogan */}
+            <Box
+                sx={{
+                    height: footerHeight,
+                    py: 1.5,
+                    px: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                }}
+            >
                 <Tooltip title={t('layout.sidebar.sloganTooltip')} placement="top" arrow>
                     <Typography
                         variant="caption"
