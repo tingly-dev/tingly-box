@@ -213,11 +213,8 @@ func betaMessageToParamPreservingThinking(msg *anthropic.BetaMessage) anthropic.
 
 	// Preserve original assistant content when building the follow-up request.
 	// Raw JSON round-trip keeps provider-specific fields that ToParam() may omit.
-	if raw := msg.RawJSON(); raw != "" {
-		var param anthropic.BetaMessageParam
-		if err := json.Unmarshal([]byte(raw), &param); err == nil {
-			return param
-		}
+	if param, ok := unmarshalAnthropicParamPreservingRawJSON[anthropic.BetaMessageParam](msg.RawJSON()); ok {
+		return param
 	}
 
 	return msg.ToParam()

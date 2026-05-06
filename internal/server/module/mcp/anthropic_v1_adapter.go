@@ -213,11 +213,8 @@ func messageToParamPreservingThinking(msg *anthropic.Message) anthropic.MessageP
 
 	// Preserve original assistant content when building the follow-up request.
 	// Raw JSON round-trip keeps provider-specific fields that ToParam() may omit.
-	if raw := msg.RawJSON(); raw != "" {
-		var param anthropic.MessageParam
-		if err := json.Unmarshal([]byte(raw), &param); err == nil {
-			return param
-		}
+	if param, ok := unmarshalAnthropicParamPreservingRawJSON[anthropic.MessageParam](msg.RawJSON()); ok {
+		return param
 	}
 
 	return msg.ToParam()

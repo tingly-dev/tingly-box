@@ -48,6 +48,18 @@ type pathProbe struct {
 	sawOpenAIVirtualResultInjected        bool
 }
 
+type anthropicProbeMessage struct {
+	Role    string `json:"role"`
+	Content []struct {
+		Type      string `json:"type"`
+		ToolUseID string `json:"tool_use_id"`
+	} `json:"content"`
+}
+
+type anthropicProbeRequest struct {
+	Messages []anthropicProbeMessage `json:"messages"`
+}
+
 func (p *pathProbe) addAnthropic(stream bool, body string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -60,9 +72,29 @@ func (p *pathProbe) addAnthropic(stream bool, body string) {
 	if strings.Contains(body, `"tool_use_id":"toolu_external"`) && strings.Contains(body, `"tool_use_id":"toolu_virtual"`) {
 		p.sawAnthropicVirtualResultInjected = true
 	}
-	if strings.Contains(body, `"tool_use_id":"toolu_virtual"`) && strings.Contains(body, `"tool_use_id":"toolu_external"`) && strings.Contains(body, `"role":"user"`) {
-		if strings.Contains(body, `"tool_use_id":"toolu_virtual","content"`) && strings.Contains(body, `"tool_use_id":"toolu_external","content"`) {
-			p.sawAnthropicMergedAdjacentToolResults = true
+	var req anthropicProbeRequest
+	if err := json.Unmarshal([]byte(body), &req); err == nil {
+		for _, msg := range req.Messages {
+			if msg.Role != "user" {
+				continue
+			}
+			hasVirtual := false
+			hasExternal := false
+			for _, block := range msg.Content {
+				if block.Type != "tool_result" {
+					continue
+				}
+				switch block.ToolUseID {
+				case "toolu_virtual":
+					hasVirtual = true
+				case "toolu_external":
+					hasExternal = true
+				}
+			}
+			if hasVirtual && hasExternal {
+				p.sawAnthropicMergedAdjacentToolResults = true
+				break
+			}
 		}
 	}
 }
