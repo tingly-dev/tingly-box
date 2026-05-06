@@ -35,6 +35,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
 	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
+	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
@@ -79,8 +80,10 @@ type Server struct {
 	// OAuth handler (module)
 	oauthHandler *oauthmodule.Handler
 
-	// ImBot settings handler (module)
-	imbotSettingsHandler interface{}
+	// ImBot lifecycle controller (module). Concrete impl is *imbot.Handler;
+	// using the interface keeps the seam narrow and replaces the previous
+	// untyped interface{} that required inline type assertions everywhere.
+	imbotSettingsHandler imbotmodule.LifecycleController
 
 	// remote middle-layer state. The channel registry holds running
 	// imbot Channel adapters; the interaction registry stores pending
@@ -1468,14 +1471,6 @@ func (s *Server) StartRemoteCoder() error {
 		return fmt.Errorf("imbotsettings handler not available")
 	}
 
-	// Use type assertion to access BotManager methods
-	handler, ok := s.imbotSettingsHandler.(interface {
-		StartAllEnabled(context.Context) error
-	})
-	if !ok {
-		return fmt.Errorf("imbotsettings handler does not support StartAllEnabled")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	s.remoteCoderCtx = ctx
 	s.remoteCoderCancel = cancel
@@ -1484,7 +1479,7 @@ func (s *Server) StartRemoteCoder() error {
 
 	// Start all enabled bots through the imbotsettings handler
 	go func() {
-		if err := handler.StartAllEnabled(ctx); err != nil && ctx.Err() == nil {
+		if err := s.imbotSettingsHandler.StartAllEnabled(ctx); err != nil && ctx.Err() == nil {
 			logrus.WithError(err).Warn("Failed to start some enabled bots")
 		}
 		// Keep context alive until canceled
@@ -1512,10 +1507,8 @@ func (s *Server) StopRemoteCoder() {
 
 	// Stop all bots through the imbotsettings handler
 	if s.imbotSettingsHandler != nil {
-		if handler, ok := s.imbotSettingsHandler.(interface{ StopAll() }); ok {
-			handler.StopAll()
-			logrus.Info("All bots stopped via imbotsettings handler")
-		}
+		s.imbotSettingsHandler.StopAll()
+		logrus.Info("All bots stopped via imbotsettings handler")
 	}
 
 	logrus.Info("Remote-coder stopped")
@@ -1530,15 +1523,10 @@ func (s *Server) IsRemoteCoderRunning() bool {
 
 // SyncRemoteCoderBots syncs bots with the remote control bot manager
 func (s *Server) SyncRemoteCoderBots(ctx context.Context) error {
-	// Use the imbotsettings handler's bot manager if available
-	if s.imbotSettingsHandler != nil {
-		if handler, ok := s.imbotSettingsHandler.(interface {
-			Sync(context.Context) error
-		}); ok {
-			return handler.Sync(ctx)
-		}
+	if s.imbotSettingsHandler == nil {
+		return fmt.Errorf("bot manager not available")
 	}
-	return fmt.Errorf("bot manager not available")
+	return s.imbotSettingsHandler.Sync(ctx)
 }
 
 // Stop gracefully stops the HTTP server
@@ -1558,10 +1546,8 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	// Shutdown ImBot settings handler
 	if s.imbotSettingsHandler != nil {
-		if handler, ok := s.imbotSettingsHandler.(interface{ Shutdown() }); ok {
-			handler.Shutdown()
-			log.Println("ImBot settings handler stopped")
-		}
+		s.imbotSettingsHandler.Shutdown()
+		log.Println("ImBot settings handler stopped")
 	}
 
 	// Stop token refresher

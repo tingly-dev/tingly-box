@@ -1602,6 +1602,23 @@ export const api = {
         }
     },
 
+    restartImBot: async (uuid: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/imbot-admin/restart/{uuid}' as any, {
+                headers,
+                params: {path: {uuid}}
+            });
+            return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return {success: false, error: 'ImBot setting not found'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
     toggleImBotSetting: async (uuid: string): Promise<any> => {
         try {
             const client = await getClient();

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -416,19 +417,57 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	auditLog := m.audit
 	store := m.store
 	channels := m.channels
-	go func() {
-		defer close(doneChan) // Signal that goroutine is done
-		if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient, pairing, auditLog, store, channels); err != nil {
-			logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
-		}
-
-		// Bot stopped, remove from running map
-		m.removeRunning(uuid)
-		logrus.WithField("uuid", uuid).Info("Bot stopped")
-	}()
+	go m.runBotSupervised(ctx, uuid, s, dataPath, tbClient, pairing, auditLog, store, channels, doneChan)
 
 	logrus.WithField("uuid", uuid).WithField("name", name).WithField("platform", platform).Info("Bot started")
 	return nil
+}
+
+// runBotSupervised executes runBotWithSettings with panic recovery so a crash in
+// any third-party IM SDK is contained to this bot's goroutine instead of
+// propagating to the runtime and taking down the whole tingly-box process.
+// Always closes doneChan and removes the bot from the running map, regardless
+// of whether the bot exited normally, with error, or via panic.
+func (m *Manager) runBotSupervised(
+	ctx context.Context,
+	uuid string,
+	s BotSetting,
+	dataPath string,
+	tbClient tbclient.TBClient,
+	pairing *PairingManager,
+	auditLog *audit.Logger,
+	store SettingsStore,
+	channels *channel.Registry,
+	doneChan chan struct{},
+) {
+	defer close(doneChan)
+	defer m.removeRunning(uuid)
+
+	defer func() {
+		if r := recover(); r != nil {
+			stack := string(debug.Stack())
+			logrus.WithFields(logrus.Fields{
+				"uuid":     uuid,
+				"name":     s.Name,
+				"platform": s.Platform,
+				"panic":    fmt.Sprintf("%v", r),
+				"stack":    stack,
+			}).Error("Bot goroutine panicked; isolated from main process")
+			if auditLog != nil {
+				auditLog.Error("bot_panic", "", "", fmt.Sprintf("bot %s (%s) panicked: %v", uuid, s.Platform, r), false, map[string]interface{}{
+					"uuid":     uuid,
+					"name":     s.Name,
+					"platform": s.Platform,
+					"stack":    stack,
+				})
+			}
+		}
+	}()
+
+	if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient, pairing, auditLog, store, channels); err != nil {
+		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
+	}
+	logrus.WithField("uuid", uuid).Info("Bot stopped")
 }
 
 // Stop stops a bot by UUID
@@ -472,7 +511,10 @@ func (m *Manager) WaitForStop(uuid string, timeout time.Duration) bool {
 	case <-doneChan:
 		return true
 	case <-time.After(timeout):
-		logrus.WithField("uuid", uuid).Warn("Timeout waiting for bot to stop")
+		logrus.WithFields(logrus.Fields{
+			"uuid":    uuid,
+			"timeout": timeout.String(),
+		}).Warn("Timeout waiting for bot to stop; goroutine may still be running and could leak resources or duplicate connections on restart")
 		return false
 	}
 }

@@ -1,4 +1,4 @@
-import {Delete as DeleteIcon, Edit as EditIcon, Warning as WarningIcon} from '@mui/icons-material';
+import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon, Warning as WarningIcon} from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -98,9 +98,11 @@ interface BotCardProps {
     onEdit: () => void;
     onDelete: () => void;
     onBotToggle: () => void;
+    onRestart: () => void;
     onModelClick: () => void;
     onCWDChange: (cwd: string) => void;
     isToggling?: boolean;
+    isRestarting?: boolean;
 }
 
 const BotCard: React.FC<BotCardProps> = ({
@@ -109,9 +111,11 @@ const BotCard: React.FC<BotCardProps> = ({
                                              onEdit,
                                              onDelete,
                                              onBotToggle,
+                                             onRestart,
                                              onModelClick,
                                              onCWDChange,
                                              isToggling = false,
+                                             isRestarting = false,
                                          }) => {
     const isActive = bot.enabled ?? true;
     const isExpanded = true;
@@ -202,12 +206,24 @@ const BotCard: React.FC<BotCardProps> = ({
                             disabled={isToggling}
                         />
                     </Tooltip>
+                    <Tooltip title={isActive ? 'Restart Bot' : 'Enable bot to restart'}>
+                        <span>
+                            <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={onRestart}
+                                disabled={!isActive || isToggling || isRestarting}
+                            >
+                                <RestartIcon fontSize="small"/>
+                            </IconButton>
+                        </span>
+                    </Tooltip>
                     <Tooltip title="Edit">
                         <IconButton
                             size="small"
                             color="primary"
                             onClick={onEdit}
-                            disabled={isToggling}
+                            disabled={isToggling || isRestarting}
                         >
                             <EditIcon fontSize="small"/>
                         </IconButton>
@@ -217,7 +233,7 @@ const BotCard: React.FC<BotCardProps> = ({
                             size="small"
                             color="error"
                             onClick={handleDeleteClick}
-                            disabled={isToggling}
+                            disabled={isToggling || isRestarting}
                         >
                             <DeleteIcon fontSize="small"/>
                         </IconButton>

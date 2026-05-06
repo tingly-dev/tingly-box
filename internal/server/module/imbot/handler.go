@@ -12,7 +12,21 @@ import (
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/remote/channel"
 )
+
+// LifecycleController is the narrow surface the server uses to drive the
+// imbot module's lifecycle. Replacing the previous untyped interface{} +
+// inline type assertions makes the contract explicit and is the single
+// seam at which an out-of-process implementation could later be swapped in.
+type LifecycleController interface {
+	StartAllEnabled(ctx context.Context) error
+	StopAll()
+	RestartBotByUUID(ctx context.Context, uuid string) error
+	Sync(ctx context.Context) error
+	Shutdown()
+	SetChannelRegistry(reg *channel.Registry)
+}
 
 // Handler handles ImBot settings HTTP requests
 type Handler struct {
@@ -519,9 +533,14 @@ func normalizeAllowlist(values []string) []string {
 	return out
 }
 
-// BotManager returns the bot manager for server integration
-func (h *Handler) BotManager() *BotManager {
-	return h.botMgr
+// SetChannelRegistry wires the remote channel registry through to the
+// underlying bot manager. Used by the server during route registration so
+// each running bot exposes itself as a remote.channel.Channel.
+func (h *Handler) SetChannelRegistry(reg *channel.Registry) {
+	if h.botMgr == nil {
+		return
+	}
+	h.botMgr.SetChannelRegistry(reg)
 }
 
 // StartAllEnabled starts all enabled bots (delegates to BotManager)
@@ -530,6 +549,58 @@ func (h *Handler) StartAllEnabled(ctx context.Context) error {
 		return fmt.Errorf("bot manager is nil")
 	}
 	return h.botMgr.StartAllEnabled(ctx)
+}
+
+// RestartBotByUUID stops then starts a single bot. Used by both the admin
+// HTTP endpoint and the LifecycleController interface.
+func (h *Handler) RestartBotByUUID(ctx context.Context, uuid string) error {
+	if h.botMgr == nil {
+		return fmt.Errorf("bot manager is nil")
+	}
+	return h.botMgr.RestartBot(ctx, uuid)
+}
+
+// RestartBot is the HTTP handler for POST /imbot-admin/restart/:uuid.
+// Restarts a single bot without affecting the rest of the server.
+func (h *Handler) RestartBot(c *gin.Context) {
+	if h.botMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bot manager not available"})
+		return
+	}
+
+	uuid := c.Param("uuid")
+	if uuid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "UUID is required"})
+		return
+	}
+
+	if err := h.botMgr.RestartBot(c.Request.Context(), uuid); err != nil {
+		logrus.WithError(err).WithField("uuid", uuid).Warn("Failed to restart bot")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	logrus.WithField("uuid", uuid).Info("Bot restarted via admin API")
+	c.JSON(http.StatusOK, gin.H{"success": true, "uuid": uuid, "running": h.botMgr.IsRunning(uuid)})
+}
+
+// Reload is the HTTP handler for POST /imbot-admin/reload. Re-reads bot
+// settings and starts/stops bots to match the current enabled flags. Does
+// not restart bots whose enabled state has not changed.
+func (h *Handler) Reload(c *gin.Context) {
+	if h.botMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Bot manager not available"})
+		return
+	}
+
+	if err := h.botMgr.Sync(c.Request.Context()); err != nil {
+		logrus.WithError(err).Warn("Failed to reload bots")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	logrus.Info("Bot configuration reloaded via admin API")
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // StopAll stops all running bots (delegates to BotManager)

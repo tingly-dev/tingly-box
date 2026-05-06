@@ -12,11 +12,13 @@ interface BotCardGridProps {
     onEdit?: (uuid: string) => void;
     onDelete?: (uuid: string) => void;
     onBotToggle?: (uuid: string, enabled: boolean) => void;
+    onBotRestart?: (uuid: string) => void;
     onBotModelSelect?: (botUuid: string) => void;
     onCWDChange?: (botUuid: string, cwd: string) => void;
     loading?: boolean;
     error?: string | null;
     togglingBotUuid?: string | null;
+    restartingBotUuid?: string | null;
 }
 
 const SkeletonCard = () => (
@@ -45,11 +47,13 @@ const BotCardGrid: React.FC<BotCardGridProps> = ({
     onEdit,
     onDelete,
     onBotToggle,
+    onBotRestart,
     onBotModelSelect,
     onCWDChange,
     loading = false,
     error = null,
     togglingBotUuid = null,
+    restartingBotUuid = null,
 }) => {
     const [deleteModal, setDeleteModal] = useState<{ open: boolean; uuid: string; name: string }>({
         open: false,
@@ -133,9 +137,11 @@ const BotCardGrid: React.FC<BotCardGridProps> = ({
                                 onEdit={() => onEdit?.(bot.uuid!)}
                                 onDelete={() => handleDeleteClick(bot.uuid!)}
                                 onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
+                                onRestart={() => onBotRestart?.(bot.uuid!)}
                                 onModelClick={() => handleBotModelClick(bot.uuid!)}
                                 onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
                                 isToggling={isToggling}
+                                isRestarting={restartingBotUuid === bot.uuid}
                             />
                         </CardGridItem>
                     );

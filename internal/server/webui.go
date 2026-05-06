@@ -143,9 +143,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 		// as a remote.channel.Channel reachable from /tingly/:scenario
 		// scenario plugins.
 		if s.channelRegistry != nil {
-			if bm := imbotHandler.BotManager(); bm != nil {
-				bm.SetChannelRegistry(s.channelRegistry)
-			}
+			imbotHandler.SetChannelRegistry(s.channelRegistry)
 		}
 	}
 

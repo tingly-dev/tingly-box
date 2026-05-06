@@ -207,6 +207,32 @@ func (bm *BotManager) StopBot(uuid string) error {
 	return nil
 }
 
+// RestartBot stops a single bot and starts it again, preserving its UUID.
+// Useful for recovering from a panic-isolated bot or applying configuration
+// changes without restarting the whole server. Waits for the stop to fully
+// complete (up to 5s via WaitForStop in StopBot) before starting again so
+// the new instance does not race with the old goroutine.
+func (bm *BotManager) RestartBot(ctx context.Context, uuid string) error {
+	if bm == nil {
+		return fmt.Errorf("bot manager is nil")
+	}
+	if uuid == "" {
+		return fmt.Errorf("uuid is empty")
+	}
+
+	// StopBot is a no-op if the bot is not running, so this also covers
+	// "restart a crashed bot" without a special branch.
+	if bm.IsRunning(uuid) {
+		if err := bm.StopBot(uuid); err != nil {
+			return fmt.Errorf("stop before restart: %w", err)
+		}
+	}
+	if err := bm.StartBot(ctx, uuid); err != nil {
+		return fmt.Errorf("start after stop: %w", err)
+	}
+	return nil
+}
+
 // StartAllEnabled starts all bots that have enabled: true in their settings.
 // Logs errors for individual bots but continues starting others.
 func (bm *BotManager) StartAllEnabled(ctx context.Context) error {

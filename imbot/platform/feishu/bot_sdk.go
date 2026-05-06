@@ -173,8 +173,11 @@ func (b *Bot) StartReceiving(ctx context.Context) error {
 
 	b.wsClient = wsClient
 
-	// Start WebSocket connection in background
-	b.eventCtx, b.eventCancel = context.WithCancel(context.Background())
+	// Start WebSocket connection in background.
+	// Derive eventCtx from the parent ctx so cancellation of the bot's
+	// lifecycle context tears down the WS goroutine even if Disconnect()
+	// is bypassed (e.g. panic upstream).
+	b.eventCtx, b.eventCancel = context.WithCancel(ctx)
 
 	go func() {
 		b.Logger().Info("%s WebSocket connecting...", b.domain)

@@ -55,6 +55,7 @@ const BotPage = () => {
 
     // Toggle loading state
     const [togglingBotUuid, setTogglingBotUuid] = useState<string | null>(null);
+    const [restartingBotUuid, setRestartingBotUuid] = useState<string | null>(null);
 
     // Snackbar notification state
     const [snackbar, setSnackbar] = useState<{
@@ -298,6 +299,24 @@ const BotPage = () => {
         }
     }, [loadBotSettings, showNotification]);
 
+    const handleBotRestart = useCallback(async (uuid: string) => {
+        setRestartingBotUuid(uuid);
+        try {
+            const result = await api.restartImBot(uuid);
+            if (result?.success) {
+                showNotification('Bot restarted', 'success');
+                await loadBotSettings();
+            } else {
+                showNotification(`Failed to restart bot: ${result?.error || 'Unknown error'}`, 'error');
+            }
+        } catch (err) {
+            console.error('Failed to restart bot:', err);
+            showNotification('Failed to restart bot', 'error');
+        } finally {
+            setRestartingBotUuid(null);
+        }
+    }, [loadBotSettings, showNotification]);
+
     const handleDeleteBot = useCallback(async (uuid: string) => {
         try {
             const result = await api.deleteImBotSetting(uuid);
@@ -437,9 +456,11 @@ const BotPage = () => {
                                 onEdit={() => handleOpenBotTokenDialog(bot.uuid)}
                                 onDelete={() => handleDeleteBot(bot.uuid!)}
                                 onBotToggle={() => handleBotToggle(bot.uuid!, !bot.enabled)}
+                                onRestart={() => handleBotRestart(bot.uuid!)}
                                 onModelClick={() => handleBotModelSelect(bot.uuid!)}
                                 onCWDChange={(cwd) => handleCWDChange(bot.uuid!, cwd)}
                                 isToggling={togglingBotUuid === bot.uuid}
+                                isRestarting={restartingBotUuid === bot.uuid}
                             />
                         </div>
                     ))

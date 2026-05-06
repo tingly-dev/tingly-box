@@ -96,6 +96,26 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		),
 	)
 
+	// POST /imbot-admin/restart/:uuid - Restart a single bot in place
+	router.POST("/imbot-admin/restart/:uuid", handler.RestartBot,
+		swagger.WithTags("imbot-admin"),
+		swagger.WithDescription("Stops and restarts a single bot without affecting other bots or the HTTP server"),
+		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
+		swagger.WithErrorResponses(
+			swagger.ErrorResponseConfig{Code: 400, Message: "UUID is required"},
+			swagger.ErrorResponseConfig{Code: 503, Message: "Bot manager not available"},
+		),
+	)
+
+	// POST /imbot-admin/reload - Reload bot configurations and reconcile enabled state
+	router.POST("/imbot-admin/reload", handler.Reload,
+		swagger.WithTags("imbot-admin"),
+		swagger.WithDescription("Re-reads bot settings and starts/stops bots to match enabled flags"),
+		swagger.WithErrorResponses(
+			swagger.ErrorResponseConfig{Code: 503, Message: "Bot manager not available"},
+		),
+	)
+
 	// GET /imbot-platforms - Get all supported platforms
 	router.GET("/imbot-platforms", handler.GetPlatforms,
 		swagger.WithTags("imbot-settings"),
