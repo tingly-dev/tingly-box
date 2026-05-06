@@ -65,6 +65,11 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 	s.trackUsageWithTokenUsage(c, usage, nil)
 
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToOpenAIChatNonStreamResponse(c, req, string(req.Model), provider, response)
+	}
+
 	// Convert response to JSON map for modification
 	responseJSON, err := json.Marshal(response)
 	if err != nil {

@@ -909,6 +909,11 @@ func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.Tran
 	tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
 	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToOpenAIResponsesNonStreamResponse(c, req, actualModel, provider, responsesResp)
+	}
+
 	chatResp := nonstream.OpenAIResponsesToChat(responsesResp, responseModel)
 	if recorder != nil {
 		recorder.SetAssembledResponse(chatResp)
@@ -952,6 +957,11 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 
 	// Track usage
 	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
+
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToOpenAIResponsesNonStreamResponse(c, params, reqCtx.RequestModel, provider, response)
+	}
 
 	// Override model in response if needed
 	if responseModel != reqCtx.RequestModel {

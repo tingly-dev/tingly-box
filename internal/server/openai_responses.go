@@ -144,6 +144,10 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	req.ResponseNewParams = params
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
+
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToOpenAIResponsesRequest(c, &req.ResponseNewParams, actualModel, provider)
+	}
 	s.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
 }
 
