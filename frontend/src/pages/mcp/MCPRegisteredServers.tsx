@@ -324,7 +324,7 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                 id: BUILTIN_ADVISOR_ID,
                 name: 'Built-in Adviser',
                 tools: ['advisor'],
-                enabled: true,
+                enabled: false,
             }) as any;
             await onSave({
                 ...baseRest,
@@ -347,7 +347,7 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
     };
 
     const webtoolsEnabled = webtoolsSource?.enabled ?? true;
-    const advisorEnabled = advisorSource?.enabled ?? true;
+    const advisorEnabled = advisorSource?.enabled ?? false;
     const webtoolsTools = webtoolsSource?.tools ?? ['mcp_web_search', 'mcp_web_fetch'];
     const selectedProvider = providerCatalog.find((p) => p.uuid === selectedProviderUuid);
 
@@ -451,12 +451,6 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                         {advisorSaving ? 'Saving...' : 'Save'}
                     </Button>
                 </Stack>
-<<<<<<< HEAD
- 
-                    </>
-                )}
-           </Stack>
-=======
                 <Dialog open={advisorModelDialogOpen} onClose={() => setAdvisorModelDialogOpen(false)} maxWidth="lg" fullWidth>
                     <DialogTitle sx={{ textAlign: 'center' }}>Choose Model</DialogTitle>
                     <DialogContent sx={{ height: '70vh' }}>
@@ -475,8 +469,9 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                         <Button size="small" onClick={() => setAdvisorModelDialogOpen(false)}>Close</Button>
                     </DialogActions>
                 </Dialog>
+                    </>
+                )}
             </Stack>
->>>>>>> 8dc5b4c5 (feat(mcp): select advisor model from providers)
         </UnifiedCard>
     );
 };

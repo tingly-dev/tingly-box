@@ -720,6 +720,9 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 			if vt.IsClientTool || strings.TrimSpace(vt.Name) == "" {
 				continue
 			}
+			if !r.isVirtualServerToolInjectable(vt) {
+				continue
+			}
 			out[NormalizeToolName("builtin", vt.Name)] = struct{}{}
 			// Backward compatibility: older flows may still reference advisor source id.
 			if vt.Name == "advisor" {
