@@ -40,9 +40,23 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 			} else if contentParts, ok := m["content"].([]interface{}); ok {
 				// Array of content parts (multimodal)
 				for _, part := range contentParts {
-					if partMap, ok := part.(map[string]interface{}); ok {
+					partMap, ok := part.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					switch partMap["type"] {
+					case "text":
 						if text, ok := partMap["text"].(string); ok {
 							blocks = append(blocks, anthropic.NewBetaTextBlock(text))
+						}
+					case "image_url":
+						imageURL, _ := partMap["image_url"].(map[string]interface{})
+						if imageURL == nil {
+							continue
+						}
+						url, _ := imageURL["url"].(string)
+						if block, ok := openAIImageURLToAnthropicBetaBlock(url); ok {
+							blocks = append(blocks, block)
 						}
 					}
 				}
@@ -130,6 +144,44 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 	}
 
 	return params
+}
+
+// openAIImageURLToAnthropicBetaBlock turns an OpenAI image_url.url string into
+// an Anthropic beta image content block. Data URLs become base64 image sources,
+// remote URLs become URL image sources. Returns ok=false for empty/malformed
+// inputs the caller should drop.
+func openAIImageURLToAnthropicBetaBlock(url string) (anthropic.BetaContentBlockParamUnion, bool) {
+	mediaType, data, remoteURL := parseImageURLToAnthropicSource(url)
+	switch {
+	case mediaType != "" && data != "":
+		return anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+			Data:      data,
+			MediaType: anthropic.BetaBase64ImageSourceMediaType(mediaType),
+		}), true
+	case remoteURL != "":
+		return anthropic.NewBetaImageBlock(anthropic.BetaURLImageSourceParam{
+			URL: remoteURL,
+		}), true
+	}
+	return anthropic.BetaContentBlockParamUnion{}, false
+}
+
+// openAIImageURLToAnthropicV1Block is the v1 counterpart of
+// openAIImageURLToAnthropicBetaBlock.
+func openAIImageURLToAnthropicV1Block(url string) (anthropic.ContentBlockParamUnion, bool) {
+	mediaType, data, remoteURL := parseImageURLToAnthropicSource(url)
+	switch {
+	case mediaType != "" && data != "":
+		return anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
+			Data:      data,
+			MediaType: anthropic.Base64ImageSourceMediaType(mediaType),
+		}), true
+	case remoteURL != "":
+		return anthropic.NewImageBlock(anthropic.URLImageSourceParam{
+			URL: remoteURL,
+		}), true
+	}
+	return anthropic.ContentBlockParamUnion{}, false
 }
 
 func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) []anthropic.BetaToolUnionParam {
