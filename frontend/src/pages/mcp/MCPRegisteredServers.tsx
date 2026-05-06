@@ -424,6 +424,8 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                     </Button>
                 </Stack>
 
+                {advisorSource && (
+                    <>
                 <Divider sx={{ my: 1 }} />
 
                 {/* ── Advisor section ── */}
@@ -553,7 +555,10 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                         {advisorSaving ? 'Saving...' : 'Save'}
                     </Button>
                 </Stack>
-            </Stack>
+ 
+                    </>
+                )}
+           </Stack>
         </UnifiedCard>
     );
 };
