@@ -80,3 +80,36 @@ func TestOperationPolicyDoesNotBlockNonSSHRead(t *testing.T) {
 		t.Fatalf("expected allow, got %s", res.Verdict)
 	}
 }
+
+func TestOperationPolicyBlocksMultiTokenCommandPattern(t *testing.T) {
+	policy, err := NewOperationPolicy(
+		"block-destructive-rm",
+		"Block destructive rm",
+		true,
+		guardrailscore.Scope{},
+		CommandPolicyConfig{
+			Terms:   []string{"rm -rf"},
+			Actions: []string{"execute"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("new policy: %v", err)
+	}
+
+	res, err := policy.Evaluate(context.Background(), guardrailscore.Input{
+		Content: guardrailscore.Content{
+			Command: &guardrailscore.Command{
+				Name: "bash",
+				Arguments: map[string]interface{}{
+					"command": "rm -rf /tmp/demo",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if res.Verdict != guardrailscore.VerdictBlock {
+		t.Fatalf("expected block, got %s", res.Verdict)
+	}
+}
