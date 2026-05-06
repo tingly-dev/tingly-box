@@ -37,7 +37,7 @@ export function useActivityItems(): ActivityItem[] {
     const botSummary = useBotPlatformSummary(isFullEdition);
     const platformSubtitle = (id: string): string | undefined => {
         const s = botSummary[id];
-        return s && s.total > 0 ? `${s.active}/${s.total} active` : undefined;
+        return s && s.total > 0 ? `active ${s.active} / ${s.total}` : undefined;
     };
 
     const promptMenuItems = useMemo(() => {
