@@ -151,8 +151,59 @@ func (a *AnthropicV1Adapter) ApplyContinuation(req any, segment any) (any, error
 		return req, nil
 	}
 	newReq := *reqParams
-	newReq.Messages = append(append([]anthropic.MessageParam{}, seg...), reqParams.Messages...)
+	newReq.Messages = mergeAnthropicV1Continuation(seg, reqParams.Messages)
 	return &newReq, nil
+}
+
+func mergeAnthropicV1Continuation(segment []anthropic.MessageParam, messages []anthropic.MessageParam) []anthropic.MessageParam {
+	if len(segment) == 0 {
+		return append([]anthropic.MessageParam{}, messages...)
+	}
+	if len(messages) == 0 {
+		return append([]anthropic.MessageParam{}, segment...)
+	}
+
+	assistantIdx := -1
+	toolResultIdx := -1
+	for idx, msg := range messages {
+		if assistantIdx == -1 && msg.Role == anthropic.MessageParamRoleAssistant {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					assistantIdx = idx
+					break
+				}
+			}
+		}
+		if toolResultIdx == -1 && msg.Role == anthropic.MessageParamRoleUser {
+			for _, block := range msg.Content {
+				if block.OfToolResult != nil {
+					toolResultIdx = idx
+					break
+				}
+			}
+		}
+		if assistantIdx != -1 && toolResultIdx != -1 {
+			break
+		}
+	}
+	if toolResultIdx == -1 {
+		return append(append([]anthropic.MessageParam{}, segment...), messages...)
+	}
+
+	merged := append([]anthropic.MessageParam{}, segment...)
+	lastIdx := len(merged) - 1
+	merged[lastIdx].Content = append(append([]anthropic.ContentBlockParamUnion{}, merged[lastIdx].Content...), messages[toolResultIdx].Content...)
+	if assistantIdx == -1 || toolResultIdx < assistantIdx {
+		result := append([]anthropic.MessageParam{}, merged...)
+		result = append(result, messages[:toolResultIdx]...)
+		result = append(result, messages[toolResultIdx+1:]...)
+		return result
+	}
+
+	result := append([]anthropic.MessageParam{}, messages[:assistantIdx]...)
+	result = append(result, merged...)
+	result = append(result, messages[toolResultIdx+1:]...)
+	return result
 }
 
 func messageToParamPreservingThinking(msg *anthropic.Message) anthropic.MessageParam {

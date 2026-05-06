@@ -318,6 +318,7 @@ func (p *GenericLoopProcessor) applyStoredContinuation(req any) any {
 	if !ok {
 		return req
 	}
+	logrus.Debugf("[MCP-CONT] processor applying stored continuation key=%s adapter=%s", key, p.adapterID())
 	updated, err := p.adapter.ApplyContinuation(req, segment)
 	if err != nil {
 		logrus.WithError(err).Warn("[MCP-Processor] failed to apply stored continuation")

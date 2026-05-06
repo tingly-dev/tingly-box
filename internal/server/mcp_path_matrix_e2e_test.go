@@ -43,8 +43,9 @@ type pathProbe struct {
 	anthropicBodies []string
 	openAIBodies    []string
 
-	sawAnthropicVirtualResultInjected bool
-	sawOpenAIVirtualResultInjected    bool
+	sawAnthropicVirtualResultInjected     bool
+	sawAnthropicMergedAdjacentToolResults bool
+	sawOpenAIVirtualResultInjected        bool
 }
 
 func (p *pathProbe) addAnthropic(stream bool, body string) {
@@ -58,6 +59,11 @@ func (p *pathProbe) addAnthropic(stream bool, body string) {
 	p.anthropicBodies = append(p.anthropicBodies, body)
 	if strings.Contains(body, `"tool_use_id":"toolu_external"`) && strings.Contains(body, `"tool_use_id":"toolu_virtual"`) {
 		p.sawAnthropicVirtualResultInjected = true
+	}
+	if strings.Contains(body, `"tool_use_id":"toolu_virtual"`) && strings.Contains(body, `"tool_use_id":"toolu_external"`) && strings.Contains(body, `"role":"user"`) {
+		if strings.Contains(body, `"tool_use_id":"toolu_virtual","content"`) && strings.Contains(body, `"tool_use_id":"toolu_external","content"`) {
+			p.sawAnthropicMergedAdjacentToolResults = true
+		}
 	}
 }
 
@@ -703,6 +709,7 @@ func TestMCPMixedToolStreamStashInjectE2E(t *testing.T) {
 		code, _, _ = runDispatch(t, s, provider, buildAnthropicV1FollowupReq(), protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, false)
 		require.Equal(t, http.StatusOK, code)
 		require.True(t, probe.sawAnthropicVirtualResultInjected, "follow-up request should contain injected virtual tool_result, bodies=%v", probe.anthropicBodies)
+		require.True(t, probe.sawAnthropicMergedAdjacentToolResults, "follow-up request should merge virtual and external tool_result into a single user message, bodies=%v", probe.anthropicBodies)
 	})
 
 	t.Run("AnthropicBeta_stream_mixed_stash_then_inject_next_request", func(t *testing.T) {
@@ -721,6 +728,7 @@ func TestMCPMixedToolStreamStashInjectE2E(t *testing.T) {
 		code, _, _ = runDispatch(t, s, provider, buildAnthropicBetaFollowupReq(), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, false)
 		require.Equal(t, http.StatusOK, code)
 		require.True(t, probe.sawAnthropicVirtualResultInjected, "follow-up request should contain injected virtual tool_result, bodies=%v", probe.anthropicBodies)
+		require.True(t, probe.sawAnthropicMergedAdjacentToolResults, "follow-up request should merge virtual and external tool_result into a single user message, bodies=%v", probe.anthropicBodies)
 		require.Equal(t, 1, probe.anthropicStreamCalls, "initial mixed anthropic beta request must stay streaming")
 		require.Equal(t, 1, probe.anthropicNonStreamCalls, "only the follow-up request should be non-stream")
 	})

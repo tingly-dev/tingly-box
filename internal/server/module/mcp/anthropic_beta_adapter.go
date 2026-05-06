@@ -151,8 +151,59 @@ func (a *AnthropicBetaAdapter) ApplyContinuation(req any, segment any) (any, err
 		return req, nil
 	}
 	newReq := *reqParams
-	newReq.Messages = append(append([]anthropic.BetaMessageParam{}, seg...), reqParams.Messages...)
+	newReq.Messages = mergeAnthropicBetaContinuation(seg, reqParams.Messages)
 	return &newReq, nil
+}
+
+func mergeAnthropicBetaContinuation(segment []anthropic.BetaMessageParam, messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	if len(segment) == 0 {
+		return append([]anthropic.BetaMessageParam{}, messages...)
+	}
+	if len(messages) == 0 {
+		return append([]anthropic.BetaMessageParam{}, segment...)
+	}
+
+	assistantIdx := -1
+	toolResultIdx := -1
+	for idx, msg := range messages {
+		if assistantIdx == -1 && msg.Role == anthropic.BetaMessageParamRoleAssistant {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					assistantIdx = idx
+					break
+				}
+			}
+		}
+		if toolResultIdx == -1 && msg.Role == anthropic.BetaMessageParamRoleUser {
+			for _, block := range msg.Content {
+				if block.OfToolResult != nil {
+					toolResultIdx = idx
+					break
+				}
+			}
+		}
+		if assistantIdx != -1 && toolResultIdx != -1 {
+			break
+		}
+	}
+	if toolResultIdx == -1 {
+		return append(append([]anthropic.BetaMessageParam{}, segment...), messages...)
+	}
+
+	merged := append([]anthropic.BetaMessageParam{}, segment...)
+	lastIdx := len(merged) - 1
+	merged[lastIdx].Content = append(append([]anthropic.BetaContentBlockParamUnion{}, merged[lastIdx].Content...), messages[toolResultIdx].Content...)
+	if assistantIdx == -1 || toolResultIdx < assistantIdx {
+		result := append([]anthropic.BetaMessageParam{}, merged...)
+		result = append(result, messages[:toolResultIdx]...)
+		result = append(result, messages[toolResultIdx+1:]...)
+		return result
+	}
+
+	result := append([]anthropic.BetaMessageParam{}, messages[:assistantIdx]...)
+	result = append(result, merged...)
+	result = append(result, messages[toolResultIdx+1:]...)
+	return result
 }
 
 func betaMessageToParamPreservingThinking(msg *anthropic.BetaMessage) anthropic.BetaMessageParam {

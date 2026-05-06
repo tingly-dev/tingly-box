@@ -839,6 +839,7 @@ func (i *GenericStreamInterceptor) applyStoredContinuation() {
 	if !ok {
 		return
 	}
+	logrus.Debugf("[MCP-CONT] interceptor applying stored continuation key=%s adapter=%s", key, i.adapterID())
 	updated, err := i.adapter.ApplyContinuation(i.currentReq, segment)
 	if err != nil {
 		logrus.WithError(err).Warn("[MCP-Interceptor] failed to apply stored continuation")
