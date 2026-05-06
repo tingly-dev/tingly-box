@@ -46,6 +46,7 @@ import {
     VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import MCPSourceEditor from './MCPSourceEditor';
 import {
     BUILTIN_ADVISOR_ID,
@@ -91,6 +92,29 @@ const OPENCODE_CONFIG_SNIPPET = `"mcp": {
     }
   }
 }`;
+
+const ADVISOR_VISIBILITY_STORAGE_KEY = 'tb.mcp.showAdvisor';
+
+const shouldShowAdvisorSection = (search: string): boolean => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    const params = new URLSearchParams(search);
+    const advisorParam = params.get('advisor');
+
+    if (advisorParam === '1' || advisorParam === 'true' || advisorParam === 'on') {
+        window.localStorage.setItem(ADVISOR_VISIBILITY_STORAGE_KEY, 'true');
+        return true;
+    }
+
+    if (advisorParam === '0' || advisorParam === 'false' || advisorParam === 'off') {
+        window.localStorage.removeItem(ADVISOR_VISIBILITY_STORAGE_KEY);
+        return false;
+    }
+
+    return window.localStorage.getItem(ADVISOR_VISIBILITY_STORAGE_KEY) === 'true';
+};
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const maskSecret = (val: string): string => {
@@ -710,10 +734,12 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const MCPRegisteredServers = () => {
+    const location = useLocation();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+    const showAdvisorSection = shouldShowAdvisorSection(location.search);
 
     useEffect(() => { void loadData(); }, []);
 
@@ -774,7 +800,7 @@ const MCPRegisteredServers = () => {
                 {/* Part 2 */}
                 <BuiltinServersCard
                     webtoolsSource={webtoolsSource}
-                    advisorSource={advisorSource}
+                    advisorSource={showAdvisorSection ? advisorSource : undefined}
                     onSave={upsertSource}
                     saving={saving}
                 />
