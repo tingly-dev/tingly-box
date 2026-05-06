@@ -6,7 +6,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+
+	agentsession "github.com/tingly-dev/tingly-box/agentboot/session"
 )
+
+// Compile-time assertion that Manager satisfies the agentboot runner's
+// Store interface. If a refactor drops or renames any of
+// SetRunning/SetCompleted/SetFailed the build fails here instead of
+// the runner crashing at runtime.
+var _ agentsession.Store = (*Manager)(nil)
 
 // Status represents the current state of a session
 type Status string

@@ -154,19 +154,12 @@ func (h *TestHarness) MintPairingCode() (code string, expiresAt time.Time) {
 	return h.Pairing.Mint(h.Setting.UUID)
 }
 
-// MarkChatPaired writes a pairing record directly into the chat store,
-// bypassing the /bind handshake. Convenient for tests that focus on
-// post-pairing behavior.
+// MarkChatPaired records a pairing for the harness's bot via the same
+// production API path that VerifyAndPair uses. Tests focused on
+// post-pairing behavior can skip the /bind handshake without bypassing
+// the real persistence path — exercising any future bug in SetPaired.
 func (h *TestHarness) MarkChatPaired(chatID, senderID string) {
-	chat, err := h.ChatStore.GetOrCreateChat(chatID, h.Setting.Platform)
-	if err != nil {
-		panic(err)
-	}
-	chat.IsPaired = true
-	chat.PairedBotUUID = h.Setting.UUID
-	chat.PairedSenderID = senderID
-	chat.PairedAt = time.Now()
-	if err := h.ChatStore.UpsertChat(chat); err != nil {
+	if err := h.ChatStore.SetPaired(chatID, h.Setting.Platform, h.Setting.UUID, senderID); err != nil {
 		panic(err)
 	}
 }
@@ -185,15 +178,13 @@ func (h *TestHarness) WhitelistGroup(chatID, ownerID string) {
 	}
 }
 
-// SetCurrentAgent updates the current-agent binding for a chat. Tests use
-// this to route subsequent text into the mock agent (or another).
+// SetCurrentAgent updates the current-agent binding for a chat through the
+// same production path the @cc/@tb handoff uses. Going through
+// chatStore.SetCurrentAgent (rather than mutating Chat directly) keeps
+// the harness honest: any regression in the persistence path — e.g. a
+// silent no-op on a missing chat row — surfaces as a test failure.
 func (h *TestHarness) SetCurrentAgent(chatID, agentType string) {
-	chat, err := h.ChatStore.GetOrCreateChat(chatID, h.Setting.Platform)
-	if err != nil {
-		panic(err)
-	}
-	chat.CurrentAgent = agentType
-	if err := h.ChatStore.UpsertChat(chat); err != nil {
+	if err := h.ChatStore.SetCurrentAgent(chatID, h.Setting.Platform, agentType); err != nil {
 		panic(err)
 	}
 }

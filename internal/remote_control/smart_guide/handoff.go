@@ -11,11 +11,13 @@ import (
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
-// validAgents is the set of valid agent types for handoff
+// validAgents is the set of valid agent types for handoff. The "mock"
+// agent type still exists internally as a session/state label but is
+// not a user-facing handoff target — there is no MockAgentExecutor
+// since Phase 2 replaced mockagent with the claude-fixture test seam.
 var validAgents = map[string]bool{
 	AgentTypeTinglyBox:  true,
 	AgentTypeClaudeCode: true,
-	AgentTypeMock:       true,
 }
 
 // HandoffState represents the state during a handoff
@@ -89,9 +91,6 @@ func (hm *HandoffManager) ExecuteHandoff(ctx context.Context, state *HandoffStat
 	case AgentTypeTinglyBox:
 		message = HandoffToTBPrompt()
 		nextHint = "I'm here to help with setup. Type '@cc' when ready to code."
-	case AgentTypeMock:
-		message = "🧪 Switched to Mock Agent.\n\nMock agent simulates execution for testing purposes."
-		nextHint = "Type '@cc' to return to Claude Code or '@tb' for Smart Guide."
 	default:
 		message = fmt.Sprintf("Switched to %s", state.ToAgent)
 		nextHint = "Continue your conversation."
@@ -145,7 +144,6 @@ func DeserializeState(data []byte) (*HandoffState, error) {
 // Examples:
 //   - "@cc" -> (AgentTypeClaudeCode, true, "")
 //   - "@cc help me" -> (AgentTypeClaudeCode, true, "help me")
-//   - "@mock test" -> (AgentTypeMock, true, "test")
 //   - "hello" -> ("", false, "")
 func DetectHandoffCommand(text string) (agentboot.AgentType, bool, string) {
 	// Trim leading/trailing whitespace
@@ -160,10 +158,6 @@ func DetectHandoffCommand(text string) (agentboot.AgentType, bool, string) {
 		remaining := strings.TrimSpace(trimmed[4:])
 		return AgentTypeTinglyBox, true, remaining
 	}
-	if strings.HasPrefix(trimmed, "@mock ") || strings.HasPrefix(trimmed, "/mock ") {
-		remaining := strings.TrimSpace(trimmed[6:])
-		return AgentTypeMock, true, remaining
-	}
 
 	// Check for exact match commands (no trailing text)
 	switch trimmed {
@@ -171,8 +165,6 @@ func DetectHandoffCommand(text string) (agentboot.AgentType, bool, string) {
 		return AgentTypeClaudeCode, true, ""
 	case "@tb", "/tb", "guide", "switch to tb", "switch to guide", "tb":
 		return AgentTypeTinglyBox, true, ""
-	case "@mock", "/mock", "mock":
-		return AgentTypeMock, true, ""
 	}
 
 	return "", false, ""
@@ -185,8 +177,6 @@ func GetAgentTypeString(agentType agentboot.AgentType) string {
 		return "Smart Guide (@tb)"
 	case AgentTypeClaudeCode:
 		return "Claude Code (@cc)"
-	case AgentTypeMock:
-		return "Mock Agent (@mock)"
 	default:
 		return string(agentType)
 	}

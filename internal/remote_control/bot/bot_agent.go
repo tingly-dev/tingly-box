@@ -364,8 +364,6 @@ func (h *BotHandler) routeToAgent(hCtx HandlerContext, text string) error {
 			targetAgent = agentTinglyBox
 		case smart_guide.AgentTypeClaudeCode:
 			targetAgent = agentClaudeCode
-		case smart_guide.AgentTypeMock:
-			targetAgent = agentMock
 		default:
 			return fmt.Errorf("unknown target agent: %s", toAgent)
 		}
