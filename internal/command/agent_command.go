@@ -330,7 +330,7 @@ func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRe
 	// No rule found or rule is invalid - prompt for configuration
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("\nNo routing rule found for '%s' in scenario '%s'.\n", requestModel, scenario)
-	fmt.Println("You may need to run 'tingly-box quickstart' first, or configure manually:")
+	fmt.Println("You may need to run 'tingly-box tui' first, or configure manually:")
 	return promptForAgentConfig(reader, appManager, req)
 }
 

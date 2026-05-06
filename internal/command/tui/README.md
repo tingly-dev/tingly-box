@@ -116,8 +116,8 @@ came from, even when some steps were auto-skipped, with no special-casing.
 The header rendered above every prompt:
 
 ```
-Tingly Box · Quickstart   Step 3/6
-✓ Welcome › ✓ Credential › ❯ Provider › · API Style › · Model › · Rules › · Done
+Tingly Box · Quickstart   Step 3/7
+✓ Welcome › ✓ Credential › ❯ Provider › · API Style › · Model › · Rules › · Agent › · Done
 ```
 
 `✓` done, `❯` active, `·` upcoming. Named steps tell users what is coming, not

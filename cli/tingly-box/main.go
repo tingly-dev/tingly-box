@@ -50,7 +50,8 @@ type CLI struct {
 	Swagger    command.SwaggerCmdKong    `kong:"cmd,hidden,help='Generate OpenAPI schema'"`
 	Quota      command.QuotaCmdKong      `kong:"cmd,help='Quota information'"`
 	Remote     command.RemoteCmdKong     `kong:"cmd,help='Remote control'"`
-	Quickstart command.QuickstartCmdKong `kong:"cmd,help='Guided setup'"`
+	TUI        command.TUICmdKong        `kong:"cmd,name='tui',help='Interactive setup wizard'"`
+	Quickstart command.QuickstartCmdKong `kong:"cmd,name='quickstart',hidden,help='Alias for tui'"`
 
 	// MCP builtin (hidden)
 	MCPBuiltin command.MCPBuiltinCmdKong `kong:"cmd,name='mcp-builtin',hidden,help='Start the builtin MCP server (internal use)'"`

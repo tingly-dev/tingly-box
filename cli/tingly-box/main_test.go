@@ -69,7 +69,8 @@ func TestKongAllTopLevelSubcommandsRecognized(t *testing.T) {
 		{"remote-config", []string{"remote", "config", "--help"}},
 		{"remote-add", []string{"remote", "add", "--help"}},
 		{"remote-pair-enable", []string{"remote", "pair", "enable", "bot-uuid", "--help"}},
-		{"quickstart", []string{"quickstart", "--help"}},
+		{"tui", []string{"tui", "--help"}},
+		{"quickstart-alias", []string{"quickstart", "--help"}},
 		{"version", []string{"version", "--help"}},
 	}
 	for _, tc := range cases {
@@ -172,15 +173,16 @@ func TestStartCmdDebugFlagSet(t *testing.T) {
 	}
 }
 
-// TestQuickstartUseTUIDefault ensures --tui defaults to true (legacy parity:
-// without the flag the TUI wizard runs, not the plain quickstart).
-func TestQuickstartUseTUIDefault(t *testing.T) {
-	cli, parser := newTestParser(t)
-	if _, err := parser.Parse([]string{"quickstart"}); err != nil {
-		t.Fatalf("quickstart should parse: %v", err)
-	}
-	if !cli.Quickstart.UseTUI {
-		t.Error("Quickstart.UseTUI should default to true")
+// TestTUICommandAndQuickstartAlias ensures both `tui` (the canonical name) and
+// `quickstart` (the hidden legacy alias) parse without arguments.
+func TestTUICommandAndQuickstartAlias(t *testing.T) {
+	for _, name := range []string{"tui", "quickstart"} {
+		t.Run(name, func(t *testing.T) {
+			_, parser := newTestParser(t)
+			if _, err := parser.Parse([]string{name}); err != nil {
+				t.Fatalf("%s should parse: %v", name, err)
+			}
+		})
 	}
 }
 

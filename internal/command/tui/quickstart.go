@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/data"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -44,6 +45,12 @@ type quickstartState struct {
 	proxyURL         string
 	model            string
 	startServer      bool
+
+	// Apply-agent sub-flow
+	selectedAgents      []agent.AgentType
+	ccUnified           bool
+	ccInstallStatusLine bool
+	agentResults        []*agent.ApplyAgentResult
 }
 
 // RunQuickstart runs the interactive Tingly Box quickstart wizard.
@@ -56,6 +63,7 @@ func RunQuickstart(mgr QuickstartManager) error {
 		{Name: "Details", Execute: qsDetails, Skip: qsUsingExisting},
 		{Name: "Model", Execute: qsModel},
 		{Name: "Rules", Execute: qsRules},
+		{Name: "Agent", Execute: qsAgent},
 		{Name: "Done", Execute: qsDone},
 	}
 
@@ -565,6 +573,120 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 	return s, StepContinue, nil
 }
 
+func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, error) {
+	infos := agent.ListAgentInfo()
+
+	items := make([]MultiSelectItem[agent.AgentType], 0, len(infos))
+	for _, info := range infos {
+		items = append(items, MultiSelectItem[agent.AgentType]{
+			Title:       info.Name,
+			Description: agentItemDescription(info),
+			Value:       info.Type,
+		})
+	}
+
+	r, err := MultiSelect("Configure AI coding agents now? (Space to toggle, Enter to continue, none = skip)", items, MultiSelectOptions{
+		Header:    ctx.Header,
+		CanGoBack: true,
+		PageSize:  6,
+	})
+	if err != nil {
+		return s, StepCancel, err
+	}
+	switch {
+	case r.IsBack():
+		return s, StepBack, nil
+	case r.IsCancel():
+		return s, StepCancel, nil
+	}
+
+	s.selectedAgents = r.Value
+	s.agentResults = nil
+	if len(s.selectedAgents) == 0 {
+		return s, StepContinue, nil
+	}
+
+	hasClaudeCode := false
+	for _, t := range s.selectedAgents {
+		if t == agent.AgentTypeClaudeCode {
+			hasClaudeCode = true
+			break
+		}
+	}
+
+	if hasClaudeCode {
+		uni, err := Confirm("Use unified mode for Claude Code? (single config for all models)", ConfirmOptions{
+			Header:     ctx.Header,
+			DefaultYes: true,
+			CanGoBack:  true,
+		})
+		if err != nil {
+			return s, StepCancel, err
+		}
+		if uni.IsBack() {
+			return s, StepBack, nil
+		}
+		if uni.IsCancel() {
+			return s, StepCancel, nil
+		}
+		s.ccUnified = uni.Value
+
+		sl, err := Confirm("Install Claude Code status line script?", ConfirmOptions{
+			Header:     ctx.Header,
+			DefaultYes: false,
+			CanGoBack:  true,
+		})
+		if err != nil {
+			return s, StepCancel, err
+		}
+		if sl.IsBack() {
+			return s, StepBack, nil
+		}
+		if sl.IsCancel() {
+			return s, StepCancel, nil
+		}
+		s.ccInstallStatusLine = sl.Value
+	}
+
+	apply := agent.NewAgentApply(s.mgr.GetGlobalConfig(), "127.0.0.1")
+	for _, t := range s.selectedAgents {
+		t := t
+		req := &agent.ApplyAgentRequest{
+			AgentType:         t,
+			Provider:          s.provider.UUID,
+			Model:             s.model,
+			Unified:           s.ccUnified,
+			InstallStatusLine: s.ccInstallStatusLine,
+			Force:             true,
+		}
+		label := string(t)
+		if info, ok := agent.GetAgentInfo(t); ok {
+			label = info.Name
+		}
+		res, err := WithSpinner(fmt.Sprintf("Applying %s configuration", label), func() (*agent.ApplyAgentResult, error) {
+			return apply.ApplyAgent(req)
+		})
+		if err != nil {
+			fmt.Println(errorStyle.Render(fmt.Sprintf("  ✗ %s: %v", label, err)))
+			continue
+		}
+		s.agentResults = append(s.agentResults, res)
+		if res != nil && !res.Success {
+			fmt.Println(errorStyle.Render(fmt.Sprintf("  ✗ %s: %s", label, res.Message)))
+		}
+	}
+	return s, StepContinue, nil
+}
+
+// agentItemDescription returns a one-line summary of where the agent writes
+// its configuration (used by the MultiSelect description column).
+func agentItemDescription(info agent.AgentInfo) string {
+	if len(info.ConfigFiles) == 0 {
+		return info.Description
+	}
+	return "writes " + strings.Join(info.ConfigFiles, ", ")
+}
+
 func qsDone(ctx StepContext, s quickstartState) (quickstartState, StepResult, error) {
 	port := s.mgr.GetServerPort()
 	if port == 0 {
@@ -582,6 +704,28 @@ func qsDone(ctx StepContext, s quickstartState) (quickstartState, StepResult, er
 	fmt.Println(ctx.Header)
 	fmt.Println()
 	fmt.Println(summary)
+
+	if len(s.agentResults) > 0 {
+		fmt.Println(descStyle.Render("Agents configured:"))
+		for _, res := range s.agentResults {
+			if res == nil {
+				continue
+			}
+			marker := successStyle.Render("  ✓ ")
+			if !res.Success {
+				marker = errorStyle.Render("  ✗ ")
+			}
+			label := string(res.AgentType)
+			if info, ok := agent.GetAgentInfo(res.AgentType); ok {
+				label = info.Name
+			}
+			fmt.Println(marker + valueStyle.Render(label))
+			for _, f := range res.ConfigFiles {
+				fmt.Println(descStyle.Render("      " + f))
+			}
+		}
+		fmt.Println()
+	}
 
 	r, err := Confirm("Start the server now?", ConfirmOptions{DefaultYes: false, CanGoBack: true})
 	if err != nil {
