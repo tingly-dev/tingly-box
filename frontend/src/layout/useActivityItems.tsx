@@ -18,7 +18,6 @@ import {
     IconKey,
     IconShield,
     IconLock,
-    IconMessageCircle,
     IconVector,
     IconFlask,
 } from '@tabler/icons-react';
@@ -27,13 +26,19 @@ import { SettingsApplications } from '@mui/icons-material';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { isFullEdition } from '@/utils/edition';
-import type { ActivityItem, NavDivider, NavItem } from './types';
+import type { ActivityItem, NavItem } from './types';
 import { IconAiAgents } from '@tabler/icons-react';
+import { useBotPlatformSummary } from './useBotPlatformSummary';
 
 export function useActivityItems(): ActivityItem[] {
     const { t } = useTranslation();
     const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
     const { profiles } = useProfileContext();
+    const botSummary = useBotPlatformSummary(isFullEdition);
+    const platformSubtitle = (id: string): string | undefined => {
+        const s = botSummary[id];
+        return s && s.total > 0 ? `${s.active}/${s.total} active` : undefined;
+    };
 
     const promptMenuItems = useMemo(() => {
         const items: NavItem[] = [];
@@ -119,16 +124,14 @@ export function useActivityItems(): ActivityItem[] {
                 key: 'remote-control' as const,
                 icon: <IconDeviceRemote size={22} />,
                 label: t('layout.remote'),
-                defaultPath: '/remote-control',
+                defaultPath: '/remote-control/weixin',
                 children: [
-                    { path: '/remote-control', label: t('layout.overview'), icon: <IconMessageCircle size={20} /> },
-                    { type: 'divider' } as NavDivider,
-                    { path: '/remote-control/weixin', label: t('layout.platforms.weixin'), icon: <Weixin size={20} /> },
-                    { path: '/remote-control/wecom', label: t('layout.platforms.wecom'), icon: <WeCom size={20} /> },
-                    { path: '/remote-control/telegram', label: t('layout.platforms.telegram'), icon: <Telegram size={20} /> },
-                    { path: '/remote-control/feishu', label: t('layout.platforms.feishu'), icon: <Feishu size={20} /> },
-                    { path: '/remote-control/lark', label: t('layout.platforms.lark'), icon: <Lark size={20} /> },
-                    { path: '/remote-control/dingtalk', label: t('layout.platforms.dingtalk'), icon: <DingTalk size={20} /> },
+                    { path: '/remote-control/weixin', label: t('layout.platforms.weixin'), icon: <Weixin size={20} />, subtitle: platformSubtitle('weixin') },
+                    { path: '/remote-control/wecom', label: t('layout.platforms.wecom'), icon: <WeCom size={20} />, subtitle: platformSubtitle('wecom') },
+                    { path: '/remote-control/telegram', label: t('layout.platforms.telegram'), icon: <Telegram size={20} />, subtitle: platformSubtitle('telegram') },
+                    { path: '/remote-control/feishu', label: t('layout.platforms.feishu'), icon: <Feishu size={20} />, subtitle: platformSubtitle('feishu') },
+                    { path: '/remote-control/lark', label: t('layout.platforms.lark'), icon: <Lark size={20} />, subtitle: platformSubtitle('lark') },
+                    { path: '/remote-control/dingtalk', label: t('layout.platforms.dingtalk'), icon: <DingTalk size={20} />, subtitle: platformSubtitle('dingtalk') },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{
@@ -180,5 +183,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, botSummary]);
 }
