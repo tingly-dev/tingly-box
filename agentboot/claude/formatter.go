@@ -19,11 +19,76 @@ type TextFormatter struct {
 	Verbose          bool
 	ShowToolDetails  bool
 	mu               sync.RWMutex
+	// toolNameByID correlates tool_use IDs to tool names so that result
+	// rendering can dispatch to the right per-tool renderer. Entries are
+	// removed once the corresponding result is rendered.
+	toolNameByID map[string]string
+	// seenAssistantToolIDs records IDs of tool_use blocks already rendered
+	// inside an AssistantMessage so the SDK's standalone *ToolUseMessage
+	// duplicate is suppressed (returns "" and is dropped by the caller).
+	seenAssistantToolIDs map[string]struct{}
 }
 
 // NewTextFormatter creates a new text formatter
 func NewTextFormatter() *TextFormatter {
 	return &TextFormatter{}
+}
+
+func (f *TextFormatter) rememberToolName(id, name string) {
+	if id == "" || name == "" {
+		return
+	}
+	f.mu.Lock()
+	if f.toolNameByID == nil {
+		f.toolNameByID = map[string]string{}
+	}
+	f.toolNameByID[id] = name
+	f.mu.Unlock()
+}
+
+func (f *TextFormatter) lookupToolName(id string) string {
+	if id == "" {
+		return ""
+	}
+	f.mu.RLock()
+	name := f.toolNameByID[id]
+	f.mu.RUnlock()
+	return name
+}
+
+func (f *TextFormatter) consumeToolName(id string) string {
+	if id == "" {
+		return ""
+	}
+	f.mu.Lock()
+	name := f.toolNameByID[id]
+	if name != "" {
+		delete(f.toolNameByID, id)
+	}
+	f.mu.Unlock()
+	return name
+}
+
+func (f *TextFormatter) markAssistantToolID(id string) {
+	if id == "" {
+		return
+	}
+	f.mu.Lock()
+	if f.seenAssistantToolIDs == nil {
+		f.seenAssistantToolIDs = map[string]struct{}{}
+	}
+	f.seenAssistantToolIDs[id] = struct{}{}
+	f.mu.Unlock()
+}
+
+func (f *TextFormatter) wasAssistantToolID(id string) bool {
+	if id == "" {
+		return false
+	}
+	f.mu.RLock()
+	_, ok := f.seenAssistantToolIDs[id]
+	f.mu.RUnlock()
+	return ok
 }
 
 // Format formats a message
@@ -118,64 +183,51 @@ func (f *TextFormatter) formatTaskNotification(m *SystemMessage) string {
 }
 
 func (f *TextFormatter) formatAssistant(m *AssistantMessage) string {
-	var b strings.Builder
+	var sections []string
+	var tools []ToolUseRef
 
-	if m.Message.ID != "" {
-		b.WriteString("[ASSISTANT] ")
-		b.WriteString(m.Message.ID)
-		b.WriteString("\n")
-	} else if !m.IsError() {
-		b.WriteString("[ASSISTANT]")
+	flushTools := func() {
+		if len(tools) == 0 {
+			return
+		}
+		if rendered := renderToolUseGroup(tools, f.ShowToolDetails); rendered != "" {
+			sections = append(sections, rendered)
+		}
+		tools = tools[:0]
 	}
 
-	hasContent := false
 	for _, content := range m.Message.Content {
 		switch content.Type {
 		case ContentBlockTypeText:
+			flushTools()
 			if content.Text != "" {
-				hasContent = true
-				b.WriteString(content.Text)
-				b.WriteString("\n")
+				sections = append(sections, strings.TrimRight(content.Text, "\n"))
 			}
 		case ContentBlockTypeToolUse:
-			if f.ShowToolDetails {
-				hasContent = true
-				b.WriteString("[TOOL] ")
-				b.WriteString(content.Name)
-				switch content.Name {
-				case "Bash":
-					b.WriteString("\n")
-					b.WriteString(fmt.Sprintf("%s", content.Input))
-				}
-				b.WriteString("\n")
-			}
+			f.rememberToolName(content.ID, content.Name)
+			f.markAssistantToolID(content.ID)
+			tools = append(tools, ToolUseRef{
+				ID:    content.ID,
+				Name:  content.Name,
+				Input: inputFromRaw(content.Input),
+			})
 		case ContentBlockTypeThinking:
+			flushTools()
 			if f.Verbose && content.Thinking != "" {
-				hasContent = true
-				b.WriteString("[THINKING] ")
-				b.WriteString(content.Thinking)
-				b.WriteString("\n")
-			}
-		case "web_search_tool_result":
-			if f.ShowToolDetails && content.ToolUseID != "" {
-				hasContent = true
-				b.WriteString("[TOOL_RESULT] ")
-				b.WriteString(content.ToolUseID)
-				b.WriteString("\n")
+				sections = append(sections, "[THINKING] "+content.Thinking)
 			}
 		}
 	}
+	flushTools()
 
 	if m.IsError() {
-		hasContent = true
-		b.WriteString(fmt.Sprintf("[ASSISTANT ERROR: %s] ", m.Error))
+		sections = append(sections, fmt.Sprintf("[ASSISTANT ERROR: %s]", m.Error))
 	}
 
-	if hasContent {
-		return strings.TrimRight(b.String(), "\n")
+	if len(sections) == 0 {
+		return ""
 	}
-
-	return ""
+	return strings.Join(sections, "\n")
 }
 
 func (f *TextFormatter) formatUser(m *UserMessage) string {
@@ -195,50 +247,24 @@ func (f *TextFormatter) formatUser(m *UserMessage) string {
 }
 
 func (f *TextFormatter) formatToolUse(m *ToolUseMessage) string {
-	var b strings.Builder
-	b.WriteString("[TOOL_USE] ")
-	b.WriteString(m.ToolUseID)
-	b.WriteString(" (")
-	b.WriteString(m.Name)
-	b.WriteString(")")
-
-	if m.Input != nil && len(m.Input) > 0 {
-		b.WriteString("\nInput: ")
-		for key, value := range m.Input {
-			b.WriteString(key)
-			b.WriteString("=")
-			b.WriteString(fmt.Sprintf("%v", value))
-			b.WriteString(" ")
-		}
+	if m == nil {
+		return ""
 	}
-	return b.String()
+	// Suppress duplicates: if the same tool_use ID was already rendered as
+	// part of an AssistantMessage bundle, drop this standalone event.
+	if f.wasAssistantToolID(m.ToolUseID) {
+		return ""
+	}
+	f.rememberToolName(m.ToolUseID, m.Name)
+	return renderToolUse(m.Name, m.Input, f.ShowToolDetails)
 }
 
 func (f *TextFormatter) formatToolResult(m *ToolResultMessage) string {
-	var b strings.Builder
-	b.WriteString("[TOOL_RESULT] ")
-	b.WriteString(m.ToolUseID)
-	b.WriteString(" [")
-	if m.IsError {
-		b.WriteString("ERROR")
-	} else {
-		b.WriteString("SUCCESS")
+	if m == nil {
+		return ""
 	}
-	b.WriteString("]")
-
-	if m.Output != "" {
-		b.WriteString("\n")
-		b.WriteString(m.Output)
-	} else if m.Content != nil {
-		for _, c := range m.Content {
-			if tr, ok := c.(*ToolResultContentBlock); ok && tr.Content != "" {
-				b.WriteString("\n")
-				b.WriteString(tr.Content)
-				break
-			}
-		}
-	}
-	return b.String()
+	name := f.consumeToolName(m.ToolUseID)
+	return renderToolResult(name, m)
 }
 
 func (f *TextFormatter) formatStreamEvent(m *StreamEventMessage) string {

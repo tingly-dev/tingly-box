@@ -65,9 +65,6 @@ func TestTextFormatter_FormatAssistantMessage(t *testing.T) {
 		t.Fatal("Expected non-empty output")
 	}
 
-	if !contains(output, "[ASSISTANT]") {
-		t.Errorf("Expected [ASSISTANT] in output: %s", output)
-	}
 	if !contains(output, "Hello, world!") {
 		t.Errorf("Expected text content in output: %s", output)
 	}
@@ -111,14 +108,11 @@ func TestTextFormatter_FormatToolUseMessage(t *testing.T) {
 		t.Fatal("Expected non-empty output")
 	}
 
-	if !contains(output, "[TOOL_USE]") {
-		t.Errorf("Expected [TOOL_USE] in output: %s", output)
+	if !contains(output, "$ ls -la") {
+		t.Errorf("Expected formatted Bash command in output: %s", output)
 	}
-	if !contains(output, "toolu-123") {
-		t.Errorf("Expected tool use ID in output: %s", output)
-	}
-	if !contains(output, "Bash") {
-		t.Errorf("Expected tool name in output: %s", output)
+	if contains(output, "toolu-123") {
+		t.Errorf("Tool use ID should not leak into user-facing output: %s", output)
 	}
 }
 
@@ -137,11 +131,11 @@ func TestTextFormatter_FormatToolResultMessage(t *testing.T) {
 		t.Fatal("Expected non-empty output")
 	}
 
-	if !contains(output, "[TOOL_RESULT]") {
-		t.Errorf("Expected [TOOL_RESULT] in output: %s", output)
+	if !contains(output, "✓") {
+		t.Errorf("Expected ✓ marker in output: %s", output)
 	}
-	if !contains(output, "SUCCESS") {
-		t.Errorf("Expected SUCCESS in output: %s", output)
+	if contains(output, "toolu-123") {
+		t.Errorf("Tool use ID should not leak into user-facing output: %s", output)
 	}
 }
 
@@ -237,11 +231,11 @@ func TestTextFormatter_ShowToolDetails(t *testing.T) {
 
 	output := formatter.Format(msg)
 	t.Logf("Tool use output: %q", output)
-	if !contains(output, "[TOOL]") {
-		t.Errorf("Expected [TOOL] in output when ShowToolDetails: %s", output)
+	if !contains(output, "$") {
+		t.Errorf("Expected Bash $ marker in output when ShowToolDetails: %s", output)
 	}
-	if !contains(output, "Bash") {
-		t.Errorf("Expected tool name in output: %s", output)
+	if contains(output, "toolu-123") {
+		t.Errorf("Tool use ID should not leak: %s", output)
 	}
 }
 
@@ -268,13 +262,12 @@ func TestTextFormatter_ShowToolDetailsWithInput(t *testing.T) {
 
 	output := formatter.Format(msg)
 	t.Logf("Tool use with input output: %q", output)
-	if !contains(output, "[TOOL]") {
-		t.Errorf("Expected [TOOL] in output: %s", output)
+	if !contains(output, "$ ls -la") {
+		t.Errorf("Expected Bash command in output: %s", output)
 	}
-	if !contains(output, "Bash") {
-		t.Errorf("Expected tool name in output: %s", output)
+	if !contains(output, "List files") {
+		t.Errorf("Expected description in detail mode: %s", output)
 	}
-	// Note: Input is not displayed in current template, but we verify tool name is shown
 }
 
 // Test for the new template logic that checks field values instead of Type
@@ -317,11 +310,8 @@ func TestTextFormatter_MultipleContentBlocks(t *testing.T) {
 	if !contains(output, "Let me check.") {
 		t.Errorf("Expected first text: %s", output)
 	}
-	if !contains(output, "[TOOL]") {
-		t.Errorf("Expected [TOOL]: %s", output)
-	}
-	if !contains(output, "Bash") {
-		t.Errorf("Expected tool name: %s", output)
+	if !contains(output, "$") {
+		t.Errorf("Expected Bash $ marker: %s", output)
 	}
 	if !contains(output, "Done!") {
 		t.Errorf("Expected second text: %s", output)
@@ -342,11 +332,8 @@ func TestTextFormatter_ToolUseWithEmptyInput(t *testing.T) {
 	}
 
 	output := formatter.Format(msg)
-	if !contains(output, "[TOOL]") {
-		t.Errorf("Expected [TOOL] even with empty input: %s", output)
-	}
-	if !contains(output, "Bash") {
-		t.Errorf("Expected tool name: %s", output)
+	if !contains(output, "$") {
+		t.Errorf("Expected Bash $ marker even with empty input: %s", output)
 	}
 }
 
@@ -449,19 +436,11 @@ func TestTextFormatter_RealWorldAssistantMessage(t *testing.T) {
 	output := formatter.Format(&msg)
 	t.Logf("Real world assistant output:\n%s", output)
 
-	// Verify key components
-	if !contains(output, "[ASSISTANT]") {
-		t.Errorf("Expected [ASSISTANT] in output: %s", output)
+	if !contains(output, "$ ls -la") {
+		t.Errorf("Expected formatted Bash command in output: %s", output)
 	}
-	if !contains(output, "msg_202602212021386647913f511e4f49") {
-		t.Errorf("Expected message ID in output: %s", output)
-	}
-	// Check tool name is displayed
-	if !contains(output, "[TOOL]") {
-		t.Errorf("Expected [TOOL] in output: %s", output)
-	}
-	if !contains(output, "Bash") {
-		t.Errorf("Expected tool name 'Bash' in output: %s", output)
+	if contains(output, "msg_202602212021386647913f511e4f49") {
+		t.Errorf("Message ID should not leak into user-facing output: %s", output)
 	}
 }
 
@@ -513,14 +492,10 @@ func TestTextFormatter_RealWorldAssistantMessageWithExtraFields(t *testing.T) {
 	output := formatter.Format(&msg)
 	t.Logf("Real world assistant output with extra fields:\n%s", output)
 
-	// Verify key components
-	if !contains(output, "[ASSISTANT]") {
-		t.Errorf("Expected [ASSISTANT] in output: %s", output)
-	}
 	if !contains(output, "git add .") {
 		t.Errorf("Expected text content in output: %s", output)
 	}
-	if !contains(output, "msg_c09a5322-952b-4242-b743-94b1245f15ad") {
-		t.Errorf("Expected message ID in output: %s", output)
+	if contains(output, "msg_c09a5322-952b-4242-b743-94b1245f15ad") {
+		t.Errorf("Message ID should not leak into user-facing output: %s", output)
 	}
 }
