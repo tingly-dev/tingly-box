@@ -103,9 +103,6 @@ func (s *HTTPToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error
 	ss := s.session
 	s.mu.RUnlock()
 
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
-
 	tools, err := ss.listTools(ctx)
 	if err != nil {
 		return nil, err
@@ -133,9 +130,6 @@ func (s *HTTPToolSource) CallTool(ctx context.Context, toolName string, argument
 	s.mu.RLock()
 	ss := s.session
 	s.mu.RUnlock()
-
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
 
 	var argsMap map[string]interface{}
 	if strings.TrimSpace(arguments) != "" {
