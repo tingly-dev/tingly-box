@@ -84,7 +84,7 @@ func (h *BotHandler) handleSlashCommands(hCtx HandlerContext) {
 			helpText += "@tb to handoff control to Tingly Box Smart Guide\n"
 
 			helpText += fmt.Sprintf("\nYour ID: %s", hCtx.SenderID)
-			formattedHelp := h.formatHelpWithHeader(hCtx, helpText)
+			formattedHelp := h.formatHelpWithFooter(hCtx, helpText)
 			h.SendText(hCtx, formattedHelp)
 			return
 		}
@@ -228,20 +228,23 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 	}
 }
 
-// formatHelpWithHeader formats help text with meta information
-func (h *BotHandler) formatHelpWithHeader(hCtx HandlerContext, helpText string) string {
+// formatHelpWithFooter formats help text with the standard reply footer
+// (agent + project path) appended at the bottom.
+func (h *BotHandler) formatHelpWithFooter(hCtx HandlerContext, helpText string) string {
 	projectPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+	if projectPath == "" {
+		if path, found := getProjectPathForGroup(h.chatStore, hCtx.ChatID, string(hCtx.Platform)); found {
+			projectPath = path
+		}
+	}
 	currentAgent, _ := h.getCurrentAgent(hCtx.ChatID)
 
 	meta := ResponseMeta{
 		ProjectPath: projectPath,
 		AgentType:   string(currentAgent),
-		ChatID:      hCtx.ChatID,
-		UserID:      hCtx.SenderID,
-		SessionID:   hCtx.ChatID,
 	}
 
-	return h.formatResponseWithHeader(meta, helpText, true)
+	return h.formatResponseWithFooter(meta, helpText)
 }
 
 // normalizeAllowlistToMap converts a string slice to a map for O(1) lookups

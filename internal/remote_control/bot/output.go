@@ -1,7 +1,6 @@
 package bot
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -116,14 +115,28 @@ func ShortenID(id string, maxLen int) string {
 	return id[:maxLen]
 }
 
-// BuildFooter creates a compact footer line with agent and path info
-// Format: separator + "📁 path · icon agent"
-// Path is always present (defaults are resolved before calling this)
+// BuildFooter creates a compact footer line with agent and path info.
+// Format: separator + agent line + path line. Either part is omitted when
+// the corresponding value is empty, and an empty footer is returned when
+// both are empty so callers don't print a stray separator.
 func BuildFooter(agentType, projectPath string) string {
-	icon := GetAgentIcon(agentType)
-	agentName := GetAgentDisplayName(agentType)
-	shortPath := ShortenPath(projectPath)
-	return fmt.Sprintf(FormatFooter, SeparatorLine, icon, agentName, shortPath)
+	var b strings.Builder
+	if agentType != "" {
+		b.WriteString("\n")
+		b.WriteString(GetAgentIcon(agentType))
+		b.WriteString(" ")
+		b.WriteString(GetAgentDisplayName(agentType))
+	}
+	if projectPath != "" {
+		b.WriteString("\n")
+		b.WriteString(IconProject)
+		b.WriteString(" ")
+		b.WriteString(ShortenPath(projectPath))
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "\n" + SeparatorLine + b.String()
 }
 
 // Helper functions for path handling (avoiding filepath import issues)

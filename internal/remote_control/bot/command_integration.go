@@ -211,16 +211,6 @@ func (a *botHandlerAdapter) SendMessageWithKeyboard(chatID, text string, keyboar
 	return fmt.Errorf("SendMessageWithKeyboard requires bot context, use ctx.Bot directly")
 }
 
-// FormatHelpWithHeader formats help text with meta information.
-func (a *botHandlerAdapter) FormatHelpWithHeader(chatID, senderID, text string, isDirect bool, platform string) string {
-	hCtx := HandlerContext{
-		ChatID:   chatID,
-		SenderID: senderID,
-		Platform: imbot.Platform(platform),
-	}
-	return a.handler.formatHelpWithHeader(hCtx, text)
-}
-
 // StartInteractiveBind starts an interactive directory browser for project binding.
 func (a *botHandlerAdapter) StartInteractiveBind(chatID string) error {
 	hCtx := HandlerContext{
@@ -234,6 +224,19 @@ func (a *botHandlerAdapter) StartInteractiveBind(chatID string) error {
 // VerifyAndPair runs pairing-code verification and persists the binding.
 func (a *botHandlerAdapter) VerifyAndPair(botUUID, chatID, senderID, platform, code string) error {
 	return a.handler.VerifyAndPair(botUUID, chatID, senderID, platform, code)
+}
+
+// BuildReplyFooter assembles the standard command-reply footer for a chat.
+// Resolves project path with the same group fallback used elsewhere and the
+// current agent for the chat. Returns "" when neither piece is available,
+// so unpaired/unbound chats see no decoration.
+func (a *botHandlerAdapter) BuildReplyFooter(chatID, platform string) string {
+	projectPath := resolveProjectPath(a, chatID, platform)
+	agentType, _ := a.GetCurrentAgent(chatID)
+	if projectPath == "" && agentType == "" {
+		return ""
+	}
+	return BuildFooter(agentType, projectPath)
 }
 
 // InitCommandRegistry initializes the command registry with built-in commands.

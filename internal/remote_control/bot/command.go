@@ -109,6 +109,11 @@ type BotHandlerAdapter interface {
 	// the chat as paired with the bot. Implementations should also emit the
 	// matching audit events (success / failure).
 	VerifyAndPair(botUUID, chatID, senderID, platform, code string) error
+
+	// BuildReplyFooter returns a compact footer (agent + project path) that
+	// command replies append for context continuity. Returns an empty string
+	// when neither agent nor project path is resolvable for the chat.
+	BuildReplyFooter(chatID, platform string) string
 }
 
 // SessionInfo holds session information.
@@ -123,7 +128,7 @@ type SessionInfo struct {
 }
 
 const (
-	usageBind     = "Usage: /cd <project_path>"
+	usageBind     = "Usage: /cd <project_path|number>"
 	usageBash     = "Usage: /bash <command>"
 	usageBashCD   = "Usage: /bash cd <path>"
 	usageJoin     = "Usage: /join <group_id|@username|invite_link>"
@@ -132,7 +137,8 @@ const (
 )
 
 func sendCommandText(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, text string) error {
-	return adapter.SendText(ctx.ChatID, text)
+	footer := adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform))
+	return adapter.SendText(ctx.ChatID, text+footer)
 }
 
 func sendCommandTextf(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, format string, args ...interface{}) error {
@@ -194,13 +200,30 @@ func newHelpCommand(adapter BotHandlerAdapter) imbot.Command {
 func newBindCommand(adapter BotHandlerAdapter) imbot.Command {
 	return imbot.NewCommand("cmd-bind", "cd", "Bind and cd into a project directory").
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
-			projectPath, ok := joinedArgs(args)
+			input, ok := joinedArgs(args)
 			if !ok {
 				return sendCommandText(adapter, ctx, usageBind)
 			}
 
-			// Expand and validate path
-			expandedPath, err := ExpandPath(projectPath)
+			// Numeric index → resolve from this user's known projects.
+			if idx, ok := parsePositiveInt(input); ok {
+				paths, err := adapter.ListProjectPaths(ctx.SenderID, string(ctx.Platform))
+				if err != nil {
+					return sendCommandTextf(adapter, ctx, "Failed to list projects: %v", err)
+				}
+				if idx < 1 || idx > len(paths) {
+					return sendCommandTextf(adapter, ctx, "Invalid project number: %d (have %d)", idx, len(paths))
+				}
+				selected := paths[idx-1]
+				if err := adapter.SetProjectPath(ctx.ChatID, selected); err != nil {
+					return sendCommandTextf(adapter, ctx, "Failed to bind project: %v", err)
+				}
+				return sendCommandTextf(adapter, ctx, "✅ Switched to project: %s", ShortenPath(selected))
+			}
+
+			// Path argument: expand relative to the chat's currently-bound project.
+			currentPath, _ := adapter.GetProjectPath(ctx.ChatID)
+			expandedPath, err := ExpandPathFrom(input, currentPath)
 			if err != nil {
 				return sendCommandTextf(adapter, ctx, "Invalid path: %v", err)
 			}
@@ -209,7 +232,6 @@ func newBindCommand(adapter BotHandlerAdapter) imbot.Command {
 				return sendCommandTextf(adapter, ctx, "Path validation failed: %v", err)
 			}
 
-			// Set the project path
 			if err := adapter.SetProjectPath(ctx.ChatID, expandedPath); err != nil {
 				return sendCommandTextf(adapter, ctx, "Failed to bind project: %v", err)
 			}
@@ -219,6 +241,29 @@ func newBindCommand(adapter BotHandlerAdapter) imbot.Command {
 		WithCategory("project").
 		WithPriority(90).
 		MustBuild()
+}
+
+// parsePositiveInt parses a string into a positive integer (>= 1). Returns
+// (0, false) on any non-numeric input or non-positive values.
+func parsePositiveInt(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+		n = n*10 + int(r-'0')
+		if n > 1<<20 {
+			return 0, false
+		}
+	}
+	if n < 1 {
+		return 0, false
+	}
+	return n, true
 }
 
 func newClearCommand(adapter BotHandlerAdapter) imbot.Command {
@@ -266,46 +311,60 @@ func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 				buf.WriteString("No project bound to this chat.\n\n")
 			}
 
-			// Get all projects for user (direct messages only)
-			if ctx.IsDirectMessage {
-				projectPaths, err := adapter.ListProjectPaths(ctx.SenderID, string(ctx.Platform))
-				if err == nil && len(projectPaths) > 0 {
-					buf.WriteString("Your Projects:\n")
-					// Build inline keyboard with projects
-					var rows [][]imbot.InlineKeyboardButton
-					for _, path := range projectPaths {
-						marker := ""
-						if path == currentPath {
-							marker = " ✓"
-						}
-						btn := imbot.InlineKeyboardButton{
-							Text:         fmt.Sprintf("📁 %s%s", filepath.Base(path), marker),
-							CallbackData: imbot.FormatCallbackData("project", "switch", path),
-						}
-						rows = append(rows, []imbot.InlineKeyboardButton{btn})
-					}
-					// Add "Bind New" button
-					rows = append(rows, []imbot.InlineKeyboardButton{{
-						Text:         "📁 Bind New Project",
-						CallbackData: imbot.FormatCallbackData("action", "bind"),
-					}})
+			projectPaths, _ := adapter.ListProjectPaths(ctx.SenderID, string(ctx.Platform))
 
-					keyboard := imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
-					tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
+			// Interactive UI (inline keyboard) only for DMs on platforms that
+			// natively render buttons/cards. Other channels get a numbered text
+			// list — switching is done by /cd <number>.
+			caps := imbot.GetPlatformCapabilities(string(ctx.Platform))
+			interactive := ctx.IsDirectMessage && caps != nil && caps.SupportsInteraction()
 
-					_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
-						Text:      buf.String(),
-						ParseMode: imbot.ParseModeMarkdown,
-						Metadata:  buildTrackedReplyMetadata(tgKeyboard),
-					})
-					if err != nil {
-						logrus.WithError(err).Error("Failed to send project list")
+			if interactive && len(projectPaths) > 0 {
+				buf.WriteString("Your Projects:\n")
+				var rows [][]imbot.InlineKeyboardButton
+				for _, path := range projectPaths {
+					marker := ""
+					if path == currentPath {
+						marker = " ✓"
 					}
-					return nil
+					btn := imbot.InlineKeyboardButton{
+						Text:         fmt.Sprintf("📁 %s%s", filepath.Base(path), marker),
+						CallbackData: imbot.FormatCallbackData("project", "switch", path),
+					}
+					rows = append(rows, []imbot.InlineKeyboardButton{btn})
 				}
+				rows = append(rows, []imbot.InlineKeyboardButton{{
+					Text:         "📁 Bind New Project",
+					CallbackData: imbot.FormatCallbackData("action", "bind"),
+				}})
+
+				keyboard := imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
+				tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
+
+				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
+					Text:      buf.String() + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
+					ParseMode: imbot.ParseModeMarkdown,
+					Metadata:  buildTrackedReplyMetadata(tgKeyboard),
+				})
+				if err != nil {
+					logrus.WithError(err).Error("Failed to send project list")
+				}
+				return nil
 			}
 
-			buf.WriteString("Use /cd <path> to bind a project.")
+			if len(projectPaths) > 0 {
+				buf.WriteString("Your Projects:\n")
+				for i, path := range projectPaths {
+					marker := ""
+					if path == currentPath {
+						marker = " ✓"
+					}
+					buf.WriteString(fmt.Sprintf("  %d. %s%s\n", i+1, path, marker))
+				}
+				buf.WriteString("\nUse /cd <number> or /cd <path> to switch.")
+			} else {
+				buf.WriteString("Use /cd <path> to bind a project.")
+			}
 			return sendCommandText(adapter, ctx, buf.String())
 		}).
 		WithCategory("project").
