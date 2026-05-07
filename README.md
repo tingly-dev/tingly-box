@@ -39,6 +39,8 @@ Tingly Box **serves agents, coordinates AI models, optimizes context, and routes
 
 ## Quick Start
 
+[English](https://github.com/tingly-dev/tingly-box/issues/678#issuecomment-4273812882) | [中文](https://github.com/tingly-dev/tingly-box/issues/678#issue-4244345496)
+
 ### Install
 
 **From npm (recommended)**
