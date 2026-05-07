@@ -63,6 +63,7 @@ func RunQuickstart(mgr QuickstartManager) error {
 		{Name: "Details", Execute: qsDetails, Skip: qsUsingExisting},
 		{Name: "Model", Execute: qsModel},
 		{Name: "Rules", Execute: qsRules},
+		{Name: "Token", Execute: qsShowToken},
 		{Name: "Agent", Execute: qsAgent},
 		{Name: "Done", Execute: qsDone},
 	}
@@ -570,6 +571,54 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		configured++
 	}
 	fmt.Println(descStyle.Render(fmt.Sprintf("\n%d rules configured.\n", configured)))
+	return s, StepContinue, nil
+}
+
+// qsShowToken offers an optional preview of the tingly-box model token —
+// the credential AI clients send to this box's OpenAI/Anthropic-compatible
+// endpoints. Skipped by default; answering "no" advances without printing
+// the secret. This is independent of upstream provider tokens.
+func qsShowToken(ctx StepContext, s quickstartState) (quickstartState, StepResult, error) {
+	cfg := s.mgr.GetGlobalConfig()
+	if cfg == nil {
+		return s, StepContinue, nil
+	}
+	modelToken := cfg.ModelToken
+	if modelToken == "" {
+		// Token is generated lazily at server start; nothing to show yet.
+		return s, StepContinue, nil
+	}
+
+	r, err := Confirm("Reveal tingly box model token now?", ConfirmOptions{
+		Header:      ctx.Header,
+		DefaultYes:  false,
+		CanGoBack:   true,
+		Description: "Prints this box's model token (clients use it to call the box) — only reveal on a trusted screen.",
+	})
+	if err != nil {
+		return s, StepCancel, err
+	}
+	switch {
+	case r.IsBack():
+		return s, StepBack, nil
+	case r.IsCancel():
+		return s, StepCancel, nil
+	}
+	if !r.Value {
+		return s, StepContinue, nil
+	}
+
+	port := s.mgr.GetServerPort()
+	if port == 0 {
+		port = 12580
+	}
+
+	fmt.Println()
+	fmt.Println(promptStyle.Render("Tingly Box model token (copy into your AI client):"))
+	fmt.Println(descStyle.Render("  Endpoint ") + valueStyle.Render(fmt.Sprintf("http://localhost:%d", port)))
+	fmt.Println(descStyle.Render("  Token    ") + valueStyle.Render(modelToken))
+	fmt.Println(descStyle.Render("  Tip: 'tingly-box token view model --reveal' to copy later, 'token refresh model' to rotate."))
+	fmt.Println()
 	return s, StepContinue, nil
 }
 
