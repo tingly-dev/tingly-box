@@ -73,6 +73,29 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		),
 	)
 
+	// GET /imbot-settings/:uuid/pairing-code - Reveal current TOFU pairing code
+	router.GET("/imbot-settings/:uuid/pairing-code", handler.GetPairingCode,
+		swagger.WithTags("imbot-settings"),
+		swagger.WithDescription("Reveals the bot's current TOFU pairing code; every reveal is audit-logged"),
+		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
+		swagger.WithResponseModel(PairingCodeResponse{}),
+		swagger.WithErrorResponses(
+			swagger.ErrorResponseConfig{Code: 404, Message: "ImBot settings not found"},
+		),
+	)
+
+	// POST /imbot-settings/:uuid/pairing-code/rotate - Mint a fresh pairing code
+	router.POST("/imbot-settings/:uuid/pairing-code/rotate", handler.RotatePairingCode,
+		swagger.WithTags("imbot-settings"),
+		swagger.WithDescription("Mints a new TOFU pairing code, invalidating the previous one"),
+		swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
+		swagger.WithResponseModel(PairingCodeResponse{}),
+		swagger.WithErrorResponses(
+			swagger.ErrorResponseConfig{Code: 400, Message: "TOFU pairing not enabled for this bot"},
+			swagger.ErrorResponseConfig{Code: 404, Message: "ImBot settings not found"},
+		),
+	)
+
 	// GET /imbot-platforms - Get all supported platforms
 	router.GET("/imbot-platforms", handler.GetPlatforms,
 		swagger.WithTags("imbot-settings"),

@@ -14,9 +14,12 @@ import {
     Box,
     Button,
     CircularProgress,
+    FormControlLabel,
+    FormHelperText,
     Modal,
     Snackbar,
     Stack,
+    Switch,
     TextField,
     Typography,
 } from '@mui/material';
@@ -39,6 +42,10 @@ const BotPage = () => {
     const [botProxyDraft, setBotProxyDraft] = useState('');
     const [botChatIdDraft, setBotChatIdDraft] = useState('');
     const [botAllowlistDraft, setBotAllowlistDraft] = useState('');
+    const [botRequirePairingDraft, setBotRequirePairingDraft] = useState(true);
+    // Whether the operator manually flipped the pairing switch in this session.
+    // Mirrors the platform default until the user touches it.
+    const [botRequirePairingTouched, setBotRequirePairingTouched] = useState(false);
 
     const [botLoading, setBotLoading] = useState(false);
     const [botSaving, setBotSaving] = useState(false);
@@ -120,6 +127,11 @@ const BotPage = () => {
         }
     }, [botPlatformDraft, botPlatforms]);
 
+    // Mirrors bot.PlatformDefaultsRequirePairing (Go): token-DM platforms
+    // default to TOFU pairing on; OAuth/QR platforms default off.
+    const platformDefaultRequirePairing = (platform: string): boolean =>
+        platform === 'telegram' || platform === 'discord' || platform === 'slack';
+
     // Bot handlers
     const handleOpenBotTokenDialog = useCallback((editUuid?: string) => {
         if (editUuid) {
@@ -134,6 +146,15 @@ const BotPage = () => {
                 setBotProxyDraft(bot.proxy_url || '');
                 setBotChatIdDraft(bot.chat_id || '');
                 setBotAllowlistDraft((bot.bash_allowlist || []).join('\n'));
+                // Hydrate require_pairing: explicit value wins, nil falls
+                // back to the platform default. Once the user saves, the
+                // value becomes explicit on the server.
+                setBotRequirePairingDraft(
+                    typeof bot.require_pairing === 'boolean'
+                        ? bot.require_pairing
+                        : platformDefaultRequirePairing(bot.platform || 'telegram'),
+                );
+                setBotRequirePairingTouched(false);
                 // Set platform config
                 const config = botPlatforms.find(p => p.platform === bot.platform);
                 if (config) {
@@ -150,6 +171,8 @@ const BotPage = () => {
             setBotProxyDraft('');
             setBotChatIdDraft('');
             setBotAllowlistDraft('');
+            setBotRequirePairingDraft(platformDefaultRequirePairing('telegram'));
+            setBotRequirePairingTouched(false);
             // Set default platform config
             const config = botPlatforms.find(p => p.platform === 'telegram');
             if (config) {
@@ -187,6 +210,7 @@ const BotPage = () => {
                     chat_id: botChatIdDraft.trim(),
                     bash_allowlist: allowlist,
                     enabled: false, // Don't enable until QR binding completes
+                    require_pairing: botRequirePairingDraft,
                 };
 
                 const result = await api.createImBotSetting(data);
@@ -228,6 +252,7 @@ const BotPage = () => {
                 chat_id: botChatIdDraft.trim(),
                 bash_allowlist: allowlist,
                 enabled: true,
+                require_pairing: botRequirePairingDraft,
             };
 
             let result;
@@ -465,6 +490,11 @@ const BotPage = () => {
                                     setBotPlatformDraft(platform);
                                     // Clear auth draft when platform changes
                                     setBotAuthDraft({});
+                                    // Track platform default for require_pairing
+                                    // unless the operator has manually overridden.
+                                    if (!botRequirePairingTouched) {
+                                        setBotRequirePairingDraft(platformDefaultRequirePairing(platform));
+                                    }
                                     // Update current platform config
                                     const config = botPlatforms.find(p => p.platform === platform);
                                     if (config) {
@@ -489,6 +519,27 @@ const BotPage = () => {
                                 onBindingComplete={botDialogMode === 'qr-binding' ? handleQRBindingComplete : undefined}
                             />
                         )}
+
+                        <Box>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={botRequirePairingDraft}
+                                        onChange={(e) => {
+                                            setBotRequirePairingDraft(e.target.checked);
+                                            setBotRequirePairingTouched(true);
+                                        }}
+                                        disabled={botSaving}
+                                    />
+                                }
+                                label="Require TOFU pairing"
+                            />
+                            <FormHelperText>
+                                {platformDefaultRequirePairing(botPlatformDraft)
+                                    ? 'Recommended — anyone with the bot token can otherwise DM and run commands. After save, the bot card will show a one-time pairing code; DM the bot with /bind <code> to bind your chat.'
+                                    : 'Optional — adds a /bind <code> handshake before the bot accepts commands.'}
+                            </FormHelperText>
+                        </Box>
 
                         <TextField
                             label="Alias"

@@ -1528,6 +1528,7 @@ export const api = {
         agent_type?: string;
         default_cwd?: string;
         enabled?: boolean;
+        require_pairing?: boolean;
     }): Promise<any> => {
         try {
             const client = await getClient();
@@ -1552,6 +1553,7 @@ export const api = {
         enabled?: boolean;
         default_agent?: string;
         default_cwd?: string;
+        require_pairing?: boolean;
     }): Promise<any> => {
         try {
             const client = await getClient();
@@ -1614,6 +1616,56 @@ export const api = {
                 params: {path: {uuid}}
             });
             return response.data;
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return {success: false, error: 'ImBot setting not found'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
+    // Reveal current TOFU pairing code (audit-logged on every call).
+    getImBotPairingCode: async (uuid: string): Promise<{
+        success: boolean;
+        active?: boolean;
+        code?: string;
+        expires_at?: string;
+        message?: string;
+        error?: string;
+    }> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/imbot-settings/{uuid}/pairing-code', {
+                headers,
+                params: {path: {uuid}}
+            });
+            return response.data as any;
+        } catch (error: any) {
+            if (error.response?.status === 404) {
+                return {success: false, error: 'ImBot setting not found'};
+            }
+            return {success: false, error: error.message};
+        }
+    },
+
+    // Mint a fresh TOFU pairing code, invalidating the previous one.
+    rotateImBotPairingCode: async (uuid: string): Promise<{
+        success: boolean;
+        active?: boolean;
+        code?: string;
+        expires_at?: string;
+        message?: string;
+        error?: string;
+    }> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v1/imbot-settings/{uuid}/pairing-code/rotate', {
+                headers,
+                params: {path: {uuid}}
+            });
+            return response.data as any;
         } catch (error: any) {
             if (error.response?.status === 404) {
                 return {success: false, error: 'ImBot setting not found'};

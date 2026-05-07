@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/remote/audit"
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/session"
 
@@ -380,4 +381,23 @@ func (bm *BotManager) GetTBClient() tbclient.TBClient {
 	defer bm.mu.RUnlock()
 
 	return bm.tbClient
+}
+
+// PairingManager returns the underlying TOFU pairing manager for HTTP/CLI handlers
+// that need to mint, read, or rotate pairing codes.
+func (bm *BotManager) PairingManager() *bot.PairingManager {
+	if bm == nil || bm.manager == nil {
+		return nil
+	}
+	return bm.manager.PairingManager()
+}
+
+// AuditLogger returns the bot manager's audit logger so HTTP handlers can
+// record security-relevant operations (pairing reveal, rotate) under the
+// same logger used by the bot runtime.
+func (bm *BotManager) AuditLogger() *audit.Logger {
+	if bm == nil || bm.manager == nil {
+		return nil
+	}
+	return bm.manager.AuditLogger()
 }

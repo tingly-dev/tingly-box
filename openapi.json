@@ -1169,6 +1169,102 @@
         }
       }
     },
+    "/api/v1/imbot-settings/{uuid}/pairing-code": {
+      "get": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Reveals the bot's current TOFU pairing code; every reveal is audit-logged",
+        "description": "Reveals the bot's current TOFU pairing code; every reveal is audit-logged",
+        "operationId": "apiV1Imbot-settingsUuidPairing-codeGet",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "ImBot configuration UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingCodeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ImBot settings not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imbot-settings/{uuid}/pairing-code/rotate": {
+      "post": {
+        "tags": [
+          "imbot-settings"
+        ],
+        "summary": "Mints a new TOFU pairing code, invalidating the previous one",
+        "description": "Mints a new TOFU pairing code, invalidating the previous one",
+        "operationId": "apiV1Imbot-settingsUuidPairing-codeRotatePost",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "ImBot configuration UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "TOFU pairing not enabled for this bot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ImBot settings not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imbot-settings/{uuid}/toggle": {
       "post": {
         "tags": [
@@ -4801,6 +4897,16 @@
             "description": "API base URL",
             "example": "https://api.openai.com/v1"
           },
+          "api_base_anthropic": {
+            "type": "string",
+            "description": "Fusion-mode Anthropic-compatible base URL (optional, api_key auth only)",
+            "example": "https://api.example.com"
+          },
+          "api_base_openai": {
+            "type": "string",
+            "description": "Fusion-mode OpenAI-compatible base URL (optional, api_key auth only)",
+            "example": "https://api.example.com/v1"
+          },
           "api_style": {
             "type": "string",
             "description": "API style",
@@ -4918,6 +5024,10 @@
           "proxy_url": {
             "type": "string",
             "description": "Field proxy_url"
+          },
+          "require_pairing": {
+            "type": "boolean",
+            "description": "Field require_pairing"
           },
           "smartguide_model": {
             "type": "string",
@@ -5199,10 +5309,6 @@
       "ErrorDetail": {
         "type": "object",
         "properties": {
-          "code": {
-            "type": "string",
-            "description": "Field code"
-          },
           "message": {
             "type": "string",
             "description": "Field message"
@@ -5213,8 +5319,7 @@
           }
         },
         "required": [
-          "message",
-          "type"
+          "message"
         ]
       },
       "ExtractData": {
@@ -6653,6 +6758,35 @@
           "scriptUnix"
         ]
       },
+      "PairingCodeResponse": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Field active"
+          },
+          "code": {
+            "type": "string",
+            "description": "Field code"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "Field expires_at"
+          },
+          "message": {
+            "type": "string",
+            "description": "Field message"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Field success"
+          }
+        },
+        "required": [
+          "success",
+          "active"
+        ]
+      },
       "PlatformConfig": {
         "type": "object",
         "properties": {
@@ -7281,6 +7415,16 @@
             "type": "string",
             "description": "Field api_base",
             "example": "https://api.openai.com/v1"
+          },
+          "api_base_anthropic": {
+            "type": "string",
+            "description": "Field api_base_anthropic",
+            "example": "https://api.example.com"
+          },
+          "api_base_openai": {
+            "type": "string",
+            "description": "Field api_base_openai",
+            "example": "https://api.example.com/v1"
           },
           "api_style": {
             "type": "string",
@@ -8478,6 +8622,10 @@
             "type": "boolean",
             "description": "Field require_pairing"
           },
+          "scenarios": {
+            "type": "string",
+            "description": "Field scenarios"
+          },
           "smartguide_model": {
             "type": "string",
             "description": "Field smartguide_model"
@@ -9139,6 +9287,14 @@
             "type": "string",
             "description": "New API base URL"
           },
+          "api_base_anthropic": {
+            "type": "string",
+            "description": "New fusion-mode Anthropic-compatible base URL (empty string clears it)"
+          },
+          "api_base_openai": {
+            "type": "string",
+            "description": "New fusion-mode OpenAI-compatible base URL (empty string clears it)"
+          },
           "api_style": {
             "type": "string",
             "description": "New API style"
@@ -9237,6 +9393,10 @@
           "proxy_url": {
             "type": "string",
             "description": "Field proxy_url"
+          },
+          "require_pairing": {
+            "type": "boolean",
+            "description": "Field require_pairing"
           },
           "smartguide_model": {
             "type": "string",
@@ -9831,6 +9991,26 @@
   },
   "tags": [
     {
+      "name": "server",
+      "description": "Operations related to server"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
       "name": "auth",
       "description": "Operations related to auth"
     },
@@ -9839,60 +10019,16 @@
       "description": "Operations related to logs"
     },
     {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "providers",
-      "description": "Operations related to providers"
-    },
-    {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
-    },
-    {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "onboarding",
-      "description": "Operations related to onboarding"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
       "name": "actions",
       "description": "Operations related to actions"
     },
     {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
-      "name": "usage",
-      "description": "Operations related to usage"
+      "name": "skills",
+      "description": "Operations related to skills"
     },
     {
       "name": "imbot-settings",
@@ -9903,28 +10039,52 @@
       "description": "Operations related to weixin"
     },
     {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
       "name": "scenarios",
       "description": "Operations related to scenarios"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
     },
     {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "oauth",
+      "description": "Operations related to oauth"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
     },
     {
       "name": "config",
       "description": "Operations related to config"
     },
     {
-      "name": "mcp",
-      "description": "Operations related to mcp"
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
     }
   ]
 }

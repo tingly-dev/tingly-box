@@ -142,6 +142,7 @@ func (h *Handler) CreateSettings(c *gin.Context) {
 		Enabled:            req.Enabled,
 		SmartGuideProvider: strings.TrimSpace(req.SmartGuideProvider),
 		SmartGuideModel:    strings.TrimSpace(req.SmartGuideModel),
+		RequirePairing:     req.RequirePairing,
 	}
 
 	created, err := h.store.CreateSettings(settings)
@@ -289,6 +290,11 @@ func (h *Handler) UpdateSettings(c *gin.Context) {
 	// Handle enabled status
 	if req.Enabled != nil {
 		settings.Enabled = *req.Enabled
+	}
+
+	// Handle require_pairing (partial update); nil → leave unchanged in DB.
+	if req.RequirePairing != nil {
+		settings.RequirePairing = req.RequirePairing
 	}
 
 	if err := h.store.UpdateSettings(uuid, settings); err != nil {

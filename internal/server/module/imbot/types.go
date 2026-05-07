@@ -38,6 +38,7 @@ type CreateRequest struct {
 	Token              string            `json:"token,omitempty"`               // Legacy field
 	SmartGuideProvider string            `json:"smartguide_provider,omitempty"` // Provider UUID
 	SmartGuideModel    string            `json:"smartguide_model,omitempty"`    // Model identifier
+	RequirePairing     *bool             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → platform default
 }
 
 // UpdateRequest represents the request to update ImBot settings
@@ -55,6 +56,16 @@ type UpdateRequest struct {
 	Token              string            `json:"token,omitempty"`               // Legacy field
 	SmartGuideProvider *string           `json:"smartguide_provider,omitempty"` // Provider UUID
 	SmartGuideModel    *string           `json:"smartguide_model,omitempty"`    // Model identifier
+	RequirePairing     *bool             `json:"require_pairing,omitempty"`     // TOFU pairing gate; nil → unchanged
+}
+
+// PairingCodeResponse represents the response for pairing-code reveal/rotate.
+type PairingCodeResponse struct {
+	Success   bool   `json:"success"`
+	Active    bool   `json:"active"`               // false = no live code (bot stopped, expired, or non-TOFU)
+	Code      string `json:"code,omitempty"`       // cleartext pairing code, present iff Active
+	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339 expiry, present iff Active
+	Message   string `json:"message,omitempty"`
 }
 
 // ToggleResponse represents the response for toggling ImBot settings

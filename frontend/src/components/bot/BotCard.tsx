@@ -18,6 +18,7 @@ import type {Provider} from '@/types/provider';
 import {CrossNode, NodeContainer} from '../nodes';
 import ImBotNode from '../nodes/ImBotNode';
 import BotModelNode from '../nodes/BotModelNode';
+import PairingCodePanel from './PairingCodePanel';
 import {useCallback, useState} from 'react';
 
 // Use same style constants as RuleGraph for consistency
@@ -253,6 +254,7 @@ const BotCard: React.FC<BotCardProps> = ({
 
                     {/* Metadata row below graph */}
                     <Box sx={{mt: 2, display: 'flex', flexDirection: 'column', gap: 1}}>
+                        <PairingCodePanel bot={bot} />
                         {bot.proxy_url && (
                             <Tooltip title={bot.proxy_url}>
                                 <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: 'monospace'}}>
