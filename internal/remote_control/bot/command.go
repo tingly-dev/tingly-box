@@ -359,9 +359,8 @@ func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 				tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
 
 				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
-					Text:      buf.String() + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
-					ParseMode: imbot.ParseModeMarkdown,
-					Metadata:  buildTrackedReplyMetadata(tgKeyboard),
+					Text:     buf.String() + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
+					Metadata: buildTrackedReplyMetadata(tgKeyboard),
 				})
 				if err != nil {
 					logrus.WithError(err).Error("Failed to send project list")
