@@ -62,6 +62,12 @@ type GuardrailsStreamState struct {
 	AnthropicToolEvents map[int][]GuardrailsBufferedEvent
 	// AnthropicToolIDs links the buffered block index back to the provider tool id.
 	AnthropicToolIDs map[int]string
+	// OpenAIResponsesToolEvents buffers one function_call item until the item is done.
+	OpenAIResponsesToolEvents map[string][]GuardrailsBufferedEvent
+	// OpenAIResponsesOutputIDs links Responses output_index back to the provider item id.
+	OpenAIResponsesOutputIDs map[int]string
+	// OpenAIResponsesBlocked stores blocked function_call replacements until response.completed.
+	OpenAIResponsesBlocked []GuardrailsOpenAIResponsesBlockedItem
 }
 
 func (hc *HandleContext) EnsureGuardrails() *HandleGuardrails {
@@ -75,10 +81,12 @@ func (hc *HandleContext) EnsureGuardrailsStream() *GuardrailsStreamState {
 	guardrails := hc.EnsureGuardrails()
 	if guardrails.Stream == nil {
 		guardrails.Stream = &GuardrailsStreamState{
-			PendingBlockMessages: make(map[string]string),
-			PendingBlockedIndex:  make(map[int]string),
-			AnthropicToolEvents:  make(map[int][]GuardrailsBufferedEvent),
-			AnthropicToolIDs:     make(map[int]string),
+			PendingBlockMessages:      make(map[string]string),
+			PendingBlockedIndex:       make(map[int]string),
+			AnthropicToolEvents:       make(map[int][]GuardrailsBufferedEvent),
+			AnthropicToolIDs:          make(map[int]string),
+			OpenAIResponsesToolEvents: make(map[string][]GuardrailsBufferedEvent),
+			OpenAIResponsesOutputIDs:  make(map[int]string),
 		}
 	}
 	return guardrails.Stream
@@ -87,6 +95,13 @@ func (hc *HandleContext) EnsureGuardrailsStream() *GuardrailsStreamState {
 type GuardrailsBufferedEvent struct {
 	EventType string
 	Payload   map[string]interface{}
+}
+
+type GuardrailsOpenAIResponsesBlockedItem struct {
+	ItemID      string
+	TextItemID  string
+	OutputIndex int
+	Message     string
 }
 
 // WithOnStreamEvent adds a hook that is called for each stream event.

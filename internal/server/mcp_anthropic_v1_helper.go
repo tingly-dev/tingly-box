@@ -458,6 +458,11 @@ func (s *Server) dispatchGenericOpenAIChatNonStream(
 	// Update affinity
 	s.updateAffinityMessageID(c, rule, string(response.ID))
 
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToOpenAIChatNonStreamResponse(c, req, reqCtx.RequestModel, provider, response)
+	}
+
 	// Return response (OpenAI format)
 	c.JSON(http.StatusOK, response)
 }

@@ -230,6 +230,11 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	}
 	transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
 
+	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
+	if s.guardrailsEnabledForScenario(scenario) {
+		s.applyGuardrailsToOpenAIChatRequest(c, &req.ChatCompletionNewParams, actualModel, provider)
+	}
+
 	// === Cap max_tokens at model's maximum ===
 	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
 		req.MaxTokens.Value = int64(maxAllowed)

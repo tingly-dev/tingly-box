@@ -34,6 +34,10 @@ type AnthropicToolUseDecision struct {
 }
 
 func RegisterAnthropicGuardrailsBlock(state *protocol.GuardrailsStreamState, toolID string, index int, message string) {
+	RegisterGuardrailsBlock(state, toolID, index, message)
+}
+
+func RegisterGuardrailsBlock(state *protocol.GuardrailsStreamState, toolID string, index int, message string) {
 	if state == nil || toolID == "" || message == "" {
 		return
 	}

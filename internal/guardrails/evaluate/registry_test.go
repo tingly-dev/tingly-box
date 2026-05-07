@@ -58,7 +58,7 @@ func TestBuildEvaluatorsCreatesResourceAccessPolicyEvaluator(t *testing.T) {
 	if got := policyRule.scope.Content; len(got) != 1 || got[0] != guardrailscore.ContentTypeCommand {
 		t.Fatalf("policyRule.scope.Content = %v", got)
 	}
-	if got := policyRule.config.ToolNames; len(got) != 1 || got[0] != "bash" {
+	if got := policyRule.config.ToolNames; len(got) != 2 || got[0] != "bash" || got[1] != "exec_command" {
 		t.Fatalf("policyRule.config.ToolNames = %#v", got)
 	}
 }
@@ -132,7 +132,7 @@ func TestBuildEvaluatorsDefaultsCommandExecutionToolNames(t *testing.T) {
 	if !ok {
 		t.Fatalf("evaluators[0] type = %T, want *OperationPolicy", evaluators[0])
 	}
-	if got := policyRule.config.ToolNames; len(got) != 1 || got[0] != "bash" {
+	if got := policyRule.config.ToolNames; len(got) != 2 || got[0] != "bash" || got[1] != "exec_command" {
 		t.Fatalf("policyRule.config.ToolNames = %#v", got)
 	}
 }

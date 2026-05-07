@@ -114,6 +114,6 @@ func handleGuardrailsBlock(
 		runtime.AddHistory(input, guardrailscore.Result{Verdict: guardrailscore.VerdictBlock}, "tool_use", blockMessage)
 	}
 	if streamState != nil {
-		guardrailsmutate.RegisterAnthropicGuardrailsBlock(streamState, toolID, blockIndex, blockMessage)
+		guardrailsmutate.RegisterGuardrailsBlock(streamState, toolID, blockIndex, blockMessage)
 	}
 }

@@ -262,6 +262,9 @@ func (s *Server) guardrailsEnabled() bool {
 		return false
 	}
 	return s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails") ||
+		s.config.GetScenarioFlag(typ.ScenarioOpenAI, "guardrails") ||
+		s.config.GetScenarioFlag(typ.ScenarioCodex, "guardrails") ||
+		s.config.GetScenarioFlag(typ.ScenarioAnthropic, "guardrails") ||
 		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, "guardrails")
 }
 

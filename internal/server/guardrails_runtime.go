@@ -3,6 +3,8 @@ package server
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/guardrails"
@@ -15,6 +17,8 @@ import (
 )
 
 var guardrailsSupportedScenarios = []string{
+	string(typ.ScenarioOpenAI),
+	string(typ.ScenarioCodex),
 	string(typ.ScenarioAnthropic),
 	string(typ.ScenarioClaudeCode),
 }
@@ -352,6 +356,46 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaRequest(c *gin.Context, req *an
 	}
 }
 
+func (s *Server) applyGuardrailsToOpenAIChatRequest(c *gin.Context, req *openai.ChatCompletionNewParams, actualModel string, provider *typ.Provider) {
+	if req == nil {
+		return
+	}
+
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
+	input.State.CredentialMask = ensureGuardrailsCredentialMaskState(c)
+	input.Payload.Protocol = "openai_chat"
+	input.Payload.Request = req
+
+	err := guardrailspipeline.ProcessOpenAIChatRequest(
+		c.Request.Context(),
+		s.currentGuardrailsRuntime(),
+		input,
+	)
+	if err != nil {
+		return
+	}
+}
+
+func (s *Server) applyGuardrailsToOpenAIResponsesRequest(c *gin.Context, req *responses.ResponseNewParams, actualModel string, provider *typ.Provider) {
+	if req == nil {
+		return
+	}
+
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionRequest, nil)
+	input.State.CredentialMask = ensureGuardrailsCredentialMaskState(c)
+	input.Payload.Protocol = "openai_responses"
+	input.Payload.Request = req
+
+	err := guardrailspipeline.ProcessOpenAIResponsesRequest(
+		c.Request.Context(),
+		s.currentGuardrailsRuntime(),
+		input,
+	)
+	if err != nil {
+		return
+	}
+}
+
 // ----------------------------------------------------------------------
 // Non-Stream Response Guardrails
 // ----------------------------------------------------------------------
@@ -400,6 +444,50 @@ func (s *Server) applyGuardrailsToAnthropicV1BetaNonStreamResponse(c *gin.Contex
 	}
 	if !mutation.Changed {
 		guardrailsmutate.RestoreAnthropicV1BetaResponseCredentials(maskState, resp)
+	}
+	return mutation.Changed
+}
+
+func (s *Server) applyGuardrailsToOpenAIChatNonStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, actualModel string, provider *typ.Provider, resp *openai.ChatCompletion) bool {
+	if req == nil || resp == nil {
+		return false
+	}
+
+	maskState := ensureGuardrailsCredentialMaskState(c)
+	messageHistory := guardrailsadapter.AdaptMessagesFromOpenAIChat(req.Messages)
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.State.CredentialMask = maskState
+	input.Payload.Protocol = "openai_chat"
+	input.Payload.Response = resp
+
+	mutation, err := guardrailspipeline.ProcessOpenAIChatNonStreamResponse(c.Request.Context(), s.currentGuardrailsRuntime(), input, resp)
+	if err != nil {
+		return false
+	}
+	if !mutation.Changed {
+		guardrailsmutate.RestoreOpenAIChatResponseCredentials(maskState, resp)
+	}
+	return mutation.Changed
+}
+
+func (s *Server) applyGuardrailsToOpenAIResponsesNonStreamResponse(c *gin.Context, req *responses.ResponseNewParams, actualModel string, provider *typ.Provider, resp *responses.Response) bool {
+	if req == nil || resp == nil {
+		return false
+	}
+
+	maskState := ensureGuardrailsCredentialMaskState(c)
+	messageHistory := guardrailsadapter.AdaptMessagesFromOpenAIResponses(req)
+	input := s.buildGuardrailsBaseInput(c, actualModel, provider, guardrailscore.DirectionResponse, messageHistory)
+	input.State.CredentialMask = maskState
+	input.Payload.Protocol = "openai_responses"
+	input.Payload.Response = resp
+
+	mutation, err := guardrailspipeline.ProcessOpenAIResponsesNonStreamResponse(c.Request.Context(), s.currentGuardrailsRuntime(), input, resp)
+	if err != nil {
+		return false
+	}
+	if !mutation.Changed {
+		guardrailsmutate.RestoreOpenAIResponsesResponseCredentials(maskState, resp)
 	}
 	return mutation.Changed
 }
