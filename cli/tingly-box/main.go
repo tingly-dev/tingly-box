@@ -43,6 +43,9 @@ type CLI struct {
 	// OAuth
 	OAuth command.OAuthCmdKong `kong:"cmd,name='oauth',help='OAuth authentication'"`
 
+	// Tingly-box token management (auth + model, view / refresh)
+	Token command.TokenCmdKong `kong:"cmd,name='token',help='View or refresh tingly-box auth/model tokens'"`
+
 	// Claude Code
 	CC command.CCmdKong `kong:"cmd,help='Launch Claude Code',passthrough"`
 
