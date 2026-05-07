@@ -96,6 +96,47 @@ func TestResponseCreateRequest_UnmarshalJSON_ArrayInput(t *testing.T) {
 	}
 }
 
+func TestResponseCreateRequest_UnmarshalJSON_TypelessFunctionCallInput(t *testing.T) {
+	jsonString := `{
+		"model": "gpt-4o",
+		"input": [
+			{
+				"call_id": "call_123",
+				"name": "Write",
+				"arguments": "{\"file_path\":\"c:/Users/nil/workspace/mario-game.html\",\"content\":\"hello\"}"
+			}
+		]
+	}`
+
+	var req protocol.ResponseCreateRequest
+	if err := json.Unmarshal([]byte(jsonString), &req); err != nil {
+		t.Fatalf("Failed to deserialize typeless function_call input: %v", err)
+	}
+
+	if param.IsOmitted(req.Input.OfInputItemList) {
+		t.Fatal("Expected input item list")
+	}
+	items := req.Input.OfInputItemList
+	if len(items) != 1 {
+		t.Fatalf("Expected 1 input item, got %d", len(items))
+	}
+	if param.IsOmitted(items[0].OfFunctionCall) {
+		t.Fatal("Expected function_call item to be preserved")
+	}
+	if items[0].OfFunctionCall.Name != "Write" {
+		t.Fatalf("Expected function name Write, got %q", items[0].OfFunctionCall.Name)
+	}
+	if items[0].OfFunctionCall.Arguments == "" {
+		t.Fatal("Expected function call arguments to be preserved")
+	}
+	if items[0].OfFunctionCall.Arguments != `{"file_path":"c:/Users/nil/workspace/mario-game.html","content":"hello"}` {
+		t.Fatalf("Unexpected function call arguments: %s", items[0].OfFunctionCall.Arguments)
+	}
+	if items[0].OfFunctionCall.CallID != "call_123" {
+		t.Fatalf("Expected call_id call_123, got %q", items[0].OfFunctionCall.CallID)
+	}
+}
+
 // TestResponseCreateRequest_UnmarshalJSON_WithExtraFields tests unmarshaling with extra fields
 func TestResponseCreateRequest_UnmarshalJSON_WithExtraFields(t *testing.T) {
 	jsonString := `{

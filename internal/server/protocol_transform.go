@@ -11,7 +11,7 @@ import (
 func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
 
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
@@ -46,14 +46,16 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
 	}
 
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
 		&req.BetaMessageNewParams,
 		opts...,
 	)
+	transformCtx.HasNativeAdvisor = hasNativeAdvisorBeta(req)
 	transformCtx.SourceAPI = protocol.TypeAnthropicBeta
 	transformCtx.TargetAPI = target
 
@@ -77,7 +79,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 
 func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
@@ -111,8 +113,9 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
 	}
 
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
@@ -141,7 +144,7 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 
 func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +167,9 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 		opts = append(opts, transform.WithIsAdvisorRequest(true))
 	}
 
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(
@@ -194,7 +198,7 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 
 func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, maxAllowed int) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, nil, protocolRecorder)
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
@@ -212,8 +216,9 @@ func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseC
 		transform.WithDevice(s.config.ClaudeCodeDeviceID),
 		transform.WithMaxTokens(int64(maxAllowed)),
 	}
-	if provider.AuthType == typ.AuthTypeOAuth {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
 		opts = append(opts, transform.WithUserID(provider.OAuthDetail.UserID))
+		opts = append(opts, transform.WithIssuer(provider.OAuthDetail.ProviderType))
 	}
 
 	transformCtx := transform.NewTransformContext(

@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // ClientPoolGetter matches client.ClientPool interface
@@ -65,7 +66,7 @@ func (f *AnthropicV1Forwarder) ForwardStream(
 		return nil, err
 	}
 
-	return &AnthropicV1StreamHandle{stream: stream, cancel: cancel}, nil
+	return &AnthropicV1StreamHandle{stream: stream, cancel: cancel, client: wrapper}, nil
 }
 
 func (f *AnthropicV1Forwarder) ForwardNonStream(
@@ -92,25 +93,31 @@ func (f *AnthropicV1Forwarder) ForwardNonStream(
 	}
 
 	// Store cancel for cleanup
-	return &ForwardResult{Message: message, Cancel: cancel}, nil
+	return &ForwardResult{Message: message, Cancel: cancel, AnthropicClient: wrapper}, nil
 }
 
 // AnthropicV1StreamHandle wraps MessageStream
 type AnthropicV1StreamHandle struct {
 	stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion]
 	cancel context.CancelFunc
+	client *client.AnthropicClient
 }
 
 func (h *AnthropicV1StreamHandle) Next() bool {
-	return h.stream.Next()
+	next := h.stream.Next()
+	runtime.KeepAlive(h.client)
+	return next
 }
 
 func (h *AnthropicV1StreamHandle) Current() any {
-	return h.stream.Current()
+	current := h.stream.Current()
+	runtime.KeepAlive(h.client)
+	return current
 }
 
 func (h *AnthropicV1StreamHandle) Err() error {
 	err := h.stream.Err()
+	runtime.KeepAlive(h.client)
 	if err == io.EOF {
 		return nil
 	}
@@ -126,8 +133,10 @@ func (h *AnthropicV1StreamHandle) Close() error {
 
 // ForwardResult wraps non-streaming response with cancel func
 type ForwardResult struct {
-	Message any
-	Cancel  context.CancelFunc
+	Message         any
+	Cancel          context.CancelFunc
+	AnthropicClient *client.AnthropicClient
+	OpenAIClient    *client.OpenAIClient
 }
 
 // ===================================================================
@@ -170,7 +179,7 @@ func (f *AnthropicBetaForwarder) ForwardStream(
 		return nil, err
 	}
 
-	return &AnthropicBetaStreamHandle{stream: stream, cancel: cancel}, nil
+	return &AnthropicBetaStreamHandle{stream: stream, cancel: cancel, client: wrapper}, nil
 }
 
 func (f *AnthropicBetaForwarder) ForwardNonStream(
@@ -196,25 +205,31 @@ func (f *AnthropicBetaForwarder) ForwardNonStream(
 		return nil, err
 	}
 
-	return &ForwardResult{Message: message, Cancel: cancel}, nil
+	return &ForwardResult{Message: message, Cancel: cancel, AnthropicClient: wrapper}, nil
 }
 
 // AnthropicBetaStreamHandle wraps Beta stream
 type AnthropicBetaStreamHandle struct {
 	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
 	cancel context.CancelFunc
+	client *client.AnthropicClient
 }
 
 func (h *AnthropicBetaStreamHandle) Next() bool {
-	return h.stream.Next()
+	next := h.stream.Next()
+	runtime.KeepAlive(h.client)
+	return next
 }
 
 func (h *AnthropicBetaStreamHandle) Current() any {
-	return h.stream.Current()
+	current := h.stream.Current()
+	runtime.KeepAlive(h.client)
+	return current
 }
 
 func (h *AnthropicBetaStreamHandle) Err() error {
 	err := h.stream.Err()
+	runtime.KeepAlive(h.client)
 	if err == io.EOF {
 		return nil
 	}

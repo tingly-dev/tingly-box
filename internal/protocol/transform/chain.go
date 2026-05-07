@@ -137,6 +137,10 @@ type TransformContext struct {
 	// Used to prevent recursive MCP tool injection
 	IsAdvisorRequest bool
 
+	// HasNativeAdvisor indicates Claude Code native advisor semantics are already
+	// present in the request, so tingly-box must not inject or bridge a second advisor.
+	HasNativeAdvisor bool
+
 	// OriginalRequest stores the original request before any transformations
 	OriginalRequest interface{}
 

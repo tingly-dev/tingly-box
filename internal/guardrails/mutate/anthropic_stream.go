@@ -12,6 +12,7 @@ const (
 	anthropicEventTypeContentBlockStart = "content_block_start"
 	anthropicEventTypeContentBlockDelta = "content_block_delta"
 	anthropicEventTypeContentBlockStop  = "content_block_stop"
+	anthropicEventTypeMessageDelta      = "message_delta"
 	anthropicDeltaTypeInputJSONDelta    = "input_json_delta"
 )
 
@@ -100,6 +101,9 @@ func RewriteAnthropicToolUseEvent(
 		if decision.BlockMessage == "" {
 			return true, nil, nil
 		}
+		if streamState != nil {
+			streamState.RewroteBlockedToolUse = true
+		}
 		return true, []AnthropicBufferedEvent{
 			{
 				EventType: anthropicEventTypeContentBlockStart,
@@ -161,6 +165,10 @@ func ShouldRewriteAnthropicEvent(state *protocol.GuardrailsStreamState, eventTyp
 			if hasBuffered {
 				return true
 			}
+		}
+	case anthropicEventTypeMessageDelta:
+		if state != nil && state.RewroteBlockedToolUse {
+			return true
 		}
 	}
 	return false
@@ -233,6 +241,26 @@ func HandleAnthropicToolUseBuffer(credentialMask *guardrailscore.CredentialMaskS
 		return AnthropicToolUseDecision{
 			Kind:        AnthropicToolUseDecisionPassthrough,
 			Passthrough: buffered,
+		}
+	case anthropicEventTypeMessageDelta:
+		if !streamState.RewroteBlockedToolUse {
+			return AnthropicToolUseDecision{}
+		}
+		streamState.RewroteBlockedToolUse = false
+		payload := cloneAnthropicEventPayload(eventMap)
+		delta, _ := payload["delta"].(map[string]interface{})
+		if delta == nil {
+			delta = map[string]interface{}{}
+			payload["delta"] = delta
+		}
+		if stopReason, _ := delta["stop_reason"].(string); stopReason == "tool_use" {
+			delta["stop_reason"] = "end_turn"
+		}
+		return AnthropicToolUseDecision{
+			Kind: AnthropicToolUseDecisionPassthrough,
+			Passthrough: []AnthropicBufferedEvent{
+				{EventType: anthropicEventTypeMessageDelta, Payload: payload},
+			},
 		}
 	}
 	return AnthropicToolUseDecision{}

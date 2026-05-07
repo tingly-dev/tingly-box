@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -177,9 +178,39 @@ func TestServerReadyCheck(t *testing.T) {
 	}
 }
 
-func TestListEnabledServerToolNames_IncludesServerVirtualTools(t *testing.T) {
+func TestListEnabledServerToolNames_AdvisorDisabledByDefault(t *testing.T) {
 	r := NewRuntime(func() *typ.MCPRuntimeConfig {
 		return &typ.MCPRuntimeConfig{}
+	})
+	if r == nil {
+		t.Fatal("expected runtime")
+	}
+
+	r.RegisterAdviser(typ.AdvisorConfig{
+		BaseURL: "https://example.com",
+		Model:   "claude-opus-4-6",
+		APIKey:  "test-key",
+	}, nil)
+
+	names := r.ListEnabledServerToolNames(context.Background())
+	if _, ok := names[NormalizeToolName("builtin", "advisor")]; ok {
+		t.Fatalf("expected %q to be disabled by default", NormalizeToolName("builtin", "advisor"))
+	}
+	if _, ok := names[NormalizeToolName("advisor", "advisor")]; ok {
+		t.Fatalf("expected %q to be disabled by default", NormalizeToolName("advisor", "advisor"))
+	}
+}
+
+func TestListEnabledServerToolNames_AdvisorEnabledWhenSourceEnabled(t *testing.T) {
+	r := NewRuntime(func() *typ.MCPRuntimeConfig {
+		return &typ.MCPRuntimeConfig{
+			Sources: []typ.MCPSourceConfig{{
+				ID:           mcptools.BuiltinAdvisorSourceID,
+				Enabled:      typ.BoolPtr(true),
+				IsClientTool: typ.BoolPtr(false),
+				Tools:        []string{"advisor"},
+			}},
+		}
 	})
 	if r == nil {
 		t.Fatal("expected runtime")

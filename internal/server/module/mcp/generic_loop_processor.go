@@ -2,11 +2,8 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
@@ -16,17 +13,16 @@ import (
 
 // GenericLoopProcessor implements format-agnostic non-streaming MCP tool handling
 type GenericLoopProcessor struct {
-	ctx              context.Context
-	s                ServerOps
-	provider         *typ.Provider
-	hc               *protocol.HandleContext
-	virtualRegistry  *runtime.VirtualToolRegistry
-	recorder         ProtocolRecorder
-	adapter          FormatAdapter
-	forwarder        Forwarder
-	toolExecutor     ToolExecutor
-	pendingManager   PendingResultsManager
-	config           InterceptorConfig
+	ctx             context.Context
+	s               ServerOps
+	provider        *typ.Provider
+	hc              *protocol.HandleContext
+	virtualRegistry *runtime.VirtualToolRegistry
+	recorder        ProtocolRecorder
+	adapter         FormatAdapter
+	forwarder       Forwarder
+	toolExecutor    ToolExecutor
+	config          InterceptorConfig
 
 	// Usage tracking
 	totalInputTokens  int64
@@ -45,7 +41,6 @@ func NewGenericLoopProcessor(
 	adapter FormatAdapter,
 	forwarder Forwarder,
 	toolExecutor ToolExecutor,
-	pendingManager PendingResultsManager,
 	config InterceptorConfig,
 ) *GenericLoopProcessor {
 	if config.MaxRounds == 0 {
@@ -62,14 +57,13 @@ func NewGenericLoopProcessor(
 		adapter:         adapter,
 		forwarder:       forwarder,
 		toolExecutor:    toolExecutor,
-		pendingManager:  pendingManager,
 		config:          config,
 	}
 }
 
 // Run executes the non-streaming processor loop
 func (p *GenericLoopProcessor) Run(req any) (any, error) {
-	currentReq := req
+	currentReq := p.applyStoredContinuation(req)
 
 	for round := 0; round < p.config.MaxRounds; round++ {
 		logrus.Debugf("[MCP-Processor] Round %d: starting", round)
@@ -82,6 +76,17 @@ func (p *GenericLoopProcessor) Run(req any) (any, error) {
 
 		// Extract the actual response from ForwardResult wrapper
 		if fr, ok := response.(*ForwardResult); ok {
+			defer func() {
+				if fr.Cancel != nil {
+					fr.Cancel()
+				}
+				if fr.AnthropicClient != nil {
+					_ = fr.AnthropicClient.Close()
+				}
+				if fr.OpenAIClient != nil {
+					_ = fr.OpenAIClient.Close()
+				}
+			}()
 			response = fr.Message
 		}
 
@@ -208,12 +213,21 @@ func (p *GenericLoopProcessor) handleMixed(response, req any) (any, error) {
 		results = append(results, result)
 	}
 
-	// Stash results linked to external IDs
-	if p.pendingManager != nil && len(externalIDs) > 0 {
-		if err := p.pendingManager.Stash(externalIDs, results); err != nil {
-			logrus.WithError(err).Warn("failed to stash pending results")
-		}
+	normalizedResults, err := validateAndNormalizeMixedStash(externalIDs, results)
+	if err != nil {
+		logrus.WithError(err).Warn("[MCP-Processor] mixed consistency validation failed; ending current round for continuation")
+		// Return filtered external calls without stashing, so caller can continue
+		// in the next round using the external tool flow only.
+		return p.adapter.FilterVirtualTools(response, external)
 	}
+
+	segment, err := p.adapter.BuildContinuationSegment(response, normalizedResults)
+	if err != nil {
+		logrus.WithError(err).Warn("[MCP-Processor] failed to build mixed continuation segment")
+		return p.adapter.FilterVirtualTools(response, external)
+	}
+	key := continuationKey(typ.GetSessionID(p.ctx), p.provider.UUID, p.adapterID())
+	mixedContinuationStore.put(key, segment)
 
 	// Filter response to only include external tools
 	filteredResponse, err := p.adapter.FilterVirtualTools(response, external)
@@ -230,7 +244,13 @@ func (p *GenericLoopProcessor) executeTool(tool Tool, req any) (ToolExecutionRes
 	messages := p.extractMessages(req)
 
 	// Execute tool
-	result, err := p.s.CallMCPTool(p.ctx, tool.Name(), tool.Arguments(), messages)
+	type toolHookCaller interface {
+		CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error)
+	}
+	nextCtx, result, err := p.s.(toolHookCaller).CallMCPToolWithHooks(p.ctx, tool.Name(), tool.Arguments(), messages)
+	if nextCtx != nil {
+		p.ctx = nextCtx
+	}
 
 	return ToolExecutionResult{
 		ToolUseID: tool.ID(),
@@ -242,61 +262,11 @@ func (p *GenericLoopProcessor) executeTool(tool Tool, req any) (ToolExecutionRes
 // Helper methods
 
 func (p *GenericLoopProcessor) extractModel(req any) string {
-	// Extract model from request based on format
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		return string(r.Model)
-	case *anthropic.BetaMessageNewParams:
-		return string(r.Model)
-	case *openai.ChatCompletionNewParams:
-		return string(r.Model)
-	default:
-		// Fallback to provider name if available
-		if len(p.provider.Models) > 0 {
-			return p.provider.Models[0]
-		}
-		return ""
-	}
+	return extractModelFromRequest(req, p.provider)
 }
 
 func (p *GenericLoopProcessor) extractMessages(req any) []map[string]any {
-	// Extract messages from request for tool execution hooks
-	// Note: Current CallMCPTool implementation does not use messages parameter,
-	// but this is implemented for future compatibility
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		if len(r.Messages) == 0 {
-			return nil
-		}
-		b, _ := json.Marshal(r.Messages)
-		var out []map[string]any
-		json.Unmarshal(b, &out)
-		return out
-	case *anthropic.BetaMessageNewParams:
-		if len(r.Messages) == 0 {
-			return nil
-		}
-		b, _ := json.Marshal(r.Messages)
-		var out []map[string]any
-		json.Unmarshal(b, &out)
-		return out
-	case *openai.ChatCompletionNewParams:
-		// For OpenAI, convert messages to map format
-		if len(r.Messages) == 0 {
-			return nil
-		}
-		messages := make([]map[string]any, len(r.Messages))
-		for i, msg := range r.Messages {
-			// Convert OpenAI message to map representation
-			msgJSON, _ := msg.MarshalJSON()
-			var msgMap map[string]any
-			json.Unmarshal(msgJSON, &msgMap)
-			messages[i] = msgMap
-		}
-		return messages
-	default:
-		return nil
-	}
+	return extractMessagesForToolCall(req)
 }
 
 func (p *GenericLoopProcessor) resultsToAny(results []ToolExecutionResult) []any {
@@ -326,4 +296,33 @@ func (p *GenericLoopProcessor) reportUsage() {
 		logrus.Debugf("[MCP-Processor] Usage: Input=%d, Output=%d, Cache=%d",
 			p.totalInputTokens, p.totalOutputTokens, p.totalCacheTokens)
 	}
+}
+
+func (p *GenericLoopProcessor) adapterID() string {
+	switch p.adapter.(type) {
+	case *OpenAIChatAdapter:
+		return "openai-chat"
+	case *AnthropicV1Adapter:
+		return "anthropic-v1"
+	case *AnthropicBetaAdapter:
+		return "anthropic-beta"
+	default:
+		return fmt.Sprintf("%T", p.adapter)
+	}
+}
+
+func (p *GenericLoopProcessor) applyStoredContinuation(req any) any {
+	sessionID := typ.GetSessionID(p.ctx)
+	key := continuationKey(sessionID, p.provider.UUID, p.adapterID())
+	segment, ok := mixedContinuationStore.pop(key)
+	if !ok {
+		return req
+	}
+	logrus.Debugf("[MCP-CONT] processor applying stored continuation key=%s adapter=%s", key, p.adapterID())
+	updated, err := p.adapter.ApplyContinuation(req, segment)
+	if err != nil {
+		logrus.WithError(err).Warn("[MCP-Processor] failed to apply stored continuation")
+		return req
+	}
+	return updated
 }

@@ -63,17 +63,36 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 	for _, m := range actx.Messages {
 		role, _ := m["role"].(string)
 		content := extractMessageText(m["content"])
-		if content == "" {
+		reasoning := extractMessageThinking(m["content"])
+		if content == "" && reasoning == "" {
 			continue
 		}
 		switch role {
 		case "user":
+			if content == "" {
+				continue
+			}
 			messages = append(messages, openai.UserMessage(content))
 		case "assistant":
-			messages = append(messages, openai.AssistantMessage(content))
+			msg := openai.AssistantMessage(content)
+			if reasoning != "" && msg.OfAssistant != nil {
+				extra := msg.OfAssistant.ExtraFields()
+				if extra == nil {
+					extra = map[string]any{}
+				}
+				extra["reasoning_content"] = reasoning
+				msg.OfAssistant.SetExtraFields(extra)
+			}
+			messages = append(messages, msg)
 		case "system":
+			if content == "" {
+				continue
+			}
 			messages = append(messages, openai.SystemMessage(content))
 		case "tool":
+			if content == "" {
+				continue
+			}
 			messages = append(messages, openai.UserMessage("[tool result]: "+content))
 		default:
 			logrus.WithField("role", role).Warn("advisor: dropping unknown message role")
@@ -296,6 +315,35 @@ func extractMessageText(content any) string {
 	default:
 		return ""
 	}
+}
+
+// extractMessageThinking extracts Anthropic-style thinking text from content parts.
+// This is mapped to OpenAI-compatible reasoning_content for providers like DeepSeek.
+func extractMessageThinking(content any) string {
+	parts, ok := content.([]any)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	for _, part := range parts {
+		p, ok := part.(map[string]any)
+		if !ok {
+			continue
+		}
+		t, _ := p["type"].(string)
+		if t != "thinking" {
+			continue
+		}
+		txt, _ := p["thinking"].(string)
+		if txt == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(txt)
+	}
+	return b.String()
 }
 
 const advisorCallTimeout = 60 * time.Second

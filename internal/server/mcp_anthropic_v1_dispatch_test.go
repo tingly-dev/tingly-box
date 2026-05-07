@@ -143,8 +143,8 @@ func TestAllGenericPaths_CanBeEnabledIndependently(t *testing.T) {
 
 	// Test enabling each path independently
 	testCases := []struct {
-		name            string
-		setFlags        func()
+		name                string
+		setFlags            func()
 		expectedAANonStream bool
 		expectedAAStream    bool
 		expectedOONonStream bool
@@ -256,11 +256,11 @@ func TestDispatchGenericAnthropicV1NonStream_FeatureFlagChecks(t *testing.T) {
 	s := NewServer(cfg)
 
 	tests := []struct {
-		name               string
-		enableNonStream    bool
-		enableStream       bool
-		isStreaming        bool
-		shouldUseGeneric   bool
+		name             string
+		enableNonStream  bool
+		enableStream     bool
+		isStreaming      bool
+		shouldUseGeneric bool
 	}{
 		{
 			name:             "Non-streaming disabled, streaming disabled - use original",
@@ -304,124 +304,6 @@ func TestDispatchGenericAnthropicV1NonStream_FeatureFlagChecks(t *testing.T) {
 			} else {
 				assert.Equal(t, tt.enableNonStream, s.config.GenericMCP.UseGenericAnthropicV1NonStream)
 			}
-		})
-	}
-}
-
-// TestDispatchGenericAnthropicBetaNonStream_BasicRouting tests that Beta routing works
-func TestDispatchGenericAnthropicBetaNonStream_BasicRouting(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	s := NewServer(cfg)
-
-	// Verify Beta feature flags exist and default to false (safe default)
-	assert.False(t, cfg.GenericMCP.UseGenericAnthropicBetaNonStream, "Beta non-streaming should be disabled by default")
-	assert.False(t, cfg.GenericMCP.UseGenericAnthropicBetaStream, "Beta streaming should be disabled by default")
-
-	// Verify we can enable Beta flags independently
-	s.config.GenericMCP.UseGenericAnthropicBetaNonStream = true
-	s.config.GenericMCP.UseGenericAnthropicBetaStream = true
-
-	assert.True(t, s.config.GenericMCP.UseGenericAnthropicBetaNonStream, "Beta non-streaming should be enabled")
-	assert.True(t, s.config.GenericMCP.UseGenericAnthropicBetaStream, "Beta streaming should be enabled")
-
-	// Verify enabling Beta doesn't affect other paths
-	assert.False(t, s.config.GenericMCP.UseGenericAnthropicV1NonStream, "A→A non-streaming should remain disabled")
-	assert.False(t, s.config.GenericMCP.UseGenericAnthropicV1Stream, "A→A streaming should remain disabled")
-	assert.False(t, s.config.GenericMCP.UseGenericOpenAIChatNonStream, "O→O non-streaming should remain disabled")
-	assert.False(t, s.config.GenericMCP.UseGenericOpenAIChatStream, "O→O streaming should remain disabled")
-}
-
-// TestAllSixGenericPaths_CanBeEnabledIndependently tests that all 6 paths can be enabled separately
-func TestAllSixGenericPaths_CanBeEnabledIndependently(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	s := NewServer(cfg)
-
-	// Test enabling each path independently
-	testCases := []struct {
-		name                  string
-		setFlags              func()
-		expectedAANonStream   bool
-		expectedAAStream      bool
-		expectedAABetaNonStream bool
-		expectedAABetaStream  bool
-		expectedOONonStream   bool
-		expectedOOStream      bool
-	}{
-		{
-			name: "Enable Aβ→Aβ non-streaming only",
-			setFlags: func() {
-				s.config.GenericMCP.UseGenericAnthropicV1NonStream = false
-				s.config.GenericMCP.UseGenericAnthropicV1Stream = false
-				s.config.GenericMCP.UseGenericAnthropicBetaNonStream = true
-				s.config.GenericMCP.UseGenericAnthropicBetaStream = false
-				s.config.GenericMCP.UseGenericOpenAIChatNonStream = false
-				s.config.GenericMCP.UseGenericOpenAIChatStream = false
-			},
-			expectedAANonStream:     false,
-			expectedAAStream:        false,
-			expectedAABetaNonStream: true,
-			expectedAABetaStream:    false,
-			expectedOONonStream:     false,
-			expectedOOStream:        false,
-		},
-		{
-			name: "Enable Aβ→Aβ streaming only",
-			setFlags: func() {
-				s.config.GenericMCP.UseGenericAnthropicV1NonStream = false
-				s.config.GenericMCP.UseGenericAnthropicV1Stream = false
-				s.config.GenericMCP.UseGenericAnthropicBetaNonStream = false
-				s.config.GenericMCP.UseGenericAnthropicBetaStream = true
-				s.config.GenericMCP.UseGenericOpenAIChatNonStream = false
-				s.config.GenericMCP.UseGenericOpenAIChatStream = false
-			},
-			expectedAANonStream:     false,
-			expectedAAStream:        false,
-			expectedAABetaNonStream: false,
-			expectedAABetaStream:    true,
-			expectedOONonStream:     false,
-			expectedOOStream:        false,
-		},
-		{
-			name: "Enable all 6 paths",
-			setFlags: func() {
-				s.config.GenericMCP.UseGenericAnthropicV1NonStream = true
-				s.config.GenericMCP.UseGenericAnthropicV1Stream = true
-				s.config.GenericMCP.UseGenericAnthropicBetaNonStream = true
-				s.config.GenericMCP.UseGenericAnthropicBetaStream = true
-				s.config.GenericMCP.UseGenericOpenAIChatNonStream = true
-				s.config.GenericMCP.UseGenericOpenAIChatStream = true
-			},
-			expectedAANonStream:     true,
-			expectedAAStream:        true,
-			expectedAABetaNonStream: true,
-			expectedAABetaStream:    true,
-			expectedOONonStream:     true,
-			expectedOOStream:        true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Reset all flags
-			s.config.GenericMCP.UseGenericAnthropicV1NonStream = false
-			s.config.GenericMCP.UseGenericAnthropicV1Stream = false
-			s.config.GenericMCP.UseGenericAnthropicBetaNonStream = false
-			s.config.GenericMCP.UseGenericAnthropicBetaStream = false
-			s.config.GenericMCP.UseGenericOpenAIChatNonStream = false
-			s.config.GenericMCP.UseGenericOpenAIChatStream = false
-
-			// Set flags for this test case
-			tc.setFlags()
-
-			// Verify flags are set correctly
-			assert.Equal(t, tc.expectedAANonStream, s.config.GenericMCP.UseGenericAnthropicV1NonStream)
-			assert.Equal(t, tc.expectedAAStream, s.config.GenericMCP.UseGenericAnthropicV1Stream)
-			assert.Equal(t, tc.expectedAABetaNonStream, s.config.GenericMCP.UseGenericAnthropicBetaNonStream)
-			assert.Equal(t, tc.expectedAABetaStream, s.config.GenericMCP.UseGenericAnthropicBetaStream)
-			assert.Equal(t, tc.expectedOONonStream, s.config.GenericMCP.UseGenericOpenAIChatNonStream)
-			assert.Equal(t, tc.expectedOOStream, s.config.GenericMCP.UseGenericOpenAIChatStream)
 		})
 	}
 }

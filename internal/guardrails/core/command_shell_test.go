@@ -114,7 +114,7 @@ func TestCommandAttachDerivedFieldsBuildsShellAndNormalizedViews(t *testing.T) {
 	if cmd.Normalized.Kind != "shell" {
 		t.Fatalf("expected shell kind, got %q", cmd.Normalized.Kind)
 	}
-	if !reflect.DeepEqual(cmd.Normalized.Actions, []string{"read"}) {
+	if !reflect.DeepEqual(cmd.Normalized.Actions, []string{"execute", "read"}) {
 		t.Fatalf("unexpected normalized actions: %#v", cmd.Normalized.Actions)
 	}
 	if !reflect.DeepEqual(cmd.Normalized.Resources, []string{"~/.ssh"}) {

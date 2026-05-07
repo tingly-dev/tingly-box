@@ -89,7 +89,7 @@ func (a *AnthropicV1Adapter) BuildAssistantMessage(response any) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("expected *anthropic.Message, got %T", response)
 	}
-	return msg.ToParam(), nil
+	return messageToParamPreservingThinking(msg), nil
 }
 
 func (a *AnthropicV1Adapter) BuildToolMessage(result ToolExecutionResult) any {
@@ -110,7 +110,7 @@ func (a *AnthropicV1Adapter) AppendToolResults(req, resp any, results []any) (an
 	// Create new request with appended messages
 	newReq := *reqParams
 	newMessages := append([]anthropic.MessageParam{}, reqParams.Messages...)
-	newMessages = append(newMessages, msg.ToParam())
+	newMessages = append(newMessages, messageToParamPreservingThinking(msg))
 
 	// Convert results to tool result blocks
 	resultBlocks := make([]anthropic.ContentBlockParamUnion, len(results))
@@ -122,6 +122,102 @@ func (a *AnthropicV1Adapter) AppendToolResults(req, resp any, results []any) (an
 
 	newReq.Messages = newMessages
 	return &newReq, nil
+}
+
+func (a *AnthropicV1Adapter) BuildContinuationSegment(resp any, results []ToolExecutionResult) (any, error) {
+	msg, ok := resp.(*anthropic.Message)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.Message, got %T", resp)
+	}
+	segment := make([]anthropic.MessageParam, 0, 2)
+	segment = append(segment, messageToParamPreservingThinking(msg))
+	resultBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(results))
+	for _, r := range results {
+		resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(r.ToolUseID, r.Content, r.IsError))
+	}
+	if len(resultBlocks) > 0 {
+		segment = append(segment, anthropic.NewUserMessage(resultBlocks...))
+	}
+	return segment, nil
+}
+
+func (a *AnthropicV1Adapter) ApplyContinuation(req any, segment any) (any, error) {
+	reqParams, ok := req.(*anthropic.MessageNewParams)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.MessageNewParams, got %T", req)
+	}
+	seg, ok := segment.([]anthropic.MessageParam)
+	if !ok || len(seg) == 0 {
+		return req, nil
+	}
+	newReq := *reqParams
+	newReq.Messages = mergeAnthropicV1Continuation(seg, reqParams.Messages)
+	return &newReq, nil
+}
+
+func mergeAnthropicV1Continuation(segment []anthropic.MessageParam, messages []anthropic.MessageParam) []anthropic.MessageParam {
+	if len(segment) == 0 {
+		return append([]anthropic.MessageParam{}, messages...)
+	}
+	if len(messages) == 0 {
+		return append([]anthropic.MessageParam{}, segment...)
+	}
+
+	assistantIdx := -1
+	toolResultIdx := -1
+	for idx, msg := range messages {
+		if assistantIdx == -1 && msg.Role == anthropic.MessageParamRoleAssistant {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					assistantIdx = idx
+					break
+				}
+			}
+		}
+		if toolResultIdx == -1 && msg.Role == anthropic.MessageParamRoleUser {
+			for _, block := range msg.Content {
+				if block.OfToolResult != nil {
+					toolResultIdx = idx
+					break
+				}
+			}
+		}
+		if assistantIdx != -1 && toolResultIdx != -1 {
+			break
+		}
+	}
+	if toolResultIdx == -1 {
+		return append(append([]anthropic.MessageParam{}, segment...), messages...)
+	}
+
+	merged := append([]anthropic.MessageParam{}, segment...)
+	lastIdx := len(merged) - 1
+	merged[lastIdx].Content = append(append([]anthropic.ContentBlockParamUnion{}, merged[lastIdx].Content...), messages[toolResultIdx].Content...)
+	if assistantIdx == -1 || toolResultIdx < assistantIdx {
+		result := append([]anthropic.MessageParam{}, merged...)
+		result = append(result, messages[:toolResultIdx]...)
+		result = append(result, messages[toolResultIdx+1:]...)
+		return result
+	}
+
+	result := append([]anthropic.MessageParam{}, messages[:assistantIdx]...)
+	result = append(result, merged...)
+	result = append(result, messages[toolResultIdx+1:]...)
+	return result
+}
+
+func messageToParamPreservingThinking(msg *anthropic.Message) anthropic.MessageParam {
+	if msg == nil {
+		return anthropic.MessageParam{}
+	}
+
+	// Preserve original assistant content when building the follow-up request.
+	// Raw JSON round-trip keeps provider-specific fields that ToParam() may omit.
+	if param, ok := unmarshalAnthropicParamPreservingRawJSON[anthropic.MessageParam](msg.RawJSON()); ok {
+		return param
+	}
+
+	return msg.ToParam()
 }
 
 func (a *AnthropicV1Adapter) FilterVirtualTools(response any, externalTools []Tool) (any, error) {
@@ -174,6 +270,14 @@ func (a *AnthropicV1Adapter) SendKeepAlive(c *gin.Context) error {
 }
 
 func (a *AnthropicV1Adapter) SendFinalMessage(c *gin.Context) error {
+	deltaJSON, _ := json.Marshal(map[string]interface{}{
+		"type": "message_delta",
+		"delta": map[string]interface{}{
+			"stop_reason":   "end_turn",
+			"stop_sequence": nil,
+		},
+	})
+	c.SSEvent("", string(deltaJSON))
 	stopJSON, _ := json.Marshal(map[string]interface{}{"type": "message_stop"})
 	c.SSEvent("", string(stopJSON))
 	c.Writer.Flush()

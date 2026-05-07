@@ -226,10 +226,20 @@ func convertResponsesUserMessageToAnthropic(msg *responses.EasyInputMessageParam
 	if !param.IsOmitted(msg.Content.OfInputItemContentList) {
 		var blocks []anthropic.ContentBlockParamUnion
 		for _, contentItem := range msg.Content.OfInputItemContentList {
-			if !param.IsOmitted(contentItem.OfInputText) {
+			switch {
+			case !param.IsOmitted(contentItem.OfInputText):
 				blocks = append(blocks, anthropic.NewTextBlock(contentItem.OfInputText.Text))
-			} else {
-				// Log unsupported content types (images, audio, etc.)
+			case !param.IsOmitted(contentItem.OfInputImage):
+				img := contentItem.OfInputImage
+				if !img.ImageURL.Valid() {
+					// File-id only or empty image — Anthropic has no equivalent, skip.
+					logrus.Warnf("Skipping Responses API input_image without image_url (e.g. file_id-only) in user message")
+					continue
+				}
+				if block, ok := openAIImageURLToAnthropicV1Block(img.ImageURL.Value); ok {
+					blocks = append(blocks, block)
+				}
+			default:
 				logrus.Warnf("Unsupported content type in Responses API user message, skipping. Content types available: %v", contentItem)
 			}
 		}
@@ -314,10 +324,19 @@ func convertResponsesUserMessageToAnthropicBeta(msg *responses.EasyInputMessageP
 	if !param.IsOmitted(msg.Content.OfInputItemContentList) {
 		var blocks []anthropic.BetaContentBlockParamUnion
 		for _, contentItem := range msg.Content.OfInputItemContentList {
-			if !param.IsOmitted(contentItem.OfInputText) {
+			switch {
+			case !param.IsOmitted(contentItem.OfInputText):
 				blocks = append(blocks, anthropic.NewBetaTextBlock(contentItem.OfInputText.Text))
-			} else {
-				// Log unsupported content types
+			case !param.IsOmitted(contentItem.OfInputImage):
+				img := contentItem.OfInputImage
+				if !img.ImageURL.Valid() {
+					logrus.Warnf("Skipping Responses API input_image without image_url (e.g. file_id-only) in beta user message")
+					continue
+				}
+				if block, ok := openAIImageURLToAnthropicBetaBlock(img.ImageURL.Value); ok {
+					blocks = append(blocks, block)
+				}
+			default:
 				logrus.Warnf("Unsupported content type in Responses API beta user message, skipping. Content types available: %v", contentItem)
 			}
 		}

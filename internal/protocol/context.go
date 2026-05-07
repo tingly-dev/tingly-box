@@ -53,6 +53,10 @@ type GuardrailsStreamState struct {
 	PendingBlockMessages map[string]string
 	// PendingBlockedIndex tracks which content block index is currently blocked.
 	PendingBlockedIndex map[int]string
+	// RewroteBlockedToolUse is set once the current message's tool_use block has
+	// been replaced by a synthetic guardrails text block. The subsequent
+	// message_delta stop_reason must be rewritten away from tool_use.
+	RewroteBlockedToolUse bool
 	// AnthropicToolEvents buffers one tool_use block from start -> delta -> stop
 	// so the rewrite layer can either flush the original events or replace them.
 	AnthropicToolEvents map[int][]GuardrailsBufferedEvent

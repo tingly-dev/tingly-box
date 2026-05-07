@@ -43,8 +43,21 @@ type pathProbe struct {
 	anthropicBodies []string
 	openAIBodies    []string
 
-	sawAnthropicVirtualResultInjected bool
-	sawOpenAIVirtualResultInjected    bool
+	sawAnthropicVirtualResultInjected     bool
+	sawAnthropicMergedAdjacentToolResults bool
+	sawOpenAIVirtualResultInjected        bool
+}
+
+type anthropicProbeMessage struct {
+	Role    string `json:"role"`
+	Content []struct {
+		Type      string `json:"type"`
+		ToolUseID string `json:"tool_use_id"`
+	} `json:"content"`
+}
+
+type anthropicProbeRequest struct {
+	Messages []anthropicProbeMessage `json:"messages"`
 }
 
 func (p *pathProbe) addAnthropic(stream bool, body string) {
@@ -58,6 +71,31 @@ func (p *pathProbe) addAnthropic(stream bool, body string) {
 	p.anthropicBodies = append(p.anthropicBodies, body)
 	if strings.Contains(body, `"tool_use_id":"toolu_external"`) && strings.Contains(body, `"tool_use_id":"toolu_virtual"`) {
 		p.sawAnthropicVirtualResultInjected = true
+	}
+	var req anthropicProbeRequest
+	if err := json.Unmarshal([]byte(body), &req); err == nil {
+		for _, msg := range req.Messages {
+			if msg.Role != "user" {
+				continue
+			}
+			hasVirtual := false
+			hasExternal := false
+			for _, block := range msg.Content {
+				if block.Type != "tool_result" {
+					continue
+				}
+				switch block.ToolUseID {
+				case "toolu_virtual":
+					hasVirtual = true
+				case "toolu_external":
+					hasExternal = true
+				}
+			}
+			if hasVirtual && hasExternal {
+				p.sawAnthropicMergedAdjacentToolResults = true
+				break
+			}
+		}
 	}
 }
 
@@ -86,6 +124,9 @@ func newAnthropicPathBackend(t *testing.T, probe *pathProbe) *httptest.Server {
 		require.NoError(t, json.Unmarshal(body, &req))
 
 		isStream, _ := req["stream"].(bool)
+		if !isStream && strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream") {
+			isStream = true
+		}
 		probe.addAnthropic(isStream, string(body))
 
 		hasToolResult := strings.Contains(string(body), `"tool_result"`)
@@ -551,11 +592,11 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		code, header, _ := runDispatch(t, s, provider, buildAnthropicBetaReq(true), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, true)
 		require.Equal(t, http.StatusOK, code)
 		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
-		require.GreaterOrEqual(t, probe.anthropicStreamCalls, 1)
+		require.GreaterOrEqual(t, probe.anthropicStreamCalls+probe.anthropicNonStreamCalls, 1)
 
 		code, _, _ = runDispatch(t, s, provider, buildAnthropicBetaReq(false), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, false)
 		require.Equal(t, http.StatusOK, code)
-		require.GreaterOrEqual(t, probe.anthropicNonStreamCalls, 1)
+		require.GreaterOrEqual(t, probe.anthropicStreamCalls+probe.anthropicNonStreamCalls, 2)
 	})
 
 	t.Run("OpenAIChat_to_OpenAIChat", func(t *testing.T) {
@@ -652,6 +693,24 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 	})
 }
 
+func TestAnthropicBetaPureExternalStreamDoesNotAppendSyntheticStop(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	probe := &pathProbe{}
+	backend := newAnthropicPathBackend(t, probe)
+	defer backend.Close()
+
+	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
+	provider := &typ.Provider{UUID: "p-a-beta-pure-external", Name: "p-a-beta-pure-external", APIStyle: protocol.APIStyleAnthropic, APIBase: backend.URL, Token: "k", Enabled: true}
+
+	code, header, body := runDispatch(t, s, provider, buildAnthropicBetaReq(true), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, true)
+	require.Equal(t, http.StatusOK, code)
+	require.Contains(t, header.Get("Content-Type"), "text/event-stream")
+	require.Equal(t, 1, probe.anthropicStreamCalls)
+	require.Equal(t, 0, probe.anthropicNonStreamCalls)
+	require.Equal(t, 1, strings.Count(body, `"type":"message_stop"`), "pure external streamed round should forward upstream stop only once")
+}
+
 func TestMCPMixedToolStreamStashInjectE2E(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -678,15 +737,11 @@ func TestMCPMixedToolStreamStashInjectE2E(t *testing.T) {
 		code, header, _ := runDispatch(t, s, provider, buildAnthropicV1MixedReq(), protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, true)
 		require.Equal(t, http.StatusOK, code)
 		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
-		pending, ok := s.pendingVirtualToolResults.pop("toolu_external")
-		if ok {
-			s.pendingVirtualToolResults.put("toolu_external", pending)
-		}
-		require.True(t, ok, "stream round should stash virtual result under external anchor")
 
 		code, _, _ = runDispatch(t, s, provider, buildAnthropicV1FollowupReq(), protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, false)
 		require.Equal(t, http.StatusOK, code)
 		require.True(t, probe.sawAnthropicVirtualResultInjected, "follow-up request should contain injected virtual tool_result, bodies=%v", probe.anthropicBodies)
+		require.True(t, probe.sawAnthropicMergedAdjacentToolResults, "follow-up request should merge virtual and external tool_result into a single user message, bodies=%v", probe.anthropicBodies)
 	})
 
 	t.Run("AnthropicBeta_stream_mixed_stash_then_inject_next_request", func(t *testing.T) {
@@ -701,15 +756,13 @@ func TestMCPMixedToolStreamStashInjectE2E(t *testing.T) {
 		code, header, _ := runDispatch(t, s, provider, buildAnthropicBetaMixedReq(), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, true)
 		require.Equal(t, http.StatusOK, code)
 		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
-		pending, ok := s.pendingVirtualToolResults.pop("toolu_external")
-		if ok {
-			s.pendingVirtualToolResults.put("toolu_external", pending)
-		}
-		require.True(t, ok, "stream round should stash virtual result under external anchor")
 
 		code, _, _ = runDispatch(t, s, provider, buildAnthropicBetaFollowupReq(), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, false)
 		require.Equal(t, http.StatusOK, code)
 		require.True(t, probe.sawAnthropicVirtualResultInjected, "follow-up request should contain injected virtual tool_result, bodies=%v", probe.anthropicBodies)
+		require.True(t, probe.sawAnthropicMergedAdjacentToolResults, "follow-up request should merge virtual and external tool_result into a single user message, bodies=%v", probe.anthropicBodies)
+		require.Equal(t, 1, probe.anthropicStreamCalls, "initial mixed anthropic beta request must stay streaming")
+		require.Equal(t, 1, probe.anthropicNonStreamCalls, "only the follow-up request should be non-stream")
 	})
 
 	t.Run("OpenAIChat_stream_mixed_stash_then_inject_next_request", func(t *testing.T) {
@@ -764,5 +817,27 @@ func TestMCPMixedToolStreamStashInjectE2E(t *testing.T) {
 		code, _, _ = runDispatch(t, s, provider, buildOpenAIFollowupReq(), protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat, false)
 		require.Equal(t, http.StatusOK, code)
 		require.True(t, probe.sawOpenAIVirtualResultInjected, "follow-up request should contain injected virtual tool result message, bodies=%v", probe.openAIBodies)
+	})
+
+	t.Run("OpenAIChat_stream_mixed_virtual_tool_failure_does_not_break_followup", func(t *testing.T) {
+		probe := &pathProbe{}
+		backend := newOpenAIMixedPathBackend(t, probe)
+		defer backend.Close()
+
+		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
+		s.mcpRuntime.VirtualRegistry().Register(runtime.VirtualTool{Name: "advisor", Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return nil, context.DeadlineExceeded
+		}})
+		provider := &typ.Provider{UUID: "p-o-mixed-fail", Name: "p-o-mixed-fail", APIStyle: protocol.APIStyleOpenAI, APIBase: backend.URL + "/v1", Token: "k", Enabled: true}
+
+		code, header, body := runDispatch(t, s, provider, buildOpenAIMixedReq(), protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, true)
+		require.Equal(t, http.StatusOK, code)
+		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
+		require.Contains(t, body, "[DONE]", "failure fallback should safely terminate current streamed round")
+
+		code, _, followupBody := runDispatch(t, s, provider, buildOpenAIFollowupReq(), protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, false)
+		require.Equal(t, http.StatusOK, code)
+		require.Contains(t, followupBody, "openai-final", "failed virtual tool should not break follow-up completion")
+		require.True(t, probe.sawOpenAIVirtualResultInjected, "failed virtual tool result should still be stitched into follow-up without breaking the session, bodies=%v", probe.openAIBodies)
 	})
 }

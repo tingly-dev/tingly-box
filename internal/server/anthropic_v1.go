@@ -79,7 +79,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
 	var recorder *ProtocolRecorder
 	if s.ApplyRecording(scenarioType) {
-		recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
+		recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
 	}
 
 	reqCtx, err := s.transformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType)
@@ -97,10 +97,10 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 // nonstreamResponsesToAnthropic handles non-streaming Responses API request for v1
 // This converts Anthropic v1 request directly to Responses API format, calls the API, and converts back to v1
 func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
-	// Get scenario recorder if exists
-	var recorder *ScenarioRecorder
+	// Get protocol recorder if exists
+	var recorder *ProtocolRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
-		recorder = r.(*ScenarioRecorder)
+		recorder = r.(*ProtocolRecorder)
 	}
 
 	var response *responses.Response

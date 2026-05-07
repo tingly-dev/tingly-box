@@ -89,7 +89,7 @@ func (a *AnthropicBetaAdapter) BuildAssistantMessage(response any) (any, error) 
 	if !ok {
 		return nil, fmt.Errorf("expected *anthropic.BetaMessage, got %T", response)
 	}
-	return msg.ToParam(), nil
+	return betaMessageToParamPreservingThinking(msg), nil
 }
 
 func (a *AnthropicBetaAdapter) BuildToolMessage(result ToolExecutionResult) any {
@@ -110,7 +110,7 @@ func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (
 	// Create new request with appended messages
 	newReq := *reqParams
 	newMessages := append([]anthropic.BetaMessageParam{}, reqParams.Messages...)
-	newMessages = append(newMessages, msg.ToParam())
+	newMessages = append(newMessages, betaMessageToParamPreservingThinking(msg))
 
 	// Convert results to tool result blocks
 	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, len(results))
@@ -122,6 +122,102 @@ func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (
 
 	newReq.Messages = newMessages
 	return &newReq, nil
+}
+
+func (a *AnthropicBetaAdapter) BuildContinuationSegment(resp any, results []ToolExecutionResult) (any, error) {
+	msg, ok := resp.(*anthropic.BetaMessage)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.BetaMessage, got %T", resp)
+	}
+	segment := make([]anthropic.BetaMessageParam, 0, 2)
+	segment = append(segment, betaMessageToParamPreservingThinking(msg))
+	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(results))
+	for _, r := range results {
+		resultBlocks = append(resultBlocks, anthropic.NewBetaToolResultBlock(r.ToolUseID, r.Content, r.IsError))
+	}
+	if len(resultBlocks) > 0 {
+		segment = append(segment, anthropic.NewBetaUserMessage(resultBlocks...))
+	}
+	return segment, nil
+}
+
+func (a *AnthropicBetaAdapter) ApplyContinuation(req any, segment any) (any, error) {
+	reqParams, ok := req.(*anthropic.BetaMessageNewParams)
+	if !ok {
+		return nil, fmt.Errorf("expected *anthropic.BetaMessageNewParams, got %T", req)
+	}
+	seg, ok := segment.([]anthropic.BetaMessageParam)
+	if !ok || len(seg) == 0 {
+		return req, nil
+	}
+	newReq := *reqParams
+	newReq.Messages = mergeAnthropicBetaContinuation(seg, reqParams.Messages)
+	return &newReq, nil
+}
+
+func mergeAnthropicBetaContinuation(segment []anthropic.BetaMessageParam, messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	if len(segment) == 0 {
+		return append([]anthropic.BetaMessageParam{}, messages...)
+	}
+	if len(messages) == 0 {
+		return append([]anthropic.BetaMessageParam{}, segment...)
+	}
+
+	assistantIdx := -1
+	toolResultIdx := -1
+	for idx, msg := range messages {
+		if assistantIdx == -1 && msg.Role == anthropic.BetaMessageParamRoleAssistant {
+			for _, block := range msg.Content {
+				if block.OfToolUse != nil {
+					assistantIdx = idx
+					break
+				}
+			}
+		}
+		if toolResultIdx == -1 && msg.Role == anthropic.BetaMessageParamRoleUser {
+			for _, block := range msg.Content {
+				if block.OfToolResult != nil {
+					toolResultIdx = idx
+					break
+				}
+			}
+		}
+		if assistantIdx != -1 && toolResultIdx != -1 {
+			break
+		}
+	}
+	if toolResultIdx == -1 {
+		return append(append([]anthropic.BetaMessageParam{}, segment...), messages...)
+	}
+
+	merged := append([]anthropic.BetaMessageParam{}, segment...)
+	lastIdx := len(merged) - 1
+	merged[lastIdx].Content = append(append([]anthropic.BetaContentBlockParamUnion{}, merged[lastIdx].Content...), messages[toolResultIdx].Content...)
+	if assistantIdx == -1 || toolResultIdx < assistantIdx {
+		result := append([]anthropic.BetaMessageParam{}, merged...)
+		result = append(result, messages[:toolResultIdx]...)
+		result = append(result, messages[toolResultIdx+1:]...)
+		return result
+	}
+
+	result := append([]anthropic.BetaMessageParam{}, messages[:assistantIdx]...)
+	result = append(result, merged...)
+	result = append(result, messages[toolResultIdx+1:]...)
+	return result
+}
+
+func betaMessageToParamPreservingThinking(msg *anthropic.BetaMessage) anthropic.BetaMessageParam {
+	if msg == nil {
+		return anthropic.BetaMessageParam{}
+	}
+
+	// Preserve original assistant content when building the follow-up request.
+	// Raw JSON round-trip keeps provider-specific fields that ToParam() may omit.
+	if param, ok := unmarshalAnthropicParamPreservingRawJSON[anthropic.BetaMessageParam](msg.RawJSON()); ok {
+		return param
+	}
+
+	return msg.ToParam()
 }
 
 func (a *AnthropicBetaAdapter) FilterVirtualTools(response any, externalTools []Tool) (any, error) {
@@ -143,9 +239,15 @@ func (a *AnthropicBetaAdapter) FilterVirtualTools(response any, externalTools []
 			if externalIDs[string(tu.ID)] {
 				filtered = append(filtered, block)
 			}
-		} else {
-			filtered = append(filtered, block)
+			continue
 		}
+		if stu, ok := block.AsAny().(anthropic.BetaServerToolUseBlock); ok {
+			if externalIDs[string(stu.ID)] {
+				filtered = append(filtered, block)
+			}
+			continue
+		}
+		filtered = append(filtered, block)
 	}
 
 	msg.Content = filtered
@@ -162,7 +264,17 @@ func (a *AnthropicBetaAdapter) SetupSSEHeaders(c *gin.Context) {
 }
 
 func (a *AnthropicBetaAdapter) SendEvent(c *gin.Context, eventType string, payload []byte) error {
-	c.SSEvent("", payload)
+	name := eventType
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err == nil {
+		if typ, ok := raw["type"].(string); ok && typ != "" {
+			name = typ
+		}
+	}
+	if name == "" {
+		name = "message"
+	}
+	fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", name, payload)
 	c.Writer.Flush()
 	return nil
 }
@@ -174,10 +286,18 @@ func (a *AnthropicBetaAdapter) SendKeepAlive(c *gin.Context) error {
 }
 
 func (a *AnthropicBetaAdapter) SendFinalMessage(c *gin.Context) error {
+	deltaJSON, _ := json.Marshal(map[string]interface{}{
+		"type": "message_delta",
+		"delta": map[string]interface{}{
+			"stop_reason":   "end_turn",
+			"stop_sequence": nil,
+		},
+	})
+	if err := a.SendEvent(c, "message_delta", deltaJSON); err != nil {
+		return err
+	}
 	stopJSON, _ := json.Marshal(map[string]interface{}{"type": "message_stop"})
-	c.SSEvent("", string(stopJSON))
-	c.Writer.Flush()
-	return nil
+	return a.SendEvent(c, "message_stop", stopJSON)
 }
 
 // Event processing
@@ -202,6 +322,9 @@ func (a *AnthropicBetaAdapter) ClassifyEvent(event any) EventType {
 
 	case anthropic.BetaRawContentBlockStartEvent:
 		if _, ok := v.ContentBlock.AsAny().(anthropic.BetaToolUseBlock); ok {
+			return EventToolStart
+		}
+		if stu, ok := v.ContentBlock.AsAny().(anthropic.BetaServerToolUseBlock); ok && stu.Name == "advisor" {
 			return EventToolStart
 		}
 		return EventText
@@ -250,7 +373,6 @@ func (a *AnthropicBetaAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 	if !ok {
 		return nil, false
 	}
-
 	return &AnthropicBetaTool{ToolUseBlock: tu}, true
 }
 

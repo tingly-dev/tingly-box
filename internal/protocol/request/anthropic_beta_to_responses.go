@@ -83,12 +83,13 @@ func ConvertAnthropicBetaToResponsesRequest(anthropicReq *anthropic.BetaMessageN
 func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []responses.ResponseInputItemUnionParam {
 	var items []responses.ResponseInputItemUnionParam
 
-	// Check for tool_result blocks
-	var hasToolResult bool
+	var hasToolResult, hasImage bool
 	for _, block := range msg.Content {
 		if block.OfToolResult != nil {
 			hasToolResult = true
-			break
+		}
+		if block.OfImage != nil {
+			hasImage = true
 		}
 	}
 
@@ -120,6 +121,39 @@ func convertBetaUserMessageToResponsesInput(msg anthropic.BetaMessageParam) []re
 					OfMessage: &messageItem,
 				})
 			}
+		}
+	} else if hasImage {
+		// Multimodal user message: emit input_text + input_image content parts
+		contentList := make(responses.ResponseInputMessageContentListParam, 0, len(msg.Content))
+		for _, block := range msg.Content {
+			switch {
+			case block.OfText != nil:
+				contentList = append(contentList, responses.ResponseInputContentUnionParam{
+					OfInputText: &responses.ResponseInputTextParam{Text: block.OfText.Text},
+				})
+			case block.OfImage != nil:
+				url := betaImageBlockToOpenAIURL(block.OfImage)
+				if url == "" {
+					continue
+				}
+				contentList = append(contentList, responses.ResponseInputContentUnionParam{
+					OfInputImage: &responses.ResponseInputImageParam{
+						ImageURL: ParamOpt(url),
+					},
+				})
+			}
+		}
+		if len(contentList) > 0 {
+			messageItem := responses.EasyInputMessageParam{
+				Type: responses.EasyInputMessageTypeMessage,
+				Role: responses.EasyInputMessageRole("user"),
+				Content: responses.EasyInputMessageContentUnionParam{
+					OfInputItemContentList: contentList,
+				},
+			}
+			items = append(items, responses.ResponseInputItemUnionParam{
+				OfMessage: &messageItem,
+			})
 		}
 	} else {
 		// Simple text-only user message

@@ -18,3 +18,7 @@ func IsVirtualTool(normalizedName string, registry *runtime.VirtualToolRegistry)
 	_, ok = registry.Get(toolName)
 	return ok
 }
+
+func IsVirtualToolName(name string, registry *runtime.VirtualToolRegistry) bool {
+	return IsVirtualTool(name, registry)
+}

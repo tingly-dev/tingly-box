@@ -1,6 +1,8 @@
 import { PageLayout } from '@/components/PageLayout';
+import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import type { Provider } from '@/types/provider';
 import {
     Alert,
     Box,
@@ -12,13 +14,10 @@ import {
     DialogContent,
     DialogTitle,
     Divider,
-    FormControl,
     FormControlLabel,
     IconButton,
     InputAdornment,
-    MenuItem,
     Paper,
-    Select,
     Snackbar,
     Stack,
     Switch,
@@ -41,7 +40,6 @@ import {
     Edit as EditIcon,
     InfoOutlined as InfoIcon,
     PowerSettingsNew as PowerIcon,
-    Refresh as RefreshIcon,
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
@@ -62,20 +60,6 @@ import {
 } from './types';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const ADVISOR_MODELS = [
-    'gpt-4o',
-    'gpt-4o-mini',
-    'gpt-4.1',
-    'gpt-4.1-mini',
-    'claude-opus-4-5',
-    'claude-sonnet-4-5',
-    'claude-haiku-4-5-20251001',
-    'qwen3-235b-a22b',
-    'qwen3-32b',
-    'deepseek-chat',
-    'deepseek-reasoner',
-];
 
 const MCP_ADD_COMMAND = `claude mcp add --transport http tb "http://localhost:12580/api/v1/mcp/tb" --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"`;
 
@@ -270,45 +254,34 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
     const [webtoolsSaving, setWebtoolsSaving] = useState(false);
 
     // advisor state
-    const [baseUrl, setBaseUrl] = useState('');
-    const [apiKey, setApiKey] = useState('');
     const [model, setModel] = useState('');
+    const [selectedProviderUuid, setSelectedProviderUuid] = useState('');
     const [advisorSaving, setAdvisorSaving] = useState(false);
-    const [advisorModels, setAdvisorModels] = useState<string[]>(ADVISOR_MODELS);
-    const [modelsFetching, setModelsFetching] = useState(false);
-    const [customModelOpen, setCustomModelOpen] = useState(false);
-    const [customModelInput, setCustomModelInput] = useState('');
-
-    const fetchAdvisorModels = async (url: string, key: string) => {
-        if (!url) return;
-        setModelsFetching(true);
-        try {
-            const result = await api.probeModels(url, key);
-            if (result.success && Array.isArray(result.models) && result.models.length > 0) {
-                setAdvisorModels(result.models);
-            } else {
-                setAdvisorModels(ADVISOR_MODELS);
-            }
-        } catch {
-            setAdvisorModels(ADVISOR_MODELS);
-        } finally {
-            setModelsFetching(false);
-        }
-    };
+    const [providerCatalog, setProviderCatalog] = useState<Provider[]>([]);
+    const [advisorModelDialogOpen, setAdvisorModelDialogOpen] = useState(false);
 
     useEffect(() => {
         setSerperKey(webtoolsSource?.env?.['SERPER_API_KEY'] ?? '');
     }, [webtoolsSource]);
 
     useEffect(() => {
-        const url = advisorSource?.advisor?.base_url ?? advisorSource?.env?.['ADVISOR_BASE_URL'] ?? '';
-        const key = advisorSource?.advisor?.api_key ?? advisorSource?.env?.['ADVISOR_API_KEY'] ?? '';
+        const providerUuid = advisorSource?.env?.['ADVISOR_PROVIDER_UUID'] ?? '';
         const m = advisorSource?.advisor?.model ?? advisorSource?.env?.['ADVISOR_MODEL'] ?? '';
-        setBaseUrl(url);
-        setApiKey(key);
+        setSelectedProviderUuid(providerUuid);
         setModel(m);
-        if (url) { void fetchAdvisorModels(url, key); }
     }, [advisorSource]);
+
+    useEffect(() => {
+        const loadProviders = async () => {
+            const result = await api.getProviders();
+            if (result?.success && Array.isArray(result.data)) {
+                setProviderCatalog(result.data as Provider[]);
+            } else {
+                setProviderCatalog([]);
+            }
+        };
+        void loadProviders();
+    }, []);
 
     const handleWebtoolsToggle = (enabled: boolean) => {
         if (!webtoolsSource) return;
@@ -343,6 +316,7 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
     const handleAdvisorSave = async () => {
         setAdvisorSaving(true);
         try {
+            const selectedProvider = providerCatalog.find((p) => p.uuid === selectedProviderUuid);
             // Strip transport/command/args/cwd — advisor is an in-process virtual tool,
             // not a stdio process. Sending transport:'stdio' causes the runtime to attempt
             // a subprocess connection and fail with "empty command".
@@ -350,19 +324,20 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                 id: BUILTIN_ADVISOR_ID,
                 name: 'Built-in Adviser',
                 tools: ['advisor'],
-                enabled: true,
+                enabled: false,
             }) as any;
             await onSave({
                 ...baseRest,
                 advisor: {
                     ...(baseRest.advisor ?? {}),
-                    base_url: baseUrl || undefined,
-                    api_key: apiKey || undefined,
+                    base_url: selectedProvider?.api_base || undefined,
+                    api_key: selectedProvider?.token || undefined,
                     model: model || undefined,
                 },
                 env: {
-                    ...(baseUrl ? { ADVISOR_BASE_URL: baseUrl } : {}),
-                    ...(apiKey ? { ADVISOR_API_KEY: apiKey } : {}),
+                    ...(selectedProviderUuid ? { ADVISOR_PROVIDER_UUID: selectedProviderUuid } : {}),
+                    ...(selectedProvider?.api_base ? { ADVISOR_BASE_URL: selectedProvider.api_base } : {}),
+                    ...(selectedProvider?.token ? { ADVISOR_API_KEY: selectedProvider.token } : {}),
                     ...(model ? { ADVISOR_MODEL: model } : {}),
                 },
             });
@@ -372,9 +347,9 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
     };
 
     const webtoolsEnabled = webtoolsSource?.enabled ?? true;
-    const advisorEnabled = advisorSource?.enabled ?? true;
+    const advisorEnabled = advisorSource?.enabled ?? false;
     const webtoolsTools = webtoolsSource?.tools ?? ['mcp_web_search', 'mcp_web_fetch'];
-    const isCustomModel = model && !advisorModels.includes(model);
+    const selectedProvider = providerCatalog.find((p) => p.uuid === selectedProviderUuid);
 
     return (
         <UnifiedCard title="Builtin Servers" size="full">
@@ -453,97 +428,18 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                     {' '}endpoint. Best used for critical decision points to avoid excess latency.
                 </Typography>
 
-                <ConfigRow label="Base URL" hint="API base URL of the LLM provider, e.g. https://api.openai.com/v1">
-                    <TextField
-                        fullWidth
-                        size="small"
-                        value={baseUrl}
-                        onChange={(e) => { setBaseUrl(e.target.value); }}
-                        onBlur={() => { void fetchAdvisorModels(baseUrl, apiKey); }}
-                        placeholder="https://api.openai.com/v1"
-                        InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
-                    />
-                </ConfigRow>
-
-                <ConfigRow label="API Key" hint="API key for the model provider">
-                    <SecretInput
-                        value={apiKey}
-                        onChange={(v) => { setApiKey(v); }}
-                        onBlur={() => { void fetchAdvisorModels(baseUrl, apiKey); }}
-                        placeholder="sk-..."
-                    />
-                </ConfigRow>
-
-                <ConfigRow label="Model" hint="Model ID, e.g. gpt-4o, qwen3-235b-a22b, deepseek-chat">
-                    <Stack direction="row" spacing={0.5} alignItems="center">
-                        <FormControl fullWidth size="small">
-                        <Select
-                            value={advisorModels.includes(model) ? model : (model ? '__custom__' : '')}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === '__add_custom__') {
-                                    setCustomModelInput(isCustomModel ? model : '');
-                                    setCustomModelOpen(true);
-                                } else if (v !== '__custom__') {
-                                    setModel(v);
-                                }
-                            }}
-                            displayEmpty
-                            renderValue={(v) => v ? (v === '__custom__' ? model : v) : <span style={{ color: '#999' }}>Select model</span>}
-                            sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
-                        >
-                            {advisorModels.map((m) => (
-                                <MenuItem key={m} value={m} sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{m}</MenuItem>
-                            ))}
-                            {isCustomModel && (
-                                <MenuItem value="__custom__" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                                    {model} <Chip label="custom" size="small" sx={{ ml: 1, fontSize: '0.65rem', height: 18 }} />
-                                </MenuItem>
-                            )}
-                            <Divider />
-                            <MenuItem value="__add_custom__" sx={{ fontSize: '0.8rem', color: 'primary.main' }}>
-                                + Custom
-                            </MenuItem>
-                        </Select>
-                    </FormControl>
-                        <Tooltip title="Refresh model list">
-                            <span>
-                                <IconButton size="small" onClick={() => { void fetchAdvisorModels(baseUrl, apiKey); }} disabled={modelsFetching || !baseUrl}>
-                                    <RefreshIcon fontSize="small" />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
+                <ConfigRow label="Model" hint="Choose advisor provider and model">
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
+                        <Button size="small" variant="outlined" onClick={() => setAdvisorModelDialogOpen(true)}>
+                            Choose Model
+                        </Button>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                            {selectedProvider
+                                ? `${selectedProvider.name} (${selectedProvider.api_style}) / ${model || '(no model selected)'}`
+                                : '(no provider selected)'}
+                        </Typography>
                     </Stack>
                 </ConfigRow>
-
-                <Dialog open={customModelOpen} onClose={() => setCustomModelOpen(false)} maxWidth="xs" fullWidth>
-                    <DialogTitle sx={{ fontSize: '1rem' }}>Custom Model ID</DialogTitle>
-                    <DialogContent>
-                        <TextField
-                            autoFocus
-                            fullWidth
-                            size="small"
-                            value={customModelInput}
-                            onChange={(e) => setCustomModelInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && customModelInput.trim()) {
-                                    setModel(customModelInput.trim());
-                                    setCustomModelOpen(false);
-                                }
-                            }}
-                            placeholder="e.g. for-adviser, my-custom-model"
-                            sx={{ mt: 1, fontFamily: 'monospace' }}
-                            InputProps={{ sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
-                        />
-                    </DialogContent>
-                    <DialogActions>
-                        <Button size="small" onClick={() => setCustomModelOpen(false)}>Cancel</Button>
-                        <Button size="small" variant="contained" disabled={!customModelInput.trim()} onClick={() => {
-                            setModel(customModelInput.trim());
-                            setCustomModelOpen(false);
-                        }}>Confirm</Button>
-                    </DialogActions>
-                </Dialog>
 
                 <Stack direction="row" justifyContent="flex-end" sx={{ pt: 1 }}>
                     <Button
@@ -555,10 +451,27 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                         {advisorSaving ? 'Saving...' : 'Save'}
                     </Button>
                 </Stack>
- 
+                <Dialog open={advisorModelDialogOpen} onClose={() => setAdvisorModelDialogOpen(false)} maxWidth="lg" fullWidth>
+                    <DialogTitle sx={{ textAlign: 'center' }}>Choose Model</DialogTitle>
+                    <DialogContent sx={{ height: '70vh' }}>
+                        <ModelSelectDialog
+                            providers={providerCatalog}
+                            selectedProvider={selectedProviderUuid || undefined}
+                            selectedModel={model || undefined}
+                            onSelected={(option: ProviderSelectTabOption) => {
+                                setSelectedProviderUuid(option.provider.uuid);
+                                setModel(option.model || '');
+                                setAdvisorModelDialogOpen(false);
+                            }}
+                        />
+                    </DialogContent>
+                    <DialogActions>
+                        <Button size="small" onClick={() => setAdvisorModelDialogOpen(false)}>Close</Button>
+                    </DialogActions>
+                </Dialog>
                     </>
                 )}
-           </Stack>
+            </Stack>
         </UnifiedCard>
     );
 };

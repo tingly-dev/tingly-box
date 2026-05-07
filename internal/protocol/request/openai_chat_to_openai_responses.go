@@ -115,17 +115,59 @@ func ConvertChatMessagesToResponsesInput(messages []openai.ChatCompletionMessage
 
 // convertChatUserMessageToResponses converts a Chat user message to Responses format.
 func convertChatUserMessageToResponses(userMsg *openai.ChatCompletionUserMessageParam) responses.ResponseInputItemUnionParam {
-	content := ""
-	if !param.IsOmitted(userMsg.Content.OfString) && userMsg.Content.OfString.Value != "" {
-		content = userMsg.Content.OfString.Value
+	if userMsg.Content.OfString.Valid() {
+		return responses.ResponseInputItemUnionParam{
+			OfMessage: &responses.EasyInputMessageParam{
+				Type: responses.EasyInputMessageTypeMessage,
+				Role: responses.EasyInputMessageRole("user"),
+				Content: responses.EasyInputMessageContentUnionParam{
+					OfString: param.NewOpt(userMsg.Content.OfString.Value),
+				},
+			},
+		}
 	}
 
+	// Multipart content: forward text + image_url parts as input_text + input_image.
+	if len(userMsg.Content.OfArrayOfContentParts) > 0 {
+		contentList := make(responses.ResponseInputMessageContentListParam, 0, len(userMsg.Content.OfArrayOfContentParts))
+		for _, part := range userMsg.Content.OfArrayOfContentParts {
+			switch {
+			case part.OfText != nil:
+				contentList = append(contentList, responses.ResponseInputContentUnionParam{
+					OfInputText: &responses.ResponseInputTextParam{Text: part.OfText.Text},
+				})
+			case part.OfImageURL != nil:
+				url := part.OfImageURL.ImageURL.URL
+				if url == "" {
+					continue
+				}
+				contentList = append(contentList, responses.ResponseInputContentUnionParam{
+					OfInputImage: &responses.ResponseInputImageParam{
+						ImageURL: param.NewOpt(url),
+					},
+				})
+			}
+		}
+		if len(contentList) > 0 {
+			return responses.ResponseInputItemUnionParam{
+				OfMessage: &responses.EasyInputMessageParam{
+					Type: responses.EasyInputMessageTypeMessage,
+					Role: responses.EasyInputMessageRole("user"),
+					Content: responses.EasyInputMessageContentUnionParam{
+						OfInputItemContentList: contentList,
+					},
+				},
+			}
+		}
+	}
+
+	// Fall back to an empty user message to preserve prior behavior.
 	return responses.ResponseInputItemUnionParam{
 		OfMessage: &responses.EasyInputMessageParam{
 			Type: responses.EasyInputMessageTypeMessage,
 			Role: responses.EasyInputMessageRole("user"),
 			Content: responses.EasyInputMessageContentUnionParam{
-				OfString: param.NewOpt(content),
+				OfString: param.NewOpt(""),
 			},
 		},
 	}

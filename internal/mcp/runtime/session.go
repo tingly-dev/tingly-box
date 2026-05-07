@@ -161,12 +161,11 @@ func (sc *sessionCache) getOrCreate(ctx context.Context, source typ.MCPSourceCon
 		Version: "dev",
 	}, nil)
 
-	// Connect with context timeout; the SDK's Connect spawns goroutines
-	// that are scoped to the returned session, not the connect context.
-	connectCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	session, connErr := client.Connect(connectCtx, t, nil)
+	// The SDK binds the JSON-RPC connection lifetime to the context passed to
+	// Connect. Do not pass a request-scoped or timeout context here, or long-lived
+	// transports such as SSE will be closed as soon as Connect returns.
+	sessionCtx := context.WithoutCancel(ctx)
+	session, connErr := client.Connect(sessionCtx, t, nil)
 	if connErr != nil {
 		// Transport was started but session failed. The SDK's session.Close handles cleanup.
 		return nil, nil, &sessionError{sourceID: source.ID, msg: "connect: " + connErr.Error()}

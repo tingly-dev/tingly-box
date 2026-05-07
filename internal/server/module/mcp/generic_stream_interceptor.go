@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -31,7 +32,6 @@ type GenericStreamInterceptor struct {
 	adapter         FormatAdapter
 	forwarder       Forwarder
 	toolExecutor    ToolExecutor
-	pendingManager  PendingResultsManager
 	config          InterceptorConfig
 
 	// Cross-round state (not reset)
@@ -46,12 +46,20 @@ type GenericStreamInterceptor struct {
 	// Per-round state (reset each round)
 	round int
 
-	roundAnthropicV1   *anthropic.Message
-	roundAnthropicBeta *anthropic.BetaMessage
-	roundOpenAI        *openai.ChatCompletion
-	openAIToolStates   map[int]*genericOpenAIToolCallState
-	roundTools         []Tool
-	roundToolSeen      map[string]struct{}
+	roundAnthropicV1       *anthropic.Message
+	roundAnthropicBeta     *anthropic.BetaMessage
+	roundOpenAI            *openai.ChatCompletion
+	openAIToolStates       map[int]*genericOpenAIToolCallState
+	roundTools             []Tool
+	roundToolSeen          map[string]struct{}
+	seenMessageStart       bool
+	seenContentBlockStart  bool
+	seenContentBlockStop   bool
+	seenStopReason         bool
+	roundMessageDelta      []byte
+	roundMessageStop       []byte
+	suppressedBlockIndices map[int]struct{}
+	stopAfterRound         bool
 }
 
 type genericOpenAIToolCallState struct {
@@ -90,11 +98,6 @@ func NewGenericStreamInterceptor(
 	}
 }
 
-// SetPendingResultsManager injects optional pending-result stashing behavior for mixed tool outputs.
-func (i *GenericStreamInterceptor) SetPendingResultsManager(manager PendingResultsManager) {
-	i.pendingManager = manager
-}
-
 // Run executes the streaming interceptor loop
 func (i *GenericStreamInterceptor) Run(req any) error {
 	// Setup SSE headers
@@ -102,6 +105,7 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 	defer i.reportUsage()
 
 	i.currentReq = req
+	i.applyStoredContinuation()
 
 	for i.round = 0; i.round < i.config.MaxRounds; i.round++ {
 		i.resetRoundState()
@@ -147,8 +151,15 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 			// Loop continues with updated i.currentReq
 
 		case DecisionPureExternal:
-			logrus.Debugf("[MCP-Interceptor] Round %d: pure external, ending", i.round)
-			return i.adapter.SendFinalMessage(i.c)
+			logrus.Debugf("[MCP-Interceptor] Round %d: pure external, continuing with tool execution", i.round)
+			if err := i.handlePureExternal(response); err != nil {
+				return err
+			}
+			if i.stopAfterRound {
+				logrus.Debugf("[MCP-Interceptor] Round %d: client-native handoff complete, ending stream", i.round)
+				return nil
+			}
+			// Loop continues with updated i.currentReq after appending tool results.
 
 		case DecisionMixed:
 			logrus.Debugf("[MCP-Interceptor] Round %d: mixed, stashing and ending", i.round)
@@ -161,9 +172,34 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 	return i.adapter.SendFinalMessage(i.c)
 }
 
+// handlePureExternal hands non-virtual tools back to the client. Only virtual
+// tools (for example advisor) are executed by tingly-box inside the stream loop.
+func (i *GenericStreamInterceptor) handlePureExternal(response any) error {
+	return i.finishClientNativeToolUse()
+}
+
+func (i *GenericStreamInterceptor) finishClientNativeToolUse() error {
+	i.stopAfterRound = true
+	if i.roundMessageDelta != nil {
+		if err := i.adapter.SendEvent(i.c, "message_delta", i.roundMessageDelta); err != nil {
+			return err
+		}
+	}
+	if i.roundMessageStop != nil {
+		if err := i.adapter.SendEvent(i.c, "message_stop", i.roundMessageStop); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // consumeRound processes all events from a stream and builds a complete response
 func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error) {
-	for stream.Next() {
+	for {
+		next := stream.Next()
+		if !next {
+			break
+		}
 		event := stream.Current()
 		i.accumulateRoundEvent(event)
 
@@ -183,7 +219,8 @@ func (i *GenericStreamInterceptor) consumeRound(stream StreamHandle) (any, error
 		}
 	}
 
-	if err := stream.Err(); err != nil {
+	err := stream.Err()
+	if err != nil {
 		return nil, fmt.Errorf("stream error: %w", err)
 	}
 
@@ -198,6 +235,14 @@ func (i *GenericStreamInterceptor) resetRoundState() {
 	i.openAIToolStates = make(map[int]*genericOpenAIToolCallState)
 	i.roundTools = nil
 	i.roundToolSeen = make(map[string]struct{})
+	i.seenMessageStart = false
+	i.seenContentBlockStart = false
+	i.seenContentBlockStop = false
+	i.seenStopReason = false
+	i.roundMessageDelta = nil
+	i.roundMessageStop = nil
+	i.suppressedBlockIndices = make(map[int]struct{})
+	i.stopAfterRound = false
 }
 
 func (i *GenericStreamInterceptor) roundResponse() any {
@@ -317,6 +362,15 @@ func (i *GenericStreamInterceptor) accumulateOpenAIChunk(chunk openai.ChatComple
 func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) error {
 	switch eventType {
 	case EventText:
+		if isAnthropicMessageStartEvent(event) {
+			i.seenMessageStart = true
+		}
+		if isAnthropicContentBlockStartEvent(event) {
+			i.seenContentBlockStart = true
+		}
+		if isAnthropicContentBlockStopEvent(event) {
+			i.seenContentBlockStop = true
+		}
 		return i.handleTextEvent(event)
 
 	case EventToolStart:
@@ -329,11 +383,20 @@ func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) er
 		return i.handleToolStopEvent(event)
 
 	case MessageDelta:
+		if stopReason := extractAnthropicStopReason(event); stopReason != "" {
+			i.seenStopReason = true
+			if payload, err := i.extractEventPayload(event); err == nil {
+				i.roundMessageDelta = payload
+			}
+			logrus.Debugf("[MCP-Interceptor] Round %d: forwarded message_delta stop_reason=%s", i.round, stopReason)
+		}
 		// Silently accumulate, interceptor controls end timing
 		return nil
 
 	case MessageStop:
-		// Suppress mid-stream, interceptor controls end timing
+		if payload, err := i.extractEventPayload(event); err == nil {
+			i.roundMessageStop = payload
+		}
 		return nil
 
 	default:
@@ -360,7 +423,11 @@ func (i *GenericStreamInterceptor) handleTextEvent(event any) error {
 
 // handleToolStartEvent handles tool use start event
 func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
+	i.seenContentBlockStart = true
 	tool, ok := i.adapter.ExtractToolFromEvent(event)
+	if ok {
+		logrus.Debugf("[MCP-TOOLS] round=%d tool_start name=%s id=%s virtual=%v", i.round, tool.Name(), tool.ID(), i.adapter.IsVirtualTool(tool, i.virtualRegistry))
+	}
 	if !ok {
 		// Not a tool event, pass through
 		payload, err := i.extractEventPayload(event)
@@ -373,8 +440,10 @@ func (i *GenericStreamInterceptor) handleToolStartEvent(event any) error {
 
 	// Check if virtual tool
 	if i.adapter.IsVirtualTool(tool, i.virtualRegistry) {
-		// Buffer/suppress virtual tool event
-		return i.bufferToolEvent(event)
+		if index, ok := extractContentBlockIndex(event); ok {
+			i.suppressedBlockIndices[index] = struct{}{}
+		}
+		return nil
 	}
 
 	// External tool: pass through to client
@@ -390,8 +459,7 @@ func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
 	if tool, ok := i.adapter.ExtractToolFromEvent(event); ok {
 		i.recordRoundTool(tool)
 	}
-	if i.adapter.ShouldSuppressEvent(event, i.virtualRegistry) {
-		// Suppress virtual tool delta
+	if i.isSuppressedContentBlockEvent(event) || i.adapter.ShouldSuppressEvent(event, i.virtualRegistry) {
 		return nil
 	}
 
@@ -405,8 +473,8 @@ func (i *GenericStreamInterceptor) handleToolDeltaEvent(event any) error {
 
 // handleToolStopEvent handles tool stop event
 func (i *GenericStreamInterceptor) handleToolStopEvent(event any) error {
-	if i.adapter.ShouldSuppressEvent(event, i.virtualRegistry) {
-		// Suppress virtual tool stop
+	i.seenContentBlockStop = true
+	if i.isSuppressedContentBlockEvent(event) || i.adapter.ShouldSuppressEvent(event, i.virtualRegistry) {
 		return nil
 	}
 
@@ -424,6 +492,11 @@ func (i *GenericStreamInterceptor) classifyResponse(response any) ResponseDecisi
 	if err != nil || len(tools) == 0 {
 		return DecisionNoTools
 	}
+	toolNames := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		toolNames = append(toolNames, tool.Name())
+	}
+	logrus.Debugf("[MCP-TOOLS] round=%d extracted=%v", i.round, toolNames)
 
 	hasVirtual := false
 	hasExternal := false
@@ -451,6 +524,11 @@ func (i *GenericStreamInterceptor) handlePureVirtual(response any) error {
 	if err != nil {
 		return err
 	}
+	toolNames := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		toolNames = append(toolNames, tool.Name())
+	}
+	logrus.Debugf("[MCP-TOOLS] round=%d pure_virtual=%v", i.round, toolNames)
 
 	// Execute virtual tools
 	results := make([]ToolExecutionResult, 0, len(tools))
@@ -481,6 +559,11 @@ func (i *GenericStreamInterceptor) handleMixed(response, req any) error {
 	}
 
 	virtual, _, externalIDs := i.adapter.SplitVirtualExternal(tools, i.virtualRegistry)
+	virtualNames := make([]string, 0, len(virtual))
+	for _, tool := range virtual {
+		virtualNames = append(virtualNames, tool.Name())
+	}
+	logrus.Debugf("[MCP-TOOLS] round=%d split virtual=%v external_ids=%v", i.round, virtualNames, externalIDs)
 
 	// Execute virtual tools
 	results := make([]ToolExecutionResult, 0, len(virtual))
@@ -492,12 +575,19 @@ func (i *GenericStreamInterceptor) handleMixed(response, req any) error {
 		results = append(results, result)
 	}
 
-	// Stash results linked to external IDs
-	if i.pendingManager != nil && len(externalIDs) > 0 {
-		if err := i.pendingManager.Stash(externalIDs, results); err != nil {
-			logrus.WithError(err).Warn("failed to stash pending results")
-		}
+	normalizedResults, err := validateAndNormalizeMixedStash(externalIDs, results)
+	if err != nil {
+		logrus.WithError(err).Warn("[MCP-Interceptor] mixed consistency validation failed; ending current round for continuation")
+		return i.adapter.SendFinalMessage(i.c)
 	}
+
+	segment, err := i.adapter.BuildContinuationSegment(response, normalizedResults)
+	if err != nil {
+		logrus.WithError(err).Warn("[MCP-Interceptor] failed to build mixed continuation segment; ending current round for continuation")
+		return i.adapter.SendFinalMessage(i.c)
+	}
+	key := continuationKey(typ.GetSessionID(i.c.Request.Context()), i.provider.UUID, i.adapterID())
+	mixedContinuationStore.put(key, segment)
 
 	// Send final message (external tools already streamed to client)
 	return i.adapter.SendFinalMessage(i.c)
@@ -509,8 +599,13 @@ func (i *GenericStreamInterceptor) executeTool(tool Tool, req any) (ToolExecutio
 	messages := i.extractMessages(req)
 
 	// Execute tool
-	result, err := i.s.CallMCPTool(i.c.Request.Context(), tool.Name(), tool.Arguments(), messages)
-
+	type toolHookCaller interface {
+		CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error)
+	}
+	nextCtx, result, err := i.s.(toolHookCaller).CallMCPToolWithHooks(i.c.Request.Context(), tool.Name(), tool.Arguments(), messages)
+	if nextCtx != nil {
+		i.c.Request = i.c.Request.WithContext(nextCtx)
+	}
 	return ToolExecutionResult{
 		ToolUseID: tool.ID(),
 		Content:   result,
@@ -521,21 +616,7 @@ func (i *GenericStreamInterceptor) executeTool(tool Tool, req any) (ToolExecutio
 // Helper methods
 
 func (i *GenericStreamInterceptor) extractModel(req any) string {
-	// Extract model from request based on format
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		return string(r.Model)
-	case *anthropic.BetaMessageNewParams:
-		return string(r.Model)
-	case *openai.ChatCompletionNewParams:
-		return string(r.Model)
-	default:
-		// Fallback to provider's first model if available
-		if len(i.provider.Models) > 0 {
-			return i.provider.Models[0]
-		}
-		return ""
-	}
+	return extractModelFromRequest(req, i.provider)
 }
 
 func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error) {
@@ -560,15 +641,7 @@ func (i *GenericStreamInterceptor) extractEventPayload(event any) ([]byte, error
 }
 
 func (i *GenericStreamInterceptor) extractMessages(req any) []map[string]any {
-	switch r := req.(type) {
-	case *anthropic.MessageNewParams:
-		return extractAnthropicV1Messages(r.Messages)
-	case *anthropic.BetaMessageNewParams:
-		return extractAnthropicBetaMessages(r.Messages)
-	case *openai.ChatCompletionNewParams:
-		return extractOpenAIChatMessages(r.Messages)
-	}
-	return nil
+	return extractMessagesForToolCall(req)
 }
 
 func (i *GenericStreamInterceptor) resultsToAny(results []ToolExecutionResult) []any {
@@ -586,11 +659,13 @@ func (i *GenericStreamInterceptor) recordTTFT() {
 	// See: mcp_anthropic_v1_helper.go - dispatchGeneric*Stream functions
 }
 
-func (i *GenericStreamInterceptor) bufferToolEvent(_ any) error {
-	// Buffer tool event for potential later flush
-	// Currently virtual tool events are suppressed, so this is a no-op
-	// If buffering is needed in the future, implement here
-	return nil
+func (i *GenericStreamInterceptor) isSuppressedContentBlockEvent(event any) bool {
+	index, ok := extractContentBlockIndex(event)
+	if !ok {
+		return false
+	}
+	_, suppressed := i.suppressedBlockIndices[index]
+	return suppressed
 }
 
 func (i *GenericStreamInterceptor) accumulateUsage(response any) error {
@@ -637,51 +712,138 @@ func (i *GenericStreamInterceptor) extractRoundTools(response any) ([]Tool, erro
 	return tools, err
 }
 
-// extractAnthropicV1Messages serialises Anthropic v1 messages to []map[string]any for advisor context.
-// JSON round-trip is used because the SDK union types don't expose underlying maps directly.
-func extractAnthropicV1Messages(messages []anthropic.MessageParam) []map[string]any {
-	if len(messages) == 0 {
-		return nil
+func extractContentBlockIndex(event any) (int, bool) {
+	switch e := event.(type) {
+	case anthropic.BetaRawMessageStreamEventUnion:
+		return extractContentBlockIndex(e.AsAny())
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if e == nil {
+			return 0, false
+		}
+		return extractContentBlockIndex(e.AsAny())
+	case anthropic.BetaRawContentBlockStartEvent:
+		return int(e.Index), true
+	case anthropic.BetaRawContentBlockDeltaEvent:
+		return int(e.Index), true
+	case anthropic.BetaRawContentBlockStopEvent:
+		return int(e.Index), true
+	case anthropic.MessageStreamEventUnion:
+		return extractContentBlockIndex(e.AsAny())
+	case *anthropic.MessageStreamEventUnion:
+		if e == nil {
+			return 0, false
+		}
+		return extractContentBlockIndex(e.AsAny())
+	case anthropic.ContentBlockStartEvent:
+		return int(e.Index), true
+	case anthropic.ContentBlockDeltaEvent:
+		return int(e.Index), true
+	case anthropic.ContentBlockStopEvent:
+		return int(e.Index), true
+	default:
+		return 0, false
 	}
-	b, err := json.Marshal(messages)
-	if err != nil {
-		return nil
-	}
-	var out []map[string]any
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil
-	}
-	return out
 }
 
-// extractAnthropicBetaMessages serialises Anthropic Beta messages to []map[string]any for advisor context.
-func extractAnthropicBetaMessages(messages []anthropic.BetaMessageParam) []map[string]any {
-	if len(messages) == 0 {
-		return nil
+func isAnthropicMessageStartEvent(event any) bool {
+	switch e := event.(type) {
+	case anthropic.BetaRawMessageStreamEventUnion:
+		_, ok := e.AsAny().(anthropic.BetaRawMessageStartEvent)
+		return ok
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if e == nil {
+			return false
+		}
+		_, ok := e.AsAny().(anthropic.BetaRawMessageStartEvent)
+		return ok
+	default:
+		return false
 	}
-	b, err := json.Marshal(messages)
-	if err != nil {
-		return nil
-	}
-	var out []map[string]any
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil
-	}
-	return out
 }
 
-// extractOpenAIChatMessages serialises OpenAI chat messages to []map[string]any for advisor context.
-func extractOpenAIChatMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
-	if len(messages) == 0 {
-		return nil
+func isAnthropicContentBlockStartEvent(event any) bool {
+	switch e := event.(type) {
+	case anthropic.BetaRawMessageStreamEventUnion:
+		_, ok := e.AsAny().(anthropic.BetaRawContentBlockStartEvent)
+		return ok
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if e == nil {
+			return false
+		}
+		_, ok := e.AsAny().(anthropic.BetaRawContentBlockStartEvent)
+		return ok
+	default:
+		return false
 	}
-	b, err := json.Marshal(messages)
+}
+
+func isAnthropicContentBlockStopEvent(event any) bool {
+	switch e := event.(type) {
+	case anthropic.BetaRawMessageStreamEventUnion:
+		_, ok := e.AsAny().(anthropic.BetaRawContentBlockStopEvent)
+		return ok
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if e == nil {
+			return false
+		}
+		_, ok := e.AsAny().(anthropic.BetaRawContentBlockStopEvent)
+		return ok
+	default:
+		return false
+	}
+}
+
+func extractAnthropicStopReason(event any) string {
+	switch e := event.(type) {
+	case anthropic.MessageStreamEventUnion:
+		if delta, ok := e.AsAny().(anthropic.MessageDeltaEvent); ok {
+			return string(delta.Delta.StopReason)
+		}
+	case *anthropic.MessageStreamEventUnion:
+		if e != nil {
+			if delta, ok := e.AsAny().(anthropic.MessageDeltaEvent); ok {
+				return string(delta.Delta.StopReason)
+			}
+		}
+	case anthropic.BetaRawMessageStreamEventUnion:
+		if delta, ok := e.AsAny().(anthropic.BetaRawMessageDeltaEvent); ok {
+			return string(delta.Delta.StopReason)
+		}
+	case *anthropic.BetaRawMessageStreamEventUnion:
+		if e != nil {
+			if delta, ok := e.AsAny().(anthropic.BetaRawMessageDeltaEvent); ok {
+				return string(delta.Delta.StopReason)
+			}
+		}
+	}
+	return ""
+}
+
+func (i *GenericStreamInterceptor) adapterID() string {
+	switch i.adapter.(type) {
+	case *OpenAIChatAdapter:
+		return "openai-chat"
+	case *AnthropicV1Adapter:
+		return "anthropic-v1"
+	case *AnthropicBetaAdapter:
+		return "anthropic-beta"
+	default:
+		return fmt.Sprintf("%T", i.adapter)
+	}
+}
+
+func (i *GenericStreamInterceptor) applyStoredContinuation() {
+	sessionID := typ.GetSessionID(i.c.Request.Context())
+	key := continuationKey(sessionID, i.provider.UUID, i.adapterID())
+	segment, ok := mixedContinuationStore.pop(key)
+	if !ok {
+		return
+	}
+	logrus.Debugf("[MCP-CONT] interceptor applying stored continuation key=%s adapter=%s", key, i.adapterID())
+	updated, err := i.adapter.ApplyContinuation(i.currentReq, segment)
 	if err != nil {
-		return nil
+		logrus.WithError(err).Warn("[MCP-Interceptor] failed to apply stored continuation")
+		return
 	}
-	var out []map[string]any
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil
-	}
-	return out
+	i.currentReq = updated
 }

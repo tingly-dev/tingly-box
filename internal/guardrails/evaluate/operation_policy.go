@@ -181,5 +181,14 @@ func sliceContainsPattern(values, patterns []string) bool {
 			}
 		}
 	}
+	if len(values) == 0 {
+		return false
+	}
+	joined := strings.ToLower(strings.Join(values, " "))
+	for _, pattern := range patterns {
+		if strings.Contains(joined, strings.ToLower(pattern)) {
+			return true
+		}
+	}
 	return false
 }

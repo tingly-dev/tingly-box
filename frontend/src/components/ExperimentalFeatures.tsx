@@ -32,9 +32,9 @@ const FEATURES: FeatureConfig[] = [
 // Record V2 modes
 const RECORD_V2_MODES = [
     { value: '', label: 'Off', description: 'Recording disabled' },
-    { value: 'request', label: 'Request', description: 'Record request only' },
-    { value: 'response', label: 'Response', description: 'Record response only' },
-    { value: 'request_response', label: 'Both', description: 'Record both request and response' },
+    { value: 'request', label: 'Request Only', description: 'Record the final outbound request only' },
+    { value: 'request_response', label: 'Request + Response', description: 'Record the final outbound request and final response' },
+    { value: 'staged_request_response', label: 'Request + Transform + Response', description: 'Record original request, transformed request, and final response' },
 ] as const;
 
 const ExperimentalFeatures: React.FC<ExperimentalFeaturesProps> = ({ scenario }) => {

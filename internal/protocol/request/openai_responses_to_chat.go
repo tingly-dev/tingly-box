@@ -74,7 +74,50 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 				content := msg.Content.OfString.Value
 				messages = append(messages, createMessage(role, content))
 			} else if !param.IsOmitted(msg.Content.OfInputItemContentList) {
-				// Array content - concatenate text items
+				// Array content. If any input_image is present, preserve the
+				// multipart shape for OpenAI Chat Completions so vision input
+				// survives the conversion. Otherwise concatenate text items.
+				var hasImage bool
+				for _, contentItem := range msg.Content.OfInputItemContentList {
+					if !param.IsOmitted(contentItem.OfInputImage) {
+						hasImage = true
+						break
+					}
+				}
+
+				if hasImage && strings.EqualFold(role, "user") {
+					parts := make([]map[string]interface{}, 0, len(msg.Content.OfInputItemContentList))
+					for _, contentItem := range msg.Content.OfInputItemContentList {
+						switch {
+						case !param.IsOmitted(contentItem.OfInputText):
+							parts = append(parts, map[string]interface{}{
+								"type": "text",
+								"text": contentItem.OfInputText.Text,
+							})
+						case !param.IsOmitted(contentItem.OfInputImage):
+							img := contentItem.OfInputImage
+							if !img.ImageURL.Valid() || img.ImageURL.Value == "" {
+								continue
+							}
+							parts = append(parts, map[string]interface{}{
+								"type":      "image_url",
+								"image_url": map[string]interface{}{"url": img.ImageURL.Value},
+							})
+						}
+					}
+					if len(parts) > 0 {
+						msgMap := map[string]interface{}{
+							"role":    "user",
+							"content": parts,
+						}
+						msgBytes, _ := json.Marshal(msgMap)
+						var userMsg openai.ChatCompletionMessageParamUnion
+						_ = json.Unmarshal(msgBytes, &userMsg)
+						messages = append(messages, userMsg)
+					}
+					continue
+				}
+
 				var contentStr string
 				for _, contentItem := range msg.Content.OfInputItemContentList {
 					if !param.IsOmitted(contentItem.OfInputText) {

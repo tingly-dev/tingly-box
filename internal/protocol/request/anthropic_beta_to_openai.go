@@ -162,6 +162,24 @@ func ConvertBetaContentBlocksToString(blocks []anthropic.BetaContentBlockParamUn
 	return result.String()
 }
 
+// betaImageBlockToOpenAIURL converts an Anthropic beta image block source into
+// the URL string OpenAI's image_url content part expects. Base64 sources become
+// a data: URL; URL sources are passed through. Returns "" for unsupported
+// sources (e.g. file IDs that have no OpenAI equivalent).
+func betaImageBlockToOpenAIURL(img *anthropic.BetaImageBlockParam) string {
+	if img == nil {
+		return ""
+	}
+	if img.Source.OfBase64 != nil {
+		return "data:" + string(img.Source.OfBase64.MediaType) +
+			";base64," + img.Source.OfBase64.Data
+	}
+	if img.Source.OfURL != nil {
+		return img.Source.OfURL.URL
+	}
+	return ""
+}
+
 // convertAnthropicBetaAssistantMessageToOpenAI converts Anthropic beta assistant message to OpenAI format
 // Note: thinking content is preserved in "x_thinking" field for provider-specific transforms
 func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam) openai.ChatCompletionMessageParamUnion {
@@ -242,13 +260,14 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 func convertAnthropicBetaUserMessageToOpenAI(msg anthropic.BetaMessageParam) []openai.ChatCompletionMessageParamUnion {
 	var result []openai.ChatCompletionMessageParamUnion
 	var textContent string
-	var hasToolResult bool
+	var hasToolResult, hasImage bool
 
-	// First, check if there are any tool_result blocks
 	for _, block := range msg.Content {
 		if block.OfToolResult != nil {
 			hasToolResult = true
-			break
+		}
+		if block.OfImage != nil {
+			hasImage = true
 		}
 	}
 
@@ -276,6 +295,37 @@ func convertAnthropicBetaUserMessageToOpenAI(msg anthropic.BetaMessageParam) []o
 		// If there was text content alongside tool results, add it as a user message
 		if textContent != "" {
 			result = append(result, openai.UserMessage(textContent))
+		}
+	} else if hasImage {
+		// Multimodal user message: emit an array of text + image_url content parts
+		parts := make([]map[string]interface{}, 0, len(msg.Content))
+		for _, block := range msg.Content {
+			switch {
+			case block.OfText != nil:
+				parts = append(parts, map[string]interface{}{
+					"type": "text",
+					"text": block.OfText.Text,
+				})
+			case block.OfImage != nil:
+				url := betaImageBlockToOpenAIURL(block.OfImage)
+				if url == "" {
+					continue
+				}
+				parts = append(parts, map[string]interface{}{
+					"type":      "image_url",
+					"image_url": map[string]interface{}{"url": url},
+				})
+			}
+		}
+		if len(parts) > 0 {
+			msgMap := map[string]interface{}{
+				"role":    "user",
+				"content": parts,
+			}
+			msgBytes, _ := json.Marshal(msgMap)
+			var userMsg openai.ChatCompletionMessageParamUnion
+			_ = json.Unmarshal(msgBytes, &userMsg)
+			result = append(result, userMsg)
 		}
 	} else {
 		// Simple text-only user message

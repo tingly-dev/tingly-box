@@ -21,9 +21,9 @@ const (
 	RecordModeScenario RecordMode = "scenario"
 	RecordModeSlim     RecordMode = "slim" // TODO: Not implemented yet
 
-	RecordModeRequest           RecordMode = "request"          // Record only requests (original + transformed)
-	RecordModeResponse          RecordMode = "response"         // Record only response
-	RecordModeV2RequestResponse RecordMode = "request_response" // Record both requests and responses
+	RecordModeRequestOnly           RecordMode = "request"                 // Record transformed request only
+	RecordModeRequestResponse       RecordMode = "request_response"        // Record transformed request + final response
+	RecordModeStagedRequestResponse RecordMode = "staged_request_response" // Record original request + transformed request + final response
 )
 
 // RecordEntry represents a single recorded request/response pair
@@ -93,6 +93,13 @@ type Sink struct {
 	mutex   sync.RWMutex
 }
 
+func (r *Sink) GetMode() RecordMode {
+	if r == nil {
+		return ""
+	}
+	return r.mode
+}
+
 // recordFile holds a file handle and its writer
 type recordFile struct {
 	file        *os.File
@@ -115,7 +122,7 @@ func NewSink(baseDir string, mode RecordMode) *Sink {
 		return nil
 
 	case RecordModeAll, RecordModeScenario,
-		RecordModeRequest, RecordModeResponse, RecordModeV2RequestResponse:
+		RecordModeRequestOnly, RecordModeRequestResponse, RecordModeStagedRequestResponse:
 
 		// Empty baseDir means recording is disabled
 		if baseDir == "" {
@@ -201,6 +208,7 @@ func (r *Sink) RecordWithScenario(provider, model, scenario string, req *RecordR
 	if r.mode == "" {
 		return
 	}
+
 
 	entry := &RecordEntry{
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
@@ -371,6 +379,7 @@ func (r *Sink) RecordEntryV2(entry *RecordEntryV2) {
 	if r == nil || r.mode == "" {
 		return
 	}
+
 
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

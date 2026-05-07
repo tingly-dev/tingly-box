@@ -114,10 +114,17 @@ func PreprocessInputData(data []byte) ([]byte, error) {
 			continue
 		}
 
-		// Step 1: Add "type": "message" if missing and role exists
+		// Step 1: Infer missing union discriminator for input items.
+		// Some clients replay prior Responses history without `type`, but the SDK
+		// needs it to deserialize union items and preserve function arguments.
 		if _, hasType := itemObj["type"]; !hasType {
-			if _, hasRole := itemObj["role"]; hasRole {
+			switch {
+			case hasKey(itemObj, "role"):
 				itemObj["type"] = "message"
+			case hasKey(itemObj, "call_id") && hasKey(itemObj, "arguments"):
+				itemObj["type"] = "function_call"
+			case hasKey(itemObj, "call_id") && hasKey(itemObj, "output"):
+				itemObj["type"] = "function_call_output"
 			}
 		}
 
@@ -186,6 +193,11 @@ func asSlice(v any) ([]any, bool) {
 		return items, true
 	}
 	return nil, false
+}
+
+func hasKey(m map[string]any, key string) bool {
+	_, ok := m[key]
+	return ok
 }
 
 // =============================================

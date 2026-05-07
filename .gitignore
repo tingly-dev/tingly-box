@@ -112,3 +112,4 @@ MANIFEST
 /tests/test_results/
 go.work.sum
 /docs/plans/
+/.codex-scratch/

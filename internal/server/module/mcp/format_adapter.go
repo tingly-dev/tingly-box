@@ -21,7 +21,6 @@ type ProtocolRecorder interface {
 	RecordResponse(provider any, model string)
 }
 
-
 // EventType represents the type of streaming event
 type EventType int
 
@@ -71,6 +70,8 @@ type FormatAdapter interface {
 	BuildAssistantMessage(response any) (any, error)
 	BuildToolMessage(result ToolExecutionResult) any
 	AppendToolResults(req any, resp any, results []any) (any, error)
+	BuildContinuationSegment(resp any, results []ToolExecutionResult) (any, error)
+	ApplyContinuation(req any, segment any) (any, error)
 	FilterVirtualTools(response any, externalTools []Tool) (any, error)
 
 	// Streaming setup
@@ -112,15 +113,9 @@ type Forwarder interface {
 
 // ToolExecutor handles execution of virtual tools
 type ToolExecutor interface {
+	ExecuteToolWithContext(ctx context.Context, tool Tool, messages []map[string]any) (context.Context, ToolExecutionResult, error)
 	ExecuteTool(ctx context.Context, tool Tool, messages []map[string]any) (ToolExecutionResult, error)
 	ExecuteTools(ctx context.Context, tools []Tool, messages []map[string]any) ([]ToolExecutionResult, error)
-}
-
-// PendingResultsManager handles stashing and injecting pending tool results
-type PendingResultsManager interface {
-	Stash(anchorIDs []string, results []ToolExecutionResult) error
-	Inject(req any) (any, error)
-	Clear(anchorID string) error
 }
 
 // InterceptorConfig configures the generic interceptors

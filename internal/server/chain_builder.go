@@ -11,19 +11,25 @@ import (
 
 // ShouldRecording determines if recording should be used
 func (s *Server) ShouldRecording(recorder *ProtocolRecorder) bool {
-	return s.enableRecording && recorder != nil
+	return recorder != nil
 }
 
 // BuildTransformChain builds the appropriate transform chain based on recording configuration
-func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioFlags *typ.ScenarioFlags, recorder *ProtocolRecorder) (*transform.TransformChain, error) {
+func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType, providerURL string, scenarioType typ.RuleScenario, scenarioFlags *typ.ScenarioFlags, recorder *ProtocolRecorder) (*transform.TransformChain, error) {
 
-	recordMode := s.recordMode
+	recordMode := s.GetScenarioRecordMode(scenarioType)
 	shouldRecord := s.ShouldRecording(recorder)
 
 	var transforms []transform.Transform
 
+	requestRecordingEnabled := recordMode == obs.RecordModeAll ||
+		recordMode == obs.RecordModeScenario ||
+		recordMode == obs.RecordModeRequestOnly ||
+		recordMode == obs.RecordModeRequestResponse ||
+		recordMode == obs.RecordModeStagedRequestResponse
+
 	// 1. Pre-transform recording (if request recording is enabled)
-	if shouldRecord && (recordMode == obs.RecordModeAll || recordMode == obs.RecordModeScenario) {
+	if shouldRecord && requestRecordingEnabled {
 		transforms = append(transforms, NewPreTransformRecorder(c, recorder))
 	}
 
@@ -36,7 +42,7 @@ func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType
 	transforms = append(transforms, transform.NewVendorTransform(providerURL))
 
 	// 3. Post-transform recording (if request recording is enabled)
-	if shouldRecord && (recordMode == obs.RecordModeAll || recordMode == obs.RecordModeScenario) {
+	if shouldRecord && requestRecordingEnabled {
 		transforms = append(transforms, NewPostTransformRecorder(recorder, c))
 	}
 

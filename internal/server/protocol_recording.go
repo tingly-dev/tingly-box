@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -91,6 +92,64 @@ func (sr *ProtocolRecorder) SetTransformSteps(steps []string) {
 	sr.transformSteps = steps
 }
 
+// SetAssembledResponse stores the final assembled response for V2 recording.
+// This mirrors ScenarioRecorder behavior but routes the final serialized body
+// into ProtocolRecorder so RecordResponse() can emit RecordEntryV2.
+func (sr *ProtocolRecorder) SetAssembledResponse(response any) {
+	if sr == nil {
+		return
+	}
+
+	var responseMap map[string]interface{}
+	switch v := response.(type) {
+	case map[string]interface{}:
+		responseMap = v
+	case []byte:
+		if err := json.Unmarshal(v, &responseMap); err != nil {
+			logrus.Debugf("ProtocolRecorder: failed to unmarshal response bytes: %v", err)
+			return
+		}
+	default:
+		data, err := json.Marshal(response)
+		if err != nil {
+			logrus.Debugf("ProtocolRecorder: failed to marshal response: %v", err)
+			return
+		}
+		if err := json.Unmarshal(data, &responseMap); err != nil {
+			logrus.Debugf("ProtocolRecorder: failed to unmarshal marshaled response: %v", err)
+			return
+		}
+	}
+
+	statusCode := 200
+	headers := map[string]string{}
+	if sr.c != nil {
+		statusCode = sr.c.Writer.Status()
+		headers = headerToMap(sr.c.Writer.Header())
+	}
+
+	sr.SetFinalResponse(&obs.RecordResponse{
+		StatusCode: statusCode,
+		Headers:    headers,
+		Body:       responseMap,
+	})
+}
+
+// RecordResponse records a V2 protocol entry instead of falling back to the
+// embedded ScenarioRecorder's old-format RecordWithScenario path.
+func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string) {
+	if sr == nil {
+		return
+	}
+	if provider != nil {
+		sr.providerName = provider.Name
+	}
+	if model != "" {
+		sr.model = model
+	}
+	sr.Record()
+}
+
 // Record writes the V2 record entry to the sink
 func (sr *ProtocolRecorder) Record() {
 	if sr == nil || sr.sink == nil || sr.mode == "" {
@@ -123,9 +182,14 @@ func (sr *ProtocolRecorder) Record() {
 		entry.TransformedRequest = sr.transformedRequest
 		entry.ProviderResponse = sr.providerResponse
 		entry.FinalResponse = sr.finalResponse
-	case obs.RecordModeResponse:
-		// Only record responses
-		entry.ProviderResponse = sr.providerResponse
+	case obs.RecordModeRequestOnly:
+		entry.TransformedRequest = sr.transformedRequest
+	case obs.RecordModeRequestResponse:
+		entry.TransformedRequest = sr.transformedRequest
+		entry.FinalResponse = sr.finalResponse
+	case obs.RecordModeStagedRequestResponse:
+		entry.OriginalRequest = sr.originalRequest
+		entry.TransformedRequest = sr.transformedRequest
 		entry.FinalResponse = sr.finalResponse
 	case obs.RecordModeScenario:
 		// For scenario mode, record everything
@@ -164,12 +228,18 @@ func (sr *ProtocolRecorder) RecordError(err error) {
 
 	// Filter based on existing record mode
 	switch sr.mode {
-	case obs.RecordModeAll, obs.RecordModeScenario:
+	case obs.RecordModeAll, obs.RecordModeScenario, obs.RecordModeStagedRequestResponse:
 		entry.OriginalRequest = sr.originalRequest
 		entry.TransformedRequest = sr.transformedRequest
-	case obs.RecordModeResponse:
-		entry.ProviderResponse = sr.providerResponse
 		entry.FinalResponse = sr.finalResponse
+		if sr.mode == obs.RecordModeAll || sr.mode == obs.RecordModeScenario {
+			entry.ProviderResponse = sr.providerResponse
+		}
+	case obs.RecordModeRequestOnly, obs.RecordModeRequestResponse:
+		entry.TransformedRequest = sr.transformedRequest
+		if sr.mode == obs.RecordModeRequestResponse {
+			entry.FinalResponse = sr.finalResponse
+		}
 	}
 
 	sr.sink.RecordEntryV2(entry)
