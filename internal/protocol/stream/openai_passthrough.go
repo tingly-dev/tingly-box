@@ -15,6 +15,7 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 )
@@ -364,6 +365,11 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 
 		evt := stream.Current()
+		for _, hook := range hc.OnStreamEventHooks {
+			if err := hook(&evt); err != nil {
+				logrus.WithError(err).Warn("guardrails hook error")
+			}
+		}
 
 		// Accumulate usage from completed events
 		if evt.Response.Usage.InputTokens > 0 {
@@ -391,20 +397,32 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		// Marshal event using RawJSON() to avoid serializing empty union fields
 		jsonBytes := []byte(evt.RawJSON())
 
+		var parsedEvent map[string]interface{}
+
 		// Apply model override if the event contains a response object with a model field
 		if len(jsonBytes) > 0 {
-			var parsed map[string]interface{}
-			if err := json.Unmarshal(jsonBytes, &parsed); err == nil {
+			if err := json.Unmarshal(jsonBytes, &parsedEvent); err == nil {
 				// Check if this event has a response field with a model
-				if response, ok := parsed["response"].(map[string]interface{}); ok {
+				if response, ok := parsedEvent["response"].(map[string]interface{}); ok {
 					if model, ok2 := response["model"].(string); ok2 && model != "" {
 						response["model"] = responseModel
-						modified, err := json.Marshal(parsed)
+						modified, err := json.Marshal(parsedEvent)
 						if err == nil {
 							jsonBytes = modified
 						}
 					}
 				}
+			}
+		}
+
+		if hc.Guardrails != nil && hc.Guardrails.Enabled {
+			if handled, rewritten, err := guardrailsmutate.RewriteOpenAIResponsesFunctionCallEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, parsedEvent); err != nil {
+				logrus.WithError(err).Warn("OpenAI Responses guardrails rewrite error")
+			} else if handled {
+				for _, rewrittenEvent := range rewritten {
+					OpenAISSE(c, rewrittenEvent.Payload)
+				}
+				return true
 			}
 		}
 

@@ -6,8 +6,8 @@ import (
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
 )
 
-var defaultResourceAccessToolNames = []string{"bash"}
-var defaultCommandExecutionToolNames = []string{"bash"}
+var defaultResourceAccessToolNames = []string{"bash", "exec_command"}
+var defaultCommandExecutionToolNames = []string{"bash", "exec_command"}
 
 // Dependencies provides external services needed by some policy kinds.
 type Dependencies struct {

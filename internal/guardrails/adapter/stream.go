@@ -9,6 +9,28 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
+const (
+	streamEventContentBlockDelta = "content_block_delta"
+	streamEventContentBlockStart = "content_block_start"
+	streamEventContentBlockStop  = "content_block_stop"
+
+	streamEventResponseOutputTextDelta      = "response.output_text.delta"
+	streamEventResponseOutputTextDone       = "response.output_text.done"
+	streamEventResponseFunctionArgsDelta    = "response.function_call_arguments.delta"
+	streamEventResponseFunctionArgsDone     = "response.function_call_arguments.done"
+	streamEventResponseCustomToolInputDelta = "response.custom_tool_call_input.delta"
+	streamEventResponseCustomToolInputDone  = "response.custom_tool_call_input.done"
+	streamEventResponseMCPArgsDelta         = "response.mcp_call_arguments.delta"
+	streamEventResponseMCPArgsDone          = "response.mcp_call_arguments.done"
+	streamEventResponseOutputItemAdded      = "response.output_item.added"
+	streamEventResponseCompleted            = "response.completed"
+
+	streamToolTypeAnthropicToolUse = "tool_use"
+	streamToolTypeFunctionCall     = "function_call"
+	streamToolTypeCustomToolCall   = "custom_tool_call"
+	streamToolTypeMCPCall          = "mcp_call"
+)
+
 type StreamToolUse struct {
 	Index int
 	ID    string
@@ -34,6 +56,8 @@ type streamToolUseState struct {
 	name  string
 	args  string
 }
+
+// Provider entry points.
 
 func (a *StreamAccumulator) IngestAnthropicEvent(evt *anthropic.MessageStreamEventUnion) {
 	if evt == nil {
@@ -105,6 +129,8 @@ func (a *StreamAccumulator) IngestAnyEvent(event interface{}) {
 	}
 }
 
+// Public state accessors.
+
 func (a *StreamAccumulator) NextBlockIndex() int {
 	if a.hasIndex {
 		return a.lastIndex + 1
@@ -125,6 +151,8 @@ func (a *StreamAccumulator) PopCompletedToolUse() (StreamToolUse, bool) {
 	return state, true
 }
 
+// Generic JSON stream dispatch.
+
 func (a *StreamAccumulator) ingestRawJSON(raw string) {
 	if raw == "" {
 		return
@@ -138,51 +166,68 @@ func (a *StreamAccumulator) ingestRawJSON(raw string) {
 
 func (a *StreamAccumulator) ingestEventMap(payload map[string]interface{}) {
 	eventType, _ := payload["type"].(string)
-	index := a.captureIndex(payload)
 
 	switch eventType {
-	case "content_block_delta":
-		delta, _ := payload["delta"].(map[string]interface{})
-		a.ingestDelta(index, delta)
-	case "content_block_start":
-		block, _ := payload["content_block"].(map[string]interface{})
-		a.ingestContentBlock(index, block)
-	case "content_block_stop":
-		a.ingestContentBlockStop(index)
-	case "response.output_text.delta":
-		if delta, ok := payload["delta"].(string); ok {
-			a.textBuilder.WriteString(delta)
-		}
-	case "response.output_text.done":
-		if text, ok := payload["text"].(string); ok {
-			a.textBuilder.WriteString(text)
-		}
-	case "response.function_call_arguments.delta", "response.custom_tool_call_input.delta", "response.mcp_call_arguments.delta":
-		if delta, ok := payload["delta"].(string); ok {
-			a.commandArgs.WriteString(delta)
-			a.commandFound = true
-		}
-	case "response.function_call_arguments.done", "response.custom_tool_call_input.done", "response.mcp_call_arguments.done":
-		if name, ok := payload["name"].(string); ok && name != "" {
-			a.commandName = name
-			a.commandFound = true
-		}
-	case "response.output_item.added":
-		item, _ := payload["item"].(map[string]interface{})
-		a.ingestOutputItem(item)
-	case "response.completed":
-		response, _ := payload["response"].(map[string]interface{})
-		if output, ok := response["output"].([]interface{}); ok {
-			for _, item := range output {
-				if itemMap, ok := item.(map[string]interface{}); ok {
-					a.ingestOutputItem(itemMap)
-				}
-			}
-		}
+	case streamEventContentBlockDelta, streamEventContentBlockStart, streamEventContentBlockStop:
+		a.ingestAnthropicEventMap(payload)
+	case streamEventResponseOutputTextDelta,
+		streamEventResponseOutputTextDone,
+		streamEventResponseFunctionArgsDelta,
+		streamEventResponseCustomToolInputDelta,
+		streamEventResponseMCPArgsDelta,
+		streamEventResponseFunctionArgsDone,
+		streamEventResponseCustomToolInputDone,
+		streamEventResponseMCPArgsDone,
+		streamEventResponseOutputItemAdded,
+		streamEventResponseCompleted:
+		a.ingestOpenAIResponsesEventMap(payload)
 	}
 }
 
-func (a *StreamAccumulator) ingestDelta(index int, delta map[string]interface{}) {
+// Provider-specific dispatch.
+
+func (a *StreamAccumulator) ingestAnthropicEventMap(payload map[string]interface{}) {
+	eventType, _ := payload["type"].(string)
+	index := a.captureAnthropicIndex(payload)
+
+	switch eventType {
+	case streamEventContentBlockDelta:
+		delta, _ := payload["delta"].(map[string]interface{})
+		a.ingestAnthropicDelta(index, delta)
+	case streamEventContentBlockStart:
+		block, _ := payload["content_block"].(map[string]interface{})
+		a.ingestAnthropicContentBlock(index, block)
+	case streamEventContentBlockStop:
+		a.completeToolUse(index)
+	}
+}
+
+func (a *StreamAccumulator) ingestOpenAIResponsesEventMap(payload map[string]interface{}) {
+	eventType, _ := payload["type"].(string)
+
+	switch eventType {
+	case streamEventResponseOutputTextDelta:
+		if delta, ok := payload["delta"].(string); ok {
+			a.textBuilder.WriteString(delta)
+		}
+	case streamEventResponseOutputTextDone:
+		if text, ok := payload["text"].(string); ok {
+			a.textBuilder.WriteString(text)
+		}
+	case streamEventResponseFunctionArgsDelta, streamEventResponseCustomToolInputDelta, streamEventResponseMCPArgsDelta:
+		a.ingestOpenAIResponsesToolArgumentsDelta(payload)
+	case streamEventResponseFunctionArgsDone, streamEventResponseCustomToolInputDone, streamEventResponseMCPArgsDone:
+		a.ingestOpenAIResponsesToolArgumentsDone(payload)
+	case streamEventResponseOutputItemAdded:
+		a.ingestOpenAIResponsesOutputItemAdded(payload)
+	case streamEventResponseCompleted:
+		a.observeOpenAIResponsesCompleted(payload)
+	}
+}
+
+// Anthropic stream event handling.
+
+func (a *StreamAccumulator) ingestAnthropicDelta(index int, delta map[string]interface{}) {
 	if delta == nil {
 		return
 	}
@@ -201,12 +246,12 @@ func (a *StreamAccumulator) ingestDelta(index int, delta map[string]interface{})
 	}
 }
 
-func (a *StreamAccumulator) ingestContentBlock(index int, block map[string]interface{}) {
+func (a *StreamAccumulator) ingestAnthropicContentBlock(index int, block map[string]interface{}) {
 	if block == nil {
 		return
 	}
 	blockType, _ := block["type"].(string)
-	if blockType != "tool_use" && blockType != "function_call" {
+	if blockType != streamToolTypeAnthropicToolUse && blockType != streamToolTypeFunctionCall {
 		return
 	}
 	if id, ok := block["id"].(string); ok && id != "" {
@@ -234,29 +279,14 @@ func (a *StreamAccumulator) ingestContentBlock(index int, block map[string]inter
 	}
 }
 
-func (a *StreamAccumulator) ingestContentBlockStop(index int) {
-	if a.toolUses == nil {
-		return
-	}
-	state, ok := a.toolUses[index]
-	if !ok {
-		return
-	}
-	a.completed = append(a.completed, StreamToolUse{
-		Index: state.index,
-		ID:    state.id,
-		Name:  state.name,
-		Args:  state.args,
-	})
-	delete(a.toolUses, index)
-}
+// OpenAI Responses stream event handling.
 
-func (a *StreamAccumulator) ingestOutputItem(item map[string]interface{}) {
+func (a *StreamAccumulator) observeOpenAIResponsesToolItem(item map[string]interface{}) {
 	if item == nil {
 		return
 	}
 	itemType, _ := item["type"].(string)
-	if itemType != "function_call" && itemType != "custom_tool_call" && itemType != "mcp_call" {
+	if !isStreamToolItemType(itemType) {
 		return
 	}
 	if id, ok := item["id"].(string); ok && id != "" {
@@ -276,27 +306,124 @@ func (a *StreamAccumulator) ingestOutputItem(item map[string]interface{}) {
 	}
 }
 
-func (a *StreamAccumulator) captureIndex(payload map[string]interface{}) int {
+func (a *StreamAccumulator) ingestOpenAIResponsesToolArgumentsDelta(payload map[string]interface{}) {
+	responseIndex := a.captureOpenAIResponsesOutputIndex(payload)
+	if delta, ok := payload["delta"].(string); ok {
+		a.commandArgs.WriteString(delta)
+		a.commandFound = true
+		if state := a.getOrCreateToolUse(responseIndex); state != nil {
+			state.args += delta
+		}
+	}
+}
+
+func (a *StreamAccumulator) ingestOpenAIResponsesToolArgumentsDone(payload map[string]interface{}) {
+	responseIndex := a.captureOpenAIResponsesOutputIndex(payload)
+	state := a.getOrCreateToolUse(responseIndex)
+	if state == nil {
+		return
+	}
+	if itemID, ok := payload["item_id"].(string); ok && itemID != "" {
+		a.lastToolID = itemID
+		state.id = itemID
+	}
+	if name, ok := payload["name"].(string); ok && name != "" {
+		a.commandName = name
+		a.commandFound = true
+		state.name = name
+	}
+	if args, ok := payload["arguments"].(string); ok {
+		state.args = args
+	}
+	a.completeToolUse(responseIndex)
+}
+
+func (a *StreamAccumulator) ingestOpenAIResponsesOutputItemAdded(payload map[string]interface{}) {
+	responseIndex := a.captureOpenAIResponsesOutputIndex(payload)
+	item, _ := payload["item"].(map[string]interface{})
+	a.mergeOpenAIResponsesToolItem(responseIndex, item)
+	a.observeOpenAIResponsesToolItem(item)
+}
+
+func (a *StreamAccumulator) observeOpenAIResponsesCompleted(payload map[string]interface{}) {
+	response, _ := payload["response"].(map[string]interface{})
+	if output, ok := response["output"].([]interface{}); ok {
+		for _, item := range output {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				a.observeOpenAIResponsesToolItem(itemMap)
+			}
+		}
+	}
+}
+
+// Provider-specific index extraction.
+
+func (a *StreamAccumulator) captureAnthropicIndex(payload map[string]interface{}) int {
 	if payload == nil {
 		return 0
 	}
-	if raw, ok := payload["index"]; ok {
-		switch v := raw.(type) {
-		case float64:
-			a.lastIndex = int(v)
-			a.hasIndex = true
-			return a.lastIndex
-		case int:
-			a.lastIndex = v
-			a.hasIndex = true
-			return a.lastIndex
-		case int64:
-			a.lastIndex = int(v)
-			a.hasIndex = true
-			return a.lastIndex
-		}
+	if index, ok := numericIndex(payload, "index"); ok {
+		a.rememberIndex(index)
+		return index
 	}
 	return 0
+}
+
+func (a *StreamAccumulator) captureOpenAIResponsesOutputIndex(payload map[string]interface{}) int {
+	if payload == nil {
+		return 0
+	}
+	if index, ok := numericIndex(payload, "output_index"); ok {
+		a.rememberIndex(index)
+		return index
+	}
+	return a.captureAnthropicIndex(payload)
+}
+
+// Shared tool-use state management.
+
+func (a *StreamAccumulator) mergeOpenAIResponsesToolItem(index int, item map[string]interface{}) {
+	if item == nil {
+		return
+	}
+	itemType, _ := item["type"].(string)
+	if !isStreamToolItemType(itemType) {
+		return
+	}
+	state := a.getOrCreateToolUse(index)
+	if state == nil {
+		return
+	}
+	if id, ok := item["id"].(string); ok && id != "" {
+		state.id = id
+		a.lastToolID = id
+	}
+	if name, ok := item["name"].(string); ok && name != "" {
+		state.name = name
+	}
+	if args, ok := item["arguments"].(string); ok && args != "" {
+		state.args = args
+	}
+	if input, ok := item["input"].(string); ok && input != "" {
+		state.args = input
+	}
+}
+
+func (a *StreamAccumulator) completeToolUse(index int) {
+	if a.toolUses == nil {
+		return
+	}
+	state, ok := a.toolUses[index]
+	if !ok {
+		return
+	}
+	a.completed = append(a.completed, StreamToolUse{
+		Index: state.index,
+		ID:    state.id,
+		Name:  state.name,
+		Args:  state.args,
+	})
+	delete(a.toolUses, index)
 }
 
 func (a *StreamAccumulator) getOrCreateToolUse(index int) *streamToolUseState {
@@ -309,4 +436,32 @@ func (a *StreamAccumulator) getOrCreateToolUse(index int) *streamToolUseState {
 	state := &streamToolUseState{index: index}
 	a.toolUses[index] = state
 	return state
+}
+
+func (a *StreamAccumulator) rememberIndex(index int) {
+	a.lastIndex = index
+	a.hasIndex = true
+}
+
+func numericIndex(payload map[string]interface{}, key string) (int, bool) {
+	raw, ok := payload[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := raw.(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+func isStreamToolItemType(itemType string) bool {
+	return itemType == streamToolTypeFunctionCall ||
+		itemType == streamToolTypeCustomToolCall ||
+		itemType == streamToolTypeMCPCall
 }
