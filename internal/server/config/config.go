@@ -1705,7 +1705,7 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		config.Flags.ThinkingMode = value
 	case "recording_v2":
 		if !typ.IsValidRecordingMode(value) {
-			return fmt.Errorf("invalid recording_v2 value: %s (must be one of: request, response, request_response, or empty)", value)
+			return fmt.Errorf("invalid recording_v2 value: %s (must be one of: request, request_response, staged_request_response, or empty)", value)
 		}
 		config.Flags.RecordingV2 = typ.RecordingMode(value)
 	default:

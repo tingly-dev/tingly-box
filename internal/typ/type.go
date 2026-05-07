@@ -112,16 +112,16 @@ const (
 type RecordingMode string
 
 const (
-	RecordingModeDisabled        RecordingMode = ""                 // Recording disabled (default)
-	RecordingModeRequest         RecordingMode = "request"          // Record request only
-	RecordingModeResponse        RecordingMode = "response"         // Record response only
-	RecordingModeRequestResponse RecordingMode = "request_response" // Record both request and response
+	RecordingModeDisabled               RecordingMode = ""                         // Recording disabled (default)
+	RecordingModeRequestOnly            RecordingMode = "request"                  // Record transformed request only
+	RecordingModeRequestResponse        RecordingMode = "request_response"         // Record transformed request + final response
+	RecordingModeStagedRequestResponse  RecordingMode = "staged_request_response"  // Record original request + transformed request + final response
 )
 
 // IsValidRecordingMode checks if the given string is a valid recording mode
 func IsValidRecordingMode(mode string) bool {
 	switch RecordingMode(mode) {
-	case RecordingModeDisabled, RecordingModeRequest, RecordingModeResponse, RecordingModeRequestResponse:
+	case RecordingModeDisabled, RecordingModeRequestOnly, RecordingModeRequestResponse, RecordingModeStagedRequestResponse:
 		return true
 	default:
 		return false
@@ -136,7 +136,7 @@ type ScenarioFlags struct {
 
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
-	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`     // Enable scenario recording V2 (request/response/request_response)
+	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`     // Enable scenario recording V2 (request/request_response/staged_request_response)
 	Beta         bool          `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
 
 	// Stream configuration flags

@@ -47,6 +47,13 @@ func NewRecordRoundTripper(transport http.RoundTripper, recordSink *obs.Sink, pr
 
 // RoundTrip executes a single HTTP transaction and records request/response
 func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if r.recordSink != nil {
+		mode := r.recordSink.GetMode()
+		if mode == obs.RecordModeRequestOnly || mode == obs.RecordModeRequestResponse || mode == obs.RecordModeStagedRequestResponse {
+			return r.transport.RoundTrip(req)
+		}
+	}
+
 	startTime := time.Now()
 
 	// Mark advisor loopback requests with depth header to prevent recursive MCP tool injection

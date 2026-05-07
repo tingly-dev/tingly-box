@@ -442,8 +442,15 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 		return sink
 	}
 
-	// Create new sink for this scenario
-	sink := obs.NewSink(s.recordDir, obs.RecordModeScenario)
+	mode := s.GetScenarioRecordMode(scenario)
+	if mode == "" {
+		return nil
+	}
+
+	// Create new sink for this scenario using the scenario-effective recording mode.
+	// This allows `recording_v2` on individual scenarios such as `claude_code`
+	// even when global CLI record mode is unset.
+	sink := obs.NewSink(s.recordDir, mode)
 	if sink == nil {
 		// Sink creation failed or recording is disabled (empty recordDir)
 		// This is expected when no record directory is configured
@@ -452,8 +459,20 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 	}
 
 	s.scenarioRecordSinks[scenario] = sink
-	logrus.Debugf("Created scenario recording sink for %s, directory: %s", scenario, s.recordDir)
+	logrus.Debugf("Created scenario recording sink for %s, mode: %s, directory: %s", scenario, mode, s.recordDir)
 	return sink
+}
+
+func (s *Server) GetScenarioRecordMode(scenario typ.RuleScenario) obs.RecordMode {
+	if s == nil || s.config == nil {
+		return s.recordMode
+	}
+
+	if mode := s.config.GetScenarioRecordingMode(scenario); mode != typ.RecordingModeDisabled {
+		return obs.RecordMode(mode)
+	}
+
+	return s.recordMode
 }
 
 // NewServer creates a new HTTP server instance with functional options
@@ -559,11 +578,11 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	switch server.recordMode {
 	case "":
 		// Recording disabled
-	case obs.RecordModeResponse, obs.RecordModeAll:
+	case obs.RecordModeAll:
 		recordSink := obs.NewSink(server.recordDir, server.recordMode)
 		server.clientPool.SetRecordSink(recordSink)
 		logrus.Debugf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
-	case obs.RecordModeScenario:
+	case obs.RecordModeScenario, obs.RecordModeRequestOnly, obs.RecordModeRequestResponse, obs.RecordModeStagedRequestResponse:
 		// Scenario recording is now on-demand, created when scenario flag is enabled
 		logrus.Debugf("Scenario recording mode enabled, sinks will be created on-demand per scenario")
 	default:

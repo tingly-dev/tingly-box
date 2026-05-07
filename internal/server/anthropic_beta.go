@@ -85,7 +85,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
 	var recorder *ProtocolRecorder
 	if s.ApplyRecording(scenarioType) {
-		recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.recordMode)
+		recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
 	}
 
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType)
@@ -142,10 +142,10 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 
 // nonstreamResponsesToAnthropicBeta handles non-streaming Responses API request
 func (s *Server) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
-	// Get scenario recorder if exists
-	var recorder *ScenarioRecorder
+	// Get protocol recorder if exists
+	var recorder *ProtocolRecorder
 	if r, exists := c.Get("scenario_recorder"); exists {
-		recorder = r.(*ScenarioRecorder)
+		recorder = r.(*ProtocolRecorder)
 	}
 
 	// Get rule from context for affinity
