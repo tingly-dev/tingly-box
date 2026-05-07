@@ -97,8 +97,10 @@ func (h *BotHandler) handleProjectSwitch(hCtx HandlerContext, projectPath string
 
 // handleBindInteractive starts an interactive directory browser for binding
 func (h *BotHandler) handleBindInteractive(hCtx HandlerContext) {
-	// Start from home directory
-	_, err := h.directoryBrowser.Start(hCtx.ChatID)
+	// Start from the currently-bound project path so the user lands in a
+	// familiar spot; falls back to home when nothing is bound yet.
+	currentPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
+	_, err := h.directoryBrowser.StartAt(hCtx.ChatID, currentPath)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to start directory browser")
 		h.SendText(hCtx, fmt.Sprintf("Failed to start directory browser: %v", err))

@@ -35,16 +35,32 @@ func NewDirectoryBrowser() *DirectoryBrowser {
 	}
 }
 
-// Start begins a new bind flow for a chat
+// Start begins a new bind flow for a chat, starting at the home directory.
 func (b *DirectoryBrowser) Start(chatID string) (*BindFlowState, error) {
-	homeDir, err := getHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	return b.StartAt(chatID, "")
+}
+
+// StartAt begins a new bind flow for a chat, starting at startPath.
+// If startPath is empty or does not exist, the browser falls back to the
+// home directory so the user always lands somewhere navigable.
+func (b *DirectoryBrowser) StartAt(chatID, startPath string) (*BindFlowState, error) {
+	initialPath := ""
+	if startPath != "" {
+		if info, err := os.Stat(startPath); err == nil && info.IsDir() {
+			initialPath = startPath
+		}
+	}
+	if initialPath == "" {
+		homeDir, err := getHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get home directory: %w", err)
+		}
+		initialPath = homeDir
 	}
 
 	state := &BindFlowState{
 		ChatID:      chatID,
-		CurrentPath: homeDir,
+		CurrentPath: initialPath,
 		Page:        0,
 		PageSize:    b.pageSize,
 		ExpiresAt:   time.Now().Add(stateExpiry),

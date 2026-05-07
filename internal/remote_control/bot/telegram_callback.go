@@ -202,9 +202,9 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 	// Ensure state exists
 	state := h.directoryBrowser.GetState(hCtx.ChatID)
 	if state == nil {
-		// Start a new bind flow if none exists
+		currentPath, _, _ := h.chatStore.GetProjectPath(hCtx.ChatID)
 		var err error
-		state, err = h.directoryBrowser.Start(hCtx.ChatID)
+		state, err = h.directoryBrowser.StartAt(hCtx.ChatID, currentPath)
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Failed to start bind flow: %v", err))
 			return
