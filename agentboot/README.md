@@ -1,75 +1,28 @@
 # AgentBoot Package
 
-AgentBoot is a unified agent bootstrapping and management package that provides a clean abstraction for running different AI coding agents.
+AgentBoot is a unified bootstrapping and runtime layer for AI coding agents. It hides per-agent process management, protocol parsing, and permission/ask routing behind a small, agent-agnostic API.
 
 ## Features
 
-- **Unified Agent Interface**: Common interface for all agent types
-- **Stream-JSON Support**: Real-time event streaming for rich output
-- **Permission Management**: Flexible permission handling with multiple modes
-- **Extensible Design**: Easy to add new agent types
-- **Configuration**: Environment-based configuration
+- **Unified Agent interface** — one `Execute` entry point for every agent type.
+- **Streaming execution handle** — consume a totally-ordered event channel and respond to permission / ask requests inline.
+- **Driver + Transport + Runner split** — process setup, protocol parsing, and execution are independent and individually testable.
+- **Pluggable process factory** — swap real `os/exec` for a scripted fake in tests without touching the driver or transport.
+- **Session store integration** — list and resume Claude Code sessions read from `~/.claude/projects`.
 
 ## Supported Agents
 
-| Agent | Status | Description |
-|-------|--------|-------------|
-| `claude` | ✅ Implemented | Claude Code CLI |
-| `codex` | 🚧 Planned | OpenAI Codex |
-| `gemini` | 🚧 Planned | Google Gemini |
-| `cursor` | 🚧 Planned | Cursor AI |
+| Agent    | Status         | Description       |
+|----------|----------------|-------------------|
+| `claude` | Implemented    | Claude Code CLI   |
+| `mock`   | Test-only      | In-memory agent for tests |
+| `codex`  | Planned        | OpenAI Codex      |
+| `gemini` | Planned        | Google Gemini     |
+| `cursor` | Planned        | Cursor AI         |
 
 ## Usage
 
-### Basic Usage
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-
-    "github.com/tingly-dev/tingly-box/agentboot"
-    _ "github.com/tingly-dev/tingly-box/agentboot/claude" // Import to register Claude agent
-)
-
-func main() {
-    // Create AgentBoot instance
-    ab, err := agentboot.New(agentboot.Config{
-        DefaultAgent:     agentboot.AgentTypeClaude,
-        DefaultFormat:    agentboot.OutputFormatStreamJSON,
-        EnableStreamJSON: true,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Register Claude agent (or use agents that have auto-registered via init())
-    claudeAgent := claude.NewAgent(ab.GetConfig())
-    ab.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
-
-    // Get Claude agent
-    agent, err := ab.GetAgent(agentboot.AgentTypeClaude)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Execute prompt
-    result, err := agent.Execute(context.Background(), "Say hello", agentboot.ExecutionOptions{
-        OutputFormat: agentboot.OutputFormatStreamJSON,
-    })
-
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(result.TextOutput())
-}
-```
-
-### Alternative: Using Claude Agent Directly
+### Direct Claude agent
 
 ```go
 package main
@@ -84,163 +37,211 @@ import (
 )
 
 func main() {
-    // Create config
-    config := agentboot.Config{
-        DefaultFormat:    agentboot.OutputFormatStreamJSON,
-        EnableStreamJSON: true,
-    }
+    agent := claude.NewAgentWithConfig(claude.DefaultConfig())
 
-    // Create Claude agent directly
-    agent := claude.NewAgent(config)
-
-    // Execute prompt
-    result, err := agent.Execute(context.Background(), "Say hello", agentboot.ExecutionOptions{
+    handle, err := agent.Execute(context.Background(), "Say hello", agentboot.ExecutionOptions{
+        ProjectPath:  "/tmp",
         OutputFormat: agentboot.OutputFormatStreamJSON,
     })
-
     if err != nil {
         log.Fatal(err)
     }
 
+    for ev := range handle.Events() {
+        switch e := ev.(type) {
+        case agentboot.MessageEvent:
+            fmt.Printf("message: %T\n", e.Raw)
+        case agentboot.ApprovalRequestEvent:
+            _ = handle.Respond(e.ID, agentboot.ApprovalResponse{Approved: true})
+        case agentboot.AskRequestEvent:
+            _ = handle.Respond(e.ID, agentboot.AskResponse{Approved: true})
+        case agentboot.ErrorEvent:
+            log.Printf("non-fatal: %v", e.Err)
+        }
+    }
+
+    result, err := handle.Wait()
+    if err != nil {
+        log.Fatal(err)
+    }
     fmt.Println(result.TextOutput())
 }
 ```
 
-### With Permission Handler
+### Through the AgentBoot registry
 
 ```go
-package main
-
-import (
-    "context"
-    "log"
-
-    "github.com/tingly-dev/tingly-box/agentboot"
-    "github.com/tingly-dev/tingly-box/agentboot/claude"
-    "github.com/tingly-dev/tingly-box/agentboot/permission"
-)
-
-func main() {
-    // Create configuration
-    config := agentboot.Config{
-        DefaultFormat:    agentboot.OutputFormatStreamJSON,
-        EnableStreamJSON: true,
-    }
-
-    // Create permission handler
-    permHandler := permission.NewDefaultHandler(permission.Config{
-        DefaultMode: agentboot.PermissionModeManual,
-        Timeout:     300, // 5 minutes
-    })
-
-    // Create agent with permission handler
-    agent := claude.NewAgentWithPermissionHandler(config, permHandler)
-
-    // Set permission mode for a session
-    permHandler.SetMode("session-123", agentboot.PermissionModeAuto)
-
-    // Execute prompt
-    result, err := agent.Execute(context.Background(), "List files", agentboot.ExecutionOptions{
-        OutputFormat: agentboot.OutputFormatStreamJSON,
-    })
-
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    log.Println(result.TextOutput())
+ab, err := agentboot.New(agentboot.Config{
+    DefaultAgent:     agentboot.AgentTypeClaude,
+    DefaultFormat:    agentboot.OutputFormatStreamJSON,
+    EnableStreamJSON: true,
+})
+if err != nil {
+    log.Fatal(err)
 }
+
+ab.RegisterAgent(agentboot.AgentTypeClaude, claude.NewAgent(ab.GetConfig()))
+
+agent, err := ab.GetDefaultAgent()
+if err != nil {
+    log.Fatal(err)
+}
+
+handle, err := agent.Execute(ctx, "List files", agentboot.ExecutionOptions{
+    ProjectPath: "/tmp",
+})
+// ...consume handle.Events(), then handle.Wait()
 ```
+
+### Resuming a Claude session
+
+```go
+ab, _ := agentboot.New(agentboot.Config{
+    DefaultAgent:      agentboot.AgentTypeClaude,
+    ClaudeProjectsDir: "", // empty = ~/.claude/projects
+})
+
+sessions, err := ab.ListRecentSessions(ctx, "/abs/project/path", 10)
+if err != nil {
+    log.Fatal(err)
+}
+
+opts := ab.ResumeSession(sessions[0].SessionID)
+opts.ProjectPath = "/abs/project/path"
+
+handle, err := agent.Execute(ctx, "Continue", opts)
+```
+
+## Execution Lifecycle
+
+`Agent.Execute` returns an `ExecutionHandle` that owns the in-flight execution:
+
+1. Iterate `handle.Events()` from a single goroutine. Events are delivered in totally-ordered form.
+2. For `ApprovalRequestEvent` and `AskRequestEvent`, call `handle.Respond(req.ID, response)` with the matching `ControlResponse` — `ApprovalResponse` or `AskResponse`. The response is forwarded to the agent process's stdin.
+3. The events channel closes after the process has exited *and* every decoded event has been delivered.
+4. After the channel closes, `handle.Wait()` returns the aggregated `*Result`.
+5. `handle.Cancel()` requests cooperative shutdown; the underlying context can be cancelled to the same effect.
+
+`Respond`, `Cancel`, and `Wait` are safe to call from any goroutine.
+
+## Stream Events
+
+| Event                   | Description                                                  |
+|-------------------------|--------------------------------------------------------------|
+| `MessageEvent`          | Agent message (assistant text, tool use, tool result, etc.) |
+| `ApprovalRequestEvent`  | Tool permission request — caller must `Respond`              |
+| `AskRequestEvent`       | Interactive question (e.g. AskUserQuestion)                  |
+| `ErrorEvent`            | Non-fatal error — execution continues                         |
+
+Fatal errors are surfaced via the error returned from `handle.Wait()`.
 
 ## Output Formats
 
-### Text Format
-Simple text output (default):
-```bash
-claude --print --output-format text "Say hello"
-```
-
-### Stream-JSON Format
-Rich event streaming:
-```bash
-claude --output-format stream-json --verbose --print "Say hello"
-```
-
-Event types:
-- `text_delta` - Incremental text output
-- `tool_call_start` - Tool invocation begins
-- `tool_call_end` - Tool completes
-- `permission_request` - Permission needed
-- `status` - Agent status change
-- `thinking` - Reasoning state
+| Format                        | Description                              |
+|-------------------------------|------------------------------------------|
+| `OutputFormatText`            | Plain text output                        |
+| `OutputFormatStreamJSON`      | Streaming JSON events (default)          |
 
 ## Permission Modes
 
-| Mode | Description |
-|------|-------------|
-| `auto` | Auto-approve all requests |
-| `manual` | Require user approval |
-| `skip` | Skip permission prompts |
+| Mode                       | Description                            |
+|----------------------------|----------------------------------------|
+| `PermissionModeAuto`       | Auto-approve all requests              |
+| `PermissionModeManual`     | Require caller approval per request    |
+| `PermissionModeSkip`       | Skip permission prompts (CLI bypass)   |
+
+Set per-execution via `ExecutionOptions.PermissionMode`, or globally on the Claude agent through `Agent.SetSkipPermissions`.
 
 ## Configuration
 
-### Environment Variables
+`Config` is plain Go — no environment variables are read by the package itself. Defaults are provided by `agentboot.DefaultConfig()`:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AGENTBOOT_DEFAULT_AGENT` | Default agent type | `claude` |
-| `AGENTBOOT_DEFAULT_FORMAT` | Default output format | `text` |
-| `AGENTBOOT_ENABLE_STREAM_JSON` | Enable stream-json | `true` |
-| `AGENTBOOT_STREAM_BUFFER_SIZE` | Event buffer size | `100` |
-| `RCC_PERMISSION_MODE` | Permission mode | `auto` |
-| `RCC_PERMISSION_TIMEOUT` | Approval timeout | `5m` |
-| `RCC_WHITELIST` | Whitelisted tools | |
-| `RCC_BLACKLIST` | Blacklisted tools | |
+| Field                       | Default                          |
+|-----------------------------|----------------------------------|
+| `DefaultAgent`              | `AgentTypeClaude`                |
+| `DefaultFormat`             | `OutputFormatStreamJSON`         |
+| `EnableStreamJSON`          | `true`                           |
+| `StreamBufferSize`          | `100`                            |
+| `DefaultExecutionTimeout`   | `0` (no timeout)                 |
+| `ClaudeProjectsDir`         | `""` (session store disabled)    |
+
+`ExecutionOptions` carries per-call overrides: project path, output format, timeout, env, session ID + resume flag, model and fallback model, max turns, allowed/disallowed tools, MCP servers, custom/append system prompts, permission mode, settings path, permission prompt tool, and a session store sink.
 
 ## Package Structure
 
 ```
 agentboot/
-├── agentboot.go      # Core package and factory
-├── types.go          # Common types and interfaces
-├── config.go         # Configuration
-├── events/           # Event streaming
-│   ├── events.go     # Event interfaces
-│   ├── parser.go     # Stream parser
-│   └── bus.go        # Event bus
-├── permission/       # Permission management
-│   ├── handler.go    # Permission handler interface
-│   ├── handler_impl.go # Default implementation
-│   └── store.go      # Permission history storage
-└── claude/           # Claude Code agent
-    ├── agent.go      # Claude agent
-    ├── launcher.go   # Process launcher
-    ├── config.go     # Claude config
-    └── events.go     # Claude event types
+├── agentboot.go          # AgentBoot registry + session helpers
+├── config.go             # DefaultConfig / DefaultPermissionConfig
+├── types.go              # Agent interface, ExecutionOptions, Result, ...
+├── handle.go             # ExecutionHandle + ControlResponse types
+├── events.go             # StreamEvent sum type (Message/Approval/Ask/Error)
+├── handler.go            # CompositeHandler for streamer/approval/ask/completion
+├── builder.go            # Function-typed handler adapters
+├── driver.go             # AgentDriver interface + LaunchSpec
+├── transport.go          # AgentTransport interface
+├── runner.go             # Generic Runner wiring driver+transport+process
+├── run.go                # Run loop / event pump
+├── message.go            # Internal message routing
+├── session_bridge.go     # Session lifecycle bridging
+├── ask/                  # Ask/permission prompter implementations
+├── common/               # Shared event + session metadata types
+├── process/              # Process abstraction (osexec + fake for tests)
+├── prompt/               # Prompt utilities
+├── protocol/             # Stream-JSON encoder / decoder
+├── session/              # Generic session store interface
+└── claude/               # Claude Code agent implementation
+    ├── agent.go          # claude.Agent (wraps Runner)
+    ├── driver.go         # CLI flag construction + binary discovery
+    ├── transport.go      # Stream-JSON parsing
+    ├── launcher.go       # Process supervision
+    ├── cli_builder.go    # Argv construction
+    ├── cli_discovery.go  # Locate the claude binary
+    ├── accumulator.go    # Per-message accumulation
+    ├── messages.go       # Claude message types
+    ├── tool_renderer.go  # Tool-use rendering
+    ├── formatter.go      # Output formatting helpers
+    ├── prompt_builder.go # Prompt assembly
+    ├── session/          # Claude-specific session store (~/.claude/projects)
+    ├── examples/         # query, server, session sample programs
+    └── ref/              # Reference docs
 ```
 
 ## Adding a New Agent
 
-1. Create agent package: `agentboot/youragent/`
+The fastest path is to reuse the generic `Runner` by implementing `AgentDriver` and `AgentTransport`:
 
-2. Implement `agent.Agent` interface:
-```go
-type Agent struct {
-    launcher *Launcher
-}
+1. Create `agentboot/youragent/` with:
+   - `Driver` — implements `agentboot.AgentDriver` (binary discovery, CLI flag construction, `LaunchSpec` assembly).
+   - `Transport` — implements `agentboot.AgentTransport` (parse the agent's stdout into `common.Event`s and emit `StreamEvent`s).
+2. Wrap them in an `Agent` type that satisfies `agentboot.Agent`:
+   ```go
+   func NewAgent(cfg agentboot.Config) *Agent {
+       d := NewDriver(cfg)
+       t := NewTransport()
+       return &Agent{runner: agentboot.NewRunner(d, t), driver: d}
+   }
 
-func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (*agentboot.Result, error)
-func (a *Agent) IsAvailable() bool
-func (a *Agent) Type() agentboot.AgentType
-func (a *Agent) SetDefaultFormat(format agentboot.OutputFormat)
-func (a *Agent) GetDefaultFormat() agentboot.OutputFormat
-```
+   func (a *Agent) Execute(ctx context.Context, prompt string, opts agentboot.ExecutionOptions) (agentboot.ExecutionHandle, error) {
+       return a.runner.Execute(ctx, prompt, opts)
+   }
+   func (a *Agent) IsAvailable() bool                              { return a.driver.IsAvailable() }
+   func (a *Agent) Type() agentboot.AgentType                      { return agentboot.AgentTypeYourAgent }
+   func (a *Agent) SetDefaultFormat(f agentboot.OutputFormat)      { a.runner.SetDefaultFormat(f) }
+   func (a *Agent) GetDefaultFormat() agentboot.OutputFormat       { return a.runner.GetDefaultFormat() }
+   ```
+3. Add the constant to `types.go` and register the agent on an `AgentBoot` with `RegisterAgent`.
 
-3. Register in `agentboot.go`:
-```go
-ab.agents[AgentTypeYourAgent] = youragent.NewAgent(ab.config)
-```
+For agents that don't fit the process+protocol pipeline (in-process mocks, remote services), use `agentboot.NewControlledHandle` to drive an `ExecutionHandle` directly.
+
+## Testing
+
+- `process.NewFakeFactory` substitutes the binary with a scripted in-memory process.
+- `claude.NewAgentWithFactory` wires a fake factory into the real Claude driver/transport so end-to-end stream-JSON parsing is exercised without spawning `claude`.
+- `NewControlledHandle` lets tests build an `ExecutionHandle` from closures.
+
+See `agentboot/claude/*_e2e_test.go` and `agentboot/handle_test.go` for the patterns.
 
 ## License
 
-MIT
+See repository `LICENSE.txt`.
