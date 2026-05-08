@@ -37,7 +37,7 @@ func (s *Server) isEnabledMCPToolName(ctx context.Context, toolName string) bool
 	if s == nil || s.mcpRuntime == nil {
 		return false
 	}
-	enabled := s.mcpRuntime.ListEnabledServerToolNames(ctx)
+	enabled := s.mcpRuntime.ListCallableServerToolNames(ctx)
 	_, ok := enabled[toolName]
 	return ok
 }

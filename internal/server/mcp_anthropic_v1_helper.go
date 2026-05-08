@@ -280,10 +280,8 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 	// Get virtual registry
 	virtualRegistry := s.mcpRuntime.VirtualRegistry()
 
-	// Create server ops adapter
-	serverOps := newServerOpsAdapter(s, recorder)
-
 	// Create tool executor
+	serverOps := newServerOpsAdapter(s, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
@@ -365,6 +363,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -425,6 +424,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 		recorderAdapter,
 		adapter,
 		forwarder,
+		toolExecutor,
 		interceptorCfg,
 	)
 
@@ -485,6 +485,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -529,6 +530,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 		recorderAdapter,
 		adapter,
 		forwarder,
+		toolExecutor,
 		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
@@ -595,6 +597,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -655,6 +658,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 		recorderAdapter,
 		adapter,
 		forwarder,
+		toolExecutor,
 		interceptorCfg,
 	)
 

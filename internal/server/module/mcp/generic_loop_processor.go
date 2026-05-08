@@ -243,20 +243,18 @@ func (p *GenericLoopProcessor) executeTool(tool Tool, req any) (ToolExecutionRes
 	// Extract messages from request
 	messages := p.extractMessages(req)
 
-	// Execute tool
-	type toolHookCaller interface {
-		CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error)
-	}
-	nextCtx, result, err := p.s.(toolHookCaller).CallMCPToolWithHooks(p.ctx, tool.Name(), tool.Arguments(), messages)
-	if nextCtx != nil {
-		p.ctx = nextCtx
+	if p.toolExecutor != nil {
+		nextCtx, result, err := p.toolExecutor.ExecuteToolWithContext(p.ctx, tool, messages)
+		if nextCtx != nil {
+			p.ctx = nextCtx
+		}
+		return result, err
 	}
 
 	return ToolExecutionResult{
 		ToolUseID: tool.ID(),
-		Content:   result,
-		IsError:   err != nil,
-	}, err
+		IsError:   true,
+	}, fmt.Errorf("tool executor is not configured")
 }
 
 // Helper methods

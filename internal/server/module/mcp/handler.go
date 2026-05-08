@@ -152,40 +152,38 @@ func (h *Handler) SetMCPRuntimeConfig(c *gin.Context) {
 		return
 	}
 
+	// Validate sources and apply defaults
+	for i, source := range req.Sources {
+		if source.ID == "" {
+			c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
+				Success: false,
+				Error:   "MCP source ID cannot be empty",
+			})
+			return
+		}
+		if source.Transport != "" && source.Transport != "http" && source.Transport != "stdio" && source.Transport != "sse" && source.Transport != "advisor" {
+			c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
+				Success: false,
+				Error:   "Invalid transport type: " + source.Transport + ". Must be one of 'http', 'stdio', 'sse'",
+			})
+			return
+		}
 
-		// Validate sources and apply defaults
-		for i, source := range req.Sources {
-			if source.ID == "" {
-				c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
-					Success: false,
-					Error:   "MCP source ID cannot be empty",
-				})
-				return
-			}
-			if source.Transport != "" && source.Transport != "http" && source.Transport != "stdio" && source.Transport != "sse" && source.Transport != "advisor" {
-				c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
-					Success: false,
-					Error:   "Invalid transport type: " + source.Transport + ". Must be one of 'http', 'stdio', 'sse'",
-				})
-				return
-			}
-
-			// Rule 1: Builtin tools cannot modify IsClientTool field
-			isBuiltin := source.ID == mcptools.BuiltinAdvisorSourceID || source.ID == mcptools.BuiltinWebtoolsSourceID
-			if isBuiltin && source.IsClientTool != nil {
-				c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
-					Success: false,
-					Error:   "Builtin tools '" + source.ID + "' cannot modify IsClientTool field",
-				})
-				return
-			}
-
-			// Rule 2: New tools default to client tool (IsClientTool=true)
-			if !isBuiltin && source.IsClientTool == nil {
-				isClientTool := true
-				req.Sources[i].IsClientTool = &isClientTool
+		isBuiltin := source.ID == mcptools.BuiltinAdvisorSourceID || source.ID == mcptools.BuiltinWebtoolsSourceID
+		if source.Visibility == "" {
+			req.Sources[i].Visibility = typ.ToolVisibilityClient
+			if isBuiltin && source.ID == mcptools.BuiltinAdvisorSourceID {
+				req.Sources[i].Visibility = typ.ToolVisibilityServer
 			}
 		}
+		if req.Sources[i].Visibility != typ.ToolVisibilityClient && req.Sources[i].Visibility != typ.ToolVisibilityServer {
+			c.JSON(http.StatusBadRequest, MCPRuntimeConfigResponse{
+				Success: false,
+				Error:   "Invalid visibility: " + string(req.Sources[i].Visibility) + ". Must be one of 'client', 'server'",
+			})
+			return
+		}
+	}
 
 	issues := mcpruntime.ValidateEnabledMCPSourceEnvRefs(req.Sources)
 	if len(issues) > 0 {

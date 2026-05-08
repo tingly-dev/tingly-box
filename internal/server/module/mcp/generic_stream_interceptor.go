@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -79,6 +78,7 @@ func NewGenericStreamInterceptor(
 	recorder ProtocolRecorder,
 	adapter FormatAdapter,
 	forwarder Forwarder,
+	toolExecutor ToolExecutor,
 	config InterceptorConfig,
 ) *GenericStreamInterceptor {
 	if config.MaxRounds == 0 {
@@ -94,6 +94,7 @@ func NewGenericStreamInterceptor(
 		recorder:        recorder,
 		adapter:         adapter,
 		forwarder:       forwarder,
+		toolExecutor:    toolExecutor,
 		config:          config,
 	}
 }
@@ -598,19 +599,17 @@ func (i *GenericStreamInterceptor) executeTool(tool Tool, req any) (ToolExecutio
 	// Extract messages from request
 	messages := i.extractMessages(req)
 
-	// Execute tool
-	type toolHookCaller interface {
-		CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error)
-	}
-	nextCtx, result, err := i.s.(toolHookCaller).CallMCPToolWithHooks(i.c.Request.Context(), tool.Name(), tool.Arguments(), messages)
-	if nextCtx != nil {
-		i.c.Request = i.c.Request.WithContext(nextCtx)
+	if i.toolExecutor != nil {
+		nextCtx, result, err := i.toolExecutor.ExecuteToolWithContext(i.c.Request.Context(), tool, messages)
+		if nextCtx != nil {
+			i.c.Request = i.c.Request.WithContext(nextCtx)
+		}
+		return result, err
 	}
 	return ToolExecutionResult{
 		ToolUseID: tool.ID(),
-		Content:   result,
-		IsError:   err != nil,
-	}, err
+		IsError:   true,
+	}, fmt.Errorf("tool executor is not configured")
 }
 
 // Helper methods

@@ -35,7 +35,7 @@ const defaultBuiltinForm = (): MCPSourceFormValue => ({
     tools: ['mcp_web_search', 'mcp_web_fetch'],
     envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'SERPER_API_KEY'],
     useGlobalProxy: true,
-    isClientTool: true, // Built-in tools are client tools by default
+    visibility: 'client',
 });
 
 const MCPBuiltin = () => {
@@ -186,8 +186,8 @@ const MCPBuiltin = () => {
                                 <Chip label="webtools" color="primary" />
                                 <Chip label={builtinSource.transport || 'stdio'} />
                                 <Chip
-                                    label={builtinSource.is_client_tool ? 'Client Tool' : 'Server Tool'}
-                                    color={builtinSource.is_client_tool ? 'info' : 'success'}
+                                    label={(builtinSource.visibility === 'server') ? 'Server Tool' : 'Client Tool'}
+                                    color={(builtinSource.visibility === 'server') ? 'success' : 'info'}
                                     size="small"
                                 />
                                 {(builtinSource.tools || []).map((t) => <Chip key={t} label={t} variant="outlined" />)}

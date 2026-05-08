@@ -164,11 +164,11 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
 			{
-				ID:           "advisor",
-				Transport:    "advisor",
-				Enabled:      typ.BoolPtr(true),
-				IsClientTool: typ.BoolPtr(false),
-				Tools:        []string{"advisor"},
+				ID:         "advisor",
+				Transport:  "advisor",
+				Enabled:    typ.BoolPtr(true),
+				Visibility: typ.ToolVisibilityServer,
+				Tools:      []string{"advisor"},
 				Advisor: &typ.AdvisorConfig{
 					BaseURL:           mockServer.URL + "/v1",
 					Model:             "advisor-model",
@@ -517,11 +517,11 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
 			{
-				ID:           "advisor",
-				Transport:    "advisor",
-				Enabled:      typ.BoolPtr(false),
-				IsClientTool: typ.BoolPtr(false),
-				Tools:        []string{"advisor"},
+				ID:         "advisor",
+				Transport:  "advisor",
+				Enabled:    typ.BoolPtr(false),
+				Visibility: typ.ToolVisibilityServer,
+				Tools:      []string{"advisor"},
 				Advisor: &typ.AdvisorConfig{
 					BaseURL:           mockServer.URL + "/v1",
 					Model:             "advisor-model",

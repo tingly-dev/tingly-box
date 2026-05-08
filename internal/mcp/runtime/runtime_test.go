@@ -180,7 +180,13 @@ func TestServerReadyCheck(t *testing.T) {
 
 func TestListEnabledServerToolNames_AdvisorDisabledByDefault(t *testing.T) {
 	r := NewRuntime(func() *typ.MCPRuntimeConfig {
-		return &typ.MCPRuntimeConfig{}
+		return &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{
+			ID:         "advisor",
+			Transport:  "advisor",
+			Enabled:    typ.BoolPtr(false),
+			Visibility: typ.ToolVisibilityServer,
+			Tools:      []string{"advisor"},
+		}}}
 	})
 	if r == nil {
 		t.Fatal("expected runtime")
@@ -205,10 +211,10 @@ func TestListEnabledServerToolNames_AdvisorEnabledWhenSourceEnabled(t *testing.T
 	r := NewRuntime(func() *typ.MCPRuntimeConfig {
 		return &typ.MCPRuntimeConfig{
 			Sources: []typ.MCPSourceConfig{{
-				ID:           mcptools.BuiltinAdvisorSourceID,
-				Enabled:      typ.BoolPtr(true),
-				IsClientTool: typ.BoolPtr(false),
-				Tools:        []string{"advisor"},
+				ID:         mcptools.BuiltinAdvisorSourceID,
+				Enabled:    typ.BoolPtr(true),
+				Visibility: typ.ToolVisibilityServer,
+				Tools:      []string{"advisor"},
 			}},
 		}
 	})
@@ -228,5 +234,27 @@ func TestListEnabledServerToolNames_AdvisorEnabledWhenSourceEnabled(t *testing.T
 	}
 	if _, ok := names[NormalizeToolName("advisor", "advisor")]; !ok {
 		t.Fatalf("expected %q to be enabled for backward compatibility", NormalizeToolName("advisor", "advisor"))
+	}
+}
+
+func TestBuiltinWebtoolsRemainClientVisibleOnly(t *testing.T) {
+	cfg := &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{
+		ID:         "webtools",
+		Transport:  "stdio",
+		Enabled:    typ.BoolPtr(true),
+		Visibility: typ.ToolVisibilityClient,
+		Tools:      []string{"mcp_web_search", "mcp_web_fetch"},
+	}}}
+	r := NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+	defer r.Close()
+
+	if r.HasServerTools() {
+		t.Fatal("webtools should not count as server tools")
+	}
+	if len(r.ListServerToolsForInjection(context.Background())) != 0 {
+		t.Fatal("webtools should not be injected as server tools")
+	}
+	if _, ok := r.ListCallableServerToolNames(context.Background())[NormalizeToolName("webtools", "mcp_web_search")]; ok {
+		t.Fatal("websearch should not be callable through servertool executor")
 	}
 }

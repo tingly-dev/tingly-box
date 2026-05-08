@@ -2,7 +2,7 @@ export interface MCPSourceConfig {
     id?: string;
     name?: string;
     enabled?: boolean;
-    transport?: 'http' | 'stdio' | 'sse';
+    transport?: 'http' | 'stdio' | 'sse' | 'advisor';
     endpoint?: string;
     headers?: Record<string, string>;
     tools?: string[];
@@ -11,7 +11,7 @@ export interface MCPSourceConfig {
     cwd?: string;
     env?: Record<string, string>;
     proxy_url?: string;
-    is_client_tool?: boolean; // undefined means servertool (default for backward compatibility)
+    visibility?: 'client' | 'server';
     // Local mode specific fields
     connection_type?: 'stdio' | 'http' | 'sse';
     auth_type?: 'none' | 'headers' | 'oauth';
@@ -63,7 +63,7 @@ export interface MCPSourceFormValue {
     tools: string[];
     useGlobalProxy: boolean;
     proxyUrl: string;
-    isClientTool: boolean; // true if this source is a client tool
+    visibility: 'client' | 'server';
 }
 
 export const MCP_DEFAULT_CWD = '~/.tingly-box/mcp';
@@ -81,7 +81,7 @@ export const defaultMCPSourceFormValue = (): MCPSourceFormValue => ({
     tools: ['*'],
     useGlobalProxy: true,
     proxyUrl: '',
-    isClientTool: false, // default is client tool
+    visibility: 'client',
 });
 
 const isPassthroughValue = (key: string, value: string): boolean => value === `\${${key}}`;
@@ -133,7 +133,7 @@ export const sourceToFormValue = (source?: MCPSourceConfig): MCPSourceFormValue 
         tools: source.tools && source.tools.length > 0 ? source.tools : ['*'],
         useGlobalProxy: !source.proxy_url,
         proxyUrl: source.proxy_url || '',
-        isClientTool: source.is_client_tool ?? false,
+        visibility: source.visibility === 'server' ? 'server' : 'client',
     };
 };
 
@@ -155,7 +155,7 @@ export const formValueToSource = (form: MCPSourceFormValue): MCPSourceConfig => 
         enabled: form.enabled,
         transport: form.transport,
         tools: (form.tools || []).map((t) => t.trim()).filter(Boolean),
-        is_client_tool: form.isClientTool,
+        visibility: form.visibility,
     };
 
     if (form.transport === 'http') {

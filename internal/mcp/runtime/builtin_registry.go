@@ -58,30 +58,30 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 	}
 
 	// Create webtools configuration
-	isClientTool := true
+	visibility := typ.ToolVisibilityClient
 	enabled := typ.BoolPtr(true)
 	tools := mcptools.DefaultBuiltinWebtoolNames()
 	if existingWebtools != nil {
 		if existingWebtools.Enabled != nil {
 			enabled = existingWebtools.Enabled
 		}
-		if existingWebtools.IsClientTool != nil {
-			isClientTool = *existingWebtools.IsClientTool
+		if existingWebtools.Visibility != "" {
+			visibility = existingWebtools.Visibility
 		}
 		if len(existingWebtools.Tools) > 0 {
 			tools = existingWebtools.Tools
 		}
 	}
 	builtinWebtools := typ.MCPSourceConfig{
-		ID:           mcptools.BuiltinWebtoolsSourceID,
-		Name:         mcptools.BuiltinWebtoolsSourceName,
-		Transport:    "stdio",
-		Command:      currentExecPath,         // Use absolute path of current binary
-		Args:         []string{"mcp-builtin"}, // Subcommand to start builtin server
-		Enabled:      enabled,
-		IsClientTool: &isClientTool,
-		Tools:        tools,
-		Env:          preservedEnv, // Preserve user's environment variables
+		ID:         mcptools.BuiltinWebtoolsSourceID,
+		Name:       mcptools.BuiltinWebtoolsSourceName,
+		Transport:  "stdio",
+		Command:    currentExecPath,         // Use absolute path of current binary
+		Args:       []string{"mcp-builtin"}, // Subcommand to start builtin server
+		Enabled:    enabled,
+		Visibility: visibility,
+		Tools:      tools,
+		Env:        preservedEnv, // Preserve user's environment variables
 	}
 
 	// Update or append webtools configuration
@@ -95,7 +95,7 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 
 	// Create advisor configuration and register as virtual tool.
 	advisorEnabled := typ.BoolPtr(false) // default: disabled
-	advisorIsClientTool := false         // server tool
+	advisorVisibility := typ.ToolVisibilityServer
 	advisorTools := mcptools.DefaultBuiltinAdvisorToolNames()
 	advisorEnv := map[string]string{
 		"ADVISOR_BASE_URL": "${ADVISOR_BASE_URL}",
@@ -113,8 +113,8 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		if existingAdvisor.Enabled != nil {
 			advisorEnabled = existingAdvisor.Enabled
 		}
-		if existingAdvisor.IsClientTool != nil {
-			advisorIsClientTool = *existingAdvisor.IsClientTool
+		if existingAdvisor.Visibility != "" {
+			advisorVisibility = existingAdvisor.Visibility
 		}
 		if len(existingAdvisor.Tools) > 0 {
 			advisorTools = existingAdvisor.Tools
@@ -129,13 +129,13 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 		}
 	}
 	builtinAdvisor := typ.MCPSourceConfig{
-		ID:           mcptools.BuiltinAdvisorSourceID,
-		Name:         mcptools.BuiltinAdvisorSourceName,
-		Enabled:      advisorEnabled,
-		IsClientTool: &advisorIsClientTool,
-		Tools:        advisorTools,
-		Env:          advisorEnv,
-		Advisor:      advisorCfg,
+		ID:         mcptools.BuiltinAdvisorSourceID,
+		Name:       mcptools.BuiltinAdvisorSourceName,
+		Enabled:    advisorEnabled,
+		Visibility: advisorVisibility,
+		Tools:      advisorTools,
+		Env:        advisorEnv,
+		Advisor:    advisorCfg,
 	}
 
 	// Update or append advisor configuration

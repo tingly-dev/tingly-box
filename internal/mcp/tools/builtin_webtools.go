@@ -39,7 +39,7 @@ var BuiltinWebtoolsSource = map[string]interface{}{
 	"name":           BuiltinWebtoolsSourceName,
 	"transport":      "builtin", // Special transport for built-in tools
 	"enabled":        true,
-	"is_client_tool": true, // Mark as client tool
+	"visibility":     "client",
 	"tools":          DefaultBuiltinWebtoolNames(),
 	"env": map[string]string{
 		"SERPER_API_KEY": "${SERPER_API_KEY}", // User provides via UI

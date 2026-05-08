@@ -61,13 +61,13 @@ func runMCPRemoteRuntimeE2E(t *testing.T, transport string) {
 	t.Cleanup(remote.Close)
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{
-		ID:           "remote-" + transport,
-		Name:         "Remote " + transport,
-		Transport:    transport,
-		Endpoint:     remote.URL,
-		Enabled:      typ.BoolPtr(true),
-		Tools:        []string{"*"},
-		IsClientTool: typ.BoolPtr(true),
+		ID:         "remote-" + transport,
+		Name:       "Remote " + transport,
+		Transport:  transport,
+		Endpoint:   remote.URL,
+		Enabled:    typ.BoolPtr(true),
+		Tools:      []string{"*"},
+		Visibility: typ.ToolVisibilityClient,
 	}}})
 
 	ctx := context.Background()

@@ -59,12 +59,12 @@ func TestCallMCPToolWithHooks_AdvisorInjectsContext(t *testing.T) {
 		return &typ.MCPRuntimeConfig{
 			Sources: []typ.MCPSourceConfig{
 				{
-					ID:           "advisor",
-					Transport:    "advisor",
-					Enabled:      typ.BoolPtr(true),
-					IsClientTool: typ.BoolPtr(false),
-					Tools:        []string{"advisor"},
-					Advisor:      &typ.AdvisorConfig{MaxUsesPerRequest: 3},
+					ID:         "advisor",
+					Transport:  "advisor",
+					Enabled:    typ.BoolPtr(true),
+					Visibility: typ.ToolVisibilityServer,
+					Tools:      []string{"advisor"},
+					Advisor:    &typ.AdvisorConfig{MaxUsesPerRequest: 3},
 				},
 			},
 		}
@@ -116,11 +116,11 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 	cfg := &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
 			{
-				ID:           "advisor",
-				Transport:    "advisor",
-				Enabled:      typ.BoolPtr(true),
-				IsClientTool: typ.BoolPtr(false),
-				Tools:        []string{"advisor"},
+				ID:         "advisor",
+				Transport:  "advisor",
+				Enabled:    typ.BoolPtr(true),
+				Visibility: typ.ToolVisibilityServer,
+				Tools:      []string{"advisor"},
 				Advisor: &typ.AdvisorConfig{
 					BaseURL:           mockServer.URL + "/v1",
 					Model:             "advisor-model",

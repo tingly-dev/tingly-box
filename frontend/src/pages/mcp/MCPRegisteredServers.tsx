@@ -285,20 +285,20 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
 
     const handleWebtoolsToggle = (enabled: boolean) => {
         if (!webtoolsSource) return;
-        const { is_client_tool, ...rest } = webtoolsSource as any;
+        const { visibility, ...rest } = webtoolsSource as any;
         void onSave({ ...rest, enabled });
     };
 
     const handleAdvisorToggle = (enabled: boolean) => {
         if (!advisorSource) return;
-        const { is_client_tool, transport, command, args, cwd, ...rest } = advisorSource as any;
+        const { visibility, transport, command, args, cwd, ...rest } = advisorSource as any;
         void onSave({ ...rest, enabled });
     };
 
     const handleWebtoolsSave = async () => {
         setWebtoolsSaving(true);
         try {
-            const { is_client_tool, ...baseRest } = (webtoolsSource ?? {
+            const { visibility, ...baseRest } = (webtoolsSource ?? {
                 id: BUILTIN_WEBTOOLS_ID,
                 name: 'Built-in Web Tools',
                 transport: 'stdio',
@@ -320,7 +320,7 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
             // Strip transport/command/args/cwd — advisor is an in-process virtual tool,
             // not a stdio process. Sending transport:'stdio' causes the runtime to attempt
             // a subprocess connection and fail with "empty command".
-            const { is_client_tool, transport, command, args, cwd, ...baseRest } = (advisorSource ?? {
+            const { visibility, transport, command, args, cwd, ...baseRest } = (advisorSource ?? {
                 id: BUILTIN_ADVISOR_ID,
                 name: 'Built-in Adviser',
                 tools: ['advisor'],
@@ -575,9 +575,9 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
                                                 <Stack direction="row" spacing={0.5} alignItems="center">
                                                     <Typography variant="body2" fontWeight={500}>{source.id}</Typography>
                                                     <Chip
-                                                        label={source.is_client_tool ? 'Client' : 'Server'}
+                                                        label={(source.visibility === 'server') ? 'Server' : 'Client'}
                                                         size="small"
-                                                        color={source.is_client_tool ? 'info' : 'success'}
+                                                        color={(source.visibility === 'server') ? 'success' : 'info'}
                                                         variant="outlined"
                                                         sx={{ fontSize: '0.65rem', height: 18 }}
                                                     />
@@ -670,15 +670,9 @@ const MCPRegisteredServers = () => {
         setLoading(false);
     };
 
-    const saveConfig = async (sources: MCPSourceConfig[]): Promise<void> => {
-        setSaving(true);
-        // Builtin sources must not include is_client_tool — backend rejects it.
-        const sanitized = sources.map((s) => {
-            if (!BUILTIN_IDS.includes(s.id as any)) return s;
-            const { is_client_tool, ...rest } = s as any;
-            return rest as MCPSourceConfig;
-        });
-        const result = await api.setMCPConfig({ sources: sanitized });
+	    const saveConfig = async (sources: MCPSourceConfig[]): Promise<void> => {
+	        setSaving(true);
+	        const result = await api.setMCPConfig({ sources });
         if (result.success) {
             setAllSources(sources);
             setNotification({ open: true, message: 'Saved. Reconnect MCP client to apply.', severity: 'success' });

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // VirtualToolHandler executes an in-process MCP tool.
@@ -16,9 +17,7 @@ type VirtualTool struct {
 	Description string
 	InputSchema mcp.ToolInputSchema
 	Handler     VirtualToolHandler
-	// IsClientTool indicates whether this tool should be exposed to client requests.
-	// If false, the tool is only available for internal server-side logic.
-	IsClientTool bool
+	Visibility  typ.ToolVisibility
 }
 
 // VirtualToolRegistry holds registered in-process tools.
@@ -58,7 +57,7 @@ func (r *VirtualToolRegistry) List() []mcp.Tool {
 	return out
 }
 
-// ListVirtualTools returns the full VirtualTool list with IsClientTool information.
+// ListVirtualTools returns the full VirtualTool list with visibility information.
 // This is used by Runtime to filter tools based on client exposure.
 func (r *VirtualToolRegistry) ListVirtualTools() []VirtualTool {
 	r.mu.RLock()

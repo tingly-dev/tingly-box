@@ -25,11 +25,11 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 	schema.Properties = map[string]any{}
 
 	return VirtualTool{
-		Name:         "advisor",
-		Description:  description(),
-		InputSchema:  schema,
-		Handler:      newAdvisorHandler(cfg, cp, store),
-		IsClientTool: false, // Server tool: not exposed to clients
+		Name:        "advisor",
+		Description: description(),
+		InputSchema: schema,
+		Handler:     newAdvisorHandler(cfg, cp, store),
+		Visibility:  typ.ToolVisibilityServer,
 	}
 }
 

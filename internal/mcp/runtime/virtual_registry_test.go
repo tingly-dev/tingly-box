@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
@@ -15,7 +16,7 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent("ok")}}, nil
 		},
-		IsClientTool: false, // Server tool
+		Visibility: typ.ToolVisibilityServer, // Server tool
 	}
 	reg.Register(vt)
 
@@ -24,8 +25,8 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 		t.Fatal("expected advisor virtual tool")
 	}
 
-	if got.IsClientTool {
-		t.Fatal("expected advisor to be a server tool (IsClientTool=false)")
+	if got.Visibility == typ.ToolVisibilityClient {
+		t.Fatal("expected advisor to be a server tool (Visibility=server)")
 	}
 
 	mcpTools := reg.List()
@@ -42,7 +43,7 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 		Name:        "adviser",
 		Description: "Server-side advisor",
 		Handler:     nil,
-		IsClientTool: false,
+		Visibility:  typ.ToolVisibilityServer,
 	}
 	reg.Register(serverTool)
 
@@ -51,7 +52,7 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 		Name:        "websearch",
 		Description: "Client-side web search",
 		Handler:     nil,
-		IsClientTool: true,
+		Visibility:  typ.ToolVisibilityClient,
 	}
 	reg.Register(clientTool)
 
@@ -64,7 +65,7 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 	clientCount := 0
 	serverCount := 0
 	for _, vt := range virtualTools {
-		if vt.IsClientTool {
+		if vt.Visibility == typ.ToolVisibilityClient {
 			clientCount++
 		} else {
 			serverCount++
