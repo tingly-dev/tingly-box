@@ -110,6 +110,7 @@ export default {
     "accessControl": "Access Control",
     "status": "Status",
     "system": "System",
+    "general": "General",
     "experimental": "Experimental",
     "logs": "Logs",
     "userRequest": "User Request",
@@ -247,8 +248,8 @@ export default {
         "label": "HTTP/SOCKS Proxy URL (Optional)",
         "placeholder": "http://127.0.0.1:7890 or socks5://127.0.0.1:7890",
         "helper": "Optional: Use a proxy to bypass region restrictions. Saved for future use.",
-        "useGlobal": "Use global proxy ({{url}})",
-        "useGlobalNotSet": "Use global proxy (not configured — set in System Settings)"
+        "useGlobal": "Use quick proxy ({{url}})",
+        "useGlobalNotSet": "Use quick proxy (not configured — set in System Settings)"
       }
     },
     "verification": {
@@ -415,10 +416,11 @@ export default {
         "helper": "When enabled, providers without explicit proxy configuration will use system proxy settings (HTTP_PROXY, HTTPS_PROXY, macOS system proxy, Clash, etc.)"
       },
       "globalProxyUrl": {
-        "label": "Global Proxy",
-        "helper": "Fallback proxy for all providers and OAuth. Per-provider proxy takes priority.",
-        "saveSuccess": "Global proxy URL saved",
-        "saveFailed": "Failed to save global proxy URL"
+        "label": "Quick Proxy",
+        "description": "Save a proxy you reuse often so providers and OAuth can pick it up with one click — per-provider proxy still wins if set.",
+        "helper": "Reusable across providers and OAuth. Per-provider proxy takes priority.",
+        "saveSuccess": "Quick proxy saved",
+        "saveFailed": "Failed to save quick proxy"
       },
       "notifications": {
         "updateSuccess": "Proxy settings updated successfully",

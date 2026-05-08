@@ -171,11 +171,11 @@ export function useActivityItems(): ActivityItem[] {
             {
                 key: 'system',
                 icon: <IconSettings size={22} />,
-                label: t('layout.settings'),
+                label: t('layout.system'),
                 defaultPath: '/system',
                 children: [
+                    { path: '/system', label: t('layout.general'), icon: <IconSettings size={20} /> },
                     { path: '/access-control', label: t('layout.accessControl'), icon: <IconShield size={20} /> },
-                    { path: '/system', label: t('layout.system'), icon: <IconSettings size={20} /> },
                     { path: '/system/experimental', label: t('layout.experimental'), icon: <IconFlask size={20} /> },
                     { path: '/system/logs', label: t('layout.logs'), icon: <IconFileText size={20} /> },
                 ],

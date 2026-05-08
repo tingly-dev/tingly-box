@@ -110,6 +110,7 @@ export default {
     "accessControl": "访问控制",
     "status": "状态",
     "system": "系统",
+    "general": "通用",
     "experimental": "实验功能",
     "logs": "日志",
     "userRequest": "用户请求",
@@ -247,8 +248,8 @@ export default {
         "label": "HTTP/SOCKS 代理 URL（可选）",
         "placeholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:7890",
         "helper": "可选：使用代理绕过区域限制。将保存以供将来使用。",
-        "useGlobal": "使用全局代理（{{url}}）",
-        "useGlobalNotSet": "使用全局代理（未配置 — 请在系统设置中配置）"
+        "useGlobal": "使用常用代理（{{url}}）",
+        "useGlobalNotSet": "使用常用代理（未配置 — 请在系统设置中配置）"
       }
     },
     "verification": {
@@ -415,10 +416,11 @@ export default {
         "helper": "启用后，没有显式代理配置的提供商将使用系统代理设置（HTTP_PROXY、HTTPS_PROXY、macOS 系统代理、Clash 等）"
       },
       "globalProxyUrl": {
-        "label": "全局代理",
-        "helper": "所有提供商和 OAuth 的兜底代理，每个提供商的专属代理优先级更高。",
-        "saveSuccess": "全局代理 URL 已保存",
-        "saveFailed": "保存全局代理 URL 失败"
+        "label": "常用代理",
+        "description": "保存一个常用的代理，配置 Provider 或 OAuth 时可一键复用；如果 Provider 单独设置了代理，会以 Provider 的为准。",
+        "helper": "可在 Provider 和 OAuth 中一键复用，Provider 单独设置的代理优先级更高。",
+        "saveSuccess": "常用代理已保存",
+        "saveFailed": "保存常用代理失败"
       },
       "notifications": {
         "updateSuccess": "代理设置更新成功",

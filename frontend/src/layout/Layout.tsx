@@ -14,6 +14,7 @@ import { useZenMode } from '../hooks/useZenMode';
 import { useProfileContext } from '../contexts/ProfileContext';
 import type { ActivityItem, LayoutProps } from './types';
 import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '../components/BrandIcons';
+import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators';
 import { IconPlus } from '@tabler/icons-react';
 
 const Layout = ({ children }: LayoutProps) => {
@@ -292,6 +293,7 @@ const Layout = ({ children }: LayoutProps) => {
 
     return (
         <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative', zIndex: Z_INDEX.main }}>
+            <FloatingStatusIndicators />
             {/* Zen Mode Layout */}
             {effectiveZenEnabled && !zenLoading && zenAgent ? (
                 <>

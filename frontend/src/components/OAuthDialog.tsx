@@ -774,8 +774,8 @@ const OAuthDialog = ({open, onClose, onSuccess}: OAuthDialogProps) => {
                                 label={
                                     <Typography variant="body2" color={globalProxyUrl ? 'text.secondary' : 'text.disabled'}>
                                         {globalProxyUrl
-                                            ? `Use global proxy (${globalProxyUrl})`
-                                            : 'Use global proxy (not configured)'}
+                                            ? `Use quick proxy (${globalProxyUrl})`
+                                            : 'Use quick proxy (not configured)'}
                                     </Typography>
                                 }
                                 labelPlacement="start"
