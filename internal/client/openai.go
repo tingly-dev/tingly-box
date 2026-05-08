@@ -124,6 +124,11 @@ func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNe
 	return c.client.Embeddings.New(ctx, req)
 }
 
+// ImagesGenerate creates a new image generation request
+func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
+	return c.client.Images.Generate(ctx, req)
+}
+
 // ResponsesNew creates a new Responses API request
 func (c *OpenAIClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
 	return c.client.Responses.New(ctx, req)

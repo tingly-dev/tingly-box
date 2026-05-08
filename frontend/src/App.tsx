@@ -32,6 +32,7 @@ import UseOpenCodePage from './pages/scenario/UseOpenCodePage';
 import UseXcodePage from './pages/scenario/UseXcodePage';
 import UseVSCodePage from './pages/scenario/UseVSCodePage';
 import UseEmbedPage from './pages/scenario/UseEmbedPage';
+import UseImageGenPage from './pages/scenario/UseImageGenPage';
 import CredentialPage from './pages/CredentialPage';
 import ProviderListPage from './pages/ProviderListPage';
 import System from './pages/System';
@@ -350,6 +351,7 @@ function AppContent() {
                     <Route path="/agent/xcode" element={<UseXcodePage />} />
                     <Route path="/agent/vscode" element={<UseVSCodePage />} />
                     <Route path="/agent/embed" element={<UseEmbedPage />} />
+                    <Route path="/agent/imagegen" element={<UseImageGenPage />} />
                     {/* Legacy redirects */}
                     <Route path="/use-openai" element={<Navigate to="/agent/openai" replace />} />
                     <Route path="/use-anthropic" element={<Navigate to="/agent/anthropic" replace />} />

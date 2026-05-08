@@ -51,6 +51,23 @@ func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper *client.OpenAIClient, r
 	return resp, cancel, err
 }
 
+// ForwardOpenAIImageGeneration sends an OpenAI image generation request.
+// Image generation has no streaming and skips the chat transform chain.
+func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ImageGenerateParams) (*openai.ImagesResponse, context.CancelFunc, error) {
+	if wrapper == nil {
+		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
+	}
+
+	ctx, cancel := fc.PrepareContext(req)
+
+	logrus.Infof("provider: %s, model: %s (image generation)", fc.Provider.Name, req.Model)
+
+	resp, err := wrapper.ImagesGenerate(ctx, *req)
+	fc.Complete(ctx, resp, err)
+
+	return resp, cancel, err
+}
+
 // ForwardOpenAIChatStream sends a streaming OpenAI chat completion request.
 // IMPORTANT: All transformations (protocol conversion + vendor-specific) should
 // be applied by the transform chain BEFORE calling this function.

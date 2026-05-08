@@ -1163,6 +1163,9 @@ func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// Embeddings endpoint (OpenAI compatible)
 	group.POST("/embeddings", s.getModelAuthMiddleware(), s.HandleOpenAIEmbeddings)
 
+	// Image generation endpoint (OpenAI compatible)
+	group.POST("/images/generations", s.getModelAuthMiddleware(), s.HandleOpenAIImageGeneration)
+
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", s.getModelAuthMiddleware(), s.ListModelsByScenario)
 }
@@ -1338,6 +1341,7 @@ func (s *Server) Start(port int) error {
 		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
 		fmt.Printf("Embeddings API endpoint: %s://%s:%d/tingly/embed/v1/embeddings\n", scheme, resolvedHost, port)
+		fmt.Printf("Image Generation API endpoint: %s://%s:%d/tingly/imagegen/v1/images/generations\n", scheme, resolvedHost, port)
 		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())
