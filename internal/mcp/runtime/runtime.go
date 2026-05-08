@@ -595,6 +595,14 @@ func (r *Runtime) VirtualRegistry() *VirtualToolRegistry {
 	return r.virtualRegistry
 }
 
+// SessionStore returns the runtime's session store.
+func (r *Runtime) SessionStore() *SessionStore {
+	if r == nil {
+		return nil
+	}
+	return r.sessionStore
+}
+
 func buildAllowList(names []string) (bool, map[string]bool) {
 	if len(names) == 0 {
 		return true, nil

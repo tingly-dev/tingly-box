@@ -5,7 +5,7 @@ import (
 
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/servertool"
+	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 )
 
 // serverHookDeps implements servertool.HookDeps using the Server.
@@ -37,6 +37,9 @@ func (d *serverHookDeps) GetScenarioSink(ctx context.Context) *obs.Sink {
 
 // newServerExecutor creates a DefaultExecutor backed by this Server.
 func (s *Server) newServerExecutor() *servertool.DefaultExecutor {
+	if s.servertoolPipeline != nil {
+		return s.servertoolPipeline.NewExecutor(s.mcpRuntime, &serverHookDeps{server: s})
+	}
 	return servertool.NewDefaultExecutor(s.mcpRuntime, &serverHookDeps{server: s})
 }
 
