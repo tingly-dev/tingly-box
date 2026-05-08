@@ -44,6 +44,7 @@ export default {
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
       "useEmbed": "Embed",
+      "useImageGen": "Image Gen",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
       "credential": "Credential",
