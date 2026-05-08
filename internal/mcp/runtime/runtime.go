@@ -227,16 +227,16 @@ func ParseNormalizedToolName(name string) (string, string, bool) {
 	return parts[0], parts[1], true
 }
 
-// CallTool executes a normalized MCP tool call and returns serialized result.
+// CallTool executes a normalized MCP tool call and returns a structured ToolResult.
 // Dispatches virtual tools first (kernel mode), then remote tools (user mode).
-func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (string, error) {
+func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (ToolResult, error) {
 	if r == nil {
-		return "", fmt.Errorf("MCP runtime not initialized")
+		return ToolResult{}, fmt.Errorf("MCP runtime not initialized")
 	}
 	// 1. Check virtual registry first (kernel mode)
 	sourceID, toolName, ok := ParseNormalizedToolName(normalizedName)
 	if !ok {
-		return "", &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
+		return ToolResult{}, &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
 	}
 
 	if sourceID == "builtin" && r.virtualRegistry != nil {
@@ -255,13 +255,13 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	// 2. Forward to remote tool source (user mode)
 	source, err := r.getOrCreateSource(ctx, sourceID)
 	if err != nil {
-		return "", err
+		return ToolResult{}, err
 	}
 
 	// Ensure source is connected
 	if !source.IsConnected() {
 		if err := source.Connect(ctx); err != nil {
-			return "", &sessionError{sourceID: sourceID, msg: "failed to connect source: " + err.Error()}
+			return ToolResult{}, &sessionError{sourceID: sourceID, msg: "failed to connect source: " + err.Error()}
 		}
 
 		// Enable health monitoring for persistent connections
@@ -270,22 +270,22 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 		}
 	}
 
-	// Call the tool
+	// Call the tool — remote sources still return string; wrap into ToolResult.
 	result, err := source.CallTool(ctx, toolName, arguments)
 	if err != nil {
-		return "", err
+		return ToolResult{}, err
 	}
 
-	return result, nil
+	return TextToolResult(result), nil
 }
 
 // callVirtualTool executes an in-process virtual tool with panic recovery.
-func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, arguments string) (string, error) {
+func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, arguments string) (out ToolResult, err error) {
 	// Parse arguments
 	var argMap map[string]any
 	if arguments != "" {
-		if err := json.Unmarshal([]byte(arguments), &argMap); err != nil {
-			return "", fmt.Errorf("invalid arguments JSON: %w", err)
+		if jsonErr := json.Unmarshal([]byte(arguments), &argMap); jsonErr != nil {
+			return ToolResult{}, fmt.Errorf("invalid arguments JSON: %w", jsonErr)
 		}
 	}
 
@@ -297,32 +297,20 @@ func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, argumen
 		},
 	}
 
-	// Execute with panic recovery
+	// Execute with panic recovery — named returns allow the deferred func to set err.
 	defer func() {
 		if rec := recover(); rec != nil {
 			logrus.WithField("panic", rec).Error("mcp: virtual tool panic")
+			err = fmt.Errorf("virtual tool panic: %v", rec)
 		}
 	}()
 
 	result, err := tool.Handler(ctx, req)
 	if err != nil {
-		return "", err
+		return ToolResult{}, err
 	}
 
-	// Serialize result
-	resultBytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize tool result: %w", err)
-	}
-
-	// Extract text content from result
-	if len(result.Content) > 0 {
-		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
-			return string(textContent.Text), nil
-		}
-	}
-
-	return string(resultBytes), nil
+	return ToolResultFromMCPResult(result), nil
 }
 
 // isSourceEnabled checks if a source is enabled in the current configuration

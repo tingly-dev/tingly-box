@@ -93,7 +93,11 @@ func (a *AnthropicBetaAdapter) BuildAssistantMessage(response any) (any, error) 
 }
 
 func (a *AnthropicBetaAdapter) BuildToolMessage(result ToolExecutionResult) any {
-	return anthropic.NewBetaToolResultBlock(result.ToolUseID, result.Content, result.IsError)
+	return anthropic.BetaToolResultBlockParam{
+		ToolUseID: result.ToolUseID,
+		Content:   toolContentsToAnthropicBeta(result.Contents),
+		IsError:   anthropic.Bool(result.IsError),
+	}
 }
 
 func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (any, error) {
@@ -116,7 +120,13 @@ func (a *AnthropicBetaAdapter) AppendToolResults(req, resp any, results []any) (
 	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, len(results))
 	for i, r := range results {
 		tr := r.(ToolExecutionResult)
-		resultBlocks[i] = anthropic.NewBetaToolResultBlock(tr.ToolUseID, tr.Content, tr.IsError)
+		resultBlocks[i] = anthropic.BetaContentBlockParamUnion{
+			OfToolResult: &anthropic.BetaToolResultBlockParam{
+				ToolUseID: tr.ToolUseID,
+				Content:   toolContentsToAnthropicBeta(tr.Contents),
+				IsError:   anthropic.Bool(tr.IsError),
+			},
+		}
 	}
 	newMessages = append(newMessages, anthropic.NewBetaUserMessage(resultBlocks...))
 
@@ -133,7 +143,13 @@ func (a *AnthropicBetaAdapter) BuildContinuationSegment(resp any, results []Tool
 	segment = append(segment, betaMessageToParamPreservingThinking(msg))
 	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(results))
 	for _, r := range results {
-		resultBlocks = append(resultBlocks, anthropic.NewBetaToolResultBlock(r.ToolUseID, r.Content, r.IsError))
+	resultBlocks = append(resultBlocks, anthropic.BetaContentBlockParamUnion{
+			OfToolResult: &anthropic.BetaToolResultBlockParam{
+				ToolUseID: r.ToolUseID,
+				Content:   toolContentsToAnthropicBeta(r.Contents),
+				IsError:   anthropic.Bool(r.IsError),
+			},
+		})
 	}
 	if len(resultBlocks) > 0 {
 		segment = append(segment, anthropic.NewBetaUserMessage(resultBlocks...))

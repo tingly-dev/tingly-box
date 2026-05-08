@@ -25,7 +25,7 @@ func TestCallMCPToolWithGuard_DisabledToolReturnsCallingDisabledTools(t *testing
 	result, err := s.callMCPToolWithGuard(context.Background(), "tingly_box_mcp__webtools__mcp_web_search", `{"query":"x"}`)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "calling disabled tools")
-	require.Contains(t, result, `"error":"calling disabled tools: tingly_box_mcp__webtools__mcp_web_search"`)
+	require.Contains(t, result.FirstText(), `"error":"calling disabled tools: tingly_box_mcp__webtools__mcp_web_search"`)
 }
 
 func TestAdvisorResponseHook_MatchSupportsBuiltinAndAdvisorSourceIDs(t *testing.T) {
@@ -81,7 +81,7 @@ func TestCallMCPToolWithHooks_AdvisorInjectsContext(t *testing.T) {
 		{"role": "user", "content": "hello"},
 	})
 	require.NoError(t, err)
-	require.Contains(t, result, "client pool not available")
+	require.Contains(t, result.FirstText(), "client pool not available")
 }
 
 func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
@@ -157,15 +157,15 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 
 	_, result1, err1 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err1)
-	require.Contains(t, result1, "plan")
+	require.Contains(t, result1.FirstText(), "plan")
 
 	ctx, result2, err2 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err2)
-	require.Contains(t, result2, "plan")
+	require.Contains(t, result2.FirstText(), "plan")
 
 	_, result3, err3 := s.callMCPToolWithHooks(ctx, toolName, `{}`, msgs)
 	require.NoError(t, err3)
-	require.Equal(t, "Advisor consultations exhausted for this request.", result3)
+	require.Equal(t, "Advisor consultations exhausted for this request.", result3.FirstText())
 }
 
 func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
@@ -217,5 +217,5 @@ func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
 
 	_, result, err := s.callMCPToolWithHooks(ctx, "tingly_box_mcp__advisor__advisor", `{}`, nil)
 	require.NoError(t, err)
-	require.Contains(t, result, "recursion limit reached")
+	require.Contains(t, result.FirstText(), "recursion limit reached")
 }

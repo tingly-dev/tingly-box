@@ -99,7 +99,7 @@ func (m *MockFormatAdapter) BuildToolMessage(result ToolExecutionResult) any {
 	m.BuildToolMessageCalled = true
 	return &MockToolMessage{
 		ToolUseID: result.ToolUseID,
-		Content:   result.Content,
+		Content:   result.TextContent(),
 	}
 }
 

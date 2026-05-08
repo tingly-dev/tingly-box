@@ -93,7 +93,11 @@ func (a *AnthropicV1Adapter) BuildAssistantMessage(response any) (any, error) {
 }
 
 func (a *AnthropicV1Adapter) BuildToolMessage(result ToolExecutionResult) any {
-	return anthropic.NewToolResultBlock(result.ToolUseID, result.Content, result.IsError)
+	return anthropic.ToolResultBlockParam{
+		ToolUseID: result.ToolUseID,
+		Content:   toolContentsToAnthropicV1(result.Contents),
+		IsError:   anthropic.Bool(result.IsError),
+	}
 }
 
 func (a *AnthropicV1Adapter) AppendToolResults(req, resp any, results []any) (any, error) {
@@ -116,7 +120,13 @@ func (a *AnthropicV1Adapter) AppendToolResults(req, resp any, results []any) (an
 	resultBlocks := make([]anthropic.ContentBlockParamUnion, len(results))
 	for i, r := range results {
 		tr := r.(ToolExecutionResult)
-		resultBlocks[i] = anthropic.NewToolResultBlock(tr.ToolUseID, tr.Content, tr.IsError)
+		resultBlocks[i] = anthropic.ContentBlockParamUnion{
+			OfToolResult: &anthropic.ToolResultBlockParam{
+				ToolUseID: tr.ToolUseID,
+				Content:   toolContentsToAnthropicV1(tr.Contents),
+				IsError:   anthropic.Bool(tr.IsError),
+			},
+		}
 	}
 	newMessages = append(newMessages, anthropic.NewUserMessage(resultBlocks...))
 
@@ -133,7 +143,13 @@ func (a *AnthropicV1Adapter) BuildContinuationSegment(resp any, results []ToolEx
 	segment = append(segment, messageToParamPreservingThinking(msg))
 	resultBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(results))
 	for _, r := range results {
-		resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(r.ToolUseID, r.Content, r.IsError))
+		resultBlocks = append(resultBlocks, anthropic.ContentBlockParamUnion{
+			OfToolResult: &anthropic.ToolResultBlockParam{
+				ToolUseID: r.ToolUseID,
+				Content:   toolContentsToAnthropicV1(r.Contents),
+				IsError:   anthropic.Bool(r.IsError),
+			},
+		})
 	}
 	if len(resultBlocks) > 0 {
 		segment = append(segment, anthropic.NewUserMessage(resultBlocks...))

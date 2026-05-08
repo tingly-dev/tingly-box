@@ -42,17 +42,17 @@ func (s *Server) isEnabledMCPToolName(ctx context.Context, toolName string) bool
 	return ok
 }
 
-func disabledMCPToolErrorPayload(toolName string) string {
+func disabledMCPToolErrorPayload(toolName string) mcpruntime.ToolResult {
 	payload, _ := json.Marshal(map[string]string{"error": "calling disabled tools: " + toolName})
-	return string(payload)
+	return mcpruntime.ErrorToolResult(string(payload))
 }
 
-func normalizeMCPToolCallError(err error) string {
+func normalizeMCPToolCallError(err error) mcpruntime.ToolResult {
 	if err == nil {
-		return ""
+		return mcpruntime.ToolResult{}
 	}
 	payload, _ := json.Marshal(map[string]string{"error": err.Error()})
-	return string(payload)
+	return mcpruntime.ErrorToolResult(string(payload))
 }
 
 func remapLegacyAdvisorToolName(toolName string) string {
@@ -66,7 +66,7 @@ func remapLegacyAdvisorToolName(toolName string) string {
 	return toolName
 }
 
-func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (string, error) {
+func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (mcpruntime.ToolResult, error) {
 	if !mcpruntime.IsMCPToolName(toolName) {
 		return disabledMCPToolErrorPayload(toolName), fmt.Errorf("non-MCP tool routed to MCP executor: %s", toolName)
 	}
@@ -135,7 +135,7 @@ func (s *Server) applyMCPResponseToolCallHooks(ctx context.Context, toolName str
 // callMCPToolWithHooks executes response-phase MCP servertool hooks before the runtime call.
 // Hooks run when we consume worker-returned tool calls.
 // Returns updated context (with advisor quota decremented), result, and error.
-func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error) {
+func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
 	prevDepth := mcpruntime.GetAdvisorDepth(ctx)
 	ctx = s.applyMCPResponseToolCallHooks(ctx, toolName, messages)
 	result, err := s.callMCPToolWithGuard(ctx, toolName, arguments)
@@ -144,6 +144,6 @@ func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments s
 	return ctx, result, err
 }
 
-func (s *Server) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error) {
+func (s *Server) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
 	return s.callMCPToolWithHooks(ctx, toolName, arguments, messages)
 }

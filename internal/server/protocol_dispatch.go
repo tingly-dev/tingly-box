@@ -462,15 +462,15 @@ func (s *Server) buildOpenAIToAnthropicMCPHooks(
 					arguments = "{}"
 				}
 				// callMCPToolWithHooks updates context (e.g., advisor quota), so we must propagate it
-				var result string
+				var toolResult mcpruntime.ToolResult
 				var err error
-				ctx, result, err = s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
+				ctx, toolResult, err = s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
 				if err != nil {
 					logrus.WithError(err).Warnf("mcp: tool call failed name=%s arguments=%s", tc.Name, arguments)
 				}
 				virtualResults = append(virtualResults, mcp.ToolExecutionResult{
 					ToolUseID: tc.ID,
-					Content:   result,
+					Contents:  toolResult.Contents,
 					IsError:   err != nil,
 				})
 			}
@@ -531,7 +531,7 @@ func buildOpenAIContinuationSegment(
 		if r.ToolUseID == "" {
 			continue
 		}
-		segment = append(segment, openai.ToolMessage(r.Content, r.ToolUseID))
+		segment = append(segment, openai.ToolMessage(r.TextContent(), r.ToolUseID))
 	}
 	return segment
 }

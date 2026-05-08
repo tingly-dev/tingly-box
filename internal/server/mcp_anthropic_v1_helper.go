@@ -52,10 +52,10 @@ func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments 
 	if ac, ok := mcpruntime.GetAdvisorContext(updatedCtx); ok {
 		a.advisorCtx = ac
 	}
-	return result, err
+	return result.FirstText(), err
 }
 
-func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error) {
+func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
 	callCtx := ctx
 	if a.advisorCtx != nil {
 		callCtx = mcpruntime.WithAdvisorContext(ctx, a.advisorCtx)

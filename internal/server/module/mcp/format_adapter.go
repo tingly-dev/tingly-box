@@ -44,8 +44,19 @@ type Tool interface {
 // ToolExecutionResult represents the result of executing a tool
 type ToolExecutionResult struct {
 	ToolUseID string
-	Content   string
+	Contents  []runtime.ToolContent
 	IsError   bool
+}
+
+// TextContent returns the concatenated text of all text content items.
+func (r ToolExecutionResult) TextContent() string {
+	var out string
+	for _, c := range r.Contents {
+		if c.Type == runtime.ContentTypeText {
+			out += c.Text
+		}
+	}
+	return out
 }
 
 // TokenUsage represents token usage information

@@ -94,7 +94,7 @@ func (o *OpenAIChatAdapter) BuildAssistantMessage(response any) (any, error) {
 }
 
 func (o *OpenAIChatAdapter) BuildToolMessage(result ToolExecutionResult) any {
-	return openai.ToolMessage(result.Content, result.ToolUseID)
+	return openai.ToolMessage(result.TextContent(), result.ToolUseID)
 }
 
 func (o *OpenAIChatAdapter) AppendToolResults(req, resp any, results []any) (any, error) {
@@ -117,7 +117,7 @@ func (o *OpenAIChatAdapter) AppendToolResults(req, resp any, results []any) (any
 	for _, r := range results {
 		result := r.(ToolExecutionResult)
 		// ToolMessage returns ChatCompletionMessageParamUnion
-		newMessages = append(newMessages, openai.ToolMessage(result.Content, result.ToolUseID))
+		newMessages = append(newMessages, openai.ToolMessage(result.TextContent(), result.ToolUseID))
 	}
 
 	newReq.Messages = newMessages
@@ -132,7 +132,7 @@ func (o *OpenAIChatAdapter) BuildContinuationSegment(resp any, results []ToolExe
 	segment := make([]openai.ChatCompletionMessageParamUnion, 0, 1+len(results))
 	segment = append(segment, completion.Choices[0].Message.ToParam())
 	for _, r := range results {
-		segment = append(segment, openai.ToolMessage(r.Content, r.ToolUseID))
+		segment = append(segment, openai.ToolMessage(r.TextContent(), r.ToolUseID))
 	}
 	return segment, nil
 }

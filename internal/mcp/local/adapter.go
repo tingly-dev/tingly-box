@@ -104,7 +104,7 @@ func (a *MCPRuntimeAdapter) CallTool(ctx context.Context, name string, arguments
 		return "", fmt.Errorf("call tool %s: %w", name, err)
 	}
 
-	return result, nil
+	return result.FirstText(), nil
 }
 
 // BuildNormalizedToolName creates a normalized tool name from source ID and tool name.

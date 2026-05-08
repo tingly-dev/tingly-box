@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 )
 
 // ServerToolExecutor implements ToolExecutor by wrapping server's MCP tool execution
@@ -11,7 +13,7 @@ type ServerToolExecutor struct {
 
 // ToolExecutorServer defines the server methods needed for tool execution
 type ToolExecutorServer interface {
-	CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error)
+	CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error)
 	CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error)
 }
 
@@ -35,7 +37,7 @@ func (e *ServerToolExecutor) ExecuteToolWithContext(
 	tool Tool,
 	messages []map[string]any,
 ) (context.Context, ToolExecutionResult, error) {
-	nextCtx, result, err := e.server.CallMCPToolWithHooks(
+	nextCtx, toolResult, err := e.server.CallMCPToolWithHooks(
 		ctx,
 		tool.Name(),
 		tool.Arguments(),
@@ -45,12 +47,12 @@ func (e *ServerToolExecutor) ExecuteToolWithContext(
 		nextCtx = ctx
 	}
 
-	toolResult := ToolExecutionResult{
+	result := ToolExecutionResult{
 		ToolUseID: tool.ID(),
-		Content:   result,
-		IsError:   err != nil,
+		Contents:  toolResult.Contents,
+		IsError:   err != nil || toolResult.IsError,
 	}
-	return nextCtx, toolResult, err
+	return nextCtx, result, err
 }
 
 func (e *ServerToolExecutor) ExecuteTools(

@@ -88,7 +88,7 @@ func runMCPRemoteRuntimeE2E(t *testing.T, transport string) {
 			Text string `json:"text"`
 		} `json:"content"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(result), &decoded))
+	require.NoError(t, json.Unmarshal([]byte(result.FirstText()), &decoded))
 	require.Len(t, decoded.Content, 1)
 	require.Equal(t, "text", decoded.Content[0].Type)
 	require.Equal(t, `{"ok":true,"q":"hello"}`, decoded.Content[0].Text)
