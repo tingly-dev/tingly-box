@@ -167,3 +167,55 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 	require.NoError(t, err3)
 	require.Equal(t, "Advisor consultations exhausted for this request.", result3)
 }
+
+func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
+	// Simulate an advisor request that is itself calling back into the advisor
+	// (depth already > 1 before the call). The handler must reject with the
+	// recursion-limit message so advisor cannot self-reinject.
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Should never be reached when depth guard fires.
+		t.Error("advisor HTTP backend should not be called on loopback")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mockServer.Close()
+
+	cfg := &typ.MCPRuntimeConfig{
+		Sources: []typ.MCPSourceConfig{{
+			ID:        "advisor",
+			Transport: "advisor",
+			Enabled:   typ.BoolPtr(true),
+			Visibility: typ.ToolVisibilityServer,
+			Tools:     []string{"advisor"},
+			Advisor: &typ.AdvisorConfig{
+				BaseURL:           mockServer.URL + "/v1",
+				Model:             "advisor-model",
+				APIKey:            "test-key",
+				MaxUsesPerRequest: 3,
+			},
+		}},
+	}
+
+	cp := client.NewClientPool()
+	rt := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
+	rt.SetClientPool(cp)
+	for _, source := range cfg.Sources {
+		if source.Advisor != nil {
+			rt.RegisterAdviser(*source.Advisor, cp)
+		}
+	}
+	t.Cleanup(rt.Close)
+
+	s := &Server{mcpRuntime: rt}
+
+	uses := 3
+	// Pre-set depth to 2 to simulate a loopback (advisor calling itself).
+	ctx := mcpruntime.WithAdvisorDepth(context.Background(), 2)
+	ctx = mcpruntime.WithAdvisorContext(ctx, &mcpruntime.AdvisorContext{
+		Messages:      []map[string]any{{"role": "user", "content": "inner"}},
+		UsesRemaining: &uses,
+	})
+
+	_, result, err := s.callMCPToolWithHooks(ctx, "tingly_box_mcp__advisor__advisor", `{}`, nil)
+	require.NoError(t, err)
+	require.Contains(t, result, "recursion limit reached")
+}
