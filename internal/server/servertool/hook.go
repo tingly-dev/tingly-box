@@ -55,13 +55,6 @@ func (h AdvisorHook) PrepareContext(deps HookDeps, ctx context.Context, messages
 	})
 }
 
-// defaultHooks returns the set of hooks applied before every tool call.
-func defaultHooks() []Hook {
-	return []Hook{
-		AdvisorHook{},
-	}
-}
-
 // applyHooks runs all matching hooks for the given tool name and returns the updated context.
 func applyHooks(ctx context.Context, toolName string, messages []map[string]any, deps HookDeps, hooks []Hook) context.Context {
 	for _, hook := range hooks {

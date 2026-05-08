@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -76,6 +77,9 @@ func TestCallMCPToolWithHooks_AdvisorInjectsContext(t *testing.T) {
 		clientPool: cp,
 		mcpRuntime: rt,
 	}
+	pipeline := servertool.NewPipeline()
+	pipeline.Register(servertool.NewAdvisorProvider(typ.AdvisorConfig{MaxUsesPerRequest: 3}, nil, nil))
+	s.servertoolPipeline = pipeline
 	// No pre-injected AdvisorContext here; hook should create one.
 	_, result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{}`, []map[string]any{
 		{"role": "user", "content": "hello"},

@@ -35,12 +35,12 @@ type DefaultExecutor struct {
 	hooks   []Hook
 }
 
-// NewDefaultExecutor creates a DefaultExecutor with the default hook set.
+// NewDefaultExecutor creates a DefaultExecutor with no hooks.
+// Use Pipeline.NewExecutor to get an executor with registered tool hooks.
 func NewDefaultExecutor(rt RuntimeCaller, deps HookDeps) *DefaultExecutor {
 	return &DefaultExecutor{
 		runtime: rt,
 		deps:    deps,
-		hooks:   defaultHooks(),
 	}
 }
 
