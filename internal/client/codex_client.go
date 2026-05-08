@@ -133,11 +133,12 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 
 	// Map response_format to output_format
 	// OpenAI: "url", "b64_json" -> Codex: "url", "b64_json"
+	// Codex: supported values are: 'png', 'webp', and 'jpeg'
 	if req.ResponseFormat != "" {
 		tool["output_format"] = string(req.ResponseFormat)
 	} else {
 		// Default to b64_json for Codex
-		tool["output_format"] = "b64_json"
+		tool["output_format"] = "png"
 	}
 
 	// Log warning for unsupported N parameter
@@ -180,6 +181,8 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 	// Collect output items from response.output_item.done events
 	for stream.Next() {
 		event := stream.Current()
+
+		fmt.Printf("[Codex] Receiving event: %v\n", event)
 
 		// Look for response.output_item.done events
 		if event.Type == "response.output_item.done" {
