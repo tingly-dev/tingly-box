@@ -3,13 +3,14 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { Logout } from '@mui/icons-material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
-import { IconCircleCheck, IconCircleX, IconInfoCircle, IconKey, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage } from '@tabler/icons-react';
+import { IconCircleCheck, IconCircleX, IconInfoCircle, IconKey, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage, IconBrush, IconSun, IconMoon, IconSunHigh } from '@tabler/icons-react';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useThemeMode } from '@/contexts/ThemeContext';
 import { api } from '@/services/api';
 
 const System = () => {
@@ -17,6 +18,7 @@ const System = () => {
     const { currentVersion, hasUpdate, latestVersion, showUpdateDialog } = useVersion();
     const { isHealthy, checking, checkHealth } = useHealth();
     const { logout: authLogout } = useAuth();
+    const { mode: themeMode, setTheme } = useThemeMode();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
@@ -308,6 +310,48 @@ const System = () => {
                                             },
                                         }}
                                     />
+                                </Box>
+                            </Box>
+
+                            {/* Theme — moved from the activity bar */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                    <IconBrush size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        {t('common.theme')}
+                                    </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, flexWrap: 'wrap' }}>
+                                    {([
+                                        { value: 'light', label: t('layout.activityBar.light'), Icon: IconSun },
+                                        { value: 'dark', label: t('layout.activityBar.dark'), Icon: IconMoon },
+                                        { value: 'sunlit', label: t('layout.activityBar.sunlit'), Icon: IconSunHigh },
+                                    ] as const).map(({ value, label, Icon }) => {
+                                        const selected = themeMode === value;
+                                        return (
+                                            <Chip
+                                                key={value}
+                                                icon={<Icon size={14} />}
+                                                label={label}
+                                                onClick={() => setTheme(value)}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: selected ? 'primary.main' : 'action.hover',
+                                                    color: selected ? 'primary.contrastText' : 'text.primary',
+                                                    fontWeight: selected ? 600 : 400,
+                                                    border: selected ? 'none' : '1px solid',
+                                                    borderColor: 'divider',
+                                                    cursor: 'pointer',
+                                                    '& .MuiChip-icon': {
+                                                        color: 'inherit',
+                                                    },
+                                                    '&:hover': {
+                                                        bgcolor: selected ? 'primary.dark' : 'action.selected',
+                                                    },
+                                                }}
+                                            />
+                                        );
+                                    })}
                                 </Box>
                             </Box>
                         </Stack>

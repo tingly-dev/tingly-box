@@ -1,11 +1,6 @@
 import {
     IconAlertCircle,
-    IconBrush,
-    IconMoon,
-    IconSparkles,
     IconStar,
-    IconSun,
-    IconSunHigh,
     IconUser,
     IconYinYang,
     IconDots,
@@ -18,7 +13,6 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { useThemeMode } from '../contexts/ThemeContext';
 import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '@/components/BrandIcons';
 import {
     activityBarWidth,
@@ -54,18 +48,8 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
     const { currentVersion } = useAppVersion();
     const { hasUpdate, showUpdateDialog } = useAppVersion();
     const { isHealthy, showDisconnectDialog } = useHealth();
-    const { mode, setTheme } = useThemeMode();
-    const [themeMenuAnchorEl, setThemeMenuAnchorEl] = useState<HTMLElement | null>(null);
     const [zenMenuAnchorEl, setZenMenuAnchorEl] = useState<HTMLElement | null>(null);
     const [languageMenuAnchorEl, setLanguageMenuAnchorEl] = useState<HTMLElement | null>(null);
-
-    const handleThemeMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-        setThemeMenuAnchorEl(event.currentTarget);
-    };
-
-    const handleThemeMenuClose = () => {
-        setThemeMenuAnchorEl(null);
-    };
 
     const handleLanguageMenuClick = (event: React.MouseEvent<HTMLElement>) => {
         setLanguageMenuAnchorEl(event.currentTarget);
@@ -253,59 +237,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                     </Tooltip>
                 )}
 
-                {/* Theme menu - only show in normal mode */}
-                {!zenEnabled && (
-                    <Menu
-                        anchorEl={themeMenuAnchorEl}
-                        open={Boolean(themeMenuAnchorEl)}
-                        onClose={handleThemeMenuClose}
-                        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                        slotProps={{
-                            paper: {
-                                sx: {
-                                    minWidth: 160,
-                                    mt: 1,
-                                },
-                            },
-                        }}
-                    >
-                        <MenuItem
-                            selected={mode === 'light'}
-                            onClick={() => {
-                                setTheme('light');
-                                handleThemeMenuClose();
-                            }}
-                            sx={{ gap: 1.5 }}
-                        >
-                            <IconSun size={18} />
-                            <Typography>{t('layout.activityBar.light')}</Typography>
-                        </MenuItem>
-                        <MenuItem
-                            selected={mode === 'dark'}
-                            onClick={() => {
-                                setTheme('dark');
-                                handleThemeMenuClose();
-                            }}
-                            sx={{ gap: 1.5 }}
-                        >
-                            <IconMoon size={18} />
-                            <Typography>{t('layout.activityBar.dark')}</Typography>
-                        </MenuItem>
-                        <MenuItem
-                            selected={mode === 'sunlit'}
-                            onClick={() => {
-                                setTheme('sunlit');
-                                handleThemeMenuClose();
-                            }}
-                            sx={{ gap: 1.5 }}
-                        >
-                            <IconSunHigh size={18} />
-                            <Typography>{t('layout.activityBar.sunlit')}</Typography>
-                        </MenuItem>
-                    </Menu>
-                )}
-
                 {/* Language menu - only show in normal mode */}
                 {!zenEnabled && (
                     <Menu
@@ -475,7 +406,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                 )}
             </Box>
 
-            {/* Theme & Language buttons - bottom-left, above user icon */}
+            {/* Language button - bottom-left, above user icon */}
             {!zenEnabled && (
                 <Box
                     sx={{
@@ -487,34 +418,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         flexShrink: 0,
                     }}
                 >
-                    <Tooltip title={t('layout.activityBar.theme')} placement="right" arrow>
-                        <ListItemButton
-                            onClick={handleThemeMenuClick}
-                            sx={{
-                                minHeight: 48,
-                                mx: 0.5,
-                                px: activityItemPaddingX,
-                                py: 0.75,
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 0.25,
-                                position: 'relative',
-                                color: 'text.secondary',
-                                borderRadius: activityItemRadius,
-                                cursor: 'pointer',
-                                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
-                            }}
-                        >
-                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <IconBrush size={22} />
-                            </ListItemIcon>
-                            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'inherit', textAlign: 'center', lineHeight: 1.1 }}>
-                                {t('common.theme')}
-                            </Typography>
-                        </ListItemButton>
-                    </Tooltip>
-
                     <Tooltip title={t('system.language.title')} placement="right" arrow>
                         <ListItemButton
                             onClick={handleLanguageMenuClick}
