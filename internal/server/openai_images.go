@@ -14,12 +14,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests.
+// HandleOpenAIImageGeneration serves OpenAI-compatible image generation requests
+// against the upstream POST /v1/images/generations endpoint. The request is
+// forwarded as-is; tingly-box does not probe whether the upstream prefers the
+// dedicated images endpoint or the Responses API — the caller chooses the
+// surface and the corresponding tingly-box route.
 //
-// The endpoint is exposed via the mixin route group, so any scenario whose
-// descriptor declares TransportOpenAI or TransportImageGen can reach it. The
-// canonical home is the dedicated `imagegen` scenario; the `openai` scenario
-// also works because its descriptor is extended with TransportImageGen.
+// Exposed via the mixin route group, so any scenario whose descriptor declares
+// TransportImageGen (or TransportOpenAI as a mixin) can reach it. The canonical
+// home is the dedicated `imagegen` scenario.
 func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	scenario := c.Param("scenario")
 	scenarioType := typ.RuleScenario(scenario)
@@ -34,8 +37,7 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
-	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) &&
-		!typ.ScenarioSupportsTransport(scenarioType, typ.TransportImageGen) {
+	if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportImageGen) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
 				Message: fmt.Sprintf("scenario %s does not support image generation", scenario),
