@@ -2,148 +2,69 @@ package server
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
-	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/servertool"
 )
 
-// mcpResponseToolCallHook prepares runtime context for specific MCP servertool calls.
-// Hooks run after worker response arrives and before local tool execution.
-type mcpResponseToolCallHook interface {
-	Match(toolName string) bool
-	PrepareContext(s *Server, ctx context.Context, messages []map[string]any) context.Context
+// serverHookDeps implements servertool.HookDeps using the Server.
+type serverHookDeps struct {
+	server *Server
 }
 
-type advisorResponseHook struct{}
+func (d *serverHookDeps) GetAdvisorMaxUses() int {
+	if d.server == nil || d.server.mcpRuntime == nil {
+		return 0
+	}
+	return d.server.mcpRuntime.GetAdvisorMaxUses()
+}
 
-func (h advisorResponseHook) Match(toolName string) bool {
-	sourceID, toolNameOnly, ok := mcpruntime.ParseNormalizedToolName(toolName)
+func (d *serverHookDeps) GetScenarioSink(ctx context.Context) *obs.Sink {
+	if d.server == nil {
+		return nil
+	}
+	scenario, ok := servertool.ScenarioFromContext(ctx)
 	if !ok {
-		return false
+		return nil
 	}
-	isAdvisorSource := sourceID == mcptools.BuiltinAdvisorSourceID || sourceID == "builtin"
-	return isAdvisorSource && toolNameOnly == mcptools.BuiltinAdvisorToolName
+	sink := d.server.GetOrCreateScenarioSink(scenario)
+	if sink == nil || !sink.IsEnabled() {
+		return nil
+	}
+	return sink
 }
 
-func (h advisorResponseHook) PrepareContext(s *Server, ctx context.Context, messages []map[string]any) context.Context {
-	return s.withAdvisorContext(ctx, messages)
-}
-
-func (s *Server) isEnabledMCPToolName(ctx context.Context, toolName string) bool {
-	if s == nil || s.mcpRuntime == nil {
-		return false
-	}
-	enabled := s.mcpRuntime.ListCallableServerToolNames(ctx)
-	_, ok := enabled[toolName]
-	return ok
-}
-
-func disabledMCPToolErrorPayload(toolName string) mcpruntime.ToolResult {
-	payload, _ := json.Marshal(map[string]string{"error": "calling disabled tools: " + toolName})
-	return mcpruntime.ErrorToolResult(string(payload))
-}
-
-func normalizeMCPToolCallError(err error) mcpruntime.ToolResult {
-	if err == nil {
-		return mcpruntime.ToolResult{}
-	}
-	payload, _ := json.Marshal(map[string]string{"error": err.Error()})
-	return mcpruntime.ErrorToolResult(string(payload))
-}
-
-func remapLegacyAdvisorToolName(toolName string) string {
-	sourceID, toolNameOnly, ok := mcpruntime.ParseNormalizedToolName(toolName)
-	if !ok {
-		return toolName
-	}
-	if sourceID == mcptools.BuiltinAdvisorSourceID && toolNameOnly == mcptools.BuiltinAdvisorToolName {
-		return mcpruntime.NormalizeToolName("builtin", mcptools.BuiltinAdvisorToolName)
-	}
-	return toolName
-}
-
-func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (mcpruntime.ToolResult, error) {
-	if !mcpruntime.IsMCPToolName(toolName) {
-		return disabledMCPToolErrorPayload(toolName), fmt.Errorf("non-MCP tool routed to MCP executor: %s", toolName)
-	}
-
-	resolvedToolName := remapLegacyAdvisorToolName(toolName)
-	if !s.isEnabledMCPToolName(ctx, resolvedToolName) {
-		return disabledMCPToolErrorPayload(toolName), fmt.Errorf("calling disabled tools: %s", toolName)
-	}
-
-	result, err := s.mcpRuntime.CallTool(ctx, resolvedToolName, arguments)
-	if err != nil {
-		return normalizeMCPToolCallError(err), err
-	}
-
-	return result, nil
-}
-
-func (s *Server) mcpResponseToolCallHooks() []mcpResponseToolCallHook {
-	return []mcpResponseToolCallHook{
-		advisorResponseHook{},
-	}
-}
-
-func (s *Server) withAdvisorContext(ctx context.Context, messages []map[string]any) context.Context {
-	if actx, ok := mcpruntime.GetAdvisorContext(ctx); ok {
-		actx.Messages = messages
-		// Don't create a new context - return the original so modifications to actx
-		// are visible to subsequent calls within the same request
-		return ctx
-	}
-
-	maxUses := 0
-	if s != nil && s.mcpRuntime != nil {
-		maxUses = s.mcpRuntime.GetAdvisorMaxUses()
-	}
-	if maxUses <= 0 {
-		maxUses = 3
-	}
-
-	return mcpruntime.WithAdvisorContext(ctx, &mcpruntime.AdvisorContext{
-		Messages:      messages,
-		UsesRemaining: &maxUses,
-	})
-}
-
-func (s *Server) applyMCPResponseToolCallHooks(ctx context.Context, toolName string, messages []map[string]any) context.Context {
-	for _, hook := range s.mcpResponseToolCallHooks() {
-		if hook.Match(toolName) {
-			// Increment depth to prevent adviser recursion
-			depth := mcpruntime.GetAdvisorDepth(ctx)
-			ctx = mcpruntime.WithAdvisorDepth(ctx, depth+1)
-			ctx = hook.PrepareContext(s, ctx, messages)
-
-			// Inject scenario record sink so advisor HTTP calls get recorded
-			if scenarioVal := ctx.Value(client.ScenarioContextKey); scenarioVal != nil {
-				scenario := typ.RuleScenario(scenarioVal.(string))
-				if sink := s.GetOrCreateScenarioSink(scenario); sink != nil && sink.IsEnabled() {
-					ctx = mcpruntime.WithAdvisorRecordSink(ctx, sink)
-				}
-			}
-		}
-	}
-	return ctx
+// newServerExecutor creates a DefaultExecutor backed by this Server.
+func (s *Server) newServerExecutor() *servertool.DefaultExecutor {
+	return servertool.NewDefaultExecutor(s.mcpRuntime, &serverHookDeps{server: s})
 }
 
 // callMCPToolWithHooks executes response-phase MCP servertool hooks before the runtime call.
-// Hooks run when we consume worker-returned tool calls.
 // Returns updated context (with advisor quota decremented), result, and error.
 func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
-	prevDepth := mcpruntime.GetAdvisorDepth(ctx)
-	ctx = s.applyMCPResponseToolCallHooks(ctx, toolName, messages)
-	result, err := s.callMCPToolWithGuard(ctx, toolName, arguments)
-	// Restore depth after call so it doesn't accumulate across sequential tool calls.
-	ctx = mcpruntime.WithAdvisorDepth(ctx, prevDepth)
-	return ctx, result, err
+	return s.newServerExecutor().Execute(ctx, servertool.ToolCall{
+		NormalizedName: toolName,
+		Arguments:      arguments,
+		Messages:       messages,
+	})
 }
 
+// CallMCPToolWithHooks is the exported variant of callMCPToolWithHooks.
 func (s *Server) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
 	return s.callMCPToolWithHooks(ctx, toolName, arguments, messages)
+}
+
+// callMCPToolWithGuard is kept for test compatibility.
+func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (mcpruntime.ToolResult, error) {
+	_, result, err := s.callMCPToolWithHooks(ctx, toolName, arguments, nil)
+	return result, err
+}
+
+// advisorResponseHook is kept for test compatibility (TestAdvisorResponseHook_Match*).
+type advisorResponseHook = servertool.AdvisorHook
+
+// remapLegacyAdvisorToolName is kept for test compatibility (TestRemapLegacyAdvisorToolName).
+func remapLegacyAdvisorToolName(toolName string) string {
+	return servertool.RemapLegacyAdvisorToolName(toolName)
 }
