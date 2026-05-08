@@ -42,8 +42,10 @@ export interface AgentSetupCardProps {
 }
 
 const COLLAPSED_KEY = (agentKey: string) => `setup-card-collapsed-${agentKey}`;
-const STEP2_KEY = (agentKey: string) => `setup-card-step2-done-${agentKey}`;
-const STEP3_KEY = (agentKey: string) => `setup-card-step3-done-${agentKey}`;
+// Storage key names retain their `step2`/`step3` suffixes for backward compat
+// even though those steps moved to positions 3 and 4 in the UI.
+const INSTALL_DONE_KEY = (agentKey: string) => `setup-card-step2-done-${agentKey}`;
+const APPLY_DONE_KEY = (agentKey: string) => `setup-card-step3-done-${agentKey}`;
 const TOTAL_STEPS = 4;
 
 /** True iff at least one rule has a service with both a non-empty provider and model. */
@@ -81,11 +83,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     // effect below can distinguish "user has not chosen" from "user chose expanded".
     const initialCollapsedPref = useRef<string | null>(localStorage.getItem(COLLAPSED_KEY(agentKey)));
     const [collapsed, setCollapsed] = useState(initialCollapsedPref.current === 'true');
-    const [step2Done, setStep2Done] = useState(
-        () => localStorage.getItem(STEP2_KEY(agentKey)) === 'true'
+    const [installDone, setInstallDone] = useState(
+        () => localStorage.getItem(INSTALL_DONE_KEY(agentKey)) === 'true'
     );
-    const [step3Done, setStep3Done] = useState(
-        () => localStorage.getItem(STEP3_KEY(agentKey)) === 'true'
+    const [applyDone, setApplyDone] = useState(
+        () => localStorage.getItem(APPLY_DONE_KEY(agentKey)) === 'true'
     );
     const [hasProvider, setHasProvider] = useState(false);
     const [providerCount, setProviderCount] = useState(0);
@@ -109,10 +111,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         return () => { cancelled = true; };
     }, []);
 
-    const step1Done = hasProvider;
-    const step4Done = hasModelSelected;
-    const allDone = step1Done && step2Done && step3Done && step4Done;
-    const doneCount = [step1Done, step2Done, step3Done, step4Done].filter(Boolean).length;
+    // Step order: 1) Provider, 2) Model, 3) Install, 4) Apply
+    const providerDone = hasProvider;
+    const modelDone = hasModelSelected;
+    const allDone = providerDone && modelDone && installDone && applyDone;
+    const doneCount = [providerDone, modelDone, installDone, applyDone].filter(Boolean).length;
 
     // Auto-collapse on first visit when every step is already complete, but only
     // when the user hasn't expressed a preference. We wait for providerLoading
@@ -135,14 +138,14 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         setCollapsed(next);
     };
 
-    const handleStep2Done = () => {
-        localStorage.setItem(STEP2_KEY(agentKey), 'true');
-        setStep2Done(true);
+    const handleInstallDone = () => {
+        localStorage.setItem(INSTALL_DONE_KEY(agentKey), 'true');
+        setInstallDone(true);
     };
 
-    const handleStep3Done = () => {
-        localStorage.setItem(STEP3_KEY(agentKey), 'true');
-        setStep3Done(true);
+    const handleApplyDone = () => {
+        localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
+        setApplyDone(true);
     };
 
     const handleCopy = async () => {
@@ -162,7 +165,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         const result = await onApply();
         setApplyResult(result);
         if (result.success) {
-            handleStep3Done();
+            handleApplyDone();
         }
     };
 
@@ -171,20 +174,20 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         const result = await onApplyWithStatusLine();
         setApplyResult(result);
         if (result.success) {
-            handleStep3Done();
+            handleApplyDone();
         }
     };
 
     const progressLabel = allDone ? 'Done' : `${doneCount}/${TOTAL_STEPS}`;
     const progressColor = allDone ? 'success' : 'default';
 
-    const collapsedHint = !step1Done
+    const collapsedHint = !providerDone
         ? 'Add a provider to get started'
-        : !step2Done
-            ? `Install ${agentName}`
-            : !step3Done
-                ? 'Apply config'
-                : 'Pick a model to finish';
+        : !modelDone
+            ? 'Pick a model'
+            : !installDone
+                ? `Install ${agentName}`
+                : 'Apply config to finish';
 
     return (
         <UnifiedCard
@@ -221,13 +224,13 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         {providerLoading
                             ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} />
-                            : <StepIcon done={step1Done} active={!step1Done} />
+                            : <StepIcon done={providerDone} active={!providerDone} />
                         }
                         <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={500} color={step1Done ? 'text.primary' : 'primary.main'}>
+                            <Typography variant="body2" fontWeight={500} color={providerDone ? 'text.primary' : 'primary.main'}>
                                 Step 1 — Add a Provider
                             </Typography>
-                            {step1Done ? (
+                            {providerDone ? (
                                 <Typography variant="caption" color="text.secondary">
                                     {providerCount === 1
                                         ? `${providerCount} provider ready`
@@ -252,12 +255,52 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Box>
                     </Stack>
 
-                    {/* Step 2: Install */}
+                    {/* Step 2: Select a Model */}
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                        <StepIcon done={step2Done} active={!step2Done} />
+                        <StepIcon done={modelDone} active={providerDone && !modelDone} />
                         <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={500} color={step2Done ? 'text.primary' : 'primary.main'}>
-                                Step 2 — Install {agentName}
+                            <Typography
+                                variant="body2"
+                                fontWeight={500}
+                                color={!providerDone ? 'text.disabled' : modelDone ? 'text.primary' : 'primary.main'}
+                            >
+                                Step 2 — Select a Model
+                            </Typography>
+                            {modelDone ? (
+                                <Typography variant="caption" color="text.secondary">
+                                    Model selected — you're ready to go.
+                                </Typography>
+                            ) : (
+                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap" gap={1}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Pick a model in <em>Models and Forwarding Rules</em> to start routing requests.
+                                    </Typography>
+                                    {onSelectModel && (
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            disabled={!providerDone}
+                                            onClick={onSelectModel}
+                                            sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem' }}
+                                        >
+                                            Choose Model
+                                        </Button>
+                                    )}
+                                </Stack>
+                            )}
+                        </Box>
+                    </Stack>
+
+                    {/* Step 3: Install */}
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                        <StepIcon done={installDone} active={modelDone && !installDone} />
+                        <Box sx={{ flex: 1 }}>
+                            <Typography
+                                variant="body2"
+                                fontWeight={500}
+                                color={!modelDone ? 'text.disabled' : installDone ? 'text.primary' : 'primary.main'}
+                            >
+                                Step 3 — Install {agentName}
                             </Typography>
 
                             {/* npm official */}
@@ -330,11 +373,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 </Box>
                             )}
 
-                            {!step2Done && (
+                            {!installDone && (
                                 <Button
                                     size="small"
                                     variant="text"
-                                    onClick={handleStep2Done}
+                                    onClick={handleInstallDone}
                                     sx={{ mt: 0.5, fontSize: '0.75rem', px: 0 }}
                                 >
                                     ✓ Already installed / Done
@@ -343,27 +386,27 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Box>
                     </Stack>
 
-                    {/* Step 3: Apply Config */}
+                    {/* Step 4: Apply Config */}
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                        <StepIcon done={step3Done} active={step2Done && !step3Done} />
+                        <StepIcon done={applyDone} active={installDone && !applyDone} />
                         <Box sx={{ flex: 1 }}>
                             <Typography
                                 variant="body2"
                                 fontWeight={500}
-                                color={!step2Done ? 'text.disabled' : step3Done ? 'text.primary' : 'primary.main'}
+                                color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}
                             >
-                                Step 3 — Apply Config
+                                Step 4 — Apply Config
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                                 Write the proxy configuration to {agentName}'s settings file.
                             </Typography>
 
-                            <Collapse in={!step3Done}>
+                            <Collapse in={!applyDone}>
                                 <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
                                     <Button
                                         variant="contained"
                                         size="small"
-                                        disabled={!step2Done || isApplyLoading}
+                                        disabled={!installDone || isApplyLoading}
                                         onClick={handleApply}
                                         startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}
                                     >
@@ -373,7 +416,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         <Button
                                             variant="outlined"
                                             size="small"
-                                            disabled={!step2Done || isApplyLoading}
+                                            disabled={!installDone || isApplyLoading}
                                             onClick={handleApplyWithStatusLine}
                                         >
                                             Apply + Status Line
@@ -391,8 +434,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     <Button
                                         variant="text"
                                         size="small"
-                                        disabled={!step2Done}
-                                        onClick={handleStep3Done}
+                                        disabled={!installDone}
+                                        onClick={handleApplyDone}
                                         sx={{ fontSize: '0.75rem' }}
                                     >
                                         ✓ Already configured / Done
@@ -418,42 +461,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         <Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>
                                     )}
                                 </Alert>
-                            )}
-                        </Box>
-                    </Stack>
-
-                    {/* Step 4: Select a Model */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                        <StepIcon done={step4Done} active={step3Done && !step4Done} />
-                        <Box sx={{ flex: 1 }}>
-                            <Typography
-                                variant="body2"
-                                fontWeight={500}
-                                color={!step3Done ? 'text.disabled' : step4Done ? 'text.primary' : 'primary.main'}
-                            >
-                                Step 4 — Select a Model
-                            </Typography>
-                            {step4Done ? (
-                                <Typography variant="caption" color="text.secondary">
-                                    Model selected — you're ready to go.
-                                </Typography>
-                            ) : (
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap" gap={1}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Pick a model in <em>Models and Forwarding Rules</em> to start routing requests.
-                                    </Typography>
-                                    {onSelectModel && (
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            disabled={!step3Done}
-                                            onClick={onSelectModel}
-                                            sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem' }}
-                                        >
-                                            Choose Model
-                                        </Button>
-                                    )}
-                                </Stack>
                             )}
                         </Box>
                     </Stack>
