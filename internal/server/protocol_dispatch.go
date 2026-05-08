@@ -648,6 +648,7 @@ func (s *Server) dispatchOpenAIChat(
 	// in the transform chain (normalizeMessages -> alignToolMessages), which
 	// runs before dispatchOpenAIChat for all TypeOpenAIChat targets.
 	request.CleanupOpenaiFields(req)
+	transform.AlignToolMessagesForOpenAI(req)
 
 	if isStreaming {
 		switch reqCtx.SourceAPI {
