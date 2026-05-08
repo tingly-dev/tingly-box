@@ -143,7 +143,7 @@ func (a *AnthropicBetaAdapter) BuildContinuationSegment(resp any, results []Tool
 	segment = append(segment, betaMessageToParamPreservingThinking(msg))
 	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(results))
 	for _, r := range results {
-	resultBlocks = append(resultBlocks, anthropic.BetaContentBlockParamUnion{
+		resultBlocks = append(resultBlocks, anthropic.BetaContentBlockParamUnion{
 			OfToolResult: &anthropic.BetaToolResultBlockParam{
 				ToolUseID: r.ToolUseID,
 				Content:   toolContentsToAnthropicBeta(r.Contents),

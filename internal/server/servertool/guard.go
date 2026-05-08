@@ -1,8 +1,6 @@
 package servertool
 
 import (
-	"fmt"
-
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 )
 
@@ -25,9 +23,3 @@ func RemapLegacyAdvisorToolName(toolName string) string {
 	return toolName
 }
 
-// DisabledToolResult returns an error ToolResult indicating the tool is disabled.
-func DisabledToolResult(toolName string) mcpruntime.ToolResult {
-	return mcpruntime.ErrorToolResult(
-		fmt.Sprintf(`{"error":"calling disabled tools: %s"}`, toolName),
-	)
-}
