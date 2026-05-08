@@ -31,6 +31,11 @@ type OpenAIClient struct {
 	debugMode  bool
 	httpClient *http.Client
 	recordSink *obs.Sink
+
+	// Override functions for Codex-specific behavior
+	imagesGenerateHandler           func(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error)
+	chatCompletionsHandler          func(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+	chatCompletionsStreamingHandler func(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
 }
 
 // NewOpenAIClient creates a new OpenAI client wrapper
@@ -111,11 +116,21 @@ func (c *OpenAIClient) HttpClient() *http.Client {
 
 // ChatCompletionsNew creates a new chat completion request
 func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	// Use override function if set (for Codex providers)
+	if c.chatCompletionsHandler != nil {
+		return c.chatCompletionsHandler(ctx, req)
+	}
+	// Use standard OpenAI SDK
 	return c.client.Chat.Completions.New(ctx, req)
 }
 
 // ChatCompletionsNewStreaming creates a new streaming chat completion request
 func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
+	// Use override function if set (for Codex providers)
+	if c.chatCompletionsStreamingHandler != nil {
+		return c.chatCompletionsStreamingHandler(ctx, req)
+	}
+	// Use standard OpenAI SDK
 	return c.client.Chat.Completions.NewStreaming(ctx, req)
 }
 
@@ -125,15 +140,12 @@ func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNe
 }
 
 // ImagesGenerate creates a new image generation request
-// For Codex OAuth providers, this transforms the request to use the Responses API
-// with the image_generation tool, as Codex does not support /images/generations endpoint.
 func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
-	// Check if this is a Codex OAuth provider
-	// Codex requires using the Responses API with image_generation tool
-	if c.isCodexProvider() {
-		return c.imagesGenerateViaCodex(ctx, req)
+	// Use override function if set (for Codex providers)
+	if c.imagesGenerateHandler != nil {
+		return c.imagesGenerateHandler(ctx, req)
 	}
-	// Use standard path for other providers
+	// Use standard OpenAI SDK
 	return c.client.Images.Generate(ctx, req)
 }
 
@@ -623,136 +635,4 @@ func (c *OpenAIClient) isCodexProvider() bool {
 		return false
 	}
 	return c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex
-}
-
-// imagesGenerateViaCodex handles image generation for Codex OAuth providers
-// by transforming the request to use the Responses API with image_generation tool
-func (c *OpenAIClient) imagesGenerateViaCodex(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
-	logrus.Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
-
-	// Build Responses API request
-	responsesReq := c.buildImageGenerationResponsesRequest(req)
-
-	// Call streaming Responses API
-	stream := c.ResponsesNewStreaming(ctx, responsesReq)
-
-	// Parse streaming response
-	return c.parseImageGenerationStream(ctx, stream)
-}
-
-// buildImageGenerationResponsesRequest transforms ImageGenerateParams into
-// a Responses API request with the image_generation tool
-func (c *OpenAIClient) buildImageGenerationResponsesRequest(req openai.ImageGenerateParams) responses.ResponseNewParams {
-	// Build input item from prompt
-	inputItem := map[string]interface{}{
-		"type": "message",
-		"role": "user",
-		"content": []map[string]string{
-			{"type": "input_text", "text": string(req.Prompt)},
-		},
-	}
-
-	// Build image_generation tool with base parameters
-	tool := map[string]interface{}{
-		"type": "image_generation",
-		"size": string(req.Size),
-	}
-
-	// Map quality parameter (if provided)
-	// OpenAI: "standard", "hd" -> Codex: "medium", "high"
-	if req.Quality != "" {
-		quality := string(req.Quality)
-		if quality == "standard" {
-			tool["quality"] = "medium"
-		} else if quality == "hd" {
-			tool["quality"] = "high"
-		} else {
-			tool["quality"] = quality
-		}
-	}
-
-	// Map response_format to output_format
-	// OpenAI: "url", "b64_json" -> Codex: "url", "b64_json"
-	if req.ResponseFormat != "" {
-		tool["output_format"] = string(req.ResponseFormat)
-	} else {
-		// Default to b64_json for Codex
-		tool["output_format"] = "b64_json"
-	}
-
-	// Log warning for unsupported N parameter
-	if req.N.Valid() {
-		n := req.N.Value
-		if n > 1 {
-			logrus.Warnf("[Codex] Multiple images (N=%d) not supported, using N=1", n)
-		}
-	}
-
-	// Log warning for unsupported style parameter
-	if req.Style != "" {
-		logrus.Warnf("[Codex] Style parameter not supported for image generation")
-	}
-
-	// Build the Responses API request
-	params := responses.ResponseNewParams{
-		Model: req.Model,
-	}
-
-	// Use extra fields to set the custom format
-	params.SetExtraFields(map[string]interface{}{
-		"input":   []interface{}{inputItem},
-		"tools":   []interface{}{tool},
-		"stream":  true,
-		"store":   false,
-		"include": []string{"reasoning.encrypted_content"},
-	})
-
-	return params
-}
-
-// parseImageGenerationStream parses the streaming Responses API response
-// and extracts the generated image data from the output array
-func (c *OpenAIClient) parseImageGenerationStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
-	defer stream.Close()
-
-	var b64JSON string
-
-	// Collect output items from response.output_item.done events
-	// The final image data will be in the image_generation_call output
-	for stream.Next() {
-		event := stream.Current()
-
-		// Look for response.output_item.done events
-		if event.Type == "response.output_item.done" {
-			doneEvent := event.AsResponseOutputItemDone()
-
-			// Extract image data from output item
-			item := doneEvent.Item
-			if item.Type == "image_generation_call" {
-				imageCall := item.AsImageGenerationCall()
-				if imageCall.Status == "completed" && imageCall.Result != "" {
-					b64JSON = imageCall.Result
-					logrus.Debugf("[Codex] Received completed image, id: %s", imageCall.ID)
-				}
-			}
-		}
-	}
-
-	if err := stream.Err(); err != nil {
-		return nil, fmt.Errorf("stream error: %w", err)
-	}
-
-	if b64JSON == "" {
-		return nil, fmt.Errorf("no image data in response")
-	}
-
-	// Build standard ImagesResponse from extracted data
-	// Note: Token usage is not available in stream events for image generation
-	return &openai.ImagesResponse{
-		Data: []openai.Image{
-			{
-				B64JSON: b64JSON,
-			},
-		},
-	}, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -54,15 +55,32 @@ func NewClientPool() *ClientPool {
 }
 
 // GetOpenAIClient returns an OpenAI client wrapper for the specified provider.
+// For Codex OAuth providers, returns a CodexClient with special handling.
 // sessionID is resolved from ctx via typ.GetSessionID; pass context.Background() when no session is available.
 func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) *OpenAIClient {
 	sessionID := typ.GetSessionID(ctx)
 	logrus.Debugf("Creating OpenAI client for provider: %s, session: %s", provider.Name, sessionID.Value)
 
-	client, err := NewOpenAIClient(provider, model, sessionID)
-	if err != nil {
-		logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
-		return nil
+	var client *OpenAIClient
+	var err error
+
+	// Check if this is a Codex OAuth provider
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
+		codexClient, err := NewCodexClient(provider, model, sessionID)
+		if err != nil {
+			logrus.Errorf("Failed to create Codex client for provider %s: %v", provider.Name, err)
+			return nil
+		}
+		// Return the embedded OpenAIClient for compatibility
+		// Note: This means callers won't get CodexClient's overridden methods
+		// For full Codex support, the return type should be changed to an interface
+		client = codexClient.OpenAIClient
+	} else {
+		client, err = NewOpenAIClient(provider, model, sessionID)
+		if err != nil {
+			logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
+			return nil
+		}
 	}
 
 	if p.recordSink != nil && p.recordSink.IsEnabled() {
