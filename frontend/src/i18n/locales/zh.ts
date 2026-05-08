@@ -110,6 +110,7 @@ export default {
     "accessControl": "访问控制",
     "status": "状态",
     "system": "系统",
+    "general": "通用",
     "experimental": "实验功能",
     "logs": "日志",
     "userRequest": "用户请求",
