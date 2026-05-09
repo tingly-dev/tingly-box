@@ -341,3 +341,8 @@ tasks:
           echo "Commits since $LATEST_RELEASE_TAG:"
           git --no-pager log ${LATEST_RELEASE_TAG}..HEAD --pretty=format:"%h - %s (%an, %ar)" --graph
         fi
+
+  harness:matrix:
+    cmds:
+      - |
+        go run ./cli/harness matrix
