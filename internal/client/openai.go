@@ -36,6 +36,7 @@ type OpenAIClient struct {
 	imagesGenerateHandler           func(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error)
 	chatCompletionsHandler          func(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
 	chatCompletionsStreamingHandler func(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
+	responsesNewStreamingHandler    func(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
 }
 
 // NewOpenAIClient creates a new OpenAI client wrapper
@@ -156,6 +157,11 @@ func (c *OpenAIClient) ResponsesNew(ctx context.Context, req responses.ResponseN
 
 // ResponsesNewStreaming creates a new streaming Responses API request
 func (c *OpenAIClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+	// Use override function if set (for Codex providers)
+	if c.responsesNewStreamingHandler != nil {
+		return c.responsesNewStreamingHandler(ctx, req)
+	}
+	// Use standard OpenAI SDK
 	return c.client.Responses.NewStreaming(ctx, req)
 }
 

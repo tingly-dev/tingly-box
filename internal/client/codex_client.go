@@ -49,6 +49,16 @@ func NewCodexClient(provider *typ.Provider, model string, sessionID typ.SessionI
 		return nil
 	}
 
+	base.responsesNewStreamingHandler = func(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+		c := &CodexClient{OpenAIClient: base}
+
+		// Apply Codex-specific defaults to the request
+		applyCodexDefaultsToParams(&req)
+
+		// Call the base implementation
+		return c.client.Responses.NewStreaming(ctx, req)
+	}
+
 	// Set the override function for image generation (use Responses API)
 	base.imagesGenerateHandler = func(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
 		return (&CodexClient{OpenAIClient: base}).ImagesGenerate(ctx, req)
@@ -93,15 +103,6 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 	return c.parseImageGenerationStream(ctx, stream)
 }
 
-// ResponsesNewStreaming creates a new streaming Responses API request with Codex-specific defaults applied.
-func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
-	// Apply Codex-specific defaults to the request
-	applyCodexDefaultsToParams(&req)
-
-	// Call the base implementation
-	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
-}
-
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
 func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
 	// Set default instructions if not provided
@@ -121,9 +122,9 @@ func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
 	// Remove unsupported parameters for Codex
 	// ChatGPT backend API does NOT support: temperature, top_p, max_output_tokens
 	// Set them to invalid/zero state so they won't be included in the request
-	req.Temperature = param.Opt[float64]{}
-	req.TopP = param.Opt[float64]{}
-	req.MaxOutputTokens = param.Opt[int64]{}
+	req.Temperature = param.Null[float64]()
+	req.TopP = param.Null[float64]()
+	req.MaxOutputTokens = param.Null[int64]()
 
 	// Merge "reasoning.encrypted_content" into existing include array (preserve client-provided values)
 	includes := req.Include
@@ -144,6 +145,9 @@ func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
 	if len(req.ExtraFields()) > 0 {
 		// Copy existing extra fields
 		for k, v := range req.ExtraFields() {
+			if k == "max_output_tokens" {
+				continue
+			}
 			extraFields[k] = v
 		}
 	}
