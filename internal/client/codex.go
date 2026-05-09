@@ -1,12 +1,14 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/sjson"
 )
 
 const reasoningMarker = "reasoning.encrypted_content"
@@ -45,9 +47,31 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	// Filter out unsupported parameters for ChatGPT backend API
-	// ChatGPT backend API does NOT support: max_tokens, max_completion_tokens, temperature, top_p
-	// It DOES support: max_output_tokens
-	var isStreaming = true
+	// ChatGPT backend API does NOT support: max_tokens, max_completion_tokens, temperature, top_p, max_output_tokens
+
+	var filtered []byte
+	var isStreaming = false
+	if req.Body != nil && req.Method == "POST" {
+		body, err := io.ReadAll(req.Body)
+		_ = req.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+
+		filtered, err = t.filterField(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to filter field: %w", err)
+		}
+
+		// Trim capacity to length to avoid excessive memory usage
+		filtered = append([]byte(nil), filtered...)
+		// Set GetBody to allow retries and redirects
+		req.Body = io.NopCloser(bytes.NewReader(filtered))
+		req.ContentLength = int64(len(filtered))
+		req.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(filtered)), nil
+		}
+	}
 
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
@@ -67,6 +91,22 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	return resp, nil
+}
+
+func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
+	// Filter the request body to remove unsupported parameters using sjson
+	// This is more efficient than unmarshaling to map and marshaling back
+
+	bodyStr := string(body)
+
+	// Remove unsupported parameters (ignore errors if key doesn't exist)
+	bodyStr, _ = sjson.Delete(bodyStr, "max_tokens")
+	bodyStr, _ = sjson.Delete(bodyStr, "max_completion_tokens")
+	bodyStr, _ = sjson.Delete(bodyStr, "max_output_tokens")
+	bodyStr, _ = sjson.Delete(bodyStr, "temperature")
+	bodyStr, _ = sjson.Delete(bodyStr, "top_p")
+
+	return []byte(bodyStr), nil
 }
 
 func rewriteCodexPath(path string) string {
