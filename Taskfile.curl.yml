@@ -28,14 +28,12 @@ tasks:
           -H "Content-Type: application/json" \
           -d '{
             "model": "gpt-image-2",
-            "prompt": "A cute orange cat sitting on a wooden desk, soft natural light",
+            "prompt": "A cute orange cat and dog sitting on a wooden desk, soft natural light",
             "size": "1024x1024",
             "quality": "low"
-          }'
-        
-        # \
-        # | jq -r '.data[0].b64_json' \
-        # | base64 -d > output.png
+          }' \
+        | jq -r '.data[0].b64_json' \
+        | base64 -d > output.png
   
   codex-image-reponses:
     cmds:
