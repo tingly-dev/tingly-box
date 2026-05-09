@@ -1,5 +1,5 @@
-import { Box, Drawer, IconButton, Popover, Typography, Menu, MenuItem } from '@mui/material';
-import { IconMenu, IconDots, IconYinYang, IconSun, IconMoon, IconSunHigh } from '@tabler/icons-react';
+import { Box, Drawer, IconButton, Popover, Tooltip, Typography, Menu, MenuItem } from '@mui/material';
+import { IconMenu, IconDots, IconYinYang, IconSun, IconMoon, IconSunHigh, IconPencil } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -77,16 +77,11 @@ const Layout = ({ children }: LayoutProps) => {
         return activeActivity;
     }, [effectiveZenEnabled, location.pathname, activeActivity]);
 
-    // Persist the active activity for cross-session boot. Per-activity path
-    // memory is intentionally scoped to the scenario (agent) activity only —
-    // every other activity opens at its defaultPath when re-clicked.
+    // Persist the active activity for cross-session boot. Each activity
+    // re-opens at its defaultPath (the scenario activity opens its overview).
     useEffect(() => {
         sessionStorage.setItem('layout.activeActivity', activeActivity);
         localStorage.setItem('layout.activeActivity', activeActivity);
-        if (activeActivity === 'scenario') {
-            sessionStorage.setItem(`layout.activityPath.${activeActivity}`, location.pathname);
-            localStorage.setItem(`layout.activityPath.${activeActivity}`, location.pathname);
-        }
     }, [activeActivity, location.pathname]);
 
     // When navigating to a zen path, clear zenMoreActivity
@@ -192,22 +187,11 @@ const Layout = ({ children }: LayoutProps) => {
 
         sessionStorage.setItem('layout.activeActivity', item.key);
 
-        // Only the scenario activity restores its previously visited sub-page —
-        // every other activity always opens at its defaultPath, so users never
-        // get a stale "last viewed" view they don't expect.
+        // Every activity opens at its defaultPath when clicked. The scenario
+        // activity points at /agent (the overview) so users always land there
+        // before drilling into a specific scenario.
         const firstNavChild = item.children?.find(c => c.type !== 'divider');
-        let targetPath: string | undefined;
-
-        if (item.key === 'scenario') {
-            const savedPath = sessionStorage.getItem(`layout.activityPath.${item.key}`) || localStorage.getItem(`layout.activityPath.${item.key}`);
-            if (savedPath && item.children?.some(c => c.type !== 'divider' && c.path === savedPath)) {
-                targetPath = savedPath;
-            }
-        }
-
-        if (!targetPath) {
-            targetPath = item.defaultPath || item.path || firstNavChild?.path;
-        }
+        let targetPath = item.defaultPath || item.path || firstNavChild?.path;
 
         // Ultimate fallback to prevent navigation to invalid paths
         if (!targetPath && firstNavChild) {
@@ -242,6 +226,21 @@ const Layout = ({ children }: LayoutProps) => {
 
     const zenActivityItems = getZenActivityItems();
 
+    const sidebarHeaderAction = activeActivity === 'scenario' ? (
+        <Tooltip title={t('scenarioOverview.editTooltip', { defaultValue: 'Manage visible agents' })} arrow placement="right">
+            <IconButton
+                size="small"
+                onClick={() => navigate('/agent')}
+                sx={{
+                    color: location.pathname === '/agent' ? 'primary.main' : 'text.secondary',
+                    '&:hover': { color: 'primary.main' },
+                }}
+            >
+                <IconPencil size={16} />
+            </IconButton>
+        </Tooltip>
+    ) : undefined;
+
     const navigationContent = (
         <Box sx={{ display: 'flex', height: '100%' }}>
             <ZenActivityBar
@@ -261,6 +260,7 @@ const Layout = ({ children }: LayoutProps) => {
                     sidebarItems={sidebarItems}
                     activeActivityLabel={activeActivityLabel}
                     onClose={() => setMobileOpen(false)}
+                    headerAction={sidebarHeaderAction}
                 />
             )}
         </Box>

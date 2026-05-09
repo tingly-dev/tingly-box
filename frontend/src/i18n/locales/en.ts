@@ -852,5 +852,24 @@ export default {
     "quickLinks": "Quick Links",
     "goToDashboard": "Dashboard",
     "goToHelp": "Help & Docs"
+  },
+  "scenarioOverview": {
+    "title": "Agents",
+    "subtitle": "Pick a scenario to configure. Hide the ones you don't use to keep the sidebar tidy.",
+    "showInSidebar": "Show in sidebar",
+    "hidden": "Hidden",
+    "editTooltip": "Manage visible agents",
+    "descriptions": {
+      "claude_code": "Route Claude Code with custom profiles and per-task models.",
+      "codex": "Configure Codex CLI through your provider keys.",
+      "opencode": "Open-source coding agent powered by your provider.",
+      "xcode": "Bring your model into Xcode's coding intelligence.",
+      "vscode": "Power VS Code Copilot Chat through Tingly Box.",
+      "openai": "Drop-in OpenAI-compatible SDK endpoint.",
+      "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
+      "embed": "Route embedding requests to your provider.",
+      "imagegen": "Route image generation through Tingly Box.",
+      "agent": "OpenClaw — universal agent runner."
+    }
   }
 };

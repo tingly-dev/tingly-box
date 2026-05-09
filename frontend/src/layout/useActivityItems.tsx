@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getHiddenScenarios } from '@/pages/scenario/AgentOverviewPage';
 import {
     IconChartBar,
     IconGridDots,
@@ -36,6 +37,17 @@ export function useActivityItems(): ActivityItem[] {
     const { skillUser, skillIde, enableGuardrails, enableMCP } = useFeatureFlags();
     const { profiles } = useProfileContext();
     const botSummary = useBotPlatformSummary(isFullEdition);
+
+    const [hiddenScenarios, setHiddenScenarios] = useState<Set<string>>(() => getHiddenScenarios());
+    useEffect(() => {
+        const sync = () => setHiddenScenarios(getHiddenScenarios());
+        window.addEventListener('scenario-visibility-change', sync);
+        window.addEventListener('storage', sync);
+        return () => {
+            window.removeEventListener('scenario-visibility-change', sync);
+            window.removeEventListener('storage', sync);
+        };
+    }, []);
     const platformSubtitle = (id: string): string | undefined => {
         const s = botSummary[id];
         return s && s.total > 0 ? `active ${s.active} / ${s.total}` : undefined;
@@ -69,34 +81,47 @@ export function useActivityItems(): ActivityItem[] {
             icon: <Claude size={20} />,
         }));
 
+        type HideableScenario = { id: string; nav: NavItem };
+        const visible = (group: HideableScenario[]): NavItem[] =>
+            group.filter(s => !hiddenScenarios.has(s.id)).map(s => s.nav);
+
+        const codingTools = visible([
+            { id: 'codex', nav: { path: '/agent/codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> } },
+            { id: 'opencode', nav: { path: '/agent/opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> } },
+            { id: 'xcode', nav: { path: '/agent/xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> } },
+            { id: 'vscode', nav: { path: '/agent/vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> } },
+        ]);
+        const sdkTools = visible([
+            { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
+            { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
+            { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embed' }), icon: <IconVector size={20} /> } },
+            { id: 'imagegen', nav: { path: '/agent/imagegen', label: t('layout.nav.useImageGen', { defaultValue: 'Image Gen' }), icon: <IconPhoto size={20} /> } },
+        ]);
+        const agentTools = visible([
+            { id: 'agent', nav: { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> } },
+        ]);
+
+        const scenarioChildren: NavItem[] = [
+            {
+                path: '/agent/claude_code',
+                subtitle: t('layout.default'),
+                label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
+                icon: <Claude size={20} />,
+            },
+            ...profileNavItems,
+            { path: '#add-profile', label: t('layout.addProfile'), icon: <IconPlus size={20} /> },
+        ];
+        if (codingTools.length > 0) scenarioChildren.push({ type: 'divider' }, ...codingTools);
+        if (sdkTools.length > 0) scenarioChildren.push({ type: 'divider' }, ...sdkTools);
+        if (agentTools.length > 0) scenarioChildren.push({ type: 'divider' }, ...agentTools);
+
         const items: ActivityItem[] = [
             {
                 key: 'scenario',
                 icon: <IconAiAgents size={22} />,
                 label: t('layout.nav.home'),
-                defaultPath: '/agent/claude_code',
-                children: [
-                    {
-                        path: '/agent/claude_code',
-                        subtitle: t('layout.default'),
-                        label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
-                        icon: <Claude size={20} />,
-                    },
-                    ...profileNavItems,
-                    { path: '#add-profile', label: t('layout.addProfile'), icon: <IconPlus size={20} /> },
-                    { type: 'divider' },
-                    { path: '/agent/codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> },
-                    { path: '/agent/opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> },
-                    { path: '/agent/xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> },
-                    { path: '/agent/vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> },
-                    { type: 'divider' },
-                    { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> },
-                    { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> },
-                    { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embed' }), icon: <IconVector size={20} /> },
-                    { path: '/agent/imagegen', label: t('layout.nav.useImageGen', { defaultValue: 'Image Gen' }), icon: <IconPhoto size={20} /> },
-                    { type: 'divider' },
-                    { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> },
-                ],
+                defaultPath: '/agent',
+                children: scenarioChildren,
             },
             {
                 key: 'dashboard',
@@ -185,5 +210,5 @@ export function useActivityItems(): ActivityItem[] {
         ];
 
         return items;
-    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, botSummary]);
+    }, [t, promptMenuItems, enableGuardrails, enableMCP, profiles, botSummary, hiddenScenarios]);
 }

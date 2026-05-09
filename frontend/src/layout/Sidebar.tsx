@@ -28,9 +28,10 @@ interface SidebarProps {
     sidebarItems: NavItem[];
     activeActivityLabel: string;
     onClose: () => void;
+    headerAction?: React.ReactNode;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLabel, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLabel, onClose, headerAction }) => {
     const { t } = useTranslation();
     const location = useLocation();
     const { refresh } = useProfileContext();
@@ -94,6 +95,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     px: 2,
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1,
                     borderBottom: '1px solid',
                     borderColor: 'divider',
                 }}
@@ -101,6 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 <Typography variant="subtitle2" sx={{ color: 'text.primary', fontWeight: 600, fontSize: '0.875rem' }}>
                     {activeActivityLabel}
                 </Typography>
+                {headerAction}
             </Box>
 
             {/* Nav Items */}
