@@ -187,10 +187,7 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 		return nil, false
 	}
 
-	// Per-op trace for logging — independent from the actual selection call.
-	trace := router.TraceEvaluation(reqCtx)
-
-	matchedServices, matchedRuleIndex, matched := router.EvaluateRequestWithIndex(reqCtx)
+	matchedServices, matchedRuleIndex, matched, trace := router.Evaluate(reqCtx)
 	if !matched || len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
 		s.emitTrace(ctx, reqCtx, trace, -1, 0, 0, nil, "no_match", "no rule matched the request")

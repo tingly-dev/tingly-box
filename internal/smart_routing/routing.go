@@ -17,43 +17,52 @@ type Router struct {
 
 // NewRouter creates a new smart routing router
 func NewRouter(rules []SmartRouting) (*Router, error) {
-	// Validate all rules
 	for i, rule := range rules {
 		if err := ValidateSmartRouting(&rule); err != nil {
 			return nil, fmt.Errorf("rule[%d]: %w", i, err)
 		}
 	}
-
-	return &Router{
-		rules: rules,
-	}, nil
+	return &Router{rules: rules}, nil
 }
 
-// EvaluateRequest evaluates a request against smart routing rules
-// Returns the matched services and true if a rule matched, otherwise empty and false
+// Evaluate runs the rule list against ctx in a single pass and returns the
+// matched services (or nil), the matched rule index (or -1), the matched flag,
+// and the per-rule trace. All other public Evaluate* / TraceEvaluation methods
+// are thin wrappers around this.
+func (r *Router) Evaluate(ctx *RequestContext) (services []*loadbalance.Service, ruleIdx int, matched bool, trace []RuleEvalResult) {
+	trace = make([]RuleEvalResult, 0, len(r.rules))
+	ruleIdx = -1
+	for i := range r.rules {
+		rule := &r.rules[i]
+		ruleRes := r.evaluateRule(ctx, rule, i)
+		trace = append(trace, ruleRes)
+		if ruleRes.Matched {
+			services = rule.Services
+			ruleIdx = i
+			matched = true
+			break
+		}
+	}
+	return
+}
+
+// EvaluateRequest evaluates a request against smart routing rules.
+// Returns the matched services and true if a rule matched, otherwise nil and false.
 func (r *Router) EvaluateRequest(ctx *RequestContext) ([]*loadbalance.Service, bool) {
-	for i := range r.rules {
-		if r.evaluateRule(ctx, &r.rules[i]) {
-			return r.rules[i].Services, true
-		}
-	}
-	return nil, false
+	services, _, matched, _ := r.Evaluate(ctx)
+	return services, matched
 }
 
-// EvaluateRequestWithIndex evaluates a request against smart routing rules
-// Returns the matched services, the matched rule index, and true if a rule matched
+// EvaluateRequestWithIndex is EvaluateRequest plus the matched rule index.
 func (r *Router) EvaluateRequestWithIndex(ctx *RequestContext) ([]*loadbalance.Service, int, bool) {
-	for i := range r.rules {
-		if r.evaluateRule(ctx, &r.rules[i]) {
-			return r.rules[i].Services, i, true
-		}
-	}
-	return nil, -1, false
+	services, idx, matched, _ := r.Evaluate(ctx)
+	return services, idx, matched
 }
 
-// evaluateRule evaluates if a context matches a single rule
-func (r *Router) evaluateRule(ctx *RequestContext, rule *SmartRouting) bool {
-	// Inject per-rule service data to avoid cross-rule contamination
+// evaluateRule evaluates a single rule and returns the per-op trace plus the
+// composite Matched flag. Evaluation short-circuits at the first failed op so
+// the returned Ops slice may end on a non-matching entry.
+func (r *Router) evaluateRule(ctx *RequestContext, rule *SmartRouting, idx int) RuleEvalResult {
 	origStats := ctx.ServiceStats
 	origCap := ctx.ServiceCapacity
 	ctx.ServiceStats = collectRuleStats(rule.Services)
@@ -63,17 +72,29 @@ func (r *Router) evaluateRule(ctx *RequestContext, rule *SmartRouting) bool {
 		ctx.ServiceCapacity = origCap
 	}()
 
-	// All operations must match (AND logic)
-	for _, op := range rule.Ops {
-		if !r.evaluateOp(ctx, &op) {
-			return false
+	res := RuleEvalResult{
+		RuleIndex:   idx,
+		Description: rule.Description,
+		OpsTotal:    len(rule.Ops),
+		Matched:     true,
+		Ops:         make([]OpEvalResult, 0, len(rule.Ops)),
+	}
+	for i := range rule.Ops {
+		opRes := r.evaluateOp(ctx, &rule.Ops[i])
+		res.Ops = append(res.Ops, opRes)
+		if !opRes.Matched {
+			res.Matched = false
+			break
 		}
 	}
-	return true
+	res.OpsEvaluated = len(res.Ops)
+	return res
 }
 
-// evaluateOp evaluates if a context matches a single operation
-func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) bool {
+// evaluateOp dispatches to the per-position evaluator. The returned
+// OpEvalResult always has Position/Operation/Value populated; per-position
+// methods set Matched plus optional Reason and Actual.
+func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 	switch op.Position {
 	case PositionModel:
 		return r.evaluateModelOp(ctx, op)
@@ -96,7 +117,20 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) bool {
 	case PositionAgentClaudeCode:
 		return r.evaluateAgentClaudeCodeOp(ctx, op)
 	default:
-		return false
+		res := newOpResult(op)
+		res.Reason = fmt.Sprintf("unknown position %q", op.Position)
+		return res
+	}
+}
+
+// newOpResult seeds an OpEvalResult with the configured op metadata. Matched
+// defaults to false; per-position evaluators set it on success.
+func newOpResult(op *SmartOp) OpEvalResult {
+	return OpEvalResult{
+		UUID:      op.UUID,
+		Position:  string(op.Position),
+		Operation: string(op.Operation),
+		Value:     op.Value,
 	}
 }
 
@@ -105,21 +139,17 @@ func ValidateSmartRouting(rule *SmartRouting) error {
 	if rule.Description == "" {
 		return fmt.Errorf("description cannot be empty")
 	}
-
 	if len(rule.Ops) == 0 {
 		return fmt.Errorf("ops cannot be empty")
 	}
-
 	for i, op := range rule.Ops {
 		if err := ValidateSmartOp(&op); err != nil {
 			return fmt.Errorf("op[%d]: %w", i, err)
 		}
 	}
-
 	if len(rule.Services) == 0 {
 		return fmt.Errorf("services cannot be empty")
 	}
-
 	for i, svc := range rule.Services {
 		if svc.Provider == "" {
 			return fmt.Errorf("services[%d]: provider cannot be empty", i)
@@ -128,7 +158,6 @@ func ValidateSmartRouting(rule *SmartRouting) error {
 			return fmt.Errorf("services[%d]: model cannot be empty", i)
 		}
 	}
-
 	return nil
 }
 
@@ -137,28 +166,17 @@ func ValidateSmartOp(op *SmartOp) error {
 	if !op.Position.IsValid() {
 		return fmt.Errorf("invalid position: %s", op.Position)
 	}
-
 	if op.Operation == "" {
 		return fmt.Errorf("operation cannot be empty")
 	}
-
-	// Validate operation is compatible with position
 	if !isValidOperationForPosition(op.Position, op.Operation) {
 		return fmt.Errorf("operation '%s' is not valid for position '%s'", op.Operation, op.Position)
 	}
-
-	// Validate value matches the expected type
-	if err := validateOpValueType(op); err != nil {
-		return err
-	}
-
-	return nil
+	return validateOpValueType(op)
 }
 
-// validateOpValueType checks if the value can be parsed as the expected type
 func validateOpValueType(op *SmartOp) error {
-	// Get the expected type from Operations registry
-	expectedType := ValueTypeString // Default to string for backward compatibility
+	expectedType := ValueTypeString
 	for _, validOp := range Operations {
 		if validOp.Position == op.Position && validOp.Operation == op.Operation {
 			if validOp.Meta.Type != "" {
@@ -167,16 +185,11 @@ func validateOpValueType(op *SmartOp) error {
 			break
 		}
 	}
-
-	// Skip validation if no type specified (backward compatibility)
 	if expectedType == ValueTypeString && op.Meta.Type == "" {
 		return nil
 	}
-
-	// Validate the value can be parsed as expected type
 	switch expectedType {
 	case ValueTypeString:
-		// Any string is valid
 		return nil
 	case ValueTypeInt:
 		_, err := op.Int()
@@ -189,8 +202,6 @@ func validateOpValueType(op *SmartOp) error {
 	}
 }
 
-// isValidOperationForPosition checks if an operation is valid for a given position
-// by looking it up in the global Operations registry
 func isValidOperationForPosition(pos SmartOpPosition, op SmartOpOperation) bool {
 	for _, validOp := range Operations {
 		if validOp.Position == pos && validOp.Operation == op {
@@ -200,246 +211,209 @@ func isValidOperationForPosition(pos SmartOpPosition, op SmartOpOperation) bool 
 	return false
 }
 
-// evaluateModelOp evaluates operations on the model field
-func (r *Router) evaluateModelOp(ctx *RequestContext, op *SmartOp) bool {
-	model := ctx.Model
+func (r *Router) evaluateModelOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
+	res.Actual = ctx.Model
 	value, err := op.String()
 	if err != nil {
 		log.Printf("[smart_routing] invalid model value '%s': %v", op.Value, err)
-		return false
+		res.Reason = fmt.Sprintf("invalid value: %v", err)
+		return res
 	}
-
 	switch op.Operation {
 	case OpModelContains:
-		return strings.Contains(model, value)
+		res.Matched = strings.Contains(ctx.Model, value)
+		res.Reason = fmt.Sprintf("model %q contains %q", ctx.Model, value)
 	case OpModelGlob:
 		g, err := glob.Compile(value)
 		if err != nil {
 			log.Printf("[smart_routing] invalid glob pattern '%s' in model operation: %v", value, err)
-			return false
+			res.Reason = fmt.Sprintf("invalid glob %q: %v", value, err)
+			return res
 		}
-		return g.Match(model)
+		res.Matched = g.Match(ctx.Model)
+		res.Reason = fmt.Sprintf("model %q glob %q", ctx.Model, value)
 	case OpModelEquals:
-		return model == value
+		res.Matched = ctx.Model == value
+		res.Reason = fmt.Sprintf("model %q equals %q", ctx.Model, value)
 	default:
-		return false
+		res.Reason = fmt.Sprintf("unsupported model op %q", op.Operation)
 	}
+	return res
 }
 
-// evaluateThinkingOp evaluates operations on the thinking field
-func (r *Router) evaluateThinkingOp(ctx *RequestContext, op *SmartOp) bool {
-	enabled := ctx.ThinkingEnabled
-
+func (r *Router) evaluateThinkingOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
+	res.Actual = boolStr(ctx.ThinkingEnabled)
+	val, err := op.Bool()
+	if err != nil && op.Value != "" {
+		log.Printf("[smart_routing] invalid thinking value '%s': %v", op.Value, err)
+		res.Reason = fmt.Sprintf("invalid bool %q: %v", op.Value, err)
+		return res
+	}
 	switch op.Operation {
 	case OpThinkingEnabled:
-		// Parse value as bool; empty string defaults to true (just checking enabled state)
-		val, err := op.Bool()
-		if err != nil && op.Value != "" {
-			log.Printf("[smart_routing] invalid thinking value '%s': %v", op.Value, err)
-			return false
-		}
-		// If value parsed successfully and is true, check if enabled
-		// If value is empty, just check if enabled
 		if op.Value == "" || val {
-			return enabled
+			res.Matched = ctx.ThinkingEnabled
+			res.Reason = "thinking enabled"
+		} else {
+			res.Reason = "value=false; check is no-op"
 		}
-		return false
 	case OpThinkingDisabled:
-		val, err := op.Bool()
-		if err != nil && op.Value != "" {
-			log.Printf("[smart_routing] invalid thinking value '%s': %v", op.Value, err)
-			return false
-		}
 		if op.Value == "" || val {
-			return !enabled
+			res.Matched = !ctx.ThinkingEnabled
+			res.Reason = "thinking disabled"
+		} else {
+			res.Reason = "value=false; check is no-op"
 		}
-		return false
 	default:
-		return false
+		res.Reason = fmt.Sprintf("unsupported thinking op %q", op.Operation)
 	}
+	return res
 }
 
-// evaluateContextSystemOp evaluates operations on the context system message field
-func (r *Router) evaluateContextSystemOp(ctx *RequestContext, op *SmartOp) bool {
+func (r *Router) evaluateContextSystemOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 	combined := ctx.CombineMessages(ctx.SystemMessages)
-	value, err := op.String()
-	if err != nil {
-		log.Printf("[smart_routing] invalid system value '%s': %v", op.Value, err)
-		return false
-	}
-
-	switch op.Operation {
-	case OpContextSystemContains:
-		return strings.Contains(combined, value)
-	case OpContextSystemRegex:
-		// Basic regex support - can be extended with regexp package
-		matched, err := stringsMatch(combined, value, true)
-		if err != nil {
-			return false
-		}
-		return matched
-	default:
-		return false
-	}
+	return evaluateTextContains(op, combined, "system context",
+		OpContextSystemContains, OpContextSystemRegex)
 }
 
-// evaluateContextUserOp evaluates operations on the context user message field
-func (r *Router) evaluateContextUserOp(ctx *RequestContext, op *SmartOp) bool {
+func (r *Router) evaluateContextUserOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 	combined := ctx.CombineMessages(ctx.UserMessages)
-	value, err := op.String()
-	if err != nil {
-		log.Printf("[smart_routing] invalid user value '%s': %v", op.Value, err)
-		return false
-	}
-
-	switch op.Operation {
-	case OpContextUserContains:
-		return strings.Contains(combined, value)
-	case OpContextUserRegex:
-		matched, err := stringsMatch(combined, value, true)
-		if err != nil {
-			return false
-		}
-		return matched
-	default:
-		return false
-	}
+	return evaluateTextContains(op, combined, "user context",
+		OpContextUserContains, OpContextUserRegex)
 }
 
-// evaluateLatestUserOp evaluates operations on the latest user message field
-func (r *Router) evaluateLatestUserOp(ctx *RequestContext, op *SmartOp) bool {
+// evaluateTextContains is the shared body for system/user contains+regex ops.
+// containsOp/regexOp are typed so we don't depend on string equality of "contains".
+func evaluateTextContains(op *SmartOp, text, label string, containsOp, regexOp SmartOpOperation) OpEvalResult {
+	res := newOpResult(op)
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid %s value '%s': %v", label, op.Value, err)
+		res.Reason = fmt.Sprintf("invalid value: %v", err)
+		return res
+	}
+	switch op.Operation {
+	case containsOp:
+		res.Matched = strings.Contains(text, value)
+		res.Actual = snippetAround(text, value)
+		res.Reason = fmt.Sprintf("%s contains %q", label, value)
+	case regexOp:
+		ok, err := stringsMatch(text, value, true)
+		if err != nil {
+			res.Actual = snippetHead(text, snippetHeadLen)
+			res.Reason = fmt.Sprintf("regex error: %v", err)
+			return res
+		}
+		res.Matched = ok
+		res.Actual = snippetHead(text, snippetHeadLen)
+		res.Reason = fmt.Sprintf("%s matches regex %q", label, value)
+	default:
+		res.Actual = snippetHead(text, snippetHeadLen)
+		res.Reason = fmt.Sprintf("unsupported %s op %q", label, op.Operation)
+	}
+	return res
+}
+
+func (r *Router) evaluateLatestUserOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
 	value, err := op.String()
 	if err != nil {
 		log.Printf("[smart_routing] invalid latest user value '%s': %v", op.Value, err)
-		return false
+		res.Reason = fmt.Sprintf("invalid value: %v", err)
+		return res
 	}
-
 	switch op.Operation {
 	case OpLatestUserContains:
-		// Check if latest role is user
-		if ctx.LatestRole != "user" {
-			return false
-		}
 		latest := ctx.GetLatestUserMessage()
-		return strings.Contains(latest, value)
+		if ctx.LatestRole != "user" {
+			res.Actual = snippetHead(latest, snippetHeadLen)
+			res.Reason = fmt.Sprintf("latest role is %q, not user", ctx.LatestRole)
+			return res
+		}
+		res.Matched = strings.Contains(latest, value)
+		res.Actual = snippetAround(latest, value)
+		res.Reason = fmt.Sprintf("latest user contains %q", value)
 	case OpLatestUserRequestType:
-		return ctx.LatestContentType == value
+		res.Actual = ctx.LatestContentType
+		res.Matched = ctx.LatestContentType == value
+		res.Reason = fmt.Sprintf("latest content_type %q == %q", ctx.LatestContentType, value)
 	default:
-		return false
+		res.Reason = fmt.Sprintf("unsupported latest_user op %q", op.Operation)
 	}
+	return res
 }
 
-// evaluateToolUseOp evaluates operations on the tool_use field
-func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) bool {
+func (r *Router) evaluateToolUseOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
+	res.Actual = strings.Join(ctx.ToolUses, ",")
 	value, err := op.String()
 	if err != nil {
 		log.Printf("[smart_routing] invalid tool_use value '%s': %v", op.Value, err)
-		return false
+		res.Reason = fmt.Sprintf("invalid value: %v", err)
+		return res
 	}
-
-	// Check if any tool use matches
-	for _, toolUse := range ctx.ToolUses {
-		if op.Operation == OpToolUseEquals && toolUse == value {
-			return true
+	if op.Operation != OpToolUseEquals {
+		res.Reason = fmt.Sprintf("unsupported tool_use op %q", op.Operation)
+		return res
+	}
+	for _, t := range ctx.ToolUses {
+		if t == value {
+			res.Matched = true
+			res.Reason = fmt.Sprintf("tool %q used", value)
+			return res
 		}
 	}
-	return false
+	res.Reason = fmt.Sprintf("tool %q not in [%s]", value, strings.Join(ctx.ToolUses, ","))
+	return res
 }
 
-// evaluateTokenOp evaluates operations on the token count field
-func (r *Router) evaluateTokenOp(ctx *RequestContext, op *SmartOp) bool {
-	tokens := ctx.EstimatedTokens
+func (r *Router) evaluateTokenOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
+	res.Actual = fmt.Sprintf("%d", ctx.EstimatedTokens)
 	target, err := op.Int()
 	if err != nil {
 		log.Printf("[smart_routing] invalid token value '%s': %v", op.Value, err)
-		return false
+		res.Reason = fmt.Sprintf("invalid int: %v", err)
+		return res
 	}
-
+	tokens := ctx.EstimatedTokens
 	switch op.Operation {
 	case OpTokenGe:
-		return tokens >= target
+		res.Matched = tokens >= target
+		res.Reason = fmt.Sprintf("tokens %d >= %d", tokens, target)
 	case OpTokenGt:
-		return tokens > target
+		res.Matched = tokens > target
+		res.Reason = fmt.Sprintf("tokens %d > %d", tokens, target)
 	case OpTokenLe:
-		return tokens <= target
+		res.Matched = tokens <= target
+		res.Reason = fmt.Sprintf("tokens %d <= %d", tokens, target)
 	case OpTokenLt:
-		return tokens < target
+		res.Matched = tokens < target
+		res.Reason = fmt.Sprintf("tokens %d < %d", tokens, target)
 	default:
-		return false
+		res.Reason = fmt.Sprintf("unsupported token op %q", op.Operation)
 	}
+	return res
 }
 
-// evaluateAgentClaudeCodeOp evaluates operations on the agent.claude_code position.
-// The ctx.ClaudeCodeRequestKind field is populated by SmartRoutingStage only when
-// the request scenario is claude_code; for other scenarios it is empty and no
-// value will match — which is the desired behavior.
-func (r *Router) evaluateAgentClaudeCodeOp(ctx *RequestContext, op *SmartOp) bool {
-	value, err := op.String()
-	if err != nil {
-		log.Printf("[smart_routing] invalid agent.claude_code value '%s': %v", op.Value, err)
-		return false
-	}
-	switch op.Operation {
-	case OpAgentClaudeCodeEquals:
-		if ctx.ClaudeCodeRequestKind == "" {
-			return false
-		}
-		return ctx.ClaudeCodeRequestKind == value
-	default:
-		return false
-	}
-}
-
-// stringsMatch provides basic regex matching support
-// For now, it provides simple pattern matching with support for:
-// - Wildcards (*)
-// - Character classes ([abc])
-// - Alternatives (a|b)
-func stringsMatch(text, pattern string, useRegex bool) (bool, error) {
-	if !useRegex {
-		return strings.Contains(text, pattern), nil
-	}
-
-	// For simple patterns, use glob
-	// For complex regex, we'd use the regexp package
-	// This is a simplified implementation
-	g, err := glob.Compile(pattern)
-	if err != nil {
-		log.Printf("[smart_routing] invalid glob/regex pattern '%s', falling back to contains: %v", pattern, err)
-		// Try as simple contains
-		return strings.Contains(text, pattern), nil
-	}
-	return g.Match(text), nil
-}
-
-// EstimateTokens estimates token count from text (rough approximation: 4 chars per token)
-func EstimateTokens(text string) int {
-	if text == "" {
-		return 0
-	}
-	// Rough approximation: ~4 characters per token
-	return len(text) / 4
-}
-
-// GetRules returns the router's rules
-func (r *Router) GetRules() []SmartRouting {
-	return r.rules
-}
-
-// evaluateServiceTTFTOp evaluates operations on service TTFT characteristics.
-// Operates on ctx.ServiceStats, which is pre-filtered per-rule by evaluateRule.
-// Returns true (pass) when there is no data (cold-start friendliness).
-func (r *Router) evaluateServiceTTFTOp(ctx *RequestContext, op *SmartOp) bool {
+// evaluateServiceTTFTOp operates on ctx.ServiceStats, which is pre-filtered
+// per-rule by evaluateRule. Returns Matched=true (pass) when there is no data
+// (cold-start friendliness).
+func (r *Router) evaluateServiceTTFTOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
 	if len(ctx.ServiceStats) == 0 {
-		return true
+		res.Matched = true
+		res.Reason = "no service stats; pass"
+		return res
 	}
-
 	threshold, err := op.Int()
 	if err != nil {
 		log.Printf("[smart_routing] invalid service_ttft value '%s': %v", op.Value, err)
-		return false
+		res.Reason = fmt.Sprintf("invalid int: %v", err)
+		return res
 	}
-
 	var values []float64
 	for _, s := range ctx.ServiceStats {
 		switch op.Operation {
@@ -453,67 +427,149 @@ func (r *Router) evaluateServiceTTFTOp(ctx *RequestContext, op *SmartOp) bool {
 			}
 		}
 	}
-
 	if len(values) == 0 {
-		return true // no samples yet — do not block
+		res.Matched = true
+		res.Reason = "no TTFT samples; pass"
+		return res
 	}
-
 	thresholdF := float64(threshold)
 	switch op.Operation {
 	case OpServiceTTFTAvgLe:
-		return minFloat(values) <= thresholdF
+		actual := minFloat(values)
+		res.Matched = actual <= thresholdF
+		res.Actual = fmt.Sprintf("%.0f", actual)
+		res.Reason = fmt.Sprintf("min(avg_ttft) %.0f <= %d", actual, threshold)
 	case OpServiceTTFTAvgGe:
-		return avgFloat(values) >= thresholdF
+		actual := avgFloat(values)
+		res.Matched = actual >= thresholdF
+		res.Actual = fmt.Sprintf("%.0f", actual)
+		res.Reason = fmt.Sprintf("avg(avg_ttft) %.0f >= %d", actual, threshold)
 	case OpServiceTTFTMaxLe:
-		return minFloat(values) <= thresholdF
+		actual := minFloat(values)
+		res.Matched = actual <= thresholdF
+		res.Actual = fmt.Sprintf("%.0f", actual)
+		res.Reason = fmt.Sprintf("min(p99_ttft) %.0f <= %d", actual, threshold)
 	case OpServiceTTFTMaxGe:
-		return avgFloat(values) >= thresholdF
+		actual := avgFloat(values)
+		res.Matched = actual >= thresholdF
+		res.Actual = fmt.Sprintf("%.0f", actual)
+		res.Reason = fmt.Sprintf("avg(p99_ttft) %.0f >= %d", actual, threshold)
+	default:
+		res.Reason = fmt.Sprintf("unsupported service_ttft op %q", op.Operation)
 	}
-	return false
+	return res
 }
 
-// evaluateServiceCapacityOp evaluates seat-utilization operations.
-// Utilization = activeCount / capacity * 100 per service; averaged across services that have a capacity set.
-// Services with no ModelCapacity (capacity == 0) are treated as unlimited and skipped.
-// Returns true (pass) when no service has a capacity configured.
-func (r *Router) evaluateServiceCapacityOp(ctx *RequestContext, op *SmartOp) bool {
+// evaluateServiceCapacityOp computes seat utilization = activeCount / capacity * 100
+// per service, averaged across services with capacity configured. Services with
+// capacity == 0 are unlimited and skipped. Returns Matched=true (pass) when no
+// service has capacity configured.
+func (r *Router) evaluateServiceCapacityOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
 	if len(ctx.ServiceCapacity) == 0 {
-		return true
+		res.Matched = true
+		res.Reason = "no capacity info; pass"
+		return res
 	}
-
 	threshold, err := op.Int()
 	if err != nil {
 		log.Printf("[smart_routing] invalid service_capacity value '%s': %v", op.Value, err)
-		return false
+		res.Reason = fmt.Sprintf("invalid int: %v", err)
+		return res
 	}
-
 	var utilValues []float64
 	for _, c := range ctx.ServiceCapacity {
 		if c.Capacity <= 0 {
-			continue // unlimited — skip
+			continue
 		}
-		util := float64(c.ActiveCount) / float64(c.Capacity) * 100
-		utilValues = append(utilValues, util)
+		utilValues = append(utilValues, float64(c.ActiveCount)/float64(c.Capacity)*100)
 	}
-
 	if len(utilValues) == 0 {
-		return true // no capacity-configured services — do not block
+		res.Matched = true
+		res.Reason = "no capacity-configured services; pass"
+		return res
 	}
-
 	avg := avgFloat(utilValues)
 	thresholdF := float64(threshold)
-
+	res.Actual = fmt.Sprintf("%.1f%%", avg)
 	switch op.Operation {
 	case OpServiceCapacityUtilLe:
-		return avg <= thresholdF
+		res.Matched = avg <= thresholdF
+		res.Reason = fmt.Sprintf("avg util %.1f%% <= %d%%", avg, threshold)
 	case OpServiceCapacityUtilGe:
-		return avg >= thresholdF
+		res.Matched = avg >= thresholdF
+		res.Reason = fmt.Sprintf("avg util %.1f%% >= %d%%", avg, threshold)
 	case OpServiceCapacityUtilLt:
-		return avg < thresholdF
+		res.Matched = avg < thresholdF
+		res.Reason = fmt.Sprintf("avg util %.1f%% < %d%%", avg, threshold)
 	case OpServiceCapacityUtilGt:
-		return avg > thresholdF
+		res.Matched = avg > thresholdF
+		res.Reason = fmt.Sprintf("avg util %.1f%% > %d%%", avg, threshold)
+	default:
+		res.Reason = fmt.Sprintf("unsupported service_capacity op %q", op.Operation)
 	}
-	return false
+	return res
+}
+
+// evaluateAgentClaudeCodeOp evaluates the agent.claude_code position.
+// ctx.ClaudeCodeRequestKind is populated by SmartRoutingStage only when the
+// request scenario is claude_code; for other scenarios it is empty and no
+// value matches — which is the desired behavior.
+func (r *Router) evaluateAgentClaudeCodeOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
+	res := newOpResult(op)
+	res.Actual = ctx.ClaudeCodeRequestKind
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid agent.claude_code value '%s': %v", op.Value, err)
+		res.Reason = fmt.Sprintf("invalid value: %v", err)
+		return res
+	}
+	if op.Operation != OpAgentClaudeCodeEquals {
+		res.Reason = fmt.Sprintf("unsupported agent.claude_code op %q", op.Operation)
+		return res
+	}
+	if ctx.ClaudeCodeRequestKind == "" {
+		res.Reason = "request kind not set (scenario is not claude_code)"
+		return res
+	}
+	res.Matched = ctx.ClaudeCodeRequestKind == value
+	res.Reason = fmt.Sprintf("agent.claude_code %q == %q", ctx.ClaudeCodeRequestKind, value)
+	return res
+}
+
+// stringsMatch provides basic regex matching support.
+// For now, it provides simple pattern matching with support for:
+// - Wildcards (*)
+// - Character classes ([abc])
+// - Alternatives (a|b)
+func stringsMatch(text, pattern string, useRegex bool) (bool, error) {
+	if !useRegex {
+		return strings.Contains(text, pattern), nil
+	}
+	g, err := glob.Compile(pattern)
+	if err != nil {
+		log.Printf("[smart_routing] invalid glob/regex pattern '%s', falling back to contains: %v", pattern, err)
+		return strings.Contains(text, pattern), nil
+	}
+	return g.Match(text), nil
+}
+
+// EstimateTokens estimates token count from text (rough approximation: 4 chars per token)
+func EstimateTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+	return len(text) / 4
+}
+
+// GetRules returns the router's rules
+func (r *Router) GetRules() []SmartRouting { return r.rules }
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // collectRuleStats returns a snapshot of ServiceStats for each service in the rule.
