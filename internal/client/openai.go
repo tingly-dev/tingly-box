@@ -24,6 +24,33 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// OpenAIClientInterface defines the contract for OpenAI-compatible clients.
+// Both OpenAIClient and CodexClient implement this interface.
+type OpenAIClientInterface interface {
+	// Core API methods
+	ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+	ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
+	ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error)
+	ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error)
+	ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
+	EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
+
+	// Utility methods
+	ListModels(ctx context.Context) ([]string, error)
+	Close() error
+	GetProvider() *typ.Provider
+	APIStyle() protocol.APIStyle
+	SetRecordSink(sink *obs.Sink)
+
+	// Prober interface methods
+	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
+	ProbeModelsEndpoint(ctx context.Context) ProbeResult
+	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+
+	// Client returns the underlying OpenAI SDK client (for advanced usage)
+	Client() *openai.Client
+}
+
 // OpenAIClient wraps the OpenAI SDK client
 type OpenAIClient struct {
 	client     openai.Client
@@ -31,12 +58,6 @@ type OpenAIClient struct {
 	debugMode  bool
 	httpClient *http.Client
 	recordSink *obs.Sink
-
-	// Override functions for Codex-specific behavior
-	imagesGenerateHandler           func(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error)
-	chatCompletionsHandler          func(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
-	chatCompletionsStreamingHandler func(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
-	responsesNewStreamingHandler    func(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
 }
 
 // NewOpenAIClient creates a new OpenAI client wrapper
@@ -117,21 +138,11 @@ func (c *OpenAIClient) HttpClient() *http.Client {
 
 // ChatCompletionsNew creates a new chat completion request
 func (c *OpenAIClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	// Use override function if set (for Codex providers)
-	if c.chatCompletionsHandler != nil {
-		return c.chatCompletionsHandler(ctx, req)
-	}
-	// Use standard OpenAI SDK
 	return c.client.Chat.Completions.New(ctx, req)
 }
 
 // ChatCompletionsNewStreaming creates a new streaming chat completion request
 func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
-	// Use override function if set (for Codex providers)
-	if c.chatCompletionsStreamingHandler != nil {
-		return c.chatCompletionsStreamingHandler(ctx, req)
-	}
-	// Use standard OpenAI SDK
 	return c.client.Chat.Completions.NewStreaming(ctx, req)
 }
 
@@ -142,11 +153,6 @@ func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNe
 
 // ImagesGenerate creates a new image generation request
 func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
-	// Use override function if set (for Codex providers)
-	if c.imagesGenerateHandler != nil {
-		return c.imagesGenerateHandler(ctx, req)
-	}
-	// Use standard OpenAI SDK
 	return c.client.Images.Generate(ctx, req)
 }
 
@@ -157,11 +163,6 @@ func (c *OpenAIClient) ResponsesNew(ctx context.Context, req responses.ResponseN
 
 // ResponsesNewStreaming creates a new streaming Responses API request
 func (c *OpenAIClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
-	// Use override function if set (for Codex providers)
-	if c.responsesNewStreamingHandler != nil {
-		return c.responsesNewStreamingHandler(ctx, req)
-	}
-	// Use standard OpenAI SDK
 	return c.client.Responses.NewStreaming(ctx, req)
 }
 

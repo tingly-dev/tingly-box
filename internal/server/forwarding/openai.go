@@ -14,7 +14,7 @@ import (
 // ForwardOpenAIChat sends a non-streaming OpenAI chat completion request.
 // IMPORTANT: All transformations (protocol conversion + vendor-specific) should
 // be applied by the transform chain BEFORE calling this function.
-func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, context.CancelFunc, error) {
+func ForwardOpenAIChat(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *openai.ChatCompletionNewParams) (*openai.ChatCompletion, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
@@ -36,7 +36,7 @@ func ForwardOpenAIChat(fc *ForwardContext, wrapper *client.OpenAIClient, req *op
 
 // ForwardOpenAIEmbeddings sends an OpenAI embeddings request.
 // Embeddings have no streaming and skip the chat transform chain.
-func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, context.CancelFunc, error) {
+func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
@@ -53,7 +53,7 @@ func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper *client.OpenAIClient, r
 
 // ForwardOpenAIImageGeneration sends an OpenAI image generation request.
 // Image generation has no streaming and skips the chat transform chain.
-func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ImageGenerateParams) (*openai.ImagesResponse, context.CancelFunc, error) {
+func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *openai.ImageGenerateParams) (*openai.ImagesResponse, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
@@ -72,7 +72,7 @@ func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper *client.OpenAIClie
 // IMPORTANT: All transformations (protocol conversion + vendor-specific) should
 // be applied by the transform chain BEFORE calling this function.
 // Note: Pass request context (c.Request.Context()) as baseCtx in NewForwardContext for client cancellation support.
-func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, req *openai.ChatCompletionNewParams) (*openaistream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
+func ForwardOpenAIChatStream(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *openai.ChatCompletionNewParams) (*openaistream.Stream[openai.ChatCompletionChunk], context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
@@ -85,7 +85,7 @@ func ForwardOpenAIChatStream(fc *ForwardContext, wrapper *client.OpenAIClient, r
 }
 
 // ForwardOpenAIResponses sends a non-streaming OpenAI Responses API request.
-func ForwardOpenAIResponses(fc *ForwardContext, wrapper *client.OpenAIClient, params responses.ResponseNewParams) (*responses.Response, context.CancelFunc, error) {
+func ForwardOpenAIResponses(fc *ForwardContext, wrapper client.OpenAIClientInterface, params responses.ResponseNewParams) (*responses.Response, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}
@@ -98,7 +98,7 @@ func ForwardOpenAIResponses(fc *ForwardContext, wrapper *client.OpenAIClient, pa
 
 // ForwardOpenAIResponsesStream sends a streaming OpenAI Responses API request.
 // Note: Pass request context (c.Request.Context()) as baseCtx in NewForwardContext for client cancellation support.
-func ForwardOpenAIResponsesStream(fc *ForwardContext, wrapper *client.OpenAIClient, params responses.ResponseNewParams) (*openaistream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
+func ForwardOpenAIResponsesStream(fc *ForwardContext, wrapper client.OpenAIClientInterface, params responses.ResponseNewParams) (*openaistream.Stream[responses.ResponseStreamEventUnion], context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
 	}

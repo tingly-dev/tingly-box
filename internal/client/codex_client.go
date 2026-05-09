@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -35,35 +36,6 @@ func NewCodexClient(provider *typ.Provider, model string, sessionID typ.SessionI
 		return nil, fmt.Errorf("failed to create base OpenAI client: %w", err)
 	}
 
-	// Set the override function for chat completions (reject with error)
-	base.chatCompletionsHandler = func(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-		return nil, &ErrCodexNotSupported{
-			Operation: "Chat Completions",
-			Reason:    "ChatGPT backend API does not support standard /v1/chat/completions endpoint. Use Responses API instead.",
-		}
-	}
-
-	// Set the override function for streaming chat completions (reject with error)
-	base.chatCompletionsStreamingHandler = func(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
-		logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
-		return nil
-	}
-
-	base.responsesNewStreamingHandler = func(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
-		c := &CodexClient{OpenAIClient: base}
-
-		// Apply Codex-specific defaults to the request
-		applyCodexDefaultsToParams(&req)
-
-		// Call the base implementation
-		return c.client.Responses.NewStreaming(ctx, req)
-	}
-
-	// Set the override function for image generation (use Responses API)
-	base.imagesGenerateHandler = func(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
-		return (&CodexClient{OpenAIClient: base}).ImagesGenerate(ctx, req)
-	}
-
 	return &CodexClient{
 		OpenAIClient: base,
 	}, nil
@@ -85,6 +57,14 @@ func (c *CodexClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCom
 func (c *CodexClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
 	logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
 	return nil
+}
+
+// ResponsesNewStreaming creates a new streaming Responses API request with Codex-specific defaults.
+func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+	// Apply Codex-specific defaults to the request
+	applyCodexDefaultsToParams(&req)
+	// Call the base implementation
+	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
 }
 
 // ImagesGenerate creates a new image generation request.
@@ -385,12 +365,45 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 	}, nil
 }
 
-// IsCodexProvider returns true for CodexClient instances.
-func (c *CodexClient) IsCodexProvider() bool {
-	return true
+// SetRecordSink sets the record sink for the client.
+// For CodexClient, we delegate to the embedded OpenAIClient.
+func (c *CodexClient) SetRecordSink(sink *obs.Sink) {
+	c.OpenAIClient.SetRecordSink(sink)
 }
 
-// GetProvider returns the provider for this client.
-func (c *CodexClient) GetProvider() *typ.Provider {
-	return c.provider
+// Client returns the underlying OpenAI SDK client.
+// For CodexClient, we delegate to the embedded OpenAIClient.
+func (c *CodexClient) Client() *openai.Client {
+	return c.OpenAIClient.Client()
+}
+
+// ProbeChatEndpoint tests the chat endpoint.
+// For Codex, this delegates to the embedded OpenAIClient's probeResponsesEndpoint.
+func (c *CodexClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+	logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
+	return ProbeResult{
+		Success:          false,
+		Message:          "",
+		Content:          "",
+		LatencyMs:        0,
+		ModelsCount:      0,
+		PromptTokens:     0,
+		CompletionTokens: 0,
+		TotalTokens:      0,
+		ErrorMessage:     "Codex does not support /chat endpoint",
+	}
+}
+
+// ProbeModelsEndpoint tests the models endpoint.
+// For Codex, this returns an error as the endpoint is not supported.
+func (c *CodexClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
+	return ProbeResult{
+		Success:      false,
+		ErrorMessage: "Codex does not support /models endpoint",
+	}
+}
+
+// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request.
+func (c *CodexClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
+	return c.OpenAIClient.ProbeOptionsEndpoint(ctx)
 }
