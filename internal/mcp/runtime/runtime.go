@@ -56,13 +56,10 @@ type Runtime struct {
 
 // NewRuntime creates a new MCP runtime.
 func NewRuntime(getConfig configProvider) *Runtime {
-	// Guard nil config provider: return a usable runtime with empty config so
-	// callers (e.g. NewServer with a fresh config dir) don't get a nil runtime.
-	if getConfig == nil {
-		getConfig = func() *typ.MCPRuntimeConfig { return &typ.MCPRuntimeConfig{} }
-	}
-	if cfg := getConfig(); cfg == nil {
-		getConfig = func() *typ.MCPRuntimeConfig { return &typ.MCPRuntimeConfig{} }
+	// FIXME: it is useful but ugly, guard it in future
+	cfg := getConfig()
+	if cfg == nil {
+		return nil
 	}
 	sc := newSessionCache()
 	r := &Runtime{
