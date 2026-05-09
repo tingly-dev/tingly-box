@@ -163,9 +163,9 @@ func handleOpenAIToAnthropicBetaStream(
 
 		choice := chunk.Choices[0]
 
-		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
-			chunkCount, len(chunk.Choices),
-			choice.Delta.Content, choice.FinishReason)
+		//logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
+		//	chunkCount, len(chunk.Choices),
+		//	choice.Delta.Content, choice.FinishReason)
 
 		delta := choice.Delta
 
@@ -200,8 +200,8 @@ func handleOpenAIToAnthropicBetaStream(
 					// Extract thinking content (handle different types)
 					thinkingText := extractString(v)
 					if thinkingText != "" {
-						preview := thinkingText
-						logrus.Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
+						//preview := thinkingText
+						//logrus.Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
 						// Send content_block_delta with thinking_delta
 						ensureMessageStart()
 						sendContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{

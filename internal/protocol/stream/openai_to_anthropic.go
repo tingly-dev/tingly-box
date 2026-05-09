@@ -180,9 +180,9 @@ func handleOpenAIToAnthropicStreamResponse(
 
 		choice := chunk.Choices[0]
 
-		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
-			chunkCount, len(chunk.Choices),
-			choice.Delta.Content, choice.FinishReason)
+		//logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
+		//	chunkCount, len(chunk.Choices),
+		//	choice.Delta.Content, choice.FinishReason)
 
 		// Log first few chunks in detail for debugging
 		if chunkCount <= 5 || choice.FinishReason != "" {
@@ -581,8 +581,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
-			preview := reasoningDelta.Delta
-			logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
+			//preview := reasoningDelta.Delta
+			//logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 			senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 				"type":     deltaTypeThinkingDelta,
 				"thinking": reasoningDelta.Delta,
@@ -658,8 +658,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 					senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
-				preview := reasoningDelta.Delta
-				logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
+				//preview := reasoningDelta.Delta
+				//logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 					"type":     deltaTypeThinkingDelta,
 					"thinking": reasoningDelta.Delta,
