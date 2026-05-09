@@ -102,11 +102,12 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 	var pendingCalls []pendingToolCall
 
 	for _, item := range items {
-		// Handle message items — flush pending calls first (message boundary)
+		// Handle message items — do NOT flush pending function_calls.
+		// function_call_output flushes them so that assistant(tool_calls)
+		// appears immediately before the corresponding tool messages.
+		// Flushing here would cause messages to be inserted between
+		// assistant(tool_calls) and its tool responses.
 		if !param.IsOmitted(item.OfMessage) {
-			flushCalls(pendingCalls)
-			pendingCalls = nil
-
 			msg := item.OfMessage
 			role := string(msg.Role)
 

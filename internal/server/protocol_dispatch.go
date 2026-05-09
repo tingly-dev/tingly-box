@@ -644,6 +644,7 @@ func (s *Server) dispatchOpenAIChat(
 	if seg, ok := mcp.PopOpenAIContinuationSegment(typ.GetSessionID(c.Request.Context()), provider.UUID); ok {
 		req.Messages = append(append([]openai.ChatCompletionMessageParamUnion{}, seg...), req.Messages...)
 	}
+	transform.AlignToolMessagesForOpenAI(req)
 	request.CleanupOpenaiFields(req)
 
 	if isStreaming {
@@ -1055,6 +1056,7 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 	if seg, ok := mcp.PopOpenAIContinuationSegment(typ.GetSessionID(c.Request.Context()), provider.UUID); ok {
 		req.Messages = append(append([]openai.ChatCompletionMessageParamUnion{}, seg...), req.Messages...)
 	}
+	transform.AlignToolMessagesForOpenAI(req)
 
 	// Step 1: Convert OpenAI Chat request to Anthropic Beta format
 	const defaultMaxTokens = 4096
