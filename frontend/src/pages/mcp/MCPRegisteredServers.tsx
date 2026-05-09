@@ -1,33 +1,20 @@
 import { PageLayout } from '@/components/PageLayout';
-import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog';
-import UnifiedCard from '@/components/UnifiedCard';
 import AgentInstallCard from '@/components/AgentInstallCard';
+import ToolCard from '@/components/ToolCard';
 import { api } from '@/services/api';
-import type { Provider } from '@/types/provider';
 import {
     Alert,
     Box,
     Button,
-    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
-    Divider,
-    FormControlLabel,
     IconButton,
     InputAdornment,
-    Paper,
     Snackbar,
     Stack,
-    Switch,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
     TextField,
     Tooltip,
     Typography,
@@ -41,14 +28,16 @@ import {
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
+import {
+    IconSearch,
+    IconWorldDownload,
+    IconServer,
+} from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
 import MCPSourceEditor from './MCPSourceEditor';
 import {
-    BUILTIN_ADVISOR_ID,
     BUILTIN_IDS,
     BUILTIN_WEBTOOLS_ID,
-    MCP_DEFAULT_CWD,
     defaultMCPSourceFormValue,
     formValueToSource,
     sourceToFormValue,
@@ -58,36 +47,6 @@ import {
 } from './types';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const ADVISOR_VISIBILITY_STORAGE_KEY = 'tb.mcp.showAdvisor';
-
-const shouldShowAdvisorSection = (search: string): boolean => {
-    if (typeof window === 'undefined') {
-        return false;
-    }
-
-    const params = new URLSearchParams(search);
-    const advisorParam = params.get('advisor');
-
-    if (advisorParam === '1' || advisorParam === 'true' || advisorParam === 'on') {
-        window.localStorage.setItem(ADVISOR_VISIBILITY_STORAGE_KEY, 'true');
-        return true;
-    }
-
-    if (advisorParam === '0' || advisorParam === 'false' || advisorParam === 'off') {
-        window.localStorage.removeItem(ADVISOR_VISIBILITY_STORAGE_KEY);
-        return false;
-    }
-
-    return window.localStorage.getItem(ADVISOR_VISIBILITY_STORAGE_KEY) === 'true';
-};
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const maskSecret = (val: string): string => {
-    if (!val) return '';
-    if (val.length <= 8) return '●'.repeat(val.length);
-    return val.slice(0, 4) + '●'.repeat(Math.min(val.length - 6, 8)) + val.slice(-2);
-};
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -147,66 +106,34 @@ const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, onBlur, plac
     );
 };
 
-// ─── Part 2: Builtin servers (webtools + advisor in one card) ────────────────
+// ─── Part 2: Builtin web tools (two separate ToolCards) ──────────────────────
 
-interface BuiltinServersCardProps {
+interface WebtoolCardProps {
     webtoolsSource: MCPSourceConfig | undefined;
-    advisorSource: MCPSourceConfig | undefined;
+    toolName: 'mcp_web_search' | 'mcp_web_fetch';
     onSave: (patch: MCPSourceConfig) => Promise<void>;
-    saving: boolean;
 }
 
-const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource, advisorSource, onSave }) => {
-    // webtools state
+const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onSave }) => {
     const [serperKey, setSerperKey] = useState('');
-    const [webtoolsSaving, setWebtoolsSaving] = useState(false);
-
-    // advisor state
-    const [model, setModel] = useState('');
-    const [selectedProviderUuid, setSelectedProviderUuid] = useState('');
-    const [advisorSaving, setAdvisorSaving] = useState(false);
-    const [providerCatalog, setProviderCatalog] = useState<Provider[]>([]);
-    const [advisorModelDialogOpen, setAdvisorModelDialogOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         setSerperKey(webtoolsSource?.env?.['SERPER_API_KEY'] ?? '');
     }, [webtoolsSource]);
 
-    useEffect(() => {
-        const providerUuid = advisorSource?.env?.['ADVISOR_PROVIDER_UUID'] ?? '';
-        const m = advisorSource?.advisor?.model ?? advisorSource?.env?.['ADVISOR_MODEL'] ?? '';
-        setSelectedProviderUuid(providerUuid);
-        setModel(m);
-    }, [advisorSource]);
+    const enabled = webtoolsSource?.enabled ?? true;
 
-    useEffect(() => {
-        const loadProviders = async () => {
-            const result = await api.getProviders();
-            if (result?.success && Array.isArray(result.data)) {
-                setProviderCatalog(result.data as Provider[]);
-            } else {
-                setProviderCatalog([]);
-            }
-        };
-        void loadProviders();
-    }, []);
-
-    const handleWebtoolsToggle = (enabled: boolean) => {
+    const handleToggle = (next: boolean) => {
         if (!webtoolsSource) return;
         const { visibility, ...rest } = webtoolsSource as any;
-        void onSave({ ...rest, enabled });
+        void onSave({ ...rest, enabled: next });
     };
 
-    const handleAdvisorToggle = (enabled: boolean) => {
-        if (!advisorSource) return;
-        const { visibility, transport, command, args, cwd, ...rest } = advisorSource as any;
-        void onSave({ ...rest, enabled });
-    };
-
-    const handleWebtoolsSave = async () => {
-        setWebtoolsSaving(true);
+    const handleSave = async () => {
+        setSaving(true);
         try {
-            const { visibility, ...baseRest } = (webtoolsSource ?? {
+            const { visibility, ...base } = (webtoolsSource ?? {
                 id: BUILTIN_WEBTOOLS_ID,
                 name: 'Built-in Web Tools',
                 transport: 'stdio',
@@ -215,176 +142,52 @@ const BuiltinServersCard: React.FC<BuiltinServersCardProps> = ({ webtoolsSource,
                 tools: ['mcp_web_search', 'mcp_web_fetch'],
                 enabled: true,
             }) as any;
-            await onSave({ ...baseRest, env: serperKey ? { SERPER_API_KEY: serperKey } : {} });
+            await onSave({ ...base, env: serperKey ? { SERPER_API_KEY: serperKey } : {} });
         } finally {
-            setWebtoolsSaving(false);
+            setSaving(false);
         }
     };
 
-    const handleAdvisorSave = async () => {
-        setAdvisorSaving(true);
-        try {
-            const selectedProvider = providerCatalog.find((p) => p.uuid === selectedProviderUuid);
-            // Strip transport/command/args/cwd — advisor is an in-process virtual tool,
-            // not a stdio process. Sending transport:'stdio' causes the runtime to attempt
-            // a subprocess connection and fail with "empty command".
-            const { visibility, transport, command, args, cwd, ...baseRest } = (advisorSource ?? {
-                id: BUILTIN_ADVISOR_ID,
-                name: 'Built-in Adviser',
-                tools: ['advisor'],
-                enabled: false,
-            }) as any;
-            await onSave({
-                ...baseRest,
-                advisor: {
-                    ...(baseRest.advisor ?? {}),
-                    base_url: selectedProvider?.api_base || undefined,
-                    api_key: selectedProvider?.token || undefined,
-                    model: model || undefined,
-                },
-                env: {
-                    ...(selectedProviderUuid ? { ADVISOR_PROVIDER_UUID: selectedProviderUuid } : {}),
-                    ...(selectedProvider?.api_base ? { ADVISOR_BASE_URL: selectedProvider.api_base } : {}),
-                    ...(selectedProvider?.token ? { ADVISOR_API_KEY: selectedProvider.token } : {}),
-                    ...(model ? { ADVISOR_MODEL: model } : {}),
-                },
-            });
-        } finally {
-            setAdvisorSaving(false);
-        }
-    };
+    const isSearch = toolName === 'mcp_web_search';
 
-    const webtoolsEnabled = webtoolsSource?.enabled ?? true;
-    const advisorEnabled = advisorSource?.enabled ?? false;
-    const webtoolsTools = webtoolsSource?.tools ?? ['mcp_web_search', 'mcp_web_fetch'];
-    const selectedProvider = providerCatalog.find((p) => p.uuid === selectedProviderUuid);
+    const settings = (
+        <Stack spacing={1.5}>
+            {isSearch && (
+                <ConfigRow label="Serper API Key" hint="Required for web_search. Get your free key at serper.dev">
+                    <SecretInput value={serperKey} onChange={setSerperKey} placeholder="Enter Serper API key" />
+                </ConfigRow>
+            )}
+            {!isSearch && (
+                <Typography variant="caption" color="text.secondary">
+                    No configuration required. Fetches public web pages on demand.
+                </Typography>
+            )}
+            {isSearch && (
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button variant="contained" size="small" onClick={() => void handleSave()} disabled={saving}>
+                        {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                </Box>
+            )}
+        </Stack>
+    );
 
     return (
-        <UnifiedCard title="Builtin Servers" size="full">
-            <Stack spacing={0}>
-                {/* ── Web Tools section ── */}
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                    <Typography variant="subtitle1" fontWeight={600}>Web Tools</Typography>
-                    <Chip label="Client Tool" size="small" color="info" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
-                    <Stack direction="row" spacing={0.5} sx={{ flex: 1 }}>
-                        {webtoolsTools.map((t) => (
-                            <Chip key={t} label={t} size="small" variant="outlined" />
-                        ))}
-                    </Stack>
-                    {webtoolsSource && (
-                        <FormControlLabel
-                            control={
-                                <Switch size="small" checked={webtoolsEnabled} onChange={(e) => handleWebtoolsToggle(e.target.checked)} disabled={webtoolsSaving} />
-                            }
-                            label={webtoolsEnabled ? 'Enabled' : 'Disabled'}
-                            sx={{ mr: 0 }}
-                        />
-                    )}
-                </Stack>
-
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Client-side web search and fetch tools available for agents to call. Powered by{' '}
-                    <Typography component="a" href="https://serper.dev" target="_blank" rel="noreferrer" variant="body2" color="primary">Serper</Typography>
-                    {' '}for search and a built-in HTTP fetcher for page content.
-                </Typography>
-
-                <ConfigRow label="Serper API Key" hint="Required for mcp_web_search. Get your free key at serper.dev">
-                    <SecretInput
-                        value={serperKey}
-                        onChange={(v) => { setSerperKey(v); }}
-                        placeholder="Enter Serper API key"
-                    />
-                </ConfigRow>
-
-                <Stack direction="row" justifyContent="flex-end" sx={{ pb: 2 }}>
-                    <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => { void handleWebtoolsSave(); }}
-                        disabled={webtoolsSaving}
-                    >
-                        {webtoolsSaving ? 'Saving...' : 'Save'}
-                    </Button>
-                </Stack>
-
-                {advisorSource && (
-                    <>
-                <Divider sx={{ my: 1 }} />
-
-                {/* ── Advisor section ── */}
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 2, mb: 0.5 }}>
-                    <Typography variant="subtitle1" fontWeight={600}>Advisor</Typography>
-                    <Chip label="Server Tool" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
-                    <Chip label="Experimental" size="small" color="warning" variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
-                    <Box sx={{ flex: 1 }} />
-                    {advisorSource && (
-                        <FormControlLabel
-                            control={
-                                <Switch size="small" checked={advisorEnabled} onChange={(e) => handleAdvisorToggle(e.target.checked)} disabled={advisorSaving} />
-                            }
-                            label={advisorEnabled ? 'Enabled' : 'Disabled'}
-                            sx={{ mr: 0 }}
-                        />
-                    )}
-                </Stack>
-
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    An in-process LLM tool that agents can consult for hard decisions. Connects to any{' '}
-                    <Typography component="a" href="https://platform.openai.com/docs/api-reference" target="_blank" rel="noreferrer" variant="body2" color="primary">OpenAI-compatible</Typography>
-                    {' '}or{' '}
-                    <Typography component="a" href="https://docs.anthropic.com/en/api/getting-started" target="_blank" rel="noreferrer" variant="body2" color="primary">Anthropic</Typography>
-                    {' '}endpoint. Best used for critical decision points to avoid excess latency.
-                </Typography>
-
-                <ConfigRow label="Model" hint="Choose advisor provider and model">
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
-                        <Button size="small" variant="outlined" onClick={() => setAdvisorModelDialogOpen(true)}>
-                            Choose Model
-                        </Button>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                            {selectedProvider
-                                ? `${selectedProvider.name} (${selectedProvider.api_style}) / ${model || '(no model selected)'}`
-                                : '(no provider selected)'}
-                        </Typography>
-                    </Stack>
-                </ConfigRow>
-
-                <Stack direction="row" justifyContent="flex-end" sx={{ pt: 1 }}>
-                    <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => { void handleAdvisorSave(); }}
-                        disabled={advisorSaving}
-                    >
-                        {advisorSaving ? 'Saving...' : 'Save'}
-                    </Button>
-                </Stack>
-                <Dialog open={advisorModelDialogOpen} onClose={() => setAdvisorModelDialogOpen(false)} maxWidth="lg" fullWidth>
-                    <DialogTitle sx={{ textAlign: 'center' }}>Choose Model</DialogTitle>
-                    <DialogContent sx={{ height: '70vh' }}>
-                        <ModelSelectDialog
-                            providers={providerCatalog}
-                            selectedProvider={selectedProviderUuid || undefined}
-                            selectedModel={model || undefined}
-                            onSelected={(option: ProviderSelectTabOption) => {
-                                setSelectedProviderUuid(option.provider.uuid);
-                                setModel(option.model || '');
-                                setAdvisorModelDialogOpen(false);
-                            }}
-                        />
-                    </DialogContent>
-                    <DialogActions>
-                        <Button size="small" onClick={() => setAdvisorModelDialogOpen(false)}>Close</Button>
-                    </DialogActions>
-                </Dialog>
-                    </>
-                )}
-            </Stack>
-        </UnifiedCard>
+        <ToolCard
+            icon={isSearch ? <IconSearch size={18} /> : <IconWorldDownload size={18} />}
+            name={toolName}
+            description={isSearch
+                ? 'Browser-side web search via Serper. Requires an API key.'
+                : 'Fetches public web page content for agents to read.'}
+            enabled={enabled}
+            onToggle={handleToggle}
+            badges={[{ label: 'Client', color: 'blue' }]}
+            settings={settings}
+        />
     );
 };
 
-// ─── Part 3: Custom servers ───────────────────────────────────────────────────
+// ─── Part 3: Custom MCP servers ───────────────────────────────────────────────
 
 interface CustomServersCardProps {
     sources: MCPSourceConfig[];
@@ -393,8 +196,8 @@ interface CustomServersCardProps {
 }
 
 const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, saving }) => {
-    const [editingId, setEditingId] = useState<string>('');
-    const [editorMode, setEditorMode] = useState<'none' | 'add' | 'edit'>('none');
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [editingSource, setEditingSource] = useState<MCPSourceConfig | null>(null);
     const [editorForm, setEditorForm] = useState<MCPSourceFormValue>(() => ({
         ...defaultMCPSourceFormValue(),
         args: [],
@@ -404,7 +207,7 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
     }));
 
     const openAdd = () => {
-        setEditingId('');
+        setEditingSource(null);
         setEditorForm({
             ...defaultMCPSourceFormValue(),
             args: [],
@@ -412,160 +215,141 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
             envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
             useGlobalProxy: true,
         });
-        setEditorMode('add');
+        setDialogOpen(true);
     };
 
     const openEdit = (source: MCPSourceConfig) => {
-        setEditingId(source.id || '');
+        setEditingSource(source);
         setEditorForm(sourceToFormValue(source));
-        setEditorMode('edit');
+        setDialogOpen(true);
+    };
+
+    const closeDialog = () => {
+        setDialogOpen(false);
+        setEditingSource(null);
     };
 
     const handleDelete = async (id?: string) => {
         if (!id) return;
         await onSave(sources.filter((s) => s.id !== id));
-        if (editingId === id) { setEditingId(''); setEditorMode('none'); }
     };
 
     const handleToggle = async (id: string | undefined, enabled: boolean) => {
         if (!id) return;
         await onSave(sources.map((s) => (s.id === id ? { ...s, enabled } : s)));
-        if (editingId === id) setEditorForm((prev) => ({ ...prev, enabled }));
     };
 
-    const handleSave = async () => {
+    const handleDialogSave = async () => {
         const source = formValueToSource(editorForm);
         if (!source.id) return;
         const next = [...sources];
         const idx = next.findIndex((s) => s.id === source.id);
         if (idx >= 0) { next[idx] = source; } else { next.push(source); }
         await onSave(next);
-        setEditorMode('none');
-        setEditingId('');
+        closeDialog();
+    };
+
+    const connectionLabel = (source: MCPSourceConfig): string => {
+        if (source.transport === 'http' || source.transport === 'sse') return source.endpoint || '-';
+        return source.command
+            ? `${source.command}${source.args?.length ? ' ' + source.args.join(' ') : ''}`
+            : '-';
     };
 
     return (
-        <UnifiedCard title="Custom Servers" size="full">
-            <Stack spacing={2}>
-                <Stack direction="row" justifyContent="flex-end">
-                    <Tooltip title="Add Server">
-                        <IconButton onClick={openAdd} color="primary">
-                            <AddIcon />
-                        </IconButton>
-                    </Tooltip>
-                </Stack>
+        <Stack spacing={1.5}>
+            {/* Section header + add button */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                        Remote servers
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Third-party MCP servers connected to your gateway.
+                    </Typography>
+                </Box>
+                <Tooltip title="Connect server">
+                    <IconButton
+                        onClick={openAdd}
+                        size="medium"
+                        sx={{
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: '10px',
+                            bgcolor: 'background.paper',
+                            '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                    >
+                        <AddIcon />
+                    </IconButton>
+                </Tooltip>
+            </Box>
 
-                {sources.length > 0 ? (
-                    <TableContainer component={Paper} variant="outlined">
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>Connection</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>Tools</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sources.map((source) => {
-                                    const isEnabled = source.enabled ?? true;
-                                    const tools = source.tools ?? [];
-                                    const connectionInfo = source.transport === 'http'
-                                        ? source.endpoint || '-'
-                                        : source.command
-                                            ? `${source.command}${source.args?.length ? ' ' + source.args.join(' ') : ''}`
-                                            : '-';
-                                    return (
-                                        <TableRow key={source.id} hover sx={{ cursor: 'pointer' }} onClick={() => source.id && setEditingId(source.id)}>
-                                            <TableCell>
-                                                <Stack direction="row" spacing={0.5} alignItems="center">
-                                                    <Typography variant="body2" fontWeight={500}>{source.id}</Typography>
-                                                    <Chip
-                                                        label={(source.visibility === 'server') ? 'Server' : 'Client'}
-                                                        size="small"
-                                                        color={(source.visibility === 'server') ? 'success' : 'info'}
-                                                        variant="outlined"
-                                                        sx={{ fontSize: '0.65rem', height: 18 }}
-                                                    />
-                                                </Stack>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip label={(source.transport || 'stdio').toUpperCase()} size="small" variant="outlined" />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={connectionInfo}>
-                                                    {connectionInfo}
-                                                </Typography>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                                                    {tools.slice(0, 2).map((t) => <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />)}
-                                                    {tools.length > 2 && <Chip label={`+${tools.length - 2}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />}
-                                                </Stack>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip label={isEnabled ? 'Enabled' : 'Disabled'} size="small" color={isEnabled ? 'success' : 'default'} variant={isEnabled ? 'filled' : 'outlined'} />
-                                            </TableCell>
-                                            <TableCell>
-                                                <Stack direction="row" spacing={0.5} onClick={(e) => e.stopPropagation()}>
-                                                    <Tooltip title={isEnabled ? 'Disable' : 'Enable'}>
-                                                        <IconButton size="small" color={isEnabled ? 'success' : 'default'} onClick={() => handleToggle(source.id, !isEnabled)}>
-                                                            <PowerIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Edit">
-                                                        <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
-                                                            <EditIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Delete">
-                                                        <IconButton size="small" color="error" onClick={() => handleDelete(source.id)}>
-                                                            <DeleteOutlineIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                </Stack>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                ) : (
-                    <Typography variant="body2" color="text.secondary">No custom MCP servers yet.</Typography>
-                )}
+            {/* Existing servers as ToolCards */}
+            {sources.map((source) => {
+                const enabled = source.enabled ?? true;
+                const conn = connectionLabel(source);
+                return (
+                    <ToolCard
+                        key={source.id}
+                        icon={<IconServer size={18} />}
+                        name={source.id || ''}
+                        description={conn}
+                        enabled={enabled}
+                        onToggle={(v) => void handleToggle(source.id, v)}
+                        badges={[{
+                            label: source.visibility === 'server' ? 'Server' : 'Client',
+                            color: source.visibility === 'server' ? 'green' : 'blue',
+                        }]}
+                        tags={source.transport ? [(source.transport).toUpperCase()] : []}
+                        noExpand
+                        settings={
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                <Tooltip title="Edit">
+                                    <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
+                                        <EditIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title={enabled ? 'Disable' : 'Enable'}>
+                                    <IconButton size="small" color={enabled ? 'success' : 'default'} onClick={() => void handleToggle(source.id, !enabled)}>
+                                        <PowerIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Delete">
+                                    <IconButton size="small" color="error" onClick={() => void handleDelete(source.id)}>
+                                        <DeleteOutlineIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Stack>
+                        }
+                    />
+                );
+            })}
 
-                {editorMode !== 'none' && (
-                    <>
-                        <MCPSourceEditor
-                            title={editorMode === 'edit' ? 'Edit custom MCP' : 'Connect to a custom MCP'}
-                            value={editorForm}
-                            onChange={setEditorForm}
-                        />
-                        <Stack direction="row" justifyContent="space-between">
-                            <Button variant="text" onClick={() => setEditorMode('none')}>Cancel</Button>
-                            <Button variant="contained" onClick={handleSave} disabled={saving}>
-                                {saving ? 'Saving...' : 'Save'}
-                            </Button>
-                        </Stack>
-                    </>
-                )}
-            </Stack>
-        </UnifiedCard>
+            {/* Add / Edit dialog */}
+            <Dialog open={dialogOpen} onClose={closeDialog} maxWidth="md" fullWidth>
+                <DialogTitle>{editingSource ? `Edit — ${editingSource.id}` : 'Connect custom MCP server'}</DialogTitle>
+                <DialogContent sx={{ pt: 1 }}>
+                    <MCPSourceEditor value={editorForm} onChange={setEditorForm} />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeDialog}>Cancel</Button>
+                    <Button variant="contained" onClick={() => void handleDialogSave()} disabled={saving}>
+                        {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Stack>
     );
 };
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const MCPRegisteredServers = () => {
-    const location = useLocation();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-    const showAdvisorSection = shouldShowAdvisorSection(location.search);
 
     useEffect(() => { void loadData(); }, []);
 
@@ -578,9 +362,9 @@ const MCPRegisteredServers = () => {
         setLoading(false);
     };
 
-	    const saveConfig = async (sources: MCPSourceConfig[]): Promise<void> => {
-	        setSaving(true);
-	        const result = await api.setMCPConfig({ sources });
+    const saveConfig = async (sources: MCPSourceConfig[]): Promise<void> => {
+        setSaving(true);
+        const result = await api.setMCPConfig({ sources });
         if (result.success) {
             setAllSources(sources);
             setNotification({ open: true, message: 'Saved. Reconnect MCP client to apply.', severity: 'success' });
@@ -598,7 +382,6 @@ const MCPRegisteredServers = () => {
     };
 
     const webtoolsSource = allSources.find((s) => s.id === BUILTIN_WEBTOOLS_ID);
-    const advisorSource = allSources.find((s) => s.id === BUILTIN_ADVISOR_ID);
     const customSources = allSources.filter((s) => !BUILTIN_IDS.includes(s.id as any));
 
     if (loading) {
@@ -614,18 +397,33 @@ const MCPRegisteredServers = () => {
     return (
         <PageLayout loading={false}>
             <Stack spacing={2.5}>
-                {/* Part 1 */}
+                {/* Part 1: Install instructions */}
                 <AgentInstallCard />
 
-                {/* Part 2 */}
-                <BuiltinServersCard
-                    webtoolsSource={webtoolsSource}
-                    advisorSource={showAdvisorSection ? advisorSource : undefined}
-                    onSave={upsertSource}
-                    saving={saving}
-                />
+                {/* Part 2: Builtin web tools */}
+                <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2.5 }}>
+                        <Typography
+                            sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 600, color: 'text.disabled', mt: 0.5, flexShrink: 0, userSelect: 'none' }}
+                        >
+                            02
+                        </Typography>
+                        <Box>
+                            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                                Builtin tools
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Tools built into the gateway. Click a card to configure.
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <Stack spacing={1.5}>
+                        <WebtoolCard webtoolsSource={webtoolsSource} toolName="mcp_web_search" onSave={upsertSource} />
+                        <WebtoolCard webtoolsSource={webtoolsSource} toolName="mcp_web_fetch" onSave={upsertSource} />
+                    </Stack>
+                </Box>
 
-                {/* Part 3 */}
+                {/* Part 3: Custom remote servers */}
                 <CustomServersCard
                     sources={customSources}
                     onSave={async (updated) => {
