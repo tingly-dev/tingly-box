@@ -150,6 +150,7 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave }) => {
             ]}
             tags={['advisor']}
             settings={settings}
+            defaultExpanded
         />
     );
 };
