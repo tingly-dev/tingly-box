@@ -23,7 +23,7 @@ func TestCallMCPToolWithGuard_DisabledToolReturnsCallingDisabledTools(t *testing
 		}),
 	}
 
-	result, err := s.callMCPToolWithGuard(context.Background(), "tingly_box_mcp__webtools__mcp_web_search", `{"query":"x"}`)
+	_, result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__webtools__mcp_web_search", `{"query":"x"}`, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "calling disabled tools")
 	require.Contains(t, result.FirstText(), `"error":"calling disabled tools: tingly_box_mcp__webtools__mcp_web_search"`)

@@ -58,12 +58,6 @@ func (s *Server) CallMCPToolWithHooks(ctx context.Context, toolName, arguments s
 	return s.callMCPToolWithHooks(ctx, toolName, arguments, messages)
 }
 
-// callMCPToolWithGuard is kept for test compatibility.
-func (s *Server) callMCPToolWithGuard(ctx context.Context, toolName, arguments string) (mcpruntime.ToolResult, error) {
-	_, result, err := s.callMCPToolWithHooks(ctx, toolName, arguments, nil)
-	return result, err
-}
-
 // advisorResponseHook is kept for test compatibility (TestAdvisorResponseHook_Match*).
 type advisorResponseHook = servertool.AdvisorHook
 
