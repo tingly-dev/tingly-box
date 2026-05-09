@@ -159,24 +159,33 @@ func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
 	req.Input.OfInputItemList = inputItems
 }
 
-// sanitizeInputItemID sanitizes the ID field in a ResponseInputItemUnionParam.
-// For most item types, ID is stored in ExtraFields.
+// sanitizeInputItemID sanitizes the ID field in a ResponseInputItemUnionParam
+// by clearing invalid IDs directly on the inner SDK struct fields.
 func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) {
-	// Get the extra fields from the item
-	extraFields := item.ExtraFields()
-	if extraFields == nil {
+	if item.OfFunctionCall != nil {
+		sanitizeOptID(&item.OfFunctionCall.ID)
+	}
+	if item.OfFunctionCallOutput != nil {
+		sanitizeOptID(&item.OfFunctionCallOutput.ID)
+	}
+	if item.OfComputerCallOutput != nil {
+		sanitizeOptID(&item.OfComputerCallOutput.ID)
+	}
+	if item.OfCustomToolCall != nil {
+		sanitizeOptID(&item.OfCustomToolCall.ID)
+	}
+	if item.OfCustomToolCallOutput != nil {
+		sanitizeOptID(&item.OfCustomToolCallOutput.ID)
+	}
+}
+
+func sanitizeOptID(id *param.Opt[string]) {
+	if !id.Valid() {
 		return
 	}
-
-	// Check if there's an ID field
-	if idValue, ok := extraFields["id"].(string); ok {
-		// Trim and validate the ID
-		idValue = strings.TrimSpace(idValue)
-		if idValue == "" || !isValidCodexID(idValue) {
-			// Remove invalid ID
-			delete(extraFields, "id")
-			item.SetExtraFields(extraFields)
-		}
+	v := strings.TrimSpace(id.Value)
+	if v == "" || !isValidCodexID(v) {
+		*id = param.Opt[string]{}
 	}
 }
 
