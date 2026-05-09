@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -22,7 +22,7 @@ func TestGenericMCPIntegration_ImportCycleResolved(t *testing.T) {
 		Models: []string{"test-model"},
 	}
 
-	virtualRegistry := runtime.NewVirtualToolRegistry()
+	virtualRegistry := coretool.NewVirtualToolRegistry()
 	adapter := mcp.NewAnthropicV1Adapter()
 
 	// Create forwarder using the new forwarding package
@@ -75,10 +75,10 @@ func TestGenericMCPIntegration_AllAdaptersCreated(t *testing.T) {
 
 // TestGenericMCPIntegration_VirtualToolRegistry validates virtual tool registry works
 func TestGenericMCPIntegration_VirtualToolRegistry(t *testing.T) {
-	registry := runtime.NewVirtualToolRegistry()
+	registry := coretool.NewVirtualToolRegistry()
 
 	// Register a virtual tool
-	registry.Register(runtime.VirtualTool{
+	registry.Register(coretool.VirtualTool{
 		Name:        "test_tool",
 		Description: "Test tool",
 	})

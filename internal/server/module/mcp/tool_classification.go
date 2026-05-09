@@ -1,9 +1,12 @@
 package mcp
 
-import "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+import (
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
+)
 
 // IsVirtualTool reports whether the normalized MCP tool should execute server-side.
-func IsVirtualTool(normalizedName string, registry *runtime.VirtualToolRegistry) bool {
+func IsVirtualTool(normalizedName string, registry *coretool.VirtualToolRegistry) bool {
 	sourceID, toolName, ok := runtime.ParseNormalizedToolName(normalizedName)
 	if !ok {
 		return false
@@ -19,6 +22,6 @@ func IsVirtualTool(normalizedName string, registry *runtime.VirtualToolRegistry)
 	return ok
 }
 
-func IsVirtualToolName(name string, registry *runtime.VirtualToolRegistry) bool {
+func IsVirtualToolName(name string, registry *coretool.VirtualToolRegistry) bool {
 	return IsVirtualTool(name, registry)
 }

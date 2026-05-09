@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // ServerOps abstracts server operations needed by interceptors/processors
@@ -44,8 +44,19 @@ type Tool interface {
 // ToolExecutionResult represents the result of executing a tool
 type ToolExecutionResult struct {
 	ToolUseID string
-	Content   string
+	Contents  []coretool.ToolContent
 	IsError   bool
+}
+
+// TextContent returns the concatenated text of all text content items.
+func (r ToolExecutionResult) TextContent() string {
+	var out string
+	for _, c := range r.Contents {
+		if c.Type == coretool.ContentTypeText {
+			out += c.Text
+		}
+	}
+	return out
 }
 
 // TokenUsage represents token usage information
@@ -63,8 +74,8 @@ type FormatAdapter interface {
 
 	// Tool extraction and classification
 	ExtractTools(response any) ([]Tool, error)
-	IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool
-	SplitVirtualExternal(tools []Tool, registry *runtime.VirtualToolRegistry) (virtual, external []Tool, externalIDs []string)
+	IsVirtualTool(tool Tool, registry *coretool.VirtualToolRegistry) bool
+	SplitVirtualExternal(tools []Tool, registry *coretool.VirtualToolRegistry) (virtual, external []Tool, externalIDs []string)
 
 	// Message building
 	BuildAssistantMessage(response any) (any, error)
@@ -90,7 +101,7 @@ type FormatAdapter interface {
 	// so delta/stop events never reach the client and ShouldSuppressEvent returns false.
 	// OpenAI adapters must suppress at delta stage because function names appear in
 	// delta.ToolCalls, not at start; hence OpenAI's implementation checks the name here.
-	ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool
+	ShouldSuppressEvent(event any, virtualRegistry *coretool.VirtualToolRegistry) bool
 	RewriteEventIndex(event any, offset int) ([]byte, error)
 
 	// Usage extraction

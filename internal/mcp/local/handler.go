@@ -675,7 +675,7 @@ func (h *Handler) ExecuteTool(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ExecuteToolResponse{
 		Success:       true,
-		Result:        result,
+		Result:        result.FirstText(),
 		ExecutionTime: executionTime,
 	})
 }

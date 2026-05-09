@@ -80,14 +80,15 @@ export const CompactConfigCard: React.FC<CompactConfigCardProps> = ({
             key: 'baseUrl',
             label: 'Base URL',
             content: (
-                <Typography
-                    variant="subtitle2"
-                    onClick={() => onCopy(fullUrl, title || baseUrlLabel)}
-                    sx={copyableTextStyle}
-                    title={`Click to copy ${baseUrlLabel}: ${fullUrl}`}
-                >
-                    {fullUrl}
-                </Typography>
+                <Tooltip title={`Click to copy ${baseUrlLabel}`} arrow placement="top">
+                    <Typography
+                        variant="subtitle2"
+                        onClick={() => onCopy(fullUrl, title || baseUrlLabel)}
+                        sx={copyableTextStyle}
+                    >
+                        {fullUrl}
+                    </Typography>
+                </Tooltip>
             ),
             actions: (
                 <EnvironmentModeSwitcher
@@ -101,14 +102,15 @@ export const CompactConfigCard: React.FC<CompactConfigCardProps> = ({
             key: 'apiKey',
             label: 'API Key',
             content: (
-                <Typography
-                    variant="subtitle2"
-                    onClick={() => onCopy(token, apiKeyLabel)}
-                    sx={copyableTextStyle}
-                    title={`Click to copy ${apiKeyLabel}`}
-                >
-                    {maskToken(token)}
-                </Typography>
+                <Tooltip title={`Click to copy ${apiKeyLabel}`} arrow placement="top">
+                    <Typography
+                        variant="subtitle2"
+                        onClick={() => onCopy(token, apiKeyLabel)}
+                        sx={copyableTextStyle}
+                    >
+                        {maskToken(token)}
+                    </Typography>
+                </Tooltip>
             ),
             actions: (
                 <Tooltip title="View Full Token">

@@ -3,17 +3,19 @@ package runtime
 import (
 	"context"
 	"testing"
+
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 func TestAdvisorContextRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	uses := 2
-	ac := &AdvisorContext{
+	ac := &coretool.AdvisorContext{
 		Messages:      []map[string]any{{"role": "user", "content": "hello"}},
 		UsesRemaining: &uses,
 	}
-	ctx = WithAdvisorContext(ctx, ac)
-	got, ok := GetAdvisorContext(ctx)
+	ctx = coretool.WithAdvisorContext(ctx, ac)
+	got, ok := coretool.GetAdvisorContext(ctx)
 	if !ok {
 		t.Fatal("expected advisor context to be present")
 	}

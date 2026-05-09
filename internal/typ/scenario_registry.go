@@ -13,6 +13,7 @@ const (
 	TransportOpenAI    ScenarioTransport = "openai"
 	TransportAnthropic ScenarioTransport = "anthropic"
 	TransportEmbed     ScenarioTransport = "embed"
+	TransportImageGen  ScenarioTransport = "imagegen"
 )
 
 type ScenarioDescriptor struct {
@@ -50,7 +51,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 	case ScenarioOpenAI:
 		return ScenarioDescriptor{
 			ID:                 scenario,
-			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportEmbed},
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportEmbed, TransportImageGen},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
@@ -58,6 +59,16 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportEmbed},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioImageGen:
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			// Two parallel surfaces: TransportOpenAI for /responses & /chat/completions
+			// (image_generation tool), TransportImageGen for /images/generations.
+			// The caller chooses; tingly-box does not probe the upstream.
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportImageGen},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}

@@ -2,19 +2,17 @@ package client
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/sjson"
 )
 
-var codexInputIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-
 const reasoningMarker = "reasoning.encrypted_content"
+const defaultInstructions = "You are a helpful AI assistant."
 
 // codexRoundTripper wraps an http.RoundTripper to transform ChatGPT backend API
 // responses to OpenAI Responses API format. The ChatGPT backend API returns a custom format
@@ -49,8 +47,8 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	// Filter out unsupported parameters for ChatGPT backend API
-	// ChatGPT backend API does NOT support: max_tokens, max_completion_tokens, temperature, top_p
-	// It DOES support: max_output_tokens
+	// ChatGPT backend API does NOT support: max_tokens, max_completion_tokens, temperature, top_p, max_output_tokens
+
 	var filtered []byte
 	var isStreaming = false
 	if req.Body != nil && req.Method == "POST" {
@@ -60,8 +58,11 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 
-		// Filter the request body to remove unsupported parameters
-		filtered, isStreaming = filterCodexRequestJSON(body)
+		filtered, err = t.filterField(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to filter field: %w", err)
+		}
+
 		// Trim capacity to length to avoid excessive memory usage
 		filtered = append([]byte(nil), filtered...)
 		// Set GetBody to allow retries and redirects
@@ -92,125 +93,20 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	return resp, nil
 }
 
-// filterCodexRequestJSON filters out unsupported parameters for ChatGPT backend API.
-// ChatGPT backend API does NOT support: max_tokens, max_completion_tokens, temperature, top_p
-// It DOES support: max_output_tokens
-func filterCodexRequestJSON(data []byte) ([]byte, bool) {
-	var req map[string]interface{}
-	if err := json.Unmarshal(data, &req); err != nil {
-		return data, false // Return original if parsing fails
-	}
+func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
+	// Filter the request body to remove unsupported parameters using sjson
+	// This is more efficient than unmarshaling to map and marshaling back
 
-	// stream is always true: codex-rs hardcodes true, and our SSE layer only handles streaming
-	isStreaming := true
+	bodyStr := string(body)
 
-	req["store"] = false
+	// Remove unsupported parameters (ignore errors if key doesn't exist)
+	bodyStr, _ = sjson.Delete(bodyStr, "max_tokens")
+	bodyStr, _ = sjson.Delete(bodyStr, "max_completion_tokens")
+	bodyStr, _ = sjson.Delete(bodyStr, "max_output_tokens")
+	bodyStr, _ = sjson.Delete(bodyStr, "temperature")
+	bodyStr, _ = sjson.Delete(bodyStr, "top_p")
 
-	// Force stream=true — override even if client sent false
-	req["stream"] = isStreaming
-
-	// Merge "reasoning.encrypted_content" into existing include array (preserve client-provided values)
-	includes := []interface{}{}
-	if existing, ok := req["include"].([]interface{}); ok {
-		includes = existing
-	}
-	hasMarker := false
-	for _, v := range includes {
-		if s, ok := v.(string); ok && s == reasoningMarker {
-			hasMarker = true
-			break
-		}
-	}
-	if !hasMarker {
-		includes = append(includes, reasoningMarker)
-	}
-	req["include"] = includes
-
-	if _, ok := req["instructions"]; ok {
-		//if insStr, ok := ins.(string); ok {
-		//	req["instructions"] = "You are a helpful AI assistant."
-		//	if input, ok := req["input"].([]any); ok {
-		//		tmp := []any{
-		//			map[string]any{
-		//				"content": []map[string]any{
-		//					{
-		//						"text": insStr,
-		//						"type": "input_text",
-		//					},
-		//				},
-		//				"role": "user", "type": "message"},
-		//		}
-		//		if len(input) > 0 {
-		//			tmp = append(tmp, input...)
-		//		}
-		//		req["input"] = tmp
-		//	}
-		//}
-	} else {
-		req["instructions"] = "You are a helpful AI assistant."
-	}
-
-	// Insert defaults only if client did not provide them
-	if _, ok := req["tools"]; !ok {
-		req["tools"] = []interface{}{}
-	}
-	if _, ok := req["parallel_tool_calls"]; !ok {
-		req["parallel_tool_calls"] = false
-	}
-
-	// Remove unsupported parameters
-	delete(req, "max_tokens")
-	delete(req, "max_completion_tokens")
-	delete(req, "max_output_tokens")
-	delete(req, "temperature")
-	delete(req, "top_p")
-
-	// ChatGPT Codex rejects empty/invalid item ids in input[].
-	// These ids are optional for request items, so strip malformed values.
-	sanitizeCodexInputIDs(req)
-
-	// max_output_tokens IS supported, so we keep it
-	// Other supported parameters: instructions, input, tools, tool_choice, stream, store, include, etc.
-
-	result, err := json.Marshal(req)
-	if err != nil {
-		return data, isStreaming // Return original if marshaling fails
-	}
-	return result, isStreaming
-}
-
-func sanitizeCodexInputIDs(req map[string]interface{}) {
-	input, ok := req["input"]
-	if !ok {
-		return
-	}
-	model, _ := req["model"].(string)
-	req["input"] = sanitizeCodexValue(input, "input", model)
-}
-
-func sanitizeCodexValue(v interface{}, path, model string) interface{} {
-	switch item := v.(type) {
-	case []interface{}:
-		for i := range item {
-			item[i] = sanitizeCodexValue(item[i], fmt.Sprintf("%s[%d]", path, i), model)
-		}
-		return item
-	case map[string]interface{}:
-		for key, value := range item {
-			item[key] = sanitizeCodexValue(value, path+"."+key, model)
-		}
-		if rawID, ok := item["id"].(string); ok {
-			rawID = strings.TrimSpace(rawID)
-			if rawID == "" || !codexInputIDPattern.MatchString(rawID) {
-				delete(item, "id")
-			} else {
-				item["id"] = rawID
-			}
-		}
-		return item
-	default:
-		return v
-	}
+	return []byte(bodyStr), nil
 }
 
 func rewriteCodexPath(path string) string {

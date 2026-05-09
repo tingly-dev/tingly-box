@@ -8,6 +8,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // ProviderResolver resolves providers by UUID and persists config state.
@@ -109,6 +110,18 @@ func NewServiceSelector(
 	affinity AffinityStore,
 	lb LoadBalancer,
 ) *ServiceSelector {
+	return NewServiceSelectorWithLogger(cfg, affinity, lb, nil)
+}
+
+// NewServiceSelectorWithLogger is like NewServiceSelector but also wires the
+// multi-logger into smart-routing stages so each evaluation is captured to the
+// dedicated smart_routing log source.
+func NewServiceSelectorWithLogger(
+	cfg ProviderResolver,
+	affinity AffinityStore,
+	lb LoadBalancer,
+	multiLogger *pkgobs.MultiLogger,
+) *ServiceSelector {
 	s := &ServiceSelector{
 		config:        cfg,
 		affinityStore: affinity,
@@ -121,20 +134,28 @@ func NewServiceSelector(
 		healthFilter = p.HealthFilter()
 	}
 
+	newSmart := func() *SmartRoutingStage {
+		stage := NewSmartRoutingStage(lb, affinity)
+		if multiLogger != nil {
+			stage.SetMultiLogger(multiLogger)
+		}
+		return stage
+	}
+
 	// Pre-build all pipeline variants
 	s.pipelines[pipelineModeNoAffinity] = []SelectionStage{
-		NewSmartRoutingStage(lb, affinity),
+		newSmart(),
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeGlobalAffinity] = []SelectionStage{
 		NewAffinityStage(affinity, "global"),
-		NewSmartRoutingStage(lb, affinity),
+		newSmart(),
 		NewLoadBalancerStage(lb),
 	}
 	s.pipelines[pipelineModeSmartAffinity] = []SelectionStage{
 		NewHealthStage(healthFilter),
 		NewAffinityStage(affinity, "smart_rule"),
-		NewSmartRoutingStage(lb, affinity),
+		newSmart(),
 		NewLoadBalancerStage(lb),
 	}
 

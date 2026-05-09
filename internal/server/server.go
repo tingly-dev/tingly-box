@@ -29,6 +29,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
@@ -37,6 +38,7 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
+	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel/virtualserver"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -111,6 +113,9 @@ type Server struct {
 
 	// mcp runtime for external MCP tools
 	mcpRuntime *mcpruntime.Runtime
+
+	// servertool pipeline — owns virtual tool providers and hook list
+	servertoolPipeline *servertool.Pipeline
 
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
@@ -639,8 +644,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize affinity store for smart routing
 	affinityStore := NewAffinityStore(0) // 0 = use default TTL
 
-	// Initialize routing selector with pipeline
-	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer)
+	// Initialize routing selector with pipeline. Pass multiLogger so smart
+	// routing stages emit per-request evaluation traces to the smart_routing
+	// log source viewable from the frontend system log page.
+	serviceSelector := routing.NewServiceSelectorWithLogger(cfg, affinityStore, loadBalancer, server.multiLogger)
 	simpleSelector := routing.NewSimpleSelector(serviceSelector)
 
 	// Initialize load balancer API
@@ -841,16 +848,26 @@ func expandAdvisorConfig(cfg typ.AdvisorConfig) typ.AdvisorConfig {
 func (s *Server) registerAdviserFromConfig() {
 	mcpCfg := s.mcpRuntime.GetConfig()
 	if mcpCfg == nil {
+		s.servertoolPipeline = servertool.NewPipeline()
 		return
 	}
 	for _, source := range mcpCfg.Sources {
-		if source.Advisor != nil && source.Enabled != nil && *source.Enabled {
-			advisorCfg := expandAdvisorConfig(*source.Advisor)
-			s.mcpRuntime.RegisterAdviser(advisorCfg, s.clientPool)
-			logrus.Info("mcp: registered adviser as virtual tool")
-			break
+		if source.Advisor == nil || source.Enabled == nil || !*source.Enabled {
+			continue
 		}
+		advisorCfg := expandAdvisorConfig(*source.Advisor)
+
+		pipeline := servertool.NewPipeline()
+		pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
+		pipeline.RegisterInto(s.mcpRuntime.VirtualRegistry())
+		s.servertoolPipeline = pipeline
+
+		logrus.Info("mcp: registered adviser via servertool pipeline")
+		return
 	}
+
+	// No advisor configured — empty pipeline.
+	s.servertoolPipeline = servertool.NewPipeline()
 }
 
 // setupConfigWatcher initializes the configuration hot-reload watcher
@@ -1163,6 +1180,12 @@ func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// Embeddings endpoint (OpenAI compatible)
 	group.POST("/embeddings", s.getModelAuthMiddleware(), s.HandleOpenAIEmbeddings)
 
+	// Image generation endpoint (OpenAI compatible).
+	// Routed directly to upstream POST /v1/images/generations; the Responses API
+	// (POST /responses with the image_generation tool) is exposed in parallel via
+	// the same scenario, with the caller choosing which surface to use.
+	group.POST("/images/generations", s.getModelAuthMiddleware(), s.HandleOpenAIImageGeneration)
+
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", s.getModelAuthMiddleware(), s.ListModelsByScenario)
 }
@@ -1338,6 +1361,8 @@ func (s *Server) Start(port int) error {
 		fmt.Printf("OpenAI v1 Chat API endpoint: %s://%s:%d/openai/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Anthropic v1 Message API endpoint: %s://%s:%d/anthropic/v1/messages\n", scheme, resolvedHost, port)
 		fmt.Printf("Embeddings API endpoint: %s://%s:%d/tingly/embed/v1/embeddings\n", scheme, resolvedHost, port)
+		fmt.Printf("Image Generation API endpoint: %s://%s:%d/tingly/imagegen/v1/images/generations\n", scheme, resolvedHost, port)
+		fmt.Printf("Image Generation (Responses API): %s://%s:%d/tingly/imagegen/v1/responses\n", scheme, resolvedHost, port)
 		fmt.Printf("Virtual Model API endpoint: %s://%s:%d/virtual/v1/chat/completions\n", scheme, resolvedHost, port)
 		fmt.Printf("Mode name: %s\n", constant.DefaultModeName)
 		fmt.Printf("Model API key: %s\n", s.config.GetModelToken())

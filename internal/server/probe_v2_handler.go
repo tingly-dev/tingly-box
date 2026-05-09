@@ -249,7 +249,7 @@ func (s *Server) resolveSmartRoutingForProbe(rule *typ.Rule) (*loadbalance.Servi
 				anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
 			},
 		}
-		reqCtx = smartrouting.ExtractContextFromAnthropicRequest(probeReq)
+		reqCtx = smartrouting.ExtractContext(probeReq)
 	default:
 		probeReq := &openai.ChatCompletionNewParams{
 			Model: openai.ChatModel(rule.RequestModel),
@@ -257,7 +257,7 @@ func (s *Server) resolveSmartRoutingForProbe(rule *typ.Rule) (*loadbalance.Servi
 				openai.UserMessage("hi"),
 			},
 		}
-		reqCtx = smartrouting.ExtractContextFromOpenAIRequest(probeReq)
+		reqCtx = smartrouting.ExtractContext(probeReq)
 	}
 
 	router, err := smartrouting.NewRouter(rule.SmartRouting)

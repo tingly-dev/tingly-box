@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // OpenAIChatAdapter implements FormatAdapter for OpenAI Chat Completions API
@@ -46,7 +47,7 @@ func (o *OpenAIChatAdapter) ExtractTools(response any) ([]Tool, error) {
 	return tools, nil
 }
 
-func (o *OpenAIChatAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
+func (o *OpenAIChatAdapter) IsVirtualTool(tool Tool, registry *coretool.VirtualToolRegistry) bool {
 	sourceID, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
 	if !ok {
 		return false
@@ -64,7 +65,7 @@ func (o *OpenAIChatAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualTo
 
 func (o *OpenAIChatAdapter) SplitVirtualExternal(
 	tools []Tool,
-	registry *runtime.VirtualToolRegistry,
+	registry *coretool.VirtualToolRegistry,
 ) (virtual, external []Tool, externalIDs []string) {
 	virtual = make([]Tool, 0)
 	external = make([]Tool, 0)
@@ -94,7 +95,7 @@ func (o *OpenAIChatAdapter) BuildAssistantMessage(response any) (any, error) {
 }
 
 func (o *OpenAIChatAdapter) BuildToolMessage(result ToolExecutionResult) any {
-	return openai.ToolMessage(result.Content, result.ToolUseID)
+	return openai.ToolMessage(result.TextContent(), result.ToolUseID)
 }
 
 func (o *OpenAIChatAdapter) AppendToolResults(req, resp any, results []any) (any, error) {
@@ -117,7 +118,7 @@ func (o *OpenAIChatAdapter) AppendToolResults(req, resp any, results []any) (any
 	for _, r := range results {
 		result := r.(ToolExecutionResult)
 		// ToolMessage returns ChatCompletionMessageParamUnion
-		newMessages = append(newMessages, openai.ToolMessage(result.Content, result.ToolUseID))
+		newMessages = append(newMessages, openai.ToolMessage(result.TextContent(), result.ToolUseID))
 	}
 
 	newReq.Messages = newMessages
@@ -132,7 +133,7 @@ func (o *OpenAIChatAdapter) BuildContinuationSegment(resp any, results []ToolExe
 	segment := make([]openai.ChatCompletionMessageParamUnion, 0, 1+len(results))
 	segment = append(segment, completion.Choices[0].Message.ToParam())
 	for _, r := range results {
-		segment = append(segment, openai.ToolMessage(r.Content, r.ToolUseID))
+		segment = append(segment, openai.ToolMessage(r.TextContent(), r.ToolUseID))
 	}
 	return segment, nil
 }
@@ -250,7 +251,7 @@ func (o *OpenAIChatAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 	return &OpenAIChunkTool{ToolCall: tc}, true
 }
 
-func (o *OpenAIChatAdapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
+func (o *OpenAIChatAdapter) ShouldSuppressEvent(event any, virtualRegistry *coretool.VirtualToolRegistry) bool {
 	chunk, ok := event.(openai.ChatCompletionChunk)
 	if !ok || len(chunk.Choices) == 0 {
 		return false

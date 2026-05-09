@@ -1,0 +1,409 @@
+package client
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/sirupsen/logrus"
+
+	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
+
+// CodexClient wraps OpenAIClient with Codex-specific behaviors.
+// It embeds OpenAIClient to inherit standard OpenAI API functionality,
+// while overriding methods that require special handling for ChatGPT backend API.
+//
+// Codex (ChatGPT OAuth) limitations:
+// - Does NOT support standard Chat Completions API
+// - Does NOT support /models endpoint
+// - Does NOT support /images/generations endpoint
+// - ONLY supports Responses API with special parameters
+type CodexClient struct {
+	*OpenAIClient
+}
+
+// NewCodexClient creates a new Codex client wrapper.
+// The base OpenAIClient is configured with codexRoundTripper for path/header transformation.
+func NewCodexClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*CodexClient, error) {
+	base, err := NewOpenAIClient(provider, model, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create base OpenAI client: %w", err)
+	}
+
+	return &CodexClient{
+		OpenAIClient: base,
+	}, nil
+}
+
+// ChatCompletionsNew creates a new chat completion request.
+// For Codex, this returns an error as ChatGPT backend API does not support standard Chat Completions.
+// Use Responses API instead.
+func (c *CodexClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	return nil, &ErrCodexNotSupported{
+		Operation: "Chat Completions",
+		Reason:    "ChatGPT backend API does not support standard /v1/chat/completions endpoint. Use Responses API instead.",
+	}
+}
+
+// ChatCompletionsNewStreaming creates a new streaming chat completion request.
+// For Codex, this returns nil as ChatGPT backend API does not support standard Chat Completions.
+// Use Responses API instead.
+func (c *CodexClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
+	logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
+	return nil
+}
+
+// ResponsesNewStreaming creates a new streaming Responses API request with Codex-specific defaults.
+func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+	// Apply Codex-specific defaults to the request
+	applyCodexDefaultsToParams(&req)
+	// Call the base implementation
+	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
+}
+
+// ImagesGenerate creates a new image generation request.
+// For Codex, this transforms the request to use the Responses API with the image_generation tool,
+// as ChatGPT backend API does not support the standard /images/generations endpoint.
+func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
+	logrus.Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
+
+	// Build Responses API request
+	responsesReq := c.buildImageGenerationResponsesRequest(req)
+
+	// Call streaming Responses API
+	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
+
+	// Parse streaming response
+	return c.parseImageGenerationStream(ctx, stream)
+}
+
+// applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
+func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
+	// Set default instructions if not provided
+	if !req.Instructions.Valid() {
+		req.Instructions = param.NewOpt(defaultInstructions)
+	}
+	// Set store to false for Codex
+	req.Store = param.NewOpt(false)
+	// Insert defaults only if client did not provide them
+	if len(req.Tools) == 0 {
+		req.Tools = []responses.ToolUnionParam{}
+	}
+	if !req.ParallelToolCalls.Valid() {
+		req.ParallelToolCalls = param.NewOpt(false)
+	}
+
+	// Remove unsupported parameters for Codex
+	// ChatGPT backend API does NOT support: temperature, top_p, max_output_tokens
+	// Set them to invalid/zero state so they won't be included in the request
+	req.Temperature = param.Null[float64]()
+	req.TopP = param.Null[float64]()
+	req.MaxOutputTokens = param.Null[int64]()
+
+	// Merge "reasoning.encrypted_content" into existing include array (preserve client-provided values)
+	includes := req.Include
+	hasMarker := false
+	for _, v := range includes {
+		if string(v) == reasoningMarker {
+			hasMarker = true
+			break
+		}
+	}
+	if !hasMarker {
+		includes = append(includes, responses.ResponseIncludable(reasoningMarker))
+	}
+	req.Include = includes
+
+	// Get the current extra fields (call the method)
+	extraFields := map[string]interface{}{}
+	if len(req.ExtraFields()) > 0 {
+		// Copy existing extra fields
+		for k, v := range req.ExtraFields() {
+			if k == "max_output_tokens" {
+				continue
+			}
+			extraFields[k] = v
+		}
+	}
+
+	extraFields["stream"] = true
+
+	// ChatGPT Codex rejects empty/invalid item ids in input[].
+	// These ids are optional for request items, so strip malformed values.
+	sanitizeResponseInputIDs(req)
+
+	// Set the modified extra fields back
+	req.SetExtraFields(extraFields)
+}
+
+// sanitizeResponseInputIDs sanitizes item IDs in ResponseNewParams.Input for Codex.
+// ChatGPT Codex rejects empty/invalid item ids, so we strip malformed values.
+func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
+	// Check if Input is set and is of type OfInputItemList
+	if req.Input.OfInputItemList == nil {
+		return
+	}
+
+	inputItems := req.Input.OfInputItemList
+	for i := range inputItems {
+		item := &inputItems[i]
+		sanitizeInputItemID(item)
+	}
+
+	req.Input.OfInputItemList = inputItems
+}
+
+// sanitizeInputItemID sanitizes the ID field in a ResponseInputItemUnionParam.
+// For most item types, ID is stored in ExtraFields.
+func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) {
+	// Get the extra fields from the item
+	extraFields := item.ExtraFields()
+	if extraFields == nil {
+		return
+	}
+
+	// Check if there's an ID field
+	if idValue, ok := extraFields["id"].(string); ok {
+		// Trim and validate the ID
+		idValue = strings.TrimSpace(idValue)
+		if idValue == "" || !isValidCodexID(idValue) {
+			// Remove invalid ID
+			delete(extraFields, "id")
+			item.SetExtraFields(extraFields)
+		}
+	}
+}
+
+// isValidCodexID checks if a string is a valid Codex ID.
+// Valid IDs contain only alphanumeric characters, underscores, and hyphens.
+func isValidCodexID(id string) bool {
+	if len(id) == 0 {
+		return false
+	}
+	for _, c := range id {
+		if !isAlnumunderscoreHyphen(c) {
+			return false
+		}
+	}
+	return true
+}
+
+// isAlnumunderscoreHyphen checks if a rune is alphanumeric, underscore, or hyphen.
+func isAlnumunderscoreHyphen(c rune) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '_' || c == '-'
+}
+
+// ListModels returns the list of available models.
+// For Codex, this returns an error as ChatGPT OAuth tokens cannot access /models endpoint.
+func (c *CodexClient) ListModels(ctx context.Context) ([]string, error) {
+	return nil, &ErrModelsEndpointNotSupported{
+		Provider: c.provider.Name,
+		Reason:   "ChatGPT OAuth token cannot access /models endpoint",
+	}
+}
+
+// buildImageGenerationResponsesRequest transforms ImageGenerateParams into
+// a Responses API request with the image_generation tool.
+func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGenerateParams) responses.ResponseNewParams {
+	// Build the Responses API request with Codex-specific defaults
+	params := responses.ResponseNewParams{
+		Model: req.Model,
+	}
+
+	// Set default values directly on the struct
+	params.Store = param.NewOpt(false)
+	params.Instructions = param.NewOpt(defaultInstructions)
+	params.ParallelToolCalls = param.NewOpt(false)
+	params.Include = []responses.ResponseIncludable{responses.ResponseIncludable(reasoningMarker)}
+
+	// Build input content
+	contentItem := responses.ResponseInputContentParamOfInputText(string(req.Prompt))
+	contentItems := responses.ResponseInputMessageContentListParam{contentItem}
+
+	// Build input message
+	inputItem := responses.ResponseInputItemUnionParam{
+		OfMessage: &responses.EasyInputMessageParam{
+			Type:    responses.EasyInputMessageTypeMessage,
+			Role:    responses.EasyInputMessageRoleUser,
+			Content: responses.EasyInputMessageContentUnionParam{OfInputItemContentList: contentItems},
+		},
+	}
+	inputItems := responses.ResponseInputParam{inputItem}
+	params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: inputItems}
+
+	// Determine quality
+	quality := "auto"
+	if req.Quality != "" {
+		qualityStr := string(req.Quality)
+		if qualityStr == "standard" {
+			quality = "medium"
+		} else if qualityStr == "hd" {
+			quality = "high"
+		} else {
+			quality = qualityStr
+		}
+	}
+
+	// Determine output format
+	outputFormat := "png"
+	if req.ResponseFormat != "" {
+		outputFormat = string(req.ResponseFormat)
+	}
+
+	// Build image_generation tool
+	toolParam := &responses.ToolImageGenerationParam{
+		Type:         "image_generation",
+		Size:         string(req.Size),
+		Quality:      quality,
+		OutputFormat: outputFormat,
+		//Action:       "auto",
+		//Background:   "auto",
+		//Moderation:   "auto",
+	}
+
+	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}
+
+	// Log warning for unsupported N parameter
+	if req.N.Valid() {
+		n := req.N.Value
+		if n > 1 {
+			logrus.Warnf("[Codex] Multiple images (N=%d) not supported, using N=1", n)
+		}
+	}
+
+	// Log warning for unsupported style parameter
+	if req.Style != "" {
+		logrus.Warnf("[Codex] Style parameter not supported for image generation")
+	}
+
+	// Set stream=true via ExtraFields
+	extraFields := map[string]interface{}{
+		"stream": true,
+	}
+	params.SetExtraFields(extraFields)
+
+	return params
+}
+
+// parseImageGenerationStream parses the streaming Responses API response
+// and extracts the generated image data from the output array.
+//
+// The image data comes through two event types:
+// 1. response.image_generation_call.partial_image - streaming partial image chunks
+// 2. response.output_item.done - final status of the image generation call
+func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
+	defer stream.Close()
+
+	var b64JSON string
+	var imageCallID string
+
+	// Collect image data from stream events
+	for stream.Next() {
+		event := stream.Current()
+
+		switch event.Type {
+		case "response.image_generation_call.partial_image":
+			// Partial image chunks during generation
+			partialEvent := event.AsResponseImageGenerationCallPartialImage()
+			if partialEvent.PartialImageB64 != "" {
+				b64JSON += partialEvent.PartialImageB64
+				imageCallID = partialEvent.ItemID
+				logrus.Debugf("[Codex] Received partial image chunk, item_id: %s, total_size: %d",
+					partialEvent.ItemID, len(b64JSON))
+			}
+
+		case "response.output_item.done":
+			// Final status of output items
+			doneEvent := event.AsResponseOutputItemDone()
+			item := doneEvent.Item
+
+			if item.Type == "image_generation_call" {
+				imageCall := item.AsImageGenerationCall()
+				// Check for image result in the done event
+				// The status can be "generating", "completed", or other values
+				// If we haven't received partial images, use the Result field
+				if b64JSON == "" && imageCall.Result != "" {
+					b64JSON = imageCall.Result
+					imageCallID = imageCall.ID
+					logrus.Debugf("[Codex] Received image result in done event, id: %s, status: %s",
+						imageCall.ID, imageCall.Status)
+				}
+				// Update imageCallID even if we already have data from partial events
+				if imageCallID == "" {
+					imageCallID = imageCall.ID
+				}
+			}
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	if b64JSON == "" {
+		return nil, fmt.Errorf("no image data in response (image_call_id: %s)", imageCallID)
+	}
+
+	logrus.Infof("[Codex] Successfully extracted image data, id: %s, size: %d bytes", imageCallID, len(b64JSON))
+
+	// Build standard ImagesResponse from extracted data
+	return &openai.ImagesResponse{
+		Data: []openai.Image{
+			{
+				B64JSON: b64JSON,
+			},
+		},
+	}, nil
+}
+
+// SetRecordSink sets the record sink for the client.
+// For CodexClient, we delegate to the embedded OpenAIClient.
+func (c *CodexClient) SetRecordSink(sink *obs.Sink) {
+	c.OpenAIClient.SetRecordSink(sink)
+}
+
+// Client returns the underlying OpenAI SDK client.
+// For CodexClient, we delegate to the embedded OpenAIClient.
+func (c *CodexClient) Client() *openai.Client {
+	return c.OpenAIClient.Client()
+}
+
+// ProbeChatEndpoint tests the chat endpoint.
+// For Codex, this delegates to the embedded OpenAIClient's probeResponsesEndpoint.
+func (c *CodexClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+	logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
+	return ProbeResult{
+		Success:          false,
+		Message:          "",
+		Content:          "",
+		LatencyMs:        0,
+		ModelsCount:      0,
+		PromptTokens:     0,
+		CompletionTokens: 0,
+		TotalTokens:      0,
+		ErrorMessage:     "Codex does not support /chat endpoint",
+	}
+}
+
+// ProbeModelsEndpoint tests the models endpoint.
+// For Codex, this returns an error as the endpoint is not supported.
+func (c *CodexClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
+	return ProbeResult{
+		Success:      false,
+		ErrorMessage: "Codex does not support /models endpoint",
+	}
+}
+
+// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request.
+func (c *CodexClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
+	return c.OpenAIClient.ProbeOptionsEndpoint(ctx)
+}

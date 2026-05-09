@@ -5,8 +5,6 @@ package server
 // These methods are kept for backward compatibility with DetermineProviderAndModelWithScenario.
 
 import (
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -18,17 +16,7 @@ import (
 //
 // Deprecated: Use routing/smart_routing_helper.go ExtractRequestContext() instead.
 func (s *Server) ExtractRequestContext(req interface{}) (*smartrouting.RequestContext, error) {
-	switch r := req.(type) {
-	case *openai.ChatCompletionNewParams:
-		return smartrouting.ExtractContextFromOpenAIRequest(r), nil
-	case *anthropic.MessageNewParams:
-		return smartrouting.ExtractContextFromAnthropicRequest(r), nil
-	case *anthropic.BetaMessageNewParams:
-		return smartrouting.ExtractContextFromBetaRequest(r), nil
-	default:
-		logrus.Debugf("[smart_routing] unknown request type %T, cannot extract context", req)
-		return nil, nil
-	}
+	return smartrouting.ExtractContext(req), nil
 }
 
 // SelectServiceFromSmartRouting selects a service from matched smart routing services

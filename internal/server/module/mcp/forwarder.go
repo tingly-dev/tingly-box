@@ -18,7 +18,7 @@ import (
 // ClientPoolGetter matches client.ClientPool interface
 type ClientPoolGetter interface {
 	GetAnthropicClient(ctx context.Context, provider *typ.Provider, model string) *client.AnthropicClient
-	GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) *client.OpenAIClient
+	GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) client.OpenAIClientInterface
 }
 
 // ForwardContextGetter provides ForwardContext
@@ -136,7 +136,7 @@ type ForwardResult struct {
 	Message         any
 	Cancel          context.CancelFunc
 	AnthropicClient *client.AnthropicClient
-	OpenAIClient    *client.OpenAIClient
+	OpenAIClient    client.OpenAIClientInterface
 }
 
 // ===================================================================

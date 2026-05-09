@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -80,7 +80,7 @@ func TestAdvisorToolLoop(t *testing.T) {
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	uses3 := 3
-	actx := &runtime.AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "You are a helpful assistant."},
 			{"role": "user", "content": "Hello"},
@@ -88,23 +88,15 @@ func TestAdvisorToolLoop(t *testing.T) {
 		},
 		UsesRemaining: &uses3,
 	}
-	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func() mcp.CallToolRequest {
-		return mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name:      "advisor",
-				Arguments: map[string]any{},
-			},
-		}
+	makeReq := func() coretool.ToolCall {
+		return coretool.ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
-	extractText := func(result *mcp.CallToolResult) string {
-		require.NotNil(t, result)
-		require.NotEmpty(t, result.Content)
-		text, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		return text.Text
+	extractText := func(result coretool.ToolResult) string {
+		require.NotEmpty(t, result.Contents)
+		return result.FirstText()
 	}
 
 	// First call should succeed and decrement UsesRemaining.
@@ -238,7 +230,7 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	uses2 := 2
-	actx := &runtime.AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "Executor system prompt."},
 			{"role": "user", "content": "Help me"},
@@ -246,23 +238,15 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 		},
 		UsesRemaining: &uses2,
 	}
-	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func() mcp.CallToolRequest {
-		return mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name:      "advisor",
-				Arguments: map[string]any{},
-			},
-		}
+	makeReq := func() coretool.ToolCall {
+		return coretool.ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
-	extractText := func(result *mcp.CallToolResult) string {
-		require.NotNil(t, result)
-		require.NotEmpty(t, result.Content)
-		text, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		return text.Text
+	extractText := func(result coretool.ToolResult) string {
+		require.NotEmpty(t, result.Contents)
+		return result.FirstText()
 	}
 
 	result, err := vt.Handler(ctx, makeReq())
@@ -359,27 +343,25 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	uses1 := 1
-	actx := &runtime.AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "user", "content": "Hello"},
 		},
 		UsesRemaining: &uses1,
 	}
-	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "advisor",
-			Arguments: map[string]any{
-				"session_id": "sess-42",
-			},
+	req := coretool.ToolCall{
+		Name: "advisor",
+		Arguments: map[string]any{
+			"session_id": "sess-42",
 		},
 	}
 
 	result, err := vt.Handler(ctx, req)
 	require.NoError(t, err)
 	require.False(t, result.IsError)
-	require.Len(t, result.Content, 1)
+	require.Len(t, result.Contents, 1)
 
 	// Verify that session data was injected into the request messages.
 	require.Len(t, receivedRequests, 1)

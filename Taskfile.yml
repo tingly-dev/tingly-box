@@ -21,6 +21,12 @@ vars:
   BIN_NAME: "tingly-box"
   BIN_DIR: "bin"
 
+  # Submodule versions (format: "name:branch/tag/commit")
+  # Example: "openai-go:tingly-dev-v3.32.0"
+  OPENAI_GO_VERSION: "tingly-dev-v3.35.0"
+  ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.41.0"
+  GO_GENAI_VERSION: "upstream-v1.56.0"
+
 tasks:
   build:
     aliases:
@@ -234,6 +240,10 @@ tasks:
             cd - > /dev/null
           fi
         done
+
+  submodule:sync:
+    summary: Sync and update all submodules to their remote branches
+    cmds:
       - |
         git submodule sync
         git submodule update --remote
@@ -246,8 +256,75 @@ tasks:
             cd - > /dev/null
           fi
         done
-        
 
+  submodule:update:
+    summary: Update submodules to versions specified in Taskfile.yml variables
+    cmds:
+      - |
+        echo "Updating openai-go to {{.OPENAI_GO_VERSION}}..."
+        cd libs/openai-go
+        git fetch origin
+        git checkout {{.OPENAI_GO_VERSION}}
+        cd - > /dev/null
+      - |
+        echo "Updating anthropic-sdk-go to {{.ANTHROPIC_SDK_GO_VERSION}}..."
+        cd libs/anthropic-sdk-go
+        git fetch origin
+        git checkout {{.ANTHROPIC_SDK_GO_VERSION}}
+        cd - > /dev/null
+      - |
+        echo "Updating go-genai to {{.GO_GENAI_VERSION}}..."
+        cd libs/go-genai
+        git fetch origin
+        git checkout {{.GO_GENAI_VERSION}}
+        cd - > /dev/null
+      - |
+        echo ""
+        echo "Submodule versions updated:"
+        task: submodule
+
+  submodule:openai-go:
+    summary: Update openai-go submodule to a specific version (branch/tag/commit)
+    cmds:
+      - |
+        cd libs/openai-go
+        git fetch origin
+        git checkout {{.CLI_ARGS}}
+        cd - > /dev/null
+      - |
+        echo "openai-go updated to:"
+        cd libs/openai-go
+        git --no-pager log -n 1
+        cd - > /dev/null
+
+  submodule:anthropic-sdk-go:
+    summary: Update anthropic-sdk-go submodule to a specific version (branch/tag/commit)
+    cmds:
+      - |
+        cd libs/anthropic-sdk-go
+        git fetch origin
+        git checkout {{.CLI_ARGS}}
+        cd - > /dev/null
+      - |
+        echo "anthropic-sdk-go updated to:"
+        cd libs/anthropic-sdk-go
+        git --no-pager log -n 1
+        cd - > /dev/null
+
+  submodule:go-genai:
+    summary: Update go-genai submodule to a specific version (branch/tag/commit)
+    cmds:
+      - |
+        cd libs/go-genai
+        git fetch origin
+        git checkout {{.CLI_ARGS}}
+        cd - > /dev/null
+      - |
+        echo "go-genai updated to:"
+        cd libs/go-genai
+        git --no-pager log -n 1
+        cd - > /dev/null
+        
   changelog:
     cmds:
       - |
@@ -264,3 +341,8 @@ tasks:
           echo "Commits since $LATEST_RELEASE_TAG:"
           git --no-pager log ${LATEST_RELEASE_TAG}..HEAD --pretty=format:"%h - %s (%an, %ar)" --graph
         fi
+
+  harness:matrix:
+    cmds:
+      - |
+        go run ./cli/harness matrix

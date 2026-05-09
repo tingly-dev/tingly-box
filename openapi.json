@@ -5309,6 +5309,10 @@
       "ErrorDetail": {
         "type": "object",
         "properties": {
+          "code": {
+            "type": "string",
+            "description": "Field code"
+          },
           "message": {
             "type": "string",
             "description": "Field message"
@@ -5319,7 +5323,8 @@
           }
         },
         "required": [
-          "message"
+          "message",
+          "type"
         ]
       },
       "ExtractData": {
@@ -6045,10 +6050,6 @@
             "type": "string",
             "description": "Field id"
           },
-          "is_client_tool": {
-            "type": "boolean",
-            "description": "Field is_client_tool"
-          },
           "is_ping_available": {
             "type": "boolean",
             "description": "Field is_ping_available"
@@ -6093,6 +6094,10 @@
           "transport": {
             "type": "string",
             "description": "Field transport"
+          },
+          "visibility": {
+            "type": "string",
+            "description": "Field visibility"
           }
         }
       },
@@ -9991,12 +9996,8 @@
   },
   "tags": [
     {
-      "name": "server",
-      "description": "Operations related to server"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
       "name": "testing",
@@ -10007,72 +10008,36 @@
       "description": "Operations related to providers"
     },
     {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
       "name": "skills",
       "description": "Operations related to skills"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "weixin",
-      "description": "Operations related to weixin"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
     },
     {
       "name": "oauth",
       "description": "Operations related to oauth"
     },
     {
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
       "name": "codex",
       "description": "Operations related to codex"
     },
     {
-      "name": "mcp",
-      "description": "Operations related to mcp"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
-      "name": "onboarding",
-      "description": "Operations related to onboarding"
+      "name": "server",
+      "description": "Operations related to server"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "weixin",
+      "description": "Operations related to weixin"
     },
     {
       "name": "config",
@@ -10083,8 +10048,48 @@
       "description": "Operations related to mcp-transport"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
+    },
+    {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
     }
   ]
 }

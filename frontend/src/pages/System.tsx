@@ -3,13 +3,14 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { Logout } from '@mui/icons-material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
-import { IconCircleCheck, IconCircleX, IconInfoCircle, IconKey, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage } from '@tabler/icons-react';
+import { IconCircleCheck, IconCircleX, IconInfoCircle, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage, IconBrush, IconSun, IconMoon, IconSunHigh, IconWorld, IconCheck } from '@tabler/icons-react';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useThemeMode } from '@/contexts/ThemeContext';
 import { api } from '@/services/api';
 
 const System = () => {
@@ -17,6 +18,7 @@ const System = () => {
     const { currentVersion, hasUpdate, latestVersion, showUpdateDialog } = useVersion();
     const { isHealthy, checking, checkHealth } = useHealth();
     const { logout: authLogout } = useAuth();
+    const { mode: themeMode, setTheme } = useThemeMode();
     const [serverStatus, setServerStatus] = useState<any>(null);
     const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
@@ -166,21 +168,6 @@ const System = () => {
                                 </Box>
                             </Box>
 
-                            {/* Keys */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                    <IconKey size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
-                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                        {t('system.status.keys')}
-                                    </Typography>
-                                </Box>
-                                <Box sx={{ flex: 1 }}>
-                                    <Typography variant="body2" sx={{ color: 'text.primary' }}>
-                                        {serverStatus.providers_enabled} / {serverStatus.providers_total}
-                                    </Typography>
-                                </Box>
-                            </Box>
-
                             {/* Uptime */}
                             {serverStatus.uptime && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
@@ -231,42 +218,6 @@ const System = () => {
                                 </Box>
                             </Box>
 
-                            {/* Global Proxy URL */}
-                            <Box sx={{ display: 'flex', alignItems: 'flex-start', py: 0.5, gap: 3 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100, pt: 1 }}>
-                                    <IconLock size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
-                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                        {t('system.proxy.globalProxyUrl.label')}
-                                    </Typography>
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, maxWidth: 380 }}>
-                                    <TextField
-                                        size="small"
-                                        value={globalProxyInput}
-                                        onChange={(e) => setGlobalProxyInput(e.target.value)}
-                                        placeholder="http://127.0.0.1:7890"
-                                        helperText={t('system.proxy.globalProxyUrl.helper')}
-                                        sx={{ flex: 1 }}
-                                        InputProps={globalProxyUrl && globalProxyInput === globalProxyUrl ? {
-                                            endAdornment: (
-                                                <InputAdornment position="end">
-                                                    <IconLock size={14} style={{ color: 'var(--mui-palette-success-main)' }} />
-                                                </InputAdornment>
-                                            )
-                                        } : undefined}
-                                    />
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={saveGlobalProxyUrl}
-                                        disabled={proxyUrlSaving || globalProxyInput === globalProxyUrl}
-                                        sx={{ mt: 0.5, whiteSpace: 'nowrap' }}
-                                    >
-                                        {t('common.save')}
-                                    </Button>
-                                </Box>
-                            </Box>
-
                             {/* Language — merged from the standalone Language Settings card */}
                             <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
@@ -310,10 +261,99 @@ const System = () => {
                                     />
                                 </Box>
                             </Box>
+
+                            {/* Theme — moved from the activity bar */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
+                                    <IconBrush size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                        {t('common.theme')}
+                                    </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, flexWrap: 'wrap' }}>
+                                    {([
+                                        { value: 'light', label: t('layout.activityBar.light'), Icon: IconSun },
+                                        { value: 'dark', label: t('layout.activityBar.dark'), Icon: IconMoon },
+                                        { value: 'sunlit', label: t('layout.activityBar.sunlit'), Icon: IconSunHigh },
+                                    ] as const).map(({ value, label, Icon }) => {
+                                        const selected = themeMode === value;
+                                        return (
+                                            <Chip
+                                                key={value}
+                                                icon={<Icon size={14} />}
+                                                label={label}
+                                                onClick={() => setTheme(value)}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: selected ? 'primary.main' : 'action.hover',
+                                                    color: selected ? 'primary.contrastText' : 'text.primary',
+                                                    fontWeight: selected ? 600 : 400,
+                                                    border: selected ? 'none' : '1px solid',
+                                                    borderColor: 'divider',
+                                                    cursor: 'pointer',
+                                                    '& .MuiChip-icon': {
+                                                        color: 'inherit',
+                                                    },
+                                                    '&:hover': {
+                                                        bgcolor: selected ? 'primary.dark' : 'action.selected',
+                                                    },
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                </Box>
+                            </Box>
                         </Stack>
                     ) : (
                         <Typography color="text.secondary">{t('system.status.loading')}</Typography>
                     )}
+                </UnifiedCard>
+
+                {/* Quick Proxy — dedicated card for the reusable proxy preset */}
+                <UnifiedCard
+                    title={
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                            <IconWorld size={18} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                            <Typography variant="subtitle1" fontWeight={600}>
+                                {t('system.proxy.globalProxyUrl.label')}
+                            </Typography>
+                        </Stack>
+                    }
+                    size="full"
+                >
+                    <Stack spacing={1.5}>
+                        <Typography variant="body2" color="text.secondary">
+                            {t('system.proxy.globalProxyUrl.description', { defaultValue: t('system.proxy.globalProxyUrl.helper') })}
+                        </Typography>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <TextField
+                                size="small"
+                                fullWidth
+                                value={globalProxyInput}
+                                onChange={(e) => setGlobalProxyInput(e.target.value)}
+                                placeholder="http://127.0.0.1:7890"
+                                sx={{ maxWidth: 480 }}
+                                InputProps={globalProxyUrl && globalProxyInput === globalProxyUrl ? {
+                                    endAdornment: (
+                                        <InputAdornment position="end">
+                                            <Tooltip title={t('common.saved', { defaultValue: 'Saved' })} arrow>
+                                                <IconCheck size={16} style={{ color: 'var(--mui-palette-success-main)' }} />
+                                            </Tooltip>
+                                        </InputAdornment>
+                                    )
+                                } : undefined}
+                            />
+                            <Button
+                                size="small"
+                                variant="contained"
+                                onClick={saveGlobalProxyUrl}
+                                disabled={proxyUrlSaving || globalProxyInput === globalProxyUrl}
+                                sx={{ whiteSpace: 'nowrap', minWidth: 72 }}
+                            >
+                                {proxyUrlSaving ? <CircularProgress size={14} color="inherit" /> : t('common.save')}
+                            </Button>
+                        </Stack>
+                    </Stack>
                 </UnifiedCard>
 
                 {/* About - Simplified one-line-per-status design */}

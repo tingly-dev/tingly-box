@@ -45,7 +45,7 @@ func TestSmartRouting_Integration_OpenAI(t *testing.T) {
 	}
 
 	// Extract context and evaluate
-	ctx := ExtractContextFromOpenAIRequest(req)
+	ctx := ExtractContext(req)
 	services, matched := router.EvaluateRequest(ctx)
 
 	require.True(t, matched, "should match the gpt routing rule")
@@ -116,7 +116,7 @@ func TestSmartRouting_Integration_Anthropic(t *testing.T) {
 		},
 	}
 
-	ctx := ExtractContextFromAnthropicRequest(reqThinking)
+	ctx := ExtractContext(reqThinking)
 	services, matched := router.EvaluateRequest(ctx)
 
 	require.True(t, matched, "should match the thinking routing rule")
@@ -133,7 +133,7 @@ func TestSmartRouting_Integration_Anthropic(t *testing.T) {
 		},
 	}
 
-	ctx = ExtractContextFromAnthropicRequest(reqHaiku)
+	ctx = ExtractContext(reqHaiku)
 	services, matched = router.EvaluateRequest(ctx)
 
 	require.True(t, matched, "should match the haiku routing rule")
@@ -154,7 +154,7 @@ func TestSmartRouting_Integration_Anthropic_ImageContent(t *testing.T) {
 		},
 	}
 
-	ctx := ExtractContextFromAnthropicRequest(req)
+	ctx := ExtractContext(req)
 	require.Equal(t, "image", ctx.LatestContentType)
 }
 
@@ -618,3 +618,81 @@ func TestValidateOpValueType(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluate_AgentClaudeCode_MatchesEachKind(t *testing.T) {
+	svcMain := &loadbalance.Service{Provider: "p", Model: "m-main", Weight: 1, Active: true}
+	svcSub := &loadbalance.Service{Provider: "p", Model: "m-sub", Weight: 1, Active: true}
+	svcCompact := &loadbalance.Service{Provider: "p", Model: "m-compact", Weight: 1, Active: true}
+
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "compact",
+			Ops: []SmartOp{
+				{Position: PositionAgentClaudeCode, Operation: OpAgentClaudeCodeEquals, Value: ClaudeCodeKindCompact},
+			},
+			Services: []*loadbalance.Service{svcCompact},
+		},
+		{
+			Description: "subagent",
+			Ops: []SmartOp{
+				{Position: PositionAgentClaudeCode, Operation: OpAgentClaudeCodeEquals, Value: ClaudeCodeKindSubagent},
+			},
+			Services: []*loadbalance.Service{svcSub},
+		},
+		{
+			Description: "main",
+			Ops: []SmartOp{
+				{Position: PositionAgentClaudeCode, Operation: OpAgentClaudeCodeEquals, Value: ClaudeCodeKindMain},
+			},
+			Services: []*loadbalance.Service{svcMain},
+		},
+	})
+	require.NoError(t, err)
+
+	cases := []struct {
+		kind     string
+		wantSvc  string
+	}{
+		{ClaudeCodeKindMain, "m-main"},
+		{ClaudeCodeKindSubagent, "m-sub"},
+		{ClaudeCodeKindCompact, "m-compact"},
+	}
+	for _, c := range cases {
+		t.Run(c.kind, func(t *testing.T) {
+			ctx := &RequestContext{ClaudeCodeRequestKind: c.kind}
+			services, matched := router.EvaluateRequest(ctx)
+			require.True(t, matched)
+			require.Len(t, services, 1)
+			require.Equal(t, c.wantSvc, services[0].Model)
+		})
+	}
+}
+
+func TestEvaluate_AgentClaudeCode_EmptyKindDoesNotMatch(t *testing.T) {
+	svc := &loadbalance.Service{Provider: "p", Model: "m", Weight: 1, Active: true}
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "any kind",
+			Ops: []SmartOp{
+				{Position: PositionAgentClaudeCode, Operation: OpAgentClaudeCodeEquals, Value: ClaudeCodeKindMain},
+			},
+			Services: []*loadbalance.Service{svc},
+		},
+	})
+	require.NoError(t, err)
+
+	// Empty ClaudeCodeRequestKind (e.g., non-claude_code scenario) → no match.
+	ctx := &RequestContext{}
+	_, matched := router.EvaluateRequest(ctx)
+	require.False(t, matched)
+}
+
+func TestValidateSmartOp_AgentClaudeCode(t *testing.T) {
+	op := SmartOp{
+		Position:  PositionAgentClaudeCode,
+		Operation: OpAgentClaudeCodeEquals,
+		Value:     ClaudeCodeKindSubagent,
+	}
+	require.NoError(t, ValidateSmartOp(&op))
+}
+

@@ -24,6 +24,33 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// OpenAIClientInterface defines the contract for OpenAI-compatible clients.
+// Both OpenAIClient and CodexClient implement this interface.
+type OpenAIClientInterface interface {
+	// Core API methods
+	ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+	ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
+	ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error)
+	ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error)
+	ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
+	EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
+
+	// Utility methods
+	ListModels(ctx context.Context) ([]string, error)
+	Close() error
+	GetProvider() *typ.Provider
+	APIStyle() protocol.APIStyle
+	SetRecordSink(sink *obs.Sink)
+
+	// Prober interface methods
+	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
+	ProbeModelsEndpoint(ctx context.Context) ProbeResult
+	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+
+	// Client returns the underlying OpenAI SDK client (for advanced usage)
+	Client() *openai.Client
+}
+
 // OpenAIClient wraps the OpenAI SDK client
 type OpenAIClient struct {
 	client     openai.Client
@@ -122,6 +149,11 @@ func (c *OpenAIClient) ChatCompletionsNewStreaming(ctx context.Context, req open
 // EmbeddingsNew creates a new embeddings request
 func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error) {
 	return c.client.Embeddings.New(ctx, req)
+}
+
+// ImagesGenerate creates a new image generation request
+func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
+	return c.client.Images.Generate(ctx, req)
 }
 
 // ResponsesNew creates a new Responses API request
@@ -598,4 +630,16 @@ func (c *OpenAIClient) probeResponsesEndpoint(ctx context.Context, model string)
 		CompletionTokens: tokenUsage.CompletionTokens,
 		TotalTokens:      tokenUsage.TotalTokens,
 	}
+}
+
+// isCodexProvider checks if the current provider is a Codex OAuth provider
+// Codex OAuth providers require special handling for image generation
+func (c *OpenAIClient) isCodexProvider() bool {
+	if c.provider.AuthType != typ.AuthTypeOAuth {
+		return false
+	}
+	if c.provider.OAuthDetail == nil {
+		return false
+	}
+	return c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex
 }

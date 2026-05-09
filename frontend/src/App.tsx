@@ -28,10 +28,12 @@ import UseCodexPage from './pages/scenario/UseCodexPage';
 import UseClaudeCodePage from './pages/scenario/UseClaudeCodePage';
 import ClaudeCodeProfilePage from './pages/scenario/ClaudeCodeProfilePage';
 import UseAgentPage from './pages/scenario/UseAgentPage';
+import AgentOverviewPage from './pages/scenario/AgentOverviewPage';
 import UseOpenCodePage from './pages/scenario/UseOpenCodePage';
 import UseXcodePage from './pages/scenario/UseXcodePage';
 import UseVSCodePage from './pages/scenario/UseVSCodePage';
 import UseEmbedPage from './pages/scenario/UseEmbedPage';
+import UseImageGenPage from './pages/scenario/UseImageGenPage';
 import CredentialPage from './pages/CredentialPage';
 import ProviderListPage from './pages/ProviderListPage';
 import System from './pages/System';
@@ -274,10 +276,9 @@ const AppDialogs = () => {
 
 // OnboardingGate decides where a freshly-authenticated user lands. Brand-new
 // installs (no provider configured) get sent to /onboarding; everyone else
-// always lands in the scenario activity, restoring the previously selected
-// agent sub-page if one was remembered, or /agent/claude_code by default.
-// We hit /api/v2/providers once on mount; while in flight we render nothing
-// to avoid a flash of the default agent page.
+// lands on the agent overview at /agent. We hit /api/v2/providers once on
+// mount; while in flight we render nothing to avoid a flash of the default
+// agent page.
 const OnboardingGate: React.FC = () => {
     const [target, setTarget] = useState<string | null>(null);
 
@@ -297,8 +298,7 @@ const OnboardingGate: React.FC = () => {
                 // Swallow the error and fall through to the default agent —
                 // failing the gate should never lock the user out of the app.
             }
-            const fallback = localStorage.getItem('layout.activityPath.scenario') || '/agent/claude_code';
-            if (!cancelled) setTarget(fallback);
+            if (!cancelled) setTarget('/agent');
         })();
         return () => { cancelled = true; };
     }, []);
@@ -340,6 +340,7 @@ function AppContent() {
                     {/* Onboarding for new installs */}
                     <Route path="/onboarding" element={<Onboarding />} />
                     {/* Function panel routes */}
+                    <Route path="/agent" element={<AgentOverviewPage />} />
                     <Route path="/agent/openai" element={<UseOpenAIPage />} />
                     <Route path="/agent/anthropic" element={<UseAnthropicPage />} />
                     <Route path="/agent/codex" element={<UseCodexPage />} />
@@ -350,6 +351,7 @@ function AppContent() {
                     <Route path="/agent/xcode" element={<UseXcodePage />} />
                     <Route path="/agent/vscode" element={<UseVSCodePage />} />
                     <Route path="/agent/embed" element={<UseEmbedPage />} />
+                    <Route path="/agent/imagegen" element={<UseImageGenPage />} />
                     {/* Legacy redirects */}
                     <Route path="/use-openai" element={<Navigate to="/agent/openai" replace />} />
                     <Route path="/use-anthropic" element={<Navigate to="/agent/anthropic" replace />} />
@@ -432,7 +434,7 @@ function AppContent() {
                     {/* Legacy zen redirects */}
                     <Route path="/zen/claude-code" element={<Navigate to="/zen/claude_code" replace />} />
                     {/* Catch-all redirect for unknown routes */}
-                    <Route path="*" element={<Navigate to="/agent/claude_code" replace />} />
+                    <Route path="*" element={<Navigate to="/agent" replace />} />
                 </Route>
             </Routes>
     )

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // MockFormatAdapter is a mock implementation of FormatAdapter for testing
@@ -59,7 +60,7 @@ func (m *MockFormatAdapter) ExtractTools(response any) ([]Tool, error) {
 	return m.ToolsToReturn, nil
 }
 
-func (m *MockFormatAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
+func (m *MockFormatAdapter) IsVirtualTool(tool Tool, registry *coretool.VirtualToolRegistry) bool {
 	if registry == nil {
 		return false
 	}
@@ -70,7 +71,7 @@ func (m *MockFormatAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualTo
 
 func (m *MockFormatAdapter) SplitVirtualExternal(
 	tools []Tool,
-	registry *runtime.VirtualToolRegistry,
+	registry *coretool.VirtualToolRegistry,
 ) (virtual, external []Tool, externalIDs []string) {
 	m.SplitVirtualExternalCalled = true
 	virtual = make([]Tool, 0)
@@ -99,7 +100,7 @@ func (m *MockFormatAdapter) BuildToolMessage(result ToolExecutionResult) any {
 	m.BuildToolMessageCalled = true
 	return &MockToolMessage{
 		ToolUseID: result.ToolUseID,
-		Content:   result.Content,
+		Content:   result.TextContent(),
 	}
 }
 
@@ -147,7 +148,7 @@ func (m *MockFormatAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 	return nil, false
 }
 
-func (m *MockFormatAdapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
+func (m *MockFormatAdapter) ShouldSuppressEvent(event any, virtualRegistry *coretool.VirtualToolRegistry) bool {
 	return false
 }
 

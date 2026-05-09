@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -54,24 +55,40 @@ func NewClientPool() *ClientPool {
 }
 
 // GetOpenAIClient returns an OpenAI client wrapper for the specified provider.
+// For Codex OAuth providers, returns a CodexClient with special handling.
 // sessionID is resolved from ctx via typ.GetSessionID; pass context.Background() when no session is available.
-func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) *OpenAIClient {
+func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) OpenAIClientInterface {
 	sessionID := typ.GetSessionID(ctx)
 	logrus.Debugf("Creating OpenAI client for provider: %s, session: %s", provider.Name, sessionID.Value)
 
-	client, err := NewOpenAIClient(provider, model, sessionID)
-	if err != nil {
-		logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
-		return nil
+	var client OpenAIClientInterface
+	var err error
+
+	// Check if this is a Codex OAuth provider
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
+		client, err = NewCodexClient(provider, model, sessionID)
+		if err != nil {
+			logrus.Errorf("Failed to create Codex client for provider %s: %v", provider.Name, err)
+			return nil
+		}
+	} else {
+		client, err = NewOpenAIClient(provider, model, sessionID)
+		if err != nil {
+			logrus.Errorf("Failed to create OpenAI client for provider %s: %v", provider.Name, err)
+			return nil
+		}
 	}
 
+	// Set record sink if enabled (only for OpenAIClient, not CodexClient)
 	if p.recordSink != nil && p.recordSink.IsEnabled() {
-		client.SetRecordSink(p.recordSink)
+		if oc, ok := client.(*OpenAIClient); ok {
+			oc.SetRecordSink(p.recordSink)
+		}
 	}
 
 	// Set finalizer for automatic cleanup when GC collects the client.
 	// This ensures idle connections are closed without requiring explicit Close() calls.
-	runtime.SetFinalizer(client, func(c *OpenAIClient) {
+	runtime.SetFinalizer(client, func(c OpenAIClientInterface) {
 		if c != nil {
 			c.Close()
 			logrus.Debugf("Auto-closed OpenAI client for provider: %s via finalizer", provider.Name)

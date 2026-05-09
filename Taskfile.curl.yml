@@ -20,6 +20,45 @@ tasks:
       - echo "{{.GREETING}}"
     silent: true
   
+  codex-image-gen:
+    cmds:
+      - |
+        curl -s -X POST "http://localhost:12580/tingly/imagegen/v1/images/generations" \
+          -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "model": "gpt-image-2",
+            "prompt": "A cute orange cat and dog sitting on a wooden desk, soft natural light",
+            "size": "1024x1024",
+            "quality": "low"
+          }' \
+        | jq -r '.data[0].b64_json' \
+        | base64 -d > output.png
+  
+  codex-image-reponses:
+    cmds:
+      - |
+        curl -v http://localhost:12580/tingly/imagegen/responses \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "model": "gpt-5.5",
+          "stream": true,
+          "input": [
+            {
+              "role": "user",
+              "content": "Draw a clean product icon for an AI gateway app."
+            }
+          ],
+          "tools": [
+            {
+              "type": "image_generation",
+              "size": "1024x1024",
+              "output_format": "png"
+            }
+          ]
+        }'
+  
   request-o2a:
     cmds:
       - |

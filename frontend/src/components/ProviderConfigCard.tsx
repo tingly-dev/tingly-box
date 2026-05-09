@@ -141,14 +141,15 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                                 key: 'baseUrl',
                                 label: baseUrlLabel,
                                 content: (
-                                    <Typography
-                                        variant="subtitle2"
-                                        onClick={() => onCopy(fullUrl, `${title} ${baseUrlLabel}`)}
-                                        sx={copyableTextStyle}
-                                        title={`Click to copy ${baseUrlLabel}`}
-                                    >
-                                        {fullUrl}
-                                    </Typography>
+                                    <Tooltip title={`Click to copy ${baseUrlLabel}`} arrow placement="top">
+                                        <Typography
+                                            variant="subtitle2"
+                                            onClick={() => onCopy(fullUrl, `${title} ${baseUrlLabel}`)}
+                                            sx={copyableTextStyle}
+                                        >
+                                            {fullUrl}
+                                        </Typography>
+                                    </Tooltip>
                                 ),
                                 actions: (
                                     <EnvironmentModeSwitcher
@@ -173,14 +174,15 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                                 key: 'apiKey',
                                 label: 'API Key',
                                 content: (
-                                    <Typography
-                                        variant="subtitle2"
-                                        onClick={() => onCopy(token, 'API Key')}
-                                        sx={copyableTextStyle}
-                                        title="Click to copy API Key"
-                                    >
-                                        {maskToken(token)}
-                                    </Typography>
+                                    <Tooltip title="Click to copy API Key" arrow placement="top">
+                                        <Typography
+                                            variant="subtitle2"
+                                            onClick={() => onCopy(token, 'API Key')}
+                                            sx={copyableTextStyle}
+                                        >
+                                            {maskToken(token)}
+                                        </Typography>
+                                    </Tooltip>
                                 ),
                                 actions: (
                                     <Tooltip title="View Full Token">

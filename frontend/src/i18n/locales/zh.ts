@@ -44,6 +44,7 @@ export default {
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
       "useEmbed": "Embed 嵌入",
+      "useImageGen": "图像生成",
       "apiKeys": "API 密钥",
       "oauth": "OAuth 凭证",
       "credential": "凭证",
@@ -110,6 +111,7 @@ export default {
     "accessControl": "访问控制",
     "status": "状态",
     "system": "系统",
+    "general": "通用",
     "experimental": "实验功能",
     "logs": "日志",
     "userRequest": "用户请求",
@@ -247,8 +249,8 @@ export default {
         "label": "HTTP/SOCKS 代理 URL（可选）",
         "placeholder": "http://127.0.0.1:7890 或 socks5://127.0.0.1:7890",
         "helper": "可选：使用代理绕过区域限制。将保存以供将来使用。",
-        "useGlobal": "使用全局代理（{{url}}）",
-        "useGlobalNotSet": "使用全局代理（未配置 — 请在系统设置中配置）"
+        "useGlobal": "使用常用代理（{{url}}）",
+        "useGlobalNotSet": "使用常用代理（未配置 — 请在系统设置中配置）"
       }
     },
     "verification": {
@@ -415,10 +417,11 @@ export default {
         "helper": "启用后，没有显式代理配置的提供商将使用系统代理设置（HTTP_PROXY、HTTPS_PROXY、macOS 系统代理、Clash 等）"
       },
       "globalProxyUrl": {
-        "label": "全局代理",
-        "helper": "所有提供商和 OAuth 的兜底代理，每个提供商的专属代理优先级更高。",
-        "saveSuccess": "全局代理 URL 已保存",
-        "saveFailed": "保存全局代理 URL 失败"
+        "label": "常用代理",
+        "description": "保存一个常用的代理，配置 Provider 或 OAuth 时可一键复用；如果 Provider 单独设置了代理，会以 Provider 的为准。",
+        "helper": "可在 Provider 和 OAuth 中一键复用，Provider 单独设置的代理优先级更高。",
+        "saveSuccess": "常用代理已保存",
+        "saveFailed": "保存常用代理失败"
       },
       "notifications": {
         "updateSuccess": "代理设置更新成功",
@@ -833,7 +836,14 @@ export default {
     "browse": {
       "searchPlaceholder": "搜索提供商",
       "empty": "没有匹配的提供商。",
-      "selectProvider": "选择此提供商"
+      "selectProvider": "选择此提供商",
+      "customProvider": "自定义提供商",
+      "customProviderHint": "使用自定义接入地址",
+      "section": {
+        "global": "国际",
+        "china": "中国大陆",
+        "custom": "自定义"
+      }
     },
     "paste": {
       "detectButton": "识别",
@@ -849,5 +859,24 @@ export default {
     "quickLinks": "快速链接",
     "goToDashboard": "控制台",
     "goToHelp": "帮助与文档"
+  },
+  "scenarioOverview": {
+    "title": "智能应用",
+    "subtitle": "选择要配置的场景，未使用的可以隐藏以保持侧边栏整洁。",
+    "showInSidebar": "在侧边栏显示",
+    "hidden": "已隐藏",
+    "editTooltip": "管理可见的智能应用",
+    "descriptions": {
+      "claude_code": "为 Claude Code 配置自定义路由、配置文件与按任务的模型。",
+      "codex": "用你的提供商凭证配置 Codex CLI。",
+      "opencode": "使用你的提供商驱动的开源代码 Agent。",
+      "xcode": "将你的模型接入 Xcode 编码智能。",
+      "vscode": "通过 Tingly Box 驱动 VS Code Copilot Chat。",
+      "openai": "兼容 OpenAI 的 SDK 直连端点。",
+      "anthropic": "兼容 Anthropic 的 SDK 直连端点。",
+      "embed": "将 Embedding 请求路由到你的提供商。",
+      "imagegen": "通过 Tingly Box 路由图像生成。",
+      "agent": "OpenClaw — 通用 Agent 运行器。"
+    }
   }
 };

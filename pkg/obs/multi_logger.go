@@ -23,6 +23,8 @@ const (
 	LogSourceSystem LogSource = "system"
 	// LogSourceAction indicates logs from user actions/operations
 	LogSourceAction LogSource = "action"
+	// LogSourceSmartRouting indicates logs from smart routing rule evaluation
+	LogSourceSmartRouting LogSource = "smart_routing"
 	// LogSourceUnknown indicates unknown log source
 	LogSourceUnknown LogSource = "unknown"
 )
@@ -122,9 +124,10 @@ func DefaultMultiLoggerConfig(configDir string) *MultiLoggerConfig {
 
 		// Default memory sink sizes
 		MemorySinkConfig: map[LogSource]MemorySinkConfig{
-			LogSourceHTTP:   {MaxEntries: 1000}, // HTTP requests: high volume
-			LogSourceSystem: {MaxEntries: 500},  // System logs: medium volume
-			LogSourceAction: {MaxEntries: 100},  // User actions: low volume, important
+			LogSourceHTTP:         {MaxEntries: 1000}, // HTTP requests: high volume
+			LogSourceSystem:       {MaxEntries: 500},  // System logs: medium volume
+			LogSourceAction:       {MaxEntries: 100},  // User actions: low volume, important
+			LogSourceSmartRouting: {MaxEntries: 500},  // Smart routing evaluations: per-request
 		},
 	}
 }
@@ -260,6 +263,8 @@ func (m *MultiLogger) getDefaultMemorySinkSize(source LogSource) int {
 		return 500
 	case LogSourceAction:
 		return 100
+	case LogSourceSmartRouting:
+		return 500
 	default:
 		return 100
 	}

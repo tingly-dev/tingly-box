@@ -1,10 +1,8 @@
-package runtime
+package tool
 
 import (
 	"context"
 	"testing"
-
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
@@ -12,10 +10,10 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 	vt := VirtualTool{
 		Name:        "advisor",
 		Description: "strategic guidance",
-		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent("ok")}}, nil
+		Handler: func(ctx context.Context, call ToolCall) (ToolResult, error) {
+			return TextToolResult("ok"), nil
 		},
-		IsClientTool: false, // Server tool
+		Visibility: ToolVisibilityServer,
 	}
 	reg.Register(vt)
 
@@ -24,13 +22,13 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 		t.Fatal("expected advisor virtual tool")
 	}
 
-	if got.IsClientTool {
-		t.Fatal("expected advisor to be a server tool (IsClientTool=false)")
+	if got.Visibility == ToolVisibilityClient {
+		t.Fatal("expected advisor to be a server tool (Visibility=server)")
 	}
 
-	mcpTools := reg.List()
-	if len(mcpTools) != 1 || mcpTools[0].Name != "advisor" {
-		t.Fatalf("expected 1 tool, got %d", len(mcpTools))
+	virtualTools := reg.ListVirtualTools()
+	if len(virtualTools) != 1 || virtualTools[0].Name != "advisor" {
+		t.Fatalf("expected 1 tool, got %d", len(virtualTools))
 	}
 }
 
@@ -42,7 +40,7 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 		Name:        "adviser",
 		Description: "Server-side advisor",
 		Handler:     nil,
-		IsClientTool: false,
+		Visibility:  ToolVisibilityServer,
 	}
 	reg.Register(serverTool)
 
@@ -51,7 +49,7 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 		Name:        "websearch",
 		Description: "Client-side web search",
 		Handler:     nil,
-		IsClientTool: true,
+		Visibility:  ToolVisibilityClient,
 	}
 	reg.Register(clientTool)
 
@@ -60,11 +58,10 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 		t.Fatalf("expected 2 virtual tools, got %d", len(virtualTools))
 	}
 
-	// Count client and server tools
 	clientCount := 0
 	serverCount := 0
 	for _, vt := range virtualTools {
-		if vt.IsClientTool {
+		if vt.Visibility == ToolVisibilityClient {
 			clientCount++
 		} else {
 			serverCount++
