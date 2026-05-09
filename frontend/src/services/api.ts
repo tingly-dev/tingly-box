@@ -1797,7 +1797,7 @@ export const api = {
             cwd?: string;
             env?: Record<string, string>;
             proxy_url?: string;
-            is_client_tool?: boolean;
+            visibility?: 'client' | 'server';
             advisor?: {
                 base_url?: string;
                 model?: string;

@@ -5,9 +5,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -79,19 +78,14 @@ func TestGenericMCPConfigDefaults(t *testing.T) {
 // logic works correctly for different scenarios
 func TestDispatchGenericAnthropicV1NonStream_BasicRouting(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	s := NewServer(cfg)
+	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 
 	// Register a test virtual tool
-	s.mcpRuntime.VirtualRegistry().Register(runtime.VirtualTool{
+	s.mcpRuntime.VirtualRegistry().Register(coretool.VirtualTool{
 		Name:        "test_routing_tool",
 		Description: "A test tool for routing",
-		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.NewTextContent("Tool executed"),
-				},
-			}, nil
+		Handler: func(ctx context.Context, call coretool.ToolCall) (coretool.ToolResult, error) {
+			return coretool.TextToolResult("Tool executed"), nil
 		},
 	})
 
@@ -104,16 +98,15 @@ func TestDispatchGenericAnthropicV1NonStream_BasicRouting(t *testing.T) {
 // TestDispatchGenericOpenAIChatNonStream_BasicRouting tests that O→O routing works correctly
 func TestDispatchGenericOpenAIChatNonStream_BasicRouting(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	s := NewServer(cfg)
+	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 
 	// Verify OpenAI Chat adapter can be created
 	adapter := s.mcpRuntime.VirtualRegistry()
 	assert.NotNil(t, adapter, "Virtual registry should exist")
 
 	// Verify feature flags are independent
-	assert.False(t, cfg.GenericMCP.UseGenericOpenAIChatNonStream, "O→O non-streaming should be disabled by default")
-	assert.False(t, cfg.GenericMCP.UseGenericOpenAIChatStream, "O→O streaming should be disabled by default")
+	assert.False(t, s.config.GenericMCP.UseGenericOpenAIChatNonStream, "O→O non-streaming should be disabled by default")
+	assert.False(t, s.config.GenericMCP.UseGenericOpenAIChatStream, "O→O streaming should be disabled by default")
 }
 
 // TestDispatchGenericOpenAIChat_FeatureFlagIndependence tests that O→O flags work independently from A→A flags

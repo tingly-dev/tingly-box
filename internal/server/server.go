@@ -29,6 +29,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
@@ -37,6 +38,7 @@ import (
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
+	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/internal/virtualmodel/virtualserver"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
@@ -111,6 +113,9 @@ type Server struct {
 
 	// mcp runtime for external MCP tools
 	mcpRuntime *mcpruntime.Runtime
+
+	// servertool pipeline — owns virtual tool providers and hook list
+	servertoolPipeline *servertool.Pipeline
 
 	// guardrails runtime (optional)
 	guardrailsRuntime   *guardrails.Guardrails
@@ -841,16 +846,26 @@ func expandAdvisorConfig(cfg typ.AdvisorConfig) typ.AdvisorConfig {
 func (s *Server) registerAdviserFromConfig() {
 	mcpCfg := s.mcpRuntime.GetConfig()
 	if mcpCfg == nil {
+		s.servertoolPipeline = servertool.NewPipeline()
 		return
 	}
 	for _, source := range mcpCfg.Sources {
-		if source.Advisor != nil && source.Enabled != nil && *source.Enabled {
-			advisorCfg := expandAdvisorConfig(*source.Advisor)
-			s.mcpRuntime.RegisterAdviser(advisorCfg, s.clientPool)
-			logrus.Info("mcp: registered adviser as virtual tool")
-			break
+		if source.Advisor == nil || source.Enabled == nil || !*source.Enabled {
+			continue
 		}
+		advisorCfg := expandAdvisorConfig(*source.Advisor)
+
+		pipeline := servertool.NewPipeline()
+		pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
+		pipeline.RegisterInto(s.mcpRuntime.VirtualRegistry())
+		s.servertoolPipeline = pipeline
+
+		logrus.Info("mcp: registered adviser via servertool pipeline")
+		return
 	}
+
+	// No advisor configured — empty pipeline.
+	s.servertoolPipeline = servertool.NewPipeline()
 }
 
 // setupConfigWatcher initializes the configuration hot-reload watcher

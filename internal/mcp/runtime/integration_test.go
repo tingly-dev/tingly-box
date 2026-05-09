@@ -212,19 +212,19 @@ func TestRuntime_EndToEndToolCall(t *testing.T) {
 			t.Fatalf("Tool call failed: %v", err)
 		}
 
-		if result == "" {
+		if result.FirstText() == "" {
 			t.Fatal("Expected non-empty result from websearch")
 		}
 
 		// Verify result contains expected content
 		// Result should be JSON with search results
-		if !strings.Contains(result, "content") {
-			t.Errorf("Expected result to contain 'content', got: %s", result)
+		if !strings.Contains(result.FirstText(), "content") {
+			t.Errorf("Expected result to contain 'content', got: %s", result.FirstText())
 		}
 
 		// Parse the JSON response to verify structure
 		var response map[string]interface{}
-		if err := json.Unmarshal([]byte(result), &response); err != nil {
+		if err := json.Unmarshal([]byte(result.FirstText()), &response); err != nil {
 			t.Fatalf("Failed to parse result JSON: %v", err)
 		}
 
@@ -284,19 +284,19 @@ func TestRuntime_EndToEndToolCall(t *testing.T) {
 			t.Fatalf("Tool call failed: %v", err)
 		}
 
-		if result == "" {
+		if result.FirstText() == "" {
 			t.Fatal("Expected non-empty result from webfetch")
 		}
 
 		// Verify result contains expected content
 		// Result should be JSON with fetched content
-		if !strings.Contains(result, "content") {
-			t.Errorf("Expected result to contain 'content', got: %s", result)
+		if !strings.Contains(result.FirstText(), "content") {
+			t.Errorf("Expected result to contain 'content', got: %s", result.FirstText())
 		}
 
 		// Parse the JSON response to verify structure
 		var response map[string]interface{}
-		if err := json.Unmarshal([]byte(result), &response); err != nil {
+		if err := json.Unmarshal([]byte(result.FirstText()), &response); err != nil {
 			t.Fatalf("Failed to parse result JSON: %v", err)
 		}
 

@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
@@ -16,24 +15,9 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-const normalizedPrefix = "tingly_box_mcp__"
-
-// advisorDepthKey is the context key for tracking adviser call depth.
-type advisorDepthKey struct{}
-
-// WithAdvisorDepth sets the adviser call depth in context.
-func WithAdvisorDepth(ctx context.Context, depth int) context.Context {
-	return context.WithValue(ctx, advisorDepthKey{}, depth)
-}
-
-// GetAdvisorDepth retrieves the current adviser call depth from context.
-func GetAdvisorDepth(ctx context.Context) int {
-	v, _ := ctx.Value(advisorDepthKey{}).(int)
-	return v
-}
 
 type configProvider func() *typ.MCPRuntimeConfig
 
@@ -44,7 +28,7 @@ type Runtime struct {
 	toolSourceFactory *ToolSourceFactory
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
-	virtualRegistry   *VirtualToolRegistry
+	virtualRegistry   *coretool.VirtualToolRegistry
 	sessionStore      *SessionStore
 	sweeper           *time.Ticker
 
@@ -67,7 +51,7 @@ func NewRuntime(getConfig configProvider) *Runtime {
 		sc:                sc,
 		toolSourceFactory: NewToolSourceFactory(sc, nil),
 		activeSources:     make(map[string]ToolSource),
-		virtualRegistry:   NewVirtualToolRegistry(),
+		virtualRegistry:   coretool.NewVirtualToolRegistry(),
 		sessionStore:      NewSessionStore(10 * time.Minute),
 	}
 	r.sweeper = r.sessionStore.StartSweeper(1 * time.Minute)
@@ -153,7 +137,7 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 				"type":       "object",
 				"properties": map[string]interface{}{},
 			}
-			// Convert mcp.ToolInputSchema to shared.FunctionParameters via JSON
+			// Convert protocol-neutral input schema to shared.FunctionParameters via JSON.
 			schemaBytes, _ := json.Marshal(vt.InputSchema)
 			var schema map[string]interface{}
 			if err := json.Unmarshal(schemaBytes, &schema); err == nil && len(schema) > 0 {
@@ -172,8 +156,8 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 	return out
 }
 
-func (r *Runtime) isVirtualServerToolInjectable(vt VirtualTool) bool {
-	if strings.TrimSpace(vt.Name) == "" || vt.IsClientTool {
+func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
+	if strings.TrimSpace(vt.Name) == "" || !IsServerVisibleVirtualTool(vt) {
 		return false
 	}
 
@@ -190,7 +174,7 @@ func (r *Runtime) isVirtualServerToolInjectable(vt VirtualTool) bool {
 			if !typ.IsMCPSourceEnabled(source) {
 				return false
 			}
-			if source.IsClientTool != nil && *source.IsClientTool {
+			if !IsServerVisibleSource(source) {
 				return false
 			}
 			allowAll, allowSet := buildAllowList(source.Tools)
@@ -204,37 +188,29 @@ func (r *Runtime) isVirtualServerToolInjectable(vt VirtualTool) bool {
 
 // IsMCPToolName checks whether a tool name is a normalized MCP tool.
 func IsMCPToolName(name string) bool {
-	return strings.HasPrefix(name, normalizedPrefix) && strings.Count(name, "__") >= 2
+	return coretool.IsMCPToolName(name)
 }
 
 // NormalizeToolName converts source/tool pair to normalized tool name.
 func NormalizeToolName(sourceID, toolName string) string {
-	return normalizedPrefix + sourceID + "__" + toolName
+	return coretool.NormalizeToolName(sourceID, toolName)
 }
 
 // ParseNormalizedToolName parses normalized name and returns sourceID/toolName.
 func ParseNormalizedToolName(name string) (string, string, bool) {
-	if !strings.HasPrefix(name, normalizedPrefix) {
-		return "", "", false
-	}
-	rest := strings.TrimPrefix(name, normalizedPrefix)
-	parts := strings.SplitN(rest, "__", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	return parts[0], parts[1], true
+	return coretool.ParseNormalizedToolName(name)
 }
 
-// CallTool executes a normalized MCP tool call and returns serialized result.
+// CallTool executes a normalized MCP tool call and returns a structured ToolResult.
 // Dispatches virtual tools first (kernel mode), then remote tools (user mode).
-func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (string, error) {
+func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (coretool.ToolResult, error) {
 	if r == nil {
-		return "", fmt.Errorf("MCP runtime not initialized")
+		return coretool.ToolResult{}, fmt.Errorf("MCP runtime not initialized")
 	}
 	// 1. Check virtual registry first (kernel mode)
 	sourceID, toolName, ok := ParseNormalizedToolName(normalizedName)
 	if !ok {
-		return "", &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
+		return coretool.ToolResult{}, &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
 	}
 
 	if sourceID == "builtin" && r.virtualRegistry != nil {
@@ -253,13 +229,13 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	// 2. Forward to remote tool source (user mode)
 	source, err := r.getOrCreateSource(ctx, sourceID)
 	if err != nil {
-		return "", err
+		return coretool.ToolResult{}, err
 	}
 
 	// Ensure source is connected
 	if !source.IsConnected() {
 		if err := source.Connect(ctx); err != nil {
-			return "", &sessionError{sourceID: sourceID, msg: "failed to connect source: " + err.Error()}
+			return coretool.ToolResult{}, &sessionError{sourceID: sourceID, msg: "failed to connect source: " + err.Error()}
 		}
 
 		// Enable health monitoring for persistent connections
@@ -268,59 +244,37 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 		}
 	}
 
-	// Call the tool
+	// Call the tool — remote sources still return string; wrap into ToolResult.
 	result, err := source.CallTool(ctx, toolName, arguments)
 	if err != nil {
-		return "", err
+		return coretool.ToolResult{}, err
 	}
 
-	return result, nil
+	return coretool.TextToolResult(result), nil
 }
 
 // callVirtualTool executes an in-process virtual tool with panic recovery.
-func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, arguments string) (string, error) {
+func (r *Runtime) callVirtualTool(ctx context.Context, tool coretool.VirtualTool, arguments string) (out coretool.ToolResult, err error) {
 	// Parse arguments
 	var argMap map[string]any
 	if arguments != "" {
-		if err := json.Unmarshal([]byte(arguments), &argMap); err != nil {
-			return "", fmt.Errorf("invalid arguments JSON: %w", err)
+		if jsonErr := json.Unmarshal([]byte(arguments), &argMap); jsonErr != nil {
+			return coretool.ToolResult{}, fmt.Errorf("invalid arguments JSON: %w", jsonErr)
 		}
 	}
 
-	// Build mcp.CallToolRequest
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      tool.Name,
-			Arguments: argMap,
-		},
-	}
-
-	// Execute with panic recovery
+	// Execute with panic recovery — named returns allow the deferred func to set err.
 	defer func() {
 		if rec := recover(); rec != nil {
 			logrus.WithField("panic", rec).Error("mcp: virtual tool panic")
+			err = fmt.Errorf("virtual tool panic: %v", rec)
 		}
 	}()
 
-	result, err := tool.Handler(ctx, req)
-	if err != nil {
-		return "", err
+	if tool.Handler == nil {
+		return coretool.ToolResult{}, fmt.Errorf("virtual tool %q has no handler", tool.Name)
 	}
-
-	// Serialize result
-	resultBytes, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize tool result: %w", err)
-	}
-
-	// Extract text content from result
-	if len(result.Content) > 0 {
-		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
-			return string(textContent.Text), nil
-		}
-	}
-
-	return string(resultBytes), nil
+	return tool.Handler(ctx, coretool.ToolCall{Name: tool.Name, Arguments: argMap})
 }
 
 // isSourceEnabled checks if a source is enabled in the current configuration
@@ -526,7 +480,7 @@ func (r *Runtime) ListSourceTools(ctx context.Context) (map[string][]SourceTool,
 // ListClientSourceToolsForMCP returns source tools that are eligible for MCP client exposure.
 // Rules:
 //   - source must be enabled
-//   - source must be client tool (is_client_tool=true)
+//   - source must be client-visible
 //   - tool must come from non-virtual source (ListSourceTools contract)
 func (r *Runtime) ListClientSourceToolsForMCP(ctx context.Context) (map[string][]SourceTool, error) {
 	sourceTools, err := r.ListSourceTools(ctx)
@@ -547,7 +501,7 @@ func (r *Runtime) ListClientSourceToolsForMCP(ctx context.Context) (map[string][
 		if !typ.IsMCPSourceEnabled(source) {
 			continue
 		}
-		if source.IsClientTool != nil && *source.IsClientTool {
+		if IsClientVisibleSource(source) {
 			clientSources[source.ID] = true
 		}
 	}
@@ -598,11 +552,19 @@ func (r *Runtime) GetConfig() *typ.MCPRuntimeConfig {
 }
 
 // VirtualRegistry returns the runtime's virtual tool registry, or nil if the runtime is nil.
-func (r *Runtime) VirtualRegistry() *VirtualToolRegistry {
+func (r *Runtime) VirtualRegistry() *coretool.VirtualToolRegistry {
 	if r == nil {
 		return nil
 	}
 	return r.virtualRegistry
+}
+
+// SessionStore returns the runtime's session store.
+func (r *Runtime) SessionStore() *SessionStore {
+	if r == nil {
+		return nil
+	}
+	return r.sessionStore
 }
 
 func buildAllowList(names []string) (bool, map[string]bool) {
@@ -659,8 +621,7 @@ func (r *Runtime) HasServerTools() bool {
 		if !typ.IsMCPSourceEnabled(source) {
 			continue
 		}
-		// Check if this is a server tool (nil or false means server tool)
-		if source.IsClientTool == nil || !*source.IsClientTool {
+		if IsServerVisibleSource(source) {
 			return true
 		}
 	}
@@ -668,6 +629,74 @@ func (r *Runtime) HasServerTools() bool {
 }
 
 const enabledNamesCacheTTL = 5 * time.Second
+
+func (r *Runtime) ListClientVisibleMCPToolNames(ctx context.Context) map[string]struct{} {
+	out := make(map[string]struct{})
+	if r == nil {
+		return out
+	}
+	if clientTools, err := r.ListClientSourceToolsForMCP(ctx); err == nil {
+		for sourceID, tools := range clientTools {
+			for _, t := range tools {
+				if strings.TrimSpace(t.Name) == "" {
+					continue
+				}
+				out[NormalizeToolName(sourceID, t.Name)] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+func (r *Runtime) ListInjectableServerToolNames(ctx context.Context) map[string]struct{} {
+	out := make(map[string]struct{})
+	if r == nil {
+		return out
+	}
+	for _, t := range r.ListServerToolsForInjection(ctx) {
+		fn := t.GetFunction()
+		if fn == nil || fn.Name == "" {
+			continue
+		}
+		out[fn.Name] = struct{}{}
+	}
+	return out
+}
+
+func (r *Runtime) ListCallableServerToolNames(ctx context.Context) map[string]struct{} {
+	out := r.ListInjectableServerToolNames(ctx)
+	if r == nil {
+		return out
+	}
+	cfg := r.getConfigOrDefault()
+	if cfg != nil {
+		for _, source := range cfg.Sources {
+			if source.ID != mcptools.BuiltinAdvisorSourceID || !typ.IsMCPSourceEnabled(source) || !IsServerVisibleSource(source) {
+				continue
+			}
+			allowAll, allowSet := buildAllowList(source.Tools)
+			if allowAll || allowSet[mcptools.BuiltinAdvisorToolName] {
+				out[NormalizeToolName("builtin", mcptools.BuiltinAdvisorToolName)] = struct{}{}
+				out[NormalizeToolName(mcptools.BuiltinAdvisorSourceID, mcptools.BuiltinAdvisorToolName)] = struct{}{}
+			}
+		}
+	}
+	if r.virtualRegistry != nil {
+		for _, vt := range r.virtualRegistry.ListVirtualTools() {
+			if !IsServerVisibleVirtualTool(vt) || strings.TrimSpace(vt.Name) == "" {
+				continue
+			}
+			if !r.isVirtualServerToolInjectable(vt) {
+				continue
+			}
+			out[NormalizeToolName("builtin", vt.Name)] = struct{}{}
+			if vt.Name == "advisor" {
+				out[NormalizeToolName("advisor", vt.Name)] = struct{}{}
+			}
+		}
+	}
+	return out
+}
 
 // ListEnabledServerToolNames returns normalized MCP tool names that are callable by
 // server-side MCP execution paths. This includes:
@@ -691,44 +720,9 @@ func (r *Runtime) ListEnabledServerToolNames(ctx context.Context) map[string]str
 	if r.enabledNamesCache != nil && time.Now().Before(r.enabledNamesExpires) {
 		return r.enabledNamesCache
 	}
-	out := make(map[string]struct{})
-	// Include enabled client-facing non-virtual MCP tools so strip-guard does not
-	// incorrectly remove valid tools declared by MCP clients.
-	if clientTools, err := r.ListClientSourceToolsForMCP(ctx); err == nil {
-		for sourceID, tools := range clientTools {
-			for _, t := range tools {
-				if strings.TrimSpace(t.Name) == "" {
-					continue
-				}
-				out[NormalizeToolName(sourceID, t.Name)] = struct{}{}
-			}
-		}
-	}
-
-	// Include server-side injected virtual tools.
-	for _, t := range r.ListServerToolsForInjection(ctx) {
-		fn := t.GetFunction()
-		if fn == nil || fn.Name == "" {
-			continue
-		}
-		out[fn.Name] = struct{}{}
-	}
-	// Server-only virtual tools are intentionally hidden from ListServerToolsForInjection,
-	// but still need to be executable by server-side MCP loops.
-	if r.virtualRegistry != nil {
-		for _, vt := range r.virtualRegistry.ListVirtualTools() {
-			if vt.IsClientTool || strings.TrimSpace(vt.Name) == "" {
-				continue
-			}
-			if !r.isVirtualServerToolInjectable(vt) {
-				continue
-			}
-			out[NormalizeToolName("builtin", vt.Name)] = struct{}{}
-			// Backward compatibility: older flows may still reference advisor source id.
-			if vt.Name == "advisor" {
-				out[NormalizeToolName("advisor", vt.Name)] = struct{}{}
-			}
-		}
+	out := r.ListClientVisibleMCPToolNames(ctx)
+	for name := range r.ListCallableServerToolNames(ctx) {
+		out[name] = struct{}{}
 	}
 	r.enabledNamesCache = out
 	r.enabledNamesExpires = time.Now().Add(enabledNamesCacheTTL)

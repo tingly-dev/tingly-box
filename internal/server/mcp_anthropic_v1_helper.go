@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
@@ -25,7 +25,7 @@ import (
 type serverOpsAdapter struct {
 	server     *Server
 	recorder   *ProtocolRecorder
-	advisorCtx *mcpruntime.AdvisorContext // persists AdvisorContext pointer across CallMCPTool rounds
+	advisorCtx *coretool.AdvisorContext // persists AdvisorContext pointer across CallMCPTool rounds
 }
 
 func newServerOpsAdapter(server *Server, recorder *ProtocolRecorder) *serverOpsAdapter {
@@ -45,23 +45,23 @@ func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments 
 	// across multi-round tool calls without losing the caller's cancellation chain.
 	callCtx := ctx
 	if a.advisorCtx != nil {
-		callCtx = mcpruntime.WithAdvisorContext(ctx, a.advisorCtx)
+		callCtx = coretool.WithAdvisorContext(ctx, a.advisorCtx)
 	}
 	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
 	// Extract and persist the AdvisorContext pointer for the next round.
-	if ac, ok := mcpruntime.GetAdvisorContext(updatedCtx); ok {
+	if ac, ok := coretool.GetAdvisorContext(updatedCtx); ok {
 		a.advisorCtx = ac
 	}
-	return result, err
+	return result.FirstText(), err
 }
 
-func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, string, error) {
+func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, coretool.ToolResult, error) {
 	callCtx := ctx
 	if a.advisorCtx != nil {
-		callCtx = mcpruntime.WithAdvisorContext(ctx, a.advisorCtx)
+		callCtx = coretool.WithAdvisorContext(ctx, a.advisorCtx)
 	}
 	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
-	if ac, ok := mcpruntime.GetAdvisorContext(updatedCtx); ok {
+	if ac, ok := coretool.GetAdvisorContext(updatedCtx); ok {
 		a.advisorCtx = ac
 	}
 	return updatedCtx, result, err
@@ -280,10 +280,8 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 	// Get virtual registry
 	virtualRegistry := s.mcpRuntime.VirtualRegistry()
 
-	// Create server ops adapter
-	serverOps := newServerOpsAdapter(s, recorder)
-
 	// Create tool executor
+	serverOps := newServerOpsAdapter(s, recorder)
 	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
@@ -365,6 +363,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -425,6 +424,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 		recorderAdapter,
 		adapter,
 		forwarder,
+		toolExecutor,
 		interceptorCfg,
 	)
 
@@ -485,6 +485,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -529,6 +530,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 		recorderAdapter,
 		adapter,
 		forwarder,
+		toolExecutor,
 		mcp.InterceptorConfig{MaxRounds: 3},
 	)
 
@@ -595,6 +597,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Create server ops adapter
 	serverOps := newServerOpsAdapter(s, recorder)
+	toolExecutor := mcp.NewServerToolExecutor(serverOps)
 
 	// Create recorder adapter
 	var recorderAdapter mcp.ProtocolRecorder
@@ -655,6 +658,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 		recorderAdapter,
 		adapter,
 		forwarder,
+		toolExecutor,
 		interceptorCfg,
 	)
 

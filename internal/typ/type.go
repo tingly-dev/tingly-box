@@ -6,6 +6,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // FlexibleBool is a boolean type that can unmarshal from both bool and int (0/1)
@@ -58,8 +59,8 @@ const (
 	ScenarioXcode      RuleScenario = "xcode"
 	ScenarioVSCode     RuleScenario = "vscode"
 	ScenarioSmartGuide RuleScenario = "_smart_guide"
-	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
-	ScenarioEmbed      RuleScenario = "embed"   // Embedding application scenario; only serves /embeddings
+	ScenarioGlobal     RuleScenario = "_global"  // Global flags that apply to all scenarios
+	ScenarioEmbed      RuleScenario = "embed"    // Embedding application scenario; only serves /embeddings
 	ScenarioImageGen   RuleScenario = "imagegen" // Image generation scenario; only serves /images/generations
 )
 
@@ -114,10 +115,10 @@ const (
 type RecordingMode string
 
 const (
-	RecordingModeDisabled               RecordingMode = ""                         // Recording disabled (default)
-	RecordingModeRequestOnly            RecordingMode = "request"                  // Record transformed request only
-	RecordingModeRequestResponse        RecordingMode = "request_response"         // Record transformed request + final response
-	RecordingModeStagedRequestResponse  RecordingMode = "staged_request_response"  // Record original request + transformed request + final response
+	RecordingModeDisabled              RecordingMode = ""                        // Recording disabled (default)
+	RecordingModeRequestOnly           RecordingMode = "request"                 // Record transformed request only
+	RecordingModeRequestResponse       RecordingMode = "request_response"        // Record transformed request + final response
+	RecordingModeStagedRequestResponse RecordingMode = "staged_request_response" // Record original request + transformed request + final response
 )
 
 // IsValidRecordingMode checks if the given string is a valid recording mode
@@ -228,6 +229,36 @@ const (
 	MCPAuthTypeOAuth  MCPAuthType = "oauth"
 )
 
+type ToolVisibility = coretool.ToolVisibility
+
+const (
+	ToolVisibilityClient = coretool.ToolVisibilityClient
+	ToolVisibilityServer = coretool.ToolVisibilityServer
+)
+
+type ToolImplementation string
+
+const (
+	ToolImplementationMCP     ToolImplementation = "mcp"
+	ToolImplementationVirtual ToolImplementation = "virtual"
+)
+
+type ToolProvider string
+
+const (
+	ToolProviderBuiltin ToolProvider = "builtin"
+	ToolProviderCustom  ToolProvider = "custom"
+)
+
+type ToolDescriptor struct {
+	Name           string             `json:"name"`
+	SourceID       string             `json:"source_id"`
+	Visibility     ToolVisibility     `json:"visibility"`
+	Implementation ToolImplementation `json:"implementation"`
+	Provider       ToolProvider       `json:"provider"`
+	Description    string             `json:"description,omitempty"`
+}
+
 // MCPClientState defines client connection state
 type MCPClientState string
 
@@ -248,19 +279,19 @@ type MCPRuntimeConfig struct {
 
 // MCPSourceConfig defines one MCP source connection.
 type MCPSourceConfig struct {
-	ID           string            `json:"id,omitempty"`             // unique source id for normalized tool names
-	Name         string            `json:"name,omitempty"`           // client name (unique, no spaces/hyphens)
-	Enabled      *bool             `json:"enabled,omitempty"`        // nil means enabled (backward-compatible default)
-	Transport    string            `json:"transport,omitempty"`      // "http", "stdio", or "sse"
-	Endpoint     string            `json:"endpoint,omitempty"`       // endpoint URL for HTTP/SSE transport
-	Headers      map[string]string `json:"headers,omitempty"`        // static headers for MCP calls
-	Tools        []string          `json:"tools,omitempty"`          // allow list, empty means all
-	Command      string            `json:"command,omitempty"`        // command for stdio transport
-	Args         []string          `json:"args,omitempty"`           // args for stdio command
-	Cwd          string            `json:"cwd,omitempty"`            // working directory for stdio command
-	Env          map[string]string `json:"env,omitempty"`            // extra env vars for stdio command
-	ProxyURL     string            `json:"proxy_url,omitempty"`      // HTTP proxy URL for outgoing requests
-	IsClientTool *bool             `json:"is_client_tool,omitempty"` // nil means servertool (default for backward compatibility)
+	ID         string            `json:"id,omitempty"`         // unique source id for normalized tool names
+	Name       string            `json:"name,omitempty"`       // client name (unique, no spaces/hyphens)
+	Enabled    *bool             `json:"enabled,omitempty"`    // nil means enabled (backward-compatible default)
+	Transport  string            `json:"transport,omitempty"`  // "http", "stdio", or "sse"
+	Endpoint   string            `json:"endpoint,omitempty"`   // endpoint URL for HTTP/SSE transport
+	Headers    map[string]string `json:"headers,omitempty"`    // static headers for MCP calls
+	Tools      []string          `json:"tools,omitempty"`      // allow list, empty means all
+	Command    string            `json:"command,omitempty"`    // command for stdio transport
+	Args       []string          `json:"args,omitempty"`       // args for stdio command
+	Cwd        string            `json:"cwd,omitempty"`        // working directory for stdio command
+	Env        map[string]string `json:"env,omitempty"`        // extra env vars for stdio command
+	ProxyURL   string            `json:"proxy_url,omitempty"`  // HTTP proxy URL for outgoing requests
+	Visibility ToolVisibility    `json:"visibility,omitempty"` // "client" or "server"
 
 	// Local mode specific fields
 	ConnectionType      MCPConnectionType `json:"connection_type,omitempty"`       // stdio/http/sse
@@ -329,6 +360,12 @@ func ApplyMCPRuntimeDefaults(config *MCPRuntimeConfig) {
 	for i := range config.Sources {
 		if config.Sources[i].Enabled == nil {
 			config.Sources[i].Enabled = BoolPtr(true)
+		}
+		if config.Sources[i].Visibility == "" {
+			config.Sources[i].Visibility = ToolVisibilityClient
+			if config.Sources[i].ID == "advisor" || config.Sources[i].Transport == "advisor" || config.Sources[i].Advisor != nil {
+				config.Sources[i].Visibility = ToolVisibilityServer
+			}
 		}
 		// Apply defaults for in-process advisor source.
 		if config.Sources[i].Transport == "advisor" || config.Sources[i].Advisor != nil {

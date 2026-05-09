@@ -7,10 +7,11 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
-	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	mcp "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -86,10 +87,10 @@ func (s *Server) buildAnthropicToOpenAIMCPHooks(ctx context.Context, req *anthro
 				if arguments == "" {
 					arguments = "{}"
 				}
-				var result string
+				var toolResult coretool.ToolResult
 				var err error
-				ctx, result, err = s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
-				virtualResults = append(virtualResults, mcp.ToolExecutionResult{ToolUseID: tc.ID, Content: result, IsError: err != nil})
+				ctx, toolResult, err = s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
+				virtualResults = append(virtualResults, mcp.ToolExecutionResult{ToolUseID: tc.ID, Contents: toolResult.Contents, IsError: err != nil})
 			}
 			appendAnthropicBetaToolContinuation(req, calls, virtualResults)
 			return stream.ErrMCPStreamContinue
@@ -109,7 +110,13 @@ func appendAnthropicBetaToolContinuation(req *anthropic.BetaMessageNewParams, ca
 	}
 	resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(results))
 	for _, result := range results {
-		resultBlocks = append(resultBlocks, anthropic.NewBetaToolResultBlock(result.ToolUseID, result.Content, result.IsError))
+		resultBlocks = append(resultBlocks, anthropic.BetaContentBlockParamUnion{
+			OfToolResult: &anthropic.BetaToolResultBlockParam{
+				ToolUseID: result.ToolUseID,
+				Content:   mcp.ToolContentsToAnthropicBeta(result.Contents),
+				IsError:   anthropic.Bool(result.IsError),
+			},
+		})
 	}
 	req.Messages = append(req.Messages,
 		anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleAssistant, Content: assistantBlocks},

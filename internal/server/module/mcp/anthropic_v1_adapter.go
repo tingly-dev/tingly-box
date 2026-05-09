@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // AnthropicV1Adapter implements FormatAdapter for Anthropic V1 API
@@ -45,7 +46,7 @@ func (a *AnthropicV1Adapter) ExtractTools(response any) ([]Tool, error) {
 	return tools, nil
 }
 
-func (a *AnthropicV1Adapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
+func (a *AnthropicV1Adapter) IsVirtualTool(tool Tool, registry *coretool.VirtualToolRegistry) bool {
 	sourceID, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
 	if !ok {
 		return false
@@ -63,7 +64,7 @@ func (a *AnthropicV1Adapter) IsVirtualTool(tool Tool, registry *runtime.VirtualT
 
 func (a *AnthropicV1Adapter) SplitVirtualExternal(
 	tools []Tool,
-	registry *runtime.VirtualToolRegistry,
+	registry *coretool.VirtualToolRegistry,
 ) (virtual, external []Tool, externalIDs []string) {
 	virtual = make([]Tool, 0)
 	external = make([]Tool, 0)
@@ -93,7 +94,11 @@ func (a *AnthropicV1Adapter) BuildAssistantMessage(response any) (any, error) {
 }
 
 func (a *AnthropicV1Adapter) BuildToolMessage(result ToolExecutionResult) any {
-	return anthropic.NewToolResultBlock(result.ToolUseID, result.Content, result.IsError)
+	return anthropic.ToolResultBlockParam{
+		ToolUseID: result.ToolUseID,
+		Content:   toolContentsToAnthropicV1(result.Contents),
+		IsError:   anthropic.Bool(result.IsError),
+	}
 }
 
 func (a *AnthropicV1Adapter) AppendToolResults(req, resp any, results []any) (any, error) {
@@ -116,7 +121,13 @@ func (a *AnthropicV1Adapter) AppendToolResults(req, resp any, results []any) (an
 	resultBlocks := make([]anthropic.ContentBlockParamUnion, len(results))
 	for i, r := range results {
 		tr := r.(ToolExecutionResult)
-		resultBlocks[i] = anthropic.NewToolResultBlock(tr.ToolUseID, tr.Content, tr.IsError)
+		resultBlocks[i] = anthropic.ContentBlockParamUnion{
+			OfToolResult: &anthropic.ToolResultBlockParam{
+				ToolUseID: tr.ToolUseID,
+				Content:   toolContentsToAnthropicV1(tr.Contents),
+				IsError:   anthropic.Bool(tr.IsError),
+			},
+		}
 	}
 	newMessages = append(newMessages, anthropic.NewUserMessage(resultBlocks...))
 
@@ -133,7 +144,13 @@ func (a *AnthropicV1Adapter) BuildContinuationSegment(resp any, results []ToolEx
 	segment = append(segment, messageToParamPreservingThinking(msg))
 	resultBlocks := make([]anthropic.ContentBlockParamUnion, 0, len(results))
 	for _, r := range results {
-		resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(r.ToolUseID, r.Content, r.IsError))
+		resultBlocks = append(resultBlocks, anthropic.ContentBlockParamUnion{
+			OfToolResult: &anthropic.ToolResultBlockParam{
+				ToolUseID: r.ToolUseID,
+				Content:   toolContentsToAnthropicV1(r.Contents),
+				IsError:   anthropic.Bool(r.IsError),
+			},
+		})
 	}
 	if len(resultBlocks) > 0 {
 		segment = append(segment, anthropic.NewUserMessage(resultBlocks...))
@@ -358,7 +375,7 @@ func (a *AnthropicV1Adapter) ExtractToolFromEvent(event any) (Tool, bool) {
 	return &AnthropicV1Tool{ToolUseBlock: tu}, true
 }
 
-func (a *AnthropicV1Adapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
+func (a *AnthropicV1Adapter) ShouldSuppressEvent(event any, virtualRegistry *coretool.VirtualToolRegistry) bool {
 	// Anthropic suppresses virtual tools at the start stage (bufferToolEvent),
 	// so delta/stop events never reach the client. No need to check here.
 	return false
