@@ -32,7 +32,18 @@ const POSITION_OPTIONS = [
     { value: 'token', label: 'Token Count', description: 'Token count' },
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)' },
     { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)' },
+    { value: 'agent.claude_code', label: 'Agent: Claude Code', description: 'Claude Code request kind (main / subagent / compact)' },
 ] as const;
+
+// Per-position enumerated value options. When a position has an entry here,
+// the value field renders as a Select instead of a free-form TextField.
+const VALUE_OPTIONS: Record<string, Array<{ value: string; label: string }> | undefined> = {
+    'agent.claude_code': [
+        { value: 'main', label: 'Main' },
+        { value: 'subagent', label: 'Subagent' },
+        { value: 'compact', label: 'Compact' },
+    ],
+};
 
 // Operation options grouped by position
 const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; description: string; valueType: 'string' | 'int' | 'bool' }>> = {
@@ -77,6 +88,9 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
         { value: 'util_ge', label: 'Utilization ≥', description: 'Avg seat utilization across services >= value (%)', valueType: 'int' },
         { value: 'util_lt', label: 'Utilization <', description: 'Avg seat utilization across services < value (%)', valueType: 'int' },
         { value: 'util_gt', label: 'Utilization >', description: 'Avg seat utilization across services > value (%)', valueType: 'int' },
+    ],
+    'agent.claude_code': [
+        { value: 'equals', label: 'Equals', description: 'Claude Code request kind equals the value', valueType: 'string' },
     ],
 };
 
@@ -341,20 +355,40 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
 
                                         {/* Value Input - only show for string and int types */}
                                         {op.meta?.type !== 'bool' && (
-                                            <TextField
-                                                size="small"
-                                                label="Value"
-                                                value={getDisplayValue(op)}
-                                                onChange={(e) => handleValueChange(op.uuid, e.target.value)}
-                                                placeholder={
-                                                    op.position === 'service_capacity' ? '0–100' :
-                                                    op.position === 'service_ttft' ? 'ms' :
-                                                    op.meta?.type === 'int' ? '1,234' :
-                                                    'enter value'
-                                                }
-                                                sx={{ flex: 1 }}
-                                                type="text"
-                                            />
+                                            VALUE_OPTIONS[op.position] ? (
+                                                <FormControl size="small" sx={{ flex: 1, minWidth: 150 }}>
+                                                    <InputLabel>Value</InputLabel>
+                                                    <Select
+                                                        value={op.value || ''}
+                                                        label="Value"
+                                                        onChange={(e) => handleValueChange(op.uuid, e.target.value as string)}
+                                                    >
+                                                        <MenuItem value="">
+                                                            <em>Select...</em>
+                                                        </MenuItem>
+                                                        {VALUE_OPTIONS[op.position]!.map((opt) => (
+                                                            <MenuItem key={opt.value} value={opt.value}>
+                                                                {opt.label}
+                                                            </MenuItem>
+                                                        ))}
+                                                    </Select>
+                                                </FormControl>
+                                            ) : (
+                                                <TextField
+                                                    size="small"
+                                                    label="Value"
+                                                    value={getDisplayValue(op)}
+                                                    onChange={(e) => handleValueChange(op.uuid, e.target.value)}
+                                                    placeholder={
+                                                        op.position === 'service_capacity' ? '0–100' :
+                                                        op.position === 'service_ttft' ? 'ms' :
+                                                        op.meta?.type === 'int' ? '1,234' :
+                                                        'enter value'
+                                                    }
+                                                    sx={{ flex: 1 }}
+                                                    type="text"
+                                                />
+                                            )
                                         )}
                                     </Stack>
 
