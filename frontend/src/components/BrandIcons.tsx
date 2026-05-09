@@ -87,8 +87,14 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, mon
                             width: '100%',
                             height: '100%',
                             backgroundColor: 'currentColor',
-                            mask: `url(${src}) center / contain no-repeat`,
-                            WebkitMask: `url(${src}) center / contain no-repeat`,
+                            maskImage: `url(${src})`,
+                            maskRepeat: 'no-repeat',
+                            maskPosition: 'center',
+                            maskSize: 'contain',
+                            WebkitMaskImage: `url(${src})`,
+                            WebkitMaskRepeat: 'no-repeat',
+                            WebkitMaskPosition: 'center',
+                            WebkitMaskSize: 'contain',
                         }}
                     />
                 </Box>
