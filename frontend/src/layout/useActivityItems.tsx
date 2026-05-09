@@ -23,6 +23,8 @@ import {
     IconPhoto,
     IconFlask,
     IconPlayerPlay,
+    IconTools,
+    IconServer,
 } from '@tabler/icons-react';
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw } from '../components/BrandIcons';
 import { SettingsApplications } from '@mui/icons-material';
@@ -188,10 +190,14 @@ export function useActivityItems(): ActivityItem[] {
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(enableMCP ? [{
-                key: 'mcp' as const,
-                icon: <SettingsApplications sx={{ fontSize: 22 }} />,
-                label: 'MCP',
-                path: '/mcp/sources',
+                key: 'tools' as const,
+                icon: <IconTools size={22} />,
+                label: 'Tools',
+                defaultPath: '/mcp/sources',
+                children: [
+                    { path: '/mcp/sources', label: 'MCP', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
+                    { path: '/tools/servertool', label: 'Servertool', icon: <IconServer size={20} /> },
+                ],
             }] as ActivityItem[] : []),
             {
                 key: 'credential',

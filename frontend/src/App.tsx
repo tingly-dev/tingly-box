@@ -68,6 +68,7 @@ import MCPCustom from './pages/mcp/MCPCustom';
 import MCPBuiltin from './pages/mcp/MCPBuiltin';
 import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
+import ServerToolPage from './pages/servertool/ServerToolPage';
 import {
     ZenClaudeCodePage,
     ZenClaudeCodeProfilePage,
@@ -422,6 +423,8 @@ function AppContent() {
                     <Route path="/mcp/local-mode" element={<MCPLocalMode />} />
                     <Route path="/mcp/clients" element={<Navigate to="/mcp/local-mode" replace />} />
                     <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
+                    {/* Tools */}
+                    <Route path="/tools/servertool" element={<ServerToolPage />} />
                     {/* Zen Mode Routes - Use zen layout when in zen mode */}
                     <Route path="/zen/claude_code" element={<ZenClaudeCodePage />} />
                     <Route path="/zen/claude_code/profile/:profileId" element={<ZenClaudeCodeProfilePage />} />
