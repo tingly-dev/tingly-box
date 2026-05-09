@@ -47,7 +47,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.claude_code',
         path: '/agent/claude_code',
         icon: <Claude size={scenarioIconSize} />,
-        hideable: false,
+        hideable: true,
     },
     {
         id: 'codex',

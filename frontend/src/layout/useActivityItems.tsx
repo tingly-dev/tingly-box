@@ -101,19 +101,27 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'agent', nav: { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> } },
         ]);
 
-        const scenarioChildren: NavItem[] = [
-            {
-                path: '/agent/claude_code',
-                subtitle: t('layout.default'),
-                label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
-                icon: <Claude size={20} />,
-            },
-            ...profileNavItems,
-            { path: '#add-profile', label: t('layout.addProfile'), icon: <IconPlus size={20} /> },
-        ];
-        if (codingTools.length > 0) scenarioChildren.push({ type: 'divider' }, ...codingTools);
-        if (sdkTools.length > 0) scenarioChildren.push({ type: 'divider' }, ...sdkTools);
-        if (agentTools.length > 0) scenarioChildren.push({ type: 'divider' }, ...agentTools);
+        const scenarioChildren: NavItem[] = [];
+        if (!hiddenScenarios.has('claude_code')) {
+            scenarioChildren.push(
+                {
+                    path: '/agent/claude_code',
+                    subtitle: t('layout.default'),
+                    label: t('layout.nav.useClaudeCode', { defaultValue: 'Claude Code' }),
+                    icon: <Claude size={20} />,
+                },
+                ...profileNavItems,
+                { path: '#add-profile', label: t('layout.addProfile'), icon: <IconPlus size={20} /> },
+            );
+        }
+        const pushGroup = (group: NavItem[]) => {
+            if (group.length === 0) return;
+            if (scenarioChildren.length > 0) scenarioChildren.push({ type: 'divider' });
+            scenarioChildren.push(...group);
+        };
+        pushGroup(codingTools);
+        pushGroup(sdkTools);
+        pushGroup(agentTools);
 
         const items: ActivityItem[] = [
             {
