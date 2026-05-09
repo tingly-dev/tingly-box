@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -63,43 +62,30 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 	}
 	ctx := WithAdvisorContext(context.Background(), actx)
 
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      "advisor",
-			Arguments: map[string]any{},
-		},
-	}
-
-	result, err := vt.Handler(ctx, req)
+	result, err := vt.Handler(ctx, ToolCall{Name: "advisor", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("result is nil")
-	}
 	if result.IsError {
-		t.Fatalf("advisor returned error result: %v", result.Content)
+		t.Fatalf("advisor returned error result: %v", result.Contents)
 	}
-	if len(result.Content) == 0 {
+	if len(result.Contents) == 0 {
 		t.Fatal("empty content in result")
 	}
 
-	text, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-	t.Logf("Advisor response:\n%s", text.Text)
+	text := result.FirstText()
+	t.Logf("Advisor response:\n%s", text)
 
 	// The advisor must return valid JSON with at least "assessment" and "recommendation".
 	var resp map[string]any
-	if err := json.Unmarshal([]byte(text.Text), &resp); err != nil {
-		t.Fatalf("advisor response is not valid JSON: %v\nraw: %s", err, text.Text)
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("advisor response is not valid JSON: %v\nraw: %s", err, text)
 	}
 	if _, ok := resp["assessment"]; !ok {
-		t.Errorf("response missing 'assessment' field: %s", text.Text)
+		t.Errorf("response missing 'assessment' field: %s", text)
 	}
 	if _, ok := resp["recommendation"]; !ok {
-		t.Errorf("response missing 'recommendation' field: %s", text.Text)
+		t.Errorf("response missing 'recommendation' field: %s", text)
 	}
 
 	// UsesRemaining should have decremented.
@@ -134,46 +120,35 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 	}
 	ctx := WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func() mcp.CallToolRequest {
-		return mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name:      "advisor",
-				Arguments: map[string]any{},
-			},
-		}
+	makeCall := func() ToolCall {
+		return ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
 	// First call: should succeed.
-	result, err := vt.Handler(ctx, makeReq())
+	result, err := vt.Handler(ctx, makeCall())
 	if err != nil {
 		t.Fatalf("first call unexpected error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("first call should not error, got: %v", result.Content)
+		t.Fatalf("first call should not error, got: %v", result.Contents)
 	}
 	if *actx.UsesRemaining != 0 {
 		t.Errorf("expected UsesRemaining=0 after first call, got %d", *actx.UsesRemaining)
 	}
 
-	text, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent, got %T", result.Content[0])
-	}
-	t.Logf("First advisor response: %s", text.Text)
+	text := result.FirstText()
+	t.Logf("First advisor response: %s", text)
 
 	// Second call: should be rejected with exhaustion.
-	result, err = vt.Handler(ctx, makeReq())
+	result, err = vt.Handler(ctx, makeCall())
 	if err != nil {
 		t.Fatalf("second call unexpected error: %v", err)
 	}
 	if !result.IsError {
 		t.Fatal("second call should return error (exhausted)")
 	}
-	text2, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatalf("expected TextContent on exhaustion, got %T", result.Content[0])
-	}
-	if text2.Text != "Advisor consultations exhausted for this request." {
-		t.Errorf("unexpected exhaustion message: %s", text2.Text)
+	text2 := result.FirstText()
+	if text2 != "Advisor consultations exhausted for this request." {
+		t.Errorf("unexpected exhaustion message: %s", text2)
 	}
 }

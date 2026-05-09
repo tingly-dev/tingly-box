@@ -4,9 +4,8 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -30,16 +29,16 @@ type HookDeps interface {
 type AdvisorHook struct{}
 
 func (h AdvisorHook) Match(toolName string) bool {
-	sourceID, toolNameOnly, ok := mcpruntime.ParseNormalizedToolName(toolName)
+	sourceID, toolNameOnly, ok := coretool.ParseNormalizedToolName(toolName)
 	if !ok {
 		return false
 	}
-	isAdvisorSource := sourceID == mcptools.BuiltinAdvisorSourceID || sourceID == "builtin"
-	return isAdvisorSource && toolNameOnly == mcptools.BuiltinAdvisorToolName
+	isAdvisorSource := sourceID == coretool.BuiltinAdvisorSourceID || sourceID == "builtin"
+	return isAdvisorSource && toolNameOnly == coretool.BuiltinAdvisorToolName
 }
 
 func (h AdvisorHook) PrepareContext(deps HookDeps, ctx context.Context, messages []map[string]any) context.Context {
-	if actx, ok := mcpruntime.GetAdvisorContext(ctx); ok {
+	if actx, ok := coretool.GetAdvisorContext(ctx); ok {
 		actx.Messages = messages
 		return ctx
 	}
@@ -49,7 +48,7 @@ func (h AdvisorHook) PrepareContext(deps HookDeps, ctx context.Context, messages
 		maxUses = 3
 	}
 
-	return mcpruntime.WithAdvisorContext(ctx, &mcpruntime.AdvisorContext{
+	return coretool.WithAdvisorContext(ctx, &coretool.AdvisorContext{
 		Messages:      messages,
 		UsesRemaining: &maxUses,
 	})
@@ -60,13 +59,13 @@ func applyHooks(ctx context.Context, toolName string, messages []map[string]any,
 	for _, hook := range hooks {
 		if hook.Match(toolName) {
 			// Increment depth to prevent advisor recursion.
-			depth := mcpruntime.GetAdvisorDepth(ctx)
-			ctx = mcpruntime.WithAdvisorDepth(ctx, depth+1)
+			depth := coretool.GetAdvisorDepth(ctx)
+			ctx = coretool.WithAdvisorDepth(ctx, depth+1)
 			ctx = hook.PrepareContext(deps, ctx, messages)
 
 			// Inject scenario record sink so advisor HTTP calls get recorded.
 			if sink := deps.GetScenarioSink(ctx); sink != nil && sink.IsEnabled() {
-				ctx = mcpruntime.WithAdvisorRecordSink(ctx, sink)
+				ctx = coretool.WithAdvisorRecordSink(ctx, sink)
 			}
 		}
 	}

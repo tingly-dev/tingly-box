@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -13,8 +12,8 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 	vt := VirtualTool{
 		Name:        "advisor",
 		Description: "strategic guidance",
-		Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent("ok")}}, nil
+		Handler: func(ctx context.Context, call ToolCall) (ToolResult, error) {
+			return TextToolResult("ok"), nil
 		},
 		Visibility: typ.ToolVisibilityServer, // Server tool
 	}

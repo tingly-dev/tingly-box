@@ -29,6 +29,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/hooks"
@@ -855,7 +856,7 @@ func (s *Server) registerAdviserFromConfig() {
 		advisorCfg := expandAdvisorConfig(*source.Advisor)
 
 		pipeline := servertool.NewPipeline()
-		pipeline.Register(servertool.NewAdvisorProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
+		pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))
 		pipeline.RegisterInto(s.mcpRuntime.VirtualRegistry())
 		s.servertoolPipeline = pipeline
 

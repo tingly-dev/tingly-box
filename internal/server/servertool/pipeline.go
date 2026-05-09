@@ -1,14 +1,16 @@
 package servertool
 
-import (
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-)
+import coretool "github.com/tingly-dev/tingly-box/internal/tool"
+
+type VirtualToolRegistry interface {
+	Register(coretool.VirtualTool)
+}
 
 // ToolProvider is implemented by each virtual server tool.
 // Register once; Pipeline derives hooks and registry entries from it.
 type ToolProvider interface {
 	// Descriptor returns the VirtualTool to register in the runtime registry.
-	Descriptor() mcpruntime.VirtualTool
+	Descriptor() coretool.VirtualTool
 	// Hook returns a pre-call context hook, or nil if not needed.
 	Hook() Hook
 }
@@ -37,7 +39,7 @@ func (p *Pipeline) Register(provider ToolProvider) {
 
 // RegisterInto writes all provider descriptors into registry.
 // Call once after all providers have been registered.
-func (p *Pipeline) RegisterInto(registry *mcpruntime.VirtualToolRegistry) {
+func (p *Pipeline) RegisterInto(registry VirtualToolRegistry) {
 	if registry == nil {
 		return
 	}

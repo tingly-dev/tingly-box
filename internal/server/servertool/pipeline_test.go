@@ -4,43 +4,54 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 type stubProvider struct {
-	tool mcpruntime.VirtualTool
+	tool coretool.VirtualTool
 	hook servertool.Hook
 }
 
-func (s stubProvider) Descriptor() mcpruntime.VirtualTool { return s.tool }
-func (s stubProvider) Hook() servertool.Hook              { return s.hook }
+func (s stubProvider) Descriptor() coretool.VirtualTool { return s.tool }
+func (s stubProvider) Hook() servertool.Hook            { return s.hook }
+
+type stubRegistry struct {
+	tools map[string]coretool.VirtualTool
+}
+
+func (r *stubRegistry) Register(tool coretool.VirtualTool) {
+	if r.tools == nil {
+		r.tools = make(map[string]coretool.VirtualTool)
+	}
+	r.tools[tool.Name] = tool
+}
 
 func TestPipeline_RegisterInto(t *testing.T) {
-	registry := mcpruntime.NewVirtualToolRegistry()
+	registry := &stubRegistry{}
 	p := servertool.NewPipeline()
 
 	p.Register(stubProvider{
-		tool: mcpruntime.VirtualTool{
+		tool: coretool.VirtualTool{
 			Name:       "test_tool",
 			Visibility: typ.ToolVisibilityServer,
 		},
 	})
 	p.RegisterInto(registry)
 
-	_, ok := registry.Get("test_tool")
+	_, ok := registry.tools["test_tool"]
 	assert.True(t, ok)
 }
 
 func TestPipeline_HooksCollected(t *testing.T) {
 	p := servertool.NewPipeline()
 	p.Register(stubProvider{
-		tool: mcpruntime.VirtualTool{Name: "tool_a"},
+		tool: coretool.VirtualTool{Name: "tool_a"},
 		hook: servertool.AdvisorHook{},
 	})
 	p.Register(stubProvider{
-		tool: mcpruntime.VirtualTool{Name: "tool_b"},
+		tool: coretool.VirtualTool{Name: "tool_b"},
 		// hook is nil — should not panic
 	})
 

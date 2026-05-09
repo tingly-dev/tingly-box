@@ -6,6 +6,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // FlexibleBool is a boolean type that can unmarshal from both bool and int (0/1)
@@ -58,8 +59,8 @@ const (
 	ScenarioXcode      RuleScenario = "xcode"
 	ScenarioVSCode     RuleScenario = "vscode"
 	ScenarioSmartGuide RuleScenario = "_smart_guide"
-	ScenarioGlobal     RuleScenario = "_global" // Global flags that apply to all scenarios
-	ScenarioEmbed      RuleScenario = "embed"   // Embedding application scenario; only serves /embeddings
+	ScenarioGlobal     RuleScenario = "_global"  // Global flags that apply to all scenarios
+	ScenarioEmbed      RuleScenario = "embed"    // Embedding application scenario; only serves /embeddings
 	ScenarioImageGen   RuleScenario = "imagegen" // Image generation scenario; only serves /images/generations
 )
 
@@ -228,11 +229,11 @@ const (
 	MCPAuthTypeOAuth  MCPAuthType = "oauth"
 )
 
-type ToolVisibility string
+type ToolVisibility = coretool.ToolVisibility
 
 const (
-	ToolVisibilityClient ToolVisibility = "client"
-	ToolVisibilityServer ToolVisibility = "server"
+	ToolVisibilityClient = coretool.ToolVisibilityClient
+	ToolVisibilityServer = coretool.ToolVisibilityServer
 )
 
 type ToolImplementation string

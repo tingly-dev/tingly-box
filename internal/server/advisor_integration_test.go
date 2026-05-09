@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
@@ -90,21 +89,13 @@ func TestAdvisorToolLoop(t *testing.T) {
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func() mcp.CallToolRequest {
-		return mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name:      "advisor",
-				Arguments: map[string]any{},
-			},
-		}
+	makeReq := func() runtime.ToolCall {
+		return runtime.ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
-	extractText := func(result *mcp.CallToolResult) string {
-		require.NotNil(t, result)
-		require.NotEmpty(t, result.Content)
-		text, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		return text.Text
+	extractText := func(result runtime.ToolResult) string {
+		require.NotEmpty(t, result.Contents)
+		return result.FirstText()
 	}
 
 	// First call should succeed and decrement UsesRemaining.
@@ -248,21 +239,13 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func() mcp.CallToolRequest {
-		return mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Name:      "advisor",
-				Arguments: map[string]any{},
-			},
-		}
+	makeReq := func() runtime.ToolCall {
+		return runtime.ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
-	extractText := func(result *mcp.CallToolResult) string {
-		require.NotNil(t, result)
-		require.NotEmpty(t, result.Content)
-		text, ok := result.Content[0].(mcp.TextContent)
-		require.True(t, ok)
-		return text.Text
+	extractText := func(result runtime.ToolResult) string {
+		require.NotEmpty(t, result.Contents)
+		return result.FirstText()
 	}
 
 	result, err := vt.Handler(ctx, makeReq())
@@ -367,19 +350,17 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	}
 	ctx := runtime.WithAdvisorContext(context.Background(), actx)
 
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name: "advisor",
-			Arguments: map[string]any{
-				"session_id": "sess-42",
-			},
+	req := runtime.ToolCall{
+		Name: "advisor",
+		Arguments: map[string]any{
+			"session_id": "sess-42",
 		},
 	}
 
 	result, err := vt.Handler(ctx, req)
 	require.NoError(t, err)
 	require.False(t, result.IsError)
-	require.Len(t, result.Content, 1)
+	require.Len(t, result.Contents, 1)
 
 	// Verify that session data was injected into the request messages.
 	require.Len(t, receivedRequests, 1)

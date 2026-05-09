@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -52,40 +53,6 @@ func TestRemapLegacyAdvisorToolName(t *testing.T) {
 		"tingly_box_mcp__webtools__mcp_web_search",
 		remapLegacyAdvisorToolName("tingly_box_mcp__webtools__mcp_web_search"),
 	)
-}
-
-func TestCallMCPToolWithHooks_AdvisorInjectsContext(t *testing.T) {
-	cp := client.NewClientPool()
-	rt := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
-		return &typ.MCPRuntimeConfig{
-			Sources: []typ.MCPSourceConfig{
-				{
-					ID:         "advisor",
-					Transport:  "advisor",
-					Enabled:    typ.BoolPtr(true),
-					Visibility: typ.ToolVisibilityServer,
-					Tools:      []string{"advisor"},
-					Advisor:    &typ.AdvisorConfig{MaxUsesPerRequest: 3},
-				},
-			},
-		}
-	})
-	rt.SetClientPool(cp)
-	rt.RegisterAdviser(typ.AdvisorConfig{MaxUsesPerRequest: 3}, nil)
-
-	s := &Server{
-		clientPool: cp,
-		mcpRuntime: rt,
-	}
-	pipeline := servertool.NewPipeline()
-	pipeline.Register(servertool.NewAdvisorProvider(typ.AdvisorConfig{MaxUsesPerRequest: 3}, nil, nil))
-	s.servertoolPipeline = pipeline
-	// No pre-injected AdvisorContext here; hook should create one.
-	_, result, err := s.callMCPToolWithHooks(context.Background(), "tingly_box_mcp__advisor__advisor", `{}`, []map[string]any{
-		{"role": "user", "content": "hello"},
-	})
-	require.NoError(t, err)
-	require.Contains(t, result.FirstText(), "client pool not available")
 }
 
 func TestCallMCPToolWithHooks_AdvisorHookCreatesContextAndCallsBackend(t *testing.T) {
@@ -142,7 +109,7 @@ func TestCallMCPToolWithHooks_AdvisorHookCreatesContextAndCallsBackend(t *testin
 	t.Cleanup(rt.Close)
 
 	pipeline := servertool.NewPipeline()
-	pipeline.Register(servertool.NewAdvisorProvider(*cfg.Sources[0].Advisor, cp, rt.SessionStore()))
+	pipeline.Register(advisortool.NewProvider(*cfg.Sources[0].Advisor, cp, rt.SessionStore()))
 	s := &Server{mcpRuntime: rt, servertoolPipeline: pipeline}
 	msgs := []map[string]any{{"role": "user", "content": "please advise"}}
 

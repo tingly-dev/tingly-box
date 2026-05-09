@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/shared"
@@ -16,24 +15,9 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-const normalizedPrefix = "tingly_box_mcp__"
-
-// advisorDepthKey is the context key for tracking adviser call depth.
-type advisorDepthKey struct{}
-
-// WithAdvisorDepth sets the adviser call depth in context.
-func WithAdvisorDepth(ctx context.Context, depth int) context.Context {
-	return context.WithValue(ctx, advisorDepthKey{}, depth)
-}
-
-// GetAdvisorDepth retrieves the current adviser call depth from context.
-func GetAdvisorDepth(ctx context.Context) int {
-	v, _ := ctx.Value(advisorDepthKey{}).(int)
-	return v
-}
 
 type configProvider func() *typ.MCPRuntimeConfig
 
@@ -153,7 +137,7 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 				"type":       "object",
 				"properties": map[string]interface{}{},
 			}
-			// Convert mcp.ToolInputSchema to shared.FunctionParameters via JSON
+			// Convert protocol-neutral input schema to shared.FunctionParameters via JSON.
 			schemaBytes, _ := json.Marshal(vt.InputSchema)
 			var schema map[string]interface{}
 			if err := json.Unmarshal(schemaBytes, &schema); err == nil && len(schema) > 0 {
@@ -206,25 +190,17 @@ func (r *Runtime) isVirtualServerToolInjectable(vt VirtualTool) bool {
 
 // IsMCPToolName checks whether a tool name is a normalized MCP tool.
 func IsMCPToolName(name string) bool {
-	return strings.HasPrefix(name, normalizedPrefix) && strings.Count(name, "__") >= 2
+	return coretool.IsMCPToolName(name)
 }
 
 // NormalizeToolName converts source/tool pair to normalized tool name.
 func NormalizeToolName(sourceID, toolName string) string {
-	return normalizedPrefix + sourceID + "__" + toolName
+	return coretool.NormalizeToolName(sourceID, toolName)
 }
 
 // ParseNormalizedToolName parses normalized name and returns sourceID/toolName.
 func ParseNormalizedToolName(name string) (string, string, bool) {
-	if !strings.HasPrefix(name, normalizedPrefix) {
-		return "", "", false
-	}
-	rest := strings.TrimPrefix(name, normalizedPrefix)
-	parts := strings.SplitN(rest, "__", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	return parts[0], parts[1], true
+	return coretool.ParseNormalizedToolName(name)
 }
 
 // CallTool executes a normalized MCP tool call and returns a structured ToolResult.
@@ -289,14 +265,6 @@ func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, argumen
 		}
 	}
 
-	// Build mcp.CallToolRequest
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      tool.Name,
-			Arguments: argMap,
-		},
-	}
-
 	// Execute with panic recovery — named returns allow the deferred func to set err.
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -305,12 +273,10 @@ func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, argumen
 		}
 	}()
 
-	result, err := tool.Handler(ctx, req)
-	if err != nil {
-		return ToolResult{}, err
+	if tool.Handler == nil {
+		return ToolResult{}, fmt.Errorf("virtual tool %q has no handler", tool.Name)
 	}
-
-	return ToolResultFromMCPResult(result), nil
+	return tool.Handler(ctx, ToolCall{Name: tool.Name, Arguments: argMap})
 }
 
 // isSourceEnabled checks if a source is enabled in the current configuration

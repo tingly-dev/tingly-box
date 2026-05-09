@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -21,8 +21,10 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 		cfg.MaxTokens = 4096
 	}
 
-	schema := mcp.ToolInputSchema{Type: "object"}
-	schema.Properties = map[string]any{}
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{},
+	}
 
 	return VirtualTool{
 		Name:        "advisor",
@@ -34,28 +36,22 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 }
 
 func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualToolHandler {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, call ToolCall) (ToolResult, error) {
 		// Extract arguments (advisor takes no parameters; args may still carry session_id)
-		args, _ := req.Params.Arguments.(map[string]any)
+		args := call.Arguments
 
 		// Check depth to prevent recursion.
 		// Depth is incremented by response hook before tool execution, so the first
 		// legitimate advisor call runs at depth=1 and must be allowed.
 		depth := GetAdvisorDepth(ctx)
 		if depth > 1 {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{mcp.NewTextContent("Advisor recursion limit reached.")},
-				IsError: true,
-			}, nil
+			return coretool.ErrorToolResult("Advisor recursion limit reached."), nil
 		}
 
 		// Check per-request quota from context
 		actx, ok := GetAdvisorContext(ctx)
 		if !ok || actx.UsesRemaining == nil || *actx.UsesRemaining <= 0 {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{mcp.NewTextContent("Advisor consultations exhausted for this request.")},
-				IsError: true,
-			}, nil
+			return coretool.ErrorToolResult("Advisor consultations exhausted for this request."), nil
 		}
 
 		// Enrich advisor context with session data from SessionStore
@@ -101,15 +97,12 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 				"error":          err,
 				"uses_remaining": *actx.UsesRemaining,
 			}).Error("[MCP-DEBUG] ADVISOR: consultation failed")
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{mcp.NewTextContent(fmt.Sprintf("Advisor error: %v", err))},
-				IsError: true,
-			}, nil
+			return coretool.ErrorToolResult(fmt.Sprintf("Advisor error: %v", err)), nil
 		}
 
 		logrus.WithField("uses_remaining", *actx.UsesRemaining).Debug("[MCP-DEBUG] ADVISOR: consultation completed")
 
-		return &mcp.CallToolResult{Content: []mcp.Content{mcp.NewTextContent(result)}}, nil
+		return coretool.TextToolResult(result), nil
 	}
 }
 

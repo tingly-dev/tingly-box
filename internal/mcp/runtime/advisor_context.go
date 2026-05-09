@@ -4,35 +4,35 @@ import (
 	"context"
 
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
-type advisorContextKey struct{}
-type advisorRecordSinkKey struct{}
+type AdvisorContext = coretool.AdvisorContext
 
-// AdvisorContext holds conversation state for the advisor tool.
-type AdvisorContext struct {
-	Messages      []map[string]any
-	UsesRemaining *int
+var WithAdvisorContext = coretool.WithAdvisorContext
+var GetAdvisorContext = coretool.GetAdvisorContext
+
+// WithAdvisorDepth sets the adviser call depth in context.
+func WithAdvisorDepth(ctx context.Context, depth int) context.Context {
+	return coretool.WithAdvisorDepth(ctx, depth)
 }
 
-// WithAdvisorContext attaches advisor context to the context.
-func WithAdvisorContext(ctx context.Context, ac *AdvisorContext) context.Context {
-	return context.WithValue(ctx, advisorContextKey{}, ac)
-}
-
-// GetAdvisorContext retrieves advisor context from the context.
-func GetAdvisorContext(ctx context.Context) (*AdvisorContext, bool) {
-	ac, ok := ctx.Value(advisorContextKey{}).(*AdvisorContext)
-	return ac, ok
+// GetAdvisorDepth retrieves the current adviser call depth from context.
+func GetAdvisorDepth(ctx context.Context) int {
+	return coretool.GetAdvisorDepth(ctx)
 }
 
 // WithAdvisorRecordSink attaches a record sink to the context for advisor call recording.
 func WithAdvisorRecordSink(ctx context.Context, sink *obs.Sink) context.Context {
-	return context.WithValue(ctx, advisorRecordSinkKey{}, sink)
+	return coretool.WithAdvisorRecordSink(ctx, sink)
 }
 
 // GetAdvisorRecordSink retrieves the record sink from the context.
 func GetAdvisorRecordSink(ctx context.Context) (*obs.Sink, bool) {
-	sink, ok := ctx.Value(advisorRecordSinkKey{}).(*obs.Sink)
-	return sink, ok && sink != nil
+	sink, ok := coretool.GetAdvisorRecordSink(ctx)
+	if !ok {
+		return nil, false
+	}
+	typed, ok := sink.(*obs.Sink)
+	return typed, ok && typed != nil
 }
