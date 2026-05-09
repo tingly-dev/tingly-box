@@ -841,7 +841,8 @@ export default {
       "customProviderHint": "Bring your own endpoint",
       "section": {
         "global": "Global",
-        "china": "China (Mainland)"
+        "china": "China (Mainland)",
+        "custom": "Custom"
       }
     },
     "paste": {

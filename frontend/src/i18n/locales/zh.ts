@@ -841,7 +841,8 @@ export default {
       "customProviderHint": "使用自定义接入地址",
       "section": {
         "global": "国际",
-        "china": "中国大陆"
+        "china": "中国大陆",
+        "custom": "自定义"
       }
     },
     "paste": {

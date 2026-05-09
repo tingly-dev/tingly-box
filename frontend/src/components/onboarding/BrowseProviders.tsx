@@ -72,13 +72,15 @@ const gridSx = {
 interface SectionHeaderProps {
     icon: React.ReactNode;
     title: string;
-    count: number;
-    accent: 'global' | 'cn';
+    count?: number;
+    accent: 'global' | 'cn' | 'custom';
 }
 
 const SectionHeader: React.FC<SectionHeaderProps> = ({icon, title, count, accent}) => {
-    const accentColor = accent === 'cn' ? 'error.main' : 'primary.main';
-    const accentBg = accent === 'cn' ? 'error.50' : 'primary.50';
+    const accentColor =
+        accent === 'cn' ? 'error.main' : accent === 'custom' ? 'secondary.main' : 'primary.main';
+    const accentBg =
+        accent === 'cn' ? 'error.50' : accent === 'custom' ? 'secondary.50' : 'primary.50';
     return (
         <Stack
             direction="row"
@@ -109,18 +111,20 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({icon, title, count, accent
             <Typography variant="subtitle1" fontWeight={700} sx={{color: 'text.primary'}}>
                 {title}
             </Typography>
-            <Chip
-                label={count}
-                size="small"
-                sx={{
-                    height: 20,
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    bgcolor: accentBg,
-                    color: accentColor,
-                    border: 'none',
-                }}
-            />
+            {typeof count === 'number' && (
+                <Chip
+                    label={count}
+                    size="small"
+                    sx={{
+                        height: 20,
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        bgcolor: accentBg,
+                        color: accentColor,
+                        border: 'none',
+                    }}
+                />
+            )}
         </Stack>
     );
 };
@@ -287,8 +291,7 @@ const BrowseProviders: React.FC<BrowseProvidersProps> = ({onPick}) => {
         });
     };
 
-    const totalMatched = filtered.length;
-    const isEmpty = totalMatched === 0;
+    const isEmpty = filtered.length === 0;
 
     return (
         <Box>
@@ -313,54 +316,54 @@ const BrowseProviders: React.FC<BrowseProvidersProps> = ({onPick}) => {
                 />
             </Box>
 
-            {isEmpty ? (
-                <Box sx={gridSx}>
-                    <CustomProviderCard onPick={() => onPick(emptyForm())}/>
-                    <Box sx={{py: 6, textAlign: 'center', gridColumn: '1 / -1'}}>
-                        <Typography variant="body2" color="text.secondary">
-                            {t('onboarding.browse.empty', {defaultValue: 'No providers match your search.'})}
-                        </Typography>
-                    </Box>
-                </Box>
-            ) : (
+            {chinaProviders.length > 0 && (
                 <>
-                    {globalProviders.length > 0 && (
-                        <>
-                            <SectionHeader
-                                icon={<PublicIcon sx={{fontSize: 18}}/>}
-                                title={t('onboarding.browse.section.global', {defaultValue: 'Global'})}
-                                count={globalProviders.length}
-                                accent="global"
-                            />
-                            <Box sx={gridSx}>
-                                <CustomProviderCard onPick={() => onPick(emptyForm())}/>
-                                {globalProviders.map(p => (
-                                    <ProviderCard key={p.id} provider={p} onPick={handlePick}/>
-                                ))}
-                            </Box>
-                        </>
-                    )}
-
-                    {chinaProviders.length > 0 && (
-                        <>
-                            <SectionHeader
-                                icon={<LocationOnIcon sx={{fontSize: 18}}/>}
-                                title={t('onboarding.browse.section.china', {defaultValue: 'China (Mainland)'})}
-                                count={chinaProviders.length}
-                                accent="cn"
-                            />
-                            <Box sx={gridSx}>
-                                {globalProviders.length === 0 && (
-                                    <CustomProviderCard onPick={() => onPick(emptyForm())}/>
-                                )}
-                                {chinaProviders.map(p => (
-                                    <ProviderCard key={p.id} provider={p} onPick={handlePick}/>
-                                ))}
-                            </Box>
-                        </>
-                    )}
+                    <SectionHeader
+                        icon={<LocationOnIcon sx={{fontSize: 18}}/>}
+                        title={t('onboarding.browse.section.china', {defaultValue: 'China (Mainland)'})}
+                        count={chinaProviders.length}
+                        accent="cn"
+                    />
+                    <Box sx={gridSx}>
+                        {chinaProviders.map(p => (
+                            <ProviderCard key={p.id} provider={p} onPick={handlePick}/>
+                        ))}
+                    </Box>
                 </>
             )}
+
+            {globalProviders.length > 0 && (
+                <>
+                    <SectionHeader
+                        icon={<PublicIcon sx={{fontSize: 18}}/>}
+                        title={t('onboarding.browse.section.global', {defaultValue: 'Global'})}
+                        count={globalProviders.length}
+                        accent="global"
+                    />
+                    <Box sx={gridSx}>
+                        {globalProviders.map(p => (
+                            <ProviderCard key={p.id} provider={p} onPick={handlePick}/>
+                        ))}
+                    </Box>
+                </>
+            )}
+
+            {isEmpty && (
+                <Box sx={{py: 6, textAlign: 'center'}}>
+                    <Typography variant="body2" color="text.secondary">
+                        {t('onboarding.browse.empty', {defaultValue: 'No providers match your search.'})}
+                    </Typography>
+                </Box>
+            )}
+
+            <SectionHeader
+                icon={<AddIcon sx={{fontSize: 18}}/>}
+                title={t('onboarding.browse.section.custom', {defaultValue: 'Custom'})}
+                accent="custom"
+            />
+            <Box sx={gridSx}>
+                <CustomProviderCard onPick={() => onPick(emptyForm())}/>
+            </Box>
         </Box>
     );
 };
