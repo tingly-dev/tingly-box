@@ -38,8 +38,9 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, mo
 				msgMap["reasoning_content"] = &emptyStr
 			}
 
-			// Convert back to message param
-			req.Messages[i].SetExtraFields(msgMap)
+			// ChatCompletionMessageParamUnion marshals the concrete assistant variant,
+			// so provider-specific extras must live on OfAssistant to reach the wire.
+			req.Messages[i].OfAssistant.SetExtraFields(msgMap)
 		}
 	}
 	//}

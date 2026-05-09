@@ -61,10 +61,28 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 // ConvertResponsesInputToMessages converts Responses API input items to Chat Completion messages.
 func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []openai.ChatCompletionMessageParamUnion {
 	var messages []openai.ChatCompletionMessageParamUnion
+	var pendingToolCalls []map[string]interface{}
+
+	flushPendingToolCalls := func() {
+		if len(pendingToolCalls) == 0 {
+			return
+		}
+		msgMap := map[string]interface{}{
+			"role":       "assistant",
+			"content":    "",
+			"tool_calls": pendingToolCalls,
+		}
+		msgBytes, _ := json.Marshal(msgMap)
+		var result openai.ChatCompletionMessageParamUnion
+		_ = json.Unmarshal(msgBytes, &result)
+		messages = append(messages, result)
+		pendingToolCalls = nil
+	}
 
 	for _, item := range items {
 		// Handle message items
 		if !param.IsOmitted(item.OfMessage) {
+			flushPendingToolCalls()
 			msg := item.OfMessage
 			role := string(msg.Role)
 
@@ -135,7 +153,6 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 		if !param.IsOmitted(item.OfFunctionCall) {
 			fnCall := item.OfFunctionCall
 
-			// Create assistant message with tool_calls
 			toolCallMap := map[string]interface{}{
 				"id":   fnCall.CallID,
 				"type": "function",
@@ -145,21 +162,13 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 				},
 			}
 
-			msgMap := map[string]interface{}{
-				"role":       "assistant",
-				"content":    "",
-				"tool_calls": []map[string]interface{}{toolCallMap},
-			}
-
-			msgBytes, _ := json.Marshal(msgMap)
-			var result openai.ChatCompletionMessageParamUnion
-			_ = json.Unmarshal(msgBytes, &result)
-			messages = append(messages, result)
+			pendingToolCalls = append(pendingToolCalls, toolCallMap)
 			continue
 		}
 
 		// Handle function call output items (tool results)
 		if !param.IsOmitted(item.OfFunctionCallOutput) {
+			flushPendingToolCalls()
 			output := item.OfFunctionCallOutput
 
 			// Extract output content
@@ -181,6 +190,8 @@ func ConvertResponsesInputToMessages(items responses.ResponseInputParam) []opena
 			messages = append(messages, result)
 		}
 	}
+
+	flushPendingToolCalls()
 
 	return messages
 }
