@@ -79,8 +79,7 @@ func TestGenericMCPConfigDefaults(t *testing.T) {
 // logic works correctly for different scenarios
 func TestDispatchGenericAnthropicV1NonStream_BasicRouting(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	s := NewServer(cfg)
+	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 
 	// Register a test virtual tool
 	s.mcpRuntime.VirtualRegistry().Register(runtime.VirtualTool{
@@ -104,16 +103,15 @@ func TestDispatchGenericAnthropicV1NonStream_BasicRouting(t *testing.T) {
 // TestDispatchGenericOpenAIChatNonStream_BasicRouting tests that O→O routing works correctly
 func TestDispatchGenericOpenAIChatNonStream_BasicRouting(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
-	s := NewServer(cfg)
+	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 
 	// Verify OpenAI Chat adapter can be created
 	adapter := s.mcpRuntime.VirtualRegistry()
 	assert.NotNil(t, adapter, "Virtual registry should exist")
 
 	// Verify feature flags are independent
-	assert.False(t, cfg.GenericMCP.UseGenericOpenAIChatNonStream, "O→O non-streaming should be disabled by default")
-	assert.False(t, cfg.GenericMCP.UseGenericOpenAIChatStream, "O→O streaming should be disabled by default")
+	assert.False(t, s.config.GenericMCP.UseGenericOpenAIChatNonStream, "O→O non-streaming should be disabled by default")
+	assert.False(t, s.config.GenericMCP.UseGenericOpenAIChatStream, "O→O streaming should be disabled by default")
 }
 
 // TestDispatchGenericOpenAIChat_FeatureFlagIndependence tests that O→O flags work independently from A→A flags
