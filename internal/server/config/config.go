@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -1813,30 +1814,41 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 	// Create appropriate client based on provider API style
 	// Note: For model listing, we use empty SessionID as no user session is involved
 	var lister client.ModelLister
-	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		aClient, err := client.NewAnthropicClient(provider, "", typ.SessionID{})
-		if err == nil {
-			defer aClient.Close()
-			lister = aClient
-		}
-		apiErr = err
-	case protocol.APIStyleGoogle:
-		gClient, err := client.NewGoogleClient(provider, "", typ.SessionID{})
-		if err == nil {
-			defer gClient.Close()
-			lister = gClient
-		}
-		apiErr = err
-	case protocol.APIStyleOpenAI:
-		fallthrough
-	default:
-		oClient, err := client.NewOpenAIClient(provider, "", typ.SessionID{})
+	if strings.Contains(strings.ToLower(strings.TrimSpace(provider.APIBase)), "api.deepseek.com") {
+		providerForModels := *provider
+		providerForModels.APIBase = "https://api.deepseek.com"
+		oClient, err := client.NewOpenAIClient(&providerForModels, "", typ.SessionID{})
 		if err == nil {
 			defer oClient.Close()
 			lister = oClient
 		}
 		apiErr = err
+	} else {
+		switch provider.APIStyle {
+		case protocol.APIStyleAnthropic:
+			aClient, err := client.NewAnthropicClient(provider, "", typ.SessionID{})
+			if err == nil {
+				defer aClient.Close()
+				lister = aClient
+			}
+			apiErr = err
+		case protocol.APIStyleGoogle:
+			gClient, err := client.NewGoogleClient(provider, "", typ.SessionID{})
+			if err == nil {
+				defer gClient.Close()
+				lister = gClient
+			}
+			apiErr = err
+		case protocol.APIStyleOpenAI:
+			fallthrough
+		default:
+			oClient, err := client.NewOpenAIClient(provider, "", typ.SessionID{})
+			if err == nil {
+				defer oClient.Close()
+				lister = oClient
+			}
+			apiErr = err
+		}
 	}
 
 	// If we have a lister, try to fetch models
