@@ -1,6 +1,7 @@
 import { PageLayout } from '@/components/PageLayout';
 import AgentInstallCard from '@/components/AgentInstallCard';
 import ToolCard from '@/components/ToolCard';
+import ToolFilterBar, { type ToolFilter } from '@/components/ToolFilterBar';
 import { api } from '@/services/api';
 import {
     Alert,
@@ -118,9 +119,10 @@ interface WebtoolCardProps {
     webtoolsSource: MCPSourceConfig | undefined;
     toolName: 'mcp_web_search' | 'mcp_web_fetch';
     onSave: (patch: MCPSourceConfig) => Promise<void>;
+    expanded?: boolean;
 }
 
-const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onSave }) => {
+const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onSave, expanded }) => {
     const [serperKey, setSerperKey] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -201,6 +203,7 @@ const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onS
             badges={[{ label: 'Client', color: 'blue' }]}
             settings={settings}
             defaultExpanded={needsConfig}
+            expanded={expanded}
         />
     );
 };
@@ -211,9 +214,13 @@ interface CustomServersCardProps {
     sources: MCPSourceConfig[];
     onSave: (sources: MCPSourceConfig[]) => Promise<void>;
     saving: boolean;
+    filter: ToolFilter;
+    allExpanded: boolean;
+    onFilterChange: (f: ToolFilter) => void;
+    onToggleExpand: (v: boolean) => void;
 }
 
-const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, saving }) => {
+const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, saving, filter, allExpanded, onFilterChange, onToggleExpand }) => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingSource, setEditingSource] = useState<MCPSourceConfig | null>(null);
     const [editorForm, setEditorForm] = useState<MCPSourceFormValue>(() => ({
@@ -310,8 +317,15 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
                 </Tooltip>
             </Box>
 
+            <ToolFilterBar
+                filter={filter}
+                onFilterChange={onFilterChange}
+                allExpanded={allExpanded}
+                onToggleExpand={onToggleExpand}
+            />
+
             {/* Existing servers as ToolCards */}
-            {sources.map((source) => {
+            {sources.filter(s => filter === 'all' || (filter === 'active' ? (s.enabled ?? true) : !(s.enabled ?? true))).map((source) => {
                 const enabled = source.enabled ?? true;
                 const conn = connectionLabel(source);
                 return (
@@ -322,6 +336,7 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
                         description={conn}
                         enabled={enabled}
                         onToggle={(v) => void handleToggle(source.id, v)}
+                        expanded={allExpanded}
                         badges={[{
                             label: source.visibility === 'server' ? 'Server' : 'Client',
                             color: source.visibility === 'server' ? 'green' : 'blue',
@@ -369,6 +384,14 @@ const MCPRegisteredServers = () => {
     const [saving, setSaving] = useState(false);
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+
+    // Filter / expand state for builtin tools (section 02)
+    const [builtinFilter, setBuiltinFilter] = useState<ToolFilter>('all');
+    const [builtinExpanded, setBuiltinExpanded] = useState(true);
+
+    // Filter / expand state for custom servers (section 03)
+    const [customFilter, setCustomFilter] = useState<ToolFilter>('all');
+    const [customExpanded, setCustomExpanded] = useState(true);
 
     useEffect(() => { void loadData(); }, []);
 
@@ -437,8 +460,27 @@ const MCPRegisteredServers = () => {
                         </Box>
                     </Box>
                     <Stack spacing={1.5}>
-                        <WebtoolCard webtoolsSource={webtoolsSource} toolName="mcp_web_search" onSave={upsertSource} />
-                        <WebtoolCard webtoolsSource={webtoolsSource} toolName="mcp_web_fetch" onSave={upsertSource} />
+                        <ToolFilterBar
+                            filter={builtinFilter}
+                            onFilterChange={setBuiltinFilter}
+                            allExpanded={builtinExpanded}
+                            onToggleExpand={setBuiltinExpanded}
+                        />
+                        {(['mcp_web_search', 'mcp_web_fetch'] as const)
+                            .filter(() => {
+                                const on = webtoolsSource?.enabled ?? true;
+                                return builtinFilter === 'all' || (builtinFilter === 'active' ? on : !on);
+                            })
+                            .map((toolName) => (
+                                <WebtoolCard
+                                    key={toolName}
+                                    webtoolsSource={webtoolsSource}
+                                    toolName={toolName}
+                                    onSave={upsertSource}
+                                    expanded={builtinExpanded ? true : undefined}
+                                />
+                            ))
+                        }
                     </Stack>
                 </Box>
 
@@ -450,6 +492,10 @@ const MCPRegisteredServers = () => {
                         await saveConfig([...builtins, ...updated]);
                     }}
                     saving={saving}
+                    filter={customFilter}
+                    allExpanded={customExpanded}
+                    onFilterChange={setCustomFilter}
+                    onToggleExpand={setCustomExpanded}
                 />
             </Stack>
 

@@ -54,6 +54,8 @@ export interface ToolCardProps {
     noExpand?: boolean;
     /** Start expanded (e.g. when configuration is missing) */
     defaultExpanded?: boolean;
+    /** Controlled expanded state — overrides internal toggle when provided */
+    expanded?: boolean;
 }
 
 // ─── Badge color map ──────────────────────────────────────────────────────────
@@ -133,11 +135,13 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     toggleDisabled = false,
     noExpand = false,
     defaultExpanded = false,
+    expanded: controlledExpanded,
 }) => {
-    const [expanded, setExpanded] = React.useState(defaultExpanded);
+    const [internalExpanded, setInternalExpanded] = React.useState(defaultExpanded);
+    const expanded = controlledExpanded !== undefined ? controlledExpanded : internalExpanded;
 
     const handleCardClick = () => {
-        if (!noExpand && settings) setExpanded((v) => !v);
+        if (!noExpand && settings) setInternalExpanded((v) => !v);
     };
 
     return (

@@ -1,6 +1,7 @@
 import { PageLayout } from '@/components/PageLayout';
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import ToolCard from '@/components/ToolCard';
+import ToolFilterBar, { type ToolFilter } from '@/components/ToolFilterBar';
 import { api } from '@/services/api';
 import type { Provider } from '@/types/provider';
 import {
@@ -31,9 +32,10 @@ import {
 interface AdvisorCardProps {
     advisorSource: MCPSourceConfig | undefined;
     onSave: (patch: MCPSourceConfig) => Promise<void>;
+    expanded?: boolean;
 }
 
-const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave }) => {
+const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expanded }) => {
     const [model, setModel] = useState('');
     const [selectedProviderUuid, setSelectedProviderUuid] = useState('');
     const [saving, setSaving] = useState(false);
@@ -151,6 +153,7 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave }) => {
             tags={['advisor']}
             settings={settings}
             defaultExpanded
+            expanded={expanded}
         />
     );
 };
@@ -162,6 +165,8 @@ const ServerToolPage = () => {
     const [saving, setSaving] = useState(false);
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+    const [filter, setFilter] = useState<ToolFilter>('all');
+    const [allExpanded, setAllExpanded] = useState(true);
 
     useEffect(() => { void loadData(); }, []);
 
@@ -225,8 +230,15 @@ const ServerToolPage = () => {
                     </Box>
                 </Box>
 
-                <AdvisorCard advisorSource={advisorSource} onSave={upsertSource} />
-            </Stack>
+                <ToolFilterBar
+                    filter={filter}
+                    onFilterChange={setFilter}
+                    allExpanded={allExpanded}
+                    onToggleExpand={setAllExpanded}
+                />
+                {(filter === 'all' || (filter === 'active' ? (advisorSource?.enabled ?? false) : !(advisorSource?.enabled ?? false))) && (
+                    <AdvisorCard advisorSource={advisorSource} onSave={upsertSource} expanded={allExpanded ? true : undefined} />
+                )}            </Stack>
 
             <Snackbar
                 open={notification.open}
