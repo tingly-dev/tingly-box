@@ -23,6 +23,7 @@ import type { SmartRouting, SmartOp } from './RoutingGraphTypes';
 
 // Position options with descriptions
 const POSITION_OPTIONS = [
+    { value: 'agent.claude_code', label: 'Agent: Claude Code', description: 'Claude Code request kind (main / subagent / compact)' },
     // { value: 'model', label: 'Model', description: 'Request model name' },
     { value: 'context_system', label: 'System Prompt', description: 'System prompt message in context' },
     // { value: 'context_user', label: 'User Context', description: 'User messages in context' },
@@ -32,7 +33,6 @@ const POSITION_OPTIONS = [
     { value: 'token', label: 'Token Count', description: 'Token count' },
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)' },
     { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)' },
-    { value: 'agent.claude_code', label: 'Agent: Claude Code', description: 'Claude Code request kind (main / subagent / compact)' },
 ] as const;
 
 // Per-position enumerated value options. When a position has an entry here,
