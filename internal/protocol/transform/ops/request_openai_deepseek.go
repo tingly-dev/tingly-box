@@ -17,21 +17,33 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, mo
 	//if config.HasThinking {
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
-			// Convert the message to map to check/modify fields
-			msgMap := req.Messages[i].ExtraFields()
-			if msgMap == nil {
-				msgMap = map[string]any{}
+			// Anthropic -> OpenAI conversion stores x_thinking on the union as
+			// internal metadata, but ChatCompletionMessageParamUnion marshals
+			// only its concrete OfAssistant variant when present.
+			unionExtra := req.Messages[i].ExtraFields()
+			assistantExtra := req.Messages[i].OfAssistant.ExtraFields()
+
+			// Preserve existing assistant-level extras; these are the fields
+			// that actually reach the provider in the final JSON payload.
+			msgMap := map[string]any{}
+			for k, v := range assistantExtra {
+				msgMap[k] = v
+			}
+
+			thinking, hasThinking := unionExtra["x_thinking"]
+			if !hasThinking {
+				thinking, hasThinking = assistantExtra["x_thinking"]
 			}
 
 			// Extract x_thinking and convert to reasoning_content
-			if thinking, hasThinking := msgMap["x_thinking"]; hasThinking {
+			if hasThinking {
 				// Convert x_thinking to reasoning_content
 				if thinkingStr, ok := thinking.(string); ok {
 					msgMap["reasoning_content"] = thinkingStr
 				}
 				// Remove x_thinking field
 				delete(msgMap, "x_thinking")
-			} else {
+			} else if _, hasReasoning := msgMap["reasoning_content"]; !hasReasoning {
 				// Ensure reasoning_content field exists even if no thinking content
 				// Use a placeholder (empty pointer) instead of empty string to ensure it's included in JSON
 				var emptyStr string
