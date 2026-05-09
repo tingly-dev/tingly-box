@@ -223,114 +223,53 @@ func (t *ConsistencyTransform) normalizeMessages(req *openai.ChatCompletionNewPa
 }
 
 // AlignToolMessagesForOpenAI converts orphaned tool messages (those without a
-// matching tool_call_id) to user messages, and strips tool_calls from assistant
-// messages that lack corresponding tool messages. This prevents API errors like:
-// "An assistant message with 'tool_calls' must be followed by tool messages
-// responding to each 'tool_call_id'."
+// matching tool_call_id) to user messages. This prevents "role 'tool' must be a
+// response to preceding message with 'tool_calls'" errors.
 func AlignToolMessagesForOpenAI(req *openai.ChatCompletionNewParams) {
 	if len(req.Messages) == 0 {
 		return
 	}
 
-	// Pass 1: Strip tool_calls from assistant messages that lack corresponding tool messages.
-	// DeepSeek and other providers require every tool_call_id to have a tool message response.
-	// This must run before orphaned tool message cleanup, because stripping tool_calls
-	// may make previously-valid tool messages orphaned.
-	{
-		answeredToolCallIDs := make(map[string]bool)
-		for _, msg := range req.Messages {
-			if msg.OfTool != nil && msg.OfTool.ToolCallID != "" {
-				answeredToolCallIDs[msg.OfTool.ToolCallID] = true
-			}
+	// Collect all valid tool_call_ids from assistant messages
+	validToolCallIDs := make(map[string]bool)
+	for _, msg := range req.Messages {
+		if msg.OfAssistant == nil {
+			continue
 		}
-
-		for i := range req.Messages {
-			if req.Messages[i].OfAssistant == nil {
-				continue
+		for _, tc := range msg.OfAssistant.ToolCalls {
+			if id := tc.GetID(); id != nil && *id != "" {
+				validToolCallIDs[*id] = true
 			}
-			assistant := req.Messages[i].OfAssistant
-			if len(assistant.ToolCalls) == 0 {
-				continue
-			}
-
-			allAnswered := true
-			for _, tc := range assistant.ToolCalls {
-				id := ""
-				if tcID := tc.GetID(); tcID != nil {
-					id = *tcID
-				}
-				if id != "" && !answeredToolCallIDs[id] {
-					allAnswered = false
-					break
-				}
-			}
-			if allAnswered {
-				continue
-			}
-
-			msgBytes, err := json.Marshal(req.Messages[i])
-			if err != nil {
-				continue
-			}
-			var msgMap map[string]json.RawMessage
-			if err := json.Unmarshal(msgBytes, &msgMap); err != nil {
-				continue
-			}
-			delete(msgMap, "tool_calls")
-			updatedBytes, err := json.Marshal(msgMap)
-			if err != nil {
-				continue
-			}
-			var updated openai.ChatCompletionMessageParamUnion
-			if err := json.Unmarshal(updatedBytes, &updated); err != nil {
-				continue
-			}
-			req.Messages[i] = updated
 		}
 	}
 
-	// Pass 2: Convert orphaned tool messages to user messages.
-	// Re-collect valid tool_call_ids after Pass 1 may have stripped some tool_calls.
-	{
-		validToolCallIDs := make(map[string]bool)
-		for _, msg := range req.Messages {
-			if msg.OfAssistant == nil {
-				continue
-			}
-			for _, tc := range msg.OfAssistant.ToolCalls {
-				if id := tc.GetID(); id != nil && *id != "" {
-					validToolCallIDs[*id] = true
-				}
-			}
+	// Convert orphaned tool messages to user messages
+	for i := range req.Messages {
+		if req.Messages[i].OfTool == nil {
+			continue
+		}
+		toolMsg := req.Messages[i].OfTool
+		toolCallID := toolMsg.ToolCallID
+		if toolCallID != "" && validToolCallIDs[toolCallID] {
+			continue
 		}
 
-		for i := range req.Messages {
-			if req.Messages[i].OfTool == nil {
-				continue
-			}
-			toolMsg := req.Messages[i].OfTool
-			toolCallID := toolMsg.ToolCallID
-			if toolCallID != "" && validToolCallIDs[toolCallID] {
-				continue
-			}
-
-			// Orphaned tool message, convert to user message.
-			if toolMsg.Content.OfString.Valid() {
-				req.Messages[i] = openai.UserMessage(toolMsg.Content.OfString.Value)
-				continue
-			}
-
-			if len(toolMsg.Content.OfArrayOfContentParts) > 0 {
-				parts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(toolMsg.Content.OfArrayOfContentParts))
-				for _, part := range toolMsg.Content.OfArrayOfContentParts {
-					parts = append(parts, openai.TextContentPart(part.Text))
-				}
-				req.Messages[i] = openai.UserMessage(parts)
-				continue
-			}
-
-			req.Messages[i] = openai.UserMessage("")
+		// Orphaned tool message, convert to user message.
+		if toolMsg.Content.OfString.Valid() {
+			req.Messages[i] = openai.UserMessage(toolMsg.Content.OfString.Value)
+			continue
 		}
+
+		if len(toolMsg.Content.OfArrayOfContentParts) > 0 {
+			parts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(toolMsg.Content.OfArrayOfContentParts))
+			for _, part := range toolMsg.Content.OfArrayOfContentParts {
+				parts = append(parts, openai.TextContentPart(part.Text))
+			}
+			req.Messages[i] = openai.UserMessage(parts)
+			continue
+		}
+
+		req.Messages[i] = openai.UserMessage("")
 	}
 }
 
