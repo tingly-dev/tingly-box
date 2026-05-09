@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -42,7 +43,7 @@ func SourceToolDescriptor(source typ.MCPSourceConfig, tool SourceTool) typ.ToolD
 	}
 }
 
-func VirtualToolDescriptor(sourceID string, tool VirtualTool) typ.ToolDescriptor {
+func VirtualToolDescriptor(sourceID string, tool coretool.VirtualTool) typ.ToolDescriptor {
 	visibility := tool.Visibility
 	if visibility == "" {
 		visibility = typ.ToolVisibilityServer
@@ -65,11 +66,11 @@ func IsClientVisibleSource(source typ.MCPSourceConfig) bool {
 	return SourceVisibility(source) == typ.ToolVisibilityClient
 }
 
-func IsServerVisibleVirtualTool(tool VirtualTool) bool {
+func IsServerVisibleVirtualTool(tool coretool.VirtualTool) bool {
 	return tool.Visibility == "" || tool.Visibility == typ.ToolVisibilityServer
 }
 
-func IsClientVisibleVirtualTool(tool VirtualTool) bool {
+func IsClientVisibleVirtualTool(tool coretool.VirtualTool) bool {
 	return tool.Visibility == typ.ToolVisibilityClient
 }
 

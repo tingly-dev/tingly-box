@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -24,7 +25,7 @@ func TestMCPToolInjectionTransform_AdvisorNativeGuard(t *testing.T) {
 	}
 	rt := runtime.NewRuntime(func() *typ.MCPRuntimeConfig { return cfg })
 	t.Cleanup(rt.Close)
-	rt.VirtualRegistry().Register(runtime.VirtualTool{
+	rt.VirtualRegistry().Register(coretool.VirtualTool{
 		Name:        "advisor",
 		Description: "server-side advisor",
 		InputSchema: mcp.ToolInputSchema{Type: "object"},

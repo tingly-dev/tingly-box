@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -194,7 +195,7 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 	toolName := "tingly_box_mcp__advisor__advisor"
 	msgs := []map[string]any{{"role": "user", "content": "hello"}}
 	uses := 2
-	ctx := mcpruntime.WithAdvisorContext(context.Background(), &mcpruntime.AdvisorContext{
+	ctx := coretool.WithAdvisorContext(context.Background(), &coretool.AdvisorContext{
 		Messages:      msgs,
 		UsesRemaining: &uses,
 	})
@@ -253,8 +254,8 @@ func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
 
 	uses := 3
 	// Pre-set depth to 2 to simulate a loopback (advisor calling itself).
-	ctx := mcpruntime.WithAdvisorDepth(context.Background(), 2)
-	ctx = mcpruntime.WithAdvisorContext(ctx, &mcpruntime.AdvisorContext{
+	ctx := coretool.WithAdvisorDepth(context.Background(), 2)
+	ctx = coretool.WithAdvisorContext(ctx, &coretool.AdvisorContext{
 		Messages:      []map[string]any{{"role": "user", "content": "inner"}},
 		UsesRemaining: &uses,
 	})

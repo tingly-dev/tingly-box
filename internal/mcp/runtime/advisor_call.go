@@ -12,7 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -43,7 +45,7 @@ func buildProvider(cfg typ.AdvisorConfig, style protocol.APIStyle) *typ.Provider
 	}
 }
 
-func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *AdvisorContext) (string, error) {
+func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *coretool.AdvisorContext) (string, error) {
 	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
@@ -54,8 +56,10 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 	if wrapper == nil {
 		return "", fmt.Errorf("advisor: failed to create OpenAI client")
 	}
-	if sink, ok := GetAdvisorRecordSink(ctx); ok {
-		wrapper.SetRecordSink(sink)
+	if raw, ok := coretool.GetAdvisorRecordSink(ctx); ok {
+		if sink, ok := raw.(*obs.Sink); ok && sink != nil {
+			wrapper.SetRecordSink(sink)
+		}
 	}
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(advisorSystemPrompt),
@@ -122,7 +126,7 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 	return normalizeAdvisorResponse(content), nil
 }
 
-func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *AdvisorContext) (string, error) {
+func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *coretool.AdvisorContext) (string, error) {
 	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
@@ -133,8 +137,10 @@ func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.Client
 	if wrapper == nil {
 		return "", fmt.Errorf("advisor: failed to create Anthropic client")
 	}
-	if sink, ok := GetAdvisorRecordSink(ctx); ok {
-		wrapper.SetRecordSink(sink)
+	if raw, ok := coretool.GetAdvisorRecordSink(ctx); ok {
+		if sink, ok := raw.(*obs.Sink); ok && sink != nil {
+			wrapper.SetRecordSink(sink)
+		}
 	}
 
 	var messages []anthropic.MessageParam

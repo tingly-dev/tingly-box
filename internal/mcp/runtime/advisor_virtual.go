@@ -13,7 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualTool {
+func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) coretool.VirtualTool {
 	if cfg.MaxUsesPerRequest <= 0 {
 		cfg.MaxUsesPerRequest = 3
 	}
@@ -26,7 +26,7 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 		"properties": map[string]any{},
 	}
 
-	return VirtualTool{
+	return coretool.VirtualTool{
 		Name:        "advisor",
 		Description: description(),
 		InputSchema: schema,
@@ -35,21 +35,21 @@ func NewAdvisorVirtualTool(cfg typ.AdvisorConfig, cp *client.ClientPool, store *
 	}
 }
 
-func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) VirtualToolHandler {
-	return func(ctx context.Context, call ToolCall) (ToolResult, error) {
+func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *SessionStore) coretool.VirtualToolHandler {
+	return func(ctx context.Context, call coretool.ToolCall) (coretool.ToolResult, error) {
 		// Extract arguments (advisor takes no parameters; args may still carry session_id)
 		args := call.Arguments
 
 		// Check depth to prevent recursion.
 		// Depth is incremented by response hook before tool execution, so the first
 		// legitimate advisor call runs at depth=1 and must be allowed.
-		depth := GetAdvisorDepth(ctx)
+		depth := coretool.GetAdvisorDepth(ctx)
 		if depth > 1 {
 			return coretool.ErrorToolResult("Advisor recursion limit reached."), nil
 		}
 
 		// Check per-request quota from context
-		actx, ok := GetAdvisorContext(ctx)
+		actx, ok := coretool.GetAdvisorContext(ctx)
 		if !ok || actx.UsesRemaining == nil || *actx.UsesRemaining <= 0 {
 			return coretool.ErrorToolResult("Advisor consultations exhausted for this request."), nil
 		}
@@ -59,7 +59,7 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 			if sessionID, _ := args["session_id"].(string); sessionID != "" {
 				if sc, found := store.Get(sessionID); found {
 					actx = enrichAdvisorContextWithSession(actx, sc)
-					ctx = WithAdvisorContext(ctx, actx)
+					ctx = coretool.WithAdvisorContext(ctx, actx)
 				}
 			}
 		}
@@ -109,9 +109,9 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 // enrichAdvisorContextWithSession prepends session-persistent heavy data as
 // system messages so the advisor model sees workspace state and build logs
 // before the conversation history.
-func enrichAdvisorContextWithSession(actx *AdvisorContext, sc *SessionContext) *AdvisorContext {
+func enrichAdvisorContextWithSession(actx *coretool.AdvisorContext, sc *SessionContext) *coretool.AdvisorContext {
 	if actx == nil {
-		actx = &AdvisorContext{}
+		actx = &coretool.AdvisorContext{}
 	}
 	var enriched []map[string]any
 	if len(sc.BuildLogs) > 0 {

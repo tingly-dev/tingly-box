@@ -7,7 +7,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
@@ -87,7 +87,7 @@ func (s *Server) buildAnthropicToOpenAIMCPHooks(ctx context.Context, req *anthro
 				if arguments == "" {
 					arguments = "{}"
 				}
-				var toolResult mcpruntime.ToolResult
+				var toolResult coretool.ToolResult
 				var err error
 				ctx, toolResult, err = s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
 				virtualResults = append(virtualResults, mcp.ToolExecutionResult{ToolUseID: tc.ID, Contents: toolResult.Contents, IsError: err != nil})

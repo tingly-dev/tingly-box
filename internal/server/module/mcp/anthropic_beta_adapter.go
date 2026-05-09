@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // AnthropicBetaAdapter implements FormatAdapter for Anthropic Beta API
@@ -45,7 +46,7 @@ func (a *AnthropicBetaAdapter) ExtractTools(response any) ([]Tool, error) {
 	return tools, nil
 }
 
-func (a *AnthropicBetaAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
+func (a *AnthropicBetaAdapter) IsVirtualTool(tool Tool, registry *coretool.VirtualToolRegistry) bool {
 	sourceID, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
 	if !ok {
 		return false
@@ -63,7 +64,7 @@ func (a *AnthropicBetaAdapter) IsVirtualTool(tool Tool, registry *runtime.Virtua
 
 func (a *AnthropicBetaAdapter) SplitVirtualExternal(
 	tools []Tool,
-	registry *runtime.VirtualToolRegistry,
+	registry *coretool.VirtualToolRegistry,
 ) (virtual, external []Tool, externalIDs []string) {
 	virtual = make([]Tool, 0)
 	external = make([]Tool, 0)
@@ -392,7 +393,7 @@ func (a *AnthropicBetaAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 	return &AnthropicBetaTool{ToolUseBlock: tu}, true
 }
 
-func (a *AnthropicBetaAdapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
+func (a *AnthropicBetaAdapter) ShouldSuppressEvent(event any, virtualRegistry *coretool.VirtualToolRegistry) bool {
 	// Anthropic suppresses virtual tools at the start stage (bufferToolEvent),
 	// so delta/stop events never reach the client. No need to check here.
 	return false

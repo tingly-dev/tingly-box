@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 )
@@ -45,7 +45,7 @@ func (s *Server) newServerExecutor() *servertool.DefaultExecutor {
 
 // callMCPToolWithHooks executes response-phase MCP servertool hooks before the runtime call.
 // Returns updated context (with advisor quota decremented), result, and error.
-func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
+func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, coretool.ToolResult, error) {
 	return s.newServerExecutor().Execute(ctx, servertool.ToolCall{
 		NormalizedName: toolName,
 		Arguments:      arguments,
@@ -54,7 +54,7 @@ func (s *Server) callMCPToolWithHooks(ctx context.Context, toolName, arguments s
 }
 
 // CallMCPToolWithHooks is the exported variant of callMCPToolWithHooks.
-func (s *Server) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
+func (s *Server) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, coretool.ToolResult, error) {
 	return s.callMCPToolWithHooks(ctx, toolName, arguments, messages)
 }
 

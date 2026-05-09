@@ -28,7 +28,7 @@ type Runtime struct {
 	toolSourceFactory *ToolSourceFactory
 	activeSources     map[string]ToolSource // source ID -> ToolSource
 	sourcesMu         sync.RWMutex
-	virtualRegistry   *VirtualToolRegistry
+	virtualRegistry   *coretool.VirtualToolRegistry
 	sessionStore      *SessionStore
 	sweeper           *time.Ticker
 
@@ -51,7 +51,7 @@ func NewRuntime(getConfig configProvider) *Runtime {
 		sc:                sc,
 		toolSourceFactory: NewToolSourceFactory(sc, nil),
 		activeSources:     make(map[string]ToolSource),
-		virtualRegistry:   NewVirtualToolRegistry(),
+		virtualRegistry:   coretool.NewVirtualToolRegistry(),
 		sessionStore:      NewSessionStore(10 * time.Minute),
 	}
 	r.sweeper = r.sessionStore.StartSweeper(1 * time.Minute)
@@ -156,7 +156,7 @@ func (r *Runtime) ListServerToolsForInjection(ctx context.Context) []openai.Chat
 	return out
 }
 
-func (r *Runtime) isVirtualServerToolInjectable(vt VirtualTool) bool {
+func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
 	if strings.TrimSpace(vt.Name) == "" || !IsServerVisibleVirtualTool(vt) {
 		return false
 	}
@@ -205,14 +205,14 @@ func ParseNormalizedToolName(name string) (string, string, bool) {
 
 // CallTool executes a normalized MCP tool call and returns a structured ToolResult.
 // Dispatches virtual tools first (kernel mode), then remote tools (user mode).
-func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (ToolResult, error) {
+func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments string) (coretool.ToolResult, error) {
 	if r == nil {
-		return ToolResult{}, fmt.Errorf("MCP runtime not initialized")
+		return coretool.ToolResult{}, fmt.Errorf("MCP runtime not initialized")
 	}
 	// 1. Check virtual registry first (kernel mode)
 	sourceID, toolName, ok := ParseNormalizedToolName(normalizedName)
 	if !ok {
-		return ToolResult{}, &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
+		return coretool.ToolResult{}, &sessionError{sourceID: sourceID, msg: "invalid normalized MCP tool name: " + normalizedName}
 	}
 
 	if sourceID == "builtin" && r.virtualRegistry != nil {
@@ -231,13 +231,13 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	// 2. Forward to remote tool source (user mode)
 	source, err := r.getOrCreateSource(ctx, sourceID)
 	if err != nil {
-		return ToolResult{}, err
+		return coretool.ToolResult{}, err
 	}
 
 	// Ensure source is connected
 	if !source.IsConnected() {
 		if err := source.Connect(ctx); err != nil {
-			return ToolResult{}, &sessionError{sourceID: sourceID, msg: "failed to connect source: " + err.Error()}
+			return coretool.ToolResult{}, &sessionError{sourceID: sourceID, msg: "failed to connect source: " + err.Error()}
 		}
 
 		// Enable health monitoring for persistent connections
@@ -249,19 +249,19 @@ func (r *Runtime) CallTool(ctx context.Context, normalizedName string, arguments
 	// Call the tool — remote sources still return string; wrap into ToolResult.
 	result, err := source.CallTool(ctx, toolName, arguments)
 	if err != nil {
-		return ToolResult{}, err
+		return coretool.ToolResult{}, err
 	}
 
-	return TextToolResult(result), nil
+	return coretool.TextToolResult(result), nil
 }
 
 // callVirtualTool executes an in-process virtual tool with panic recovery.
-func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, arguments string) (out ToolResult, err error) {
+func (r *Runtime) callVirtualTool(ctx context.Context, tool coretool.VirtualTool, arguments string) (out coretool.ToolResult, err error) {
 	// Parse arguments
 	var argMap map[string]any
 	if arguments != "" {
 		if jsonErr := json.Unmarshal([]byte(arguments), &argMap); jsonErr != nil {
-			return ToolResult{}, fmt.Errorf("invalid arguments JSON: %w", jsonErr)
+			return coretool.ToolResult{}, fmt.Errorf("invalid arguments JSON: %w", jsonErr)
 		}
 	}
 
@@ -274,9 +274,9 @@ func (r *Runtime) callVirtualTool(ctx context.Context, tool VirtualTool, argumen
 	}()
 
 	if tool.Handler == nil {
-		return ToolResult{}, fmt.Errorf("virtual tool %q has no handler", tool.Name)
+		return coretool.ToolResult{}, fmt.Errorf("virtual tool %q has no handler", tool.Name)
 	}
-	return tool.Handler(ctx, ToolCall{Name: tool.Name, Arguments: argMap})
+	return tool.Handler(ctx, coretool.ToolCall{Name: tool.Name, Arguments: argMap})
 }
 
 // isSourceEnabled checks if a source is enabled in the current configuration
@@ -554,7 +554,7 @@ func (r *Runtime) GetConfig() *typ.MCPRuntimeConfig {
 }
 
 // VirtualRegistry returns the runtime's virtual tool registry, or nil if the runtime is nil.
-func (r *Runtime) VirtualRegistry() *VirtualToolRegistry {
+func (r *Runtime) VirtualRegistry() *coretool.VirtualToolRegistry {
 	if r == nil {
 		return nil
 	}

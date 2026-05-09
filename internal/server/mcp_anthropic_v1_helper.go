@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
@@ -25,7 +25,7 @@ import (
 type serverOpsAdapter struct {
 	server     *Server
 	recorder   *ProtocolRecorder
-	advisorCtx *mcpruntime.AdvisorContext // persists AdvisorContext pointer across CallMCPTool rounds
+	advisorCtx *coretool.AdvisorContext // persists AdvisorContext pointer across CallMCPTool rounds
 }
 
 func newServerOpsAdapter(server *Server, recorder *ProtocolRecorder) *serverOpsAdapter {
@@ -45,23 +45,23 @@ func (a *serverOpsAdapter) CallMCPTool(ctx context.Context, toolName, arguments 
 	// across multi-round tool calls without losing the caller's cancellation chain.
 	callCtx := ctx
 	if a.advisorCtx != nil {
-		callCtx = mcpruntime.WithAdvisorContext(ctx, a.advisorCtx)
+		callCtx = coretool.WithAdvisorContext(ctx, a.advisorCtx)
 	}
 	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
 	// Extract and persist the AdvisorContext pointer for the next round.
-	if ac, ok := mcpruntime.GetAdvisorContext(updatedCtx); ok {
+	if ac, ok := coretool.GetAdvisorContext(updatedCtx); ok {
 		a.advisorCtx = ac
 	}
 	return result.FirstText(), err
 }
 
-func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error) {
+func (a *serverOpsAdapter) CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, coretool.ToolResult, error) {
 	callCtx := ctx
 	if a.advisorCtx != nil {
-		callCtx = mcpruntime.WithAdvisorContext(ctx, a.advisorCtx)
+		callCtx = coretool.WithAdvisorContext(ctx, a.advisorCtx)
 	}
 	updatedCtx, result, err := a.server.callMCPToolWithHooks(callCtx, toolName, arguments, messages)
-	if ac, ok := mcpruntime.GetAdvisorContext(updatedCtx); ok {
+	if ac, ok := coretool.GetAdvisorContext(updatedCtx); ok {
 		a.advisorCtx = ac
 	}
 	return updatedCtx, result, err

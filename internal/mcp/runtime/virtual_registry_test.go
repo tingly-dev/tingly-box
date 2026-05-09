@@ -4,16 +4,17 @@ import (
 	"context"
 	"testing"
 
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
-	reg := NewVirtualToolRegistry()
-	vt := VirtualTool{
+	reg := coretool.NewVirtualToolRegistry()
+	vt := coretool.VirtualTool{
 		Name:        "advisor",
 		Description: "strategic guidance",
-		Handler: func(ctx context.Context, call ToolCall) (ToolResult, error) {
-			return TextToolResult("ok"), nil
+		Handler: func(ctx context.Context, call coretool.ToolCall) (coretool.ToolResult, error) {
+			return coretool.TextToolResult("ok"), nil
 		},
 		Visibility: typ.ToolVisibilityServer, // Server tool
 	}
@@ -28,17 +29,17 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 		t.Fatal("expected advisor to be a server tool (Visibility=server)")
 	}
 
-	mcpTools := reg.List()
-	if len(mcpTools) != 1 || mcpTools[0].Name != "advisor" {
-		t.Fatalf("expected 1 tool, got %d", len(mcpTools))
+	virtualTools := reg.ListVirtualTools()
+	if len(virtualTools) != 1 || virtualTools[0].Name != "advisor" {
+		t.Fatalf("expected 1 tool, got %d", len(virtualTools))
 	}
 }
 
 func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
-	reg := NewVirtualToolRegistry()
+	reg := coretool.NewVirtualToolRegistry()
 
 	// Register server tool (not exposed to clients)
-	serverTool := VirtualTool{
+	serverTool := coretool.VirtualTool{
 		Name:        "adviser",
 		Description: "Server-side advisor",
 		Handler:     nil,
@@ -47,7 +48,7 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 	reg.Register(serverTool)
 
 	// Register client tool (exposed to clients)
-	clientTool := VirtualTool{
+	clientTool := coretool.VirtualTool{
 		Name:        "websearch",
 		Description: "Client-side web search",
 		Handler:     nil,

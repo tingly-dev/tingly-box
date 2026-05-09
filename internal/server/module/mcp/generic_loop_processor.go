@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -17,7 +17,7 @@ type GenericLoopProcessor struct {
 	s               ServerOps
 	provider        *typ.Provider
 	hc              *protocol.HandleContext
-	virtualRegistry *runtime.VirtualToolRegistry
+	virtualRegistry *coretool.VirtualToolRegistry
 	recorder        ProtocolRecorder
 	adapter         FormatAdapter
 	forwarder       Forwarder
@@ -36,7 +36,7 @@ func NewGenericLoopProcessor(
 	s ServerOps,
 	provider *typ.Provider,
 	hc *protocol.HandleContext,
-	virtualRegistry *runtime.VirtualToolRegistry,
+	virtualRegistry *coretool.VirtualToolRegistry,
 	recorder ProtocolRecorder,
 	adapter FormatAdapter,
 	forwarder Forwarder,

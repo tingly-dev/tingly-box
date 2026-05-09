@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -79,7 +80,7 @@ func TestAdvisorToolLoop(t *testing.T) {
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	uses3 := 3
-	actx := &runtime.AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "You are a helpful assistant."},
 			{"role": "user", "content": "Hello"},
@@ -87,13 +88,13 @@ func TestAdvisorToolLoop(t *testing.T) {
 		},
 		UsesRemaining: &uses3,
 	}
-	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func() runtime.ToolCall {
-		return runtime.ToolCall{Name: "advisor", Arguments: map[string]any{}}
+	makeReq := func() coretool.ToolCall {
+		return coretool.ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
-	extractText := func(result runtime.ToolResult) string {
+	extractText := func(result coretool.ToolResult) string {
 		require.NotEmpty(t, result.Contents)
 		return result.FirstText()
 	}
@@ -229,7 +230,7 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	uses2 := 2
-	actx := &runtime.AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "Executor system prompt."},
 			{"role": "user", "content": "Help me"},
@@ -237,13 +238,13 @@ func TestAdvisorToolLoop_Anthropic(t *testing.T) {
 		},
 		UsesRemaining: &uses2,
 	}
-	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	makeReq := func() runtime.ToolCall {
-		return runtime.ToolCall{Name: "advisor", Arguments: map[string]any{}}
+	makeReq := func() coretool.ToolCall {
+		return coretool.ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
-	extractText := func(result runtime.ToolResult) string {
+	extractText := func(result coretool.ToolResult) string {
 		require.NotEmpty(t, result.Contents)
 		return result.FirstText()
 	}
@@ -342,15 +343,15 @@ func TestAdvisorVirtualTool_WithSessionStore(t *testing.T) {
 	vt := runtime.NewAdvisorVirtualTool(cfg, cp, sessionStore)
 
 	uses1 := 1
-	actx := &runtime.AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "user", "content": "Hello"},
 		},
 		UsesRemaining: &uses1,
 	}
-	ctx := runtime.WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	req := runtime.ToolCall{
+	req := coretool.ToolCall{
 		Name: "advisor",
 		Arguments: map[string]any{
 			"session_id": "sess-42",

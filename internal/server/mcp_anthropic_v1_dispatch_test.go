@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -81,11 +81,11 @@ func TestDispatchGenericAnthropicV1NonStream_BasicRouting(t *testing.T) {
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 
 	// Register a test virtual tool
-	s.mcpRuntime.VirtualRegistry().Register(runtime.VirtualTool{
+	s.mcpRuntime.VirtualRegistry().Register(coretool.VirtualTool{
 		Name:        "test_routing_tool",
 		Description: "A test tool for routing",
-		Handler: func(ctx context.Context, call runtime.ToolCall) (runtime.ToolResult, error) {
-			return runtime.TextToolResult("Tool executed"), nil
+		Handler: func(ctx context.Context, call coretool.ToolCall) (coretool.ToolResult, error) {
+			return coretool.TextToolResult("Tool executed"), nil
 		},
 	})
 

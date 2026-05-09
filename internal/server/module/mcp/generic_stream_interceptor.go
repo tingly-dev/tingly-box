@@ -11,7 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -26,7 +26,7 @@ type GenericStreamInterceptor struct {
 	s               ServerOps
 	provider        *typ.Provider
 	hc              *protocol.HandleContext
-	virtualRegistry *runtime.VirtualToolRegistry
+	virtualRegistry *coretool.VirtualToolRegistry
 	recorder        ProtocolRecorder
 	adapter         FormatAdapter
 	forwarder       Forwarder
@@ -74,7 +74,7 @@ func NewGenericStreamInterceptor(
 	s ServerOps,
 	provider *typ.Provider,
 	hc *protocol.HandleContext,
-	virtualRegistry *runtime.VirtualToolRegistry,
+	virtualRegistry *coretool.VirtualToolRegistry,
 	recorder ProtocolRecorder,
 	adapter FormatAdapter,
 	forwarder Forwarder,

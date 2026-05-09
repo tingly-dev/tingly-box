@@ -3,14 +3,14 @@ package mcp
 import (
 	"testing"
 
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 func TestValidateAndNormalizeMixedStash_OK(t *testing.T) {
 	results, err := validateAndNormalizeMixedStash(
 		[]string{"toolu_external", "toolu_external"},
 		[]ToolExecutionResult{
-			{ToolUseID: "toolu_virtual", Contents: []mcpruntime.ToolContent{{Type: mcpruntime.ContentTypeText, Text: "ok"}}, IsError: false},
+			{ToolUseID: "toolu_virtual", Contents: []coretool.ToolContent{{Type: coretool.ContentTypeText, Text: "ok"}}, IsError: false},
 		},
 	)
 	if err != nil {
@@ -24,7 +24,7 @@ func TestValidateAndNormalizeMixedStash_OK(t *testing.T) {
 func TestValidateAndNormalizeMixedStash_NoAnchors(t *testing.T) {
 	_, err := validateAndNormalizeMixedStash(
 		[]string{"", ""},
-		[]ToolExecutionResult{{ToolUseID: "toolu_virtual", Contents: []mcpruntime.ToolContent{{Type: mcpruntime.ContentTypeText, Text: "ok"}}}},
+		[]ToolExecutionResult{{ToolUseID: "toolu_virtual", Contents: []coretool.ToolContent{{Type: coretool.ContentTypeText, Text: "ok"}}}},
 	)
 	if err == nil {
 		t.Fatalf("expected error when anchors are empty")
@@ -34,7 +34,7 @@ func TestValidateAndNormalizeMixedStash_NoAnchors(t *testing.T) {
 func TestValidateAndNormalizeMixedStash_NoVirtualIDs(t *testing.T) {
 	_, err := validateAndNormalizeMixedStash(
 		[]string{"toolu_external"},
-		[]ToolExecutionResult{{ToolUseID: "", Contents: []mcpruntime.ToolContent{{Type: mcpruntime.ContentTypeText, Text: "ok"}}}},
+		[]ToolExecutionResult{{ToolUseID: "", Contents: []coretool.ToolContent{{Type: coretool.ContentTypeText, Text: "ok"}}}},
 	)
 	if err == nil {
 		t.Fatalf("expected error when virtual tool ids are empty")

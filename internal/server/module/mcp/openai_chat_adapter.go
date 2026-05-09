@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // OpenAIChatAdapter implements FormatAdapter for OpenAI Chat Completions API
@@ -46,7 +47,7 @@ func (o *OpenAIChatAdapter) ExtractTools(response any) ([]Tool, error) {
 	return tools, nil
 }
 
-func (o *OpenAIChatAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualToolRegistry) bool {
+func (o *OpenAIChatAdapter) IsVirtualTool(tool Tool, registry *coretool.VirtualToolRegistry) bool {
 	sourceID, toolName, ok := runtime.ParseNormalizedToolName(tool.Name())
 	if !ok {
 		return false
@@ -64,7 +65,7 @@ func (o *OpenAIChatAdapter) IsVirtualTool(tool Tool, registry *runtime.VirtualTo
 
 func (o *OpenAIChatAdapter) SplitVirtualExternal(
 	tools []Tool,
-	registry *runtime.VirtualToolRegistry,
+	registry *coretool.VirtualToolRegistry,
 ) (virtual, external []Tool, externalIDs []string) {
 	virtual = make([]Tool, 0)
 	external = make([]Tool, 0)
@@ -250,7 +251,7 @@ func (o *OpenAIChatAdapter) ExtractToolFromEvent(event any) (Tool, bool) {
 	return &OpenAIChunkTool{ToolCall: tc}, true
 }
 
-func (o *OpenAIChatAdapter) ShouldSuppressEvent(event any, virtualRegistry *runtime.VirtualToolRegistry) bool {
+func (o *OpenAIChatAdapter) ShouldSuppressEvent(event any, virtualRegistry *coretool.VirtualToolRegistry) bool {
 	chunk, ok := event.(openai.ChatCompletionChunk)
 	if !ok || len(chunk.Choices) == 0 {
 		return false

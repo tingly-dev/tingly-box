@@ -16,7 +16,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/require"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -337,9 +337,9 @@ func TestMCPPathMatrixE2E(t *testing.T) {
 		s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}})
 
 		var toolCalls atomic.Int32
-		s.mcpRuntime.VirtualRegistry().Register(runtime.VirtualTool{Name: "echo", Handler: func(ctx context.Context, call runtime.ToolCall) (runtime.ToolResult, error) {
+		s.mcpRuntime.VirtualRegistry().Register(coretool.VirtualTool{Name: "echo", Handler: func(ctx context.Context, call coretool.ToolCall) (coretool.ToolResult, error) {
 			toolCalls.Add(1)
-			return runtime.TextToolResult(`{"ok":true}`), nil
+			return coretool.TextToolResult(`{"ok":true}`), nil
 		}})
 
 		provider := &typ.Provider{UUID: "p-a-v1", Name: "p-a-v1", APIStyle: protocol.APIStyleAnthropic, APIBase: backend.URL, Token: "k", Enabled: true}

@@ -3,7 +3,7 @@ package mcp
 import (
 	"context"
 
-	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 )
 
 // ServerToolExecutor implements ToolExecutor by wrapping server's MCP tool execution
@@ -13,7 +13,7 @@ type ServerToolExecutor struct {
 
 // ToolExecutorServer defines the server methods needed for tool execution
 type ToolExecutorServer interface {
-	CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, mcpruntime.ToolResult, error)
+	CallMCPToolWithHooks(ctx context.Context, toolName, arguments string, messages []map[string]any) (context.Context, coretool.ToolResult, error)
 	CallMCPTool(ctx context.Context, toolName, arguments string, messages []map[string]any) (string, error)
 }
 

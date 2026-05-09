@@ -15,6 +15,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -462,7 +463,7 @@ func (s *Server) buildOpenAIToAnthropicMCPHooks(
 					arguments = "{}"
 				}
 				// callMCPToolWithHooks updates context (e.g., advisor quota), so we must propagate it
-				var toolResult mcpruntime.ToolResult
+				var toolResult coretool.ToolResult
 				var err error
 				ctx, toolResult, err = s.callMCPToolWithHooks(ctx, tc.Name, arguments, hookMessages)
 				if err != nil {
