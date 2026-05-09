@@ -46,6 +46,8 @@ export interface ToolCardProps {
     tags?: string[];
     /** Optional config area shown below the description when expanded */
     settings?: React.ReactNode;
+    /** Always-visible action buttons shown in the header row (e.g. edit/delete) */
+    actions?: React.ReactNode;
     /** Disable the toggle (e.g. while saving) */
     toggleDisabled?: boolean;
     /** Disable click-to-expand behavior */
@@ -125,6 +127,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({
     badges = [],
     tags = [],
     settings,
+    actions,
     toggleDisabled = false,
     noExpand = false,
 }) => {
@@ -184,6 +187,16 @@ export const ToolCard: React.FC<ToolCardProps> = ({
                         {description}
                     </Typography>
                 </Box>
+
+                {/* Actions (always visible) */}
+                {actions && (
+                    <Box
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                    >
+                        {actions}
+                    </Box>
+                )}
 
                 {/* Toggle */}
                 {onToggle && (

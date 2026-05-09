@@ -24,7 +24,6 @@ import {
     DeleteOutline as DeleteOutlineIcon,
     Edit as EditIcon,
     InfoOutlined as InfoIcon,
-    PowerSettingsNew as PowerIcon,
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
@@ -302,17 +301,11 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
                             color: source.visibility === 'server' ? 'green' : 'blue',
                         }]}
                         tags={source.transport ? [(source.transport).toUpperCase()] : []}
-                        noExpand
-                        settings={
-                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        actions={
+                            <Stack direction="row" spacing={0.5} alignItems="center">
                                 <Tooltip title="Edit">
                                     <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
                                         <EditIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title={enabled ? 'Disable' : 'Enable'}>
-                                    <IconButton size="small" color={enabled ? 'success' : 'default'} onClick={() => void handleToggle(source.id, !enabled)}>
-                                        <PowerIcon fontSize="small" />
                                     </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Delete">
