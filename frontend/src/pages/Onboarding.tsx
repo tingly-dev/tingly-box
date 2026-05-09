@@ -120,7 +120,17 @@ const Onboarding: React.FC = () => {
                     <Tabs
                         value={tab}
                         onChange={(_, v) => setTab(v as OnboardingTab)}
-                        sx={{mb: 2, borderBottom: 1, borderColor: 'divider'}}
+                        sx={{
+                            mb: 2,
+                            borderBottom: 1,
+                            borderColor: 'divider',
+                            '& .MuiTab-root': {
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                fontSize: '0.95rem',
+                                minHeight: 44,
+                            },
+                        }}
                     >
                         <Tab
                             value="browse"

@@ -836,7 +836,14 @@ export default {
     "browse": {
       "searchPlaceholder": "Search providers",
       "empty": "No providers match your search.",
-      "selectProvider": "Select this provider"
+      "selectProvider": "Select this provider",
+      "customProvider": "Custom Provider",
+      "customProviderHint": "Bring your own endpoint",
+      "section": {
+        "global": "Global",
+        "china": "China (Mainland)",
+        "custom": "Custom"
+      }
     },
     "paste": {
       "detectButton": "Detect",

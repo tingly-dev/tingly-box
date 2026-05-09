@@ -836,7 +836,14 @@ export default {
     "browse": {
       "searchPlaceholder": "搜索提供商",
       "empty": "没有匹配的提供商。",
-      "selectProvider": "选择此提供商"
+      "selectProvider": "选择此提供商",
+      "customProvider": "自定义提供商",
+      "customProviderHint": "使用自定义接入地址",
+      "section": {
+        "global": "国际",
+        "china": "中国大陆",
+        "custom": "自定义"
+      }
     },
     "paste": {
       "detectButton": "识别",
