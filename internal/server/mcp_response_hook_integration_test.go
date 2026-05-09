@@ -48,11 +48,13 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 	require.NoError(t, err)
 	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", true))
 
-	return &Server{
+	server := &Server{
 		clientPool: cp,
 		mcpRuntime: rt,
 		config:     conf,
 	}
+	server.registerAdviserFromConfig()
+	return server
 }
 
 func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {

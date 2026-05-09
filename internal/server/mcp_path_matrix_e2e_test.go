@@ -387,6 +387,49 @@ func buildAnthropicBetaFollowupReq() *anthropic.BetaMessageNewParams {
 	}
 }
 
+func buildClaudeBetaAdvisorReq() *anthropic.BetaMessageNewParams {
+	return &anthropic.BetaMessageNewParams{
+		Model:     "worker-model",
+		MaxTokens: 256,
+		Messages: []anthropic.BetaMessageParam{
+			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("use advisor and return the result")),
+		},
+		Tools: []anthropic.BetaToolUnionParam{
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
+		},
+	}
+}
+
+func buildClaudeBetaAdvisorLSMixedReq() *anthropic.BetaMessageNewParams {
+	return &anthropic.BetaMessageNewParams{
+		Model:     "worker-model",
+		MaxTokens: 256,
+		Messages: []anthropic.BetaMessageParam{
+			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("use advisor and run ls")),
+		},
+		Tools: []anthropic.BetaToolUnionParam{
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "Bash"),
+		},
+	}
+}
+
+func buildClaudeBetaLSFollowupReq() *anthropic.BetaMessageNewParams {
+	return &anthropic.BetaMessageNewParams{
+		Model:     "worker-model",
+		MaxTokens: 256,
+		Messages: []anthropic.BetaMessageParam{
+			anthropic.NewBetaUserMessage(
+				anthropic.NewBetaToolResultBlock("toolu_ls", "file-a\nfile-b", false),
+			),
+		},
+		Tools: []anthropic.BetaToolUnionParam{
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "Bash"),
+		},
+	}
+}
+
 func buildOpenAIMixedReq() *openai.ChatCompletionNewParams {
 	return &openai.ChatCompletionNewParams{
 		Model: "worker-model",
@@ -549,6 +592,111 @@ func newOpenAIMixedPathBackend(t *testing.T, probe *pathProbe) *httptest.Server 
 	}))
 }
 
+func newClaudeAdvisorPathBackend(t *testing.T, bodies *[]string, mixed bool) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var req map[string]any
+		require.NoError(t, json.Unmarshal(body, &req))
+		*bodies = append(*bodies, string(body))
+		isStream, _ := req["stream"].(bool)
+
+		hasAdvisorResult := strings.Contains(string(body), `"tool_use_id":"toolu_advisor"`) && strings.Contains(string(body), "advisor-e2e-ok")
+		hasLSResult := strings.Contains(string(body), `"tool_use_id":"toolu_ls"`) && strings.Contains(string(body), "file-a")
+
+		if hasAdvisorResult && (!mixed || hasLSResult) {
+			if !isStream {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id":    "msg_final",
+					"type":  "message",
+					"role":  "assistant",
+					"model": "worker-model",
+					"content": []map[string]any{{
+						"type": "text",
+						"text": "claude-advisor-final",
+					}},
+					"stop_reason": "end_turn",
+					"usage":       map[string]any{"input_tokens": 12, "output_tokens": 5},
+				})
+				return
+			}
+
+			w.Header().Set("Content-Type", "text/event-stream")
+			writeSSEEvent(w, "message_start", `{"type":"message_start","message":{"id":"msg_final","type":"message","role":"assistant","model":"worker-model","content":[],"stop_reason":null,"usage":{"input_tokens":12,"output_tokens":0}}}`)
+			writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
+			writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"claude-advisor-final"}}`)
+			writeSSEEvent(w, "content_block_stop", `{"type":"content_block_stop","index":0}`)
+			writeSSEEvent(w, "message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}}`)
+			writeSSEEvent(w, "message_stop", `{"type":"message_stop"}`)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		writeSSEEvent(w, "message_start", `{"type":"message_start","message":{"id":"msg_tool","type":"message","role":"assistant","model":"worker-model","content":[],"stop_reason":null,"usage":{"input_tokens":8,"output_tokens":0}}}`)
+		writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_advisor","name":"tingly_box_mcp__builtin__advisor","input":{}}}`)
+		writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"q\":\"advisor\"}"}}`)
+		writeSSEEvent(w, "content_block_stop", `{"type":"content_block_stop","index":0}`)
+		if mixed {
+			writeSSEEvent(w, "content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_ls","name":"Bash","input":{}}}`)
+			writeSSEEvent(w, "content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"command\":\"ls\"}"}}`)
+			writeSSEEvent(w, "content_block_stop", `{"type":"content_block_stop","index":1}`)
+		}
+		writeSSEEvent(w, "message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":3}}`)
+		writeSSEEvent(w, "message_stop", `{"type":"message_stop"}`)
+	}))
+}
+
+func newAdvisorHTTPBackend(t *testing.T, calls *atomic.Int32) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		var req map[string]any
+		require.NoError(t, json.Unmarshal(body, &req))
+		require.Equal(t, "advisor-model", req["model"])
+		require.NotEmpty(t, req["messages"])
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id":      "chatcmpl-advisor",
+			"object":  "chat.completion",
+			"created": 1,
+			"model":   "advisor-model",
+			"choices": []map[string]any{{
+				"index": 0,
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": `{"assessment":"advisor-e2e-ok","recommendation":"continue"}`,
+				},
+				"finish_reason": "stop",
+			}},
+		})
+	}))
+}
+
+func newClaudeAdvisorMCPConfig(advisorURL string) *typ.MCPRuntimeConfig {
+	return &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{{
+		ID:         "advisor",
+		Transport:  "advisor",
+		Enabled:    typ.BoolPtr(true),
+		Visibility: typ.ToolVisibilityServer,
+		Tools:      []string{"advisor"},
+		Advisor: &typ.AdvisorConfig{
+			BaseURL:           advisorURL + "/v1",
+			Model:             "advisor-model",
+			APIKey:            "test-key",
+			MaxUsesPerRequest: 3,
+		},
+	}}}
+}
+
 func TestMCPPathMatrixE2E(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -709,6 +857,58 @@ func TestAnthropicBetaPureExternalStreamDoesNotAppendSyntheticStop(t *testing.T)
 	require.Equal(t, 1, probe.anthropicStreamCalls)
 	require.Equal(t, 0, probe.anthropicNonStreamCalls)
 	require.Equal(t, 1, strings.Count(body, `"type":"message_stop"`), "pure external streamed round should forward upstream stop only once")
+}
+
+func TestClaudeAdvisorE2E(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("advisor_only_returns_after_internal_continuation", func(t *testing.T) {
+		var advisorCalls atomic.Int32
+		advisorBackend := newAdvisorHTTPBackend(t, &advisorCalls)
+		defer advisorBackend.Close()
+
+		var workerBodies []string
+		workerBackend := newClaudeAdvisorPathBackend(t, &workerBodies, false)
+		defer workerBackend.Close()
+
+		s := newMCPEnabledTestServer(t, newClaudeAdvisorMCPConfig(advisorBackend.URL))
+		provider := &typ.Provider{UUID: "p-claude-advisor", Name: "p-claude-advisor", APIStyle: protocol.APIStyleAnthropic, APIBase: workerBackend.URL, Token: "k", Enabled: true}
+
+		code, header, body := runDispatch(t, s, provider, buildClaudeBetaAdvisorReq(), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, true)
+		require.Equal(t, http.StatusOK, code)
+		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
+		require.Contains(t, body, "claude-advisor-final")
+		require.Equal(t, int32(1), advisorCalls.Load(), "advisor backend should be called exactly once")
+		require.Len(t, workerBodies, 2, "pure advisor should continue internally to a second worker round")
+		require.Contains(t, workerBodies[1], "advisor-e2e-ok", "second worker round should receive advisor tool_result")
+	})
+
+	t.Run("advisor_plus_ls_mixed_stashes_then_injects_on_followup", func(t *testing.T) {
+		var advisorCalls atomic.Int32
+		advisorBackend := newAdvisorHTTPBackend(t, &advisorCalls)
+		defer advisorBackend.Close()
+
+		var workerBodies []string
+		workerBackend := newClaudeAdvisorPathBackend(t, &workerBodies, true)
+		defer workerBackend.Close()
+
+		s := newMCPEnabledTestServer(t, newClaudeAdvisorMCPConfig(advisorBackend.URL))
+		provider := &typ.Provider{UUID: "p-claude-advisor-ls", Name: "p-claude-advisor-ls", APIStyle: protocol.APIStyleAnthropic, APIBase: workerBackend.URL, Token: "k", Enabled: true}
+
+		code, header, body := runDispatch(t, s, provider, buildClaudeBetaAdvisorLSMixedReq(), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, true)
+		require.Equal(t, http.StatusOK, code)
+		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
+		require.Contains(t, body, "Bash", "mixed stream should hand client-native ls tool_use back to Claude")
+		require.Equal(t, int32(1), advisorCalls.Load(), "advisor backend should be called during mixed round")
+		require.Len(t, workerBodies, 1, "mixed virtual+client-native round should stop after client handoff")
+
+		code, _, followupBody := runDispatch(t, s, provider, buildClaudeBetaLSFollowupReq(), protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, false)
+		require.Equalf(t, http.StatusOK, code, "follow-up body: %s", followupBody)
+		require.Contains(t, followupBody, "claude-advisor-final")
+		require.Len(t, workerBodies, 2, "follow-up should make the second worker call")
+		require.Contains(t, workerBodies[1], "advisor-e2e-ok", "follow-up worker call should include stashed advisor tool_result")
+		require.Contains(t, workerBodies[1], "file-a", "follow-up worker call should include client ls tool_result")
+	})
 }
 
 func TestMCPMixedToolStreamStashInjectE2E(t *testing.T) {
