@@ -52,17 +52,24 @@ import {
 interface ConfigRowProps {
     label: string;
     hint?: string;
+    hintLink?: string;
     children: React.ReactNode;
 }
 
-const ConfigRow: React.FC<ConfigRowProps> = ({ label, hint, children }) => (
+const ConfigRow: React.FC<ConfigRowProps> = ({ label, hint, hintLink, children }) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1.25, maxWidth: 700 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 160, flexShrink: 0 }}>
             <Typography variant="subtitle2" color="text.secondary" fontWeight={500}>
                 {label}
             </Typography>
             {hint && (
-                <Tooltip title={hint} arrow placement="top">
+                <Tooltip
+                    title={hintLink
+                        ? <span>{hint} <a href={hintLink} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>{hintLink.replace('https://', '')}</a></span>
+                        : hint}
+                    arrow
+                    placement="top"
+                >
                     <InfoIcon sx={{ fontSize: '0.9rem', color: 'text.disabled', cursor: 'help' }} />
                 </Tooltip>
             )}
@@ -148,18 +155,29 @@ const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onS
     };
 
     const isSearch = toolName === 'mcp_web_search';
+    const needsConfig = isSearch && !serperKey;
 
     const settings = (
         <Stack spacing={1.5}>
             {isSearch && (
-                <ConfigRow label="Serper API Key" hint="Required for web_search. Get your free key at serper.dev">
+                <ConfigRow
+                    label="Serper API Key"
+                    hint="Required for web_search. Get your free key at serper.dev"
+                    hintLink="https://serper.dev"
+                >
                     <SecretInput value={serperKey} onChange={setSerperKey} placeholder="Enter Serper API key" />
                 </ConfigRow>
             )}
             {!isSearch && (
-                <Typography variant="caption" color="text.secondary">
-                    No configuration required. Fetches public web pages on demand.
-                </Typography>
+                <ConfigRow
+                    label="Fetch engine"
+                    hint="Uses Jina Reader to convert web pages to clean markdown. No API key required."
+                    hintLink="https://jina.ai/reader"
+                >
+                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                        jina.ai/reader
+                    </Typography>
+                </ConfigRow>
             )}
             {isSearch && (
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -177,11 +195,12 @@ const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onS
             name={toolName}
             description={isSearch
                 ? 'Browser-side web search via Serper. Requires an API key.'
-                : 'Fetches public web page content for agents to read.'}
+                : 'Fetches public web pages via Jina Reader and returns markdown for agents to read.'}
             enabled={enabled}
             onToggle={handleToggle}
             badges={[{ label: 'Client', color: 'blue' }]}
             settings={settings}
+            defaultExpanded={needsConfig}
         />
     );
 };
@@ -396,7 +415,7 @@ const MCPRegisteredServers = () => {
 
     return (
         <PageLayout loading={false}>
-            <Stack spacing={2.5}>
+            <Stack spacing={5}>
                 {/* Part 1: Install instructions */}
                 <AgentInstallCard />
 
