@@ -167,12 +167,10 @@ func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
 		if cfg == nil {
 			return false
 		}
-		foundAdvisorSource := false
 		for _, source := range cfg.Sources {
 			if source.ID != mcptools.BuiltinAdvisorSourceID {
 				continue
 			}
-			foundAdvisorSource = true
 			if !typ.IsMCPSourceEnabled(source) {
 				return false
 			}
@@ -182,7 +180,7 @@ func (r *Runtime) isVirtualServerToolInjectable(vt coretool.VirtualTool) bool {
 			allowAll, allowSet := buildAllowList(source.Tools)
 			return allowAll || allowSet[vt.Name]
 		}
-		return !foundAdvisorSource
+		return false
 	}
 
 	return true

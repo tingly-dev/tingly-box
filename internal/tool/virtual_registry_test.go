@@ -1,22 +1,19 @@
-package runtime
+package tool
 
 import (
 	"context"
 	"testing"
-
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
-	reg := coretool.NewVirtualToolRegistry()
-	vt := coretool.VirtualTool{
+	reg := NewVirtualToolRegistry()
+	vt := VirtualTool{
 		Name:        "advisor",
 		Description: "strategic guidance",
-		Handler: func(ctx context.Context, call coretool.ToolCall) (coretool.ToolResult, error) {
-			return coretool.TextToolResult("ok"), nil
+		Handler: func(ctx context.Context, call ToolCall) (ToolResult, error) {
+			return TextToolResult("ok"), nil
 		},
-		Visibility: typ.ToolVisibilityServer, // Server tool
+		Visibility: ToolVisibilityServer,
 	}
 	reg.Register(vt)
 
@@ -25,7 +22,7 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 		t.Fatal("expected advisor virtual tool")
 	}
 
-	if got.Visibility == typ.ToolVisibilityClient {
+	if got.Visibility == ToolVisibilityClient {
 		t.Fatal("expected advisor to be a server tool (Visibility=server)")
 	}
 
@@ -36,23 +33,23 @@ func TestVirtualRegistry_RegisterAndGet(t *testing.T) {
 }
 
 func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
-	reg := coretool.NewVirtualToolRegistry()
+	reg := NewVirtualToolRegistry()
 
 	// Register server tool (not exposed to clients)
-	serverTool := coretool.VirtualTool{
+	serverTool := VirtualTool{
 		Name:        "adviser",
 		Description: "Server-side advisor",
 		Handler:     nil,
-		Visibility:  typ.ToolVisibilityServer,
+		Visibility:  ToolVisibilityServer,
 	}
 	reg.Register(serverTool)
 
 	// Register client tool (exposed to clients)
-	clientTool := coretool.VirtualTool{
+	clientTool := VirtualTool{
 		Name:        "websearch",
 		Description: "Client-side web search",
 		Handler:     nil,
-		Visibility:  typ.ToolVisibilityClient,
+		Visibility:  ToolVisibilityClient,
 	}
 	reg.Register(clientTool)
 
@@ -61,11 +58,10 @@ func TestVirtualRegistry_ListVirtualTools(t *testing.T) {
 		t.Fatalf("expected 2 virtual tools, got %d", len(virtualTools))
 	}
 
-	// Count client and server tools
 	clientCount := 0
 	serverCount := 0
 	for _, vt := range virtualTools {
-		if vt.Visibility == typ.ToolVisibilityClient {
+		if vt.Visibility == ToolVisibilityClient {
 			clientCount++
 		} else {
 			serverCount++

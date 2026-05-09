@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -52,7 +53,7 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 	vt := NewAdvisorVirtualTool(cfg, cp, store)
 
 	uses2 := 2
-	actx := &AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages: []map[string]any{
 			{"role": "system", "content": "You are a helpful coding assistant."},
 			{"role": "user", "content": "I need to add a new endpoint /health to a Go HTTP server."},
@@ -60,9 +61,9 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 		},
 		UsesRemaining: &uses2,
 	}
-	ctx := WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	result, err := vt.Handler(ctx, ToolCall{Name: "advisor", Arguments: map[string]any{}})
+	result, err := vt.Handler(ctx, coretool.ToolCall{Name: "advisor", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -114,14 +115,14 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 	vt := NewAdvisorVirtualTool(cfg, cp, store)
 
 	uses1 := 1
-	actx := &AdvisorContext{
+	actx := &coretool.AdvisorContext{
 		Messages:      []map[string]any{{"role": "user", "content": "hello"}},
 		UsesRemaining: &uses1,
 	}
-	ctx := WithAdvisorContext(context.Background(), actx)
+	ctx := coretool.WithAdvisorContext(context.Background(), actx)
 
-	makeCall := func() ToolCall {
-		return ToolCall{Name: "advisor", Arguments: map[string]any{}}
+	makeCall := func() coretool.ToolCall {
+		return coretool.ToolCall{Name: "advisor", Arguments: map[string]any{}}
 	}
 
 	// First call: should succeed.
