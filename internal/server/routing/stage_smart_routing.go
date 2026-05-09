@@ -1,11 +1,14 @@
 package routing
 
 import (
+	"strings"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // SmartRoutingStage evaluates smart routing rules and returns matched services.
@@ -13,6 +16,7 @@ import (
 type SmartRoutingStage struct {
 	loadBalancer  LoadBalancer
 	affinityStore AffinityStore
+	multiLogger   *pkgobs.MultiLogger // optional; used to emit structured smart-routing logs
 }
 
 // NewSmartRoutingStage creates a new smart routing stage
@@ -23,9 +27,120 @@ func NewSmartRoutingStage(lb LoadBalancer, affinity AffinityStore) *SmartRouting
 	}
 }
 
+// SetMultiLogger attaches the multi-logger so the stage can emit structured
+// smart-routing evaluation logs viewable from the frontend system log page.
+func (s *SmartRoutingStage) SetMultiLogger(ml *pkgobs.MultiLogger) {
+	s.multiLogger = ml
+}
+
 // Name returns the stage identifier
 func (s *SmartRoutingStage) Name() string {
 	return "smart_routing"
+}
+
+const traceSnippetMaxLen = 200
+
+func snippetForLog(s string) string {
+	if len(s) <= traceSnippetMaxLen {
+		return s
+	}
+	return s[:traceSnippetMaxLen] + "…"
+}
+
+// requestSnapshot captures key request fields used during smart routing
+// evaluation so operators can correlate decisions with what the request
+// actually looked like.
+func requestSnapshot(reqCtx *smartrouting.RequestContext) map[string]interface{} {
+	if reqCtx == nil {
+		return nil
+	}
+	systemCombined := strings.Join(reqCtx.SystemMessages, "\n")
+	userCombined := strings.Join(reqCtx.UserMessages, "\n")
+	return map[string]interface{}{
+		"model":             reqCtx.Model,
+		"thinking_enabled":  reqCtx.ThinkingEnabled,
+		"latest_role":       reqCtx.LatestRole,
+		"latest_type":       reqCtx.LatestContentType,
+		"estimated_tokens":  reqCtx.EstimatedTokens,
+		"tool_uses":         reqCtx.ToolUses,
+		"system_snippet":    snippetForLog(systemCombined),
+		"latest_user":       snippetForLog(reqCtx.GetLatestUserMessage()),
+		"user_snippet":      snippetForLog(userCombined),
+		"system_msg_count":  len(reqCtx.SystemMessages),
+		"user_msg_count":    len(reqCtx.UserMessages),
+	}
+}
+
+// emitTrace writes a structured entry describing the smart-routing evaluation
+// to both the standard system log (logrus.Debug) and the dedicated
+// smart_routing memory sink (when a multiLogger is configured) so the
+// frontend can render an inspectable history.
+func (s *SmartRoutingStage) emitTrace(
+	ctx *SelectionContext,
+	reqCtx *smartrouting.RequestContext,
+	trace []smartrouting.RuleEvalResult,
+	matchedRuleIndex int,
+	matchedServicesCount int,
+	finalActiveCount int,
+	selectedService *loadbalance.Service,
+	outcome string,
+	reason string,
+) {
+	matched := matchedRuleIndex >= 0
+	fields := logrus.Fields{
+		"rule_uuid":           ctx.Rule.UUID,
+		"request_model":       ctx.Rule.RequestModel,
+		"matched":             matched,
+		"matched_rule_index":  matchedRuleIndex,
+		"outcome":             outcome,
+		"reason":              reason,
+		"matched_services":    matchedServicesCount,
+		"final_active_count":  finalActiveCount,
+		"trace":               trace,
+		"request":             requestSnapshot(reqCtx),
+		"rules_total":         len(ctx.Rule.SmartRouting),
+	}
+	if matched && matchedRuleIndex < len(trace) {
+		fields["matched_rule_description"] = trace[matchedRuleIndex].Description
+	}
+	if selectedService != nil {
+		fields["selected_provider"] = selectedService.Provider
+		fields["selected_model"] = selectedService.Model
+	}
+	if ctx.GinContext != nil {
+		fields["client_ip"] = ctx.GinContext.ClientIP()
+		fields["request_id"] = ctx.GinContext.GetString("X-Request-Id")
+	}
+
+	if s.multiLogger != nil {
+		s.multiLogger.GetLogrusLogger(pkgobs.LogSourceSmartRouting).
+			WithFields(fields).
+			Info(formatTraceMessage(matched, matchedRuleIndex, ctx.Rule.RequestModel, outcome))
+	}
+	logrus.WithFields(fields).Debugf("[smart_routing] %s", outcome)
+}
+
+func formatTraceMessage(matched bool, idx int, model, outcome string) string {
+	if matched {
+		return "smart routing matched rule " + indexToString(idx) + " for " + model + " (" + outcome + ")"
+	}
+	return "smart routing fell through for " + model + " (" + outcome + ")"
+}
+
+func indexToString(i int) string {
+	if i < 0 {
+		return "-1"
+	}
+	// avoid pulling strconv just for this
+	if i == 0 {
+		return "0"
+	}
+	digits := []byte{}
+	for i > 0 {
+		digits = append([]byte{byte('0' + i%10)}, digits...)
+		i /= 10
+	}
+	return string(digits)
 }
 
 // Evaluate evaluates smart routing rules and selects a service
@@ -45,6 +160,11 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	reqCtx, err := ExtractRequestContext(ctx.Request)
 	if err != nil {
 		logrus.Debugf("[smart_routing] failed to extract context: %v", err)
+		s.emitTrace(ctx, nil, nil, -1, 0, 0, nil, "extract_failed", err.Error())
+		return nil, false
+	}
+	if reqCtx == nil {
+		s.emitTrace(ctx, nil, nil, -1, 0, 0, nil, "no_context", "request type not supported for smart routing")
 		return nil, false
 	}
 
@@ -63,12 +183,17 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	router, err := smartrouting.NewRouter(rule.SmartRouting)
 	if err != nil {
 		logrus.Debugf("[smart_routing] failed to create router: %v", err)
+		s.emitTrace(ctx, reqCtx, nil, -1, 0, 0, nil, "router_invalid", err.Error())
 		return nil, false
 	}
+
+	// Per-op trace for logging — independent from the actual selection call.
+	trace := router.TraceEvaluation(reqCtx)
 
 	matchedServices, matchedRuleIndex, matched := router.EvaluateRequestWithIndex(reqCtx)
 	if !matched || len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
+		s.emitTrace(ctx, reqCtx, trace, -1, 0, 0, nil, "no_match", "no rule matched the request")
 		return nil, false
 	}
 
@@ -79,6 +204,8 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	}
 	if len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] matched rule has no services in current candidate set")
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, 0, 0, nil, "no_candidates",
+			"matched rule has no services in current candidate set")
 		return nil, false
 	}
 
@@ -91,6 +218,8 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	activeServices := FilterActiveServices(matchedServices)
 	if len(activeServices) == 0 {
 		logrus.Debugf("[smart_routing] no active services in matched set")
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), 0, nil, "no_active_services",
+			"matched rule has no active services")
 		return nil, false
 	}
 
@@ -98,17 +227,23 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	if len(activeServices) == 1 {
 		result := NewResult(activeServices[0], "smart_routing")
 		result.MatchedSmartRuleIndex = matchedRuleIndex
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
+			activeServices[0], "selected", "single active service in matched set")
 		return result, true
 	}
 
 	// Multiple services: apply load balancing within matched set
 	service := s.selectFromServices(activeServices, rule)
 	if service == nil {
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
+			nil, "lb_failed", "load balancer returned no service")
 		return nil, false
 	}
 
 	result := NewResult(service, "smart_routing")
 	result.MatchedSmartRuleIndex = matchedRuleIndex
+	s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), len(activeServices),
+		service, "selected", "load balanced within matched set")
 	return result, true
 }
 

@@ -644,8 +644,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize affinity store for smart routing
 	affinityStore := NewAffinityStore(0) // 0 = use default TTL
 
-	// Initialize routing selector with pipeline
-	serviceSelector := routing.NewServiceSelector(cfg, affinityStore, loadBalancer)
+	// Initialize routing selector with pipeline. Pass multiLogger so smart
+	// routing stages emit per-request evaluation traces to the smart_routing
+	// log source viewable from the frontend system log page.
+	serviceSelector := routing.NewServiceSelectorWithLogger(cfg, affinityStore, loadBalancer, server.multiLogger)
 	simpleSelector := routing.NewSimpleSelector(serviceSelector)
 
 	// Initialize load balancer API

@@ -1,6 +1,7 @@
 import { Box, FormControlLabel, Stack, Switch, Typography, Alert, Tabs, Tab } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import SystemLogViewer from '@/components/SystemLogViewer';
+import SmartRoutingLogViewer from '@/components/SmartRoutingLogViewer';
 import UnifiedCard from '@/components/UnifiedCard';
 
 interface TabPanelProps {
@@ -133,6 +134,40 @@ const LogsPage = () => {
         [],
     );
 
+    const getSmartRoutingLogs = useCallback(async (params?: { limit?: number }) => {
+        const queryParams = new URLSearchParams();
+        if (params?.limit) queryParams.append('limit', params.limit.toString());
+
+        const response = await fetch(`/api/v1/system/smart-routing/logs?${queryParams.toString()}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
+            },
+        });
+
+        if (!response.ok) {
+            let errorDetail = `HTTP error! status: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) errorDetail = errorData.error;
+            } catch {}
+            throw new Error(errorDetail);
+        }
+        const data = await response.json();
+        return { total: data.total || 0, logs: data.logs || [] };
+    }, []);
+
+    const clearSmartRoutingLogs = useCallback(async () => {
+        const response = await fetch('/api/v1/system/smart-routing/logs', {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
+            },
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to clear smart routing logs (${response.status})`);
+        }
+    }, []);
+
     const getRequestBody = useCallback(async (bodyRef: string) => {
         const response = await fetch(`/api/v1/log/request/${bodyRef}`, {
             headers: {
@@ -177,6 +212,7 @@ const LogsPage = () => {
                 >
                     <Tab label="Model Requests" />
                     <Tab label="System Logs" />
+                    <Tab label="Smart Routing" />
                 </Tabs>
 
                 {logError && (
@@ -197,6 +233,13 @@ const LogsPage = () => {
                     <SystemLogViewer
                         getLogs={getLogs}
                         getRequestBody={getRequestBody}
+                    />
+                </TabPanel>
+
+                <TabPanel value={tabValue} index={2}>
+                    <SmartRoutingLogViewer
+                        getLogs={getSmartRoutingLogs}
+                        clearLogs={clearSmartRoutingLogs}
                     />
                 </TabPanel>
             </Stack>

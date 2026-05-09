@@ -234,6 +234,86 @@ func (s *Server) GetActionHistory(c *gin.Context) {
 	})
 }
 
+// SmartRoutingLogEntry mirrors SystemLogEntry but is sourced from the dedicated
+// smart_routing in-memory sink so users can inspect per-request evaluation
+// traces without having to scroll through unrelated system messages.
+type SmartRoutingLogEntry struct {
+	Time    time.Time              `json:"time"`
+	Level   string                 `json:"level"`
+	Message string                 `json:"message"`
+	Fields  map[string]interface{} `json:"fields,omitempty"`
+}
+
+// SmartRoutingLogsResponse represents the API response for smart routing logs
+type SmartRoutingLogsResponse struct {
+	Total int                    `json:"total"`
+	Logs  []SmartRoutingLogEntry `json:"logs"`
+}
+
+// GetSmartRoutingLogs retrieves recent smart routing evaluation traces.
+// Each entry corresponds to a single request that hit a smart-routing-enabled
+// rule and contains a structured trace of which rule/op matched and why.
+//
+// Query parameters:
+//   - limit: maximum number of recent entries to return (default: 100, max: 1000)
+func (s *Server) GetSmartRoutingLogs(c *gin.Context) {
+	if s.multiLogger == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Smart routing logger not available",
+		})
+		return
+	}
+
+	limitStr := c.DefaultQuery("limit", "100")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	scoped := s.multiLogger.WithSource(obs.LogSourceSmartRouting)
+	entries := scoped.GetMemoryLatest(limit)
+
+	logs := make([]SmartRoutingLogEntry, 0, len(entries))
+	for _, entry := range entries {
+		fields := make(map[string]interface{}, len(entry.Data))
+		for k, v := range entry.Data {
+			if k == "source" {
+				continue
+			}
+			fields[k] = v
+		}
+		logs = append(logs, SmartRoutingLogEntry{
+			Time:    entry.Time,
+			Level:   entry.Level.String(),
+			Message: entry.Message,
+			Fields:  fields,
+		})
+	}
+
+	c.JSON(http.StatusOK, SmartRoutingLogsResponse{
+		Total: len(logs),
+		Logs:  logs,
+	})
+}
+
+// ClearSmartRoutingLogs empties the in-memory smart routing log buffer. Useful
+// when iterating on routing rules and wanting a clean slate for the next
+// request.
+func (s *Server) ClearSmartRoutingLogs(c *gin.Context) {
+	if s.multiLogger == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Smart routing logger not available",
+		})
+		return
+	}
+	scoped := s.multiLogger.WithSource(obs.LogSourceSmartRouting)
+	scoped.ClearMemory()
+	c.JSON(http.StatusOK, gin.H{"message": "Smart routing logs cleared"})
+}
+
 // GetActionStats returns statistics about user actions
 func (s *Server) GetActionStats(c *gin.Context) {
 	if s.multiLogger == nil {
