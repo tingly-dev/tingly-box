@@ -1,6 +1,7 @@
 import { PageLayout } from '@/components/PageLayout';
 import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import UnifiedCard from '@/components/UnifiedCard';
+import AgentInstallCard from '@/components/AgentInstallCard';
 import { api } from '@/services/api';
 import type { Provider } from '@/types/provider';
 import {
@@ -21,21 +22,18 @@ import {
     Snackbar,
     Stack,
     Switch,
-    Tab,
     Table,
     TableBody,
     TableCell,
     TableContainer,
     TableHead,
     TableRow,
-    Tabs,
     TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
 import {
     Add as AddIcon,
-    ContentCopy as CopyIcon,
     DeleteOutline as DeleteOutlineIcon,
     Edit as EditIcon,
     InfoOutlined as InfoIcon,
@@ -43,7 +41,7 @@ import {
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import MCPSourceEditor from './MCPSourceEditor';
 import {
@@ -60,22 +58,6 @@ import {
 } from './types';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const MCP_ADD_COMMAND = `claude mcp add --transport http tb "http://localhost:12580/api/v1/mcp/tb" --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"`;
-
-const CODEX_ADD_COMMAND = `codex mcp add tb -- http http://localhost:12580/api/v1/mcp/tb \\\n  --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"`;
-
-const OPENCODE_CONFIG_PATH = '~/.config/opencode/opencode.json';
-const OPENCODE_CONFIG_SNIPPET = `"mcp": {
-  "http://localhost:12580/api/v1/mcp/tb": {
-    "type": "remote",
-    "url": "http://localhost:12580/api/v1/mcp/tb",
-    "oauth": false,
-    "headers": {
-      "Authorization": "Bearer {MY_API_KEY}"
-    }
-  }
-}`;
 
 const ADVISOR_VISIBILITY_STORAGE_KEY = 'tb.mcp.showAdvisor';
 
@@ -162,80 +144,6 @@ const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, onBlur, plac
                 sx: { fontFamily: 'monospace', fontSize: '0.8rem' },
             }}
         />
-    );
-};
-
-// ─── Part 1: Add to Agents ────────────────────────────────────────────────────
-
-interface CopyCommandBlockProps {
-    text: string;
-}
-
-const CopyCommandBlock: React.FC<CopyCommandBlockProps> = ({ text }) => {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = useCallback(() => {
-        void navigator.clipboard.writeText(text.replace(/\\\n\s*/g, ' '));
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    }, [text]);
-    return (
-        <Box sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.5, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-            <Typography
-                component="pre"
-                sx={{ fontFamily: 'monospace', fontSize: '0.78rem', flex: 1, minWidth: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'text.primary', m: 0 }}
-            >
-                {text}
-            </Typography>
-            <Tooltip title={copied ? 'Copied!' : 'Copy'} arrow>
-                <IconButton size="small" onClick={handleCopy} color={copied ? 'success' : 'default'} sx={{ flexShrink: 0 }}>
-                    <CopyIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
-        </Box>
-    );
-};
-
-const AddToAgentsCard: React.FC = () => {
-    const [tab, setTab] = useState(0);
-
-    return (
-        <UnifiedCard title="Add to Agents" size="full">
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
-                <Tab label="Claude Code" />
-                <Tab label="Codex" />
-                <Tab label="OpenCode" />
-            </Tabs>
-
-            {tab === 0 && (
-                <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                        Run this command to register Tingly Box as an MCP server:
-                    </Typography>
-                    <CopyCommandBlock text={MCP_ADD_COMMAND} />
-                </Stack>
-            )}
-
-            {tab === 1 && (
-                <Stack spacing={1}>
-                    <Typography variant="body2" color="text.secondary">
-                        Run this command to register Tingly Box as an MCP server:
-                    </Typography>
-                    <CopyCommandBlock text={CODEX_ADD_COMMAND} />
-                </Stack>
-            )}
-
-            {tab === 2 && (
-                <Stack spacing={1.5}>
-                    <Typography variant="body2" color="text.secondary">
-                        Add the following to <Typography component="span" sx={{ fontFamily: 'monospace', fontSize: '0.85em' }}>{OPENCODE_CONFIG_PATH}</Typography>:
-                    </Typography>
-                    <CopyCommandBlock text={OPENCODE_CONFIG_SNIPPET} />
-                    <Alert severity="info" sx={{ py: 0.5 }}>
-                        Set <code>MY_API_KEY</code> to your token. Run <code>{'cat ~/.tingly-box/config.json | jq -r \'.user_token\''}</code> to get it.
-                    </Alert>
-                </Stack>
-            )}
-        </UnifiedCard>
     );
 };
 
@@ -707,7 +615,7 @@ const MCPRegisteredServers = () => {
         <PageLayout loading={false}>
             <Stack spacing={2.5}>
                 {/* Part 1 */}
-                <AddToAgentsCard />
+                <AgentInstallCard />
 
                 {/* Part 2 */}
                 <BuiltinServersCard
