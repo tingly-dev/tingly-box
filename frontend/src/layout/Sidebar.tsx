@@ -148,11 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                         backgroundColor: 'primary.main',
                                         color: 'primary.contrastText',
                                         '& img': { filter: 'none !important' },
-                                        // White plate is only useful for the colored <img> icons
-                                        // (Xcode/VSCode/social platforms). Monochrome mask icons
-                                        // already follow currentColor and look correct on the
-                                        // primary background, so don't add a plate behind them.
-                                        '& .MuiListItemIcon-root > div:has(img)': {
+                                        '& .MuiListItemIcon-root > div': {
                                             bgcolor: 'white',
                                             borderRadius: 0.5,
                                             p: 0.25,

@@ -1,5 +1,5 @@
 import type {SxProps, Theme} from '@mui/material';
-import {Box} from '@mui/material';
+import {Box, useTheme} from '@mui/material';
 
 // Import SVG files as URLs
 import AnthropicSvg from '@lobehub/icons-static-svg/icons/anthropic.svg?url';
@@ -59,47 +59,24 @@ interface BrandIconProps {
     grayscale?: boolean;
 }
 
-// Box 作为容器控制大小。
-// monochrome=true：SVG 用 fill="currentColor"，通过 mask-image 渲染并以 currentColor 上色，
-// 这样图标在亮/暗主题及高亮态下都会自动跟随父级文字颜色，避免暗色背景下黑图不可见。
-// monochrome=false：保留原 <img> 渲染，保留品牌色或 grayscale 处理。
+// Lobehub 的品牌 SVG 用 fill="currentColor" 是单色设计，但 <img> 加载是独立文档，
+// currentColor 没有外部颜色继承，会落到默认黑色，导致暗色主题下黑图不可见。
+// 解决：暗色主题下对单色图标加 invert(1)（黑→白），亮色主题保持原样。
+// 高亮态由 Sidebar 处理（白底 + 强制清零 filter，保持黑图在白底上的效果）。
 const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, monochrome = false) => {
     return ({size = 24, sx, style, grayscale = defaultGrayscale}: BrandIconProps) => {
-        if (monochrome) {
-            return (
-                <Box
-                    sx={{
-                        width: size,
-                        height: size,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        color: 'inherit',
-                        ...sx,
-                    }}
-                    style={style}
-                >
-                    <Box
-                        role="img"
-                        aria-label={alt}
-                        sx={{
-                            width: '100%',
-                            height: '100%',
-                            backgroundColor: 'currentColor',
-                            maskImage: `url(${src})`,
-                            maskRepeat: 'no-repeat',
-                            maskPosition: 'center',
-                            maskSize: 'contain',
-                            WebkitMaskImage: `url(${src})`,
-                            WebkitMaskRepeat: 'no-repeat',
-                            WebkitMaskPosition: 'center',
-                            WebkitMaskSize: 'contain',
-                        }}
-                    />
-                </Box>
-            );
+        const theme = useTheme();
+        const isDark = theme.palette.mode === 'dark';
+
+        let filter = 'none';
+        if (grayscale) {
+            filter = isDark
+                ? 'grayscale(100%) brightness(1.6)'
+                : 'grayscale(100%) brightness(1.15) contrast(1.1)';
+        } else if (monochrome && isDark) {
+            filter = 'invert(1)';
         }
+
         return (
             <Box
                 sx={{
@@ -122,7 +99,7 @@ const createBrandIcon = (src: string, alt: string, defaultGrayscale = false, mon
                         width: '100%',
                         height: '100%',
                         objectFit: 'contain',
-                        filter: grayscale ? 'grayscale(100%) brightness(1.15) contrast(1.1)' : 'none',
+                        filter,
                         transition: 'filter 0.2s',
                     }}
                 />
