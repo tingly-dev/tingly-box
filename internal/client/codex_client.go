@@ -3,8 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
@@ -91,6 +93,131 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 	return c.parseImageGenerationStream(ctx, stream)
 }
 
+// ResponsesNewStreaming creates a new streaming Responses API request with Codex-specific defaults applied.
+func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
+	// Apply Codex-specific defaults to the request
+	applyCodexDefaultsToParams(&req)
+
+	// Call the base implementation
+	return c.OpenAIClient.ResponsesNewStreaming(ctx, req)
+}
+
+// applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
+func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
+	// Set default instructions if not provided
+	if !req.Instructions.Valid() {
+		req.Instructions = param.NewOpt(defaultInstructions)
+	}
+	// Set store to false for Codex
+	req.Store = param.NewOpt(false)
+	// Insert defaults only if client did not provide them
+	if len(req.Tools) == 0 {
+		req.Tools = []responses.ToolUnionParam{}
+	}
+	if !req.ParallelToolCalls.Valid() {
+		req.ParallelToolCalls = param.NewOpt(false)
+	}
+
+	// Remove unsupported parameters for Codex
+	// ChatGPT backend API does NOT support: temperature, top_p, max_output_tokens
+	// Set them to invalid/zero state so they won't be included in the request
+	req.Temperature = param.Opt[float64]{}
+	req.TopP = param.Opt[float64]{}
+	req.MaxOutputTokens = param.Opt[int64]{}
+
+	// Merge "reasoning.encrypted_content" into existing include array (preserve client-provided values)
+	includes := req.Include
+	hasMarker := false
+	for _, v := range includes {
+		if string(v) == reasoningMarker {
+			hasMarker = true
+			break
+		}
+	}
+	if !hasMarker {
+		includes = append(includes, responses.ResponseIncludable(reasoningMarker))
+	}
+	req.Include = includes
+
+	// Get the current extra fields (call the method)
+	extraFields := map[string]interface{}{}
+	if len(req.ExtraFields()) > 0 {
+		// Copy existing extra fields
+		for k, v := range req.ExtraFields() {
+			extraFields[k] = v
+		}
+	}
+
+	extraFields["stream"] = true
+
+	// ChatGPT Codex rejects empty/invalid item ids in input[].
+	// These ids are optional for request items, so strip malformed values.
+	sanitizeResponseInputIDs(req)
+
+	// Set the modified extra fields back
+	req.SetExtraFields(extraFields)
+}
+
+// sanitizeResponseInputIDs sanitizes item IDs in ResponseNewParams.Input for Codex.
+// ChatGPT Codex rejects empty/invalid item ids, so we strip malformed values.
+func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
+	// Check if Input is set and is of type OfInputItemList
+	if req.Input.OfInputItemList == nil {
+		return
+	}
+
+	inputItems := req.Input.OfInputItemList
+	for i := range inputItems {
+		item := &inputItems[i]
+		sanitizeInputItemID(item)
+	}
+
+	req.Input.OfInputItemList = inputItems
+}
+
+// sanitizeInputItemID sanitizes the ID field in a ResponseInputItemUnionParam.
+// For most item types, ID is stored in ExtraFields.
+func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) {
+	// Get the extra fields from the item
+	extraFields := item.ExtraFields()
+	if extraFields == nil {
+		return
+	}
+
+	// Check if there's an ID field
+	if idValue, ok := extraFields["id"].(string); ok {
+		// Trim and validate the ID
+		idValue = strings.TrimSpace(idValue)
+		if idValue == "" || !isValidCodexID(idValue) {
+			// Remove invalid ID
+			delete(extraFields, "id")
+			item.SetExtraFields(extraFields)
+		}
+	}
+}
+
+// isValidCodexID checks if a string is a valid Codex ID.
+// Valid IDs contain only alphanumeric characters, underscores, and hyphens.
+func isValidCodexID(id string) bool {
+	if len(id) == 0 {
+		return false
+	}
+	for _, c := range id {
+		if !isAlnumunderscoreHyphen(c) {
+			return false
+		}
+	}
+	return true
+}
+
+// isAlnumunderscoreHyphen checks if a rune is alphanumeric, underscore, or hyphen.
+func isAlnumunderscoreHyphen(c rune) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '_' || c == '-'
+}
+
 // ListModels returns the list of available models.
 // For Codex, this returns an error as ChatGPT OAuth tokens cannot access /models endpoint.
 func (c *CodexClient) ListModels(ctx context.Context) ([]string, error) {
@@ -103,6 +230,7 @@ func (c *CodexClient) ListModels(ctx context.Context) ([]string, error) {
 // buildImageGenerationResponsesRequest transforms ImageGenerateParams into
 // a Responses API request with the image_generation tool.
 func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGenerateParams) responses.ResponseNewParams {
+
 	// Build input item from prompt
 	inputItem := map[string]interface{}{
 		"type": "message",
@@ -159,14 +287,35 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 		Model: req.Model,
 	}
 
-	// Use extra fields to set the custom format
-	params.SetExtraFields(map[string]interface{}{
-		"input":   []interface{}{inputItem},
-		"tools":   []interface{}{tool},
-		"stream":  true,
-		"store":   false,
-		"include": []string{"reasoning.encrypted_content"},
-	})
+	// Build the base request map with Codex-specific defaults
+	reqMap := map[string]interface{}{
+		"input": []interface{}{inputItem},
+		"tools": []interface{}{tool},
+	}
+
+	// Apply Codex-specific defaults and filters
+	ApplyCodexExtra(reqMap)
+
+	// Convert back to the format expected by SetExtraFields
+	extraFields := map[string]interface{}{
+		"input":   reqMap["input"],
+		"tools":   reqMap["tools"],
+		"stream":  reqMap["stream"],
+		"store":   reqMap["store"],
+		"include": reqMap["include"],
+	}
+
+	// Add instructions if it was set
+	if instructions, ok := reqMap["instructions"]; ok {
+		extraFields["instructions"] = instructions
+	}
+
+	// Add parallel_tool_calls if it was set
+	if parallel, ok := reqMap["parallel_tool_calls"]; ok {
+		extraFields["parallel_tool_calls"] = parallel
+	}
+
+	params.SetExtraFields(extraFields)
 
 	return params
 }
