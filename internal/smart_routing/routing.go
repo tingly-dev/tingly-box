@@ -93,6 +93,8 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) bool {
 		return r.evaluateServiceTTFTOp(ctx, op)
 	case PositionServiceCapacity:
 		return r.evaluateServiceCapacityOp(ctx, op)
+	case PositionAgentClaudeCode:
+		return r.evaluateAgentClaudeCodeOp(ctx, op)
 	default:
 		return false
 	}
@@ -362,6 +364,27 @@ func (r *Router) evaluateTokenOp(ctx *RequestContext, op *SmartOp) bool {
 		return tokens <= target
 	case OpTokenLt:
 		return tokens < target
+	default:
+		return false
+	}
+}
+
+// evaluateAgentClaudeCodeOp evaluates operations on the agent.claude_code position.
+// The ctx.ClaudeCodeRequestKind field is populated by SmartRoutingStage only when
+// the request scenario is claude_code; for other scenarios it is empty and no
+// value will match — which is the desired behavior.
+func (r *Router) evaluateAgentClaudeCodeOp(ctx *RequestContext, op *SmartOp) bool {
+	value, err := op.String()
+	if err != nil {
+		log.Printf("[smart_routing] invalid agent.claude_code value '%s': %v", op.Value, err)
+		return false
+	}
+	switch op.Operation {
+	case OpAgentClaudeCodeEquals:
+		if ctx.ClaudeCodeRequestKind == "" {
+			return false
+		}
+		return ctx.ClaudeCodeRequestKind == value
 	default:
 		return false
 	}

@@ -189,6 +189,16 @@ var Operations = []SmartOp{
 		},
 	},
 
+	// Agent (Claude Code) request kind operations
+	{
+		Position:  PositionAgentClaudeCode,
+		Operation: OpAgentClaudeCodeEquals,
+		Meta: SmartOpMeta{
+			Description: "Claude Code request kind equals the value ('main', 'subagent', 'compact')",
+			Type:        ValueTypeString,
+		},
+	},
+
 	// Service capacity operations (seat utilization %)
 	{
 		Position:  PositionServiceCapacity,
@@ -234,6 +244,7 @@ const (
 	PositionToken           SmartOpPosition = "token"            // Token count
 	PositionServiceTTFT     SmartOpPosition = "service_ttft"     // Service TTFT characteristics
 	PositionServiceCapacity SmartOpPosition = "service_capacity" // Service seat capacity (affinity utilization)
+	PositionAgentClaudeCode SmartOpPosition = "agent.claude_code" // Claude Code agent request kind (main / subagent / compact)
 )
 
 const (
@@ -279,4 +290,7 @@ const (
 	OpServiceCapacityUtilGe SmartOpOperation = "util_ge" // Avg seat utilization >= value (%)
 	OpServiceCapacityUtilLt SmartOpOperation = "util_lt" // Avg seat utilization < value (%)
 	OpServiceCapacityUtilGt SmartOpOperation = "util_gt" // Avg seat utilization > value (%)
+
+	// Agent (Claude Code) request kind operations
+	OpAgentClaudeCodeEquals SmartOpOperation = "equals" // Claude Code request kind equals the value
 )

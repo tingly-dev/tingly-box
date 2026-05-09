@@ -48,6 +48,13 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 		return nil, false
 	}
 
+	// Annotate the request context with the agent.claude_code request kind when
+	// the scenario is claude_code. Other scenarios leave the field empty so the
+	// agent.claude_code SmartOp simply does not match.
+	if ctx.Scenario == typ.ScenarioClaudeCode {
+		reqCtx.ClaudeCodeRequestKind = smartrouting.DetectClaudeCodeRequestKind(reqCtx)
+	}
+
 	// Pre-collect capacity info for all services across all smart routing rules.
 	// evaluateRule will filter this down to per-rule services when evaluating.
 	reqCtx.ServiceCapacity = s.collectAllCapacityInfo(rule.SmartRouting)

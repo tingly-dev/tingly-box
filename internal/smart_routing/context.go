@@ -29,6 +29,10 @@ type RequestContext struct {
 	LatestContentType string
 	EstimatedTokens   int
 
+	// ClaudeCodeRequestKind is one of "main", "subagent", "compact" — populated by the
+	// SmartRoutingStage only when the request scenario is claude_code. Empty otherwise.
+	ClaudeCodeRequestKind string
+
 	// Service runtime characteristics — populated by SmartRoutingStage before router evaluation.
 	// These fields are set per-rule inside evaluateRule to avoid cross-rule contamination.
 	ServiceStats    []loadbalance.ServiceStats // TTFT / latency snapshots
