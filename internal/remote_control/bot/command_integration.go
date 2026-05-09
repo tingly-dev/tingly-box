@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -226,6 +227,95 @@ func (a *botHandlerAdapter) BuildReplyFooter(chatID, platform string) string {
 		return ""
 	}
 	return BuildFooter(agentType, projectPath)
+}
+
+// ListResumableSessions delegates to the AgentBoot session store, returning
+// the most recent Claude on-disk sessions for the project. Returns an empty
+// slice (and no error) if the store has no entries; only configuration or I/O
+// failures bubble up.
+func (a *botHandlerAdapter) ListResumableSessions(projectPath string, limit int) ([]ResumableSession, error) {
+	if a.handler.agentBoot == nil {
+		return nil, fmt.Errorf("agentboot not configured")
+	}
+	if limit <= 0 {
+		limit = resumeListLimit
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	metas, err := a.handler.agentBoot.ListRecentSessions(ctx, projectPath, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ResumableSession, 0, len(metas))
+	for _, m := range metas {
+		out = append(out, ResumableSession{
+			SessionID:    m.SessionID,
+			ProjectPath:  m.ProjectPath,
+			StartTime:    m.StartTime,
+			EndTime:      m.EndTime,
+			NumTurns:     m.NumTurns,
+			Status:       string(m.Status),
+			FirstMessage: m.FirstMessage,
+		})
+	}
+	return out, nil
+}
+
+// PrepareResume closes any existing remote-session record for (chat, agent,
+// project) and creates a new one whose ID matches the picked Claude session
+// on disk. The next user message hitting resolveSession will then run with
+// Resume=true. We deliberately do NOT launch Claude here — Claude needs an
+// initial prompt, and the user picking from a list is not yet that prompt.
+func (a *botHandlerAdapter) PrepareResume(chatID, agentType, projectPath, sessionID string) error {
+	if sessionID == "" {
+		return fmt.Errorf("empty session id")
+	}
+	if old := a.handler.sessionMgr.FindBy(chatID, agentType, projectPath); old != nil && old.ID != sessionID {
+		a.handler.sessionMgr.Close(old.ID)
+	}
+	if existing, ok := a.handler.sessionMgr.GetOrLoad(sessionID); ok {
+		// Already present (perhaps user re-armed the same id). Just refresh
+		// the binding to make sure FindBy returns it next time.
+		a.handler.sessionMgr.Update(sessionID, func(s *session.Session) {
+			s.ChatID = chatID
+			s.Agent = agentType
+			s.Project = projectPath
+			s.Status = session.StatusPending
+			s.ExpiresAt = time.Time{}
+		})
+		_ = existing
+		return nil
+	}
+	if sess := a.handler.sessionMgr.CreateWithID(sessionID, chatID, agentType, projectPath); sess == nil {
+		return fmt.Errorf("failed to bind resume session %s", sessionID)
+	}
+	return nil
+}
+
+// RememberResumeListing stores the displayed session-id list for /resume <n>.
+func (a *botHandlerAdapter) RememberResumeListing(chatID string, sessionIDs []string) {
+	a.handler.resumeListingsMu.Lock()
+	defer a.handler.resumeListingsMu.Unlock()
+	if len(sessionIDs) == 0 {
+		delete(a.handler.resumeListings, chatID)
+		return
+	}
+	clone := make([]string, len(sessionIDs))
+	copy(clone, sessionIDs)
+	a.handler.resumeListings[chatID] = clone
+}
+
+// RecallResumeListing returns a copy of the cached listing for /resume <n>.
+func (a *botHandlerAdapter) RecallResumeListing(chatID string) []string {
+	a.handler.resumeListingsMu.RLock()
+	defer a.handler.resumeListingsMu.RUnlock()
+	ids, ok := a.handler.resumeListings[chatID]
+	if !ok {
+		return nil
+	}
+	out := make([]string, len(ids))
+	copy(out, ids)
+	return out
 }
 
 // InitCommandRegistry initializes the command registry with built-in commands.

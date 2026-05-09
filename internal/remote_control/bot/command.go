@@ -31,6 +31,7 @@ func RegisterBuiltinCommands(registry *imbot.CommandRegistry, botHandler BotHand
 		newVerboseCommand(botHandler),
 		newQuietCommand(botHandler),
 		newMockCommand(botHandler),
+		newResumeCommand(botHandler),
 	}
 
 	for _, cmd := range commands {
@@ -117,6 +118,36 @@ type BotHandlerAdapter interface {
 	// command replies append for context continuity. Returns an empty string
 	// when neither agent nor project path is resolvable for the chat.
 	BuildReplyFooter(chatID, platform string) string
+
+	// ListResumableSessions lists the most recent Claude sessions on disk for
+	// the given project, newest first, capped to limit.
+	ListResumableSessions(projectPath string, limit int) ([]ResumableSession, error)
+
+	// PrepareResume binds the given Claude session_id as the next session for
+	// (chatID, agentType, projectPath). The next user message will be sent with
+	// --resume <sessionID>.
+	PrepareResume(chatID, agentType, projectPath, sessionID string) error
+
+	// RememberResumeListing stores the session IDs presented to the user so
+	// /resume <n> can resolve back to them. Order is the same as the displayed
+	// list (1-indexed externally).
+	RememberResumeListing(chatID string, sessionIDs []string)
+
+	// RecallResumeListing returns the most recently displayed session IDs, in
+	// display order. Returns nil if no listing was remembered.
+	RecallResumeListing(chatID string) []string
+}
+
+// ResumableSession is the per-row info returned by ListResumableSessions.
+// Channel-neutral so command code can render either compact text or buttons.
+type ResumableSession struct {
+	SessionID    string
+	ProjectPath  string
+	StartTime    time.Time
+	EndTime      time.Time
+	NumTurns     int
+	Status       string
+	FirstMessage string
 }
 
 // SessionInfo holds session information.
@@ -137,6 +168,11 @@ const (
 	usageJoin     = "Usage: /join <group_id|@username|invite_link>"
 	usagePairBind = "Usage: /bind <code>"
 	usageVerbose  = "Usage: /verbose <on|off>"
+	usageResume   = "Usage: /resume [number]   (no number = list recent sessions)"
+
+	// resumeListLimit caps how many recent sessions /resume shows. Keep small
+	// enough that the list fits on a phone screen.
+	resumeListLimit = 10
 )
 
 func sendCommandText(adapter BotHandlerAdapter, ctx *imbot.HandlerContext, text string) error {
@@ -663,4 +699,162 @@ func newPairBindCommand(adapter BotHandlerAdapter) imbot.Command {
 		WithCategory("system").
 		WithPriority(95).
 		MustBuild()
+}
+
+// newResumeCommand registers `/resume`. With no args it lists the most recent
+// Claude on-disk sessions for the chat's currently-bound project; `/resume <n>`
+// arms the Nth session from that list so the user's next message resumes it.
+func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
+	return imbot.NewCommand("cmd-resume", "resume", "List or resume recent Claude sessions in the current project").
+		WithAliases("r").
+		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
+			agentType, _ := adapter.GetCurrentAgent(ctx.ChatID)
+			if agentType != AgentNameClaude {
+				return sendCommandText(adapter, ctx,
+					"⚠️ /resume only works with Claude Code (@cc). Switch with: @cc")
+			}
+
+			projectPath := resolveProjectPath(adapter, ctx.ChatID, string(ctx.Platform))
+			if projectPath == "" {
+				return sendCommandText(adapter, ctx,
+					"No project bound. Use /cd <path> or /project to bind one first.")
+			}
+
+			// /resume <n>: pick from the previously displayed listing.
+			if input, ok := firstArg(args); ok {
+				idx, ok := parsePositiveInt(input)
+				if !ok {
+					return sendCommandText(adapter, ctx, usageResume)
+				}
+				ids := adapter.RecallResumeListing(ctx.ChatID)
+				if len(ids) == 0 {
+					return sendCommandText(adapter, ctx,
+						"No recent /resume listing in this chat. Run /resume first to see options.")
+				}
+				if idx < 1 || idx > len(ids) {
+					return sendCommandTextf(adapter, ctx,
+						"Invalid number: %d (have %d). Run /resume to refresh the list.", idx, len(ids))
+				}
+				picked := ids[idx-1]
+				if err := adapter.PrepareResume(ctx.ChatID, agentType, projectPath, picked); err != nil {
+					return sendCommandTextf(adapter, ctx, "Failed to arm resume: %v", err)
+				}
+				return sendCommandTextf(adapter, ctx,
+					"✅ Armed resume for session %s.\nSend your next message to continue, or /clear to abort.",
+					shortSessionID(picked))
+			}
+
+			// /resume: list recent sessions for the bound project.
+			sessions, err := adapter.ListResumableSessions(projectPath, resumeListLimit)
+			if err != nil {
+				return sendCommandTextf(adapter, ctx,
+					"Failed to list sessions: %v\n\nTip: ensure ClaudeProjectsDir is configured.", err)
+			}
+			if len(sessions) == 0 {
+				return sendCommandText(adapter, ctx, fmt.Sprintf(
+					"No prior sessions in %s.\nSwitch project with /p (list) + /cd <n>, or just send a message to start a new one.",
+					ShortenPath(projectPath)))
+			}
+
+			ids := make([]string, 0, len(sessions))
+			for _, s := range sessions {
+				ids = append(ids, s.SessionID)
+			}
+			adapter.RememberResumeListing(ctx.ChatID, ids)
+
+			return sendCommandText(adapter, ctx, buildResumeListText(projectPath, sessions))
+		}).
+		WithCategory("session").
+		WithPriority(85).
+		MustBuild()
+}
+
+// buildResumeListText renders the compact one-line-per-session list shown by
+// /resume. Lines are kept short so phone screens can fit ~10 entries without
+// wrapping into noise.
+func buildResumeListText(projectPath string, sessions []ResumableSession) string {
+	var buf strings.Builder
+	buf.WriteString("Recent sessions in ")
+	buf.WriteString(ShortenPath(projectPath))
+	buf.WriteString(":\n")
+	for i, s := range sessions {
+		fmt.Fprintf(&buf, "  %d. %s · %s · %s%s\n",
+			i+1,
+			formatRelativeTime(latestTime(s)),
+			formatTurns(s.NumTurns),
+			truncateRunes(strings.ReplaceAll(s.FirstMessage, "\n", " "), 50),
+			statusGlyph(s.Status),
+		)
+	}
+	buf.WriteString("\nUse /resume <number> to resume. Switch project with /p + /cd.")
+	return buf.String()
+}
+
+func latestTime(s ResumableSession) time.Time {
+	if !s.EndTime.IsZero() {
+		return s.EndTime
+	}
+	return s.StartTime
+}
+
+func formatTurns(n int) string {
+	if n <= 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%dt", n)
+}
+
+// formatRelativeTime renders a coarse "Nm/h/d ago" suitable for compact lists.
+// We avoid pulling in a humanize dependency for one call site.
+func formatRelativeTime(t time.Time) string {
+	if t.IsZero() {
+		return "?"
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	default:
+		return t.Format("2006-01-02")
+	}
+}
+
+func statusGlyph(status string) string {
+	switch strings.ToLower(status) {
+	case "complete", "completed":
+		return " ✓"
+	case "error", "failed":
+		return " ✗"
+	case "active", "running":
+		return " …"
+	default:
+		return ""
+	}
+}
+
+// truncateRunes trims s to max runes (not bytes) and appends an ellipsis when
+// it had to cut. Avoids slicing inside a multi-byte rune, which matters for
+// Chinese first-message previews.
+func truncateRunes(s string, max int) string {
+	if max <= 1 {
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max-1]) + "…"
+}
+
+func shortSessionID(id string) string {
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
 }
