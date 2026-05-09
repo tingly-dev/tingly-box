@@ -36,17 +36,16 @@ func TestRegisterBuiltinTools_RegistersWebtoolsAndAdvisor(t *testing.T) {
 	require.NotNil(t, advisor)
 	require.False(t, *advisor.Enabled)
 	require.NotNil(t, advisor.Advisor)
-	require.Equal(t, "${ADVISOR_BASE_URL}", advisor.Advisor.BaseURL)
-	require.Equal(t, "${ADVISOR_MODEL}", advisor.Advisor.Model)
-	require.Equal(t, "${ADVISOR_API_KEY}", advisor.Advisor.APIKey)
+	// No placeholder strings — fields are empty by default
+	require.Empty(t, advisor.Advisor.ProviderUUID)
+	require.Empty(t, advisor.Advisor.Model)
 }
 
 func TestRegisterBuiltinTools_PreservesExistingAdvisorSettings(t *testing.T) {
 	enabled := typ.BoolPtr(true)
 	advisorCfg := &typ.AdvisorConfig{
-		BaseURL: "https://api.example.com/v1",
-		Model:   "gpt-4.1",
-		APIKey:  "${ADVISOR_API_KEY}",
+		ProviderUUID: "some-provider-uuid",
+		Model:        "gpt-4.1",
 	}
 
 	input := &typ.MCPRuntimeConfig{
@@ -82,6 +81,6 @@ func TestRegisterBuiltinTools_PreservesExistingAdvisorSettings(t *testing.T) {
 	require.NotNil(t, advisor)
 	require.True(t, *advisor.Enabled)
 	require.NotNil(t, advisor.Advisor)
-	require.Equal(t, advisorCfg.APIKey, advisor.Advisor.APIKey)
-	require.Equal(t, advisorCfg.BaseURL, advisor.Advisor.BaseURL)
+	require.Equal(t, advisorCfg.ProviderUUID, advisor.Advisor.ProviderUUID)
+	require.Equal(t, advisorCfg.Model, advisor.Advisor.Model)
 }

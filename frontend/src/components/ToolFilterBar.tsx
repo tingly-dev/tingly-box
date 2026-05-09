@@ -18,7 +18,7 @@
  */
 
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 
 export type ToolFilter = 'all' | 'active' | 'off';
 
@@ -41,7 +41,41 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
     allExpanded,
     onToggleExpand,
 }) => (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, mb: 1.5 }}>
+        {/* Expand / Collapse all — same pill-track style */}
+        <Box
+            sx={{
+                display: 'flex',
+                bgcolor: 'rgb(238, 233, 224)',
+                borderRadius: '8px',
+                p: '3px',
+                alignItems: 'center',
+            }}
+        >
+            <Box
+                component="button"
+                onClick={() => onToggleExpand(!allExpanded)}
+                sx={{
+                    height: '25.5px',
+                    px: '10px',
+                    py: '5px',
+                    borderRadius: '5px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    bgcolor: 'transparent',
+                    color: 'rgb(107, 114, 128)',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    lineHeight: 1,
+                    transition: 'color 0.15s',
+                    '&:hover': { color: 'rgb(13, 17, 23)' },
+                    '&:focus-visible': { outline: '2px solid rgb(10, 124, 90)', outlineOffset: '1px' },
+                }}
+            >
+                {allExpanded ? 'Collapse all' : 'Expand all'}
+            </Box>
+        </Box>
+
         {/* Segmented pill filter */}
         <Box
             sx={{
@@ -83,25 +117,6 @@ export const ToolFilterBar: React.FC<ToolFilterBarProps> = ({
                 );
             })}
         </Box>
-
-        {/* Expand / Collapse all */}
-        <Typography
-            component="button"
-            onClick={() => onToggleExpand(!allExpanded)}
-            sx={{
-                border: 'none',
-                bgcolor: 'transparent',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                color: 'text.disabled',
-                p: 0,
-                '&:hover': { color: 'text.secondary' },
-                transition: 'color 0.15s',
-            }}
-        >
-            {allExpanded ? 'Collapse all' : 'Expand all'}
-        </Typography>
     </Box>
 );
 

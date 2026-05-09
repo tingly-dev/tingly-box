@@ -20,9 +20,8 @@ export interface MCPSourceConfig {
     allowed_extra_headers?: string[];
     auto_registered?: boolean;
     advisor?: {
-        base_url?: string;
+        provider_uuid?: string;
         model?: string;
-        api_key?: string;
         max_uses_per_request?: number;
         max_tokens?: number;
     };

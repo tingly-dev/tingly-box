@@ -6,9 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -823,29 +821,6 @@ func (s *Server) Cancel() context.CancelFunc {
 	return s.cancel
 }
 
-// expandAdvisorConfig expands ${VAR} placeholders in AdvisorConfig fields using
-// the process environment. Fields that still contain unexpanded placeholders after
-// expansion (i.e. the env var was not set) are cleared so callers get empty strings
-// rather than literal "${...}" template tokens.
-func expandAdvisorConfig(cfg typ.AdvisorConfig) typ.AdvisorConfig {
-	envVarPattern := regexp.MustCompile(`\$\{([^}]+)\}`)
-	expand := func(s string) string {
-		result := envVarPattern.ReplaceAllStringFunc(s, func(match string) string {
-			varName := match[2 : len(match)-1]
-			return os.Getenv(varName)
-		})
-		// If the result still looks like an unexpanded placeholder, return empty.
-		if envVarPattern.MatchString(result) {
-			return ""
-		}
-		return result
-	}
-	cfg.BaseURL = expand(cfg.BaseURL)
-	cfg.APIKey = expand(cfg.APIKey)
-	cfg.Model = expand(cfg.Model)
-	return cfg
-}
-
 // registerAdviserFromConfig reads the MCP config and registers the adviser
 // virtual tool if an enabled advisor source is found.
 func (s *Server) registerAdviserFromConfig() {
@@ -858,7 +833,17 @@ func (s *Server) registerAdviserFromConfig() {
 		if source.Advisor == nil || source.Enabled == nil || !*source.Enabled {
 			continue
 		}
-		advisorCfg := expandAdvisorConfig(*source.Advisor)
+		advisorCfg := *source.Advisor
+
+		// Resolve BaseURL and APIKey from the referenced provider UUID.
+		if advisorCfg.ProviderUUID != "" {
+			if provider, err := s.config.GetProviderByUUID(advisorCfg.ProviderUUID); err == nil && provider != nil {
+				advisorCfg.BaseURL = provider.APIBase
+				advisorCfg.APIKey = provider.Token
+			} else {
+				logrus.WithField("provider_uuid", advisorCfg.ProviderUUID).Warn("mcp: advisor provider UUID not found")
+			}
+		}
 
 		pipeline := servertool.NewPipeline()
 		pipeline.Register(advisortool.NewProvider(advisorCfg, s.clientPool, s.mcpRuntime.SessionStore()))

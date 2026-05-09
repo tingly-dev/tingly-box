@@ -233,18 +233,20 @@ export const AgentInstallCard: React.FC<AgentInstallCardProps> = ({
                 <Typography
                     sx={{
                         fontFamily: 'monospace',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        color: 'text.disabled',
-                        mt: 0.5,
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        color: 'text.primary',
+                        mt: 0.35,
                         flexShrink: 0,
                         userSelect: 'none',
+                        opacity: 0.35,
+                        letterSpacing: '0.05em',
                     }}
                 >
                     {sectionNumber}
                 </Typography>
                 <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
                         {heading}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">

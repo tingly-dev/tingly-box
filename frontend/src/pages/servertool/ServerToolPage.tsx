@@ -43,8 +43,8 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expand
     const [modelDialogOpen, setModelDialogOpen] = useState(false);
 
     useEffect(() => {
-        const providerUuid = advisorSource?.env?.['ADVISOR_PROVIDER_UUID'] ?? '';
-        const m = advisorSource?.advisor?.model ?? advisorSource?.env?.['ADVISOR_MODEL'] ?? '';
+        const providerUuid = advisorSource?.advisor?.provider_uuid ?? '';
+        const m = advisorSource?.advisor?.model ?? '';
         setSelectedProviderUuid(providerUuid);
         setModel(m);
     }, [advisorSource]);
@@ -70,7 +70,6 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expand
     const handleSave = async () => {
         setSaving(true);
         try {
-            const selectedProvider = providerCatalog.find((p) => p.uuid === selectedProviderUuid);
             const { visibility, transport, command, args, cwd, ...base } = (advisorSource ?? {
                 id: BUILTIN_ADVISOR_ID,
                 name: 'Built-in Adviser',
@@ -81,15 +80,8 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expand
                 ...base,
                 advisor: {
                     ...(base.advisor ?? {}),
-                    base_url: selectedProvider?.api_base || undefined,
-                    api_key: selectedProvider?.token || undefined,
+                    provider_uuid: selectedProviderUuid || undefined,
                     model: model || undefined,
-                },
-                env: {
-                    ...(selectedProviderUuid ? { ADVISOR_PROVIDER_UUID: selectedProviderUuid } : {}),
-                    ...(selectedProvider?.api_base ? { ADVISOR_BASE_URL: selectedProvider.api_base } : {}),
-                    ...(selectedProvider?.token ? { ADVISOR_API_KEY: selectedProvider.token } : {}),
-                    ...(model ? { ADVISOR_MODEL: model } : {}),
                 },
             });
         } finally {
@@ -216,16 +208,16 @@ const ServerToolPage = () => {
                 {/* Section header */}
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                     <Typography
-                        sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 600, color: 'text.disabled', mt: 0.5, flexShrink: 0, userSelect: 'none' }}
+                        sx={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 700, color: 'text.primary', opacity: 0.35, mt: 0.35, flexShrink: 0, userSelect: 'none', letterSpacing: '0.05em' }}
                     >
                         01
                     </Typography>
                     <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
-                            Server tools
+                        <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                            Config your server tools
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                            In-process tools injected by the gateway into every AI request. Click a card to configure.
+                            In-process tools injected by the gateway into every AI request.
                         </Typography>
                     </Box>
                 </Box>

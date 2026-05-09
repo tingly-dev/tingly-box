@@ -97,15 +97,11 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 	advisorEnabled := typ.BoolPtr(false) // default: disabled
 	advisorVisibility := typ.ToolVisibilityServer
 	advisorTools := mcptools.DefaultBuiltinAdvisorToolNames()
-	advisorEnv := map[string]string{
-		"ADVISOR_BASE_URL": "${ADVISOR_BASE_URL}",
-		"ADVISOR_MODEL":    "${ADVISOR_MODEL}",
-		"ADVISOR_API_KEY":  "${ADVISOR_API_KEY}",
-	}
+	advisorEnv := map[string]string{}
 	advisorCfg := &typ.AdvisorConfig{
-		BaseURL:           "${ADVISOR_BASE_URL}",
-		Model:             "${ADVISOR_MODEL}",
-		APIKey:            "${ADVISOR_API_KEY}",
+		BaseURL:           "",
+		Model:             "",
+		APIKey:            "",
 		MaxUsesPerRequest: 3,
 		MaxTokens:         4096,
 	}

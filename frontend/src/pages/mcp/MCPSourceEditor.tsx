@@ -47,7 +47,6 @@ const MCPSourceEditor = ({
     return (
         <Stack spacing={2}>
             <Stack spacing={0.5}>
-                <Typography variant="h4" fontWeight={700}>{title}</Typography>
                 <Stack direction="row" spacing={2} alignItems="center">
                     <Button
                         href="https://tingly-dev.github.io/"

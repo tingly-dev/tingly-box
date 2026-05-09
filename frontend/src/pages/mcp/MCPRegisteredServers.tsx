@@ -46,8 +46,6 @@ import {
     type MCPSourceFormValue,
 } from './types';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 interface ConfigRowProps {
@@ -113,7 +111,7 @@ const SecretInput: React.FC<SecretInputProps> = ({ value, onChange, onBlur, plac
     );
 };
 
-// ─── Part 2: Builtin web tools (two separate ToolCards) ──────────────────────
+// ─── Builtin web tool card ────────────────────────────────────────────────────
 
 interface WebtoolCardProps {
     webtoolsSource: MCPSourceConfig | undefined;
@@ -157,7 +155,6 @@ const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onS
     };
 
     const isSearch = toolName === 'mcp_web_search';
-    const needsConfig = isSearch && !serperKey;
 
     const settings = (
         <Stack spacing={1.5}>
@@ -202,180 +199,50 @@ const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onS
             onToggle={handleToggle}
             badges={[{ label: 'Client', color: 'blue' }]}
             settings={settings}
-            defaultExpanded={needsConfig}
+            defaultExpanded={true}
             expanded={expanded}
         />
     );
 };
 
-// ─── Part 3: Custom MCP servers ───────────────────────────────────────────────
+// ─── Add server card ──────────────────────────────────────────────────────────
 
-interface CustomServersCardProps {
-    sources: MCPSourceConfig[];
-    onSave: (sources: MCPSourceConfig[]) => Promise<void>;
-    saving: boolean;
-    filter: ToolFilter;
-    allExpanded: boolean;
-    onFilterChange: (f: ToolFilter) => void;
-    onToggleExpand: (v: boolean) => void;
+interface AddServerCardProps {
+    onClick: () => void;
 }
 
-const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, saving, filter, allExpanded, onFilterChange, onToggleExpand }) => {
-    const [dialogOpen, setDialogOpen] = useState(false);
-    const [editingSource, setEditingSource] = useState<MCPSourceConfig | null>(null);
-    const [editorForm, setEditorForm] = useState<MCPSourceFormValue>(() => ({
-        ...defaultMCPSourceFormValue(),
-        args: [],
-        tools: ['*'],
-        envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
-        useGlobalProxy: true,
-    }));
-
-    const openAdd = () => {
-        setEditingSource(null);
-        setEditorForm({
-            ...defaultMCPSourceFormValue(),
-            args: [],
-            tools: ['*'],
-            envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
-            useGlobalProxy: true,
-        });
-        setDialogOpen(true);
-    };
-
-    const openEdit = (source: MCPSourceConfig) => {
-        setEditingSource(source);
-        setEditorForm(sourceToFormValue(source));
-        setDialogOpen(true);
-    };
-
-    const closeDialog = () => {
-        setDialogOpen(false);
-        setEditingSource(null);
-    };
-
-    const handleDelete = async (id?: string) => {
-        if (!id) return;
-        await onSave(sources.filter((s) => s.id !== id));
-    };
-
-    const handleToggle = async (id: string | undefined, enabled: boolean) => {
-        if (!id) return;
-        await onSave(sources.map((s) => (s.id === id ? { ...s, enabled } : s)));
-    };
-
-    const handleDialogSave = async () => {
-        const source = formValueToSource(editorForm);
-        if (!source.id) return;
-        const next = [...sources];
-        const idx = next.findIndex((s) => s.id === source.id);
-        if (idx >= 0) { next[idx] = source; } else { next.push(source); }
-        await onSave(next);
-        closeDialog();
-    };
-
-    const connectionLabel = (source: MCPSourceConfig): string => {
-        if (source.transport === 'http' || source.transport === 'sse') return source.endpoint || '-';
-        return source.command
-            ? `${source.command}${source.args?.length ? ' ' + source.args.join(' ') : ''}`
-            : '-';
-    };
-
-    return (
-        <Stack spacing={1.5}>
-            {/* Section header + add button */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                    <Typography
-                        sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 600, color: 'text.disabled', mt: 0.5, flexShrink: 0, userSelect: 'none' }}
-                    >
-                        03
-                    </Typography>
-                    <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
-                            Remote servers
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Third-party MCP servers connected to your gateway.
-                        </Typography>
-                    </Box>
-                </Box>
-                <Tooltip title="Connect server">
-                    <IconButton
-                        onClick={openAdd}
-                        size="medium"
-                        sx={{
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            borderRadius: '10px',
-                            bgcolor: 'background.paper',
-                            '&:hover': { bgcolor: 'action.hover' },
-                        }}
-                    >
-                        <AddIcon />
-                    </IconButton>
-                </Tooltip>
-            </Box>
-
-            <ToolFilterBar
-                filter={filter}
-                onFilterChange={onFilterChange}
-                allExpanded={allExpanded}
-                onToggleExpand={onToggleExpand}
-            />
-
-            {/* Existing servers as ToolCards */}
-            {sources.filter(s => filter === 'all' || (filter === 'active' ? (s.enabled ?? true) : !(s.enabled ?? true))).map((source) => {
-                const enabled = source.enabled ?? true;
-                const conn = connectionLabel(source);
-                return (
-                    <ToolCard
-                        key={source.id}
-                        icon={<IconServer size={18} />}
-                        name={source.id || ''}
-                        description={conn}
-                        enabled={enabled}
-                        onToggle={(v) => void handleToggle(source.id, v)}
-                        expanded={allExpanded}
-                        badges={[{
-                            label: source.visibility === 'server' ? 'Server' : 'Client',
-                            color: source.visibility === 'server' ? 'green' : 'blue',
-                        }]}
-                        tags={source.transport ? [(source.transport).toUpperCase()] : []}
-                        actions={
-                            <Stack direction="row" spacing={0.5} alignItems="center">
-                                <Tooltip title="Edit">
-                                    <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
-                                        <EditIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Delete">
-                                    <IconButton size="small" color="error" onClick={() => void handleDelete(source.id)}>
-                                        <DeleteOutlineIcon fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Stack>
-                        }
-                    />
-                );
-            })}
-
-            {/* Add / Edit dialog */}
-            <Dialog open={dialogOpen} onClose={closeDialog} maxWidth="md" fullWidth>
-                <DialogTitle>{editingSource ? `Edit — ${editingSource.id}` : 'Connect custom MCP server'}</DialogTitle>
-                <DialogContent sx={{ pt: 1 }}>
-                    <MCPSourceEditor value={editorForm} onChange={setEditorForm} />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={closeDialog}>Cancel</Button>
-                    <Button variant="contained" onClick={() => void handleDialogSave()} disabled={saving}>
-                        {saving ? 'Saving...' : 'Save'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Stack>
-    );
-};
+const AddServerCard: React.FC<AddServerCardProps> = ({ onClick }) => (
+    <Box
+        onClick={onClick}
+        sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 1,
+            py: 3,
+            px: 2,
+            border: '1.5px dashed',
+            borderColor: 'divider',
+            borderRadius: 2,
+            cursor: 'pointer',
+            color: 'text.disabled',
+            transition: 'border-color 0.15s, color 0.15s',
+            '&:hover': {
+                borderColor: 'text.secondary',
+                color: 'text.secondary',
+            },
+        }}
+    >
+        <AddIcon sx={{ fontSize: 36 }} />
+        <Typography variant="body2" fontWeight={500}>
+            Connect a server
+        </Typography>
+        <Typography variant="caption" color="text.disabled" textAlign="center">
+            Add a remote MCP server via stdio, HTTP or SSE.
+        </Typography>
+    </Box>
+);
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -385,13 +252,20 @@ const MCPRegisteredServers = () => {
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-    // Filter / expand state for builtin tools (section 02)
-    const [builtinFilter, setBuiltinFilter] = useState<ToolFilter>('all');
-    const [builtinExpanded, setBuiltinExpanded] = useState(true);
+    // Shared filter / expand state for the merged "Config your tools" section
+    const [toolFilter, setToolFilter] = useState<ToolFilter>('all');
+    const [toolExpanded, setToolExpanded] = useState(true);
 
-    // Filter / expand state for custom servers (section 03)
-    const [customFilter, setCustomFilter] = useState<ToolFilter>('all');
-    const [customExpanded, setCustomExpanded] = useState(true);
+    // Dialog state
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [editingSource, setEditingSource] = useState<MCPSourceConfig | null>(null);
+    const [editorForm, setEditorForm] = useState<MCPSourceFormValue>(() => ({
+        ...defaultMCPSourceFormValue(),
+        args: [],
+        tools: ['*'],
+        envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
+        useGlobalProxy: true,
+    }));
 
     useEffect(() => { void loadData(); }, []);
 
@@ -423,8 +297,62 @@ const MCPRegisteredServers = () => {
         await saveConfig(next);
     };
 
+    const openAdd = () => {
+        setEditingSource(null);
+        setEditorForm({
+            ...defaultMCPSourceFormValue(),
+            args: [],
+            tools: ['*'],
+            envPassthrough: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY'],
+            useGlobalProxy: true,
+        });
+        setDialogOpen(true);
+    };
+
+    const openEdit = (source: MCPSourceConfig) => {
+        setEditingSource(source);
+        setEditorForm(sourceToFormValue(source));
+        setDialogOpen(true);
+    };
+
+    const closeDialog = () => {
+        setDialogOpen(false);
+        setEditingSource(null);
+    };
+
+    const handleDeleteCustom = async (id?: string) => {
+        if (!id) return;
+        await saveConfig(allSources.filter((s) => s.id !== id));
+    };
+
+    const handleToggleCustom = async (id: string | undefined, enabled: boolean) => {
+        if (!id) return;
+        await saveConfig(allSources.map((s) => (s.id === id ? { ...s, enabled } : s)));
+    };
+
+    const handleDialogSave = async () => {
+        const source = formValueToSource(editorForm);
+        if (!source.id) return;
+        const next = [...allSources];
+        const idx = next.findIndex((s) => s.id === source.id);
+        if (idx >= 0) { next[idx] = source; } else { next.push(source); }
+        await saveConfig(next);
+        closeDialog();
+    };
+
+    const connectionLabel = (source: MCPSourceConfig): string => {
+        if (source.transport === 'http' || source.transport === 'sse') return source.endpoint || '-';
+        return source.command
+            ? `${source.command}${source.args?.length ? ' ' + source.args.join(' ') : ''}`
+            : '-';
+    };
+
     const webtoolsSource = allSources.find((s) => s.id === BUILTIN_WEBTOOLS_ID);
     const customSources = allSources.filter((s) => !BUILTIN_IDS.includes(s.id as any));
+
+    // Determine if builtin webtools pass the current filter
+    const webtoolsEnabled = webtoolsSource?.enabled ?? true;
+    const showBuiltins = toolFilter === 'all' || (toolFilter === 'active' ? webtoolsEnabled : !webtoolsEnabled);
 
     if (loading) {
         return (
@@ -440,64 +368,105 @@ const MCPRegisteredServers = () => {
         <PageLayout loading={false}>
             <Stack spacing={5}>
                 {/* Part 1: Install instructions */}
-                <AgentInstallCard />
+                <AgentInstallCard heading="Config your agents" />
 
-                {/* Part 2: Builtin web tools */}
+                {/* Part 2: Config your tools (builtin + custom servers merged) */}
                 <Box>
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2.5 }}>
                         <Typography
-                            sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 600, color: 'text.disabled', mt: 0.5, flexShrink: 0, userSelect: 'none' }}
+                            sx={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 700, color: 'text.primary', opacity: 0.35, mt: 0.35, flexShrink: 0, userSelect: 'none', letterSpacing: '0.05em' }}
                         >
                             02
                         </Typography>
                         <Box>
-                            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
-                                Builtin tools
+                            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                                Config your tools
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Tools built into the gateway. Click a card to configure.
+                                Built-in and remote MCP tools available to your agents.
                             </Typography>
                         </Box>
                     </Box>
+
                     <Stack spacing={1.5}>
                         <ToolFilterBar
-                            filter={builtinFilter}
-                            onFilterChange={setBuiltinFilter}
-                            allExpanded={builtinExpanded}
-                            onToggleExpand={setBuiltinExpanded}
+                            filter={toolFilter}
+                            onFilterChange={setToolFilter}
+                            allExpanded={toolExpanded}
+                            onToggleExpand={setToolExpanded}
                         />
-                        {(['mcp_web_search', 'mcp_web_fetch'] as const)
-                            .filter(() => {
-                                const on = webtoolsSource?.enabled ?? true;
-                                return builtinFilter === 'all' || (builtinFilter === 'active' ? on : !on);
+
+                        {/* Builtin web tools */}
+                        {showBuiltins && (['mcp_web_search', 'mcp_web_fetch'] as const).map((toolName) => (
+                            <WebtoolCard
+                                key={toolName}
+                                webtoolsSource={webtoolsSource}
+                                toolName={toolName}
+                                onSave={upsertSource}
+                                expanded={toolExpanded ? undefined : false}
+                            />
+                        ))}
+
+                        {/* Custom remote servers */}
+                        {customSources
+                            .filter((s) => toolFilter === 'all' || (toolFilter === 'active' ? (s.enabled ?? true) : !(s.enabled ?? true)))
+                            .map((source) => {
+                                const enabled = source.enabled ?? true;
+                                const conn = connectionLabel(source);
+                                return (
+                                    <ToolCard
+                                        key={source.id}
+                                        icon={<IconServer size={18} />}
+                                        name={source.id || ''}
+                                        description={conn}
+                                        enabled={enabled}
+                                        onToggle={(v) => void handleToggleCustom(source.id, v)}
+                                        expanded={toolExpanded ? undefined : false}
+                                        badges={[{
+                                            label: source.visibility === 'server' ? 'Server' : 'Client',
+                                            color: source.visibility === 'server' ? 'green' : 'blue',
+                                        }]}
+                                        tags={source.transport ? [(source.transport).toUpperCase()] : []}
+                                        actions={
+                                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                                <Tooltip title="Edit">
+                                                    <IconButton size="small" color="primary" onClick={() => openEdit(source)}>
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Delete">
+                                                    <IconButton size="small" color="error" onClick={() => void handleDeleteCustom(source.id)}>
+                                                        <DeleteOutlineIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </Stack>
+                                        }
+                                    />
+                                );
                             })
-                            .map((toolName) => (
-                                <WebtoolCard
-                                    key={toolName}
-                                    webtoolsSource={webtoolsSource}
-                                    toolName={toolName}
-                                    onSave={upsertSource}
-                                    expanded={builtinExpanded ? true : undefined}
-                                />
-                            ))
                         }
+
+                        {/* Add server card — only shown when filter allows it */}
+                        {(toolFilter === 'all' || toolFilter === 'off') && (
+                            <AddServerCard onClick={openAdd} />
+                        )}
                     </Stack>
                 </Box>
-
-                {/* Part 3: Custom remote servers */}
-                <CustomServersCard
-                    sources={customSources}
-                    onSave={async (updated) => {
-                        const builtins = allSources.filter((s) => BUILTIN_IDS.includes(s.id as any));
-                        await saveConfig([...builtins, ...updated]);
-                    }}
-                    saving={saving}
-                    filter={customFilter}
-                    allExpanded={customExpanded}
-                    onFilterChange={setCustomFilter}
-                    onToggleExpand={setCustomExpanded}
-                />
             </Stack>
+
+            {/* Add / Edit dialog */}
+            <Dialog open={dialogOpen} onClose={closeDialog} maxWidth="md" fullWidth>
+                <DialogTitle>{editingSource ? `Edit — ${editingSource.id}` : 'Connect custom MCP server'}</DialogTitle>
+                <DialogContent sx={{ pt: 1 }}>
+                    <MCPSourceEditor value={editorForm} onChange={setEditorForm} />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={closeDialog}>Cancel</Button>
+                    <Button variant="contained" onClick={() => void handleDialogSave()} disabled={saving}>
+                        {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             <Snackbar
                 open={notification.open}
