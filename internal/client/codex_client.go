@@ -87,7 +87,7 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 	responsesReq := c.buildImageGenerationResponsesRequest(req)
 
 	// Call streaming Responses API
-	stream := c.ResponsesNewStreaming(ctx, responsesReq)
+	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
 
 	// Parse streaming response
 	return c.parseImageGenerationStream(ctx, stream)
@@ -230,44 +230,63 @@ func (c *CodexClient) ListModels(ctx context.Context) ([]string, error) {
 // buildImageGenerationResponsesRequest transforms ImageGenerateParams into
 // a Responses API request with the image_generation tool.
 func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGenerateParams) responses.ResponseNewParams {
+	// Build the Responses API request with Codex-specific defaults
+	params := responses.ResponseNewParams{
+		Model: req.Model,
+	}
 
-	// Build input item from prompt
-	inputItem := map[string]interface{}{
-		"type": "message",
-		"role": "user",
-		"content": []map[string]string{
-			{"type": "input_text", "text": string(req.Prompt)},
+	// Set default values directly on the struct
+	params.Store = param.NewOpt(false)
+	params.Instructions = param.NewOpt(defaultInstructions)
+	params.ParallelToolCalls = param.NewOpt(false)
+	params.Include = []responses.ResponseIncludable{responses.ResponseIncludable(reasoningMarker)}
+
+	// Build input content
+	contentItem := responses.ResponseInputContentParamOfInputText(string(req.Prompt))
+	contentItems := responses.ResponseInputMessageContentListParam{contentItem}
+
+	// Build input message
+	inputItem := responses.ResponseInputItemUnionParam{
+		OfMessage: &responses.EasyInputMessageParam{
+			Type:    responses.EasyInputMessageTypeMessage,
+			Role:    responses.EasyInputMessageRoleUser,
+			Content: responses.EasyInputMessageContentUnionParam{OfInputItemContentList: contentItems},
 		},
 	}
+	inputItems := responses.ResponseInputParam{inputItem}
+	params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: inputItems}
 
-	// Build image_generation tool with base parameters
-	tool := map[string]interface{}{
-		"type": "image_generation",
-		"size": string(req.Size),
-	}
-
-	// Map quality parameter (if provided)
-	// OpenAI: "standard", "hd" -> Codex: "medium", "high"
+	// Determine quality
+	quality := "auto"
 	if req.Quality != "" {
-		quality := string(req.Quality)
-		if quality == "standard" {
-			tool["quality"] = "medium"
-		} else if quality == "hd" {
-			tool["quality"] = "high"
+		qualityStr := string(req.Quality)
+		if qualityStr == "standard" {
+			quality = "medium"
+		} else if qualityStr == "hd" {
+			quality = "high"
 		} else {
-			tool["quality"] = quality
+			quality = qualityStr
 		}
 	}
 
-	// Map response_format to output_format
-	// OpenAI: "url", "b64_json" -> Codex: "url", "b64_json"
-	// Codex: supported values are: 'png', 'webp', and 'jpeg'
+	// Determine output format
+	outputFormat := "png"
 	if req.ResponseFormat != "" {
-		tool["output_format"] = string(req.ResponseFormat)
-	} else {
-		// Default to b64_json for Codex
-		tool["output_format"] = "png"
+		outputFormat = string(req.ResponseFormat)
 	}
+
+	// Build image_generation tool
+	toolParam := &responses.ToolImageGenerationParam{
+		Type:         "image_generation",
+		Size:         string(req.Size),
+		Quality:      quality,
+		OutputFormat: outputFormat,
+		//Action:       "auto",
+		//Background:   "auto",
+		//Moderation:   "auto",
+	}
+
+	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}
 
 	// Log warning for unsupported N parameter
 	if req.N.Valid() {
@@ -282,39 +301,10 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 		logrus.Warnf("[Codex] Style parameter not supported for image generation")
 	}
 
-	// Build the Responses API request
-	params := responses.ResponseNewParams{
-		Model: req.Model,
-	}
-
-	// Build the base request map with Codex-specific defaults
-	reqMap := map[string]interface{}{
-		"input": []interface{}{inputItem},
-		"tools": []interface{}{tool},
-	}
-
-	// Apply Codex-specific defaults and filters
-	ApplyCodexExtra(reqMap)
-
-	// Convert back to the format expected by SetExtraFields
+	// Set stream=true via ExtraFields
 	extraFields := map[string]interface{}{
-		"input":   reqMap["input"],
-		"tools":   reqMap["tools"],
-		"stream":  reqMap["stream"],
-		"store":   reqMap["store"],
-		"include": reqMap["include"],
+		"stream": true,
 	}
-
-	// Add instructions if it was set
-	if instructions, ok := reqMap["instructions"]; ok {
-		extraFields["instructions"] = instructions
-	}
-
-	// Add parallel_tool_calls if it was set
-	if parallel, ok := reqMap["parallel_tool_calls"]; ok {
-		extraFields["parallel_tool_calls"] = parallel
-	}
-
 	params.SetExtraFields(extraFields)
 
 	return params
