@@ -259,13 +259,20 @@ const CustomServersCard: React.FC<CustomServersCardProps> = ({ sources, onSave, 
         <Stack spacing={1.5}>
             {/* Section header + add button */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
-                        Remote servers
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                    <Typography
+                        sx={{ fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 600, color: 'text.disabled', mt: 0.5, flexShrink: 0, userSelect: 'none' }}
+                    >
+                        03
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Third-party MCP servers connected to your gateway.
-                    </Typography>
+                    <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                            Remote servers
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Third-party MCP servers connected to your gateway.
+                        </Typography>
+                    </Box>
                 </Box>
                 <Tooltip title="Connect server">
                     <IconButton
