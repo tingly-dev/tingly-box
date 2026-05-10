@@ -39,7 +39,6 @@ func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.Session
 
 	// Build base SDK options
 	options := []anthropicOption.RequestOption{
-		anthropicOption.WithAPIKey(provider.GetAccessToken()),
 		anthropicOption.WithBaseURL(apiBase),
 		anthropicOption.WithMaxRetries(0), // Disable automatic retries for 429 errors
 	}
@@ -124,7 +123,7 @@ func (c *ClaudeClient) ListModels(ctx context.Context) ([]string, error) {
 	}
 }
 
-func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) {
+func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) *AnthropicClient {
 	// Apply thinking transformation for Claude Code OAuth
 	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
 		// Clear thinking field
@@ -132,16 +131,25 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	}
 
 	// Inject session ID from metadata
-	if req.Metadata.UserID.Valid() {
-		meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
-		if meta == nil {
-			panic("invalid metadata")
-		}
-		c.AnthropicClient.Client().Options = append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+	meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
+	if meta == nil {
+		panic("invalid metadata")
 	}
+	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+
+	// Create SDK client
+	anthropicClient := anthropic.NewClient(options...)
+
+	// Wrap in AnthropicClient base
+	base := &AnthropicClient{
+		client:   anthropicClient,
+		provider: c.AnthropicClient.provider,
+	}
+
+	return base
 }
 
-func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) {
+func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) *AnthropicClient {
 	// Apply thinking transformation for Claude Code OAuth
 	// This removes the thinking field and sets output_config.effort to "medium"
 	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
@@ -150,37 +158,45 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	}
 
 	// Inject session ID from metadata
-	if req.Metadata.UserID.Valid() {
-		meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
-		if meta == nil {
-			panic("invalid metadata")
-		}
-		c.AnthropicClient.Client().Options = append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+	meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
+	if meta == nil {
+		panic("invalid metadata")
 	}
+	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
+
+	// Create SDK client
+	anthropicClient := anthropic.NewClient(options...)
+
+	// Wrap in AnthropicClient base
+	base := &AnthropicClient{
+		client:   anthropicClient,
+		provider: c.AnthropicClient.provider,
+	}
+	return base
 }
 
 // MessagesNew creates a new message request.
 func (c *ClaudeClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
-	c.Guard(ctx, req)
-	return c.AnthropicClient.MessagesNew(ctx, req)
+	guard := c.Guard(ctx, req)
+	return guard.MessagesNew(ctx, req)
 }
 
 // MessagesNewStreaming creates a new streaming message request.
 func (c *ClaudeClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
-	c.Guard(ctx, req)
-	return c.AnthropicClient.MessagesNewStreaming(ctx, req)
+	guard := c.Guard(ctx, req)
+	return guard.MessagesNewStreaming(ctx, req)
 }
 
 // BetaMessagesNew creates a new beta message request.
 func (c *ClaudeClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
-	c.GuardBeta(ctx, req)
-	return c.AnthropicClient.BetaMessagesNew(ctx, req)
+	guard := c.GuardBeta(ctx, req)
+	return guard.BetaMessagesNew(ctx, req)
 }
 
 // BetaMessagesNewStreaming creates a new beta streaming message request.
 func (c *ClaudeClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
-	c.GuardBeta(ctx, req)
-	return c.AnthropicClient.BetaMessagesNewStreaming(ctx, req)
+	guard := c.GuardBeta(ctx, req)
+	return guard.BetaMessagesNewStreaming(ctx, req)
 }
 
 // MessagesCountTokens counts tokens for a message request.
