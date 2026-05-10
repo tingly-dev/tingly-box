@@ -248,6 +248,57 @@ func (h *BotHandler) formatHelpWithFooter(hCtx HandlerContext, helpText string) 
 	return h.formatResponseWithFooter(meta, helpText)
 }
 
+// handleResumePick processes a tap on a /resume keyboard button. Mirrors the
+// `/resume <n>` text path: validate agent + project, arm the picked session,
+// and acknowledge in chat. We resolve project/agent via the chat itself
+// (rather than trusting callback payloads) so a stale keyboard cannot be used
+// to act on a different project than the one currently bound.
+func (h *BotHandler) handleResumePick(hCtx HandlerContext, sessionID string, msg imbot.Message) {
+	if h.commandAdapter == nil {
+		h.SendText(hCtx, "Command adapter not initialized.")
+		return
+	}
+	agentType, _ := h.commandAdapter.GetCurrentAgent(hCtx.ChatID)
+	if agentType != AgentNameClaude {
+		h.SendText(hCtx, "⚠️ /resume only works with Claude Code (@cc). Switch with: @cc")
+		return
+	}
+	projectPath := resolveProjectPath(h.commandAdapter, hCtx.ChatID, string(hCtx.Platform))
+	if projectPath == "" {
+		h.SendText(hCtx, "No project bound. Use /cd <path> first.")
+		return
+	}
+	if err := h.commandAdapter.PrepareResume(hCtx.ChatID, agentType, projectPath, sessionID); err != nil {
+		h.SendText(hCtx, fmt.Sprintf("Failed to arm resume: %v", err))
+		return
+	}
+
+	// Strip the keyboard from the original listing message so the user can't
+	// double-tap into a stale state. Best-effort; ignore failures.
+	if msgID, _ := msg.Metadata["message_id"].(string); msgID != "" {
+		if tgBot, ok := imbot.AsTelegramBot(hCtx.Bot); ok {
+			if err := tgBot.RemoveMessageKeyboard(context.Background(), hCtx.ChatID, msgID); err != nil {
+				logrus.WithError(err).Debug("Failed to remove resume keyboard")
+			}
+		}
+	}
+
+	h.SendText(hCtx, fmt.Sprintf(
+		"✅ Armed resume for session %s.\nSend your next message to continue, or /clear to abort.",
+		shortSessionID(sessionID)))
+}
+
+// handleResumeCancel removes the resume keyboard and confirms cancellation.
+// No state to clean up — armed state only flips on `pick`.
+func (h *BotHandler) handleResumeCancel(hCtx HandlerContext, msg imbot.Message) {
+	if msgID, _ := msg.Metadata["message_id"].(string); msgID != "" {
+		if tgBot, ok := imbot.AsTelegramBot(hCtx.Bot); ok {
+			_ = tgBot.RemoveMessageKeyboard(context.Background(), hCtx.ChatID, msgID)
+		}
+	}
+	h.SendText(hCtx, "Resume cancelled.")
+}
+
 // normalizeAllowlistToMap converts a string slice to a map for O(1) lookups
 func normalizeAllowlistToMap(values []string) map[string]struct{} {
 	result := make(map[string]struct{})

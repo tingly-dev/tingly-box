@@ -762,11 +762,61 @@ func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
 			}
 			adapter.RememberResumeListing(ctx.ChatID, ids)
 
-			return sendCommandText(adapter, ctx, buildResumeListText(projectPath, sessions))
+			text := buildResumeListText(projectPath, sessions)
+
+			// DM on a platform with inline keyboards: also surface buttons so
+			// users can tap a session instead of typing /resume <n>. Group
+			// chats and platforms without interaction stay text-only.
+			caps := imbot.GetPlatformCapabilities(string(ctx.Platform))
+			if ctx.IsDirectMessage && caps != nil && caps.SupportsInteraction() {
+				keyboard := buildResumeKeyboard(sessions)
+				tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
+				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
+					Text:     text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
+					Metadata: buildTrackedReplyMetadata(tgKeyboard),
+				})
+				if err != nil {
+					logrus.WithError(err).Error("Failed to send resume list with keyboard")
+					return sendCommandText(adapter, ctx, text)
+				}
+				return nil
+			}
+
+			return sendCommandText(adapter, ctx, text)
 		}).
 		WithCategory("session").
 		WithPriority(85).
 		MustBuild()
+}
+
+// buildResumeKeyboard renders a 2-buttons-per-row keyboard for /resume in
+// DMs. Each button's label stays compact ("#1 · 2h · 14t") because the
+// detailed previews already live in the message body; the button is just a
+// tap-target keyed to the session's index. Callback data carries the actual
+// session_id so the handler doesn't need to re-read the listing cache.
+func buildResumeKeyboard(sessions []ResumableSession) imbot.InlineKeyboardMarkup {
+	const cols = 2
+	var rows [][]imbot.InlineKeyboardButton
+	var current []imbot.InlineKeyboardButton
+	for i, s := range sessions {
+		label := fmt.Sprintf("#%d · %s · %s", i+1, formatRelativeTime(latestTime(s)), formatTurns(s.NumTurns))
+		current = append(current, imbot.InlineKeyboardButton{
+			Text:         label,
+			CallbackData: imbot.FormatCallbackData("resume", "pick", s.SessionID),
+		})
+		if len(current) == cols {
+			rows = append(rows, current)
+			current = nil
+		}
+	}
+	if len(current) > 0 {
+		rows = append(rows, current)
+	}
+	rows = append(rows, []imbot.InlineKeyboardButton{{
+		Text:         "Cancel",
+		CallbackData: imbot.FormatCallbackData("resume", "cancel"),
+	}})
+	return imbot.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
 
 // buildResumeListText renders the compact one-line-per-session list shown by
