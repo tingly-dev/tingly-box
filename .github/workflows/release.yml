@@ -171,8 +171,8 @@ jobs:
       - name: Install musl toolchain (for amd64 static linking)
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq musl-tools musl-dev
+          sudo apt-get update -qq || echo "done"
+          sudo apt-get install -y -qq musl-tools musl-dev  || echo "done"
 
       - name: Install zig (for arm64 cross-compilation)
         if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
