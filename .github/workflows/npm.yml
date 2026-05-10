@@ -34,6 +34,15 @@ on:
         required: false
         type: boolean
         default: true
+      npm_tag:
+        description: 'npm dist-tag for publish (latest/next/rc). Auto-trigger infers from version: stable→latest, pre-release→next'
+        required: false
+        type: choice
+        options:
+          - latest
+          - next
+          - rc
+        default: 'next'
 
 permissions:
   contents: write
@@ -52,6 +61,7 @@ jobs:
       publish_gui: ${{ steps.set_vars.outputs.publish_gui }}
       publish_bundle: ${{ steps.set_vars.outputs.publish_bundle }}
       build_docker: ${{ steps.set_vars.outputs.build_docker }}
+      npm_tag: ${{ steps.set_vars.outputs.npm_tag }}
       npx_version: ${{ steps.version.outputs.npx_version }}
       release_tag: ${{ steps.version.outputs.release_tag }}
     steps:
@@ -68,11 +78,20 @@ jobs:
             echo "publish_gui=false" >> $GITHUB_OUTPUT
             echo "publish_bundle=true" >> $GITHUB_OUTPUT
             echo "build_docker=true" >> $GITHUB_OUTPUT
+            # Auto-infer npm tag from version: stable → latest, pre-release → next
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            VERSION="${RELEASE_TAG#v}"
+            if [[ "$VERSION" == *-* ]]; then
+              echo "npm_tag=next" >> $GITHUB_OUTPUT
+            else
+              echo "npm_tag=latest" >> $GITHUB_OUTPUT
+            fi
           else
             echo "publish_cli=${{ github.event.inputs.publish_cli }}" >> $GITHUB_OUTPUT
             echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
             echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
             echo "build_docker=${{ github.event.inputs.build_docker }}" >> $GITHUB_OUTPUT
+            echo "npm_tag=${{ github.event.inputs.npm_tag }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate and extract version
@@ -293,13 +312,14 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
+          NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
 
-          echo "📦 Publishing ${{ matrix.pkg_name }}@${VERSION} to npm..."
+          echo "📦 Publishing ${{ matrix.pkg_name }}@${VERSION} to npm (tag: ${NPM_TAG})..."
 
           if npm view "${{ matrix.pkg_name }}@${VERSION}" version >/dev/null 2>&1; then
             echo "ℹ️ ${{ matrix.pkg_name }}@${VERSION} already exists on npm. Skipping publish."
           else
-            npm publish --provenance --access public
+            npm publish --provenance --access public --tag "$NPM_TAG"
           fi
 
   # Create a single NPX tag and release for CLI + Bundle
@@ -524,13 +544,14 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION="${{ needs.setup.outputs.npx_version }}"
+          NPM_TAG="${{ needs.setup.outputs.npm_tag }}"
 
-          echo "📦 Publishing $PKG_NAME@${VERSION} to npm..."
+          echo "📦 Publishing $PKG_NAME@${VERSION} to npm (tag: ${NPM_TAG})..."
 
           if npm view "$PKG_NAME@${VERSION}" version >/dev/null 2>&1; then
             echo "ℹ️ $PKG_NAME@${VERSION} already exists on npm. Skipping publish."
           else
-            npm publish --provenance --access public
+            npm publish --provenance --access public --tag "$NPM_TAG"
           fi
 
       - name: Create NPX tag and release
