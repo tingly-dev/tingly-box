@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	_ "time/tzdata" // Embed timezone data for static builds
+
 	"github.com/alecthomas/kong"
 	"github.com/sirupsen/logrus"
 
