@@ -272,7 +272,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Stepper>
                     </Box>
 
-                    <Stack spacing={2} sx={{ flex: 1, width: '100%' }}>
+                    <Stack spacing={2} sx={{ flex: 1, width: '100%', minHeight: 360, justifyContent: 'space-between' }}>
+                        <Box sx={{ flex: 1 }}>
                         {stepCursor === 0 && (
                         <Stack direction="row" spacing={1.5} alignItems="flex-start">
                             {providerLoading ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} /> : null}
@@ -330,7 +331,14 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>Step 4 — Apply Config</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Write the proxy configuration to {agentName}'s settings file.</Typography><Collapse in={!applyDone}><Stack direction="row" spacing={1} flexWrap="wrap" gap={1}><Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>Apply</Button>{onApplyWithStatusLine && <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>Apply + Status Line</Button>}{onViewConfig && <Button variant="outlined" size="small" onClick={onViewConfig}>Manual Setup</Button>}</Stack></Collapse>{applyResult && (<Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>{applyResult.success ? (<Box><Typography variant="caption" fontWeight={600}>Config applied!</Typography>{applyResult.files?.map(f => (<Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>))}</Box>) : (<Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>)}</Alert>)}</Box></Stack>
                         )}
 
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        </Box>
+
+                        <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            sx={{ pt: 1.5, borderTop: 1, borderColor: 'divider' }}
+                        >
                             <Button size="small" onClick={handleReset} disabled={stepCursor === 0 && !installDone && !applyDone && skipped.size === 0}>Reset</Button>
                             <Stack direction="row" spacing={1}>
                                 <Button size="small" onClick={handleBack} disabled={stepCursor === 0}>Back</Button>
