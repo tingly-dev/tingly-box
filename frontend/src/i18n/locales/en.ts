@@ -228,7 +228,10 @@ export default {
       "label": "Protocol"
     },
     "fusion": {
-      "createCheckbox": "Create as Fusion Provider (single combined provider)"
+      "modeLabel": "Fusion mode",
+      "tooltipTitle": "How provider creation works",
+      "normalModeDesc": "Normal mode (unchecked): create two independent providers, one for OpenAI and one for Anthropic.",
+      "fusionModeDesc": "Fusion mode (checked): create one provider with both OpenAI and Anthropic base URLs."
     },
     "keyName": {
       "label": "API Key Name",

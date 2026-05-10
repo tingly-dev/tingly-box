@@ -1,4 +1,4 @@
-import {Close, Visibility, VisibilityOff} from '@mui/icons-material';
+import {Close, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -19,6 +19,7 @@ import {
     Stack,
     Switch,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -764,7 +765,32 @@ const ProviderFormDialog = ({
                                         }}
                                     />
                                 }
-                                label={t('providerDialog.fusion.createCheckbox')}
+                                label={(
+                                    <Stack direction="row" spacing={0.75} alignItems="center">
+                                        <Typography variant="body2">
+                                            {t('providerDialog.fusion.modeLabel')}
+                                        </Typography>
+                                        <Tooltip
+                                            arrow
+                                            placement="top"
+                                            title={
+                                                <Box>
+                                                    <Typography variant="body2" sx={{fontWeight: 600, mb: 0.5}}>
+                                                        {t('providerDialog.fusion.tooltipTitle')}
+                                                    </Typography>
+                                                    <Typography variant="caption" sx={{display: 'block'}}>
+                                                        {t('providerDialog.fusion.normalModeDesc')}
+                                                    </Typography>
+                                                    <Typography variant="caption" sx={{display: 'block', mt: 0.75}}>
+                                                        {t('providerDialog.fusion.fusionModeDesc')}
+                                                    </Typography>
+                                                </Box>
+                                            }
+                                        >
+                                            <InfoOutlined sx={{fontSize: 16, color: 'text.secondary'}} />
+                                        </Tooltip>
+                                    </Stack>
+                                )}
                             />
                         )}
 
