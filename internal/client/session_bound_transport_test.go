@@ -506,8 +506,8 @@ func TestCreateSessionBoundTransport(t *testing.T) {
 
 	// The transport should be a claudeRoundTripper wrapping SessionBoundTransport
 	// We can verify this by checking the type
-	if _, ok := transport.(*claudeRoundTripper); !ok {
-		t.Error("Expected claudeRoundTripper for Claude Code OAuth provider")
+	if _, ok := transport.(*SessionBoundTransport); !ok {
+		t.Errorf("Expected SessionBoundTransport for Claude Code OAuth provider (SDK middleware handles transformations), got %T", transport)
 	}
 
 	// Create an HTTP client and verify it works

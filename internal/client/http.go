@@ -477,16 +477,6 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 	// Layer provider-specific transformations
 	if provider.AuthType == typ.AuthTypeOAuth {
 		switch issuer {
-		case ai.IssuerClaudeCode:
-			// Claude Code OAuth needs request/response transformations
-			return &claudeRoundTripper{
-				RoundTripper: baseTransport,
-			}
-		case ai.IssuerCodex:
-			// Codex (ChatGPT backend API) needs path rewriting and response transformation
-			return &codexRoundTripper{
-				RoundTripper: baseTransport,
-			}
 		case ai.IssuerAntigravity:
 			// Antigravity needs extra config (project_id) and special wrapping
 			project := ""
@@ -581,10 +571,8 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 				}
 			}
 
-			client.Transport = &claudeRoundTripper{
-				RoundTripper: claudeTransport,
-			}
-			logrus.Infof("Created Claude Code RoundTripper with proxy=%s", provider.ProxyURL)
+			client.Transport = claudeTransport
+			logrus.Infof("Created Claude Code transport with proxy=%s (SDK middleware handles transformations)", provider.ProxyURL)
 		case ai.IssuerCodex:
 			// Create base transport with proxy support if needed
 			var baseTransport http.RoundTripper = transport
