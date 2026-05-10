@@ -751,47 +751,50 @@ const ProviderFormDialog = ({
                             </Stack>
                         </FormControl>
                         {enableFusion && mode === 'add' && protocolOpenAI && protocolAnthropic && (
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        size="small"
-                                        checked={createFusionProvider}
-                                        onChange={(e) => {
-                                            const checked = e.target.checked;
-                                            setCreateFusionProvider(checked);
-                                            onChange('createFusionProvider', checked);
-                                            syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
-                                            setVerificationResult(null);
-                                        }}
-                                    />
-                                }
-                                label={(
-                                    <Stack direction="row" spacing={0.75} alignItems="center">
-                                        <Typography variant="body2">
-                                            {t('providerDialog.fusion.modeLabel')}
-                                        </Typography>
-                                        <Tooltip
-                                            arrow
-                                            placement="top"
-                                            title={
-                                                <Box>
-                                                    <Typography variant="body2" sx={{fontWeight: 600, mb: 0.5}}>
-                                                        {t('providerDialog.fusion.tooltipTitle')}
-                                                    </Typography>
-                                                    <Typography variant="caption" sx={{display: 'block'}}>
-                                                        {t('providerDialog.fusion.normalModeDesc')}
-                                                    </Typography>
-                                                    <Typography variant="caption" sx={{display: 'block', mt: 0.75}}>
-                                                        {t('providerDialog.fusion.fusionModeDesc')}
-                                                    </Typography>
-                                                </Box>
-                                            }
-                                        >
-                                            <InfoOutlined sx={{fontSize: 16, color: 'text.secondary'}} />
-                                        </Tooltip>
-                                    </Stack>
-                                )}
-                            />
+                            <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: -0.5, pr: 2}}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            size="small"
+                                            checked={createFusionProvider}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setCreateFusionProvider(checked);
+                                                onChange('createFusionProvider', checked);
+                                                syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
+                                                setVerificationResult(null);
+                                            }}
+                                        />
+                                    }
+                                    label={(
+                                        <Stack direction="row" spacing={0.75} alignItems="center">
+                                            <Typography variant="body2">
+                                                {t('providerDialog.fusion.modeLabel')}
+                                            </Typography>
+                                            <Tooltip
+                                                arrow
+                                                placement="top"
+                                                title={
+                                                    <Box>
+                                                        <Typography variant="body2" sx={{fontWeight: 600, mb: 0.5}}>
+                                                            {t('providerDialog.fusion.tooltipTitle')}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{display: 'block'}}>
+                                                            {t('providerDialog.fusion.normalModeDesc')}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{display: 'block', mt: 0.75}}>
+                                                            {t('providerDialog.fusion.fusionModeDesc')}
+                                                        </Typography>
+                                                    </Box>
+                                                }
+                                            >
+                                                <InfoOutlined sx={{fontSize: 16, color: 'text.secondary'}} />
+                                            </Tooltip>
+                                        </Stack>
+                                    )}
+                                    labelPlacement="start"
+                                />
+                            </Box>
                         )}
 
                         <Box>
