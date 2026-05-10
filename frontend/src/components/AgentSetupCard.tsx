@@ -111,6 +111,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const modelDone = hasModelSelected;
     const allDone = providerDone && modelDone && installDone && applyDone;
     const doneCount = [providerDone, modelDone, installDone, applyDone].filter(Boolean).length;
+    const activeStep = !providerDone ? 0 : !modelDone ? 1 : !installDone ? 2 : !applyDone ? 3 : 3;
 
     // Auto-collapse on first visit when every step is already complete, but only
     // when the user hasn't expressed a preference. We wait for providerLoading
@@ -214,8 +215,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
             }
         >
             <Collapse in={!collapsed} unmountOnExit={false}>
-                <Stack spacing={2.5}>
-                    <Stepper activeStep={doneCount} alternativeLabel sx={{ px: 1 }}>
+                <Stack spacing={2}>
+                    <Stepper activeStep={activeStep} alternativeLabel sx={{ px: 1 }}>
                         <Step completed={providerDone}>
                             <StepLabel>Provider</StepLabel>
                         </Step>
@@ -229,7 +230,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             <StepLabel>Apply</StepLabel>
                         </Step>
                     </Stepper>
-                    {/* Step 1: Provider */}
+
+                    {activeStep === 0 && (
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         {providerLoading ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} /> : null}
                         <Box sx={{ flex: 1 }}>
@@ -261,7 +263,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Box>
                     </Stack>
 
-                    {/* Step 2: Select a Model */}
+                    )}
+
+                    {activeStep === 1 && (
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         <Box sx={{ flex: 1 }}>
                             <Typography
@@ -296,7 +300,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Box>
                     </Stack>
 
-                    {/* Step 3: Install */}
+                    )}
+
+                    {activeStep === 2 && (
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         <Box sx={{ flex: 1 }}>
                             <Typography
@@ -390,7 +396,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         </Box>
                     </Stack>
 
-                    {/* Step 4: Apply Config */}
+                    )}
+
+                    {activeStep === 3 && (
                     <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         <Box sx={{ flex: 1 }}>
                             <Typography
@@ -467,6 +475,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             )}
                         </Box>
                     </Stack>
+                    )}
                 </Stack>
             </Collapse>
         </UnifiedCard>
