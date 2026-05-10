@@ -1,9 +1,6 @@
-//go:build tdd_harness
-
 package smartrouting
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -231,12 +228,20 @@ func TestLookupProcessor_MissingReturnsFalse(t *testing.T) {
 }
 
 func TestRegisterProcessor_OverwriteContract(t *testing.T) {
-	t.Skip("Phase B: pin overwrite contract (reject vs replace) once production decides")
-	// Phase B will either:
-	//   (a) panic / return an error on duplicate registration, OR
-	//   (b) silently replace.
-	// Once the contract is chosen, this test asserts it.
-	_ = &fakeOpProcessor{}
+	// Production contract: silently replace. Keeps server boot idempotent
+	// across config reloads.
+	first := &fakeOpProcessor{}
+	second := &fakeOpProcessor{}
+
+	const testOp SmartOpOperation = "harness_overwrite_op"
+	RegisterProcessor(PositionLatestUser, testOp, first)
+	t.Cleanup(func() { UnregisterProcessor(PositionLatestUser, testOp) })
+
+	RegisterProcessor(PositionLatestUser, testOp, second)
+
+	got, ok := LookupProcessor(PositionLatestUser, testOp)
+	require.True(t, ok)
+	require.Same(t, OpProcessor(second), got, "second registration must replace the first")
 }
 
 // ---------------------------------------------------------------------------
@@ -244,23 +249,36 @@ func TestRegisterProcessor_OverwriteContract(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestEvaluateLatestUserProxyVision_MatchesWhenImagePresent(t *testing.T) {
-	t.Skip("Phase B: requires Router.evaluateLatestUserOp to handle OpLatestUserProxyVision")
-	// Phase B body:
-	//   reqCtx := ExtractContext(betaReqWithImage("describe", tinyPNGBase64))
-	//   r, _ := NewRouter([]SmartRouting{{ Ops: []SmartOp{{Position: PositionLatestUser, Operation: OpLatestUserProxyVision}}, Services: dummySvcs }})
-	//   _, _, matched, _ := r.Evaluate(reqCtx)
-	//   require.True(t, matched)
-	_ = context.Background()
-	_ = []*loadbalance.Service{}
+	reqCtx := ExtractContext(betaReqWithImage("describe", tinyPNGBase64))
+	require.NotNil(t, reqCtx)
+
+	rules := []SmartRouting{{
+		Description: "vision proxy",
+		Ops:         []SmartOp{{Position: PositionLatestUser, Operation: OpLatestUserProxyVision}},
+		Services:    []*loadbalance.Service{{Provider: "p", Model: "m", Active: true}},
+	}}
+	r, err := NewRouter(rules)
+	require.NoError(t, err)
+
+	_, idx, matched, _ := r.Evaluate(reqCtx)
+	require.True(t, matched, "image-bearing request must match proxy_vision op")
+	require.Equal(t, 0, idx)
 }
 
 func TestEvaluateLatestUserProxyVision_DoesNotMatchTextOnly(t *testing.T) {
-	t.Skip("Phase B: requires Router.evaluateLatestUserOp to handle OpLatestUserProxyVision")
-	// Phase B body:
-	//   reqCtx := ExtractContext(betaReqText("hello"))
-	//   r, _ := NewRouter([]SmartRouting{{ Ops: []SmartOp{{Position: PositionLatestUser, Operation: OpLatestUserProxyVision}}, Services: dummySvcs }})
-	//   _, _, matched, _ := r.Evaluate(reqCtx)
-	//   require.False(t, matched)
+	reqCtx := ExtractContext(betaReqText("hello"))
+	require.NotNil(t, reqCtx)
+
+	rules := []SmartRouting{{
+		Description: "vision proxy",
+		Ops:         []SmartOp{{Position: PositionLatestUser, Operation: OpLatestUserProxyVision}},
+		Services:    []*loadbalance.Service{{Provider: "p", Model: "m", Active: true}},
+	}}
+	r, err := NewRouter(rules)
+	require.NoError(t, err)
+
+	_, _, matched, _ := r.Evaluate(reqCtx)
+	require.False(t, matched, "text-only request must NOT match proxy_vision op")
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,8 @@
 package routing
 
 import (
+	"context"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -192,6 +194,56 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	if !matched || len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
 		s.emitTrace(ctx, reqCtx, trace, -1, 0, 0, nil, "no_match", "no rule matched the request")
+		return nil, false
+	}
+
+	// Implicit bypass: if any of the matched rule's ops carries a registered
+	// processor, run them and let the pipeline continue. The processor mutates
+	// ctx.Request in place; downstream stages see the mutation. The matched
+	// rule's services act as the processor's upstream candidate pool, NOT the
+	// downstream selection set.
+	matchedRule := rule.SmartRouting[matchedRuleIndex]
+	if _, already := ctx.BypassedSmartRules[matchedRuleIndex]; already {
+		// Same rule already bypassed in an earlier pass — skip the entire
+		// stage to prevent loops on residual matchable content.
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), 0, nil,
+			"bypass_already_done", "rule already bypassed by op-level processor; skipping")
+		return nil, false
+	}
+	var procs []smartrouting.OpProcessor
+	var procOpUUIDs []string
+	for i := range matchedRule.Ops {
+		op := matchedRule.Ops[i]
+		if p, ok := smartrouting.LookupProcessor(op.Position, op.Operation); ok {
+			procs = append(procs, p)
+			procOpUUIDs = append(procOpUUIDs, op.UUID)
+		}
+	}
+	if len(procs) > 0 {
+		processorCtx := context.Background()
+		if ctx.GinContext != nil && ctx.GinContext.Request != nil {
+			processorCtx = ctx.GinContext.Request.Context()
+		}
+		pctx := &smartrouting.ProcessorContext{
+			Ctx:       processorCtx,
+			Request:   ctx.Request,
+			ReqCtx:    reqCtx,
+			RuleIndex: matchedRuleIndex,
+			Services:  matchedServices,
+		}
+		for i, p := range procs {
+			pctx.OpUUID = procOpUUIDs[i]
+			if err := p.Process(pctx); err != nil {
+				logrus.Debugf("[smart_routing] processor %s/%s error: %v",
+					matchedRule.Ops[i].Position, matchedRule.Ops[i].Operation, err)
+			}
+		}
+		if ctx.BypassedSmartRules == nil {
+			ctx.BypassedSmartRules = make(map[int]struct{})
+		}
+		ctx.BypassedSmartRules[matchedRuleIndex] = struct{}{}
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), 0, nil,
+			"bypass_processor_run", "op-level processor ran; pipeline continues")
 		return nil, false
 	}
 

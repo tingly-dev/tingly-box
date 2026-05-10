@@ -1,5 +1,3 @@
-//go:build tdd_harness
-
 package routing
 
 import (
@@ -131,10 +129,28 @@ func TestSmartRoutingStage_NoProcessor_TerminalSelectionUnchanged(t *testing.T) 
 }
 
 func TestSmartRoutingStage_BypassedRule_NotReentered(t *testing.T) {
-	t.Skip("Phase B: requires SelectionContext.BypassedSmartRules — assert that re-evaluating the same context does not re-trigger an already-bypassed rule")
-	// Phase B body sketch:
-	//   ctx.BypassedSmartRules = map[int]struct{}{0: {}}
-	//   stage.Evaluate(ctx, state) should NOT call the processor a second time.
+	called := 0
+	smartrouting.RegisterProcessor(smartrouting.PositionLatestUser, smartrouting.OpLatestUserProxyVision,
+		processorFunc(func(_ *smartrouting.ProcessorContext) error {
+			called++
+			return nil
+		}))
+	t.Cleanup(func() {
+		smartrouting.UnregisterProcessor(smartrouting.PositionLatestUser, smartrouting.OpLatestUserProxyVision)
+	})
+
+	services := []*loadbalance.Service{testService("provider-a", "vision-model", true)}
+	rule := testSmartRule("rule-1", "any-model", services, proxyVisionOp())
+	ctx := testContext(rule, "")
+	ctx.Request = betaReqWithImage("describe")
+	// Pre-mark rule 0 as already bypassed.
+	ctx.BypassedSmartRules = map[int]struct{}{0: {}}
+
+	stage := NewSmartRoutingStage(&mockLoadBalancer{service: services[0]}, newMockAffinityStore())
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+
+	require.False(t, handled, "stage must not terminate; pipeline continues")
+	require.Equal(t, 0, called, "processor must NOT be re-invoked for an already-bypassed rule")
 }
 
 func TestSmartRoutingStage_ProcessorMutatesRequest_LoadBalancerSeesMutation(t *testing.T) {

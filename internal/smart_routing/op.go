@@ -101,6 +101,14 @@ var Operations = []SmartOp{
 			Type:        ValueTypeString,
 		},
 	},
+	{
+		Position:  PositionLatestUser,
+		Operation: OpLatestUserProxyVision,
+		Meta: SmartOpMeta{
+			Description: "Latest user has an image — vision-proxy processor will describe it and let the pipeline continue (implicit bypass)",
+			Type:        ValueTypeBool,
+		},
+	},
 
 	// Tool use operations
 	{
@@ -266,8 +274,9 @@ const (
 	OpContextUserRegex    SmartOpOperation = "regex"    // Combined user messages match regex pattern
 
 	// Latest user message operations
-	OpLatestUserContains    SmartOpOperation = "contains" // Latest user message contains the value
-	OpLatestUserRequestType SmartOpOperation = "type"     // Latest user message content type
+	OpLatestUserContains    SmartOpOperation = "contains"    // Latest user message contains the value
+	OpLatestUserRequestType SmartOpOperation = "type"        // Latest user message content type
+	OpLatestUserProxyVision SmartOpOperation = "proxy_vision" // Latest user has an image; trigger vision-proxy processor
 
 	// Tool use operations
 	OpToolUseEquals   SmartOpOperation = "equals"   // Latest message is `tool use` and its name equals the value

@@ -29,6 +29,12 @@ type SelectionContext struct {
 	// MatchedSmartRuleIndex tracks which smart routing rule matched (-1 if none)
 	// This is set by SmartRoutingStage and used for smart_rule-scoped affinity
 	MatchedSmartRuleIndex int
+
+	// BypassedSmartRules records smart-routing rules whose processors have
+	// already run and bypassed the stage (returned (nil, false) to let the
+	// pipeline continue). SmartRoutingStage skips these on re-evaluation so
+	// processors do not loop on residual matchable content.
+	BypassedSmartRules map[int]struct{}
 }
 
 // NewSelectionContext creates a new selection context with resolved session ID
