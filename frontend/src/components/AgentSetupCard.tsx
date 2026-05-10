@@ -8,6 +8,7 @@ import {
     Box,
     Button,
     Chip,
+    LinearProgress,
     CircularProgress,
     Collapse,
     IconButton,
@@ -179,6 +180,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     };
 
     const progressLabel = allDone ? 'Done' : `${doneCount}/${TOTAL_STEPS}`;
+    const progressValue = Math.round((doneCount / TOTAL_STEPS) * 100);
     const progressColor = allDone ? 'success' : 'default';
 
     const collapsedHint = !providerDone
@@ -218,10 +220,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                 </Tooltip>
             }
         >
+            <Box sx={{ px: 0.5, pb: 1 }}>
+                <LinearProgress
+                    variant="determinate"
+                    value={progressValue}
+                    color={allDone ? 'success' : 'primary'}
+                    sx={{ height: 6, borderRadius: 999, bgcolor: 'action.hover' }}
+                />
+            </Box>
             <Collapse in={!collapsed} unmountOnExit={false}>
                 <Stack spacing={2.5}>
                     {/* Step 1: Provider */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: providerDone ? 'success.light' : 'background.default' }}>
                         {providerLoading
                             ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} />
                             : <StepIcon done={providerDone} active={!providerDone} />
@@ -256,7 +266,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Stack>
 
                     {/* Step 2: Select a Model */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: modelDone ? 'success.light' : 'background.default' }}>
                         <StepIcon done={modelDone} active={providerDone && !modelDone} />
                         <Box sx={{ flex: 1 }}>
                             <Typography
@@ -292,7 +302,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Stack>
 
                     {/* Step 3: Install */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: installDone ? 'success.light' : 'background.default' }}>
                         <StepIcon done={installDone} active={modelDone && !installDone} />
                         <Box sx={{ flex: 1 }}>
                             <Typography
@@ -376,18 +386,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             {!installDone && (
                                 <Button
                                     size="small"
-                                    variant="text"
+                                    variant="outlined"
                                     onClick={handleInstallDone}
                                     sx={{ mt: 0.5, fontSize: '0.75rem', px: 0 }}
                                 >
-                                    ✓ Already installed / Done
+                                    Mark as Installed
                                 </Button>
                             )}
                         </Box>
                     </Stack>
 
                     {/* Step 4: Apply Config */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: applyDone ? 'success.light' : 'background.default' }}>
                         <StepIcon done={applyDone} active={installDone && !applyDone} />
                         <Box sx={{ flex: 1 }}>
                             <Typography
@@ -428,7 +438,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                             size="small"
                                             onClick={onViewConfig}
                                         >
-                                            Manual
+                                            Manual Setup
                                         </Button>
                                     )}
                                     <Button
@@ -438,7 +448,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                         onClick={handleApplyDone}
                                         sx={{ fontSize: '0.75rem' }}
                                     >
-                                        ✓ Already configured / Done
+                                        Mark as Configured
                                     </Button>
                                 </Stack>
                             </Collapse>
