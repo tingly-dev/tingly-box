@@ -168,8 +168,14 @@ jobs:
           name: frontend-dist
           path: internal/web/dist/
 
-      - name: Install zig (for cross-compilation)
-        if: matrix.cross_compile == true
+      - name: Install musl toolchain (for amd64 static linking)
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools musl-dev
+
+      - name: Install zig (for arm64 cross-compilation)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
         run: |
           wget -q https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
           tar -xf zig-linux-x86_64-0.13.0.tar.xz
@@ -203,17 +209,30 @@ jobs:
           LDFLAGS+=" -X main.goVersion=${GO_VERSION}"
           LDFLAGS+=" -X main.platform=${PLATFORM}"
 
-          # Use zig for cross-compilation if needed
-          if [ "${{ matrix.cross_compile }}" == "true" ]; then
-            CC="zig cc -target aarch64-linux-gnu"
-            CXX="zig c++ -target aarch64-linux-gnu"
-            export CC CXX
+          # Configure build flags based on platform
+          BUILD_TAGS=""
+          LDFLAGS_EXT=""
+
+          if [ "${{ matrix.goos }}" == "linux" ]; then
+            if [ "${{ matrix.goarch }}" == "amd64" ]; then
+              # Static linking with musl for Linux amd64
+              BUILD_TAGS="-tags 'sqlite_omit_load_extension'"
+              LDFLAGS_EXT="-linkmode external -extldflags \"-static\""
+              CC=musl-gcc
+              export CC
+            elif [ "${{ matrix.goarch }}" == "arm64" ]; then
+              # Use zig for cross-compilation
+              CC="zig cc -target aarch64-linux-gnu"
+              CXX="zig c++ -target aarch64-linux-gnu"
+              export CC CXX
+            fi
           fi
 
           # Build with optimizations
           CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
             go build \
-            -ldflags="${LDFLAGS}" \
+            ${BUILD_TAGS} \
+            -ldflags="${LDFLAGS} ${LDFLAGS_EXT}" \
             -trimpath \
             -o ./dist/tingly-box${{ matrix.exe }} \
             ./cli/tingly-box
