@@ -263,7 +263,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         >
             <Collapse in={!collapsed} unmountOnExit={false}>
                 <Stack spacing={2.5}>
-                    <Stepper activeStep={stepCursor} alternativeLabel>
+                    <Box sx={{ width: '100%', px: { xs: 0, sm: 1 }, pt: 0.5 }}>
+                    <Stepper activeStep={stepCursor} orientation="horizontal" alternativeLabel>
                             <Step completed={providerDone}>
                                 <StepLabel optional={isStepSkipped(0) ? <Typography variant="caption">Skipped</Typography> : undefined}>{STEP_LABELS[0]}</StepLabel>
                             </Step>
@@ -277,6 +278,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 <StepLabel optional={isStepSkipped(3) ? <Typography variant="caption">Skipped</Typography> : undefined}>{STEP_LABELS[3]}</StepLabel>
                             </Step>
                     </Stepper>
+                    </Box>
 
                     <Stack spacing={2} sx={{ width: '100%', minHeight: 320, justifyContent: 'space-between', border: 1, borderColor: 'divider', borderRadius: 2, p: 2 }}>
                         <Box sx={{ flex: 1 }}>
