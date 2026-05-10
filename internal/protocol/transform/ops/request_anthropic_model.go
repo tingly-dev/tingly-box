@@ -17,8 +17,8 @@ const ClaudeCodeVersion = "2.1.86"
 const FingerprintSalt = "59cf53e54c78"
 
 // ApplyAnthropicV1ModelTransform applies Anthropic API v1 model-specific filtering.
-// This handles model-specific limitations such as adaptive thinking only being supported by
-// Claude Opus 4.6 (claude-opus-4-6) and Claude Sonnet 4.6 (claude-sonnet-4-6).
+// This handles model-specific limitations such as adaptive thinking not being supported by
+// Gen 3 models (claude-3-*). Gen 4+ models support adaptive thinking.
 //
 // Parameters:
 //   - req: The Anthropic v1 request to transform
@@ -36,7 +36,7 @@ func ApplyAnthropicV1ModelTransform(req *anthropic.MessageNewParams, model strin
 }
 
 // ApplyAnthropicBetaModelTransform applies Anthropic API beta model-specific filtering.
-// Same rules as V1 but for BetaMessageNewParams.
+// Same rules as V1 (Gen 3 deny-list) but for BetaMessageNewParams.
 func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model string) *anthropic.BetaMessageNewParams {
 	if isThinkingSupportedModel(model) {
 		return req
@@ -45,10 +45,16 @@ func ApplyAnthropicBetaModelTransform(req *anthropic.BetaMessageNewParams, model
 }
 
 // isThinkingSupportedModel checks if the model supports adaptive thinking.
-// Only Claude Opus 4.6 and Claude Sonnet 4.6 support adaptive thinking.
+// Gen 3 models (claude-3-*) do NOT support it; Gen 4+ and future models do.
+// Uses a deny-list (negated match on "claude-3-") instead of an allow-list
+// because Gen 3 is closed and no new Gen 3 models will be released.
+// Non-Claude and empty models return false (safe default).
 func isThinkingSupportedModel(model string) bool {
 	modelLower := strings.ToLower(model)
-	return strings.Contains(modelLower, "claude-opus-4-6") || strings.Contains(modelLower, "claude-sonnet-4-6")
+	if !strings.HasPrefix(modelLower, "claude-") {
+		return false
+	}
+	return !strings.Contains(modelLower, "claude-3-")
 }
 
 // applyAnthropicV1ThinkingFilter removes thinking configuration from Anthropic v1 requests
@@ -75,8 +81,10 @@ func applyAnthropicV1ThinkingFilter(req *anthropic.MessageNewParams) *anthropic.
 	return req
 }
 
-// applyAnthropicBetaThinkingFilter removes thinking configuration from Anthropic v1 requests
-// // for models that don't support adaptive thinking.
+// applyAnthropicBetaThinkingFilter removes thinking configuration from Anthropic beta requests
+// for models that don't support adaptive thinking.
+// Also strips context_management.clear_thinking_20251015 edits that depend on thinking,
+// preventing 400 errors from Anthropic when thinking is removed but clear_thinking remains.
 func applyAnthropicBetaThinkingFilter(req *anthropic.BetaMessageNewParams) *anthropic.BetaMessageNewParams {
 	if req == nil {
 		return req
@@ -96,6 +104,29 @@ func applyAnthropicBetaThinkingFilter(req *anthropic.BetaMessageNewParams) *anth
 	// Also check messages for thinking blocks
 	req.Messages = filterBetaThinkingBlocksInMessages(req.Messages)
 
+	// Defensive: strip context_management.clear_thinking_20251015 when thinking is removed.
+	// These edits require thinking to be present in the request; without thinking,
+	// Anthropic rejects the request with 400.
+	req = stripBetaThinkingContextManagement(req)
+
+	return req
+}
+
+// stripBetaThinkingContextManagement removes thinking-dependent context_management edits
+// from an Anthropic beta request. This prevents errors when thinking is stripped but
+// clear_thinking_20251015 edits remain, which Anthropic rejects as invalid.
+func stripBetaThinkingContextManagement(req *anthropic.BetaMessageNewParams) *anthropic.BetaMessageNewParams {
+	if req == nil || len(req.ContextManagement.Edits) == 0 {
+		return req
+	}
+	var filtered []anthropic.BetaContextManagementConfigEditUnionParam
+	for _, edit := range req.ContextManagement.Edits {
+		if edit.OfClearThinking20251015 != nil {
+			continue // clear_thinking requires thinking to be present
+		}
+		filtered = append(filtered, edit)
+	}
+	req.ContextManagement.Edits = filtered
 	return req
 }
 

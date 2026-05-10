@@ -166,7 +166,7 @@ func (t *VendorTransform) applyCodexResponsesTransform(ctx *TransformContext, re
 }
 
 // applyAnthropicV1Vendor applies Anthropic-specific model filtering for v1 API
-// This handles model-specific limitations such as Haiku not supporting thinking.type="adaptive"
+// This handles model-specific limitations such as Gen 3 (claude-3-*) not supporting thinking.type="adaptive"
 // Also injects OAuth user_id into metadata when available.
 func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *anthropic.MessageNewParams) error {
 	// Get model name from context
@@ -189,7 +189,7 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 }
 
 // applyAnthropicBetaVendor applies Anthropic-specific model filtering for beta API
-// This handles model-specific limitations such as Haiku not supporting thinking.type="adaptive"
+// This handles model-specific limitations such as Gen 3 (claude-3-*) not supporting thinking.type="adaptive"
 // Also injects OAuth user_id into metadata when available.
 func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *anthropic.BetaMessageNewParams) error {
 	// Get model name from context

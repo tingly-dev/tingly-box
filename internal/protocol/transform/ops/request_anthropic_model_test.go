@@ -15,14 +15,41 @@ func TestIsThinkingSupportedModel(t *testing.T) {
 		model    string
 		expected bool
 	}{
+		// Deny-list: Gen 3 models (claude-3-*) never support adaptive thinking.
+		{
+			name:     "Claude 3 Haiku",
+			model:    "claude-3-haiku-20240307",
+			expected: false,
+		},
+		{
+			name:     "Claude 3.5 Haiku",
+			model:    "claude-3-5-haiku-20241022",
+			expected: false,
+		},
+		{
+			name:     "Claude 3.5 Sonnet",
+			model:    "claude-3-5-sonnet-20241022",
+			expected: false,
+		},
+		{
+			name:     "Claude 3.7 Opus",
+			model:    "claude-3-7-opus-20250214",
+			expected: false,
+		},
+		{
+			name:     "Claude 3 uppercase",
+			model:    "CLAUDE-3-5-SONNET-20241022",
+			expected: false,
+		},
+		// Gen 4+: all support adaptive thinking.
 		{
 			name:     "Claude Opus 4.6",
 			model:    "claude-opus-4-6",
 			expected: true,
 		},
 		{
-			name:     "Claude Opus 4.6 uppercase",
-			model:    "CLAUDE-OPUS-4-6",
+			name:     "Claude Opus 4.7 with date suffix",
+			model:    "claude-opus-4-7-20260510",
 			expected: true,
 		},
 		{
@@ -36,28 +63,24 @@ func TestIsThinkingSupportedModel(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "Claude Haiku 3.5",
-			model:    "claude-3-5-haiku-20241022",
-			expected: false,
+			name:     "Claude Haiku 4.5",
+			model:    "claude-haiku-4-5",
+			expected: true,
 		},
 		{
-			name:     "Claude Haiku 3",
-			model:    "claude-3-haiku",
-			expected: false,
+			name:     "Claude Mythos Preview",
+			model:    "claude-mythos-preview",
+			expected: true,
 		},
-		{
-			name:     "Claude Sonnet 3.5",
-			model:    "claude-3-5-sonnet-20241022",
-			expected: false,
-		},
-		{
-			name:     "Claude Opus 3.7",
-			model:    "claude-3-7-opus-20250214",
-			expected: false,
-		},
+		// Edge cases.
 		{
 			name:     "Empty model",
 			model:    "",
+			expected: false,
+		},
+		{
+			name:     "Non-Claude model",
+			model:    "deepseek-chat",
 			expected: false,
 		},
 	}
