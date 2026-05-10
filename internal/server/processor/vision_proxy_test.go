@@ -1,5 +1,3 @@
-//go:build tdd_harness
-
 package processor
 
 import (
