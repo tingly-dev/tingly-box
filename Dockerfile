@@ -39,8 +39,12 @@ RUN if [ ! -f libs/go-genai/go.mod ]; then \
 # Download dependencies (must be after source copy due to local replace directive)
 RUN go mod download
 
-# Now build using the created Taskfile
-RUN CGO_ENABLED=1 CI=true task cli:build
+# Build with static linking for SQLite (musl)
+RUN CGO_ENABLED=1 \
+    go build \
+    -tags 'sqlite_omit_load_extension' \
+    -ldflags '-linkmode external -extldflags "-static"' \
+    -o ./build/tingly-box ./cli/tingly-box
 
 # Rename binary to expected name
 RUN mv ./build/tingly-box ./tingly
