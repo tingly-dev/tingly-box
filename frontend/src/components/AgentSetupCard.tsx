@@ -1,18 +1,18 @@
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import {
     Alert,
     Box,
     Button,
     Chip,
-    LinearProgress,
     CircularProgress,
     Collapse,
     IconButton,
     Stack,
+    Step,
+    StepLabel,
+    Stepper,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -60,12 +60,6 @@ export const scrollToModelsCard = () => {
         behavior: 'smooth',
         block: 'start',
     });
-};
-
-const StepIcon: React.FC<{ done: boolean; active: boolean }> = ({ done, active }) => {
-    if (done) return <CheckCircleIcon sx={{ color: 'success.main', fontSize: 20 }} />;
-    if (active) return <RadioButtonUncheckedIcon sx={{ color: 'primary.main', fontSize: 20 }} />;
-    return <RadioButtonUncheckedIcon sx={{ color: 'text.disabled', fontSize: 20 }} />;
 };
 
 const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
@@ -180,7 +174,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     };
 
     const progressLabel = allDone ? 'Done' : `${doneCount}/${TOTAL_STEPS}`;
-    const progressValue = Math.round((doneCount / TOTAL_STEPS) * 100);
     const progressColor = allDone ? 'success' : 'default';
 
     const collapsedHint = !providerDone
@@ -220,22 +213,25 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                 </Tooltip>
             }
         >
-            <Box sx={{ px: 0.5, pb: 1 }}>
-                <LinearProgress
-                    variant="determinate"
-                    value={progressValue}
-                    color={allDone ? 'success' : 'primary'}
-                    sx={{ height: 6, borderRadius: 999, bgcolor: 'action.hover' }}
-                />
-            </Box>
             <Collapse in={!collapsed} unmountOnExit={false}>
                 <Stack spacing={2.5}>
+                    <Stepper activeStep={doneCount} alternativeLabel sx={{ px: 1 }}>
+                        <Step completed={providerDone}>
+                            <StepLabel>Provider</StepLabel>
+                        </Step>
+                        <Step completed={modelDone}>
+                            <StepLabel>Model</StepLabel>
+                        </Step>
+                        <Step completed={installDone}>
+                            <StepLabel>Install</StepLabel>
+                        </Step>
+                        <Step completed={applyDone}>
+                            <StepLabel>Apply</StepLabel>
+                        </Step>
+                    </Stepper>
                     {/* Step 1: Provider */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: providerDone ? 'success.light' : 'background.default' }}>
-                        {providerLoading
-                            ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} />
-                            : <StepIcon done={providerDone} active={!providerDone} />
-                        }
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                        {providerLoading ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} /> : null}
                         <Box sx={{ flex: 1 }}>
                             <Typography variant="body2" fontWeight={500} color={providerDone ? 'text.primary' : 'primary.main'}>
                                 Step 1 — Add a Provider
@@ -266,8 +262,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Stack>
 
                     {/* Step 2: Select a Model */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: modelDone ? 'success.light' : 'background.default' }}>
-                        <StepIcon done={modelDone} active={providerDone && !modelDone} />
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         <Box sx={{ flex: 1 }}>
                             <Typography
                                 variant="body2"
@@ -302,8 +297,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Stack>
 
                     {/* Step 3: Install */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: installDone ? 'success.light' : 'background.default' }}>
-                        <StepIcon done={installDone} active={modelDone && !installDone} />
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         <Box sx={{ flex: 1 }}>
                             <Typography
                                 variant="body2"
@@ -397,8 +391,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Stack>
 
                     {/* Step 4: Apply Config */}
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ p: 1.25, borderRadius: 1.5, bgcolor: applyDone ? 'success.light' : 'background.default' }}>
-                        <StepIcon done={applyDone} active={installDone && !applyDone} />
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
                         <Box sx={{ flex: 1 }}>
                             <Typography
                                 variant="body2"
