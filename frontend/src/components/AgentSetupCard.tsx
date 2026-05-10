@@ -280,7 +280,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     </Stepper>
                     </Box>
 
-                    <Stack spacing={1.5} sx={{ width: '100%', minHeight: 260, justifyContent: 'space-between', border: 1, borderColor: 'divider', borderRadius: 2, p: 1.5 }}>
+                    <Stack spacing={1.5} sx={{ width: '100%', minHeight: 200, justifyContent: 'space-between', border: 1, borderColor: 'divider', borderRadius: 2, p: 1.5 }}>
                         <Box sx={{ flex: 1 }}>
                         {stepCursor === 0 && (
                         <Stack direction="row" spacing={1.5} alignItems="flex-start">
