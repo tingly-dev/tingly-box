@@ -125,6 +125,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         const nextSkipped = new Set(skipped);
         nextSkipped.delete(stepCursor);
         setSkipped(nextSkipped);
+        if (stepCursor >= TOTAL_STEPS - 1) {
+            setCollapsed(true);
+            localStorage.setItem(COLLAPSED_KEY(agentKey), 'true');
+            return;
+        }
         setStepCursor(prev => Math.min(prev + 1, TOTAL_STEPS - 1));
     };
     const handleBack = () => setStepCursor(prev => Math.max(prev - 1, 0));
@@ -132,10 +137,19 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         const nextSkipped = new Set(skipped);
         nextSkipped.add(stepCursor);
         setSkipped(nextSkipped);
+        if (stepCursor >= TOTAL_STEPS - 1) {
+            setCollapsed(true);
+            localStorage.setItem(COLLAPSED_KEY(agentKey), 'true');
+            return;
+        }
         setStepCursor(prev => Math.min(prev + 1, TOTAL_STEPS - 1));
     };
     const handleReset = () => {
-        setStepCursor(activeStep);
+        localStorage.removeItem(INSTALL_DONE_KEY(agentKey));
+        localStorage.removeItem(APPLY_DONE_KEY(agentKey));
+        setInstallDone(false);
+        setApplyDone(false);
+        setStepCursor(0);
         setSkipped(new Set());
     };
 
@@ -242,7 +256,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         >
             <Collapse in={!collapsed} unmountOnExit={false}>
                 <Stack spacing={2}>
-                    <Stepper activeStep={stepCursor} alternativeLabel sx={{ px: 1 }}>
+                    <Stepper activeStep={stepCursor} orientation="vertical" sx={{ px: 1 }}>
                         <Step completed={providerDone}>
                             <StepLabel optional={isStepSkipped(0) ? <Typography variant="caption">Skipped</Typography> : undefined}>{STEP_LABELS[0]}</StepLabel>
                         </Step>
@@ -504,18 +518,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                     )}
 
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Button size="small" onClick={handleReset} disabled={stepCursor === activeStep && skipped.size === 0}>
+                        <Button size="small" onClick={handleReset} disabled={stepCursor === 0 && !installDone && !applyDone && skipped.size === 0}>
                             Reset
                         </Button>
                         <Stack direction="row" spacing={1}>
                             <Button size="small" onClick={handleBack} disabled={stepCursor === 0}>
                                 Back
                             </Button>
-                            <Button size="small" onClick={handleSkip} disabled={stepCursor >= TOTAL_STEPS - 1}>
+                            <Button size="small" onClick={handleSkip}>
                                 Skip
                             </Button>
-                            <Button size="small" variant="contained" onClick={handleNext} disabled={stepCursor >= TOTAL_STEPS - 1}>
-                                Next
+                            <Button size="small" variant="contained" onClick={handleNext}>
+                                {stepCursor >= TOTAL_STEPS - 1 ? 'Finish' : 'Next'}
                             </Button>
                         </Stack>
                     </Stack>
