@@ -12,9 +12,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
-
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 )
+
+// claudeToolPrefix is empty to match real Claude Code behavior (no tool name prefix).
+const claudeToolPrefix = ""
 
 const (
 	// Claude Code client identification
@@ -69,6 +71,12 @@ func supportsContext1M(model string) bool {
 		}
 	}
 	return false
+}
+
+// IsClaudeOAuthToken checks if the given API key is a Claude OAuth token
+// by checking for the "sk-ant-oat" prefix.
+func IsClaudeOAuthToken(apiKey string) bool {
+	return apiKey != "" && strings.Contains(apiKey, "sk-ant-oat")
 }
 
 // extractSessionIDFromBody extracts the session_id from the request body's
@@ -145,7 +153,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 
 			// Apply tool prefix for OAuth tokens
 			if isOAuthToken {
-				modifiedBody = ApplyClaudeToolPrefix(originalBody, ClaudeToolPrefix)
+				modifiedBody = ApplyClaudeToolPrefix(originalBody, claudeToolPrefix)
 			}
 		}
 
@@ -188,7 +196,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 			ReadCloser:  resp.Body,
 			isStreaming: isStreamingResponse(resp),
 			isOAuth:     true,
-			toolPrefix:  ClaudeToolPrefix,
+			toolPrefix:  claudeToolPrefix,
 		}
 	}
 

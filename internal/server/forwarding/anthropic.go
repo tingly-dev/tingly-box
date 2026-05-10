@@ -26,7 +26,7 @@ func logAnthropicForward(fc *ForwardContext, model string, mode string) {
 }
 
 // ForwardAnthropicV1 sends a non-streaming Anthropic v1 message request.
-func ForwardAnthropicV1(fc *ForwardContext, wrapper *client.AnthropicClient, req *anthropic.MessageNewParams) (*anthropic.Message, context.CancelFunc, error) {
+func ForwardAnthropicV1(fc *ForwardContext, wrapper client.AnthropicClientInterface, req *anthropic.MessageNewParams) (*anthropic.Message, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
@@ -47,7 +47,7 @@ func ForwardAnthropicV1(fc *ForwardContext, wrapper *client.AnthropicClient, req
 
 // ForwardAnthropicV1Stream sends a streaming Anthropic v1 message request.
 // Note: Set BaseCtx via WithBaseCtx() to support client cancellation.
-func ForwardAnthropicV1Stream(fc *ForwardContext, wrapper *client.AnthropicClient, req *anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
+func ForwardAnthropicV1Stream(fc *ForwardContext, wrapper client.AnthropicClientInterface, req *anthropic.MessageNewParams) (*anthropicstream.Stream[anthropic.MessageStreamEventUnion], context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
@@ -61,7 +61,7 @@ func ForwardAnthropicV1Stream(fc *ForwardContext, wrapper *client.AnthropicClien
 }
 
 // ForwardAnthropicV1Beta sends a non-streaming Anthropic v1 beta message request.
-func ForwardAnthropicV1Beta(fc *ForwardContext, wrapper *client.AnthropicClient, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, context.CancelFunc, error) {
+func ForwardAnthropicV1Beta(fc *ForwardContext, wrapper client.AnthropicClientInterface, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}
@@ -82,7 +82,7 @@ func ForwardAnthropicV1Beta(fc *ForwardContext, wrapper *client.AnthropicClient,
 
 // ForwardAnthropicV1BetaStream sends a streaming Anthropic v1 beta message request.
 // Note: Set BaseCtx via WithBaseCtx() to support client cancellation.
-func ForwardAnthropicV1BetaStream(fc *ForwardContext, wrapper *client.AnthropicClient, req *anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
+func ForwardAnthropicV1BetaStream(fc *ForwardContext, wrapper client.AnthropicClientInterface, req *anthropic.BetaMessageNewParams) (*anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get Anthropic client for provider: %s", fc.Provider.Name)
 	}

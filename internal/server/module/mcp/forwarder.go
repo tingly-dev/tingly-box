@@ -17,7 +17,7 @@ import (
 
 // ClientPoolGetter matches client.ClientPool interface
 type ClientPoolGetter interface {
-	GetAnthropicClient(ctx context.Context, provider *typ.Provider, model string) *client.AnthropicClient
+	GetAnthropicClient(ctx context.Context, provider *typ.Provider, model string) client.AnthropicClientInterface
 	GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) client.OpenAIClientInterface
 }
 
@@ -100,7 +100,7 @@ func (f *AnthropicV1Forwarder) ForwardNonStream(
 type AnthropicV1StreamHandle struct {
 	stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion]
 	cancel context.CancelFunc
-	client *client.AnthropicClient
+	client client.AnthropicClientInterface
 }
 
 func (h *AnthropicV1StreamHandle) Next() bool {
@@ -135,7 +135,7 @@ func (h *AnthropicV1StreamHandle) Close() error {
 type ForwardResult struct {
 	Message         any
 	Cancel          context.CancelFunc
-	AnthropicClient *client.AnthropicClient
+	AnthropicClient client.AnthropicClientInterface
 	OpenAIClient    client.OpenAIClientInterface
 }
 
@@ -212,7 +212,7 @@ func (f *AnthropicBetaForwarder) ForwardNonStream(
 type AnthropicBetaStreamHandle struct {
 	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
 	cancel context.CancelFunc
-	client *client.AnthropicClient
+	client client.AnthropicClientInterface
 }
 
 func (h *AnthropicBetaStreamHandle) Next() bool {

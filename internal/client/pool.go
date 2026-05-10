@@ -99,15 +99,28 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 }
 
 // GetAnthropicClient returns an Anthropic client wrapper for the specified provider.
+// For Claude Code OAuth providers, returns a ClaudeClient with special handling.
 // sessionID is resolved from ctx via typ.GetSessionID; pass context.Background() when no session is available.
-func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provider, model string) *AnthropicClient {
+func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provider, model string) AnthropicClientInterface {
 	sessionID := typ.GetSessionID(ctx)
 	logrus.Debugf("Creating Anthropic client for provider: %s, session: %s", provider.Name, sessionID.Value)
 
-	client, err := NewAnthropicClient(provider, model, sessionID)
-	if err != nil {
-		logrus.Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
-		return nil
+	var client AnthropicClientInterface
+	var err error
+
+	// Check if this is a Claude Code OAuth provider
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
+		client, err = NewClaudeClient(provider, model, sessionID)
+		if err != nil {
+			logrus.Errorf("Failed to create Claude client for provider %s: %v", provider.Name, err)
+			return nil
+		}
+	} else {
+		client, err = NewAnthropicClient(provider, model, sessionID)
+		if err != nil {
+			logrus.Errorf("Failed to create Anthropic client for provider %s: %v", provider.Name, err)
+			return nil
+		}
 	}
 
 	if p.recordSink != nil && p.recordSink.IsEnabled() {
@@ -115,7 +128,7 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 	}
 
 	// Set finalizer for automatic cleanup when GC collects the client.
-	runtime.SetFinalizer(client, func(c *AnthropicClient) {
+	runtime.SetFinalizer(client, func(c AnthropicClientInterface) {
 		if c != nil {
 			c.Close()
 			logrus.Debugf("Auto-closed Anthropic client for provider: %s via finalizer", provider.Name)

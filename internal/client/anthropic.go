@@ -21,6 +21,31 @@ import (
 // ClaudeCodeSystemHeader is a special system message for Claude Code OAuth subscriptions
 const ClaudeCodeSystemHeader = "You are Claude Code, Anthropic's official CLI for Claude."
 
+// AnthropicClientInterface defines the contract for Anthropic-compatible clients.
+// Both AnthropicClient and ClaudeClient (for Claude Code OAuth) implement this interface.
+type AnthropicClientInterface interface {
+	// Core API methods
+	MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error)
+	MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion]
+	BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error)
+	BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
+	MessagesCountTokens(ctx context.Context, req *anthropic.MessageCountTokensParams) (*anthropic.MessageTokensCount, error)
+	BetaMessagesCountTokens(ctx context.Context, req *anthropic.BetaMessageCountTokensParams) (*anthropic.BetaMessageTokensCount, error)
+
+	// Utility methods
+	ListModels(ctx context.Context) ([]string, error)
+	Close() error
+	GetProvider() *typ.Provider
+	APIStyle() protocol.APIStyle
+	SetRecordSink(sink *obs.Sink)
+	Client() *anthropic.Client
+
+	// Prober interface methods
+	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
+	ProbeModelsEndpoint(ctx context.Context) ProbeResult
+	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+}
+
 // AnthropicClient wraps the Anthropic SDK client
 type AnthropicClient struct {
 	client     anthropic.Client
