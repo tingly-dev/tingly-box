@@ -108,8 +108,15 @@ export function ProviderSidebar({
                                                     <CheckCircle color="primary" sx={{ fontSize: 14, flexShrink: 0 }} />
                                                 )}
                                             </Stack>
-                                            {provider.api_style && (
-                                                <ApiStyleBadge compact={true} apiStyle={provider.api_style} sx={{ flexShrink: 0, width: "100px" }} />
+                                            {provider.api_base_openai && provider.api_base_anthropic ? (
+                                                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                                                    <ApiStyleBadge compact={true} apiStyle="openai" />
+                                                    <ApiStyleBadge compact={true} apiStyle="anthropic" />
+                                                </Stack>
+                                            ) : (
+                                                provider.api_style && (
+                                                    <ApiStyleBadge compact={true} apiStyle={provider.api_style} sx={{ flexShrink: 0, width: "100px" }} />
+                                                )
                                             )}
                                         </Stack>
                                     </Box>

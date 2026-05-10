@@ -92,6 +92,7 @@ const CredentialPage = () => {
                     enabled: true,
                     noKeyRequired: false,
                     proxyUrl: '',
+                    createFusionProvider: false,
                 } as any);
                 setApiKeyDialogOpen(true);
             }
@@ -124,6 +125,7 @@ const CredentialPage = () => {
             enabled: true,
             noKeyRequired: false,
             proxyUrl: '',
+            createFusionProvider: false,
         } as any);
         setApiKeyDialogOpen(true);
     };
@@ -163,8 +165,9 @@ const CredentialPage = () => {
             protocols.length === 2 &&
             !!providerBaseUrls?.openai &&
             !!providerBaseUrls?.anthropic;
+        const shouldCreateFusion = enableFusion && !!(providerFormData as any).createFusionProvider;
 
-        if (bothProtocols && enableFusion) {
+        if (bothProtocols && shouldCreateFusion) {
             return {
                 name: providerFormData.name,
                 api_base: providerBaseUrls!.openai,
@@ -179,7 +182,7 @@ const CredentialPage = () => {
             };
         }
 
-        if (bothProtocols && !enableFusion) {
+        if (bothProtocols && !shouldCreateFusion) {
             // Legacy split: emit one record per protocol so the user gets
             // two independent Provider entries sharing the same credential.
             const baseRecord = {

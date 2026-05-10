@@ -227,6 +227,12 @@ export default {
     "protocol": {
       "label": "协议"
     },
+    "fusion": {
+      "modeLabel": "Fusion 模式",
+      "tooltipTitle": "创建方式说明",
+      "normalModeDesc": "普通模式（未勾选）：会创建两个独立 Provider（OpenAI 与 Anthropic 各一个）。",
+      "fusionModeDesc": "Fusion 模式（已勾选）：会创建一个同时包含 OpenAI 与 Anthropic Base URL 的 Provider。"
+    },
     "keyName": {
       "label": "API 密钥名称",
       "placeholder": "例如：OpenAI API Key",

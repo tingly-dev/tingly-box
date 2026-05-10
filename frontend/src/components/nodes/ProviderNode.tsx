@@ -14,7 +14,6 @@ import {
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '@/types/provider.ts';
-import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
@@ -68,7 +67,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     onDelete,
     onNodeClick
 }) => {
-    const { enableFusion } = useFeatureFlags();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(menuAnchorEl);
@@ -182,7 +180,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 {/* Bottom Layer - API Style Badge(s) */}
                 {provider.provider && (
                     <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                        {enableFusion && providerInfo.provider?.api_base_openai && providerInfo.provider?.api_base_anthropic ? (
+                        {providerInfo.provider?.api_base_openai && providerInfo.provider?.api_base_anthropic ? (
                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, width: '100%' }}>
                                 <ApiStyleBadge
                                     apiStyle="openai"

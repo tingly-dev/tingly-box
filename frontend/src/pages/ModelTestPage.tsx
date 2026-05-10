@@ -54,7 +54,14 @@ const ModelCard = ({ model, provider, isTesting, onTest, onViewResult, hasResult
             <CardContent sx={{ flexGrow: 1, p: 2 }}>
                 <Stack spacing={1.5}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <ApiStyleBadge apiStyle={provider.api_style} />
+                        {provider.api_base_openai && provider.api_base_anthropic ? (
+                            <Stack direction="row" spacing={0.5}>
+                                <ApiStyleBadge compact apiStyle="openai" />
+                                <ApiStyleBadge compact apiStyle="anthropic" />
+                            </Stack>
+                        ) : (
+                            <ApiStyleBadge apiStyle={provider.api_style} />
+                        )}
                         {hasResult && (
                             <Tooltip title="View test result">
                                 <IconButton
@@ -143,7 +150,14 @@ const TestResultDialog = ({ open, onClose, probeResult, model, provider }: TestR
                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                 {provider.name}
                             </Typography>
-                            <ApiStyleBadge apiStyle={provider.api_style} />
+                            {provider.api_base_openai && provider.api_base_anthropic ? (
+                                <Stack direction="row" spacing={0.5}>
+                                    <ApiStyleBadge compact apiStyle="openai" />
+                                    <ApiStyleBadge compact apiStyle="anthropic" />
+                                </Stack>
+                            ) : (
+                                <ApiStyleBadge apiStyle={provider.api_style} />
+                            )}
                         </Stack>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                             Model: {model}
@@ -341,7 +355,14 @@ const ModelTestPage = () => {
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>
                             {provider.name}
                         </Typography>
-                        <ApiStyleBadge apiStyle={provider.api_style} />
+                        {provider.api_base_openai && provider.api_base_anthropic ? (
+                            <Stack direction="row" spacing={0.5}>
+                                <ApiStyleBadge compact apiStyle="openai" />
+                                <ApiStyleBadge compact apiStyle="anthropic" />
+                            </Stack>
+                        ) : (
+                            <ApiStyleBadge apiStyle={provider.api_style} />
+                        )}
                     </Stack>
                 </Stack>
                 <Button

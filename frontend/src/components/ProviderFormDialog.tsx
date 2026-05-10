@@ -1,4 +1,4 @@
-import {Close, Visibility, VisibilityOff} from '@mui/icons-material';
+import {Close, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -19,6 +19,7 @@ import {
     Stack,
     Switch,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -45,6 +46,7 @@ export interface EnhancedProviderFormData {
     // inbound protocol natively. When only one is set, falls back to apiBase.
     apiBaseOpenAI?: string;
     apiBaseAnthropic?: string;
+    createFusionProvider?: boolean;
 }
 
 interface PresetProviderFormDialogProps {
@@ -117,6 +119,7 @@ const ProviderFormDialog = ({
     const [providerInputValue, setProviderInputValue] = useState('');
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
+    const [createFusionProvider, setCreateFusionProvider] = useState(false);
 
     const {enableFusion} = useFeatureFlags();
 
@@ -192,6 +195,10 @@ const ProviderFormDialog = ({
     useEffect(() => {
         setNoApiKey(data.noKeyRequired || false);
     }, [data.noKeyRequired]);
+
+    useEffect(() => {
+        setCreateFusionProvider(!!data.createFusionProvider);
+    }, [data.createFusionProvider]);
 
     // Fetch global proxy URL once on mount
     useEffect(() => {
@@ -295,6 +302,7 @@ const ProviderFormDialog = ({
                 // on. With the flag OFF, picking both protocols falls through
                 // to the legacy two-record split handled by the parent submit.
                 const fusion = enableFusionRef.current
+                    && createFusionProvider
                     && nextOpenAI && nextAnthropic
                     && !!provider.baseUrlOpenAI && !!provider.baseUrlAnthropic;
 
@@ -323,7 +331,7 @@ const ProviderFormDialog = ({
                 cb('apiBaseAnthropic', '');
             }
         },
-        []
+        [createFusionProvider]
     );
 
     const handleUseGlobalProxyChange = (checked: boolean) => {
@@ -742,6 +750,76 @@ const ProviderFormDialog = ({
                                 </Box>
                             </Stack>
                         </FormControl>
+                        {enableFusion && mode === 'add' && protocolOpenAI && protocolAnthropic && (
+                            <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: -0.5, pr: 2}}>
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
+                                            size="small"
+                                            checked={createFusionProvider}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setCreateFusionProvider(checked);
+                                                onChange('createFusionProvider', checked);
+                                                syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
+                                                setVerificationResult(null);
+                                            }}
+                                        />
+                                    }
+                                    label={(
+                                        <Stack direction="row" spacing={0.75} alignItems="center">
+                                            <Typography variant="body2">
+                                                {t('providerDialog.fusion.modeLabel')}
+                                            </Typography>
+                                            <Tooltip
+                                                arrow
+                                                placement="top"
+                                                slotProps={{
+                                                    tooltip: {
+                                                        sx: (theme) => ({
+                                                            maxWidth: 360,
+                                                            bgcolor: 'background.paper',
+                                                            color: 'text.primary',
+                                                            border: `1px solid ${theme.palette.divider}`,
+                                                            boxShadow: theme.shadows[6],
+                                                            p: 1.25,
+                                                            '& .MuiTypography-caption': {
+                                                                color: 'text.secondary',
+                                                                lineHeight: 1.45,
+                                                            },
+                                                        }),
+                                                    },
+                                                    arrow: {
+                                                        sx: (theme) => ({
+                                                            color: theme.palette.background.paper,
+                                                            '&:before': {
+                                                                border: `1px solid ${theme.palette.divider}`,
+                                                            },
+                                                        }),
+                                                    },
+                                                }}
+                                                title={
+                                                    <Box>
+                                                        <Typography variant="body2" sx={{fontWeight: 600, mb: 0.5}}>
+                                                            {t('providerDialog.fusion.tooltipTitle')}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{display: 'block'}}>
+                                                            {t('providerDialog.fusion.normalModeDesc')}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{display: 'block', mt: 0.75}}>
+                                                            {t('providerDialog.fusion.fusionModeDesc')}
+                                                        </Typography>
+                                                    </Box>
+                                                }
+                                            >
+                                                <InfoOutlined sx={{fontSize: 16, color: 'text.secondary'}} />
+                                            </Tooltip>
+                                        </Stack>
+                                    )}
+                                    labelPlacement="start"
+                                />
+                            </Box>
+                        )}
 
                         <Box>
                             <TextField
