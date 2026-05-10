@@ -10,56 +10,40 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// TestUnionLevelExtraFieldsSerialized proves that ExtraFields set on the
-// ChatCompletionMessageParamUnion (not on OfAssistant) are included in the
-// final JSON output.  This validates that the DeepSeek transform's current
-// approach of writing reasoning_content to the union level is correct.
-func TestUnionLevelExtraFieldsSerialized(t *testing.T) {
-	msg := assistantToolCallMessage(t)
-
-	// Set reasoning_content on the UNION level (not OfAssistant)
-	msg.SetExtraFields(map[string]any{"reasoning_content": "planning the tool call"})
-
-	raw := marshalMessage(t, msg)
-	assert.Equal(t, "planning the tool call", raw["reasoning_content"],
-		"union-level ExtraFields must appear in serialized JSON")
-}
-
 // TestOfAssistantLevelExtraFieldsSerialized proves that ExtraFields set on
-// the OfAssistant variant are also included in the final JSON output.
+// OfAssistant (variant level) are included in JSON output.
+// This is the CORRECT level — union-level ExtraFields are dropped by MarshalUnion.
 func TestOfAssistantLevelExtraFieldsSerialized(t *testing.T) {
 	msg := assistantToolCallMessage(t)
 
-	msg.OfAssistant.SetExtraFields(map[string]any{"reasoning_content": "variant-level thinking"})
+	msg.OfAssistant.SetExtraFields(map[string]any{"reasoning_content": "planning the tool call"})
 
 	raw := marshalMessage(t, msg)
-	assert.Equal(t, "variant-level thinking", raw["reasoning_content"],
+	assert.Equal(t, "planning the tool call", raw["reasoning_content"],
 		"OfAssistant-level ExtraFields must appear in serialized JSON")
 }
 
-// TestUnionExtrasOverrideVariantExtras proves that when both levels have
-// overlapping keys, the union-level value wins (because MarshalWithExtras
-// merges union extras AFTER marshaling the variant).
-func TestUnionExtrasOverrideVariantExtras(t *testing.T) {
+// TestUnionLevelExtraFieldsAreDropped proves that ExtraFields set on the
+// union level are NOT serialized — this is the SDK behavior that caused
+// the DeepSeek reasoning_content bug.
+func TestUnionLevelExtraFieldsAreDropped(t *testing.T) {
 	msg := assistantToolCallMessage(t)
 
-	msg.OfAssistant.SetExtraFields(map[string]any{"reasoning_content": "from variant"})
-	msg.SetExtraFields(map[string]any{"reasoning_content": "from union"})
+	msg.SetExtraFields(map[string]any{"reasoning_content": "this will be lost"})
 
 	raw := marshalMessage(t, msg)
-	assert.Equal(t, "from union", raw["reasoning_content"],
-		"union-level extras should override variant-level extras")
+	_, hasKey := raw["reasoning_content"]
+	assert.False(t, hasKey,
+		"union-level ExtraFields must NOT appear in serialized JSON (they are dropped by MarshalUnion)")
 }
 
-// TestDeepSeekTransformReadsUnionLevelXThinking proves that the DeepSeek
-// transform correctly reads x_thinking from the union level (where
-// Anthropic→OpenAI conversion stores it) and writes reasoning_content back
-// to the union level.
-func TestDeepSeekTransformReadsUnionLevelXThinking(t *testing.T) {
+// TestDeepSeekTransformReadsOfAssistantXThinking proves that the transform
+// correctly reads x_thinking from OfAssistant level and writes reasoning_content back.
+func TestDeepSeekTransformReadsOfAssistantXThinking(t *testing.T) {
 	msg := assistantToolCallMessage(t)
 
-	// Simulate what anthropic_v1_to_openai.go does: store x_thinking on union
-	msg.SetExtraFields(map[string]any{"x_thinking": "I need to call a tool"})
+	// Simulate what anthropic_v1_to_openai.go does: store x_thinking on OfAssistant
+	msg.OfAssistant.SetExtraFields(map[string]any{"x_thinking": "I need to call a tool"})
 
 	req := &openai.ChatCompletionNewParams{
 		Model:    openai.ChatModel("deepseek-v4-flash"),
@@ -75,12 +59,49 @@ func TestDeepSeekTransformReadsUnionLevelXThinking(t *testing.T) {
 		"x_thinking should be removed after conversion")
 }
 
+// TestDeepSeekTransformOpenCodeAI_DeepSeekModel verifies the transform is applied
+// when opencode.ai is used with a DeepSeek model (model name contains "deepseek").
+func TestDeepSeekTransformOpenCodeAI_DeepSeekModel(t *testing.T) {
+	msg := assistantToolCallMessage(t)
+	msg.OfAssistant.SetExtraFields(map[string]any{"x_thinking": "reasoning for opencode"})
+
+	req := &openai.ChatCompletionNewParams{
+		Model:    openai.ChatModel("deepseek-chat"),
+		Messages: []openai.ChatCompletionMessageParamUnion{msg},
+	}
+
+	ApplyProviderTransforms(req, "https://opencode.ai/zen/go/v1", string(req.Model), &protocol.OpenAIConfig{})
+
+	raw := marshalMessage(t, req.Messages[0])
+	assert.Equal(t, "reasoning for opencode", raw["reasoning_content"],
+		"opencode.ai + deepseek model should get reasoning_content conversion")
+}
+
+// TestDeepSeekTransformOpenCodeAI_NonDeepSeekModel verifies the transform is NOT
+// applied when opencode.ai is used with a non-DeepSeek model (e.g., OpenAI, Claude).
+func TestDeepSeekTransformOpenCodeAI_NonDeepSeekModel(t *testing.T) {
+	msg := assistantToolCallMessage(t)
+	msg.OfAssistant.SetExtraFields(map[string]any{"x_thinking": "should not be converted"})
+
+	req := &openai.ChatCompletionNewParams{
+		Model:    openai.ChatModel("gpt-4o"),
+		Messages: []openai.ChatCompletionMessageParamUnion{msg},
+	}
+
+	ApplyProviderTransforms(req, "https://opencode.ai/zen/go/v1", string(req.Model), &protocol.OpenAIConfig{})
+
+	raw := marshalMessage(t, req.Messages[0])
+	assert.Equal(t, "should not be converted", raw["x_thinking"],
+		"opencode.ai + non-deepseek model should keep x_thinking as-is (no transform)")
+	assert.NotContains(t, raw, "reasoning_content",
+		"opencode.ai + non-deepseek model should NOT have reasoning_content")
+}
+
 // TestDeepSeekTransformFallbackEmptyReasoningContent proves that when no
-// x_thinking is present, the transform sets an empty reasoning_content
-// string on the union level, and it appears in the serialized output.
+// x_thinking is present, the transform sets an empty reasoning_content.
 func TestDeepSeekTransformFallbackEmptyReasoningContent(t *testing.T) {
 	msg := assistantToolCallMessage(t)
-	// No x_thinking set — simulate assistant message that never had thinking
+	// No x_thinking set
 
 	req := &openai.ChatCompletionNewParams{
 		Model:    openai.ChatModel("deepseek-v4-flash"),
@@ -96,33 +117,30 @@ func TestDeepSeekTransformFallbackEmptyReasoningContent(t *testing.T) {
 		"reasoning_content should be empty string when no thinking content")
 }
 
-// TestAnthropicConversionStoresXThinkingOnUnionLevel proves that the
-// Anthropic→OpenAI conversion path stores x_thinking at the union level,
-// matching the DeepSeek transform's read location.
-func TestAnthropicConversionStoresXThinkingOnUnionLevel(t *testing.T) {
+// TestAnthropicConversionStoresXThinkingOnOfAssistant proves that the
+// Anthropic→OpenAI conversion stores x_thinking at the OfAssistant level,
+// which is where the DeepSeek transform reads it.
+func TestAnthropicConversionStoresXThinkingOnOfAssistant(t *testing.T) {
 	msg := assistantToolCallMessage(t)
 
-	// Reproduce the exact pattern from anthropic_v1_to_openai.go:
-	//   extraFields := result.ExtraFields()
-	//   extraFields["x_thinking"] = thinking
-	//   result.SetExtraFields(extraFields)
-	extraFields := msg.ExtraFields()
+	// Reproduce the corrected pattern: store x_thinking on OfAssistant level
+	extraFields := msg.OfAssistant.ExtraFields()
 	if extraFields == nil {
 		extraFields = map[string]any{}
 	}
 	extraFields["x_thinking"] = "model thought process"
-	msg.SetExtraFields(extraFields)
+	msg.OfAssistant.SetExtraFields(extraFields)
 
-	// Verify it's stored at union level (not OfAssistant)
-	unionExtras := msg.ExtraFields()
-	assert.NotNil(t, unionExtras, "union-level ExtraFields should not be nil")
-	assert.Equal(t, "model thought process", unionExtras["x_thinking"],
-		"x_thinking should be readable from union level")
+	// Verify it's readable from OfAssistant
+	ofAssistantExtras := msg.OfAssistant.ExtraFields()
+	assert.NotNil(t, ofAssistantExtras)
+	assert.Equal(t, "model thought process", ofAssistantExtras["x_thinking"],
+		"x_thinking should be readable from OfAssistant level")
 
 	// Verify it appears in serialized JSON
 	raw := marshalMessage(t, msg)
 	assert.Equal(t, "model thought process", raw["x_thinking"],
-		"x_thinking stored at union level must appear in JSON")
+		"x_thinking stored at OfAssistant level must appear in JSON")
 }
 
 // --- helpers ---

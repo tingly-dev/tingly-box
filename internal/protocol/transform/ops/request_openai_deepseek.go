@@ -14,8 +14,9 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, mo
 	}
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
-			// Convert the message to map to check/modify fields
-			msgMap := req.Messages[i].ExtraFields()
+			// Read/write extra fields on OfAssistant (variant level), not on union level.
+			// MarshalUnion only serializes the active variant — union-level ExtraFields are dropped.
+			msgMap := req.Messages[i].OfAssistant.ExtraFields()
 			if msgMap == nil {
 				msgMap = map[string]any{}
 			}
@@ -34,7 +35,7 @@ func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, mo
 				msgMap["reasoning_content"] = ""
 			}
 
-			req.Messages[i].SetExtraFields(msgMap)
+			req.Messages[i].OfAssistant.SetExtraFields(msgMap)
 		}
 	}
 	return req

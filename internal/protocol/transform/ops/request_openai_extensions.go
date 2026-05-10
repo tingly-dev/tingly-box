@@ -28,10 +28,11 @@ var ProviderConfigs = []providerConfig{
 		Transform:      applyDeepSeekTransform,
 	},
 
-	// OpenCode Go - backed by DeepSeek-compatible reasoning models
+	// OpenCode Go - aggregator that may route to DeepSeek models
+	// Only apply DeepSeek transform when the model name contains "deepseek"
 	{
 		APIBasePattern: "opencode.ai/zen/go",
-		ModelPattern:   "*",
+		ModelPattern:   "deepseek",
 		Transform:      applyDeepSeekTransform,
 	},
 

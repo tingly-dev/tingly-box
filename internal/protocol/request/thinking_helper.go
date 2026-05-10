@@ -55,8 +55,9 @@ func CleanupOpenaiFields(req *openai.ChatCompletionNewParams) {
 
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
-			// Convert to map to remove temporary fields
-			msgMap := req.Messages[i].ExtraFields()
+			// Read extra fields from variant level (OfAssistant), not union level.
+			// Union-level ExtraFields are not serialized by MarshalUnion.
+			msgMap := req.Messages[i].OfAssistant.ExtraFields()
 			if msgMap == nil {
 				continue
 			}
@@ -67,7 +68,7 @@ func CleanupOpenaiFields(req *openai.ChatCompletionNewParams) {
 			//   (they don't support thinking mode in the same way)
 			delete(msgMap, "x_thinking")
 
-			req.Messages[i].SetExtraFields(msgMap)
+			req.Messages[i].OfAssistant.SetExtraFields(msgMap)
 		}
 	}
 }

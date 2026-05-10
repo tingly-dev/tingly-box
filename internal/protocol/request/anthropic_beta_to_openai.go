@@ -224,13 +224,16 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 		_ = json.Unmarshal(msgBytes, &result)
 
 		// Preserve x_thinking in ExtraFields for provider transforms (e.g., DeepSeek/Moonshot)
-		// Always add the field, even if empty, for consistency
-		extraFields := result.ExtraFields()
-		if extraFields == nil {
-			extraFields = map[string]any{}
+		// Must set on OfAssistant (variant level), not on union level, because
+		// MarshalUnion only serializes the active variant — union-level ExtraFields are dropped.
+		if result.OfAssistant != nil {
+			extraFields := result.OfAssistant.ExtraFields()
+			if extraFields == nil {
+				extraFields = map[string]any{}
+			}
+			extraFields["x_thinking"] = thinking
+			result.OfAssistant.SetExtraFields(extraFields)
 		}
-		extraFields["x_thinking"] = thinking
-		result.SetExtraFields(extraFields)
 
 		return result
 	}
@@ -245,13 +248,15 @@ func convertAnthropicBetaAssistantMessageToOpenAI(msg anthropic.BetaMessageParam
 	_ = json.Unmarshal(msgBytes, &result)
 
 	// Preserve x_thinking in ExtraFields for provider transforms
-	// Always add the field, even if empty, for consistency
-	extraFields := result.ExtraFields()
-	if extraFields == nil {
-		extraFields = map[string]any{}
+	// Must set on OfAssistant (variant level), not on union level.
+	if result.OfAssistant != nil {
+		extraFields := result.OfAssistant.ExtraFields()
+		if extraFields == nil {
+			extraFields = map[string]any{}
+		}
+		extraFields["x_thinking"] = thinking
+		result.OfAssistant.SetExtraFields(extraFields)
 	}
-	extraFields["x_thinking"] = thinking
-	result.SetExtraFields(extraFields)
 
 	return result
 }
