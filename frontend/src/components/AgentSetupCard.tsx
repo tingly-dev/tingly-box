@@ -125,6 +125,10 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         const nextSkipped = new Set(skipped);
         nextSkipped.delete(stepCursor);
         setSkipped(nextSkipped);
+        if (stepCursor === 2) {
+            localStorage.setItem(INSTALL_DONE_KEY(agentKey), 'true');
+            setInstallDone(true);
+        }
         if (stepCursor >= TOTAL_STEPS - 1) {
             setCollapsed(true);
             localStorage.setItem(COLLAPSED_KEY(agentKey), 'true');
@@ -172,11 +176,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         const next = !collapsed;
         localStorage.setItem(COLLAPSED_KEY(agentKey), String(next));
         setCollapsed(next);
-    };
-
-    const handleInstallDone = () => {
-        localStorage.setItem(INSTALL_DONE_KEY(agentKey), 'true');
-        setInstallDone(true);
     };
 
     const handleApplyDone = () => {
@@ -324,12 +323,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             <Typography variant="body2" fontWeight={500} color={!modelDone ? 'text.disabled' : installDone ? 'text.primary' : 'primary.main'}>Step 3 — Install {agentName}</Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}><Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>npm official</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}><Tooltip title={copied ? 'Copied!' : 'Copy'}><IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip><Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: 'monospace', flex: 1, fontSize: '0.8rem', color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography></Box></Box>
                             {installMirrorCommand && (<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800, mt: 0.75 }}><Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>npm mirror</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}><Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}><IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip><Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: 'monospace', flex: 1, fontSize: '0.8rem', color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography></Box></Box>)}
-                            {!installDone && <Button size="small" variant="outlined" onClick={handleInstallDone} sx={{ mt: 0.5, fontSize: '0.75rem', px: 0 }}>Mark as Installed</Button>}
                         </Box></Stack>
                         )}
 
                         {stepCursor === 3 && (
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>Step 4 — Apply Config</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Write the proxy configuration to {agentName}'s settings file.</Typography><Collapse in={!applyDone}><Stack direction="row" spacing={1} flexWrap="wrap" gap={1}><Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>Apply</Button>{onApplyWithStatusLine && <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>Apply + Status Line</Button>}{onViewConfig && <Button variant="outlined" size="small" onClick={onViewConfig}>Manual Setup</Button>}<Button variant="text" size="small" disabled={!installDone} onClick={handleApplyDone} sx={{ fontSize: '0.75rem' }}>Mark as Configured</Button></Stack></Collapse>{applyResult && (<Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>{applyResult.success ? (<Box><Typography variant="caption" fontWeight={600}>Config applied!</Typography>{applyResult.files?.map(f => (<Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>))}</Box>) : (<Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>)}</Alert>)}</Box></Stack>
+                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>Step 4 — Apply Config</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>Write the proxy configuration to {agentName}'s settings file.</Typography><Collapse in={!applyDone}><Stack direction="row" spacing={1} flexWrap="wrap" gap={1}><Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>Apply</Button>{onApplyWithStatusLine && <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>Apply + Status Line</Button>}{onViewConfig && <Button variant="outlined" size="small" onClick={onViewConfig}>Manual Setup</Button>}</Stack></Collapse>{applyResult && (<Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>{applyResult.success ? (<Box><Typography variant="caption" fontWeight={600}>Config applied!</Typography>{applyResult.files?.map(f => (<Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>))}</Box>) : (<Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>)}</Alert>)}</Box></Stack>
                         )}
 
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
