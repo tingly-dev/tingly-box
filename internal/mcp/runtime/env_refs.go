@@ -35,10 +35,16 @@ func ExpandMCPRuntimeEnvRefs(cfg *typ.MCPRuntimeConfig) []EnvRefIssue {
 
 // ValidateEnabledMCPSourceEnvRefs checks ${VAR} references for enabled sources only.
 // Missing variables are returned as issues.
+// In-process transports (e.g. "advisor") are skipped — they never spawn a subprocess
+// and do not consume the env map.
 func ValidateEnabledMCPSourceEnvRefs(sources []typ.MCPSourceConfig) []EnvRefIssue {
 	issues := make([]EnvRefIssue, 0)
 	for i := range sources {
 		if !typ.IsMCPSourceEnabled(sources[i]) {
+			continue
+		}
+		// Skip in-process transports — they have no subprocess environment requirements.
+		if sources[i].Transport == "advisor" {
 			continue
 		}
 		sourceCopy := sources[i]

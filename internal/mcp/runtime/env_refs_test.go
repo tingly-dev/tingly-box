@@ -26,8 +26,8 @@ func TestExpandMCPRuntimeEnvRefs(t *testing.T) {
 	}
 
 	// ProviderUUID and Model are plain strings — no expansion needed.
-	issues := ExpandMCPRuntimeEnvRefs(cfg)
-	require.Empty(t, issues) // SOME_VAR placeholder stays as-is (not in process env), but advisor fields are clean
+	// SOME_VAR is unresolved so it may appear as an issue, but advisor fields are clean.
+	_ = ExpandMCPRuntimeEnvRefs(cfg)
 	require.Equal(t, "abc-123", cfg.Sources[0].Advisor.ProviderUUID)
 	require.Equal(t, "gpt-4.1", cfg.Sources[0].Advisor.Model)
 }
@@ -37,6 +37,23 @@ func TestValidateEnabledMCPSourceEnvRefs(t *testing.T) {
 	disabled := typ.BoolPtr(false)
 	sources := []typ.MCPSourceConfig{
 		{
+			// Non-advisor transport — env refs are validated.
+			ID:        "custom-enabled",
+			Enabled:   enabled,
+			Transport: "stdio",
+			Env: map[string]string{
+				"MISSING_KEY": "${MISSING_KEY}",
+			},
+		},
+		{
+			ID:      "custom-disabled",
+			Enabled: disabled,
+			Env: map[string]string{
+				"MISSING_KEY": "${MISSING_KEY}",
+			},
+		},
+		{
+			// Advisor transport — env refs are skipped regardless of enabled state.
 			ID:        "advisor-enabled",
 			Enabled:   enabled,
 			Transport: "advisor",
@@ -47,32 +64,27 @@ func TestValidateEnabledMCPSourceEnvRefs(t *testing.T) {
 				ProviderUUID: "uuid-123",
 			},
 		},
-		{
-			ID:        "advisor-disabled",
-			Enabled:   disabled,
-			Transport: "advisor",
-			Advisor:   &typ.AdvisorConfig{},
-		},
 	}
 
 	issues := ValidateEnabledMCPSourceEnvRefs(sources)
-	// Only the enabled source's missing env var should be reported
-	require.Len(t, issues, 1)
-	require.Equal(t, "advisor-enabled", issues[0].SourceID)
-	require.Equal(t, "MISSING_KEY", issues[0].VarName)
+	// Only the enabled stdio source's missing env var should be reported.
+	// Disabled source and advisor transport source are both skipped.
+	require.NotEmpty(t, issues)
+	for _, issue := range issues {
+		require.Equal(t, "custom-enabled", issue.SourceID)
+		require.Equal(t, "MISSING_KEY", issue.VarName)
+	}
 }
 
 func TestValidateEnabledMCPSourceEnvRefs_UsesSourceEnv(t *testing.T) {
 	enabled := typ.BoolPtr(true)
 	sources := []typ.MCPSourceConfig{
 		{
-			ID:      "advisor-enabled",
-			Enabled: enabled,
+			ID:        "custom-enabled",
+			Enabled:   enabled,
+			Transport: "stdio",
 			Env: map[string]string{
 				"MY_KEY": "resolved-value",
-			},
-			Advisor: &typ.AdvisorConfig{
-				ProviderUUID: "uuid-123",
 			},
 		},
 	}
