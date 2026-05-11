@@ -63,13 +63,11 @@ func (a *AgentApplyFlagCmdKong) Run(appManager *AppManager) error {
 		// Parse agent type with alias support (cc, claude-code, etc.)
 		parsedType, err := agent.ParseAgentType(a.AgentType)
 		if err != nil {
-			// Invalid agent type provided - fail fast with helpful message
-			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
 			fmt.Fprintln(os.Stderr, "Available agent types:")
 			fmt.Fprintln(os.Stderr, "  cc, claude-code - Claude Code CLI agent (@cc)")
 			fmt.Fprintln(os.Stderr, "  oc, opencode   - OpenCode editor agent (@oc)")
 			fmt.Fprintln(os.Stderr, "  cx, codex      - OpenAI Codex CLI (@codex)")
-			return fmt.Errorf("invalid agent type: %s", a.AgentType)
+			return err
 		}
 		req.AgentType = parsedType
 	}
@@ -118,9 +116,7 @@ func (a *AgentShowFlagCmdKong) Run(appManager *AppManager) error {
 	// Parse agent type with alias support (cc, claude-code, etc.)
 	agentType, err := agent.ParseAgentType(a.AgentType)
 	if err != nil {
-		// Invalid agent type provided - fail fast with helpful message
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		return fmt.Errorf("invalid agent type: %s", a.AgentType)
+		return err
 	}
 
 	return showAgentConfig(appManager, agentType)
@@ -150,9 +146,7 @@ func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 		// Parse agent type with alias support (cc, claude-code, etc.)
 		parsedType, err := agent.ParseAgentType(a.AgentType)
 		if err != nil {
-			// Invalid agent type provided - fail fast with helpful message
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			return fmt.Errorf("invalid agent type: %s", a.AgentType)
+			return err
 		}
 		req.AgentType = parsedType
 	}
@@ -594,7 +588,7 @@ func showAgentConfig(appManager *AppManager, agentType agent.AgentType) error {
 	case agent.AgentTypeClaudeCode:
 		requestModel = "tingly/cc"
 	case agent.AgentTypeOpenCode:
-		requestModel = "tingly/oc"
+		requestModel = "tingly-opencode"
 	case agent.AgentTypeCodex:
 		requestModel = "tingly-codex"
 	}
