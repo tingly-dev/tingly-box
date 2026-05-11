@@ -1065,6 +1065,140 @@ model_provider = "openai"
 	}
 }
 
+func TestApplyCodexConfig_WritesCatalogAndPointsConfigAtIt(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}); err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+
+	codexDir := filepath.Join(tempDir, ".codex")
+	cfg := loadCodexConfigForTest(t, filepath.Join(codexDir, "config.toml"))
+
+	wantCatalog := filepath.Join(codexDir, "tingly-model-catalog.json")
+	if cfg["model_catalog_json"] != wantCatalog {
+		t.Errorf("model_catalog_json = %v, want %v", cfg["model_catalog_json"], wantCatalog)
+	}
+
+	data, err := os.ReadFile(wantCatalog)
+	if err != nil {
+		t.Fatalf("read catalog: %v", err)
+	}
+	var catalog struct {
+		Models []map[string]interface{} `json:"models"`
+	}
+	if err := json.Unmarshal(data, &catalog); err != nil {
+		t.Fatalf("unmarshal catalog: %v\n%s", err, data)
+	}
+	if len(catalog.Models) != 2 {
+		t.Fatalf("len(models) = %d, want 2", len(catalog.Models))
+	}
+	gotSlugs := map[string]bool{}
+	for _, m := range catalog.Models {
+		gotSlugs[m["slug"].(string)] = true
+		// Spot-check a few required ModelInfo fields so a future refactor
+		// can't silently drop them and start tripping Codex's deserializer.
+		for _, key := range []string{"display_name", "supported_reasoning_levels", "shell_type", "visibility", "truncation_policy", "input_modalities"} {
+			if _, ok := m[key]; !ok {
+				t.Errorf("catalog entry %v missing required key %q", m["slug"], key)
+			}
+		}
+	}
+	if !gotSlugs["tingly-codex"] || !gotSlugs["tingly-gpt5"] {
+		t.Errorf("catalog slugs = %v, want tingly-codex+tingly-gpt5", gotSlugs)
+	}
+}
+
+// supported_reasoning_levels deserializes into Vec<ReasoningEffortPreset>
+// upstream — a list of {effort, description} objects. Regression test for a
+// bug where we emitted bare strings and Codex rejected the catalog at startup
+// with "invalid type: string ..., expected struct ReasoningEffortPreset".
+func TestApplyCodexConfig_CatalogReasoningPresetsAreObjects(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}); err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(tempDir, ".codex", "tingly-model-catalog.json"))
+	if err != nil {
+		t.Fatalf("read catalog: %v", err)
+	}
+	var catalog struct {
+		Models []struct {
+			SupportedReasoningLevels []struct {
+				Effort      string `json:"effort"`
+				Description string `json:"description"`
+			} `json:"supported_reasoning_levels"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(data, &catalog); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, data)
+	}
+	if len(catalog.Models) != 1 {
+		t.Fatalf("models len = %d, want 1", len(catalog.Models))
+	}
+	levels := catalog.Models[0].SupportedReasoningLevels
+	if len(levels) == 0 {
+		t.Fatal("supported_reasoning_levels empty")
+	}
+	for i, lvl := range levels {
+		if lvl.Effort == "" {
+			t.Errorf("levels[%d].effort empty (likely emitted as bare string)", i)
+		}
+		if lvl.Description == "" {
+			t.Errorf("levels[%d].description empty", i)
+		}
+	}
+}
+
+func TestApplyCodexConfig_NoModels_SkipsCatalog(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil); err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+
+	cfg := loadCodexConfigForTest(t, filepath.Join(tempDir, ".codex", "config.toml"))
+	if _, ok := cfg["model_catalog_json"]; ok {
+		t.Errorf("model_catalog_json should not be set when no models: %v", cfg["model_catalog_json"])
+	}
+	if _, err := os.Stat(filepath.Join(tempDir, ".codex", "tingly-model-catalog.json")); !os.IsNotExist(err) {
+		t.Errorf("catalog file should not exist when no models, err=%v", err)
+	}
+}
+
+func TestApplyCodexConfig_BacksUpExistingCatalog(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	codexDir := filepath.Join(tempDir, ".codex")
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	catalogPath := filepath.Join(codexDir, "tingly-model-catalog.json")
+	stale := []byte(`{"models":[{"slug":"old"}]}`)
+	if err := os.WriteFile(catalogPath, stale, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"new-model"}); err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+
+	backupDir := filepath.Join(codexDir, "backup")
+	matches, err := filepath.Glob(filepath.Join(backupDir, "tingly-model-catalog.json.bak-*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) == 0 {
+		t.Errorf("expected backup of existing catalog in %s, none found", backupDir)
+	}
+}
+
 func TestApplyCodexConfig_NoModels_OnlyTouchesManagedFields(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)

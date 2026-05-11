@@ -879,7 +879,15 @@ func ApplyOpenCodeConfig(payload map[string]interface{}) (*ApplyResult, error) {
 	return result, nil
 }
 
-// ApplyCodexConfig merges tingly-box Codex settings into ~/.codex/config.toml.
+// codexModelCatalogFile is the basename of the tingly-managed Codex model
+// catalog file written next to config.toml. config.toml's `model_catalog_json`
+// is pointed at the absolute path of this file so `/model` can enumerate
+// tingly-served models.
+const codexModelCatalogFile = "tingly-model-catalog.json"
+
+// ApplyCodexConfig merges tingly-box Codex settings into ~/.codex/config.toml
+// and writes ~/.codex/tingly-model-catalog.json with one entry per supplied
+// model so Codex's `/model` picker can see them.
 //
 // MERGE semantics: only fields tingly-box manages are overwritten. Everything
 // else the user put in config.toml — other top-level keys, other entries under
@@ -890,22 +898,39 @@ func ApplyOpenCodeConfig(payload map[string]interface{}) (*ApplyResult, error) {
 //   - top-level `model_provider = "tingly-box"`,
 //     `model_supports_reasoning_summaries = true`,
 //     `model_reasoning_summary = "auto"`
+//   - top-level `model_catalog_json` (set to the absolute path of the
+//     catalog file when models is non-empty; cleared otherwise so we don't
+//     point at a missing file)
 //   - `[model_providers.tingly-box]` (always re-pinned to the supplied base URL)
 //   - `[profiles.<sanitized(model)>]` for each model — overwritten unconditionally
 //     under that key; `agent restore codex` recovers the previous file if needed
 //
+// Note: Codex's `model_catalog_json` REPLACES the bundled catalog (it does not
+// merge), and is read on startup only — switching via `/model` doesn't reload
+// it. Users wanting native OpenAI entries in `/model` should keep the bundled
+// catalog (i.e. not run apply) or merge by hand.
+//
 // Orphan tingly profiles from earlier applies are NOT garbage-collected; if
 // the user has trimmed their rules they can remove stale profiles by hand.
 //
-// The previous file (if any) is backed up before being rewritten.
+// The previous config.toml and catalog (if any) are backed up before being
+// rewritten.
 func ApplyCodexConfig(baseURL string, models []string) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
+	if homeDir == "" {
+		// os.UserHomeDir can succeed and return "" in odd container setups
+		// where neither $HOME nor /etc/passwd resolves the current user.
+		// We refuse to proceed because filepath.Join would emit "/.codex/..."
+		// which Codex rejects as a non-absolute catalog path.
+		return nil, fmt.Errorf("home directory resolved to empty path")
+	}
 
 	configDir := filepath.Join(homeDir, ".codex")
 	targetPath := filepath.Join(configDir, "config.toml")
+	catalogPath := filepath.Join(configDir, codexModelCatalogFile)
 	result := &ApplyResult{}
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -930,7 +955,11 @@ func ApplyCodexConfig(baseURL string, models []string) (*ApplyResult, error) {
 		result.Created = true
 	}
 
-	mergeCodexConfig(existing, baseURL, models)
+	catalogPathForConfig := ""
+	if len(models) > 0 {
+		catalogPathForConfig = catalogPath
+	}
+	mergeCodexConfig(existing, baseURL, models, catalogPathForConfig)
 
 	out, err := tomlpkg.Marshal(existing)
 	if err != nil {
@@ -940,6 +969,24 @@ func ApplyCodexConfig(baseURL string, models []string) (*ApplyResult, error) {
 	if err := os.WriteFile(targetPath, out, 0644); err != nil {
 		result.Message = fmt.Sprintf("Failed to write file: %v", err)
 		return result, nil
+	}
+
+	if len(models) > 0 {
+		if _, err := os.Stat(catalogPath); err == nil {
+			if _, err := backupFile(catalogPath); err != nil {
+				result.Message = fmt.Sprintf("Failed to back up catalog: %v", err)
+				return result, nil
+			}
+		}
+		catalogBytes, err := renderCodexModelCatalog(models)
+		if err != nil {
+			result.Message = fmt.Sprintf("Failed to render model catalog: %v", err)
+			return result, nil
+		}
+		if err := os.WriteFile(catalogPath, catalogBytes, 0644); err != nil {
+			result.Message = fmt.Sprintf("Failed to write catalog: %v", err)
+			return result, nil
+		}
 	}
 
 	result.Success = true
@@ -957,20 +1004,37 @@ func ApplyCodexConfig(baseURL string, models []string) (*ApplyResult, error) {
 // ~/.codex/config.toml — i.e. the merge applied to an empty starting point.
 // Used by the preview endpoint so the UI can show exactly what's pending.
 func RenderCodexConfigTOML(baseURL string, models []string) ([]byte, error) {
+	catalogPathForConfig := ""
+	if len(models) > 0 {
+		// Guard against environments where UserHomeDir returns "" with no
+		// error (rare, but it makes filepath.Join emit "/.codex/..." which
+		// Codex then fails to parse as AbsolutePathBuf). Better to omit the
+		// field entirely than to write a broken path.
+		if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
+			catalogPathForConfig = filepath.Join(homeDir, ".codex", codexModelCatalogFile)
+		}
+	}
 	cfg := map[string]interface{}{}
-	mergeCodexConfig(cfg, baseURL, models)
+	mergeCodexConfig(cfg, baseURL, models, catalogPathForConfig)
 	return tomlpkg.Marshal(cfg)
 }
 
 // mergeCodexConfig mutates cfg in place, applying tingly-managed fields while
 // preserving everything else. See ApplyCodexConfig for the contract.
-func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []string) {
+//
+// catalogPath is the absolute path to write into `model_catalog_json`. Pass
+// "" to leave that key untouched (e.g. when no models are configured — we
+// don't want to point Codex at a file we never wrote).
+func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []string, catalogPath string) {
 	if len(models) > 0 {
 		cfg["model"] = models[0]
 	}
 	cfg["model_provider"] = "tingly-box"
 	cfg["model_supports_reasoning_summaries"] = true
 	cfg["model_reasoning_summary"] = "auto"
+	if catalogPath != "" {
+		cfg["model_catalog_json"] = catalogPath
+	}
 
 	providers, _ := cfg["model_providers"].(map[string]interface{})
 	if providers == nil {
@@ -997,6 +1061,52 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	if len(profiles) > 0 {
 		cfg["profiles"] = profiles
 	}
+}
+
+// renderCodexModelCatalog produces the JSON payload for
+// ~/.codex/tingly-model-catalog.json. Each model becomes one ModelInfo entry
+// with the required fields populated using conservative defaults that match
+// the OpenAI Responses API surface (text-in/text-out, reasoning summaries on,
+// no verbosity knob). Codex 0.124+ deserializes this into
+// `protocol::openai_models::ModelsResponse`; field names and value types must
+// stay in sync with that struct.
+func renderCodexModelCatalog(models []string) ([]byte, error) {
+	// supported_reasoning_levels is Vec<ReasoningEffortPreset>, not a bare
+	// string list — each element is an {effort, description} object. Values
+	// mirror Codex's bundled catalog for GPT-5 so /model shows the familiar
+	// presets.
+	reasoningPresets := []map[string]interface{}{
+		{"effort": "minimal", "description": "Minimal reasoning for the fastest responses"},
+		{"effort": "low", "description": "Fast responses with lighter reasoning"},
+		{"effort": "medium", "description": "Balances speed and reasoning depth for everyday tasks"},
+		{"effort": "high", "description": "Greater reasoning depth for complex problems"},
+	}
+	entries := make([]map[string]interface{}, 0, len(models))
+	for _, model := range models {
+		entries = append(entries, map[string]interface{}{
+			"slug":                             model,
+			"display_name":                     model,
+			"description":                      "Tingly Box managed model",
+			"supported_reasoning_levels":       reasoningPresets,
+			"default_reasoning_level":          "medium",
+			"shell_type":                       "shell_command",
+			"visibility":                       "list",
+			"supported_in_api":                 true,
+			"priority":                         0,
+			"base_instructions":                "",
+			"supports_reasoning_summaries":     true,
+			"default_reasoning_summary":        "auto",
+			"support_verbosity":                false,
+			"truncation_policy":                map[string]interface{}{"mode": "tokens", "limit": 10000},
+			"supports_parallel_tool_calls":     true,
+			"effective_context_window_percent": 100,
+			"experimental_supported_tools":     []string{},
+			"input_modalities":                 []string{"text"},
+			"apply_patch_tool_type":            "freeform",
+		})
+	}
+	payload := map[string]interface{}{"models": entries}
+	return json.MarshalIndent(payload, "", "  ")
 }
 
 var codexProfileKeyInvalid = regexp.MustCompile(`[^A-Za-z0-9_-]`)
