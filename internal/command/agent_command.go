@@ -283,22 +283,9 @@ func promptForAgentConfig(reader *bufio.Reader, appManager *AppManager, req *age
 func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRequest) error {
 	globalConfig := appManager.GetGlobalConfig()
 
-	// Determine request model and scenario based on agent type
-	var requestModel string
-	var scenario typ.RuleScenario
-
-	switch req.AgentType {
-	case agent.AgentTypeClaudeCode:
-		requestModel = "tingly/cc"
-		scenario = typ.ScenarioClaudeCode
-	case agent.AgentTypeOpenCode:
-		requestModel = "tingly-opencode"
-		scenario = typ.ScenarioOpenCode
-	case agent.AgentTypeCodex:
-		requestModel = "tingly-codex"
-		scenario = typ.ScenarioCodex
-	default:
-		return fmt.Errorf("unsupported agent type: %s", req.AgentType)
+	requestModel, scenario, err := agentRoutingKey(req.AgentType)
+	if err != nil {
+		return err
 	}
 
 	// Look for existing routing rule
@@ -569,6 +556,23 @@ func listAgentTypes() error {
 	return nil
 }
 
+// agentRoutingKey returns the canonical request model + scenario pair that
+// identifies the routing rule for an agent type. apply / show / restore must
+// agree on this mapping or they will look at different rules and disagree
+// about whether the agent is configured.
+func agentRoutingKey(agentType agent.AgentType) (string, typ.RuleScenario, error) {
+	switch agentType {
+	case agent.AgentTypeClaudeCode:
+		return "tingly/cc", typ.ScenarioClaudeCode, nil
+	case agent.AgentTypeOpenCode:
+		return "tingly-opencode", typ.ScenarioOpenCode, nil
+	case agent.AgentTypeCodex:
+		return "tingly-codex", typ.ScenarioCodex, nil
+	default:
+		return "", "", fmt.Errorf("unsupported agent type: %s", agentType)
+	}
+}
+
 // showAgentConfig shows current configuration for an agent type
 func showAgentConfig(appManager *AppManager, agentType agent.AgentType) error {
 	globalConfig := appManager.GetGlobalConfig()
@@ -582,15 +586,9 @@ func showAgentConfig(appManager *AppManager, agentType agent.AgentType) error {
 	fmt.Printf("Scenario:  %s\n", info.Scenario)
 	fmt.Println()
 
-	// Show routing rule for this scenario
-	var requestModel string
-	switch agentType {
-	case agent.AgentTypeClaudeCode:
-		requestModel = "tingly/cc"
-	case agent.AgentTypeOpenCode:
-		requestModel = "tingly-opencode"
-	case agent.AgentTypeCodex:
-		requestModel = "tingly-codex"
+	requestModel, _, err := agentRoutingKey(agentType)
+	if err != nil {
+		return err
 	}
 
 	rule := globalConfig.GetRuleByRequestModelAndScenario(requestModel, typ.RuleScenario(info.Scenario))
