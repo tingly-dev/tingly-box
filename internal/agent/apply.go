@@ -42,23 +42,34 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 	}
 }
 
-// applyClaudeCode applies Claude Code configuration
+// applyClaudeCode applies Claude Code configuration.
+// When no provider/model is supplied (i.e. no routing service is configured
+// yet), the config files are still written and routing-rule sync is skipped
+// with a warning — apply should not hard-fail just because rules are unset.
 func (aa *AgentApply) applyClaudeCode(req *ApplyAgentRequest) (*ApplyAgentResult, error) {
 	result := &ApplyAgentResult{
 		AgentType: req.AgentType,
 	}
 
-	// Get provider
-	provider, err := aa.config.GetProviderByUUID(req.Provider)
-	if err != nil {
-		return nil, fmt.Errorf("provider not found: %w", err)
+	hasService := req.Provider != "" && req.Model != ""
+
+	if hasService {
+		provider, err := aa.config.GetProviderByUUID(req.Provider)
+		if err != nil || provider == nil {
+			// Provider lookup failed — downgrade to "no service" rather than
+			// blocking the file-level apply. Tell the caller via Warnings.
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("provider %s not found; skipping routing rule update", req.Provider))
+			hasService = false
+		} else {
+			result.ProviderName = provider.Name
+			result.ProviderUUID = provider.UUID
+			result.Model = req.Model
+		}
+	} else {
+		result.Warnings = append(result.Warnings,
+			"no routing service configured; applying config files only (routing rules will not be created)")
 	}
-	if provider == nil {
-		return nil, fmt.Errorf("provider %s not found", req.Provider)
-	}
-	result.ProviderName = provider.Name
-	result.ProviderUUID = provider.UUID
-	result.Model = req.Model
 
 	// Get base URL and token for Claude settings
 	baseURL, apiKey := aa.getBaseURLAndToken()
@@ -83,36 +94,50 @@ func (aa *AgentApply) applyClaudeCode(req *ApplyAgentRequest) (*ApplyAgentResult
 	result.ConfigFiles = aa.collectConfigFiles(settingsResult, onboardingResult)
 	result.BackupPaths = aa.collectBackupPaths(settingsResult, onboardingResult)
 
-	// Create or update routing rules (all tingly/cc-* rules for convenience)
-	ruleCreated, ruleUpdated, err := aa.createOrUpdateClaudeCodeRules(provider.UUID, req.Model)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create/update routing rules: %w", err)
+	if hasService {
+		ruleCreated, ruleUpdated, err := aa.createOrUpdateClaudeCodeRules(result.ProviderUUID, req.Model)
+		if err != nil {
+			// Surface as a warning so the user still gets the config files;
+			// failing the whole apply here would defeat the purpose of the
+			// "warn, don't error" contract.
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("failed to create/update routing rules: %v", err))
+		} else {
+			result.RulesCreated = ruleCreated
+			result.RulesUpdated = ruleUpdated
+		}
 	}
-	result.RulesCreated = ruleCreated
-	result.RulesUpdated = ruleUpdated
 
 	result.Message = aa.buildResultMessage(result)
 
 	return result, nil
 }
 
-// applyOpenCode applies OpenCode configuration
+// applyOpenCode applies OpenCode configuration.
+// Mirrors applyClaudeCode: writes config files unconditionally and only
+// creates/updates routing rules when a provider+model are supplied.
 func (aa *AgentApply) applyOpenCode(req *ApplyAgentRequest) (*ApplyAgentResult, error) {
 	result := &ApplyAgentResult{
 		AgentType: req.AgentType,
 	}
 
-	// Get provider
-	provider, err := aa.config.GetProviderByUUID(req.Provider)
-	if err != nil {
-		return nil, fmt.Errorf("provider not found: %w", err)
+	hasService := req.Provider != "" && req.Model != ""
+
+	if hasService {
+		provider, err := aa.config.GetProviderByUUID(req.Provider)
+		if err != nil || provider == nil {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("provider %s not found; skipping routing rule update", req.Provider))
+			hasService = false
+		} else {
+			result.ProviderName = provider.Name
+			result.ProviderUUID = provider.UUID
+			result.Model = req.Model
+		}
+	} else {
+		result.Warnings = append(result.Warnings,
+			"no routing service configured; applying config files only (routing rules will not be created)")
 	}
-	if provider == nil {
-		return nil, fmt.Errorf("provider %s not found", req.Provider)
-	}
-	result.ProviderName = provider.Name
-	result.ProviderUUID = provider.UUID
-	result.Model = req.Model
 
 	// Get base URL and token for OpenCode config
 	baseURL, apiKey := aa.getBaseURLAndToken()
@@ -141,13 +166,16 @@ func (aa *AgentApply) applyOpenCode(req *ApplyAgentRequest) (*ApplyAgentResult, 
 		result.BackupPaths = []string{applyResult.BackupPath}
 	}
 
-	// Create or update routing rules (tingly-opencode)
-	ruleCreated, ruleUpdated, err := aa.createOrUpdateOpenCodeRules(provider.UUID, req.Model)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create/update routing rules: %w", err)
+	if hasService {
+		ruleCreated, ruleUpdated, err := aa.createOrUpdateOpenCodeRules(result.ProviderUUID, req.Model)
+		if err != nil {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("failed to create/update routing rules: %v", err))
+		} else {
+			result.RulesCreated = ruleCreated
+			result.RulesUpdated = ruleUpdated
+		}
 	}
-	result.RulesCreated = ruleCreated
-	result.RulesUpdated = ruleUpdated
 
 	result.Message = aa.buildResultMessage(result)
 
@@ -404,8 +432,12 @@ func (aa *AgentApply) buildResultMessage(result *ApplyAgentResult) string {
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Configuration applied for %s\n", result.AgentType))
-	sb.WriteString(fmt.Sprintf("Provider: %s\n", result.ProviderName))
-	sb.WriteString(fmt.Sprintf("Model: %s\n", result.Model))
+	if result.ProviderName != "" {
+		sb.WriteString(fmt.Sprintf("Provider: %s\n", result.ProviderName))
+	}
+	if result.Model != "" {
+		sb.WriteString(fmt.Sprintf("Model: %s\n", result.Model))
+	}
 
 	if len(result.ConfigFiles) > 0 {
 		sb.WriteString("\nFiles modified:\n")
@@ -425,6 +457,13 @@ func (aa *AgentApply) buildResultMessage(result *ApplyAgentResult) string {
 		sb.WriteString("\nBackups:\n")
 		for _, p := range result.BackupPaths {
 			sb.WriteString(fmt.Sprintf("  - %s\n", p))
+		}
+	}
+
+	if len(result.Warnings) > 0 {
+		sb.WriteString("\nWarnings:\n")
+		for _, w := range result.Warnings {
+			sb.WriteString(fmt.Sprintf("  - %s\n", w))
 		}
 	}
 

@@ -327,11 +327,45 @@ func resolveAgentConfigFromRules(appManager *AppManager, req *agent.ApplyAgentRe
 		}
 	}
 
-	// No rule found or rule is invalid - prompt for configuration
+	// No rule or no usable service is configured yet. This is not fatal:
+	// `agent apply` can still write the agent's config files so the agent
+	// CLI points at tingly-box. Routing rules can be configured later via
+	// `tingly-box tui`. Only fall back to the interactive prompt when there
+	// are providers available AND we're on a TTY; otherwise just warn.
+	fmt.Fprintf(os.Stderr,
+		"Warning: no routing service configured for '%s' (scenario '%s').\n",
+		requestModel, scenario)
+	fmt.Fprintln(os.Stderr,
+		"Config files will still be applied. Run 'tingly-box tui' to set up routing rules later.")
+
+	providers := appManager.ListProviders()
+	if len(providers) == 0 || !isStdinTTY() {
+		// Nothing to prompt for, or stdin is non-interactive — proceed
+		// without provider/model. applyClaudeCode/applyOpenCode handles
+		// the empty case by skipping rule sync.
+		return nil
+	}
+
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("\nNo routing rule found for '%s' in scenario '%s'.\n", requestModel, scenario)
-	fmt.Println("You may need to run 'tingly-box tui' first, or configure manually:")
-	return promptForAgentConfig(reader, appManager, req)
+	fmt.Fprintln(os.Stderr, "You may optionally select a provider/model now to also create routing rules:")
+	if err := promptForAgentConfig(reader, appManager, req); err != nil {
+		// Prompt failed (e.g. user aborted) — degrade to "config files only"
+		// rather than blocking the whole apply.
+		fmt.Fprintf(os.Stderr, "Warning: skipping routing rule setup: %v\n", err)
+		req.Provider = ""
+		req.Model = ""
+	}
+	return nil
+}
+
+// isStdinTTY reports whether stdin is connected to a terminal. It is used to
+// decide whether interactive prompts are appropriate.
+func isStdinTTY() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
 // promptForAgentProviderChoice prompts user to select a provider
@@ -433,8 +467,12 @@ func promptForAgentModelInput(reader *bufio.Reader, prompt string) (string, erro
 func confirmApply(reader *bufio.Reader, req *agent.ApplyAgentRequest) error {
 	fmt.Println("\nConfiguration preview:")
 	fmt.Printf("  Agent:  %s\n", req.AgentType)
-	fmt.Printf("  Provider:  (will be resolved)\n")
-	fmt.Printf("  Model:  %s\n", req.Model)
+	if req.Provider == "" && req.Model == "" {
+		fmt.Println("  Routing:  (no service configured — config files only, no routing rules)")
+	} else {
+		fmt.Printf("  Provider:  (will be resolved)\n")
+		fmt.Printf("  Model:  %s\n", req.Model)
+	}
 	if req.AgentType == agent.AgentTypeClaudeCode {
 		mode := "unified"
 		if !req.Unified {
@@ -464,13 +502,17 @@ func showPreview(appManager *AppManager, req *agent.ApplyAgentRequest) error {
 
 	fmt.Println("\nConfiguration preview:")
 	fmt.Printf("  Agent:  %s\n", info.Name)
-	fmt.Printf("  Provider:  (will be resolved)\n")
-	fmt.Printf("  Model:  %s\n", req.Model)
+	if req.Provider == "" && req.Model == "" {
+		fmt.Println("  Routing:  (no service configured — config files only, no routing rules)")
+	} else {
+		fmt.Printf("  Provider:  (will be resolved)\n")
+		fmt.Printf("  Model:  %s\n", req.Model)
 
-	// Get provider info
-	if req.Provider != "" {
-		if provider, err := appManager.GetProvider(req.Provider); err == nil && provider != nil {
-			fmt.Printf("  Provider:  %s\n", provider.Name)
+		// Get provider info
+		if req.Provider != "" {
+			if provider, err := appManager.GetProvider(req.Provider); err == nil && provider != nil {
+				fmt.Printf("  Provider:  %s\n", provider.Name)
+			}
 		}
 	}
 
@@ -479,9 +521,11 @@ func showPreview(appManager *AppManager, req *agent.ApplyAgentRequest) error {
 		fmt.Printf("  - %s\n", f)
 	}
 
-	fmt.Println("\nRouting rule:")
-	fmt.Printf("  Scenario:  %s\n", info.Scenario)
-	fmt.Printf("  Request Model:  tingly/%s\n", strings.TrimPrefix(string(req.AgentType), "claude-"))
+	if req.Provider != "" && req.Model != "" {
+		fmt.Println("\nRouting rule:")
+		fmt.Printf("  Scenario:  %s\n", info.Scenario)
+		fmt.Printf("  Request Model:  tingly/%s\n", strings.TrimPrefix(string(req.AgentType), "claude-"))
+	}
 
 	fmt.Println("\nNo changes will be made in preview mode.")
 	return nil

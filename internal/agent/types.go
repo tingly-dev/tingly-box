@@ -108,6 +108,10 @@ type ApplyAgentResult struct {
 	// RulesUpdated indicates how many existing routing rules were updated
 	RulesUpdated int
 
+	// Warnings collects non-fatal messages emitted during apply, e.g. when
+	// no routing service is configured yet so rule sync is skipped.
+	Warnings []string
+
 	// Message contains a human-readable result message
 	Message string
 }
