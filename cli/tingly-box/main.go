@@ -56,6 +56,9 @@ type CLI struct {
 	TUI        command.TUICmdKong        `kong:"cmd,name='tui',help='Interactive setup wizard'"`
 	Quickstart command.QuickstartCmdKong `kong:"cmd,name='quickstart',hidden,help='Alias for tui'"`
 
+	// System log streaming/inspection
+	Log command.LogCmdKong `kong:"cmd,name='log',help='View system logs (real-time follow by default, use --once for one-shot)'"`
+
 	// MCP builtin (hidden)
 	MCPBuiltin command.MCPBuiltinCmdKong `kong:"cmd,name='mcp-builtin',hidden,help='Start the builtin MCP server (internal use)'"`
 
