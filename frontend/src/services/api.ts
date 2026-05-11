@@ -762,6 +762,22 @@ export const api = {
     listOpenAIModels: (): Promise<any> => modelAPI('/openai/v1/models'),
     listAnthropicModels: (): Promise<any> => modelAPI('/anthropic/v1/models'),
 
+    // Playground: scenario-prefixed transparent passthrough endpoints
+    // (frontend SDK is swagger-generated and does not cover model-side routes,
+    // so these are hand-written placeholders — replace with codegen later)
+    playgroundChatCompletions: (scenario: string, data: any): Promise<any> =>
+        modelAPI(`/tingly/${scenario}/v1/chat/completions`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    playgroundImageGenerate: (scenario: string, data: any): Promise<any> =>
+        modelAPI(`/tingly/${scenario}/v1/images/generations`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    playgroundListModels: (scenario: string): Promise<any> =>
+        modelAPI(`/tingly/${scenario}/v1/models`),
+
 
     // Service management within rules
     addServiceToRule: (ruleName: string, serviceData: any): Promise<any> => uiAPI(`/rule/${ruleName}/services`, {

@@ -45,6 +45,7 @@ export default {
       "useVSCode": "VS Code",
       "useEmbed": "Embed",
       "useImageGen": "Image Gen",
+      "playground": "Playground",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
       "credential": "Credential",

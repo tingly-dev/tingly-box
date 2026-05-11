@@ -22,6 +22,7 @@ import {
     IconVector,
     IconPhoto,
     IconFlask,
+    IconPlayerPlay,
 } from '@tabler/icons-react';
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw } from '../components/BrandIcons';
 import { SettingsApplications } from '@mui/icons-material';
@@ -85,6 +86,9 @@ export function useActivityItems(): ActivityItem[] {
         const visible = (group: HideableScenario[]): NavItem[] =>
             group.filter(s => !hiddenScenarios.has(s.id)).map(s => s.nav);
 
+        const playgroundTool: NavItem[] = [
+            { path: '/agent/playground', label: t('layout.nav.playground', { defaultValue: 'Playground' }), icon: <IconPlayerPlay size={20} /> },
+        ];
         const codingTools = visible([
             { id: 'codex', nav: { path: '/agent/codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> } },
             { id: 'opencode', nav: { path: '/agent/opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> } },
@@ -119,6 +123,7 @@ export function useActivityItems(): ActivityItem[] {
             if (scenarioChildren.length > 0) scenarioChildren.push({ type: 'divider' });
             scenarioChildren.push(...group);
         };
+        pushGroup(playgroundTool);
         pushGroup(codingTools);
         pushGroup(sdkTools);
         pushGroup(agentTools);

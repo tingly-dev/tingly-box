@@ -1,7 +1,9 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box } from '@mui/material';
+import { Box, Button } from '@mui/material';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { useNavigate } from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
@@ -16,6 +18,7 @@ const UseImageGenPageContent: React.FC = () => {
         copyToClipboard,
         baseUrl,
     } = useScenarioPageInternal(scenario);
+    const navigate = useNavigate();
 
     return (
         <PageLayout loading={isLoading} notification={notification}>
@@ -27,6 +30,16 @@ const UseImageGenPageContent: React.FC = () => {
                         </Box>
                     }
                     size="full"
+                    rightAction={
+                        <Button
+                            onClick={() => navigate('/agent/playground')}
+                            variant="contained"
+                            size="small"
+                            startIcon={<PlayArrowIcon />}
+                        >
+                            Open Playground
+                        </Button>
+                    }
                 >
                     <ProviderConfigCard
                         title="Image Generation API Configuration"
