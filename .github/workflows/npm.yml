@@ -35,14 +35,13 @@ on:
         type: boolean
         default: true
       npm_tag:
-        description: 'npm dist-tag for publish (latest/next/rc). Auto-trigger infers from version: stable→latest, pre-release→next'
+        description: 'npm dist-tag for publish (latest/rc). Auto-trigger infers from version: stable→latest, pre-release→rc'
         required: false
         type: choice
         options:
           - latest
-          - next
           - rc
-        default: 'next'
+        default: 'rc'
 
 permissions:
   contents: write
@@ -78,11 +77,11 @@ jobs:
             echo "publish_gui=false" >> $GITHUB_OUTPUT
             echo "publish_bundle=true" >> $GITHUB_OUTPUT
             echo "build_docker=true" >> $GITHUB_OUTPUT
-            # Auto-infer npm tag from version: stable → latest, pre-release → next
+            # Auto-infer npm tag from version: stable → latest, pre-release → rc
             RELEASE_TAG="${{ github.event.release.tag_name }}"
             VERSION="${RELEASE_TAG#v}"
             if [[ "$VERSION" == *-* ]]; then
-              echo "npm_tag=next" >> $GITHUB_OUTPUT
+              echo "npm_tag=rc" >> $GITHUB_OUTPUT
             else
               echo "npm_tag=latest" >> $GITHUB_OUTPUT
             fi
