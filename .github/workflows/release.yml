@@ -221,10 +221,12 @@ jobs:
               CC=musl-gcc
               export CC
             elif [ "${{ matrix.goarch }}" == "arm64" ]; then
-              # Use zig for cross-compilation
-              CC="zig cc -target aarch64-linux-gnu"
-              CXX="zig c++ -target aarch64-linux-gnu"
+              # Use zig for cross-compilation with musl (static)
+              CC="zig cc -target aarch64-linux-musl"
+              CXX="zig c++ -target aarch64-linux-musl"
               export CC CXX
+              BUILD_TAGS="-tags 'sqlite_omit_load_extension'"
+              LDFLAGS_EXT="-linkmode external -extldflags \"-static\""
             fi
           fi
 
