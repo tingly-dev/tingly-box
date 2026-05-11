@@ -48,6 +48,7 @@ type ToolSource interface {
 	Connect(ctx context.Context) error
 	Disconnect(ctx context.Context) error
 	IsConnected() bool
+	IsConfigured() bool
 	GetConnectionState() ConnectionState
 	GetConnectionStatus() ConnectionStatus
 

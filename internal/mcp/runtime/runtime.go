@@ -698,6 +698,71 @@ func (r *Runtime) ListCallableServerToolNames(ctx context.Context) map[string]st
 	return out
 }
 
+// IsClientToolAvailable reports whether a client-visible tool on the given source is
+// enabled and configured to handle requests.
+//
+// The check is two-layered:
+//  1. Source-level: enabled + IsConfigured() on the ToolSource implementation.
+//     Custom MCP servers (stdio/http/sse) use their transport-specific check
+//     (command non-empty / endpoint non-empty / env refs resolved).
+//  2. Tool-level: for builtin sources, a per-tool ToolReadinessChecker may impose
+//     additional requirements (e.g. mcp_web_search requires SERPER_API_KEY).
+func (r *Runtime) IsClientToolAvailable(sourceID string, toolName string) bool {
+	if r == nil {
+		return false
+	}
+	cfg := r.getConfigOrDefault()
+	if cfg == nil {
+		return false
+	}
+	for _, source := range cfg.Sources {
+		if source.ID != sourceID {
+			continue
+		}
+		if !typ.IsMCPSourceEnabled(source) {
+			return false
+		}
+		// Check tool is listed for this source.
+		found := false
+		for _, t := range source.Tools {
+			if t == toolName || t == "*" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+		// Source-level configuration check via ToolSource.IsConfigured().
+		// Expand env refs first so IsConfigured sees resolved values.
+		expandedSource := source
+		expandedSource.Env = make(map[string]string, len(source.Env))
+		for k, v := range source.Env {
+			expandedSource.Env[k] = v
+		}
+		expandSourceEnvInPlace(expandedSource.Env)
+		ts, err := r.toolSourceFactory.CreateToolSource(expandedSource)
+		if err != nil || !ts.IsConfigured() {
+			return false
+		}
+		// Tool-level readiness check (builtin sources only).
+		checker, ok := mcptools.WebtoolReadinessCheckers[toolName]
+		if !ok {
+			return true
+		}
+		return checker.IsReady(expandedSource.Env)
+	}
+	return false
+}
+
+// expandSourceEnvInPlace expands ${VAR} references in an env map using os.Getenv as fallback.
+func expandSourceEnvInPlace(env map[string]string) {
+	for k, v := range env {
+		expanded, _ := expandStringEnvRefs(v, env, true)
+		env[k] = expanded
+	}
+}
+
 // ListEnabledServerToolNames returns normalized MCP tool names that are callable by
 // server-side MCP execution paths. This includes:
 //   - injected server-side virtual tools (via ListServerToolsForInjection)

@@ -37,6 +37,7 @@ func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType
 	transforms = append(transforms, transform.NewBaseTransform(targetType))
 	if s.mcpEnabled() {
 		transforms = append(transforms, servertransform.NewMCPToolInjectionTransform(s.mcpRuntime))
+		transforms = append(transforms, servertransform.NewNativeWebSearchStripTransform(s.mcpRuntime))
 		transforms = append(transforms, servertransform.NewMCPToolStripGuardTransform(s.mcpRuntime, s.mcpStripDisabledToolsEnabled()))
 	}
 	// 3. Consistency transform (cross-provider normalization including message alignment)

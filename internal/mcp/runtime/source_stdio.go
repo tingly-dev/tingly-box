@@ -157,6 +157,20 @@ func (s *StdioToolSource) IsConnected() bool {
 	return s.session != nil && s.session.session != nil
 }
 
+// IsConfigured returns whether this source has sufficient configuration to connect.
+// For stdio, this means the command field is non-empty and all required env vars are resolved.
+func (s *StdioToolSource) IsConfigured() bool {
+	if s.sourceConfig.Command == "" {
+		return false
+	}
+	for _, v := range s.sourceConfig.Env {
+		if len(v) > 3 && v[0] == '$' && v[1] == '{' && v[len(v)-1] == '}' {
+			return false
+		}
+	}
+	return true
+}
+
 // ListTools returns all tools from the stdio MCP server.
 func (s *StdioToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error) {
 	if !s.IsConnected() {

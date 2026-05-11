@@ -93,6 +93,11 @@ func (s *SSEToolSource) IsConnected() bool {
 	return s.session != nil && s.session.session != nil
 }
 
+// IsConfigured returns whether this source has sufficient configuration to connect.
+func (s *SSEToolSource) IsConfigured() bool {
+	return s.sourceConfig.Endpoint != ""
+}
+
 // ListTools returns all tools from the SSE MCP server.
 func (s *SSEToolSource) ListTools(ctx context.Context) ([]ToolDefinition, error) {
 	if !s.IsConnected() {
