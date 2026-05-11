@@ -67,16 +67,18 @@ func (p *ProviderUpdateCmdKong) Run(appManager *AppManager) error {
 	return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
 }
 
-// ProviderDetailsCmdKong displays provider details (without name drops to interactive)
+// ProviderDetailsCmdKong displays provider details. Without a UUID it drops
+// to interactive selection. Names are not unique (UUID is the PK), so the
+// positional argument is the UUID.
 type ProviderDetailsCmdKong struct {
-	Name string `kong:"arg,optional,help='Provider name'"`
+	UUID string `kong:"arg,optional,help='Provider UUID'"`
 }
 
 func (p *ProviderDetailsCmdKong) Run(appManager *AppManager) error {
-	if p.Name == "" {
+	if p.UUID == "" {
 		return runProviderGetInteractive(appManager, bufio.NewReader(os.Stdin))
 	}
-	return runProviderGet(appManager, p.Name)
+	return runProviderGet(appManager, p.UUID)
 }
 
 // ============== Business Logic Functions ==============
@@ -169,6 +171,7 @@ func runProviderList(appManager *AppManager) error {
 			status = "✅ Enabled"
 		}
 		fmt.Printf("%d. %s\n", i+1, provider.Name)
+		fmt.Printf("   UUID: %s\n", provider.UUID)
 		fmt.Printf("   URL: %s\n", provider.APIBase)
 		fmt.Printf("   Style: %s\n", provider.APIStyle)
 		fmt.Printf("   Status: %s\n", status)
@@ -202,7 +205,7 @@ func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) 
 		if !provider.Enabled {
 			status = "[Disabled]"
 		}
-		fmt.Printf("%d. %s %s\n", i+1, status, provider.Name)
+		fmt.Printf("%d. %s %s (%s)\n", i+1, status, provider.Name, provider.UUID)
 	}
 
 	fmt.Print("\nEnter provider number: ")
@@ -308,7 +311,7 @@ func runProviderDeleteInteractive(appManager *AppManager, reader *bufio.Reader) 
 		if !provider.Enabled {
 			status = "[Disabled]"
 		}
-		fmt.Printf("%d. %s %s\n", i+1, status, provider.Name)
+		fmt.Printf("%d. %s %s (%s)\n", i+1, status, provider.Name, provider.UUID)
 	}
 
 	fmt.Print("\nEnter provider number: ")
@@ -348,7 +351,9 @@ func runProviderDeleteByUUID(appManager *AppManager, uuid, name string) error {
 	return nil
 }
 
-// runProviderGetInteractive runs interactive get mode
+// runProviderGetInteractive runs interactive get mode. Selection happens by
+// menu number so we can pass the chosen provider's UUID downstream (names
+// aren't unique, so picking by name is ambiguous).
 func runProviderGetInteractive(appManager *AppManager, reader *bufio.Reader) error {
 	providers := appManager.ListProviders()
 
@@ -361,36 +366,30 @@ func runProviderGetInteractive(appManager *AppManager, reader *bufio.Reader) err
 	fmt.Println("\nSelect a provider:")
 
 	for i, provider := range providers {
-		fmt.Printf("%d. %s\n", i+1, provider.Name)
+		fmt.Printf("%d. %s (%s)\n", i+1, provider.Name, provider.UUID)
 	}
 
-	fmt.Print("\nEnter provider number or name: ")
+	fmt.Print("\nEnter provider number or UUID: ")
 	input, _ := reader.ReadString('\n')
 	choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
 
-	var name string
+	var uuid string
 	var num int
 	if _, err := fmt.Sscanf(choice, "%d", &num); err == nil && num > 0 && num <= len(providers) {
-		name = providers[num-1].Name
+		uuid = providers[num-1].UUID
 	} else {
-		name = choice
+		uuid = choice
 	}
 
-	return runProviderGet(appManager, name)
+	return runProviderGet(appManager, uuid)
 }
 
-// runProviderGet displays provider details. The argument is interpreted as a
-// provider name first (matching `config get`'s "Provider name" help text); if
-// that misses, we try it as a UUID so users with a UUID at hand still work.
-// Providers are keyed by UUID, so a bare name lookup must go through the
-// dedicated name index — not GetProvider, which expects a UUID.
-func runProviderGet(appManager *AppManager, nameOrUUID string) error {
-	provider, err := appManager.GetProviderByName(nameOrUUID)
+// runProviderGet displays provider details for the given UUID. Providers are
+// keyed by UUID; names are not unique and must not be used as lookup keys.
+func runProviderGet(appManager *AppManager, uuid string) error {
+	provider, err := appManager.GetProvider(uuid)
 	if err != nil || provider == nil {
-		provider, err = appManager.GetProvider(nameOrUUID)
-	}
-	if err != nil || provider == nil {
-		return fmt.Errorf("provider not found: %s", nameOrUUID)
+		return fmt.Errorf("provider not found: %s", uuid)
 	}
 
 	fmt.Println("\n🔍 Provider Details")
