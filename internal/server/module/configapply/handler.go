@@ -211,6 +211,11 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	unified := req.Mode != "separate"
 	env := agent.BuildClaudeCodeEnv(baseURL, apiKey, unified)
 
+	// Always inject TINGLY_API_URL so the statusline script (if installed)
+	// targets the correct tingly-box port.  The env section is replaced on
+	// every apply, so this must be set unconditionally to survive re-applies.
+	env["TINGLY_API_URL"] = baseURL
+
 	// Install status line script if requested (before applying settings)
 	var statusLineInstalled bool
 	var statusLinePath string
@@ -228,7 +233,6 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 		}
 		statusLineInstalled = true
 		_ = scriptCreated // Used for tracking but not needed for response
-		// Add statusLine config to env
 		statusLine := map[string]any{"type": "command", "command": "~/.claude/tingly-statusline.sh"}
 		opts = append(opts, config.WithExtra("statusLine", statusLine))
 	}
