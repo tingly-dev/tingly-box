@@ -3,6 +3,7 @@ package configapply
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 
@@ -13,17 +14,17 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// getBaseURLFromRequest constructs the base URL from the incoming HTTP request
-// This ensures users get the URL they actually used to access the server
+// getBaseURLFromRequest constructs the base URL from the incoming HTTP request.
+// It prefers the actual port the user connected to (from c.Request.Host) over
+// the configured default port, so reverse proxies and custom ports are respected.
 func getBaseURLFromRequest(c *gin.Context, defaultPort int) string {
-	// Get the host from the request (includes port if non-standard)
+	// Get the host from the request Host header (includes port if non-standard).
 	host := c.Request.Host
 
 	// Get the scheme from X-Forwarded-Proto header (set by reverse proxies)
-	// or detect from the request
+	// or detect from the request.
 	scheme := c.GetHeader("X-Forwarded-Proto")
 	if scheme == "" {
-		// Fall back to detecting from the request
 		if c.Request.TLS != nil {
 			scheme = "https"
 		} else {
@@ -31,8 +32,24 @@ func getBaseURLFromRequest(c *gin.Context, defaultPort int) string {
 		}
 	}
 
-	// If host doesn't include port, add the default port
-	if !strings.Contains(host, ":") {
+	// If host already contains a port, use it as-is (respects the actual
+	// request port, e.g. localhost:8080 behind a reverse proxy).
+	if strings.Contains(host, ":") {
+		return fmt.Sprintf("%s://%s", scheme, host)
+	}
+
+	// No port in Host header — try X-Forwarded-Port, then fall back to
+	// the local listener's port, then the configured default.
+	fwdPort := c.GetHeader("X-Forwarded-Port")
+	if fwdPort != "" {
+		host = fmt.Sprintf("%s:%s", host, fwdPort)
+	} else if addr := c.Request.Context().Value(http.LocalAddrContextKey); addr != nil {
+		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+			host = fmt.Sprintf("%s:%d", host, tcpAddr.Port)
+		} else {
+			host = fmt.Sprintf("%s:%d", host, defaultPort)
+		}
+	} else {
 		host = fmt.Sprintf("%s:%d", host, defaultPort)
 	}
 
@@ -199,11 +216,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	}
 
 	// Get base URL from the user's request (respects reverse proxy headers)
-	port := h.config.ServerPort
-	if port == 0 {
-		port = 12580
-	}
-	baseURL := getBaseURLFromRequest(c, port)
+	baseURL := getBaseURLFromRequest(c, h.config.ServerPort)
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
@@ -228,8 +241,10 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 		}
 		statusLineInstalled = true
 		_ = scriptCreated // Used for tracking but not needed for response
-		// Add statusLine config to env
-		statusLine := map[string]any{"type": "command", "command": "~/.claude/tingly-statusline.sh"}
+		// Add statusLine config to env — inject TINGLY_API_URL so the script
+		// targets the correct tingly-box port instead of defaulting to :12580.
+		statusLineCmd := fmt.Sprintf("TINGLY_API_URL=%s ~/.claude/tingly-statusline.sh", baseURL)
+		statusLine := map[string]any{"type": "command", "command": statusLineCmd}
 		opts = append(opts, config.WithExtra("statusLine", statusLine))
 	}
 
