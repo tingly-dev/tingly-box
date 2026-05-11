@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -989,20 +990,12 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	}
 }
 
+var codexProfileKeyInvalid = regexp.MustCompile(`[^A-Za-z0-9_-]`)
+
 // sanitizeCodexProfileKey keeps alphanumerics, `_`, `-`; turns anything else
 // into `-`; trims edge dashes. Empty result falls back to "tingly".
 func sanitizeCodexProfileKey(name string) string {
-	var b strings.Builder
-	b.Grow(len(name))
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('-')
-		}
-	}
-	out := strings.Trim(b.String(), "-")
+	out := strings.Trim(codexProfileKeyInvalid.ReplaceAllString(name, "-"), "-")
 	if out == "" {
 		return "tingly"
 	}
