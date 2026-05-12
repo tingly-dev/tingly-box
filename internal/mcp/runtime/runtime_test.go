@@ -10,18 +10,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func testAdvisorProviderResolver(style protocol.APIStyle) func(string) (*typ.Provider, error) {
-	return func(string) (*typ.Provider, error) {
-		return &typ.Provider{
-			Name:     "test",
-			APIBase:  "https://example.com",
-			Token:    "test-key",
-			APIStyle: style,
-			Enabled:  true,
-		}, nil
-	}
-}
-
 func TestNormalizeAndParseToolName(t *testing.T) {
 	name := NormalizeToolName("search", "web_search")
 	if name != "tingly_box_mcp__search__web_search" {

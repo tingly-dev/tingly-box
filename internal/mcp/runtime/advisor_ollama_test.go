@@ -18,16 +18,8 @@ const ollamaModel = "qwen2.5:latest"
 
 func testOllamaAdvisorConfig(maxUses, maxTokens int) typ.AdvisorConfig {
 	return typ.AdvisorConfig{
-		ProviderUUID: "test-ollama",
-		ProviderResolver: func(string) (*typ.Provider, error) {
-			return &typ.Provider{
-				Name:     "test",
-				APIBase:  ollamaBaseURL + "/v1",
-				Token:    "ollama",
-				APIStyle: protocol.APIStyleOpenAI,
-				Enabled:  true,
-			}, nil
-		},
+		ProviderUUID:      "test-ollama",
+		ProviderResolver:  testAdvisorProviderResolverWithBase(ollamaBaseURL+"/v1", "ollama", protocol.APIStyleOpenAI),
 		Model:             ollamaModel,
 		MaxUsesPerRequest: maxUses,
 		MaxTokens:         maxTokens,
