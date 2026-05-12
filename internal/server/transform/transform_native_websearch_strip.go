@@ -50,12 +50,13 @@ func (t *NativeWebSearchStripTransform) Apply(ctx *protocoltransform.TransformCo
 }
 
 // isNativeWebToolName returns true for the bare names used by OpenAI-style native web tools.
+// Handles both snake_case ("web_search") and CamelCase ("WebSearch") variants.
 func isNativeWebToolName(name string, stripSearch, stripFetch bool) bool {
 	lower := strings.ToLower(name)
-	if stripSearch && lower == "web_search" {
+	if stripSearch && (lower == "web_search" || lower == "websearch") {
 		return true
 	}
-	if stripFetch && lower == "web_fetch" {
+	if stripFetch && (lower == "web_fetch" || lower == "webfetch") {
 		return true
 	}
 	return false
