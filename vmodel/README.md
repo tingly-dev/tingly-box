@@ -1,9 +1,9 @@
-# `internal/virtualmodel`
+# `vmodel`
 
 Virtual models — synthetic, protocol-compliant provider implementations
 that power the production `/virtual/v1/*` endpoint (used for onboarding,
 demos, and dry-runs without configuring a real upstream provider). They
-are wired into the virtual server at `internal/virtualmodel/virtualserver`
+are wired into the virtual server at `vmodel/virtualserver`
 and shipped in the production binary via `server.UseVirtualModelEndpoints`.
 
 The same primitives are reused as an in-process LLM substitute by test
@@ -13,7 +13,7 @@ packages that need wire-format-correct fixtures (see
 ## Layout
 
 ```
-internal/virtualmodel/
+vmodel/
 ├── interface.go        // base VirtualModel interface (provider-neutral)
 ├── types.go            // VirtualModelType, Model, ToolCallConfig, helpers
 ├── registry.go         // GenericRegistry[T] — shared thread-safe registry
@@ -35,7 +35,7 @@ sub-packages do **not** import each other.
 
 ## Positioning & registration discipline
 
-`internal/virtualmodel` is a **business-first** package: it ships in production
+`vmodel` is a **business-first** package: it ships in production
 to back the public `/virtual/v1/*` endpoint, and it is the single source of
 truth for synthetic, protocol-compliant model behavior across the codebase.
 Test packages are **secondary consumers** that reuse the same primitives.
@@ -297,11 +297,11 @@ See `benchmark/examples/` for runnable server and client programs.
 
 ## Related packages
 
-- `internal/virtualmodel/virtualserver` — Production Gin HTTP handler, routes,
+- `vmodel/virtualserver` — Production Gin HTTP handler, routes,
   request/response shaping. Owns the v1 → beta lift for Anthropic.
 - `internal/server_validate` — Test-only consumer that **reuses**
   `GenericRegistry[Scenario]` as a primitive (its `Scenario` type satisfies
-  `virtualmodel.VirtualModel`). Serves pre-rendered byte/SSE payloads for
+  `vmodel.VirtualModel`). Serves pre-rendered byte/SSE payloads for
   wire-format protocol testing. It does **not** inherit production defaults
   from `RegisterDefaults`; it owns its own registry of test fixtures.
 - `internal/protocol/transform` — Transform chain types used by
