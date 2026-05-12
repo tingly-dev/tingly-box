@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"iter"
 	"net/http"
@@ -204,6 +205,57 @@ func (c *GoogleClient) Probe(ctx context.Context, model string) ProbeResult {
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,
 	}
+}
+
+// probeStream performs a streaming probe with configurable test mode
+// Note: Google genai SDK has limited tool support in probe context
+
+// ProbeStream performs a streaming probe with configurable test mode (public interface)
+func (c *GoogleClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+	return c.probeStream(ctx, model, message, testMode)
+}
+func (c *GoogleClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+	startTime := time.Now()
+
+	// Create minimal content for probe
+	contents := []*genai.Content{
+		{
+			Role: "user",
+			Parts: []*genai.Part{
+				{Text: message},
+			},
+		},
+	}
+
+	// Configure generation
+	config := &genai.GenerateContentConfig{
+		MaxOutputTokens: 1024,
+	}
+
+	// For simple mode, use non-streaming request
+	if testMode == ProbeModeSimple {
+		resp, err := c.client.Models.GenerateContent(ctx, model, contents, config)
+		if err != nil {
+			return nil, err
+		}
+
+		respJSON, _ := json.Marshal(resp)
+		return ToProbeStreamResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase), nil
+	}
+
+	// For streaming and tool modes, use streaming
+	stream := c.client.Models.GenerateContentStream(ctx, model, contents, config)
+
+	var chunks []interface{}
+	for resp, err := range stream {
+		if err != nil {
+			return nil, err
+		}
+		chunks = append(chunks, resp)
+	}
+
+	chunksJSON, _ := json.Marshal(chunks)
+	return ToProbeStreamResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase), nil
 }
 
 // ProbeModelsEndpoint tests the models list endpoint

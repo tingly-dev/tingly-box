@@ -60,10 +60,11 @@ type ProbeV2Response struct {
 
 // ProbeV2Data represents the probe result data
 type ProbeV2Data struct {
-	Content    string        `json:"content,omitempty"`
-	Usage      *ProbeV2Usage `json:"usage,omitempty"`
-	LatencyMs  int64         `json:"latency_ms"`
-	RequestURL string        `json:"request_url,omitempty"`
+	Content    string            `json:"content,omitempty"`
+	Usage      *ProbeV2Usage     `json:"usage,omitempty"`
+	ToolCalls  []ProbeV2ToolCall `json:"tool_calls,omitempty"`
+	LatencyMs  int64             `json:"latency_ms"`
+	RequestURL string            `json:"request_url,omitempty"`
 }
 
 // ProbeV2Usage represents token usage
@@ -71,6 +72,13 @@ type ProbeV2Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+// ProbeV2ToolCall represents a tool call in probe response
+type ProbeV2ToolCall struct {
+	ID    string                 `json:"id"`
+	Name  string                 `json:"name"`
+	Input map[string]interface{} `json:"input"`
 }
 
 // ProbeV2ResponseChunk represents a streaming response chunk

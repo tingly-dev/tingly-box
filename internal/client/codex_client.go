@@ -432,3 +432,15 @@ func (c *CodexClient) Probe(ctx context.Context, model string) ProbeResult {
 		ErrorMessage:     "Codex does not support /chat endpoint",
 	}
 }
+
+// probeStream performs a streaming probe with configurable test mode.
+// For Codex, this delegates to the embedded OpenAIClient's probeStream (which uses Responses API).
+
+// ProbeStream performs a streaming probe with configurable test mode (public interface)
+func (c *CodexClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+	return c.probeStream(ctx, model, message, testMode)
+}
+func (c *CodexClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+	// Delegate to OpenAI client's probeStream, which will handle Codex correctly
+	return c.OpenAIClient.probeStream(ctx, model, message, testMode)
+}
