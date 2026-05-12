@@ -16,6 +16,24 @@ import (
 const ollamaBaseURL = "http://localhost:11434"
 const ollamaModel = "qwen2.5:latest"
 
+func testOllamaAdvisorConfig(maxUses, maxTokens int) typ.AdvisorConfig {
+	return typ.AdvisorConfig{
+		ProviderUUID: "test-ollama",
+		ProviderResolver: func(string) (*typ.Provider, error) {
+			return &typ.Provider{
+				Name:     "test",
+				APIBase:  ollamaBaseURL + "/v1",
+				Token:    "ollama",
+				APIStyle: protocol.APIStyleOpenAI,
+				Enabled:  true,
+			}, nil
+		},
+		Model:             ollamaModel,
+		MaxUsesPerRequest: maxUses,
+		MaxTokens:         maxTokens,
+	}
+}
+
 // checkOllamaAvailable returns true if ollama is running and the model is available.
 func checkOllamaAvailable(t *testing.T) bool {
 	t.Helper()
@@ -41,21 +59,7 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 	}
 
 	cp := client.NewClientPool()
-	cfg := typ.AdvisorConfig{
-		ProviderUUID: "test-ollama",
-		ProviderResolver: func(string) (*typ.Provider, error) {
-			return &typ.Provider{
-				Name:     "test",
-				APIBase:  ollamaBaseURL + "/v1",
-				Token:    "ollama",
-				APIStyle: protocol.APIStyleOpenAI,
-				Enabled:  true,
-			}, nil
-		},
-		Model:             ollamaModel,
-		MaxUsesPerRequest: 2,
-		MaxTokens:         512,
-	}
+	cfg := testOllamaAdvisorConfig(2, 512)
 	store := NewSessionStore(10 * time.Minute)
 	defer store.Sweep()
 
@@ -111,21 +115,7 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 	}
 
 	cp := client.NewClientPool()
-	cfg := typ.AdvisorConfig{
-		ProviderUUID: "test-ollama",
-		ProviderResolver: func(string) (*typ.Provider, error) {
-			return &typ.Provider{
-				Name:     "test",
-				APIBase:  ollamaBaseURL + "/v1",
-				Token:    "ollama",
-				APIStyle: protocol.APIStyleOpenAI,
-				Enabled:  true,
-			}, nil
-		},
-		Model:             ollamaModel,
-		MaxUsesPerRequest: 1,
-		MaxTokens:         256,
-	}
+	cfg := testOllamaAdvisorConfig(1, 256)
 	store := NewSessionStore(10 * time.Minute)
 	defer store.Sweep()
 

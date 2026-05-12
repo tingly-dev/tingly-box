@@ -87,13 +87,6 @@ func GetProviderTransform(providerURL, model string) ProviderTransform {
 		}
 	}
 
-	// Fallback: detect DeepSeek models by model name for proxies/aggregators
-	// DeepSeek reasoning models (deepseek-reasoner, deepseek-r1, deepseek-r1-*)
-	// and DeepSeek V-series thinking models require reasoning_content handling
-	if strings.Contains(modelLower, "deepseek") {
-		return applyDeepSeekTransform
-	}
-
 	// No specific transform needed - use default
 	return nil
 }

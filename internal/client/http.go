@@ -496,6 +496,10 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 				model:        model,
 				proxyURL:     provider.ProxyURL,
 			}
+		case ai.IssuerCodex:
+			return &codexRoundTripper{
+				RoundTripper: baseTransport,
+			}
 		}
 	}
 
