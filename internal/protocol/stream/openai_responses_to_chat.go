@@ -202,16 +202,13 @@ func HandleResponsesToOpenAIChatStream(
 			state.completed = true
 
 		case "error":
-			errorChunk := map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": evt.Message,
-					"type":    "error",
-					"code":    evt.Param,
+			writeSSEChunk(c, flusher, chatCompletionStreamErrorChunk{
+				Error: chatCompletionStreamError{
+					Message: evt.Message,
+					Type:    "error",
+					Code:    evt.Param,
 				},
-			}
-			errorJSON, _ := json.Marshal(errorChunk)
-			c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(errorJSON))))
-			flusher.Flush()
+			})
 			return false
 		}
 
@@ -247,96 +244,49 @@ func HandleResponsesToOpenAIChatStream(
 }
 
 func writeResponsesToChatRoleChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string) {
-	chunk := map[string]interface{}{
-		"id":      state.chatID,
-		"object":  "chat.completion.chunk",
-		"created": state.createdAt,
-		"model":   responseModel,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"role": "assistant",
-				},
-				"finish_reason": nil,
-			},
-		},
-	}
+	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
+		Role: "assistant",
+	}, nil)
 	writeSSEChunk(c, flusher, chunk)
 	state.hasSentCreated = true
 }
 
 func writeResponsesToChatTextChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, delta string) {
-	chunk := map[string]interface{}{
-		"id":      state.chatID,
-		"object":  "chat.completion.chunk",
-		"created": state.createdAt,
-		"model":   responseModel,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"content": delta,
-				},
-				"finish_reason": nil,
-			},
-		},
-	}
+	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
+		Content: delta,
+	}, nil)
 	writeSSEChunk(c, flusher, chunk)
 }
 
 func writeResponsesToChatToolCallStart(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string, index int, id, name string) {
-	chunk := map[string]interface{}{
-		"id":      state.chatID,
-		"object":  "chat.completion.chunk",
-		"created": state.createdAt,
-		"model":   responseModel,
-		"choices": []map[string]interface{}{
+	arguments := ""
+	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
+		ToolCalls: []chatCompletionStreamToolCall{
 			{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"tool_calls": []map[string]interface{}{
-						{
-							"index": index,
-							"id":    id,
-							"type":  "function",
-							"function": map[string]interface{}{
-								"name":      name,
-								"arguments": "",
-							},
-						},
-					},
+				Index: index,
+				ID:    id,
+				Type:  "function",
+				Function: chatCompletionStreamToolFunction{
+					Name:      name,
+					Arguments: &arguments,
 				},
-				"finish_reason": nil,
 			},
 		},
-	}
+	}, nil)
 	writeSSEChunk(c, flusher, chunk)
 }
 
 func writeResponsesToChatToolCallDelta(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string, index int, delta string) {
-	chunk := map[string]interface{}{
-		"id":      state.chatID,
-		"object":  "chat.completion.chunk",
-		"created": state.createdAt,
-		"model":   responseModel,
-		"choices": []map[string]interface{}{
+	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
+		ToolCalls: []chatCompletionStreamToolCall{
 			{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"tool_calls": []map[string]interface{}{
-						{
-							"index": index,
-							"function": map[string]interface{}{
-								"arguments": delta,
-							},
-						},
-					},
+				Index: index,
+				Function: chatCompletionStreamToolFunction{
+					Arguments: &delta,
 				},
-				"finish_reason": nil,
 			},
 		},
-	}
+	}, nil)
 	writeSSEChunk(c, flusher, chunk)
 }
 
@@ -375,31 +325,35 @@ func flushResponsesToChatCompletedOutput(c *gin.Context, flusher http.Flusher, s
 }
 
 func writeResponsesToChatFinalChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, finishReason string, includeUsage bool) {
-	finalChunk := map[string]interface{}{
-		"id":      state.chatID,
-		"object":  "chat.completion.chunk",
-		"created": state.createdAt,
-		"model":   responseModel,
-		"choices": []map[string]interface{}{
-			{
-				"index":         0,
-				"delta":         map[string]interface{}{},
-				"finish_reason": finishReason,
-			},
-		},
-	}
+	finalChunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{}, &finishReason)
 	if includeUsage {
-		finalChunk["usage"] = map[string]interface{}{
-			"prompt_tokens":     state.inputTokens,
-			"completion_tokens": state.outputTokens,
-			"total_tokens":      state.inputTokens + state.outputTokens,
+		finalChunk.Usage = &chatCompletionStreamUsage{
+			PromptTokens:     state.inputTokens,
+			CompletionTokens: state.outputTokens,
+			TotalTokens:      state.inputTokens + state.outputTokens,
 		}
 	}
 	writeSSEChunk(c, flusher, finalChunk)
 }
 
+func newResponsesToChatChunk(state *responsesToChatState, responseModel string, delta chatCompletionStreamDelta, finishReason *string) chatCompletionStreamChunk {
+	return chatCompletionStreamChunk{
+		ID:      state.chatID,
+		Object:  "chat.completion.chunk",
+		Created: state.createdAt,
+		Model:   responseModel,
+		Choices: []chatCompletionStreamChoice{
+			{
+				Index:        0,
+				Delta:        delta,
+				FinishReason: finishReason,
+			},
+		},
+	}
+}
+
 // writeSSEChunk writes a single SSE chunk
-func writeSSEChunk(c *gin.Context, flusher http.Flusher, chunk map[string]interface{}) {
+func writeSSEChunk(c *gin.Context, flusher http.Flusher, chunk any) {
 	jsonBytes, err := json.Marshal(chunk)
 	if err != nil {
 		logrus.Errorf("Failed to marshal chunk: %v", err)
