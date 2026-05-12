@@ -414,7 +414,7 @@ func newResponsesWireResponse(state *chatToResponsesState, status string, output
 		CreatedAt: state.createdAt,
 		Status:    status,
 		Output:    output,
-		Usage: responsesUsageWire{
+		Usage: &responsesUsageWire{
 			InputTokens:  state.inputTokens,
 			OutputTokens: state.outputTokens,
 			TotalTokens:  state.inputTokens + state.outputTokens,

@@ -2,6 +2,7 @@ package stream
 
 // Responses stream DTOs preserve the minimal outbound JSON shape emitted by this proxy.
 // Keep these fields checked against openai-go Responses SDK event types when updating the SDK.
+
 type responsesStreamErrorEvent struct {
 	Type           string                   `json:"type"`
 	SequenceNumber int64                    `json:"sequence_number"`
@@ -19,6 +20,12 @@ type responsesCreatedEvent struct {
 	Response       responsesWireResponse `json:"response"`
 }
 
+type responsesInProgressEvent struct {
+	Type           string                `json:"type"`
+	SequenceNumber int64                 `json:"sequence_number"`
+	Response       responsesWireResponse `json:"response"`
+}
+
 type responsesCompletedEvent struct {
 	Type           string                `json:"type"`
 	SequenceNumber int64                 `json:"sequence_number"`
@@ -26,29 +33,30 @@ type responsesCompletedEvent struct {
 }
 
 type responsesWireResponse struct {
-	ID        string                    `json:"id"`
-	Object    string                    `json:"object"`
-	CreatedAt int64                     `json:"created_at"`
-	Status    string                    `json:"status"`
-	Output    []responsesOutputItemWire `json:"output"`
-	Usage     responsesUsageWire        `json:"usage"`
-	Model     string                    `json:"model,omitempty"`
+	ID          string                    `json:"id"`
+	Object      string                    `json:"object"`
+	CreatedAt   int64                     `json:"created_at"`
+	Status      string                    `json:"status"`
+	Output      []responsesOutputItemWire `json:"output"`
+	Usage       *responsesUsageWire       `json:"usage,omitempty"`
+	Model       string                    `json:"model,omitempty"`
+	CompletedAt int64                     `json:"completed_at,omitempty"`
 }
 
 type responsesUsageWire struct {
 	InputTokens         int64                            `json:"input_tokens"`
 	OutputTokens        int64                            `json:"output_tokens"`
 	TotalTokens         int64                            `json:"total_tokens"`
-	InputTokensDetails  responsesInputTokensDetailsWire  `json:"input_tokens_details"`
-	OutputTokensDetails responsesOutputTokensDetailsWire `json:"output_tokens_details"`
+	InputTokensDetails  responsesInputTokensDetailsWire  `json:"input_tokens_details,omitempty"`
+	OutputTokensDetails responsesOutputTokensDetailsWire `json:"output_tokens_details,omitempty"`
 }
 
 type responsesInputTokensDetailsWire struct {
-	CachedTokens int64 `json:"cached_tokens"`
+	CachedTokens int64 `json:"cached_tokens,omitempty"`
 }
 
 type responsesOutputTokensDetailsWire struct {
-	ReasoningTokens int64 `json:"reasoning_tokens"`
+	ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
 }
 
 type responsesOutputItemAddedEvent struct {
@@ -78,8 +86,26 @@ type responsesOutputItemWire struct {
 
 type responsesContentPartWire struct {
 	Type        string        `json:"type"`
-	Text        string        `json:"text"`
-	Annotations []interface{} `json:"annotations"`
+	Text        string        `json:"text,omitempty"`
+	Annotations []interface{} `json:"annotations,omitempty"`
+}
+
+type responsesContentPartAddedEvent struct {
+	Type           string                   `json:"type"`
+	SequenceNumber int64                    `json:"sequence_number"`
+	ItemID         string                   `json:"item_id"`
+	OutputIndex    int                      `json:"output_index"`
+	ContentIndex   int                      `json:"content_index"`
+	Part           responsesContentPartWire `json:"part"`
+}
+
+type responsesContentPartDoneEvent struct {
+	Type           string                   `json:"type"`
+	SequenceNumber int64                    `json:"sequence_number"`
+	ItemID         string                   `json:"item_id"`
+	OutputIndex    int                      `json:"output_index"`
+	ContentIndex   int                      `json:"content_index"`
+	Part           responsesContentPartWire `json:"part"`
 }
 
 type responsesOutputTextDeltaEvent struct {
@@ -89,7 +115,7 @@ type responsesOutputTextDeltaEvent struct {
 	OutputIndex    int           `json:"output_index"`
 	ContentIndex   int           `json:"content_index"`
 	Delta          string        `json:"delta"`
-	Logprobs       []interface{} `json:"logprobs"`
+	Logprobs       []interface{} `json:"logprobs,omitempty"`
 }
 
 type responsesOutputTextDoneEvent struct {
@@ -99,7 +125,7 @@ type responsesOutputTextDoneEvent struct {
 	OutputIndex    int           `json:"output_index"`
 	ContentIndex   int           `json:"content_index"`
 	Text           string        `json:"text"`
-	Logprobs       []interface{} `json:"logprobs"`
+	Logprobs       []interface{} `json:"logprobs,omitempty"`
 }
 
 type responsesFunctionCallArgumentsDeltaEvent struct {
@@ -115,6 +141,6 @@ type responsesFunctionCallArgumentsDoneEvent struct {
 	SequenceNumber int64  `json:"sequence_number"`
 	ItemID         string `json:"item_id"`
 	OutputIndex    int    `json:"output_index"`
-	Name           string `json:"name"`
+	Name           string `json:"name,omitempty"`
 	Arguments      string `json:"arguments"`
 }

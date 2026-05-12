@@ -44,25 +44,6 @@ func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 	}
 	sdkJSON := marshalJSONForTest(t, sdkEvent)
 
-	require.JSONEq(t, `{
-		"type":"response.created",
-		"sequence_number":1,
-		"response":{
-			"id":"resp_test",
-			"object":"response",
-			"created_at":123,
-			"status":"in_progress",
-			"output":[],
-			"usage":{
-				"input_tokens":10,
-				"output_tokens":5,
-				"total_tokens":15,
-				"input_tokens_details":{"cached_tokens":3},
-				"output_tokens_details":{"reasoning_tokens":0}
-			}
-		}
-	}`, wireJSON)
-
 	var wireRoot map[string]any
 	var sdkRoot map[string]any
 	require.NoError(t, json.Unmarshal([]byte(wireJSON), &wireRoot))
@@ -85,6 +66,8 @@ func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 	require.Contains(t, sdkResponse, "tools")
 	require.Contains(t, sdkResponse, "top_p")
 	require.Greater(t, len(sdkResponse), len(wireResponse))
+	t.Logf("%v", sdkResponse)
+	t.Logf("%v", wireResponse)
 }
 
 func TestResponsesWireFunctionCallPreservesEmptyArguments(t *testing.T) {

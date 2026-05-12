@@ -218,34 +218,26 @@ func (s *responsesConverterState) nextSequenceNumber() int {
 
 // handleMessageStart sends the response.created event
 func handleMessageStart(c *gin.Context, state *responsesConverterState, model string, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type": "response.created",
-		"response": map[string]interface{}{
-			"id":         state.responseID,
-			"object":     "response",
-			"created_at": state.createdAt,
-			"status":     "in_progress",
-			"model":      model,
-			"output":     []interface{}{},
-			"usage":      nil,
-		},
-		"sequence_number": state.nextSequenceNumber(),
+	resp := newResponsesWireResponseFromState(state, "in_progress", nil)
+	resp.Model = model
+	resp.Usage = nil
+
+	event := responsesCreatedEvent{
+		Type:           "response.created",
+		SequenceNumber: int64(state.nextSequenceNumber()),
+		Response:       resp,
 	}
 	sendResponsesEvent(c, event, flusher)
 
 	// Also send response.in_progress event as per the real API
-	inProgressEvent := map[string]interface{}{
-		"type": "response.in_progress",
-		"response": map[string]interface{}{
-			"id":         state.responseID,
-			"object":     "response",
-			"created_at": state.createdAt,
-			"status":     "in_progress",
-			"model":      model,
-			"output":     []interface{}{},
-			"usage":      nil,
-		},
-		"sequence_number": state.nextSequenceNumber(),
+	inProgressResp := newResponsesWireResponseFromState(state, "in_progress", nil)
+	inProgressResp.Model = model
+	inProgressResp.Usage = nil
+
+	inProgressEvent := responsesInProgressEvent{
+		Type:           "response.in_progress",
+		SequenceNumber: int64(state.nextSequenceNumber()),
+		Response:       inProgressResp,
 	}
 	sendResponsesEvent(c, inProgressEvent, flusher)
 }
@@ -263,32 +255,31 @@ func handleContentBlockStart(
 
 	if blockType == "text" {
 		// Handle text output - send response.output_item.added with message type
-		outputEvent := map[string]interface{}{
-			"type":         "response.output_item.added",
-			"item_id":      state.itemID,
-			"output_index": state.outputIndex,
-			"item": map[string]interface{}{
-				"id":      state.itemID,
-				"type":    "message",
-				"status":  "in_progress",
-				"role":    "assistant",
-				"content": []interface{}{},
+		outputEvent := responsesOutputItemAddedEvent{
+			Type:           "response.output_item.added",
+			SequenceNumber: int64(state.nextSequenceNumber()),
+			OutputIndex:    state.outputIndex,
+			Item: responsesOutputItemWire{
+				ID:      state.itemID,
+				Type:    "message",
+				Status:  "in_progress",
+				Role:    "assistant",
+				Content: []responsesContentPartWire{},
 			},
-			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, outputEvent, flusher)
 
 		// Also send response.content_part.added for the text part
-		contentPartEvent := map[string]interface{}{
-			"type":          "response.content_part.added",
-			"item_id":       state.itemID,
-			"output_index":  state.outputIndex,
-			"content_index": 0,
-			"part": map[string]interface{}{
-				"type": "output_text",
-				"text": "",
+		contentPartEvent := responsesContentPartAddedEvent{
+			Type:           "response.content_part.added",
+			SequenceNumber: int64(state.nextSequenceNumber()),
+			ItemID:         state.itemID,
+			OutputIndex:    state.outputIndex,
+			ContentIndex:   0,
+			Part: responsesContentPartWire{
+				Type: "output_text",
+				Text: "",
 			},
-			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, contentPartEvent, flusher)
 	} else if blockType == "tool_use" {
@@ -303,18 +294,19 @@ func handleContentBlockStart(
 			arguments: strings.Builder{},
 		}
 
-		outputEvent := map[string]interface{}{
-			"type": "response.output_item.added",
-			"item": map[string]interface{}{
-				"type":      "function_call",
-				"id":        toolID,
-				"call_id":   toolID,
-				"name":      toolName,
-				"arguments": "",
-				"status":    "in_progress",
+		arguments := ""
+		outputEvent := responsesOutputItemAddedEvent{
+			Type:           "response.output_item.added",
+			SequenceNumber: int64(state.nextSequenceNumber()),
+			OutputIndex:    state.outputIndex,
+			Item: responsesOutputItemWire{
+				Type:      "function_call",
+				ID:        toolID,
+				CallID:    toolID,
+				Name:      toolName,
+				Arguments: &arguments,
+				Status:    "in_progress",
 			},
-			"output_index":    state.outputIndex,
-			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, outputEvent, flusher)
 		state.outputIndex++
@@ -337,13 +329,13 @@ func handleContentBlockDelta(
 		text := event.Delta.Text
 		state.accumulatedText += text
 
-		deltaEvent := map[string]interface{}{
-			"type":            "response.output_text.delta",
-			"delta":           text,
-			"item_id":         state.itemID,
-			"output_index":    state.outputIndex,
-			"content_index":   0,
-			"sequence_number": state.nextSequenceNumber(),
+		deltaEvent := responsesOutputTextDeltaEvent{
+			Type:           "response.output_text.delta",
+			Delta:          text,
+			ItemID:         state.itemID,
+			OutputIndex:    state.outputIndex,
+			ContentIndex:   0,
+			SequenceNumber: int64(state.nextSequenceNumber()),
 		}
 		sendResponsesEvent(c, deltaEvent, flusher)
 	} else if deltaType == "input_json_delta" {
@@ -352,12 +344,12 @@ func handleContentBlockDelta(
 			argsDelta := event.Delta.PartialJSON
 			pending.arguments.WriteString(argsDelta)
 
-			deltaEvent := map[string]interface{}{
-				"type":            "response.function_call_arguments.delta",
-				"delta":           argsDelta,
-				"item_id":         pending.itemID,
-				"output_index":    state.outputIndex,
-				"sequence_number": state.nextSequenceNumber(),
+			deltaEvent := responsesFunctionCallArgumentsDeltaEvent{
+				Type:           "response.function_call_arguments.delta",
+				Delta:          argsDelta,
+				ItemID:         pending.itemID,
+				OutputIndex:    state.outputIndex,
+				SequenceNumber: int64(state.nextSequenceNumber()),
 			}
 			sendResponsesEvent(c, deltaEvent, flusher)
 		}
@@ -376,77 +368,76 @@ func handleContentBlockStop(
 
 	if blockType == "text" {
 		// Send response.output_text.done event
-		textDoneEvent := map[string]interface{}{
-			"type":            "response.output_text.done",
-			"item_id":         state.itemID,
-			"output_index":    state.outputIndex,
-			"content_index":   0,
-			"text":            state.accumulatedText,
-			"sequence_number": state.nextSequenceNumber(),
+		textDoneEvent := responsesOutputTextDoneEvent{
+			Type:           "response.output_text.done",
+			ItemID:         state.itemID,
+			OutputIndex:    state.outputIndex,
+			ContentIndex:   0,
+			Text:           state.accumulatedText,
+			SequenceNumber: int64(state.nextSequenceNumber()),
 		}
 		sendResponsesEvent(c, textDoneEvent, flusher)
 
 		// Send response.content_part.done event
-		contentPartDoneEvent := map[string]interface{}{
-			"type":          "response.content_part.done",
-			"item_id":       state.itemID,
-			"output_index":  state.outputIndex,
-			"content_index": 0,
-			"part": map[string]interface{}{
-				"type": "output_text",
-				"text": state.accumulatedText,
+		contentPartDoneEvent := responsesContentPartDoneEvent{
+			Type:           "response.content_part.done",
+			SequenceNumber: int64(state.nextSequenceNumber()),
+			ItemID:         state.itemID,
+			OutputIndex:    state.outputIndex,
+			ContentIndex:   0,
+			Part: responsesContentPartWire{
+				Type: "output_text",
+				Text: state.accumulatedText,
 			},
-			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, contentPartDoneEvent, flusher)
 
 		// Send response.output_item.done event
-		itemDoneEvent := map[string]interface{}{
-			"type":         "response.output_item.done",
-			"item_id":      state.itemID,
-			"output_index": state.outputIndex,
-			"item": map[string]interface{}{
-				"id":     state.itemID,
-				"type":   "message",
-				"status": "completed",
-				"role":   "assistant",
-				"content": []map[string]interface{}{
+		itemDoneEvent := responsesOutputItemDoneEvent{
+			Type:           "response.output_item.done",
+			SequenceNumber: int64(state.nextSequenceNumber()),
+			OutputIndex:    state.outputIndex,
+			Item: responsesOutputItemWire{
+				ID:     state.itemID,
+				Type:   "message",
+				Status: "completed",
+				Role:   "assistant",
+				Content: []responsesContentPartWire{
 					{
-						"type": "output_text",
-						"text": state.accumulatedText,
+						Type: "output_text",
+						Text: state.accumulatedText,
 					},
 				},
 			},
-			"sequence_number": state.nextSequenceNumber(),
 		}
 		sendResponsesEvent(c, itemDoneEvent, flusher)
 	} else if blockType == "tool_use" {
 		// Handle tool call completion
 		if pending, exists := state.pendingToolCalls[int(index)]; exists {
 			// Send response.function_call_arguments.done event
-			argsDoneEvent := map[string]interface{}{
-				"type":            "response.function_call_arguments.done",
-				"item_id":         pending.itemID,
-				"output_index":    state.outputIndex,
-				"arguments":       pending.arguments.String(),
-				"sequence_number": state.nextSequenceNumber(),
+			argsDoneEvent := responsesFunctionCallArgumentsDoneEvent{
+				Type:           "response.function_call_arguments.done",
+				ItemID:         pending.itemID,
+				OutputIndex:    state.outputIndex,
+				Arguments:      pending.arguments.String(),
+				SequenceNumber: int64(state.nextSequenceNumber()),
 			}
 			sendResponsesEvent(c, argsDoneEvent, flusher)
 
+			argumentsStr := pending.arguments.String()
 			// Send response.output_item.done event for the function call
-			itemDoneEvent := map[string]interface{}{
-				"type":         "response.output_item.done",
-				"item_id":      pending.itemID,
-				"output_index": state.outputIndex,
-				"item": map[string]interface{}{
-					"type":      "function_call",
-					"id":        pending.itemID,
-					"call_id":   pending.itemID,
-					"name":      pending.name,
-					"arguments": pending.arguments.String(),
-					"status":    "completed",
+			itemDoneEvent := responsesOutputItemDoneEvent{
+				Type:           "response.output_item.done",
+				SequenceNumber: int64(state.nextSequenceNumber()),
+				OutputIndex:    state.outputIndex,
+				Item: responsesOutputItemWire{
+					Type:      "function_call",
+					ID:        pending.itemID,
+					CallID:    pending.itemID,
+					Name:      pending.name,
+					Arguments: &argumentsStr,
+					Status:    "completed",
 				},
-				"sequence_number": state.nextSequenceNumber(),
 			}
 			sendResponsesEvent(c, itemDoneEvent, flusher)
 		}
@@ -480,19 +471,19 @@ func handleMessageStop(
 	state.finished = true
 
 	// Build the final output array with proper message structure
-	var output []map[string]interface{}
+	var output []responsesOutputItemWire
 
 	// Add text content as a message item if present
 	if state.accumulatedText != "" {
-		output = append(output, map[string]interface{}{
-			"id":     state.itemID,
-			"type":   "message",
-			"status": "completed",
-			"role":   "assistant",
-			"content": []map[string]interface{}{
+		output = append(output, responsesOutputItemWire{
+			ID:     state.itemID,
+			Type:   "message",
+			Status: "completed",
+			Role:   "assistant",
+			Content: []responsesContentPartWire{
 				{
-					"type": "output_text",
-					"text": state.accumulatedText,
+					Type: "output_text",
+					Text: state.accumulatedText,
 				},
 			},
 		})
@@ -500,13 +491,14 @@ func handleMessageStop(
 
 	// Add tool calls with proper structure including call_id
 	for _, pending := range state.pendingToolCalls {
-		output = append(output, map[string]interface{}{
-			"type":      "function_call",
-			"id":        pending.itemID,
-			"call_id":   pending.itemID,
-			"name":      pending.name,
-			"arguments": pending.arguments.String(),
-			"status":    "completed",
+		argumentsStr := pending.arguments.String()
+		output = append(output, responsesOutputItemWire{
+			Type:      "function_call",
+			ID:        pending.itemID,
+			CallID:    pending.itemID,
+			Name:      pending.name,
+			Arguments: &argumentsStr,
+			Status:    "completed",
 		})
 	}
 
@@ -515,26 +507,26 @@ func handleMessageStop(
 	outputTokens := state.outputTokens
 	cacheTokens := state.cacheTokens
 
-	doneEvent := map[string]interface{}{
-		"type": "response.completed",
-		"response": map[string]interface{}{
-			"id":           state.responseID,
-			"object":       "response",
-			"created_at":   state.createdAt,
-			"status":       "completed",
-			"completed_at": state.createdAt, // Use same timestamp for simplicity
-			"model":        "",              // Will be filled by caller if needed
-			"output":       output,
-			"usage": map[string]interface{}{
-				"input_tokens":  inputTokens,
-				"output_tokens": outputTokens,
-				"total_tokens":  inputTokens + outputTokens,
-				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": cacheTokens,
+	doneEvent := responsesCompletedEvent{
+		Type:           "response.completed",
+		SequenceNumber: int64(state.nextSequenceNumber()),
+		Response: responsesWireResponse{
+			ID:          state.responseID,
+			Object:      "response",
+			CreatedAt:   state.createdAt,
+			Status:      "completed",
+			CompletedAt: state.createdAt,
+			Model:       "",
+			Output:      output,
+			Usage: &responsesUsageWire{
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+				TotalTokens:  inputTokens + outputTokens,
+				InputTokensDetails: responsesInputTokensDetailsWire{
+					CachedTokens: cacheTokens,
 				},
 			},
 		},
-		"sequence_number": state.nextSequenceNumber(),
 	}
 	sendResponsesEvent(c, doneEvent, flusher)
 
@@ -543,7 +535,7 @@ func handleMessageStop(
 }
 
 // sendResponsesEvent sends a single Responses API event as SSE
-func sendResponsesEvent(c *gin.Context, event map[string]interface{}, flusher http.Flusher) {
+func sendResponsesEvent(c *gin.Context, event any, flusher http.Flusher) {
 	// Check if connection is still valid before writing
 	if c.Writer == nil || flusher == nil {
 		return
@@ -566,11 +558,11 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, f
 		f = flusher[0]
 	}
 
-	errorEvent := map[string]interface{}{
-		"type": "error",
-		"error": map[string]interface{}{
-			"type":    errorType,
-			"message": message,
+	errorEvent := responsesStreamErrorEvent{
+		Type: "error",
+		Error: responsesStreamErrorBody{
+			Type:    errorType,
+			Message: message,
 		},
 	}
 	sendResponsesEvent(c, errorEvent, f)
@@ -588,19 +580,19 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 	state.finished = true
 
 	// Build the final output array with proper message structure
-	var output []map[string]interface{}
+	var output []responsesOutputItemWire
 
 	// Add text content as a message item if present
 	if state.accumulatedText != "" {
-		output = append(output, map[string]interface{}{
-			"id":     state.itemID,
-			"type":   "message",
-			"status": "completed",
-			"role":   "assistant",
-			"content": []map[string]interface{}{
+		output = append(output, responsesOutputItemWire{
+			ID:     state.itemID,
+			Type:   "message",
+			Status: "completed",
+			Role:   "assistant",
+			Content: []responsesContentPartWire{
 				{
-					"type": "output_text",
-					"text": state.accumulatedText,
+					Type: "output_text",
+					Text: state.accumulatedText,
 				},
 			},
 		})
@@ -608,13 +600,14 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 
 	// Add tool calls with proper structure including call_id
 	for _, pending := range state.pendingToolCalls {
-		output = append(output, map[string]interface{}{
-			"type":      "function_call",
-			"id":        pending.itemID,
-			"call_id":   pending.itemID,
-			"name":      pending.name,
-			"arguments": pending.arguments.String(),
-			"status":    "completed",
+		argumentsStr := pending.arguments.String()
+		output = append(output, responsesOutputItemWire{
+			Type:      "function_call",
+			ID:        pending.itemID,
+			CallID:    pending.itemID,
+			Name:      pending.name,
+			Arguments: &argumentsStr,
+			Status:    "completed",
 		})
 	}
 
@@ -632,29 +625,42 @@ func sendFinalCompletionEvent(c *gin.Context, state *responsesConverterState, fl
 		cacheTokensFinal = cacheTokens
 	}
 
-	doneEvent := map[string]interface{}{
-		"type": "response.completed",
-		"response": map[string]interface{}{
-			"id":           state.responseID,
-			"object":       "response",
-			"created_at":   state.createdAt,
-			"status":       "completed",
-			"completed_at": state.createdAt,
-			"model":        "", // Will be filled by caller if needed
-			"output":       output,
-			"usage": map[string]interface{}{
-				"input_tokens":  inputTokensFinal,
-				"output_tokens": outputTokensFinal,
-				"total_tokens":  inputTokensFinal + outputTokensFinal,
-				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": cacheTokensFinal,
+	doneEvent := responsesCompletedEvent{
+		Type:           "response.completed",
+		SequenceNumber: int64(state.nextSequenceNumber()),
+		Response: responsesWireResponse{
+			ID:          state.responseID,
+			Object:      "response",
+			CreatedAt:   state.createdAt,
+			Status:      "completed",
+			CompletedAt: state.createdAt,
+			Model:       "",
+			Output:      output,
+			Usage: &responsesUsageWire{
+				InputTokens:  int64(inputTokensFinal),
+				OutputTokens: int64(outputTokensFinal),
+				TotalTokens:  int64(inputTokensFinal + outputTokensFinal),
+				InputTokensDetails: responsesInputTokensDetailsWire{
+					CachedTokens: int64(cacheTokensFinal),
 				},
 			},
 		},
-		"sequence_number": state.nextSequenceNumber(),
 	}
 	sendResponsesEvent(c, doneEvent, flusher)
 
 	// Send final [DONE] message
 	OpenAISSEDone(c)
+}
+
+func newResponsesWireResponseFromState(state *responsesConverterState, status string, output []responsesOutputItemWire) responsesWireResponse {
+	if output == nil {
+		output = []responsesOutputItemWire{}
+	}
+	return responsesWireResponse{
+		ID:        state.responseID,
+		Object:    "response",
+		CreatedAt: state.createdAt,
+		Status:    status,
+		Output:    output,
+	}
 }
