@@ -10,7 +10,6 @@ import {
 import {
     PlayArrow as DirectIcon,
     Stream as StreamingIcon,
-    Build as ToolIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { ProbeV2Dialog } from './ProbeV2Dialog';
@@ -46,12 +45,6 @@ const PROBE_OPTIONS: ProbeOption[] = [
         label: 'Streaming Test',
         icon: <StreamingIcon fontSize="small" />,
         description: 'Stream the response in real-time',
-    },
-    {
-        mode: 'tool',
-        label: 'Tool Calling',
-        icon: <ToolIcon fontSize="small" />,
-        description: 'Test with tool calling enabled',
     },
 ];
 

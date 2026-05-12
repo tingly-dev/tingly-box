@@ -2,7 +2,7 @@
 // Note: These are custom types not in the codegen schema
 
 export type ProbeV2TargetType = 'rule' | 'provider' | 'provider_config';
-export type ProbeV2TestMode = 'simple' | 'streaming' | 'tool';
+export type ProbeV2TestMode = 'simple' | 'streaming';
 
 export interface ProbeV2Request {
     target_type: ProbeV2TargetType;
@@ -11,7 +11,7 @@ export interface ProbeV2Request {
     scenario?: string;
     rule_uuid?: string;
 
-    // Provider test (both required)
+    // Provider test (required)
     provider_uuid?: string;
     model?: string;
 
@@ -30,7 +30,6 @@ export interface ProbeV2Response {
     };
     data?: {
         content?: string;
-        tool_calls?: ProbeV2ToolCall[];
         usage?: {
             prompt_tokens: number;
             completion_tokens: number;
@@ -39,10 +38,4 @@ export interface ProbeV2Response {
         latency_ms: number;
         request_url?: string;
     };
-}
-
-export interface ProbeV2ToolCall {
-    id: string;
-    name: string;
-    arguments: Record<string, unknown>;
 }

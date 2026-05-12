@@ -23,7 +23,6 @@ import {
     ExpandMore as ExpandMoreIcon,
     Speed as SpeedIcon,
     Token as TokenIcon,
-    Build as ToolIcon,
     ContentCopy as CopyIcon,
     Refresh as RefreshIcon,
 } from '@mui/icons-material';
@@ -49,23 +48,16 @@ interface ProbeV2DialogProps {
 const TEST_MODE_LABELS: Record<ProbeV2TestMode, string> = {
     simple: 'Direct Request',
     streaming: 'Streaming Request',
-    tool: 'Tool Calling',
 };
 
 const TEST_MODE_ICONS: Record<ProbeV2TestMode, React.ReactElement> = {
     simple: <SpeedIcon fontSize="small" />,
     streaming: <SpeedIcon fontSize="small" />,
-    tool: <ToolIcon fontSize="small" />,
 };
 
 // Preset messages
 const getDefaultMessage = (mode: ProbeV2TestMode): string => {
-    switch (mode) {
-        case 'tool':
-            return 'Please use the add_numbers tool to calculate 123 + 456.';
-        default:
-            return 'Hello, this is a test message. Please respond with a short greeting.';
-    }
+    return 'Hello, this is a test message. Please respond with a short greeting.';
 };
 
 // Status Response Card Component
@@ -133,15 +125,6 @@ const StatusResponseCard = memo(({
                                         sx={{ height: 24, minWidth: 'auto' }}
                                     />
                                 )}
-                                {result.data.tool_calls && result.data.tool_calls.length > 0 && (
-                                    <Chip
-                                        icon={<ToolIcon sx={{ fontSize: 14 }} />}
-                                        label={`${result.data.tool_calls.length} tool calls`}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{ height: 24, minWidth: 'auto' }}
-                                    />
-                                )}
                             </Box>
                         )}
                     </Box>
@@ -175,47 +158,6 @@ const StatusResponseCard = memo(({
                                 {result.data.content}
                             </pre>
                         </Paper>
-                    </Box>
-                )}
-
-                {/* Tool Calls */}
-                {result.data?.tool_calls && result.data.tool_calls.length > 0 && (
-                    <Box sx={{ p: 2, bgcolor: 'info.50' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
-                            Tool Calls
-                        </Typography>
-                        {result.data.tool_calls.map((tc, index: number) => (
-                            <Paper
-                                key={index}
-                                variant="outlined"
-                                sx={{ p: 2, mb: 1, bgcolor: 'background.paper' }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                    <Typography variant="body2" fontWeight="bold" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                                        {tc.name}
-                                    </Typography>
-                                    {tc.id && (
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary' }}>
-                                            ID: {tc.id}
-                                        </Typography>
-                                    )}
-                                </Box>
-                                <Typography
-                                    variant="caption"
-                                    component="pre"
-                                    sx={{
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
-                                    }}
-                                >
-                                    {tc.arguments && Object.keys(tc.arguments).length > 0
-                                        ? JSON.stringify(tc.arguments, null, 2)
-                                        : '(no arguments)'}
-                                </Typography>
-                            </Paper>
-                        ))}
                     </Box>
                 )}
 
@@ -288,7 +230,6 @@ interface ProbeV2Response {
     };
     data?: {
         content?: string;
-        tool_calls?: ProbeV2ToolCall[];
         usage?: {
             prompt_tokens: number;
             completion_tokens: number;
@@ -297,12 +238,6 @@ interface ProbeV2Response {
         latency_ms: number;
         request_url?: string;
     };
-}
-
-interface ProbeV2ToolCall {
-    id: string;
-    name: string;
-    arguments: Record<string, unknown>;
 }
 
 export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({

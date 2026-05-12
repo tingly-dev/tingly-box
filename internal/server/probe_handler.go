@@ -4,12 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// testProviderConnectivity tests if a provider's API key and connectivity are working using cascading validation.
+// testProviderConnectivity tests if a provider's API key and connectivity are working.
 // Kept for use by provider_handler.go provider onboarding/verification.
 func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, string, int, error) {
 	provider := &typ.Provider{
@@ -20,41 +19,24 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 		Enabled:  true,
 	}
 
+	// Reuse v2 provider-config probing: simple mode with default model
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var prober client.Prober
-	switch provider.APIStyle {
-	case protocol.APIStyleOpenAI:
-		prober = s.clientPool.GetOpenAIClient(context.Background(), provider, "")
-	case protocol.APIStyleAnthropic:
-		prober = s.clientPool.GetAnthropicClient(context.Background(), provider, "")
-	default:
-		return false, "unsupported API style", 0, nil
+	model := s.getDefaultModelForAPIStyle(provider.APIStyle)
+	message := "Hello, this is a test message. Please respond with a short greeting."
+
+	// Use SDK-based probe from probe_v2_sdk.go
+	data, err := s.probeProviderWithSDK(ctx, provider, model, message, ProbeV2ModeSimple)
+	if err != nil {
+		return false, err.Error(), 0, nil
 	}
 
-	if prober == nil {
-		return false, "failed to create client for provider", 0, nil
+	if data.Content != "" {
+		return true, "Provider verified successfully", 0, nil
 	}
 
-	result := prober.ProbeModelsEndpoint(ctx)
-	if result.Success {
-		return true, result.Message, result.ModelsCount, nil
-	}
-
-	defaultModel := s.getDefaultModelForAPIStyle(provider.APIStyle)
-	result = prober.ProbeChatEndpoint(ctx, defaultModel)
-	if result.Success {
-		return true, result.Message, 0, nil
-	}
-
-	errorMsg := "Provider connectivity check failed. "
-	if result.ErrorMessage != "" {
-		errorMsg += result.ErrorMessage
-	} else {
-		errorMsg += "Neither models nor chat endpoints are accessible. This provider may not be compatible."
-	}
-	return false, errorMsg, 0, nil
+	return false, "Provider verification failed: no response content", 0, nil
 }
 
 // getDefaultModelForAPIStyle returns a default model name for probing based on API style.

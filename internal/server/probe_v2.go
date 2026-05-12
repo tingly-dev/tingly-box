@@ -60,18 +60,10 @@ type ProbeV2Response struct {
 
 // ProbeV2Data represents the probe result data
 type ProbeV2Data struct {
-	Content    string            `json:"content,omitempty"`
-	ToolCalls  []ProbeV2ToolCall `json:"tool_calls,omitempty"`
-	Usage      *ProbeV2Usage     `json:"usage,omitempty"`
-	LatencyMs  int64             `json:"latency_ms"`
-	RequestURL string            `json:"request_url,omitempty"`
-}
-
-// ProbeV2ToolCall represents a tool call in the response
-type ProbeV2ToolCall struct {
-	ID        string                 `json:"id"`
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments"`
+	Content    string        `json:"content,omitempty"`
+	Usage      *ProbeV2Usage `json:"usage,omitempty"`
+	LatencyMs  int64         `json:"latency_ms"`
+	RequestURL string        `json:"request_url,omitempty"`
 }
 
 // ProbeV2Usage represents token usage
@@ -83,12 +75,11 @@ type ProbeV2Usage struct {
 
 // ProbeV2ResponseChunk represents a streaming response chunk
 type ProbeV2ResponseChunk struct {
-	Type      string           `json:"type"` // content, tool_call, error, done
-	Content   string           `json:"content,omitempty"`
-	ToolCall  *ProbeV2ToolCall `json:"tool_call,omitempty"`
-	Error     string           `json:"error,omitempty"`
-	Usage     *ProbeV2Usage    `json:"usage,omitempty"`
-	LatencyMs int64            `json:"latency_ms,omitempty"`
+	Type      string        `json:"type"` // content, error, done
+	Content   string        `json:"content,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Usage     *ProbeV2Usage `json:"usage,omitempty"`
+	LatencyMs int64         `json:"latency_ms,omitempty"`
 }
 
 // validateProbeV2Request validates the probe request
