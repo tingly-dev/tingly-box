@@ -11,8 +11,9 @@ import (
 type ProbeTarget string
 
 const (
-	ProbeV2TargetRule     ProbeTarget = "rule"
-	ProbeV2TargetProvider ProbeTarget = "provider"
+	ProbeV2TargetRule           ProbeTarget = "rule"
+	ProbeV2TargetProvider       ProbeTarget = "provider"
+	ProbeV2TargetProviderConfig ProbeTarget = "provider_config"
 )
 
 // ProbeMode defines the test mode
@@ -24,9 +25,9 @@ const (
 	ProbeV2ModeTool      ProbeMode = "tool"
 )
 
-// ProbeV2Request represents a Probe V3 request
+// ProbeV2Request represents a Probe V2 request
 type ProbeV2Request struct {
-	// Target type: rule or provider
+	// Target type: rule, provider, or provider_config
 	TargetType ProbeTarget `json:"target_type" binding:"required"`
 
 	// Rule test (required when target_type is rule)
@@ -37,6 +38,12 @@ type ProbeV2Request struct {
 	ProviderUUID string `json:"provider_uuid,omitempty" binding:"required_if=TargetType provider"`
 	Model        string `json:"model,omitempty" binding:"required_if=TargetType provider"`
 
+	// Provider config test (required when target_type is provider_config)
+	Name     string `json:"name,omitempty"`
+	APIBase  string `json:"api_base,omitempty"`
+	APIStyle string `json:"api_style,omitempty"`
+	Token    string `json:"token,omitempty"`
+
 	// Test mode
 	TestMode ProbeMode `json:"test_mode" binding:"required"`
 
@@ -44,7 +51,7 @@ type ProbeV2Request struct {
 	Message string `json:"message,omitempty"`
 }
 
-// ProbeV2Response represents a Probe V3 response
+// ProbeV2Response represents a Probe V2 response
 type ProbeV2Response struct {
 	Success bool         `json:"success"`
 	Error   *ErrorDetail `json:"error,omitempty"`
@@ -84,18 +91,6 @@ type ProbeV2ResponseChunk struct {
 	LatencyMs int64            `json:"latency_ms,omitempty"`
 }
 
-// ProbeV2Service handles probe V3 operations
-type ProbeV2Service struct {
-	server *Server
-}
-
-// NewProbeV2Service creates a new Probe V3 service
-func NewProbeV2Service(server *Server) *ProbeV2Service {
-	return &ProbeV2Service{
-		server: server,
-	}
-}
-
 // validateProbeV2Request validates the probe request
 func validateProbeV2Request(req *ProbeV2Request) error {
 	switch req.TargetType {
@@ -113,8 +108,18 @@ func validateProbeV2Request(req *ProbeV2Request) error {
 		if req.Model == "" {
 			return &ValidationError{Field: "model", Message: "model is required for provider test"}
 		}
+	case ProbeV2TargetProviderConfig:
+		if req.APIBase == "" {
+			return &ValidationError{Field: "api_base", Message: "api_base is required for provider config test"}
+		}
+		if req.APIStyle == "" {
+			return &ValidationError{Field: "api_style", Message: "api_style is required for provider config test"}
+		}
+		if req.Token == "" {
+			return &ValidationError{Field: "token", Message: "token is required for provider config test"}
+		}
 	default:
-		return &ValidationError{Field: "target_type", Message: "target_type must be 'rule' or 'provider'"}
+		return &ValidationError{Field: "target_type", Message: "target_type must be 'rule', 'provider', or 'provider_config'"}
 	}
 
 	// Validate test mode

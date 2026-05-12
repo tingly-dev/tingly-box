@@ -15,10 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	assets "github.com/tingly-dev/tingly-box/internal"
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
@@ -34,7 +32,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 	"github.com/tingly-dev/tingly-box/remote/audit"
@@ -167,160 +164,6 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 
 	// Static files and templates - try embedded assets first, fallback to filesystem
 	s.useWebStaticEndpoints(s.engine)
-}
-
-// HandleProbeModel tests a rule configuration by sending a sample request to the configured provider
-func (s *Server) HandleProbeModel(c *gin.Context) {
-
-	var req ProbeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	if req.Provider == "" || req.Model == "" {
-		c.JSON(http.StatusBadRequest, gin.H{})
-		return
-	}
-
-	// Get the first rule or create a default one for testing
-	globalConfig := s.config
-	if globalConfig == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    "CONFIG_UNAVAILABLE",
-				"message": "Global config not available",
-			},
-		})
-		return
-	}
-
-	// Find the provider for this rule
-	providers := s.config.ListProviders()
-	var provider *typ.Provider
-	var model = req.Model
-
-	for _, p := range providers {
-		if p.Enabled && p.UUID == req.Provider {
-			provider = p
-			break
-		}
-	}
-
-	if provider == nil {
-		errorResp := ErrorDetail{
-			Code:    "PROVIDER_NOT_FOUND",
-			Message: fmt.Sprintf("Provider '%s' not found or disabled", req.Provider),
-		}
-
-		c.JSON(http.StatusBadRequest, ProbeResponse{
-			Success: false,
-			Error:   &errorResp,
-			Data:    &ProbeResponseData{},
-		})
-		return
-	}
-
-	startTime := time.Now()
-
-	// Generate curl command for this provider/model
-	curlCommand := GenerateCurlCommand(
-		provider.APIBase,
-		string(provider.APIStyle),
-		provider.Token,
-		model,
-	)
-
-	// Create the mock request data that would be sent to the API
-	mockRequest := NewMockRequest(provider.Name, req.Model)
-
-	// Get the appropriate client based on API style
-	var prober client.Prober
-	switch provider.APIStyle {
-	case protocol.APIStyleOpenAI:
-		prober = s.clientPool.GetOpenAIClient(context.Background(), provider, model)
-	case protocol.APIStyleAnthropic:
-		prober = s.clientPool.GetAnthropicClient(context.Background(), provider, model)
-	case protocol.APIStyleGoogle:
-		prober = s.clientPool.GetGoogleClient(context.Background(), provider, model)
-	default:
-		errorMessage := "unknown api style"
-		c.JSON(http.StatusNotFound, ProbeResponse{
-			Success: false,
-			Error: &ErrorDetail{
-				Message: fmt.Sprintf("Probe failed: %s", errorMessage),
-				Type:    "error",
-				Code:    "PROBE_FAILED",
-			},
-			Data: &ProbeResponseData{
-				Request:     mockRequest,
-				Response:    ProbeResponseDetail{Content: "", Model: model, Provider: provider.Name, FinishReason: "error", Error: errorMessage},
-				Usage:       ProbeUsage{},
-				CurlCommand: curlCommand,
-			},
-		})
-		c.Abort()
-		return
-	}
-
-	// Call the probe method
-	var result client.ProbeResult
-	if prober != nil {
-		result = prober.ProbeChatEndpoint(c.Request.Context(), model)
-	}
-
-	endTime := time.Now()
-
-	if !result.Success {
-		errorMessage := result.ErrorMessage
-		if errorMessage == "" {
-			errorMessage = "Probe failed"
-		}
-
-		errorResp := ErrorDetail{
-			Message: fmt.Sprintf("Probe failed: %s", errorMessage),
-			Type:    "error",
-			Code:    "PROBE_FAILED",
-		}
-
-		c.JSON(http.StatusNotFound, ProbeResponse{
-			Success: false,
-			Error:   &errorResp,
-			Data: &ProbeResponseData{
-				Request:     mockRequest,
-				Response:    ProbeResponseDetail{Content: "", Model: model, Provider: provider.Name, FinishReason: "error", Error: errorMessage},
-				Usage:       ProbeUsage{},
-				CurlCommand: curlCommand,
-			},
-		})
-		return
-	}
-
-	finishReason := "stop"
-	if result.TotalTokens == 0 {
-		finishReason = "unknown"
-	}
-
-	usage := ProbeUsage{
-		PromptTokens:     result.PromptTokens,
-		CompletionTokens: result.CompletionTokens,
-		TotalTokens:      result.TotalTokens,
-		TimeCost:         int(endTime.Sub(startTime).Milliseconds()),
-	}
-
-	c.JSON(http.StatusOK, ProbeResponse{
-		Success: true,
-		Data: &ProbeResponseData{
-			Request:     mockRequest,
-			Response:    ProbeResponseDetail{Content: result.Content, FinishReason: finishReason},
-			Usage:       usage,
-			CurlCommand: curlCommand,
-		},
-	})
 }
 
 func (s *Server) UseIndexHTML(c *gin.Context) {
@@ -936,43 +779,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ProviderModelsResponse{}),
 	)
 
-	// Probe endpoint
-	apiV1.POST("/probe", s.HandleProbeModel,
-		swagger.WithDescription("Test a rule configuration by sending a sample request"),
-		swagger.WithTags("testing"),
-		swagger.WithRequestModel(ProbeRequest{}),
-		swagger.WithResponseModel(ProbeResponse{}),
-	)
-
-	apiV1.POST("/probe/model", s.HandleProbeModel,
-		swagger.WithDescription("Test a model forwarding by sending a sample request"),
-		swagger.WithTags("testing"),
-		swagger.WithRequestModel(ProbeRequest{}),
-		swagger.WithResponseModel(ProbeResponse{}),
-	)
-
 	// Onboarding: extract URLs and possible API tokens from arbitrary pasted
 	// text. Vendor-agnostic — the user picks which URL/token to use.
 	onboardingHandler := onboarding.NewHandler(onboarding.NewRuleExtractor())
 	onboarding.RegisterRoutes(apiV1, onboardingHandler)
 
-	apiV1.POST("/probe/provider", s.HandleProbeProvider,
-		swagger.WithDescription("Test api key for the provider"),
-		swagger.WithTags("testing"),
-		swagger.WithRequestModel(ProbeProviderRequest{}),
-		swagger.WithResponseModel(ProbeProviderResponse{}),
-	)
-
-	apiV1.POST("/probe/model/capability", s.HandleProbeModelEndpoints,
-		swagger.WithDescription("Probe model endpoints (chat and responses) concurrently"),
-		swagger.WithTags("testing"),
-		swagger.WithRequestModel(ModelProbeRequest{}),
-		swagger.WithResponseModel(ModelProbeResponse{}),
-	)
-
-	// Probe V2 endpoints (new unified probe API)
+	// Probe V2 endpoint (unified probe API for rules, providers, and unsaved provider config)
 	apiV2.POST("/probe", s.HandleProbeV2,
-		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules and providers"),
+		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules, providers, and unsaved provider config"),
 		swagger.WithTags("testing"),
 		swagger.WithRequestModel(ProbeV2Request{}),
 		swagger.WithResponseModel(ProbeV2Response{}),
