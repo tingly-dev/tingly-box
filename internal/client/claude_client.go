@@ -246,26 +246,14 @@ func (c *ClaudeClient) Client() *anthropic.Client {
 
 // ProbeChatEndpoint tests the messages endpoint.
 func (c *ClaudeClient) Probe(ctx context.Context, model string) ProbeResult {
-	startTime := time.Now()
-	r, err := c.ProbeStream(ctx, model, "hi", ProbeModeTool)
-	latencyMs := time.Since(startTime).Milliseconds()
+	res, err := c.ProbeStream(ctx, model, "hi", ProbeModeStreaming)
 	if err != nil {
 		return ProbeResult{
-			Success:      false,
-			ErrorMessage: err.Error(),
-			LatencyMs:    latencyMs,
+			Success: false,
+			Message: err.Error(),
 		}
 	}
-
-	return ProbeResult{
-		Success:          true,
-		Message:          "Messages endpoint is accessible",
-		Content:          r.Content,
-		LatencyMs:        r.LatencyMs,
-		PromptTokens:     r.PromptTokens,
-		CompletionTokens: r.CompletionTokens,
-		TotalTokens:      r.TotalTokens,
-	}
+	return *res
 }
 
 // ProbeStream performs a streaming probe with configurable test mode for Claude Code OAuth.
@@ -324,18 +312,4 @@ func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, t
 
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages", true), nil
-}
-
-// ProbeModelsEndpoint tests the models endpoint.
-// For Claude Code OAuth, this returns an error as the endpoint is not supported.
-func (c *ClaudeClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
-	return ProbeResult{
-		Success:      false,
-		ErrorMessage: "Claude Code does not support /models endpoint",
-	}
-}
-
-// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request.
-func (c *ClaudeClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
-	return c.AnthropicClient.ProbeOptionsEndpoint(ctx)
 }
