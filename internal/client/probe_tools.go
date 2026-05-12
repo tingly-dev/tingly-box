@@ -9,77 +9,109 @@ import (
 )
 
 // GetProbeToolsAnthropic returns predefined tools in Anthropic format for probe testing
+// Uses bash tool to execute simple file system operations
 func GetProbeToolsAnthropic() []anthropic.ToolUnionParam {
 	return []anthropic.ToolUnionParam{
 		{
 			OfTool: &anthropic.ToolParam{
-				Name: "add_numbers",
+				Name: "bash",
 				InputSchema: anthropic.ToolInputSchemaParam{
 					Type: "object",
 					Properties: map[string]interface{}{
-						"a": map[string]interface{}{
-							"type":        "number",
-							"description": "The first number to add",
-						},
-						"b": map[string]interface{}{
-							"type":        "number",
-							"description": "The second number to add",
+						"command": map[string]interface{}{
+							"type":        "string",
+							"description": "The bash command to execute (e.g., 'ls -la', 'pwd', 'cat file.txt')",
 						},
 					},
-					Required: []string{"a", "b"},
+					Required: []string{"command"},
+				},
+			},
+		},
+		{
+			OfTool: &anthropic.ToolParam{
+				Name: "get_status",
+				InputSchema: anthropic.ToolInputSchemaParam{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"verbose": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Whether to include verbose status information",
+						},
+					},
 				},
 			},
 		},
 	}
 }
 
-// GetProbeToolsOpenAI returns predefined tools in OpenAI format (as JSON map)
+// GetProbeToolsOpenAI returns predefined tools in OpenAI format for probe testing
+// Uses bash tool to execute simple file system operations
 func GetProbeToolsOpenAI() []openai.ChatCompletionToolUnionParam {
-	// Add tools for tool mode using raw JSON map
 	return []openai.ChatCompletionToolUnionParam{
 		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
-			Name:        "add_numbers",
-			Description: param.NewOpt("Add two numbers"),
+			Name:        "bash",
+			Description: param.NewOpt("Execute bash commands for file system operations. Supports commands like: ls, pwd, cat, grep, find, git status, etc."),
+			Parameters: shared.FunctionParameters{
+				"type:":                "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"command": map[string]interface{}{
+						"type":        "string",
+						"description": "The bash command to execute",
+					},
+				},
+				"required": []string{"command"},
+			},
+		}),
+		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
+			Name:        "get_status",
+			Description: param.NewOpt("Get current status including working directory, git branch, and system info"),
 			Parameters: shared.FunctionParameters{
 				"type":                 "object",
 				"additionalProperties": false,
 				"properties": map[string]interface{}{
-					"a": map[string]interface{}{
-						"type":        "number",
-						"description": "The first number to add",
-					},
-					"b": map[string]interface{}{
-						"type":        "number",
-						"description": "The second number to add",
+					"verbose": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Whether to include verbose information",
 					},
 				},
-				"required": []string{"a", "b"},
 			},
 		}),
 	}
 }
 
-// GetProbeToolsResponses returns predefined tools in Responses API format for probe testing.
+// GetProbeToolsResponses returns predefined tools in Responses API format for probe testing
+// Uses bash tool to execute simple file system operations
 func GetProbeToolsResponses() []responses.ToolUnionParam {
 	return []responses.ToolUnionParam{
 		responses.ToolParamOfFunction(
-			"add_numbers",
+			"bash",
 			map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
 				"properties": map[string]interface{}{
-					"a": map[string]interface{}{
-						"type":        "number",
-						"description": "The first number to add",
-					},
-					"b": map[string]interface{}{
-						"type":        "number",
-						"description": "The second number to add",
+					"command": map[string]interface{}{
+						"type":        "string",
+						"description": "The bash command to execute",
 					},
 				},
-				"required": []string{"a", "b"},
+				"required": []string{"command"},
 			},
 			true,
+		),
+		responses.ToolParamOfFunction(
+			"get_status",
+			map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"verbose": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Whether to include verbose information",
+					},
+				},
+			},
+			false,
 		),
 	}
 }

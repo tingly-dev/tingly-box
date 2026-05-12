@@ -150,7 +150,7 @@ func getProbeMessage(mode ProbeMode, customMsg string) string {
 
 	switch mode {
 	case ProbeV2ModeTool:
-		return "Please use the add_numbers tool to calculate 123 + 456."
+		return "Please use the bash tool to list the current directory contents with 'ls -la'."
 	default:
 		return "Hello, this is a test message. Please respond with a short greeting."
 	}
