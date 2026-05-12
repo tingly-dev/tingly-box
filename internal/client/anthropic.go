@@ -21,6 +21,7 @@ import (
 
 // ClaudeCodeSystemHeader is a special system message for Claude Code OAuth subscriptions
 const ClaudeCodeSystemHeader = "You are Claude Code, Anthropic's official CLI for Claude."
+const ClaudeCodeSystemBody = "You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.\n\n"
 
 // AnthropicClientInterface defines the contract for Anthropic-compatible clients.
 // Both AnthropicClient and ClaudeClient (for Claude Code OAuth) implement this interface.

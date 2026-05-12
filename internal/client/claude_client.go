@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -244,7 +246,84 @@ func (c *ClaudeClient) Client() *anthropic.Client {
 
 // ProbeChatEndpoint tests the messages endpoint.
 func (c *ClaudeClient) Probe(ctx context.Context, model string) ProbeResult {
-	return c.AnthropicClient.Probe(ctx, model)
+	startTime := time.Now()
+	r, err := c.ProbeStream(ctx, model, "hi", ProbeModeTool)
+	latencyMs := time.Since(startTime).Milliseconds()
+	if err != nil {
+		return ProbeResult{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			LatencyMs:    latencyMs,
+		}
+	}
+
+	return ProbeResult{
+		Success:          true,
+		Message:          "Messages endpoint is accessible",
+		Content:          r.Content,
+		LatencyMs:        r.LatencyMs,
+		PromptTokens:     r.Usage.PromptTokens,
+		CompletionTokens: r.Usage.CompletionTokens,
+		TotalTokens:      r.Usage.TotalTokens,
+	}
+}
+
+// ProbeStream performs a streaming probe with configurable test mode for Claude Code OAuth.
+// This uses the ClaudeClient's own MessagesNewStreaming method which properly applies:
+// - Beta headers (only for probe operations)
+// - Thinking field disabling
+// - Session ID injection via Guard pattern
+//
+// Note: Beta headers are ONLY applied during probe, not during normal message passing.
+func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+	startTime := time.Now()
+
+	// Build system message
+	systemMessages := []anthropic.TextBlockParam{
+		{
+			Text: ClaudeCodeSystemHeader,
+		},
+		{
+			Text: ClaudeCodeSystemBody,
+		},
+	}
+
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock(message)),
+	}
+
+	params := &anthropic.MessageNewParams{
+		Model:     anthropic.Model(model),
+		MaxTokens: 1024,
+		System:    systemMessages,
+		Messages:  messages,
+	}
+
+	// Disable thinking for Claude Code probe
+	params.Thinking = anthropic.ThinkingConfigParamUnion{
+		OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
+	}
+
+	// must use tool && stream
+	params.Tools = GetProbeToolsAnthropic()
+	params.ToolChoice = GetProbeToolChoiceAutoAnthropic()
+
+	// For streaming and tool modes, use streaming
+	stream := c.MessagesNewStreaming(ctx, params)
+	defer stream.Close()
+
+	var chunks []interface{}
+	for stream.Next() {
+		event := stream.Current()
+		chunks = append(chunks, event)
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+
+	chunksJSON, _ := json.Marshal(chunks)
+	return ToProbeStreamResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages"), nil
 }
 
 // ProbeModelsEndpoint tests the models endpoint.
