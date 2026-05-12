@@ -1,5 +1,7 @@
 package agent
 
+import aiagent "github.com/tingly-dev/tingly-box/ai/agent"
+
 // BuildClaudeCodeEnv constructs environment variables for Claude Code.
 // This function contains the business logic for unified vs separate mode.
 func BuildClaudeCodeEnv(baseURL, apiKey string, unified bool) map[string]string {
@@ -32,6 +34,27 @@ func BuildClaudeCodeEnv(baseURL, apiKey string, unified bool) map[string]string 
 	}
 
 	return env
+}
+
+// BuildClaudeCodeModelConfig constructs the model configuration for Claude Code.
+// This contains the business logic for unified vs separate mode.
+// Exported for use by HTTP handlers.
+func BuildClaudeCodeModelConfig(unified bool) aiagent.ClaudeCodeModelConfig {
+	if unified {
+		return aiagent.ClaudeCodeModelConfig{
+			Default: "tingly/cc",
+			// All other fields will use Default
+		}
+	}
+
+	// Separate mode - different models for different purposes
+	return aiagent.ClaudeCodeModelConfig{
+		Default:  "tingly/cc-default",
+		Haiku:    "tingly/cc-haiku",
+		Opus:     "tingly/cc-opus",
+		Sonnet:   "tingly/cc-sonnet",
+		SubAgent: "tingly/cc-subagent",
+	}
 }
 
 // BuildOpenCodeConfig constructs the OpenCode configuration object.

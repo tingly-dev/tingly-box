@@ -44,27 +44,86 @@ internal/agent/                    # Tingly-Box specific layer
 ### Claude Code
 
 ```go
-import "github.com/tingly-dev/tingly-box/ai/agent"
+type ClaudeCodeParams struct {
+    // BaseURL is the base URL for the Claude API
+    BaseURL string
 
-// Caller constructs complete env map
-env := map[string]string{
-    "ANTHROPIC_BASE_URL": "http://localhost:12580/tingly/claude_code",
-    "ANTHROPIC_AUTH_TOKEN": "your-token",
-    "ANTHROPIC_MODEL": "tingly/cc",  // Caller decides model
-    // ... all other env vars
+    // APIKey is the authentication token
+    APIKey string
+
+    // Model configuration - see ClaudeCodeModelConfig below
+    ModelConfig ClaudeCodeModelConfig
+
+    // InstallStatusLine installs the status line script
+    InstallStatusLine bool
+
+    // ExtraEnv contains additional environment variables
+    ExtraEnv map[string]string
+
+    // ExtraConfig contains additional config entries for settings.json
+    ExtraConfig map[string]interface{}
 }
 
+type ClaudeCodeModelConfig struct {
+    // Default is the default model to use
+    Default string
+
+    // Haiku is the model for Haiku requests (optional, uses Default if empty)
+    Haiku string
+
+    // Opus is the model for Opus requests (optional, uses Default if empty)
+    Opus string
+
+    // Sonnet is the model for Sonnet requests (optional, uses Default if empty)
+    Sonnet string
+
+    // SubAgent is the model for sub-agent tasks (optional, uses Default if empty)
+    SubAgent string
+}
+```
+
+**Usage examples:**
+
+```go
+// Unified mode - all slots use same model
 result, err := agent.DefaultRegistry.Get(agent.AgentTypeClaudeCode).Apply(&agent.ClaudeCodeParams{
-    Env:               env,  // Complete env map
-    InstallStatusLine: false,
-    ExtraConfig:       nil,
+    BaseURL:  "http://localhost:12580/tingly/claude_code",
+    APIKey:   "your-token",
+    ModelConfig: agent.ClaudeCodeModelConfig{
+        Default: "tingly/cc",  // All slots use this model
+    },
+})
+
+// Separate mode - different models for different purposes
+result, err := agent.DefaultRegistry.Get(agent.AgentTypeClaudeCode).Apply(&agent.ClaudeCodeParams{
+    BaseURL:  "http://localhost:12580/tingly/claude_code",
+    APIKey:   "your-token",
+    ModelConfig: agent.ClaudeCodeModelConfig{
+        Default:  "tingly/cc-default",
+        Haiku:    "tingly/cc-haiku",
+        Opus:     "tingly/cc-opus",
+        Sonnet:   "tingly/cc-sonnet",
+        SubAgent: "tingly/cc-subagent",
+    },
+})
+
+// With custom env vars
+result, err := agent.DefaultRegistry.Get(agent.AgentTypeClaudeCode).Apply(&agent.ClaudeCodeParams{
+    BaseURL:  "http://localhost:12580/tingly/claude_code",
+    APIKey:   "your-token",
+    ModelConfig: agent.ClaudeCodeModelConfig{
+        Default: "tingly/cc",
+    },
+    ExtraEnv: map[string]string{
+        "CUSTOM_VAR": "value",
+    },
 })
 ```
 
 ### OpenCode
 
 ```go
-// Caller constructs complete config object
+// Build the complete config structure
 config := map[string]interface{}{
     "$schema": "https://opencode.ai/config.json",
     "provider": map[string]interface{}{
@@ -83,18 +142,18 @@ config := map[string]interface{}{
 }
 
 result, err := agent.DefaultRegistry.Get(agent.AgentTypeOpenCode).Apply(&agent.OpenCodeParams{
-    Config: config,  // Complete config object
+    Config: config,
 })
 ```
 
 ### Codex
 
 ```go
-// Caller provides models list
+// Provide the list of models to configure
 result, err := agent.DefaultRegistry.Get(agent.AgentTypeCodex).Apply(&agent.CodexParams{
     CodexBaseURL: "http://localhost:12580/tingly/codex",
     APIKey:       "your-token",
-    Models:       []string{"tingly-codex", "custom-model"},  // Caller collects
+    Models:       []string{"tingly-codex", "custom-model"},
 })
 ```
 

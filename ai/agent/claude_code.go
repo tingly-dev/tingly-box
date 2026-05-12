@@ -11,15 +11,94 @@ type ClaudeCodeConfig struct{}
 
 // ClaudeCodeParams contains parameters for applying Claude Code configuration
 type ClaudeCodeParams struct {
-	// Env is the complete environment variables map for Claude Code settings
-	// Caller is responsible for constructing this with appropriate model names
-	Env map[string]string
+	// BaseURL is the base URL for the Claude API
+	BaseURL string
+
+	// APIKey is the authentication token
+	APIKey string
+
+	// Model configuration
+	ModelConfig ClaudeCodeModelConfig
 
 	// InstallStatusLine installs the status line script
 	InstallStatusLine bool
 
+	// ExtraEnv contains additional environment variables beyond the standard ones
+	ExtraEnv map[string]string
+
 	// ExtraConfig contains additional config entries for settings.json
 	ExtraConfig map[string]interface{}
+}
+
+// ClaudeCodeModelConfig defines which models to use for different purposes
+type ClaudeCodeModelConfig struct {
+	// Default is the default model to use
+	Default string
+
+	// Haiku is the model for Haiku requests (optional, uses Default if empty)
+	Haiku string
+
+	// Opus is the model for Opus requests (optional, uses Default if empty)
+	Opus string
+
+	// Sonnet is the model for Sonnet requests (optional, uses Default if empty)
+	Sonnet string
+
+	// SubAgent is the model for sub-agent tasks (optional, uses Default if empty)
+	SubAgent string
+}
+
+// BuildEnv constructs the complete environment variables map from params
+func (p *ClaudeCodeParams) BuildEnv() map[string]string {
+	env := map[string]string{
+		// Standard settings
+		"DISABLE_TELEMETRY":                        "1",
+		"DISABLE_ERROR_REPORTING":                  "1",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
+		"API_TIMEOUT_MS":                           "3000000",
+		"ANTHROPIC_BASE_URL":                       p.BaseURL,
+		"ANTHROPIC_AUTH_TOKEN":                     p.APIKey,
+	}
+
+	// Model configuration
+	defaultModel := p.ModelConfig.Default
+	if defaultModel == "" {
+		defaultModel = "tingly/cc"
+	}
+
+	env["ANTHROPIC_MODEL"] = defaultModel
+
+	if p.ModelConfig.Haiku != "" {
+		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = p.ModelConfig.Haiku
+	} else {
+		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = defaultModel
+	}
+
+	if p.ModelConfig.Opus != "" {
+		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = p.ModelConfig.Opus
+	} else {
+		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = defaultModel
+	}
+
+	if p.ModelConfig.Sonnet != "" {
+		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = p.ModelConfig.Sonnet
+	} else {
+		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = defaultModel
+	}
+
+	if p.ModelConfig.SubAgent != "" {
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = p.ModelConfig.SubAgent
+	} else {
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = defaultModel
+	}
+
+	// Add extra env vars
+	for k, v := range p.ExtraEnv {
+		env[k] = v
+	}
+
+	return env
 }
 
 // Apply applies Claude Code configuration files
@@ -29,8 +108,11 @@ func (c *ClaudeCodeConfig) Apply(paramsInterface interface{}) (*ApplyAgentResult
 		return nil, fmt.Errorf("invalid params type, expected *ClaudeCodeParams")
 	}
 
-	// Apply settings.json with provided env
-	settingsResult, err := applyClaudeSettings(params.Env, params.InstallStatusLine, params.ExtraConfig)
+	// Build env from params
+	env := params.BuildEnv()
+
+	// Apply settings.json
+	settingsResult, err := applyClaudeSettings(env, params.InstallStatusLine, params.ExtraConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply Claude settings: %w", err)
 	}

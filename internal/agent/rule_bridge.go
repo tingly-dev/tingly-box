@@ -89,10 +89,13 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			return nil, fmt.Errorf("claude code config not registered")
 		}
 		// Build env vars with business logic
-		env := BuildClaudeCodeEnv(baseURL, apiKey, req.Unified)
+		modelConfig := BuildClaudeCodeModelConfig(req.Unified)
 		fileResult, err = config.Apply(&aiagent.ClaudeCodeParams{
-			Env:               env,
+			BaseURL:           baseURL + "/tingly/claude_code",
+			APIKey:            apiKey,
+			ModelConfig:       modelConfig,
 			InstallStatusLine: req.InstallStatusLine,
+			ExtraEnv:          nil,
 			ExtraConfig:       nil,
 		})
 	case AgentTypeOpenCode:
