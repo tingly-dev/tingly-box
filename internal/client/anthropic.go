@@ -41,9 +41,7 @@ type AnthropicClientInterface interface {
 	Client() *anthropic.Client
 
 	// Prober interface methods
-	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
-	ProbeModelsEndpoint(ctx context.Context) ProbeResult
-	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+	Probe(ctx context.Context, model string) ProbeResult
 }
 
 // AnthropicClient wraps the Anthropic SDK client
@@ -193,7 +191,7 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // ProbeChatEndpoint tests the messages endpoint with a minimal request
-func (c *AnthropicClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *AnthropicClient) Probe(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
 	// Determine system message based on OAuth provider type

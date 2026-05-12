@@ -243,8 +243,8 @@ func (c *ClaudeClient) Client() *anthropic.Client {
 }
 
 // ProbeChatEndpoint tests the messages endpoint.
-func (c *ClaudeClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
-	return c.AnthropicClient.ProbeChatEndpoint(ctx, model)
+func (c *ClaudeClient) Probe(ctx context.Context, model string) ProbeResult {
+	return c.AnthropicClient.Probe(ctx, model)
 }
 
 // ProbeModelsEndpoint tests the models endpoint.

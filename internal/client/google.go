@@ -139,7 +139,7 @@ func (c *GoogleClient) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // ProbeChatEndpoint tests the chat endpoint with a minimal request
-func (c *GoogleClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *GoogleClient) Probe(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
 	// Create minimal content for probe

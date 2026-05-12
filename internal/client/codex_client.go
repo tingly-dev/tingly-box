@@ -418,7 +418,7 @@ func (c *CodexClient) Client() *openai.Client {
 
 // ProbeChatEndpoint tests the chat endpoint.
 // For Codex, this delegates to the embedded OpenAIClient's probeResponsesEndpoint.
-func (c *CodexClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *CodexClient) Probe(ctx context.Context, model string) ProbeResult {
 	logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
 	return ProbeResult{
 		Success:          false,
@@ -431,18 +431,4 @@ func (c *CodexClient) ProbeChatEndpoint(ctx context.Context, model string) Probe
 		TotalTokens:      0,
 		ErrorMessage:     "Codex does not support /chat endpoint",
 	}
-}
-
-// ProbeModelsEndpoint tests the models endpoint.
-// For Codex, this returns an error as the endpoint is not supported.
-func (c *CodexClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
-	return ProbeResult{
-		Success:      false,
-		ErrorMessage: "Codex does not support /models endpoint",
-	}
-}
-
-// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request.
-func (c *CodexClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
-	return c.OpenAIClient.ProbeOptionsEndpoint(ctx)
 }

@@ -38,7 +38,7 @@ func TestOpenAIClient_ProbeChatEndpoint(t *testing.T) {
 				t.Fatalf("NewOpenAIClient() error = %v", err)
 			}
 
-			result := client.ProbeChatEndpoint(context.Background(), tt.model)
+			result := client.Probe(context.Background(), tt.model)
 
 			if !tt.wantErr && !result.Success {
 				t.Errorf("ProbeChatEndpoint() failed = %v", result.ErrorMessage)

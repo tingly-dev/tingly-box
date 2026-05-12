@@ -90,13 +90,3 @@ func GetProbeToolChoiceAutoAnthropic() anthropic.ToolChoiceUnionParam {
 		OfAuto: &anthropic.ToolChoiceAutoParam{},
 	}
 }
-
-// GetProbeToolChoiceOpenAI returns auto tool choice for OpenAI (as JSON map)
-func GetProbeToolChoiceOpenAI() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "function",
-		"function": map[string]interface{}{
-			"name": "add_numbers",
-		},
-	}
-}

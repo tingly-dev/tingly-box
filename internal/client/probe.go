@@ -28,13 +28,5 @@ type ProbeUsage struct {
 type Prober interface {
 	// ProbeChatEndpoint tests the chat/messages endpoint with a minimal request
 	// Returns a ProbeResult with success status, latency, and any response content
-	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
-
-	// ProbeModelsEndpoint tests the models list endpoint
-	// Returns a ProbeResult with the number of available models
-	ProbeModelsEndpoint(ctx context.Context) ProbeResult
-
-	// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request
-	// Returns a ProbeResult indicating if the endpoint is reachable
-	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+	Probe(ctx context.Context, model string) ProbeResult
 }

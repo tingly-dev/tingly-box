@@ -41,9 +41,7 @@ type OpenAIClientInterface interface {
 	SetRecordSink(sink *obs.Sink)
 
 	// Prober interface methods
-	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
-	ProbeModelsEndpoint(ctx context.Context) ProbeResult
-	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+	Probe(ctx context.Context, model string) ProbeResult
 
 	// Client returns the underlying OpenAI SDK client (for advanced usage)
 	Client() *openai.Client
@@ -295,7 +293,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // ProbeChatEndpoint tests the chat completions endpoint with a minimal request
-func (c *OpenAIClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *OpenAIClient) Probe(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
 	// Check if this is a Codex OAuth provider
