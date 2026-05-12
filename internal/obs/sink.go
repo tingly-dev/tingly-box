@@ -90,9 +90,36 @@ func (s *Sink) GetMode() RecordMode {
 	return s.mode
 }
 
+// SinkOption customises Sink construction. Apply via NewSink(baseDir, mode, opts...).
+type SinkOption func(*sinkConfig)
+
+type sinkConfig struct {
+	// explicitExporters fully replaces the default exporter list when non-nil.
+	explicitExporters []RecordExporter
+	// enableCAS appends a CASFileExporter alongside the default gzip exporter.
+	enableCAS bool
+}
+
+// WithCASExporter appends a CASFileExporter to the default gzip exporter.
+// Records are written twice (once gzipped, once as content-addressed slim
+// JSONL + blobs) — useful for cross-session analysis or replay tooling.
+func WithCASExporter() SinkOption {
+	return func(c *sinkConfig) { c.enableCAS = true }
+}
+
+// WithExporters replaces the Sink's default exporter list entirely. Useful for
+// tests and for plugging in future exporters (SQLite, OTLP, remote collectors).
+func WithExporters(exporters ...RecordExporter) SinkOption {
+	return func(c *sinkConfig) { c.explicitExporters = exporters }
+}
+
 // NewSink creates a new Sink backed by the OTel-shaped batch pipeline.
 // Returns nil when recording is disabled (empty mode or baseDir).
-func NewSink(baseDir string, mode RecordMode) *Sink {
+//
+// Default exporter: GzipFileExporter (one gzip member per batch, per-session
+// .jsonl.gz files). Pass WithCASExporter() to additionally write
+// content-addressed slim JSONL + blobs.
+func NewSink(baseDir string, mode RecordMode, opts ...SinkOption) *Sink {
 	switch mode {
 	case "":
 		return nil
@@ -104,9 +131,16 @@ func NewSink(baseDir string, mode RecordMode) *Sink {
 		if baseDir == "" {
 			return nil
 		}
-		exp, err := NewFileExporter(baseDir)
+		cfg := sinkConfig{}
+		for _, opt := range opts {
+			opt(&cfg)
+		}
+		exp, err := buildExporter(baseDir, &cfg)
 		if err != nil {
-			logrus.Errorf("obs: failed to initialise file exporter at %s: %v", baseDir, err)
+			logrus.Errorf("obs: failed to initialise exporter at %s: %v", baseDir, err)
+			return nil
+		}
+		if exp == nil {
 			return nil
 		}
 		return &Sink{
@@ -118,6 +152,28 @@ func NewSink(baseDir string, mode RecordMode) *Sink {
 		logrus.Warnf("obs: unknown record mode %q, recording disabled", mode)
 		return nil
 	}
+}
+
+// buildExporter resolves the configured exporters into a single RecordExporter.
+func buildExporter(baseDir string, cfg *sinkConfig) (RecordExporter, error) {
+	if len(cfg.explicitExporters) > 0 {
+		if len(cfg.explicitExporters) == 1 {
+			return cfg.explicitExporters[0], nil
+		}
+		return NewMultiExporter(cfg.explicitExporters...), nil
+	}
+	exporters := []RecordExporter{NewGzipFileExporter(baseDir)}
+	if cfg.enableCAS {
+		cas, err := NewCASFileExporter(baseDir)
+		if err != nil {
+			return nil, err
+		}
+		exporters = append(exporters, cas)
+	}
+	if len(exporters) == 1 {
+		return exporters[0], nil
+	}
+	return NewMultiExporter(exporters...), nil
 }
 
 // Emit enqueues r for asynchronous export. The call is non-blocking.

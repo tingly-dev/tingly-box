@@ -2,37 +2,37 @@ package obs
 
 import (
 	"bufio"
+	"container/list"
 	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
-// FileExporter implements RecordExporter. On each Export call it:
-//  1. Slim-ifies every Record (content-addressed dedup via in-memory blob set).
-//  2. Writes new blobs atomically (tmp+rename).
+// CASFileExporter implements RecordExporter with content-addressed storage:
+//  1. Slim-ifies every Record (large sub-values replaced by $ref pointers).
+//  2. Writes new blobs atomically (tmp+rename) under {baseDir}/blobs/.
 //  3. Appends SlimRecords to per-session JSONL files.
 //
-// FileExporter is NOT goroutine-safe; it must be driven by a single goroutine
-// (the BatchProcessor worker).
-type FileExporter struct {
-	baseDir  string
-	blobSet  map[string]struct{} // hashes known to be on disk (or written this run)
-	fdLRU    *fileLRU
+// CASFileExporter is NOT goroutine-safe; it must be driven by a single
+// goroutine (the BatchProcessor worker).
+type CASFileExporter struct {
+	baseDir string
+	blobSet map[string]struct{} // hashes known to be on disk (or written this run)
+	fdLRU   *fileLRU
 }
 
-// NewFileExporter creates a FileExporter rooted at baseDir and populates the
-// in-memory blob set by scanning existing blobs.
-func NewFileExporter(baseDir string) (*FileExporter, error) {
+// NewCASFileExporter creates a CASFileExporter rooted at baseDir and populates
+// the in-memory blob set by scanning existing blobs.
+func NewCASFileExporter(baseDir string) (*CASFileExporter, error) {
 	set, err := scanBlobSet(baseDir)
 	if err != nil {
 		logrus.Warnf("obs: blob set scan failed, starting fresh: %v", err)
 		set = make(map[string]struct{})
 	}
-	return &FileExporter{
+	return &CASFileExporter{
 		baseDir: baseDir,
 		blobSet: set,
 		fdLRU:   newFileLRU(256),
@@ -40,7 +40,7 @@ func NewFileExporter(baseDir string) (*FileExporter, error) {
 }
 
 // Export processes a batch of Records.
-func (e *FileExporter) Export(_ context.Context, records []*Record) error {
+func (e *CASFileExporter) Export(_ context.Context, records []*Record) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -84,7 +84,7 @@ func (e *FileExporter) Export(_ context.Context, records []*Record) error {
 }
 
 // Shutdown flushes and closes all open session files.
-func (e *FileExporter) Shutdown(_ context.Context) error {
+func (e *CASFileExporter) Shutdown(_ context.Context) error {
 	e.fdLRU.closeAll()
 	return nil
 }
@@ -92,7 +92,7 @@ func (e *FileExporter) Shutdown(_ context.Context) error {
 // sessionPath returns the JSONL path for a record.
 // Layout: {baseDir}/{scenario}/sessions/{YYYY-MM-DD}/{session}.jsonl
 // Falls back to _unknown/{YYYY-MM-DD}.jsonl when the session is empty.
-func (e *FileExporter) sessionPath(r *Record) string {
+func (e *CASFileExporter) sessionPath(r *Record) string {
 	date := r.Timestamp.UTC().Format("2006-01-02")
 	scenario := r.Scenario
 	if scenario == "" {
@@ -116,7 +116,7 @@ func (e *FileExporter) sessionPath(r *Record) string {
 
 // appendLines JSON-encodes each slim record and appends them to path,
 // using the fd LRU cache to avoid repeated open/close.
-func (e *FileExporter) appendLines(path string, lines []*SlimRecord) error {
+func (e *CASFileExporter) appendLines(path string, lines []*SlimRecord) error {
 	f := e.fdLRU.get(path)
 	if f == nil {
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -141,24 +141,78 @@ func (e *FileExporter) appendLines(path string, lines []*SlimRecord) error {
 	return w.Flush()
 }
 
-// writeIndexEntry appends a one-line index entry the first time a session
-// is seen in a date partition. The index lives at sessions/{date}/_index.jsonl.
-// This is best-effort; errors are logged but not propagated.
-func (e *FileExporter) writeIndexEntry(baseDir, scenario, date, sessionID, source string) {
-	indexPath := filepath.Join(baseDir, scenario, "sessions", date, "_index.jsonl")
-	entry := map[string]interface{}{
-		"ts":     time.Now().UTC().Format(time.RFC3339),
-		"sid":    sessionID,
-		"source": source,
+// fileLRU is a bounded cache of open *os.File handles keyed by path.
+// The least-recently-used entry is evicted (with fsync+close) when the
+// capacity is exceeded. Not goroutine-safe; call only from a single goroutine.
+type fileLRU struct {
+	cap   int
+	index map[string]*list.Element
+	order *list.List // front = most recent
+}
+
+type lruEntry struct {
+	path string
+	file *os.File
+}
+
+func newFileLRU(cap int) *fileLRU {
+	if cap <= 0 {
+		cap = 256
 	}
-	data, _ := json.Marshal(entry)
-	data = append(data, '\n')
-	f, err := os.OpenFile(indexPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		logrus.Debugf("obs: failed to open index %s: %v", indexPath, err)
+	return &fileLRU{
+		cap:   cap,
+		index: make(map[string]*list.Element),
+		order: list.New(),
+	}
+}
+
+func (l *fileLRU) get(path string) *os.File {
+	elem, ok := l.index[path]
+	if !ok {
+		return nil
+	}
+	l.order.MoveToFront(elem)
+	return elem.Value.(*lruEntry).file
+}
+
+func (l *fileLRU) put(path string, f *os.File) {
+	if elem, ok := l.index[path]; ok {
+		l.order.MoveToFront(elem)
+		old := elem.Value.(*lruEntry)
+		if old.file != f {
+			syncAndClose(old.file)
+			old.file = f
+		}
 		return
 	}
-	_, _ = f.Write(data)
-	_ = f.Sync()
-	_ = f.Close()
+	for l.order.Len() >= l.cap {
+		l.evictLRU()
+	}
+	entry := &lruEntry{path: path, file: f}
+	elem := l.order.PushFront(entry)
+	l.index[path] = elem
+}
+
+func (l *fileLRU) closeAll() {
+	for l.order.Len() > 0 {
+		l.evictLRU()
+	}
+}
+
+func (l *fileLRU) evictLRU() {
+	back := l.order.Back()
+	if back == nil {
+		return
+	}
+	entry := back.Value.(*lruEntry)
+	syncAndClose(entry.file)
+	delete(l.index, entry.path)
+	l.order.Remove(back)
+}
+
+func syncAndClose(f *os.File) {
+	if f != nil {
+		_ = f.Sync()
+		_ = f.Close()
+	}
 }

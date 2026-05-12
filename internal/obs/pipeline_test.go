@@ -1,8 +1,11 @@
 package obs
 
 import (
+	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +17,7 @@ func TestBatchProcessorNonBlocking(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	exp, err := NewFileExporter(dir)
+	exp, err := NewCASFileExporter(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,13 +137,13 @@ func TestSlimifyDedup(t *testing.T) {
 	checkRefs(slim2)
 }
 
-// TestFileExporterRoundTrip writes records through the full FileExporter and
-// verifies that JSONL files and blobs appear in the expected layout.
-func TestFileExporterRoundTrip(t *testing.T) {
+// TestCASFileExporterRoundTrip writes records through the full CASFileExporter
+// and verifies that JSONL files and blobs appear in the expected layout.
+func TestCASFileExporterRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	exp, err := NewFileExporter(dir)
+	exp, err := NewCASFileExporter(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,5 +223,203 @@ func TestBlobStoreIdempotent(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Errorf("blob content mismatch")
+	}
+}
+
+// TestGzipExporterRoundTrip writes two batches into the same session file and
+// verifies that the concatenated gzip stream decompresses into all records
+// with bodies fully inlined (no $ref).
+func TestGzipExporterRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	exp := NewGzipFileExporter(dir)
+
+	ts := time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC)
+	mkRec := func(rid string) *Record {
+		return &Record{
+			Timestamp:  ts,
+			RequestID:  rid,
+			SessionID:  "sess1",
+			SessionSrc: "hdr",
+			Scenario:   "claude_code",
+			Model:      "claude-opus-4-7",
+			Duration:   500 * time.Millisecond,
+			OriginalRequest: &RecordRequest{
+				Method: "POST",
+				URL:    "/v1/messages",
+				Body: map[string]interface{}{
+					"model":    "claude-opus-4-7",
+					"messages": []interface{}{map[string]interface{}{"role": "user", "content": "hello " + rid}},
+				},
+			},
+			FinalResponse: &RecordResponse{StatusCode: 200, Body: map[string]interface{}{"ok": true}},
+		}
+	}
+
+	// Two separate Export calls → two gzip members in the same file.
+	ctx := context.Background()
+	if err := exp.Export(ctx, []*Record{mkRec("r1"), mkRec("r2")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := exp.Export(ctx, []*Record{mkRec("r3")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := exp.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	sessionFile := filepath.Join(dir, "claude_code", "sessions", "2026-04-29", "sess1.jsonl.gz")
+	f, err := os.Open(sessionFile)
+	if err != nil {
+		t.Fatalf("session file not found: %v", err)
+	}
+	defer f.Close()
+	gr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatalf("gzip open: %v", err)
+	}
+	defer gr.Close()
+	gr.Multistream(true)
+
+	var rids []string
+	sc := bufio.NewScanner(gr)
+	for sc.Scan() {
+		var s SlimRecord
+		if err := json.Unmarshal(sc.Bytes(), &s); err != nil {
+			t.Fatalf("malformed line: %v", err)
+		}
+		rids = append(rids, s.RequestID)
+		// Body must be fully inlined: no $ref markers.
+		if s.OriginalRequest != nil {
+			if body, ok := s.OriginalRequest.Body.(map[string]interface{}); ok {
+				if _, hasRef := body["$ref"]; hasRef {
+					t.Errorf("rid=%s: gzip output must not contain $ref", s.RequestID)
+				}
+			}
+		}
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	want := []string{"r1", "r2", "r3"}
+	if len(rids) != len(want) {
+		t.Fatalf("expected %d records, got %d: %v", len(want), len(rids), rids)
+	}
+	for i, w := range want {
+		if rids[i] != w {
+			t.Errorf("record %d: want rid %q, got %q", i, w, rids[i])
+		}
+	}
+
+	// No CAS artefacts should exist for the gzip-only path.
+	if _, err := os.Stat(filepath.Join(dir, "blobs")); !os.IsNotExist(err) {
+		t.Errorf("blobs/ dir must not exist for gzip-only output, err=%v", err)
+	}
+}
+
+// failingExporter is a RecordExporter that returns a sentinel error.
+type failingExporter struct{ called bool }
+
+var errFailExp = errors.New("fail")
+
+func (f *failingExporter) Export(_ context.Context, _ []*Record) error {
+	f.called = true
+	return errFailExp
+}
+func (f *failingExporter) Shutdown(_ context.Context) error { return nil }
+
+// recordingExporter captures records for inspection.
+type recordingExporter struct {
+	batches [][]*Record
+	stopped bool
+}
+
+func (r *recordingExporter) Export(_ context.Context, recs []*Record) error {
+	cp := make([]*Record, len(recs))
+	copy(cp, recs)
+	r.batches = append(r.batches, cp)
+	return nil
+}
+func (r *recordingExporter) Shutdown(_ context.Context) error { r.stopped = true; return nil }
+
+// TestMultiExporterFanOut verifies that records reach every exporter and a
+// single failure does not block the others.
+func TestMultiExporterFanOut(t *testing.T) {
+	t.Parallel()
+
+	a := &recordingExporter{}
+	b := &failingExporter{}
+	c := &recordingExporter{}
+	m := NewMultiExporter(a, b, c)
+
+	recs := []*Record{{Timestamp: time.Now(), RequestID: "rid"}}
+	if err := m.Export(context.Background(), recs); !errors.Is(err, errFailExp) {
+		t.Errorf("expected fail error, got %v", err)
+	}
+	if !b.called {
+		t.Error("failing exporter was not called")
+	}
+	if len(a.batches) != 1 || len(c.batches) != 1 {
+		t.Errorf("both healthy exporters should see the batch: a=%d c=%d", len(a.batches), len(c.batches))
+	}
+	if err := m.Shutdown(context.Background()); err != nil {
+		t.Errorf("shutdown error: %v", err)
+	}
+	if !a.stopped || !c.stopped {
+		t.Error("shutdown must reach all exporters")
+	}
+}
+
+// TestSinkDefaultsToGzip verifies the default NewSink path produces gzip files
+// and no blob tree.
+func TestSinkDefaultsToGzip(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	s := NewSink(dir, RecordModeAll)
+	if s == nil {
+		t.Fatal("expected sink")
+	}
+	s.Emit(&Record{
+		Timestamp: time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+		RequestID: "r1",
+		SessionID: "sx",
+		Scenario:  "sc",
+	})
+	s.Close()
+
+	gzPath := filepath.Join(dir, "sc", "sessions", "2026-04-29", "sx.jsonl.gz")
+	if _, err := os.Stat(gzPath); err != nil {
+		t.Errorf("expected gzip session file at %s: %v", gzPath, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "blobs")); !os.IsNotExist(err) {
+		t.Error("default sink must not create blobs/ tree")
+	}
+}
+
+// TestSinkWithCASExporter verifies that WithCASExporter writes both gzip and
+// CAS outputs.
+func TestSinkWithCASExporter(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	s := NewSink(dir, RecordModeAll, WithCASExporter())
+	if s == nil {
+		t.Fatal("expected sink")
+	}
+	s.Emit(&Record{
+		Timestamp: time.Date(2026, 4, 29, 10, 0, 0, 0, time.UTC),
+		RequestID: "r1",
+		SessionID: "sy",
+		Scenario:  "sc",
+	})
+	s.Close()
+
+	if _, err := os.Stat(filepath.Join(dir, "sc", "sessions", "2026-04-29", "sy.jsonl.gz")); err != nil {
+		t.Errorf("expected gzip output: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sc", "sessions", "2026-04-29", "sy.jsonl")); err != nil {
+		t.Errorf("expected CAS slim JSONL: %v", err)
 	}
 }

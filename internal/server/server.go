@@ -158,6 +158,7 @@ type Server struct {
 	// record options
 	recordMode obs.RecordMode
 	recordDir  string
+	recordCAS  bool // additionally write content-addressed slim records + blobs
 
 	// recording flag - enables dual-stage request recording
 	enableRecording bool
@@ -386,6 +387,16 @@ func WithRecordDir(dir string) ServerOption {
 	}
 }
 
+// WithRecordingCAS toggles content-addressed dedup alongside the default
+// gzip recording. When enabled, each session is written twice: once as a
+// gzip JSONL.gz (default), and once as content-addressed slim JSONL plus a
+// per-record blob tree. Useful for cross-session prompt analysis and replay.
+func WithRecordingCAS(enabled bool) ServerOption {
+	return func(s *Server) {
+		s.recordCAS = enabled
+	}
+}
+
 // WithRecording enables dual-stage recording for protocol conversion scenarios
 func WithRecording(enabled bool) ServerOption {
 	return func(s *Server) {
@@ -437,6 +448,15 @@ func (s *Server) IsFeatureEnabled(feature string) bool {
 	return s.experimentalFeatures[feature]
 }
 
+// sinkOpts derives obs.SinkOption values from the server's recording config.
+func (s *Server) sinkOpts() []obs.SinkOption {
+	var opts []obs.SinkOption
+	if s.recordCAS {
+		opts = append(opts, obs.WithCASExporter())
+	}
+	return opts
+}
+
 // GetOrCreateScenarioSink gets or creates a recording sink for the specified scenario
 // The sink is created on-demand and cached for subsequent use
 func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
@@ -456,7 +476,7 @@ func (s *Server) GetOrCreateScenarioSink(scenario typ.RuleScenario) *obs.Sink {
 	// Create new sink for this scenario using the scenario-effective recording mode.
 	// This allows `recording_v2` on individual scenarios such as `claude_code`
 	// even when global CLI record mode is unset.
-	sink := obs.NewSink(s.recordDir, mode)
+	sink := obs.NewSink(s.recordDir, mode, s.sinkOpts()...)
 	if sink == nil {
 		// Sink creation failed or recording is disabled (empty recordDir)
 		// This is expected when no record directory is configured
@@ -584,7 +604,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	case "":
 		// Recording disabled
 	case obs.RecordModeAll:
-		recordSink := obs.NewSink(server.recordDir, server.recordMode)
+		recordSink := obs.NewSink(server.recordDir, server.recordMode, server.sinkOpts()...)
 		server.clientPool.SetRecordSink(recordSink)
 		logrus.Debugf("Request recording enabled, mode: %s, directory: %s", server.recordMode, server.recordDir)
 	case obs.RecordModeScenario, obs.RecordModeRequestOnly, obs.RecordModeRequestResponse, obs.RecordModeStagedRequestResponse:

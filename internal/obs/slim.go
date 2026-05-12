@@ -49,6 +49,19 @@ type SlimHTTPData struct {
 // knownBlobs is the set of hashes already on disk; only new blobs are returned
 // in the second return value (hash → serialised JSON bytes).
 func SlimifyRecord(r *Record, knownBlobs map[string]struct{}) (*SlimRecord, map[string][]byte) {
+	return recordToSlim(r, knownBlobs, inlineThreshold)
+}
+
+// FullRecord returns a SlimRecord-shaped value with all fields inlined and no
+// $ref extraction. Used by exporters that don't dedup (e.g. GzipFileExporter).
+func FullRecord(r *Record) *SlimRecord {
+	slim, _ := recordToSlim(r, nil, -1)
+	return slim
+}
+
+// recordToSlim copies Record fields into a SlimRecord and optionally extracts
+// large sub-values to blobs. A negative threshold disables extraction entirely.
+func recordToSlim(r *Record, knownBlobs map[string]struct{}, threshold int) (*SlimRecord, map[string][]byte) {
 	newBlobs := make(map[string][]byte)
 	slim := &SlimRecord{
 		V:          3,
@@ -65,34 +78,34 @@ func SlimifyRecord(r *Record, knownBlobs map[string]struct{}) (*SlimRecord, map[
 	}
 
 	if r.OriginalRequest != nil {
-		slim.OriginalRequest = slimRequest(r.OriginalRequest, knownBlobs, newBlobs)
+		slim.OriginalRequest = slimRequest(r.OriginalRequest, knownBlobs, newBlobs, threshold)
 	}
 	if r.TransformedRequest != nil {
-		slim.TransformedRequest = slimRequest(r.TransformedRequest, knownBlobs, newBlobs)
+		slim.TransformedRequest = slimRequest(r.TransformedRequest, knownBlobs, newBlobs, threshold)
 	}
 	if r.ProviderResponse != nil {
-		slim.ProviderResponse = slimResponse(r.ProviderResponse, knownBlobs, newBlobs)
+		slim.ProviderResponse = slimResponse(r.ProviderResponse, knownBlobs, newBlobs, threshold)
 	}
 	if r.FinalResponse != nil {
-		slim.FinalResponse = slimResponse(r.FinalResponse, knownBlobs, newBlobs)
+		slim.FinalResponse = slimResponse(r.FinalResponse, knownBlobs, newBlobs, threshold)
 	}
 
 	return slim, newBlobs
 }
 
-func slimRequest(req *RecordRequest, known map[string]struct{}, out map[string][]byte) *SlimHTTPData {
+func slimRequest(req *RecordRequest, known map[string]struct{}, out map[string][]byte, threshold int) *SlimHTTPData {
 	d := &SlimHTTPData{
 		Method:  req.Method,
 		URL:     req.URL,
 		Headers: req.Headers,
 	}
 	if req.Body != nil {
-		d.Body = slimBody(req.Body, known, out)
+		d.Body = slimBody(req.Body, known, out, threshold)
 	}
 	return d
 }
 
-func slimResponse(resp *RecordResponse, known map[string]struct{}, out map[string][]byte) *SlimHTTPData {
+func slimResponse(resp *RecordResponse, known map[string]struct{}, out map[string][]byte, threshold int) *SlimHTTPData {
 	d := &SlimHTTPData{
 		StatusCode:  resp.StatusCode,
 		Headers:     resp.Headers,
@@ -100,7 +113,7 @@ func slimResponse(resp *RecordResponse, known map[string]struct{}, out map[strin
 	}
 	if resp.Body != nil {
 		// Responses are hashed as a whole unit.
-		d.Body = maybeRef(resp.Body, known, out)
+		d.Body = maybeRef(resp.Body, known, out, threshold)
 	}
 	return d
 }
@@ -108,15 +121,15 @@ func slimResponse(resp *RecordResponse, known map[string]struct{}, out map[strin
 // slimBody replaces large fields within a request body map with $ref pointers.
 // Arrays under the keys "system", "tools", and "messages" are slimmed per-element
 // to maximise deduplication across conversation turns.
-func slimBody(body map[string]interface{}, known map[string]struct{}, out map[string][]byte) map[string]interface{} {
+func slimBody(body map[string]interface{}, known map[string]struct{}, out map[string][]byte, threshold int) map[string]interface{} {
 	result := make(map[string]interface{}, len(body))
 	for k, v := range body {
 		switch k {
 		case "system", "tools", "messages":
-			result[k] = slimArray(v, known, out)
+			result[k] = slimArray(v, known, out, threshold)
 		default:
 			// Inline small scalars; hash large blobs.
-			result[k] = maybeRef(v, known, out)
+			result[k] = maybeRef(v, known, out, threshold)
 		}
 	}
 	return result
@@ -124,23 +137,27 @@ func slimBody(body map[string]interface{}, known map[string]struct{}, out map[st
 
 // slimArray hashes each element of an array individually.
 // If v is not a slice (e.g. a string system prompt), it is treated as a single value.
-func slimArray(v interface{}, known map[string]struct{}, out map[string][]byte) interface{} {
+func slimArray(v interface{}, known map[string]struct{}, out map[string][]byte, threshold int) interface{} {
 	arr, ok := v.([]interface{})
 	if !ok {
-		return maybeRef(v, known, out)
+		return maybeRef(v, known, out, threshold)
 	}
 	result := make([]interface{}, len(arr))
 	for i, elem := range arr {
-		result[i] = maybeRef(elem, known, out)
+		result[i] = maybeRef(elem, known, out, threshold)
 	}
 	return result
 }
 
-// maybeRef serialises v to JSON; if the result exceeds inlineThreshold it
-// stores it as a blob and returns a {"$ref":"sha256:<hash>"} marker.
-func maybeRef(v interface{}, known map[string]struct{}, out map[string][]byte) interface{} {
+// maybeRef serialises v to JSON; if the result exceeds threshold it stores it
+// as a blob and returns a {"$ref":"sha256:<hash>"} marker. A negative
+// threshold disables extraction (everything stays inline).
+func maybeRef(v interface{}, known map[string]struct{}, out map[string][]byte, threshold int) interface{} {
+	if threshold < 0 {
+		return v
+	}
 	data, err := json.Marshal(v)
-	if err != nil || len(data) < inlineThreshold {
+	if err != nil || len(data) < threshold {
 		return v // keep inline
 	}
 	hash := hashBytes(data)
