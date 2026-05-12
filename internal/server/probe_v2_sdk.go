@@ -36,7 +36,7 @@ func (s *Server) getClientForProvider(provider *typ.Provider, model string) (cli
 }
 
 // probeProviderWithSDK performs a non-streaming probe for a provider using Prober interface
-func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*ProbeV2Data, error) {
+func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*client.ProbeResult, error) {
 	prober, err := s.getClientForProvider(provider, model)
 	if err != nil {
 		return nil, err
@@ -45,20 +45,23 @@ func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provide
 	// Use simple mode for non-streaming probe
 	// Convert server.ProbeMode to client.ProbeMode
 	clientMode := client.ProbeMode(testMode)
-	result, err := prober.ProbeStream(ctx, model, message, clientMode)
-	if err != nil {
-		return nil, err
+	res, err := prober.ProbeStream(ctx, model, message, clientMode)
+	if err == nil {
+		return res, nil
 	}
 
-	return &ProbeV2Data{
-		Content:    result.Content,
-		LatencyMs:  result.LatencyMs,
-		RequestURL: result.RequestURL,
-	}, nil
+	if provider.APIStyle == protocol.APIStyleOpenAI {
+		if c, ok := prober.(client.OpenAIClientInterface); ok {
+			res, err = c.ProbeResponsesStream(ctx, model, message, clientMode)
+			return res, err
+		}
+	}
+
+	return nil, err
 }
 
 // probeProviderStream performs a streaming probe for a provider using Prober interface
-func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*ProbeV2Data, error) {
+func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*client.ProbeResult, error) {
 	prober, err := s.getClientForProvider(provider, model)
 	if err != nil {
 		return nil, err
@@ -66,14 +69,17 @@ func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider
 
 	// Convert server.ProbeMode to client.ProbeMode
 	clientMode := client.ProbeMode(testMode)
-	result, err := prober.ProbeStream(ctx, model, message, clientMode)
-	if err != nil {
-		return nil, err
+	res, err := prober.ProbeStream(ctx, model, message, clientMode)
+	if err == nil {
+		return res, nil
 	}
 
-	return &ProbeV2Data{
-		Content:    result.Content,
-		LatencyMs:  result.LatencyMs,
-		RequestURL: result.RequestURL,
-	}, nil
+	if provider.APIStyle == protocol.APIStyleOpenAI {
+		if c, ok := prober.(client.OpenAIClientInterface); ok {
+			res, err = c.ProbeResponsesStream(ctx, model, message, clientMode)
+			return res, err
+		}
+	}
+
+	return nil, err
 }

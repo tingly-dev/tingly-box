@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -58,36 +59,21 @@ type ProbeV2Response struct {
 	Data    *ProbeV2Data `json:"data,omitempty"`
 }
 
-// ProbeV2Data represents the probe result data
-type ProbeV2Data struct {
-	Content    string            `json:"content,omitempty"`
-	Usage      *ProbeV2Usage     `json:"usage,omitempty"`
-	ToolCalls  []ProbeV2ToolCall `json:"tool_calls,omitempty"`
-	LatencyMs  int64             `json:"latency_ms"`
-	RequestURL string            `json:"request_url,omitempty"`
-}
-
-// ProbeV2Usage represents token usage
-type ProbeV2Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
-
-// ProbeV2ToolCall represents a tool call in probe response
-type ProbeV2ToolCall struct {
-	ID    string                 `json:"id"`
-	Name  string                 `json:"name"`
-	Input map[string]interface{} `json:"input"`
-}
+// ProbeV2Data is an alias to client.ProbeResult with JSON tags
+// We use client.ProbeResult directly to maintain consistency
+type ProbeV2Data = client.ProbeResult
 
 // ProbeV2ResponseChunk represents a streaming response chunk
 type ProbeV2ResponseChunk struct {
-	Type      string        `json:"type"` // content, error, done
-	Content   string        `json:"content,omitempty"`
-	Error     string        `json:"error,omitempty"`
-	Usage     *ProbeV2Usage `json:"usage,omitempty"`
-	LatencyMs int64         `json:"latency_ms,omitempty"`
+	Type      string `json:"type"` // content, error, done
+	Content   string `json:"content,omitempty"`
+	Error     string `json:"error,omitempty"`
+	LatencyMs int64  `json:"latency_ms,omitempty"`
+
+	// Token usage (flattened for consistency)
+	PromptTokens     int `json:"prompt_tokens,omitempty"`
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
 }
 
 // validateProbeV2Request validates the probe request

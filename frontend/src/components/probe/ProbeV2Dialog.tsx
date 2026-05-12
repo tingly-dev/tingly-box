@@ -116,10 +116,10 @@ const StatusResponseCard = memo(({
                                         sx={{ height: 24, minWidth: 'auto' }}
                                     />
                                 )}
-                                {result.data.usage && (
+                                {result.data.total_tokens && (
                                     <Chip
                                         icon={<TokenIcon sx={{ fontSize: 14 }} />}
-                                        label={`${result.data.usage.total_tokens} tokens`}
+                                        label={`${result.data.total_tokens} tokens`}
                                         size="small"
                                         variant="outlined"
                                         sx={{ height: 24, minWidth: 'auto' }}
@@ -162,20 +162,20 @@ const StatusResponseCard = memo(({
                 )}
 
                 {/* Token Usage */}
-                {result.data?.usage && (
+                {result.data?.total_tokens && (
                     <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
                             Token Usage
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 2 }}>
                             <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Prompt: {result.data.usage.prompt_tokens}
+                                Prompt: {result.data.prompt_tokens}
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Completion: {result.data.usage.completion_tokens}
+                                Completion: {result.data.completion_tokens}
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Total: {result.data.usage.total_tokens}
+                                Total: {result.data.total_tokens}
                             </Typography>
                         </Box>
                     </Box>
@@ -230,13 +230,19 @@ interface ProbeV2Response {
     };
     data?: {
         content?: string;
-        usage?: {
-            prompt_tokens: number;
-            completion_tokens: number;
-            total_tokens: number;
-        };
         latency_ms: number;
         request_url?: string;
+        stream?: boolean;
+        // Token usage (flattened)
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        // Tool calls
+        tool_calls?: Array<{
+            id: string;
+            name: string;
+            input: Record<string, unknown>;
+        }>;
     };
 }
 

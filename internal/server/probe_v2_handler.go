@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
@@ -107,7 +108,7 @@ func (s *Server) handleProbeStream(c *gin.Context, req *ProbeV2Request) {
 }
 
 // probe performs a probe using SDK for both rule and provider targets
-func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
+func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*client.ProbeResult, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
@@ -118,7 +119,7 @@ func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, 
 }
 
 // probeStream performs a streaming probe using SDK for both rule and provider targets
-func (s *Server) probeStream(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
+func (s *Server) probeStream(ctx context.Context, req *ProbeV2Request) (*client.ProbeResult, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err

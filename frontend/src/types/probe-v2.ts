@@ -22,6 +22,12 @@ export interface ProbeV2Request {
     message?: string;
 }
 
+export interface ProbeToolCall {
+    id: string;
+    name: string;
+    input: Record<string, unknown>;
+}
+
 export interface ProbeV2Response {
     success: boolean;
     error?: {
@@ -29,13 +35,23 @@ export interface ProbeV2Response {
         type: string;
     };
     data?: {
+        success?: boolean;
+        message?: string;
         content?: string;
-        usage?: {
-            prompt_tokens: number;
-            completion_tokens: number;
-            total_tokens: number;
-        };
         latency_ms: number;
         request_url?: string;
+        stream?: boolean;
+
+        // Token usage (flattened)
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+
+        // Tool calls
+        tool_calls?: ProbeToolCall[];
+
+        // Other fields
+        models_count?: number;
+        error_message?: string;
     };
 }

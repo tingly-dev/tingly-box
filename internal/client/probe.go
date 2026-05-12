@@ -7,26 +7,26 @@ import (
 // ProbeResult represents the result of a probe operation (for both simple and streaming)
 type ProbeResult struct {
 	// Basic fields
-	Success      bool
-	Message      string
-	Content      string
-	LatencyMs    int64
-	ModelsCount  int
-	ErrorMessage string
+	Success      bool   `json:"success"`
+	Message      string `json:"message,omitempty"`
+	Content      string `json:"content,omitempty"`
+	LatencyMs    int64  `json:"latency_ms"`
+	ModelsCount  int    `json:"models_count,omitempty"`
+	ErrorMessage string `json:"error_message,omitempty"`
 
 	// Streaming mode indicator
-	Stream bool
+	Stream bool `json:"stream,omitempty"`
 
 	// Token usage
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
+	PromptTokens     int `json:"prompt_tokens,omitempty"`
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
 
 	// Tool calls (for tool mode)
-	ToolCalls []ProbeToolCall
+	ToolCalls []ProbeToolCall `json:"tool_calls,omitempty"`
 
 	// Request URL (for debugging)
-	RequestURL string
+	RequestURL string `json:"request_url,omitempty"`
 }
 
 // ProbeToolCall represents a tool call in probe response
