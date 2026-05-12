@@ -676,11 +676,14 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/probe/model', {
+            const response = await client.POST('/api/v2/probe', {
                 headers,
                 body: {
-                    provider: uuid,
-                    model: model
+                    target_type: 'provider' as const,
+                    provider_uuid: uuid,
+                    model: model,
+                    test_mode: 'simple' as const,
+                    message: 'Hello, this is a test message. Please respond with a short greeting.',
                 }
             });
             return response.data;
@@ -693,13 +696,15 @@ export const api = {
         try {
             const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await client.POST('/api/v1/probe/provider', {
+            const response = await client.POST('/api/v2/probe', {
                 headers,
                 body: {
-                    name: "placeholder",
+                    target_type: 'provider_config' as const,
                     api_style: api_style as any,
                     api_base: api_base,
-                    token: token
+                    token: token,
+                    test_mode: 'simple' as const,
+                    message: 'Hello, this is a test message. Please respond with a short greeting.',
                 }
             });
             return response.data;

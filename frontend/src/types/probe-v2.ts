@@ -1,7 +1,7 @@
-// Probe V3 Types
+// Probe V2 Types
 // Note: These are custom types not in the codegen schema
 
-export type ProbeV2TargetType = 'rule' | 'provider';
+export type ProbeV2TargetType = 'rule' | 'provider' | 'provider_config';
 export type ProbeV2TestMode = 'simple' | 'streaming' | 'tool';
 
 export interface ProbeV2Request {
