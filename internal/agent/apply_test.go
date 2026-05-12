@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestGenerateClaudeCodeEnv_Unified(t *testing.T) {
-	env := GenerateClaudeCodeEnv("http://localhost:12580", "test-token", true)
+func TestBuildClaudeCodeEnv_Unified(t *testing.T) {
+	env := BuildClaudeCodeEnv("http://localhost:12580", "test-token", true)
 
 	// Required base keys
 	cases := map[string]string{
@@ -32,8 +32,8 @@ func TestGenerateClaudeCodeEnv_Unified(t *testing.T) {
 	}
 }
 
-func TestGenerateClaudeCodeEnv_Separate(t *testing.T) {
-	env := GenerateClaudeCodeEnv("http://localhost:12580", "test-token", false)
+func TestBuildClaudeCodeEnv_Separate(t *testing.T) {
+	env := BuildClaudeCodeEnv("http://localhost:12580", "test-token", false)
 
 	cases := map[string]string{
 		"ANTHROPIC_MODEL":                "tingly/cc-default",
@@ -53,8 +53,8 @@ func TestGenerateClaudeCodeEnv_Separate(t *testing.T) {
 
 // TestGenerateClaudeCodeEnv_SettingsJSON verifies the env map produces a valid
 // settings.json structure (the same shape written to ~/.claude/settings.json).
-func TestGenerateClaudeCodeEnv_SettingsJSON(t *testing.T) {
-	env := GenerateClaudeCodeEnv("http://127.0.0.1:12580", "tok", true)
+func TestBuildClaudeCodeEnv_SettingsJSON(t *testing.T) {
+	env := BuildClaudeCodeEnv("http://127.0.0.1:12580", "tok", true)
 
 	// Simulate what ApplyClaudeSettingsFromEnv writes: {"env": <env map>}
 	payload := map[string]interface{}{"env": env}
@@ -81,8 +81,8 @@ func TestGenerateClaudeCodeEnv_SettingsJSON(t *testing.T) {
 	}
 }
 
-func TestGenerateOpenCodePayload_DefaultModels(t *testing.T) {
-	payload := GenerateOpenCodePayload("http://localhost:12580/tingly/opencode", "tok", nil)
+func TestBuildOpenCodeConfig_DefaultModels(t *testing.T) {
+	payload := BuildOpenCodeConfig("http://localhost:12580/tingly/opencode", "tok", nil)
 
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -133,13 +133,13 @@ func TestGenerateOpenCodePayload_DefaultModels(t *testing.T) {
 	}
 }
 
-func TestGenerateOpenCodePayload_CustomModels(t *testing.T) {
+func TestBuildOpenCodeConfig_CustomModels(t *testing.T) {
 	customModels := map[string]interface{}{
 		"tingly/cc-default": map[string]interface{}{"name": "tingly/cc-default"},
 		"tingly/cc-haiku":   map[string]interface{}{"name": "tingly/cc-haiku"},
 	}
 
-	payload := GenerateOpenCodePayload("http://localhost:12580/tingly/opencode", "tok", customModels)
+	payload := BuildOpenCodeConfig("http://localhost:12580/tingly/opencode", "tok", customModels)
 
 	data, _ := json.Marshal(payload)
 	var parsed map[string]interface{}
