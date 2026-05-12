@@ -835,14 +835,8 @@ func (s *Server) registerAdviserFromConfig() {
 		}
 		advisorCfg := *source.Advisor
 
-		// Resolve BaseURL and APIKey from the referenced provider UUID.
-		if advisorCfg.ProviderUUID != "" {
-			if provider, err := s.config.GetProviderByUUID(advisorCfg.ProviderUUID); err == nil && provider != nil {
-				advisorCfg.BaseURL = provider.APIBase
-				advisorCfg.APIKey = provider.Token
-			} else {
-				logrus.WithField("provider_uuid", advisorCfg.ProviderUUID).Warn("mcp: advisor provider UUID not found")
-			}
+		if advisorCfg.ProviderResolver == nil {
+			advisorCfg.ProviderResolver = s.config.GetProviderByUUID
 		}
 
 		pipeline := servertool.NewPipeline()

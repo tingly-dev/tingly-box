@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -41,9 +42,17 @@ func TestAdvisorVirtualTool_OllamaReal(t *testing.T) {
 
 	cp := client.NewClientPool()
 	cfg := typ.AdvisorConfig{
-		BaseURL:           ollamaBaseURL + "/v1",
+		ProviderUUID: "test-ollama",
+		ProviderResolver: func(string) (*typ.Provider, error) {
+			return &typ.Provider{
+				Name:     "test",
+				APIBase:  ollamaBaseURL + "/v1",
+				Token:    "ollama",
+				APIStyle: protocol.APIStyleOpenAI,
+				Enabled:  true,
+			}, nil
+		},
 		Model:             ollamaModel,
-		APIKey:            "ollama", // any non-empty value
 		MaxUsesPerRequest: 2,
 		MaxTokens:         512,
 	}
@@ -103,9 +112,17 @@ func TestAdvisorVirtualTool_OllamaExhaustion(t *testing.T) {
 
 	cp := client.NewClientPool()
 	cfg := typ.AdvisorConfig{
-		BaseURL:           ollamaBaseURL + "/v1",
+		ProviderUUID: "test-ollama",
+		ProviderResolver: func(string) (*typ.Provider, error) {
+			return &typ.Provider{
+				Name:     "test",
+				APIBase:  ollamaBaseURL + "/v1",
+				Token:    "ollama",
+				APIStyle: protocol.APIStyleOpenAI,
+				Enabled:  true,
+			}, nil
+		},
 		Model:             ollamaModel,
-		APIKey:            "ollama",
 		MaxUsesPerRequest: 1,
 		MaxTokens:         256,
 	}

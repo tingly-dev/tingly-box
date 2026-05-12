@@ -6,6 +6,7 @@ import (
 	"time"
 
 	mcptools "github.com/tingly-dev/tingly-box/internal/mcp/tools"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -193,9 +194,17 @@ func TestListEnabledServerToolNames_AdvisorDisabledByDefault(t *testing.T) {
 	}
 
 	r.RegisterAdviser(typ.AdvisorConfig{
-		BaseURL: "https://example.com",
-		Model:   "claude-opus-4-6",
-		APIKey:  "test-key",
+		ProviderUUID: "test",
+		ProviderResolver: func(string) (*typ.Provider, error) {
+			return &typ.Provider{
+				Name:     "test",
+				APIBase:  "https://example.com",
+				Token:    "test-key",
+				APIStyle: protocol.APIStyleAnthropic,
+				Enabled:  true,
+			}, nil
+		},
+		Model: "claude-opus-4-6",
 	}, nil)
 
 	names := r.ListEnabledServerToolNames(context.Background())
@@ -223,9 +232,17 @@ func TestListEnabledServerToolNames_AdvisorEnabledWhenSourceEnabled(t *testing.T
 	}
 
 	r.RegisterAdviser(typ.AdvisorConfig{
-		BaseURL: "https://example.com",
-		Model:   "claude-opus-4-6",
-		APIKey:  "test-key",
+		ProviderUUID: "test",
+		ProviderResolver: func(string) (*typ.Provider, error) {
+			return &typ.Provider{
+				Name:     "test",
+				APIBase:  "https://example.com",
+				Token:    "test-key",
+				APIStyle: protocol.APIStyleAnthropic,
+				Enabled:  true,
+			}, nil
+		},
+		Model: "claude-opus-4-6",
 	}, nil)
 
 	names := r.ListEnabledServerToolNames(context.Background())

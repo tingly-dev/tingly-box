@@ -308,15 +308,13 @@ type MCPSourceConfig struct {
 
 // AdvisorConfig configures the in-process advisor tool source.
 type AdvisorConfig struct {
-	// ProviderUUID references a configured provider by UUID. The server resolves
-	// BaseURL and APIKey from the provider at registration time.
+	// ProviderUUID references a configured provider by UUID.
 	ProviderUUID string `json:"provider_uuid,omitempty" yaml:"provider_uuid,omitempty"`
 	Model        string `json:"model,omitempty" yaml:"model,omitempty"`
 
-	// BaseURL and APIKey are resolved from ProviderUUID at runtime and are not
-	// persisted. They are populated by the server before passing to the advisor handler.
-	BaseURL string `json:"-" yaml:"-"`
-	APIKey  string `json:"-" yaml:"-"`
+	// ProviderResolver is a function that resolves a provider by UUID at call time.
+	// It is not persisted to JSON/YAML and must be set by the server before use.
+	ProviderResolver func(string) (*Provider, error) `json:"-" yaml:"-"`
 
 	MaxUsesPerRequest int `json:"max_uses_per_request,omitempty" yaml:"max_uses_per_request,omitempty"`
 	// The max token output by adviser. Too much explodes worker's context. 4k is enough for pure suggestions.

@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -68,7 +69,6 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 		logrus.WithFields(logrus.Fields{
 			"uses_remaining": *actx.UsesRemaining,
 			"depth":          depth,
-			"format":         detectAdvisorFormat(cfg),
 		}).Debug("[MCP-DEBUG] ADVISOR: calling advisor model")
 
 		timeout := advisorCallTimeout
@@ -81,12 +81,21 @@ func newAdvisorHandler(cfg typ.AdvisorConfig, cp *client.ClientPool, store *Sess
 		advisorCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 		defer cancel()
 
+		// Resolve live provider
+		if cfg.ProviderResolver == nil || cfg.ProviderUUID == "" {
+			return coretool.ErrorToolResult("Advisor provider not configured."), nil
+		}
+		provider, provErr := cfg.ProviderResolver(cfg.ProviderUUID)
+		if provErr != nil || provider == nil {
+			return coretool.ErrorToolResult("Advisor provider not found: " + cfg.ProviderUUID), nil
+		}
+
 		var result string
 		var err error
-		if detectAdvisorFormat(cfg) == FormatOpenAI {
-			result, err = callOpenAI(advisorCtx, cfg, cp, actx)
+		if provider.APIStyle == protocol.APIStyleAnthropic {
+			result, err = callAnthropic(advisorCtx, cfg, provider, cp, actx)
 		} else {
-			result, err = callAnthropic(advisorCtx, cfg, cp, actx)
+			result, err = callOpenAI(advisorCtx, cfg, provider, cp, actx)
 		}
 
 		// Decrement uses regardless of outcome to prevent retry loops on failure

@@ -35,18 +35,36 @@ func newMCPEnabledTestServer(t *testing.T, cfg *typ.MCPRuntimeConfig) *Server {
 	require.NotNil(t, rt)
 	rt.SetClientPool(cp)
 
-	// Register advisor virtual tool if configured and enabled
+	conf, err := serverconfig.NewConfig(serverconfig.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", true))
+	for _, source := range cfg.Sources {
+		if source.Advisor == nil {
+			continue
+		}
+		provider, err := testAdvisorResolvedProvider(source)
+		if err != nil {
+			continue
+		}
+		copiedProvider := *provider
+		copiedProvider.UUID = source.Advisor.ProviderUUID
+		require.NoError(t, conf.AddProvider(&copiedProvider))
+	}
+
+	// Register advisor virtual tool if configured and enabled.
+	// Response-hook tests need the resolver baked into the runtime-registered
+	// virtual tool before server.registerAdviserFromConfig() re-registers it.
 	for _, source := range cfg.Sources {
 		if source.Advisor != nil && typ.IsMCPSourceEnabled(source) {
-			rt.RegisterAdviser(*source.Advisor, cp)
+			advisorCfg := *source.Advisor
+			if advisorCfg.ProviderResolver == nil {
+				advisorCfg.ProviderResolver = conf.GetProviderByUUID
+			}
+			rt.RegisterAdviser(advisorCfg, cp)
 		}
 	}
 
 	t.Cleanup(rt.Close)
-
-	conf, err := serverconfig.NewConfig(serverconfig.WithConfigDir(t.TempDir()))
-	require.NoError(t, err)
-	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", true))
 
 	server := &Server{
 		clientPool: cp,
@@ -121,7 +139,7 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 								"role":    "assistant",
 								"content": "",
 								"tool_calls": []map[string]any{
-									{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{}`}},
+									{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__builtin__advisor", "arguments": `{}`}},
 								},
 							},
 							"finish_reason": "tool_calls",
@@ -165,23 +183,12 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			{
-				ID:         "advisor",
-				Transport:  "advisor",
-				Enabled:    typ.BoolPtr(true),
-				Visibility: typ.ToolVisibilityServer,
-				Tools:      []string{"advisor"},
-				Advisor: &typ.AdvisorConfig{
-					BaseURL:           mockServer.URL + "/v1",
-					Model:             "advisor-model",
-					APIKey:            "test-key",
-					MaxUsesPerRequest: 2,
-				},
-			},
+			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
 		},
 	})
 
 	provider := &typ.Provider{
+		UUID:     "worker-openai",
 		Name:     "worker-openai",
 		APIBase:  mockServer.URL + "/v1",
 		Token:    "worker-key",
@@ -195,7 +202,7 @@ func TestHandleMCPToolCalls_OpenAI_AdvisorResponseHook(t *testing.T) {
 			openai.UserMessage("help"),
 		},
 		Tools: []openai.ChatCompletionToolUnionParam{
-			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "tingly_box_mcp__advisor__advisor"}),
+			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "tingly_box_mcp__builtin__advisor"}),
 		},
 	}
 
@@ -265,7 +272,7 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 					"role":  "assistant",
 					"model": "claude-worker-v1",
 					"content": []map[string]any{
-						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{}},
+						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__builtin__advisor", "input": map[string]any{}},
 					},
 					"stop_reason": "tool_use",
 					"usage":       map[string]any{"input_tokens": 1, "output_tokens": 1},
@@ -294,16 +301,13 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 	defer mockServer.Close()
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{},
+		Sources: []typ.MCPSourceConfig{
+			testAdvisorSource(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
+		},
 	})
-	s.mcpRuntime.RegisterAdviser(typ.AdvisorConfig{
-		BaseURL:           mockServer.URL,
-		Model:             "claude-opus-4-6",
-		APIKey:            "test-key",
-		MaxUsesPerRequest: 2,
-	}, s.clientPool)
 
 	provider := &typ.Provider{
+		UUID:     "worker-anthropic-v1",
 		Name:     "worker-anthropic-v1",
 		APIBase:  mockServer.URL,
 		Token:    "worker-key",
@@ -318,7 +322,7 @@ func TestHandleAnthropicV1MCPToolCalls_AdvisorResponseHook(t *testing.T) {
 			anthropic.NewUserMessage(anthropic.NewTextBlock("help")),
 		},
 		Tools: []anthropic.ToolUnionParam{
-			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__advisor__advisor"),
+			anthropic.ToolUnionParamOfTool(anthropic.ToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
 		},
 	}
 
@@ -377,7 +381,7 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 					"role":  "assistant",
 					"model": "claude-worker-beta",
 					"content": []map[string]any{
-						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__advisor__advisor", "input": map[string]any{}},
+						{"type": "tool_use", "id": "toolu_1", "name": "tingly_box_mcp__builtin__advisor", "input": map[string]any{}},
 					},
 					"stop_reason": "tool_use",
 					"usage":       map[string]any{"input_tokens": 1, "output_tokens": 1},
@@ -406,16 +410,13 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 	defer mockServer.Close()
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{},
+		Sources: []typ.MCPSourceConfig{
+			testAdvisorSource(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
+		},
 	})
-	s.mcpRuntime.RegisterAdviser(typ.AdvisorConfig{
-		BaseURL:           mockServer.URL,
-		Model:             "claude-opus-4-6",
-		APIKey:            "test-key",
-		MaxUsesPerRequest: 2,
-	}, s.clientPool)
 
 	provider := &typ.Provider{
+		UUID:     "worker-anthropic-beta",
 		Name:     "worker-anthropic-beta",
 		APIBase:  mockServer.URL,
 		Token:    "worker-key",
@@ -430,7 +431,7 @@ func TestHandleAnthropicBetaMCPToolCalls_AdvisorResponseHook(t *testing.T) {
 			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("help")),
 		},
 		Tools: []anthropic.BetaToolUnionParam{
-			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__advisor__advisor"),
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{}, "tingly_box_mcp__builtin__advisor"),
 		},
 	}
 
@@ -459,7 +460,7 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 		workerCalls++
 
 		hasToolMsg := strings.Contains(string(body), `"role":"tool"`)
-		if hasToolMsg && strings.Contains(string(body), "calling disabled tools: tingly_box_mcp__advisor__advisor") {
+		if hasToolMsg && strings.Contains(string(body), "calling disabled tools: tingly_box_mcp__builtin__advisor") {
 			workerSawDisabledError = true
 		}
 		if !hasToolMsg {
@@ -476,7 +477,7 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 							"role":    "assistant",
 							"content": "",
 							"tool_calls": []map[string]any{
-								{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__advisor__advisor", "arguments": `{}`}},
+								{"id": "call_1", "type": "function", "function": map[string]any{"name": "tingly_box_mcp__builtin__advisor", "arguments": `{}`}},
 							},
 						},
 						"finish_reason": "tool_calls",
@@ -518,19 +519,7 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			{
-				ID:         "advisor",
-				Transport:  "advisor",
-				Enabled:    typ.BoolPtr(false),
-				Visibility: typ.ToolVisibilityServer,
-				Tools:      []string{"advisor"},
-				Advisor: &typ.AdvisorConfig{
-					BaseURL:           mockServer.URL + "/v1",
-					Model:             "advisor-model",
-					APIKey:            "test-key",
-					MaxUsesPerRequest: 2,
-				},
-			},
+			testAdvisorSourceWithEnabled(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2, false),
 		},
 	})
 
@@ -548,7 +537,7 @@ func TestHandleMCPToolCalls_OpenAI_DisabledAdvisorReturnsCallingDisabledTools(t 
 			openai.UserMessage("help"),
 		},
 		Tools: []openai.ChatCompletionToolUnionParam{
-			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "tingly_box_mcp__advisor__advisor"}),
+			openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{Name: "tingly_box_mcp__builtin__advisor"}),
 		},
 	}
 
@@ -663,14 +652,10 @@ func TestDispatchAnthropicToAnthropicV1_Streaming_AdvisorSSEEndToEnd(t *testing.
 	defer mockServer.Close()
 
 	s := newMCPEnabledTestServer(t, &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{},
+		Sources: []typ.MCPSourceConfig{
+			testAdvisorSource(mockServer.URL, "test-key", "claude-opus-4-6", protocol.APIStyleAnthropic, 2),
+		},
 	})
-	s.mcpRuntime.RegisterAdviser(typ.AdvisorConfig{
-		BaseURL:           mockServer.URL,
-		Model:             "claude-opus-4-6",
-		APIKey:            "test-key",
-		MaxUsesPerRequest: 2,
-	}, s.clientPool)
 
 	provider := &typ.Provider{
 		UUID:     "provider-worker-v1",

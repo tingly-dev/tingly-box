@@ -99,9 +99,6 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 	advisorTools := mcptools.DefaultBuiltinAdvisorToolNames()
 	advisorEnv := map[string]string{}
 	advisorCfg := &typ.AdvisorConfig{
-		BaseURL:           "",
-		Model:             "",
-		APIKey:            "",
 		MaxUsesPerRequest: 3,
 		MaxTokens:         4096,
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
@@ -88,19 +89,9 @@ func TestCallMCPToolWithHooks_AdvisorHookCreatesContextAndCallsBackend(t *testin
 	defer mockServer.Close()
 
 	cfg := &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{{
-			ID:         "advisor",
-			Transport:  "advisor",
-			Enabled:    typ.BoolPtr(true),
-			Visibility: typ.ToolVisibilityServer,
-			Tools:      []string{"advisor"},
-			Advisor: &typ.AdvisorConfig{
-				BaseURL:           mockServer.URL + "/v1",
-				Model:             "advisor-model",
-				APIKey:            "test-key",
-				MaxUsesPerRequest: 2,
-			},
-		}},
+		Sources: []typ.MCPSourceConfig{
+			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
+		},
 	}
 
 	cp := client.NewClientPool()
@@ -160,19 +151,7 @@ func TestCallMCPToolWithHooks_AdvisorUsesDecrementAcrossCalls(t *testing.T) {
 
 	cfg := &typ.MCPRuntimeConfig{
 		Sources: []typ.MCPSourceConfig{
-			{
-				ID:         "advisor",
-				Transport:  "advisor",
-				Enabled:    typ.BoolPtr(true),
-				Visibility: typ.ToolVisibilityServer,
-				Tools:      []string{"advisor"},
-				Advisor: &typ.AdvisorConfig{
-					BaseURL:           mockServer.URL + "/v1",
-					Model:             "advisor-model",
-					APIKey:            "test-key",
-					MaxUsesPerRequest: 2,
-				},
-			},
+			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 2),
 		},
 	}
 
@@ -225,19 +204,9 @@ func TestCallMCPToolWithHooks_AdvisorLoopbackDepthGuard(t *testing.T) {
 	defer mockServer.Close()
 
 	cfg := &typ.MCPRuntimeConfig{
-		Sources: []typ.MCPSourceConfig{{
-			ID:         "advisor",
-			Transport:  "advisor",
-			Enabled:    typ.BoolPtr(true),
-			Visibility: typ.ToolVisibilityServer,
-			Tools:      []string{"advisor"},
-			Advisor: &typ.AdvisorConfig{
-				BaseURL:           mockServer.URL + "/v1",
-				Model:             "advisor-model",
-				APIKey:            "test-key",
-				MaxUsesPerRequest: 3,
-			},
-		}},
+		Sources: []typ.MCPSourceConfig{
+			testAdvisorSource(mockServer.URL+"/v1", "test-key", "advisor-model", protocol.APIStyleOpenAI, 3),
+		},
 	}
 
 	cp := client.NewClientPool()

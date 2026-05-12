@@ -13,44 +13,14 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// AdvisorFormat indicates the API format of the advisor endpoint.
-type AdvisorFormat int
-
-const (
-	FormatOpenAI AdvisorFormat = iota
-	FormatAnthropic
-)
-
-func detectAdvisorFormat(cfg typ.AdvisorConfig) AdvisorFormat {
-	url := strings.ToLower(cfg.BaseURL)
-	model := strings.ToLower(cfg.Model)
-	if strings.Contains(url, "anthropic") || strings.HasPrefix(model, "claude-") {
-		return FormatAnthropic
-	}
-	return FormatOpenAI
-}
-
-func buildProvider(cfg typ.AdvisorConfig, style protocol.APIStyle) *typ.Provider {
-	return &typ.Provider{
-		Name:     "advisor",
-		APIBase:  cfg.BaseURL,
-		Token:    cfg.APIKey,
-		APIStyle: style,
-		Enabled:  true,
-	}
-}
-
-func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *coretool.AdvisorContext) (string, error) {
+func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, provider *typ.Provider, cp *client.ClientPool, actx *coretool.AdvisorContext) (string, error) {
 	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
-
-	provider := buildProvider(cfg, protocol.APIStyleOpenAI)
 
 	wrapper := cp.GetOpenAIClient(ctx, provider, cfg.Model)
 	if wrapper == nil {
@@ -126,12 +96,10 @@ func callOpenAI(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPoo
 	return normalizeAdvisorResponse(content), nil
 }
 
-func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, cp *client.ClientPool, actx *coretool.AdvisorContext) (string, error) {
+func callAnthropic(ctx context.Context, cfg typ.AdvisorConfig, provider *typ.Provider, cp *client.ClientPool, actx *coretool.AdvisorContext) (string, error) {
 	if cp == nil {
 		return "", fmt.Errorf("advisor: client pool not available")
 	}
-
-	provider := buildProvider(cfg, protocol.APIStyleAnthropic)
 
 	wrapper := cp.GetAnthropicClient(ctx, provider, cfg.Model)
 	if wrapper == nil {
