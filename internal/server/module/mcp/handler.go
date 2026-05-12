@@ -21,25 +21,32 @@ type Handler struct {
 	transportHandler *local.TransportHandler
 }
 
-// NewHandler creates a new MCP handler
-func NewHandler(cfg *config.Config) *Handler {
+// NewHandler creates a new MCP handler.
+// rt is an optional shared Runtime; when provided (e.g. from the main server) it is
+// reused so the transport handler sees already-connected sources and registered builtins.
+// When nil (e.g. in openapi/CLI mode) a fresh runtime is created from config.
+func NewHandler(cfg *config.Config, rt ...*mcpruntime.Runtime) *Handler {
 	h := &Handler{cfg: cfg}
 
 	// Create registry for local mode clients
 	registry := local.NewRegistry()
 	h.localHandler = local.NewHandler(cfg, registry, "")
 
-	// Create mcpruntime for local mode
-	mcpRuntime := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
-		var mcpCfg typ.MCPRuntimeConfig
-		if cfg != nil {
-			cfg.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg)
-		}
-		return &mcpCfg
-	})
+	// Use provided runtime or create a standalone one (no active source connections).
+	var sharedRuntime *mcpruntime.Runtime
+	if len(rt) > 0 && rt[0] != nil {
+		sharedRuntime = rt[0]
+	} else {
+		sharedRuntime = mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig {
+			var mcpCfg typ.MCPRuntimeConfig
+			if cfg != nil {
+				cfg.GetToolConfig(db.ToolTypeMCPRuntime, &mcpCfg)
+			}
+			return &mcpCfg
+		})
+	}
 
-	// Set runtime on local handler for tool execution
-	h.localHandler.SetRuntime(mcpRuntime)
+	h.localHandler.SetRuntime(sharedRuntime)
 
 	// Get base URL from config (use localhost as fallback for auto-registration)
 	baseURL := "http://localhost"
@@ -47,8 +54,7 @@ func NewHandler(cfg *config.Config) *Handler {
 		baseURL = fmt.Sprintf("http://localhost:%d", cfg.GetServerPort())
 	}
 
-	// Create transport handler for local mode with registry for auto-registration
-	h.transportHandler = local.NewTransportHandler(mcpRuntime, registry, baseURL, cfg)
+	h.transportHandler = local.NewTransportHandler(sharedRuntime, registry, baseURL, cfg)
 
 	return h
 }
@@ -211,6 +217,12 @@ func (h *Handler) SetMCPRuntimeConfig(c *gin.Context) {
 			Error:   "Failed to save MCP config: " + err.Error(),
 		})
 		return
+	}
+
+	// Tool sources changed — reset all transport servers so the next request
+	// rebuilds each with a fresh tool list.
+	if h.transportHandler != nil {
+		h.transportHandler.ResetAll()
 	}
 
 	c.JSON(http.StatusOK, MCPRuntimeConfigResponse{

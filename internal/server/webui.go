@@ -155,7 +155,7 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	codeximport.RegisterRoutes(apiV1, codexImportHandler)
 
 	// MCP runtime API routes
-	mcpHandler := mcpmodule.NewHandler(s.config)
+	mcpHandler := mcpmodule.NewHandler(s.config, s.mcpRuntime)
 	mcpmodule.RegisterRoutes(apiV1, mcpHandler, mcpHandler.GetLocalHandler(), mcpHandler.GetTransportHandler())
 
 	// Provider quota API routes
