@@ -230,11 +230,13 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 		logrus.Errorf("Chat to Responses stream error: %v", err)
 
-		// Send error event
-		errorEvent := map[string]interface{}{
-			"type":            "error",
-			"sequence_number": nextSequenceNumber(state),
-			"error":           map[string]interface{}{"message": err.Error(), "type": "stream_error"},
+		errorEvent := responsesStreamErrorEvent{
+			Type:           "error",
+			SequenceNumber: nextSequenceNumber(state),
+			Error: responsesStreamErrorBody{
+				Message: err.Error(),
+				Type:    "stream_error",
+			},
 		}
 		OpenAISSE(c, errorEvent)
 
@@ -262,27 +264,10 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 
 // sendResponsesCreatedEvent sends the response.created event
 func sendResponsesCreatedEvent(c *gin.Context, state *chatToResponsesState, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":            "response.created",
-		"sequence_number": nextSequenceNumber(state),
-		"response": map[string]interface{}{
-			"id":         state.responseID,
-			"object":     "response",
-			"created_at": state.createdAt,
-			"status":     "in_progress",
-			"output":     []interface{}{},
-			"usage": map[string]interface{}{
-				"input_tokens":  state.inputTokens,
-				"output_tokens": state.outputTokens,
-				"total_tokens":  state.inputTokens + state.outputTokens,
-				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": state.cacheTokens,
-				},
-				"output_tokens_details": map[string]interface{}{
-					"reasoning_tokens": 0,
-				},
-			},
-		},
+	event := responsesCreatedEvent{
+		Type:           "response.created",
+		SequenceNumber: nextSequenceNumber(state),
+		Response:       newResponsesWireResponse(state, "in_progress", nil, ""),
 	}
 	OpenAISSE(c, event)
 }
@@ -291,37 +276,25 @@ func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesStat
 	if state.outputIndex == 0 {
 		state.outputIndex = 1
 	}
-	event := map[string]interface{}{
-		"type":            "response.output_item.added",
-		"sequence_number": nextSequenceNumber(state),
-		"output_index":    0,
-		"item": map[string]interface{}{
-			"id":     state.textItemID,
-			"type":   "message",
-			"role":   "assistant",
-			"status": "in_progress",
-			"content": []map[string]interface{}{
-				{
-					"type":        "output_text",
-					"text":        "",
-					"annotations": []interface{}{},
-				},
-			},
-		},
+	event := responsesOutputItemAddedEvent{
+		Type:           "response.output_item.added",
+		SequenceNumber: nextSequenceNumber(state),
+		OutputIndex:    0,
+		Item:           newResponsesMessageItem(state.textItemID, "in_progress", ""),
 	}
 	OpenAISSE(c, event)
 }
 
 // sendResponsesOutputTextDelta sends response.output_text.delta event
 func sendResponsesOutputTextDelta(c *gin.Context, state *chatToResponsesState, delta string, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":            "response.output_text.delta",
-		"sequence_number": nextSequenceNumber(state),
-		"item_id":         state.textItemID,
-		"output_index":    0,
-		"content_index":   0,
-		"delta":           delta,
-		"logprobs":        []interface{}{},
+	event := responsesOutputTextDeltaEvent{
+		Type:           "response.output_text.delta",
+		SequenceNumber: nextSequenceNumber(state),
+		ItemID:         state.textItemID,
+		OutputIndex:    0,
+		ContentIndex:   0,
+		Delta:          delta,
+		Logprobs:       []interface{}{},
 	}
 	OpenAISSE(c, event)
 }
@@ -331,30 +304,23 @@ func sendResponsesOutputItemAdded(c *gin.Context, state *chatToResponsesState, i
 	if callID == "" {
 		callID = itemID
 	}
-	event := map[string]interface{}{
-		"type":            "response.output_item.added",
-		"sequence_number": nextSequenceNumber(state),
-		"item": map[string]interface{}{
-			"id":        itemID,
-			"call_id":   callID,
-			"type":      "function_call",
-			"name":      name,
-			"arguments": "",
-			"status":    "in_progress",
-		},
-		"output_index": outputIndex,
+	event := responsesOutputItemAddedEvent{
+		Type:           "response.output_item.added",
+		SequenceNumber: nextSequenceNumber(state),
+		OutputIndex:    outputIndex,
+		Item:           newResponsesFunctionCallItem(itemID, callID, name, "", "in_progress"),
 	}
 	OpenAISSE(c, event)
 }
 
 // sendResponsesFunctionCallArgumentsDelta sends response.function_call_arguments.delta event
 func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToResponsesState, itemID string, outputIndex int, delta string, flusher http.Flusher) {
-	event := map[string]interface{}{
-		"type":            "response.function_call_arguments.delta",
-		"sequence_number": nextSequenceNumber(state),
-		"item_id":         itemID,
-		"output_index":    outputIndex,
-		"delta":           delta,
+	event := responsesFunctionCallArgumentsDeltaEvent{
+		Type:           "response.function_call_arguments.delta",
+		SequenceNumber: nextSequenceNumber(state),
+		ItemID:         itemID,
+		OutputIndex:    outputIndex,
+		Delta:          delta,
 	}
 	OpenAISSE(c, event)
 }
@@ -362,34 +328,23 @@ func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToRespon
 // sendResponsesCompletedEvent sends the response.completed event
 func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, model, finishReason string, flusher http.Flusher) {
 	if state.hasTextItem {
-		textDone := map[string]interface{}{
-			"type":            "response.output_text.done",
-			"sequence_number": nextSequenceNumber(state),
-			"item_id":         state.textItemID,
-			"output_index":    0,
-			"content_index":   0,
-			"text":            state.accumulatedText.String(),
-			"logprobs":        []interface{}{},
+		text := state.accumulatedText.String()
+		textDone := responsesOutputTextDoneEvent{
+			Type:           "response.output_text.done",
+			SequenceNumber: nextSequenceNumber(state),
+			ItemID:         state.textItemID,
+			OutputIndex:    0,
+			ContentIndex:   0,
+			Text:           text,
+			Logprobs:       []interface{}{},
 		}
 		OpenAISSE(c, textDone)
 
-		textItemDone := map[string]interface{}{
-			"type":            "response.output_item.done",
-			"sequence_number": nextSequenceNumber(state),
-			"output_index":    0,
-			"item": map[string]interface{}{
-				"id":     state.textItemID,
-				"type":   "message",
-				"role":   "assistant",
-				"status": "completed",
-				"content": []map[string]interface{}{
-					{
-						"type":        "output_text",
-						"text":        state.accumulatedText.String(),
-						"annotations": []interface{}{},
-					},
-				},
-			},
+		textItemDone := responsesOutputItemDoneEvent{
+			Type:           "response.output_item.done",
+			SequenceNumber: nextSequenceNumber(state),
+			OutputIndex:    0,
+			Item:           newResponsesMessageItem(state.textItemID, "completed", text),
 		}
 		OpenAISSE(c, textItemDone)
 	}
@@ -406,96 +361,97 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		if callID == "" {
 			callID = ptc.itemID
 		}
-		argumentsDone := map[string]interface{}{
-			"type":            "response.function_call_arguments.done",
-			"sequence_number": nextSequenceNumber(state),
-			"item_id":         ptc.itemID,
-			"output_index":    ptc.outputIdx,
-			"name":            ptc.name,
-			"arguments":       ptc.arguments.String(),
+		arguments := ptc.arguments.String()
+		argumentsDone := responsesFunctionCallArgumentsDoneEvent{
+			Type:           "response.function_call_arguments.done",
+			SequenceNumber: nextSequenceNumber(state),
+			ItemID:         ptc.itemID,
+			OutputIndex:    ptc.outputIdx,
+			Name:           ptc.name,
+			Arguments:      arguments,
 		}
 		OpenAISSE(c, argumentsDone)
 
-		itemDone := map[string]interface{}{
-			"type":            "response.output_item.done",
-			"sequence_number": nextSequenceNumber(state),
-			"output_index":    ptc.outputIdx,
-			"item": map[string]interface{}{
-				"id":        ptc.itemID,
-				"call_id":   callID,
-				"type":      "function_call",
-				"name":      ptc.name,
-				"arguments": ptc.arguments.String(),
-				"status":    "completed",
-			},
+		itemDone := responsesOutputItemDoneEvent{
+			Type:           "response.output_item.done",
+			SequenceNumber: nextSequenceNumber(state),
+			OutputIndex:    ptc.outputIdx,
+			Item:           newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, arguments, "completed"),
 		}
 		OpenAISSE(c, itemDone)
 	}
 
-	// Build output array
-	var output []interface{}
-
-	// Add text content if present
+	var output []responsesOutputItemWire
 	if state.accumulatedText.Len() > 0 {
-		output = append(output, map[string]interface{}{
-			"id":     state.textItemID,
-			"type":   "message",
-			"role":   "assistant",
-			"status": "completed",
-			"content": []map[string]interface{}{
-				{
-					"type":        "output_text",
-					"text":        state.accumulatedText.String(),
-					"annotations": []interface{}{},
-				},
-			},
-		})
+		output = append(output, newResponsesMessageItem(state.textItemID, "completed", state.accumulatedText.String()))
 	}
 
-	// Add tool calls
 	for _, idx := range sortedIndexes {
 		ptc := state.pendingToolCalls[idx]
 		callID := ptc.callID
 		if callID == "" {
 			callID = ptc.itemID
 		}
-		output = append(output, map[string]interface{}{
-			"type":      "function_call",
-			"id":        ptc.itemID,
-			"call_id":   callID,
-			"name":      ptc.name,
-			"arguments": ptc.arguments.String(),
-			"status":    "completed",
-		})
+		output = append(output, newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, ptc.arguments.String(), "completed"))
 	}
 
-	event := map[string]interface{}{
-		"type":            "response.completed",
-		"sequence_number": nextSequenceNumber(state),
-		"response": map[string]interface{}{
-			"id":         state.responseID,
-			"object":     "response",
-			"created_at": state.createdAt,
-			"status":     "completed",
-			"output":     output,
-			"usage": map[string]interface{}{
-				"input_tokens":  state.inputTokens,
-				"output_tokens": state.outputTokens,
-				"total_tokens":  state.inputTokens + state.outputTokens,
-				"input_tokens_details": map[string]interface{}{
-					"cached_tokens": state.cacheTokens,
-				},
-				"output_tokens_details": map[string]interface{}{
-					"reasoning_tokens": 0,
-				},
-			},
-		},
-	}
-
-	// Add model if provided
-	if model != "" {
-		event["response"].(map[string]interface{})["model"] = model
+	event := responsesCompletedEvent{
+		Type:           "response.completed",
+		SequenceNumber: nextSequenceNumber(state),
+		Response:       newResponsesWireResponse(state, "completed", output, model),
 	}
 
 	OpenAISSE(c, event)
+}
+
+func newResponsesWireResponse(state *chatToResponsesState, status string, output []responsesOutputItemWire, model string) responsesWireResponse {
+	if output == nil {
+		output = []responsesOutputItemWire{}
+	}
+	return responsesWireResponse{
+		ID:        state.responseID,
+		Object:    "response",
+		CreatedAt: state.createdAt,
+		Status:    status,
+		Output:    output,
+		Usage: responsesUsageWire{
+			InputTokens:  state.inputTokens,
+			OutputTokens: state.outputTokens,
+			TotalTokens:  state.inputTokens + state.outputTokens,
+			InputTokensDetails: responsesInputTokensDetailsWire{
+				CachedTokens: state.cacheTokens,
+			},
+			OutputTokensDetails: responsesOutputTokensDetailsWire{
+				ReasoningTokens: 0,
+			},
+		},
+		Model: model,
+	}
+}
+
+func newResponsesMessageItem(itemID, status, text string) responsesOutputItemWire {
+	return responsesOutputItemWire{
+		ID:     itemID,
+		Type:   "message",
+		Role:   "assistant",
+		Status: status,
+		Content: []responsesContentPartWire{
+			{
+				Type:        "output_text",
+				Text:        text,
+				Annotations: []interface{}{},
+			},
+		},
+	}
+}
+
+func newResponsesFunctionCallItem(itemID, callID, name, arguments, status string) responsesOutputItemWire {
+	return responsesOutputItemWire{
+		ID:        itemID,
+		CallID:    callID,
+		Type:      "function_call",
+		Name:      name,
+		Arguments: &arguments,
+		Status:    status,
+	}
 }
