@@ -209,7 +209,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 
 	// Generate env vars based on mode
 	unified := req.Mode != "separate"
-	env := agent.GenerateClaudeCodeEnv(baseURL, apiKey, unified)
+	env := agent.BuildClaudeCodeEnv(baseURL, apiKey, unified)
 
 	// Install status line script if requested (before applying settings)
 	var statusLineInstalled bool
@@ -381,7 +381,7 @@ func (h *Handler) ApplyOpenCodeConfigFromState(c *gin.Context) {
 	}
 
 	// Generate OpenCode config with all models
-	payload := agent.GenerateOpenCodePayload(configBaseURL, apiKey, models)
+	payload := agent.BuildOpenCodeConfig(configBaseURL, apiKey, models)
 
 	result, err := config.ApplyOpenCodeConfig(payload)
 	if err != nil {
@@ -533,7 +533,7 @@ func (h *Handler) GetOpenCodeConfigPreview(c *gin.Context) {
 	}
 
 	// Generate OpenCode config JSON
-	configPayload := agent.GenerateOpenCodePayload(configBaseURL, apiKey, models)
+	configPayload := agent.BuildOpenCodeConfig(configBaseURL, apiKey, models)
 
 	configJSON, err := json.MarshalIndent(configPayload, "", "  ")
 	if err != nil {

@@ -52,18 +52,6 @@ var (
 
 	// GetAgentInfo returns information about a specific agent type
 	GetAgentInfo = aiagent.GetAgentInfo
-
-	// GenerateClaudeCodeEnv generates environment variables for Claude Code
-	GenerateClaudeCodeEnv = aiagent.GenerateClaudeCodeEnv
-
-	// GenerateOpenCodePayload generates the OpenCode configuration payload
-	GenerateOpenCodePayload = aiagent.GenerateOpenCodePayload
-
-	// GenerateOpenCodeScript generates a setup script for OpenCode
-	GenerateOpenCodeScript = aiagent.GenerateOpenCodeScript
-
-	// CollectCodexModels deduplicates and preserves order of model names
-	CollectCodexModels = aiagent.CollectCodexModels
 )
 
 // AgentApply handles agent configuration with routing rules (Tingly-Box specific)
@@ -100,11 +88,12 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 		if !ok {
 			return nil, fmt.Errorf("claude code config not registered")
 		}
+		// Build env vars with business logic
+		env := BuildClaudeCodeEnv(baseURL, apiKey, req.Unified)
 		fileResult, err = config.Apply(&aiagent.ClaudeCodeParams{
-			BaseURL:           baseURL,
-			APIKey:            apiKey,
-			Unified:           req.Unified,
+			Env:               env,
 			InstallStatusLine: req.InstallStatusLine,
+			ExtraConfig:       nil,
 		})
 	case AgentTypeOpenCode:
 		config, ok := aiagent.DefaultRegistry.Get(req.AgentType)
@@ -112,10 +101,10 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			return nil, fmt.Errorf("opencode config not registered")
 		}
 		configBaseURL := baseURL + "/tingly/opencode"
+		// Build config object with business logic
+		openCodeConfig := BuildOpenCodeConfig(configBaseURL, apiKey, nil)
 		fileResult, err = config.Apply(&aiagent.OpenCodeParams{
-			ConfigBaseURL: configBaseURL,
-			APIKey:        apiKey,
-			Models:        nil, // default
+			Config: openCodeConfig,
 		})
 	case AgentTypeCodex:
 		config, ok := aiagent.DefaultRegistry.Get(req.AgentType)
@@ -123,7 +112,9 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			return nil, fmt.Errorf("codex config not registered")
 		}
 		codexBaseURL := baseURL + "/tingly/codex"
-		models := aa.collectCodexRuleModels()
+		// Collect models with business logic
+		rawModels := aa.collectCodexRuleModels()
+		models := CollectCodexModels(rawModels)
 		fileResult, err = config.Apply(&aiagent.CodexParams{
 			CodexBaseURL: codexBaseURL,
 			APIKey:       apiKey,

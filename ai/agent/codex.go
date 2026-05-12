@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"strings"
 
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 )
@@ -14,9 +13,12 @@ type CodexConfig struct{}
 type CodexParams struct {
 	// CodexBaseURL is the base URL for Codex API endpoint
 	CodexBaseURL string
+
 	// APIKey is the authentication token
 	APIKey string
+
 	// Models is a list of model names for the Codex profiles
+	// Caller is responsible for collecting and deduplicating these
 	Models []string
 }
 
@@ -76,28 +78,8 @@ func (c *CodexConfig) Restore() (*RestoreAgentResult, error) {
 }
 
 // ApplyCodex applies Codex CLI configuration.
-// This function does NOT handle routing rules - that's done by the caller.
 // Deprecated: Use CodexConfig.Apply() instead
 func ApplyCodex(params *CodexParams) (*ApplyAgentResult, error) {
 	config := &CodexConfig{}
 	return config.Apply(params)
-}
-
-// CollectCodexModels returns a list of model names for Codex configuration.
-// This helper deduplicates and preserves order.
-func CollectCodexModels(models []string) []string {
-	seen := map[string]struct{}{}
-	var out []string
-	for _, model := range models {
-		model = strings.TrimSpace(model)
-		if model == "" {
-			continue
-		}
-		if _, dup := seen[model]; dup {
-			continue
-		}
-		seen[model] = struct{}{}
-		out = append(out, model)
-	}
-	return out
 }
