@@ -3,16 +3,12 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -550,65 +546,6 @@ func (s *Server) UpdateProviderModelsByUUID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-// ProbeModelsRequest is the request body for probing models from an arbitrary endpoint.
-type ProbeModelsRequest struct {
-	BaseURL string `json:"base_url" binding:"required"`
-	APIKey  string `json:"api_key"`
-}
-
-// probeModelsDetectStyle detects the API style from the base URL.
-func probeModelsDetectStyle(baseURL string) protocol.APIStyle {
-	lower := strings.ToLower(baseURL)
-	if strings.Contains(lower, "anthropic") {
-		return protocol.APIStyleAnthropic
-	}
-	return protocol.APIStyleOpenAI
-}
-
-// ProbeModels fetches the model list from an arbitrary endpoint, auto-detecting OpenAI vs Anthropic style.
-// POST /api/v1/probe-models
-func (s *Server) ProbeModels(c *gin.Context) {
-	var req ProbeModelsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid request: " + err.Error()})
-		return
-	}
-	provider := &typ.Provider{
-		Name:     "probe-models",
-		APIBase:  req.BaseURL,
-		Token:    req.APIKey,
-		APIStyle: probeModelsDetectStyle(req.BaseURL),
-		Enabled:  true,
-	}
-
-	var lister client.ModelLister
-	var err error
-	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		lister, err = client.NewAnthropicClient(provider, "", typ.SessionID{})
-	case protocol.APIStyleGoogle:
-		lister, err = client.NewGoogleClient(provider, "", typ.SessionID{})
-	default:
-		lister, err = client.NewOpenAIClient(provider, "", typ.SessionID{})
-	}
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Failed to create client: " + err.Error()})
-		return
-	}
-	defer lister.(io.Closer).Close()
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
-	defer cancel()
-
-	models, err := lister.ListModels(ctx)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": "Failed to fetch models: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "models": models})
 }
 
 func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
