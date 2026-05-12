@@ -159,6 +159,26 @@ func (t *TransportHandler) RemoveServer(clientName string) {
 	}
 }
 
+// RuntimePtr returns the runtime used by this handler. Exposed for testing.
+func (t *TransportHandler) RuntimePtr() *runtime.Runtime {
+	return t.runtime
+}
+
+// ResetAll resets all running servers so the next request rebuilds each with a
+// fresh tool list. Use this after MCP source configuration changes.
+func (t *TransportHandler) ResetAll() {
+	t.serversMu.RLock()
+	servers := make([]*MCPServer, 0, len(t.servers))
+	for _, s := range t.servers {
+		servers = append(servers, s)
+	}
+	t.serversMu.RUnlock()
+
+	for _, s := range servers {
+		s.Reset()
+	}
+}
+
 // StopAll stops all servers.
 func (t *TransportHandler) StopAll() {
 	t.serversMu.Lock()

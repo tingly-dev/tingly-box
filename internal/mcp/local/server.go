@@ -188,7 +188,9 @@ func (s *MCPServer) Stop() error {
 }
 
 // ServeHTTP implements http.Handler for Gin integration.
-// It starts the server on first request and shuts down after the session ends.
+// The underlying StreamableHTTPServer is started on the first request and kept
+// alive for subsequent requests (like bifrost's persistent server model).
+// Call Reset() to rebuild the tool list after config/source changes.
 func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.serverMu.RLock()
 	httpServer := s.httpServer
@@ -204,19 +206,11 @@ func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serverMu.RUnlock()
 	}
 
-	// Wrap the response writer to detect when the request is complete
-	ww := &responseWriterWrapper{ResponseWriter: w}
-	httpServer.ServeHTTP(ww, r)
-
-	// Shutdown after the session ends (request completes)
-	go s.Stop()
+	httpServer.ServeHTTP(w, r)
 }
 
-// responseWriterWrapper wraps http.ResponseWriter to detect when response is done.
-type responseWriterWrapper struct {
-	http.ResponseWriter
-}
-
-func (w *responseWriterWrapper) CloseNotify() <-chan bool {
-	return nil
+// Reset stops the server and clears it so the next request rebuilds it with a
+// fresh tool list. Use this when the underlying MCP source configuration changes.
+func (s *MCPServer) Reset() {
+	_ = s.Stop()
 }
