@@ -30,7 +30,10 @@ type AgentBoot struct {
 }
 
 // New creates a new AgentBoot instance.
-// Returns an error only if ClaudeProjectsDir is set but cannot be initialized.
+// The Claude session store is always initialized: when ClaudeProjectsDir is
+// empty the underlying store falls back to ~/.claude/projects, which is the
+// canonical location Claude Code writes its session JSONL files to. Returns
+// an error only if the store fails to initialize.
 func New(config Config) (*AgentBoot, error) {
 	if config.DefaultAgent == "" {
 		config.DefaultAgent = AgentTypeClaude
@@ -47,13 +50,11 @@ func New(config Config) (*AgentBoot, error) {
 		agents: make(map[AgentType]Agent),
 	}
 
-	if config.ClaudeProjectsDir != "" {
-		store, err := NewClaudeStore(config.ClaudeProjectsDir)
-		if err != nil {
-			return nil, fmt.Errorf("initialize session store: %w", err)
-		}
-		ab.store = store
+	store, err := NewClaudeStore(config.ClaudeProjectsDir)
+	if err != nil {
+		return nil, fmt.Errorf("initialize session store: %w", err)
 	}
+	ab.store = store
 
 	return ab, nil
 }

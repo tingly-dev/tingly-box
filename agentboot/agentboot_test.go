@@ -20,10 +20,10 @@ func TestNew_DefaultsApplied(t *testing.T) {
 	assert.Equal(t, 100, ab.config.StreamBufferSize)
 }
 
-func TestNew_NoProjectsDir_StoreNil(t *testing.T) {
+func TestNew_NoProjectsDir_StoreDefaultsToHome(t *testing.T) {
 	ab, err := New(Config{})
 	require.NoError(t, err)
-	assert.Nil(t, ab.store, "store should be nil when ClaudeProjectsDir not set")
+	assert.NotNil(t, ab.store, "store should default to ~/.claude/projects when ClaudeProjectsDir not set")
 }
 
 func TestNew_InvalidProjectsDir_StoreStillInitialized(t *testing.T) {
@@ -42,19 +42,23 @@ func TestNew_ValidProjectsDir_StoreInitialized(t *testing.T) {
 
 // --- Session API ---
 
-func TestListRecentSessions_NoStore_ReturnsError(t *testing.T) {
+func TestListRecentSessions_DefaultStore_NoError(t *testing.T) {
 	ab, err := New(Config{})
 	require.NoError(t, err)
 
-	_, err = ab.ListRecentSessions(context.Background(), "/some/path", 10)
-	assert.Error(t, err)
+	// Default store points at ~/.claude/projects; an unknown path inside it
+	// returns an empty slice (not an error), matching the on-disk store
+	// behavior for missing project dirs.
+	_, err = ab.ListRecentSessions(context.Background(), "/nonexistent/path/xyz", 10)
+	assert.NoError(t, err)
 }
 
-func TestGetSessionSummary_NoStore_ReturnsError(t *testing.T) {
+func TestGetSessionSummary_DefaultStore_ReturnsNotFound(t *testing.T) {
 	ab, err := New(Config{})
 	require.NoError(t, err)
 
-	_, err = ab.GetSessionSummary(context.Background(), "session-id", 5, 5)
+	// Store is configured; the session simply doesn't exist on disk.
+	_, err = ab.GetSessionSummary(context.Background(), "definitely-not-a-real-session-id", 5, 5)
 	assert.Error(t, err)
 }
 

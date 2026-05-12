@@ -141,6 +141,48 @@ func (m *Manager) CreateWith(chatID, agent, project string) *Session {
 	return session
 }
 
+// CreateWithID creates a new session bound to a caller-supplied ID instead of
+// generating a UUID. Used by /resume to align the remote session record with a
+// Claude on-disk session_id so the next message naturally triggers --resume.
+// Returns nil if a session with that ID already exists in memory.
+func (m *Manager) CreateWithID(id, chatID, agent, project string) *Session {
+	if id == "" {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.sessions[id]; exists {
+		return nil
+	}
+
+	now := time.Now()
+	sess := &Session{
+		ID:           id,
+		ChatID:       chatID,
+		Agent:        agent,
+		Project:      project,
+		Status:       StatusPending,
+		CreatedAt:    now,
+		LastActivity: now,
+		ExpiresAt:    time.Time{}, // persistent: caller will drive lifecycle
+		Context:      make(map[string]interface{}),
+	}
+	if project != "" {
+		sess.Context["project_path"] = project
+	}
+	m.sessions[id] = sess
+	logrus.Debugf("Session resumed-bind: %s (chat=%s, agent=%s, project=%s)",
+		id, chatID, agent, project)
+	if m.store != nil {
+		_ = m.store.Set(id, sess)
+		if jsonStore, ok := m.store.(*SessionStoreJSON); ok {
+			_ = jsonStore.ForceSave()
+		}
+	}
+	return sess
+}
+
 // Get retrieves a session by ID
 func (m *Manager) Get(id string) (*Session, bool) {
 	m.mu.RLock()

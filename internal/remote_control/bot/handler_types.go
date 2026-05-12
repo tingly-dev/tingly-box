@@ -51,6 +51,12 @@ type BotHandler struct {
 	actionMenuMessageID   map[string]string
 	actionMenuMessageIDMu sync.RWMutex
 
+	// resumeListings caches the session-id list most recently shown by /resume
+	// per chat, so /resume <n> can resolve N back to a session_id without
+	// re-reading the on-disk store. Best-effort, no persistence.
+	resumeListings   map[string][]string
+	resumeListingsMu sync.RWMutex
+
 	// verbose controls whether to show intermediate messages (onMessage details)
 	// true = show all messages (default), false = show only final results
 	verbose   bool

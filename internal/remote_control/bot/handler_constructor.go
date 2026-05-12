@@ -104,6 +104,7 @@ func NewBotHandler(
 		runningCancel:       make(map[string]context.CancelFunc),
 		pendingBinds:        make(map[string]*PendingBind),
 		actionMenuMessageID: make(map[string]string),
+		resumeListings:      make(map[string][]string),
 		verbose:             true, // Default to verbose mode
 		feishuCardRenderer:  feature.NewFeishuCardRenderer(),
 		pairing:             pairing,

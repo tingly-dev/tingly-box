@@ -77,6 +77,21 @@ func (h *BotHandler) handleCallbackQuery(bot imbot.Bot, chatID string, msg imbot
 			h.handleProjectSwitch(hCtx, projectID)
 		}
 
+	case "resume":
+		if len(parts) < 2 {
+			return
+		}
+		subAction := parts[1]
+		switch subAction {
+		case "pick":
+			if len(parts) < 3 {
+				return
+			}
+			h.handleResumePick(hCtx, parts[2], msg)
+		case "cancel":
+			h.handleResumeCancel(hCtx, msg)
+		}
+
 	case "bind":
 		// Remove the action keyboard before handling
 		h.removeActionKeyboard(bot, chatID)
