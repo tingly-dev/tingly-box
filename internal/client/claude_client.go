@@ -262,9 +262,9 @@ func (c *ClaudeClient) Probe(ctx context.Context, model string) ProbeResult {
 		Message:          "Messages endpoint is accessible",
 		Content:          r.Content,
 		LatencyMs:        r.LatencyMs,
-		PromptTokens:     r.Usage.PromptTokens,
-		CompletionTokens: r.Usage.CompletionTokens,
-		TotalTokens:      r.Usage.TotalTokens,
+		PromptTokens:     r.PromptTokens,
+		CompletionTokens: r.CompletionTokens,
+		TotalTokens:      r.TotalTokens,
 	}
 }
 
@@ -275,7 +275,7 @@ func (c *ClaudeClient) Probe(ctx context.Context, model string) ProbeResult {
 // - Session ID injection via Guard pattern
 //
 // Note: Beta headers are ONLY applied during probe, not during normal message passing.
-func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
 	startTime := time.Now()
 
 	// Build system message
@@ -323,7 +323,7 @@ func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, t
 	}
 
 	chunksJSON, _ := json.Marshal(chunks)
-	return ToProbeStreamResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages"), nil
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages", true), nil
 }
 
 // ProbeModelsEndpoint tests the models endpoint.

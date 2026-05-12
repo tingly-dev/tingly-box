@@ -211,10 +211,10 @@ func (c *GoogleClient) Probe(ctx context.Context, model string) ProbeResult {
 // Note: Google genai SDK has limited tool support in probe context
 
 // ProbeStream performs a streaming probe with configurable test mode (public interface)
-func (c *GoogleClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+func (c *GoogleClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
 	return c.probeStream(ctx, model, message, testMode)
 }
-func (c *GoogleClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+func (c *GoogleClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
 	startTime := time.Now()
 
 	// Create minimal content for probe
@@ -240,7 +240,7 @@ func (c *GoogleClient) probeStream(ctx context.Context, model, message string, t
 		}
 
 		respJSON, _ := json.Marshal(resp)
-		return ToProbeStreamResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase), nil
+		return ToProbeResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase, false), nil
 	}
 
 	// For streaming and tool modes, use streaming
@@ -255,7 +255,7 @@ func (c *GoogleClient) probeStream(ctx context.Context, model, message string, t
 	}
 
 	chunksJSON, _ := json.Marshal(chunks)
-	return ToProbeStreamResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase), nil
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase, true), nil
 }
 
 // ProbeModelsEndpoint tests the models list endpoint

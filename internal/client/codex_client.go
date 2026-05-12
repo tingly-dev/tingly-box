@@ -437,10 +437,10 @@ func (c *CodexClient) Probe(ctx context.Context, model string) ProbeResult {
 // For Codex, this delegates to the embedded OpenAIClient's probeStream (which uses Responses API).
 
 // ProbeStream performs a streaming probe with configurable test mode (public interface)
-func (c *CodexClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+func (c *CodexClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
 	return c.probeStream(ctx, model, message, testMode)
 }
-func (c *CodexClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+func (c *CodexClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
 	// Delegate to OpenAI client's probeStream, which will handle Codex correctly
 	return c.OpenAIClient.probeStream(ctx, model, message, testMode)
 }

@@ -44,7 +44,7 @@ type AnthropicClientInterface interface {
 
 	// Prober interface methods
 	Probe(ctx context.Context, model string) ProbeResult
-	ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error)
+	ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
 }
 
 // AnthropicClient wraps the Anthropic SDK client
@@ -268,12 +268,12 @@ func (c *AnthropicClient) Probe(ctx context.Context, model string) ProbeResult {
 }
 
 // ProbeStream performs a streaming probe with configurable test mode (public interface)
-func (c *AnthropicClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+func (c *AnthropicClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
 	return c.probeStream(ctx, model, message, testMode)
 }
 
 // probeStream performs a streaming probe with configurable test mode
-func (c *AnthropicClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeStreamResult, error) {
+func (c *AnthropicClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
 	startTime := time.Now()
 
 	// Determine system message based on OAuth provider type
@@ -314,7 +314,7 @@ func (c *AnthropicClient) probeStream(ctx context.Context, model, message string
 		}
 
 		respJSON, _ := json.Marshal(resp)
-		return ToProbeStreamResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/v1/messages"), nil
+		return ToProbeResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/v1/messages", false), nil
 	}
 
 	// For streaming and tool modes, use streaming
@@ -332,7 +332,7 @@ func (c *AnthropicClient) probeStream(ctx context.Context, model, message string
 	}
 
 	chunksJSON, _ := json.Marshal(chunks)
-	return ToProbeStreamResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/v1/messages"), nil
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/v1/messages", true), nil
 }
 
 // ProbeModelsEndpoint tests the models list endpoint
