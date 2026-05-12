@@ -117,6 +117,8 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
 func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
+	logCodexInvalidInputIDs(req, "before_sanitize")
+
 	// Set default instructions if not provided
 	if !req.Instructions.Valid() {
 		req.Instructions = param.NewOpt(defaultInstructions)
@@ -169,6 +171,7 @@ func applyCodexDefaultsToParams(req *responses.ResponseNewParams) {
 	// ChatGPT Codex rejects empty/invalid item ids in input[].
 	// These ids are optional for request items, so strip malformed values.
 	sanitizeResponseInputIDs(req)
+	logCodexInvalidInputIDs(req, "after_sanitize")
 
 	// Set the modified extra fields back
 	req.SetExtraFields(extraFields)
@@ -189,6 +192,61 @@ func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
 	}
 
 	req.Input.OfInputItemList = inputItems
+}
+
+func logCodexInvalidInputIDs(req *responses.ResponseNewParams, stage string) {
+	if req.Input.OfInputItemList == nil {
+		return
+	}
+
+	for i := range req.Input.OfInputItemList {
+		logCodexInvalidItemIDs(req.Input.OfInputItemList[i], i, stage)
+	}
+}
+
+func logCodexInvalidItemIDs(item responses.ResponseInputItemUnionParam, index int, stage string) {
+	check := func(kind string, field string, id string, valid bool) {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" || !valid {
+			logrus.Warnf("[Codex] Invalid input item id detected stage=%s index=%d kind=%s field=%s raw_id=%q trimmed_id=%q", stage, index, kind, field, id, trimmed)
+		} else {
+			logrus.Warnf("[Codex] Valid input item id observed stage=%s index=%d kind=%s field=%s raw_id=%q", stage, index, kind, field, id)
+		}
+	}
+
+	if item.OfFunctionCall != nil && item.OfFunctionCall.ID.Valid() {
+		check("function_call", "id", item.OfFunctionCall.ID.Value, isValidCodexID(strings.TrimSpace(item.OfFunctionCall.ID.Value)))
+	}
+	if item.OfFunctionCallOutput != nil && item.OfFunctionCallOutput.ID.Valid() {
+		check("function_call_output", "id", item.OfFunctionCallOutput.ID.Value, isValidCodexID(strings.TrimSpace(item.OfFunctionCallOutput.ID.Value)))
+	}
+	if item.OfComputerCallOutput != nil && item.OfComputerCallOutput.ID.Valid() {
+		check("computer_call_output", "id", item.OfComputerCallOutput.ID.Value, isValidCodexID(strings.TrimSpace(item.OfComputerCallOutput.ID.Value)))
+	}
+	if item.OfCustomToolCall != nil && item.OfCustomToolCall.ID.Valid() {
+		check("custom_tool_call", "id", item.OfCustomToolCall.ID.Value, isValidCodexID(strings.TrimSpace(item.OfCustomToolCall.ID.Value)))
+	}
+	if item.OfCustomToolCallOutput != nil && item.OfCustomToolCallOutput.ID.Valid() {
+		check("custom_tool_call_output", "id", item.OfCustomToolCallOutput.ID.Value, isValidCodexID(strings.TrimSpace(item.OfCustomToolCallOutput.ID.Value)))
+	}
+	if item.OfToolSearchCall != nil && item.OfToolSearchCall.ID.Valid() {
+		check("tool_search_call", "id", item.OfToolSearchCall.ID.Value, isValidCodexID(strings.TrimSpace(item.OfToolSearchCall.ID.Value)))
+	}
+	if item.OfShellCall != nil && item.OfShellCall.ID.Valid() {
+		check("shell_call", "id", item.OfShellCall.ID.Value, isValidCodexID(strings.TrimSpace(item.OfShellCall.ID.Value)))
+	}
+	if item.OfShellCallOutput != nil && item.OfShellCallOutput.ID.Valid() {
+		check("shell_call_output", "id", item.OfShellCallOutput.ID.Value, isValidCodexID(strings.TrimSpace(item.OfShellCallOutput.ID.Value)))
+	}
+	if item.OfApplyPatchCall != nil && item.OfApplyPatchCall.ID.Valid() {
+		check("apply_patch_call", "id", item.OfApplyPatchCall.ID.Value, isValidCodexID(strings.TrimSpace(item.OfApplyPatchCall.ID.Value)))
+	}
+	if item.OfApplyPatchCallOutput != nil && item.OfApplyPatchCallOutput.ID.Valid() {
+		check("apply_patch_call_output", "id", item.OfApplyPatchCallOutput.ID.Value, isValidCodexID(strings.TrimSpace(item.OfApplyPatchCallOutput.ID.Value)))
+	}
+	if item.OfMcpApprovalResponse != nil && item.OfMcpApprovalResponse.ID.Valid() {
+		check("mcp_approval_response", "id", item.OfMcpApprovalResponse.ID.Value, isValidCodexID(strings.TrimSpace(item.OfMcpApprovalResponse.ID.Value)))
+	}
 }
 
 // sanitizeInputItemID sanitizes the ID field in a ResponseInputItemUnionParam
