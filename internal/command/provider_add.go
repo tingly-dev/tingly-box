@@ -82,17 +82,18 @@ func (c *ConfigUpdateCmdKong) Run(appManager *AppManager) error {
 	return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
 }
 
-// ConfigGetCmdKong displays a provider's details. Without a name it drops
-// into interactive selection.
+// ConfigGetCmdKong displays a provider's details. Without a UUID it drops
+// into interactive selection. The lookup is by UUID because provider names
+// are not unique (UUID is the primary key).
 type ConfigGetCmdKong struct {
-	Name string `kong:"arg,optional,help='Provider name'"`
+	UUID string `kong:"arg,optional,help='Provider UUID'"`
 }
 
 func (c *ConfigGetCmdKong) Run(appManager *AppManager) error {
-	if c.Name == "" {
+	if c.UUID == "" {
 		return runProviderGetInteractive(appManager, bufio.NewReader(os.Stdin))
 	}
-	return runProviderGet(appManager, c.Name)
+	return runProviderGet(appManager, c.UUID)
 }
 
 // ConfigExportCmdKong exports configuration to file or stdout
@@ -320,12 +321,6 @@ func runAdd(appManager *AppManager, args []string) error {
 		}
 	}
 
-	// Check if provider already exists
-	if existingProvider, err := appManager.GetProvider(name); err == nil && existingProvider != nil {
-		fmt.Printf("Provider '%s' already exists. Please use a different name or update the existing provider.\n", name)
-		return fmt.Errorf("provider already exists")
-	}
-
 	// Get API base URL (if not provided)
 	if apiBase == "" {
 		var err error
@@ -356,7 +351,10 @@ func runAdd(appManager *AppManager, args []string) error {
 	return addProviderWithConfirmation(appManager, reader, name, apiBase, token, apiStyle)
 }
 
-// addProviderWithConfirmation displays summary and adds the provider
+// addProviderWithConfirmation displays summary and adds the provider.
+// Note: provider names are not unique — only UUIDs are — so we don't reject
+// "duplicate" names. The user explicitly chose the name; AddProvider will mint
+// a fresh UUID either way.
 func addProviderWithConfirmation(appManager *AppManager, reader *bufio.Reader, name, apiBase, token string, apiStyle APIStyle) error {
 	// Display summary and get confirmation
 	fmt.Println("\n--- Configuration Summary ---")
