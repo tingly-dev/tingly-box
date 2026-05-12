@@ -1109,7 +1109,8 @@ func mapOpenAIFinishReasonToAnthropic(finishReason string) string {
 	case openaiFinishReasonToolCalls:
 		return anthropicStopReasonToolUse
 	case string(openai.CompletionChoiceFinishReasonContentFilter):
-		return anthropicStopReasonContentFilter
+		// MENTION: we may use `refusal` but it works badly - then we use end turn as normal
+		return string(anthropic.StopReasonEndTurn)
 	default:
 		return anthropicStopReasonEndTurn
 	}

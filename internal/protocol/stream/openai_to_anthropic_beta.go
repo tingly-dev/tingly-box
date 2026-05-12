@@ -532,10 +532,11 @@ func mapOpenAIFinishReasonToAnthropicBeta(finishReason string) string {
 		return string(anthropic.BetaStopReasonEndTurn)
 	case string(openai.CompletionChoiceFinishReasonLength):
 		return string(anthropic.BetaStopReasonMaxTokens)
-	case openaiFinishReasonToolCalls:
+	case openaiFinishReasonToolCalls, openaiFinishReasonFunctionCall:
 		return string(anthropic.BetaStopReasonToolUse)
 	case string(openai.CompletionChoiceFinishReasonContentFilter):
-		return string(anthropic.BetaStopReasonRefusal)
+		// MENTION: we may use `refusal` but it works badly - then we use end turn as normal
+		return string(anthropic.BetaStopReasonEndTurn)
 	default:
 		return string(anthropic.BetaStopReasonEndTurn)
 	}
