@@ -16,9 +16,12 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/client"
+	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -326,6 +329,23 @@ func buildOpenAIReq(streaming bool) *openai.ChatCompletionNewParams {
 	}
 }
 
+
+func newMCPDisabledTestServer(t *testing.T) *Server {
+	t.Helper()
+
+	cp := client.NewClientPool()
+	rt := mcpruntime.NewRuntime(func() *typ.MCPRuntimeConfig { return &typ.MCPRuntimeConfig{Sources: []typ.MCPSourceConfig{}} })
+	require.NotNil(t, rt)
+	rt.SetClientPool(cp)
+	t.Cleanup(rt.Close)
+
+	conf, err := serverconfig.NewConfig(serverconfig.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+	require.NoError(t, conf.SetScenarioFlag(typ.ScenarioGlobal, "mcp", false))
+
+	return &Server{clientPool: cp, mcpRuntime: rt, config: conf}
+}
+
 func TestMCPPathMatrixE2E(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -484,4 +504,44 @@ func TestAnthropicBetaPureExternalStreamDoesNotAppendSyntheticStop(t *testing.T)
 	require.Equal(t, 1, probe.anthropicStreamCalls)
 	require.Equal(t, 0, probe.anthropicNonStreamCalls)
 	require.Equal(t, 1, strings.Count(body, `"type":"message_stop"`), "pure external streamed round should forward upstream stop only once")
+}
+
+func TestNoMCPPathMatrixE2E(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("OpenAIChat_to_OpenAIChat_NoMCP", func(t *testing.T) {
+		probe := &pathProbe{}
+		backend := newOpenAIPathBackend(t, probe)
+		defer backend.Close()
+
+		s := newMCPDisabledTestServer(t)
+		provider := &typ.Provider{UUID: "p-o-no-mcp", Name: "p-o-no-mcp", APIStyle: protocol.APIStyleOpenAI, APIBase: backend.URL + "/v1", Token: "k", Enabled: true}
+
+		code, header, _ := runDispatch(t, s, provider, buildOpenAIReq(true), protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, true)
+		require.Equal(t, http.StatusOK, code)
+		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
+		require.GreaterOrEqual(t, probe.openaiStreamCalls, 1)
+
+		code, _, _ = runDispatch(t, s, provider, buildOpenAIReq(false), protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, false)
+		require.Equal(t, http.StatusOK, code)
+		require.GreaterOrEqual(t, probe.openaiNonStreamCalls, 1)
+	})
+
+	t.Run("AnthropicV1_to_AnthropicV1_NoMCP", func(t *testing.T) {
+		probe := &pathProbe{}
+		backend := newAnthropicPathBackend(t, probe)
+		defer backend.Close()
+
+		s := newMCPDisabledTestServer(t)
+		provider := &typ.Provider{UUID: "p-a-v1-no-mcp", Name: "p-a-v1-no-mcp", APIStyle: protocol.APIStyleAnthropic, APIBase: backend.URL, Token: "k", Enabled: true}
+
+		code, header, _ := runDispatch(t, s, provider, buildAnthropicV1Req(true), protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, true)
+		require.Equal(t, http.StatusOK, code)
+		require.Contains(t, header.Get("Content-Type"), "text/event-stream")
+		require.GreaterOrEqual(t, probe.anthropicStreamCalls, 1)
+
+		code, _, _ = runDispatch(t, s, provider, buildAnthropicV1Req(false), protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, false)
+		require.Equal(t, http.StatusOK, code)
+		require.GreaterOrEqual(t, probe.anthropicNonStreamCalls, 1)
+	})
 }
