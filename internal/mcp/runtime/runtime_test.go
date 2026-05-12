@@ -10,6 +10,18 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+func testAdvisorProviderResolver(style protocol.APIStyle) func(string) (*typ.Provider, error) {
+	return func(string) (*typ.Provider, error) {
+		return &typ.Provider{
+			Name:     "test",
+			APIBase:  "https://example.com",
+			Token:    "test-key",
+			APIStyle: style,
+			Enabled:  true,
+		}, nil
+	}
+}
+
 func TestNormalizeAndParseToolName(t *testing.T) {
 	name := NormalizeToolName("search", "web_search")
 	if name != "tingly_box_mcp__search__web_search" {
@@ -194,17 +206,9 @@ func TestListEnabledServerToolNames_AdvisorDisabledByDefault(t *testing.T) {
 	}
 
 	r.RegisterAdviser(typ.AdvisorConfig{
-		ProviderUUID: "test",
-		ProviderResolver: func(string) (*typ.Provider, error) {
-			return &typ.Provider{
-				Name:     "test",
-				APIBase:  "https://example.com",
-				Token:    "test-key",
-				APIStyle: protocol.APIStyleAnthropic,
-				Enabled:  true,
-			}, nil
-		},
-		Model: "claude-opus-4-6",
+		ProviderUUID:     "test",
+		ProviderResolver: testAdvisorProviderResolver(protocol.APIStyleAnthropic),
+		Model:            "claude-opus-4-6",
 	}, nil)
 
 	names := r.ListEnabledServerToolNames(context.Background())
@@ -232,17 +236,9 @@ func TestListEnabledServerToolNames_AdvisorEnabledWhenSourceEnabled(t *testing.T
 	}
 
 	r.RegisterAdviser(typ.AdvisorConfig{
-		ProviderUUID: "test",
-		ProviderResolver: func(string) (*typ.Provider, error) {
-			return &typ.Provider{
-				Name:     "test",
-				APIBase:  "https://example.com",
-				Token:    "test-key",
-				APIStyle: protocol.APIStyleAnthropic,
-				Enabled:  true,
-			}, nil
-		},
-		Model: "claude-opus-4-6",
+		ProviderUUID:     "test",
+		ProviderResolver: testAdvisorProviderResolver(protocol.APIStyleAnthropic),
+		Model:            "claude-opus-4-6",
 	}, nil)
 
 	names := r.ListEnabledServerToolNames(context.Background())
