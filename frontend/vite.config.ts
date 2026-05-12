@@ -39,6 +39,11 @@ export default defineConfig(({ mode }) => {
                     target: 'http://localhost:12580',
                     changeOrigin: true,
                     secure: false,
+                },
+                '/tingly/': {
+                    target: 'http://localhost:12580',
+                    changeOrigin: true,
+                    secure: false,
                 }
             },
             port: 3000
