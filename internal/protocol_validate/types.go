@@ -13,8 +13,8 @@
 //
 // Note: This package (protocol_validate) is the test-only framework, while
 // internal/virtualmodel is the production Gin server. They share the
-// virtualmodel.GenericRegistry primitive for scenario / model storage —
-// server_validate.Scenario implements virtualmodel.VirtualModel — but their
+// vmodel.GenericRegistry primitive for scenario / model storage —
+// server_validate.Scenario implements vmodel.VirtualModel — but their
 // HTTP handlers remain separate by design: virtualserver/handler.go operates
 // on structured request/response shapes, while protocol_validate scenarios
 // serve pre-rendered byte / SSE-line payloads that exercise the gateway

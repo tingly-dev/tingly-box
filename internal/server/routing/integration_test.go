@@ -19,7 +19,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	openaivm "github.com/tingly-dev/tingly-box/internal/virtualmodel/openai"
+	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 )
 
 // delayModelResponseID must match openaivm.delayModelResponseID

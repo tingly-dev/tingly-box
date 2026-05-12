@@ -41,7 +41,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel/virtualserver"
 	"github.com/tingly-dev/tingly-box/pkg/auth"
 	"github.com/tingly-dev/tingly-box/pkg/network"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
@@ -50,6 +49,7 @@ import (
 	"github.com/tingly-dev/tingly-box/remote/channel"
 	"github.com/tingly-dev/tingly-box/remote/interaction"
 	"github.com/tingly-dev/tingly-box/remote/scenario"
+	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
 // Server represents the HTTP server

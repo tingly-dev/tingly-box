@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
-	"github.com/tingly-dev/tingly-box/internal/virtualmodel"
+	"github.com/tingly-dev/tingly-box/vmodel"
 )
 
 // ResponseFormat represents the format of the mock response for different endpoints.
@@ -53,8 +53,8 @@ type MockResponseBuilder struct {
 
 // Scenario is a named test scenario describing what the mock provider returns.
 //
-// Scenario also satisfies virtualmodel.VirtualModel via stub identity methods
-// so that scenario storage can reuse virtualmodel.GenericRegistry, the same
+// Scenario also satisfies vmodel.VirtualModel via stub identity methods
+// so that scenario storage can reuse vmodel.GenericRegistry, the same
 // thread-safe registry primitive used by the production virtualmodel sub-
 // packages. The byte-replay handlers in this file are intentionally NOT
 // wired through virtualserver/handler.go — that handler operates on
@@ -72,8 +72,8 @@ type Scenario struct {
 	MockResponses map[ResponseFormat]MockResponseBuilder
 }
 
-// Compile-time check: Scenario satisfies virtualmodel.VirtualModel.
-var _ virtualmodel.VirtualModel = Scenario{}
+// Compile-time check: Scenario satisfies vmodel.VirtualModel.
+var _ vmodel.VirtualModel = Scenario{}
 
 // GetID returns the scenario name; scenarios are looked up by name.
 func (s Scenario) GetID() string { return s.Name }
@@ -85,20 +85,20 @@ func (s Scenario) GetName() string { return s.Name }
 func (s Scenario) GetDescription() string { return s.Description }
 
 // GetType is always Static — scenarios serve fixed pre-rendered responses.
-func (s Scenario) GetType() virtualmodel.VirtualModelType {
-	return virtualmodel.VirtualModelTypeStatic
+func (s Scenario) GetType() vmodel.VirtualModelType {
+	return vmodel.VirtualModelTypeStatic
 }
 
 // SimulatedDelay is always 0 — protocol-validate scenarios do not simulate latency.
 func (s Scenario) SimulatedDelay() time.Duration { return 0 }
 
 // ToModel returns the OpenAI-compatible models-list entry for this scenario.
-func (s Scenario) ToModel() virtualmodel.Model {
-	return virtualmodel.Model{
+func (s Scenario) ToModel() vmodel.Model {
+	return vmodel.Model{
 		ID:      s.Name,
 		Object:  "model",
 		Created: 0,
-		OwnedBy: virtualmodel.DefaultMockOwnedBy,
+		OwnedBy: vmodel.DefaultMockOwnedBy,
 	}
 }
 
@@ -111,7 +111,7 @@ func (s Scenario) ToModel() virtualmodel.Model {
 // The gateway transforms requests to provider format before forwarding to this server.
 type VirtualServer struct {
 	server    *httptest.Server
-	scenarios *virtualmodel.GenericRegistry[Scenario]
+	scenarios *vmodel.GenericRegistry[Scenario]
 
 	mu        sync.RWMutex
 	callCount int
@@ -121,7 +121,7 @@ type VirtualServer struct {
 func NewVirtualServer(t *testing.T) *VirtualServer {
 	t.Helper()
 	vs := &VirtualServer{
-		scenarios: virtualmodel.NewGenericRegistry[Scenario](),
+		scenarios: vmodel.NewGenericRegistry[Scenario](),
 	}
 
 	mux := http.NewServeMux()
@@ -143,7 +143,7 @@ func NewVirtualServer(t *testing.T) *VirtualServer {
 // requests to provider format before forwarding to this server.
 func NewVirtualServerForCLI() *VirtualServer {
 	vs := &VirtualServer{
-		scenarios: virtualmodel.NewGenericRegistry[Scenario](),
+		scenarios: vmodel.NewGenericRegistry[Scenario](),
 	}
 
 	mux := http.NewServeMux()
