@@ -337,18 +337,6 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 	}()
 
-	_, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
-			Error: protocol.ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
-		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
-	}
-
 	// Process the stream with context cancellation checking
 	c.Stream(func(w io.Writer) bool {
 		// Check context cancellation first
@@ -379,16 +367,21 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		// Check if available in the raw JSON
 		// Marshal event using RawJSON() to avoid serializing empty union fields
 		eventRaw := evt.RawJSON()
+		eventType := evt.Type
 
 		// Extract cached tokens using gjson
-		if cachedTokens := gjson.Get(eventRaw, "response.usage.input_tokens_details.cached_tokens"); cachedTokens.Exists() {
-			cacheTokens = cachedTokens.Int()
-		} else {
-			// set raw use "0" as 0
-			if modified, err := sjson.SetRaw(eventRaw, "response.usage.input_tokens_details.cached_tokens", "0"); err == nil {
-				eventRaw = modified
+		if token_details := gjson.Get(eventRaw, "response.usage.input_tokens_details"); token_details.Exists() {
+			if cachedTokens := gjson.Get(eventRaw, "response.usage.input_tokens_details.cached_tokens"); cachedTokens.Exists() {
+				cacheTokens = cachedTokens.Int()
+				logrus.Debugf("cached tokens: %v", cacheTokens)
 			} else {
-				logrus.WithError(err).Error("Failed to set cached tokens")
+				// set raw use "0" as 0
+				if modified, err := sjson.SetRaw(eventRaw, "response.usage.input_tokens_details.cached_tokens", "0"); err == nil {
+					eventRaw = modified
+					logrus.Debugf("event raw missing cached tokens: %v", eventRaw)
+				} else {
+					logrus.WithError(err).Error("Failed to set cached tokens")
+				}
 			}
 		}
 
@@ -397,7 +390,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			// Use gjson to check if response.model exists and is non-empty
 			if model := gjson.Get(eventRaw, "response.model"); model.Exists() && model.String() != "" {
 				// Use sjson to set the new model value
-				if modified, err := sjson.SetRaw(eventRaw, "response.model", responseModel); err == nil {
+				if modified, err := sjson.Set(eventRaw, "response.model", responseModel); err == nil {
 					eventRaw = modified
 				}
 			}
@@ -433,7 +426,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			},
 		}
 
-		OpenAISSE(c, errorChunk)
+		OpenAIResponsesEvent(c, "error", errorChunk)
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 	}
 
