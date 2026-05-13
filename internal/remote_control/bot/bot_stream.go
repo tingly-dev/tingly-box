@@ -25,7 +25,25 @@ type streamingMessageHandler struct {
 	formatter *claude.TextFormatter
 	verbose   bool          // If false, only show final results (hide intermediate messages)
 	meta      *ResponseMeta // Pointer so OnComplete sees updates from SmartGuideCompletionCallback
+
+	// toolBuffer accumulates formatted tool-only renders between text-bearing
+	// messages. Messages act as the splitting boundary: when a text-bearing
+	// claude.Message arrives (assistant text, result, system notice), the
+	// buffered tool renders are flushed as a single aggregated message before
+	// the new text is sent. This avoids flooding the chat with one IM message
+	// per tool call when the agent runs long tool chains.
+	toolBuffer []string
 }
+
+// toolBufferFlushThreshold is the upper bound on buffered tool entries; when
+// reached without an intervening text-bearing message, the buffer is flushed
+// to ensure the user still sees progress on long-running tool chains.
+const toolBufferFlushThreshold = 20
+
+// quietToolPreviewCount is how many of the buffered tool entries are inlined
+// into the aggregated summary shown in quiet mode. The rest are folded into
+// an "(+N more)" suffix.
+const quietToolPreviewCount = 3
 
 // Ensure streamingMessageHandler implements required interfaces
 var _ agentboot.MessageStreamer = (*streamingMessageHandler)(nil)
@@ -110,6 +128,10 @@ func (f *streamingMessageHandler) OnAsk(context.Context, agentboot.AskRequest) (
 func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	// Drain any tool renders that never met a trailing text message so the
+	// user sees them before the completion banner.
+	f.flushToolBufferLocked()
 
 	// Build action keyboard
 	kb := feature.BuildActionKeyboard()
@@ -207,9 +229,13 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 	}
 }
 
-// handleClaudeMessage processes claude-specific messages
+// handleClaudeMessage processes claude-specific messages.
+//
+// Messages are the splitting boundary for output: tool-only renders accumulate
+// in toolBuffer, and a text-bearing message flushes the buffer (as a single
+// aggregated message) before being sent itself. Quiet mode renders the
+// flushed buffer as a short summary; verbose mode keeps one line per tool.
 func (h *streamingMessageHandler) handleClaudeMessage(claudeMsg claude.Message) error {
-	// Format using the formatter
 	formatted := h.formatter.Format(claudeMsg)
 	d, _ := json.Marshal(claudeMsg.GetRawData())
 	logrus.Infof("[bot] Raw: %s", d)
@@ -220,18 +246,102 @@ func (h *streamingMessageHandler) handleClaudeMessage(claudeMsg claude.Message) 
 		return nil
 	}
 
-	// In non-verbose mode, only show the final result (assistant turn end), not tool use / intermediate
+	if isToolOnlyClaudeMessage(claudeMsg) {
+		h.appendToolBuffer(formatted)
+		return nil
+	}
+
+	// Text-bearing message. In quiet mode, still suppress user-echo and
+	// stream-event noise — only assistant text, agent results, and system
+	// notices reach the chat.
 	if !h.verbose {
 		msgType := claudeMsg.GetType()
-		// Only forward "result" type messages in quiet mode; skip tool use, system etc.
-		if msgType != "result" && msgType != "assistant" {
+		if msgType != "result" && msgType != "assistant" && msgType != "system" {
 			logrus.WithField("msgType", msgType).Debug("Quiet mode: suppressing non-result message")
 			return nil
 		}
 	}
 
+	h.flushToolBufferLocked()
 	h.sendMessage(formatted)
 	return nil
+}
+
+// isToolOnlyClaudeMessage reports whether the message carries only tool
+// activity (no user-facing text). Such messages are buffered until the next
+// text-bearing message flushes them.
+func isToolOnlyClaudeMessage(msg claude.Message) bool {
+	switch m := msg.(type) {
+	case *claude.ToolUseMessage, *claude.ToolResultMessage:
+		return true
+	case *claude.AssistantMessage:
+		if m == nil {
+			return false
+		}
+		for _, c := range m.Message.Content {
+			if c.Type == claude.ContentBlockTypeText && strings.TrimSpace(c.Text) != "" {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+// appendToolBuffer records a formatted tool render. The caller must hold h.mu.
+// When the buffer reaches toolBufferFlushThreshold it is flushed immediately
+// so the user still sees progress on long tool chains.
+func (h *streamingMessageHandler) appendToolBuffer(formatted string) {
+	if strings.TrimSpace(formatted) == "" {
+		return
+	}
+	h.toolBuffer = append(h.toolBuffer, formatted)
+	if len(h.toolBuffer) >= toolBufferFlushThreshold {
+		h.flushToolBufferLocked()
+	}
+}
+
+// flushToolBufferLocked sends any buffered tool renders as a single aggregated
+// message and clears the buffer. The caller must hold h.mu.
+func (h *streamingMessageHandler) flushToolBufferLocked() {
+	if len(h.toolBuffer) == 0 {
+		return
+	}
+	text := h.renderToolBuffer(h.toolBuffer)
+	h.toolBuffer = h.toolBuffer[:0]
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	h.sendMessage(text)
+}
+
+// renderToolBuffer turns the accumulated tool renders into the single message
+// that will be sent to the user. Verbose mode keeps every entry on its own
+// line; quiet mode collapses to a count + preview of the first few entries.
+func (h *streamingMessageHandler) renderToolBuffer(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	if h.verbose {
+		return strings.Join(items, "\n")
+	}
+
+	previewN := quietToolPreviewCount
+	if previewN > len(items) {
+		previewN = len(items)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "🔧 %d tool call(s)\n", len(items))
+	for _, p := range items[:previewN] {
+		b.WriteString("• ")
+		b.WriteString(p)
+		b.WriteString("\n")
+	}
+	if rest := len(items) - previewN; rest > 0 {
+		fmt.Fprintf(&b, "…(+%d more)", rest)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // handleAgentbootEvent processes agentboot.Event messages (fallback for unknown event types)
@@ -311,6 +421,10 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 func (h *streamingMessageHandler) OnError(err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	// Surface any buffered tool activity before the error so the user has
+	// context on what was happening when the failure occurred.
+	h.flushToolBufferLocked()
 
 	errStr := err.Error()
 	var errMsg string
