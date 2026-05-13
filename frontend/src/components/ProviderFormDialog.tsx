@@ -470,7 +470,7 @@ const ProviderFormDialog = ({
             const host = new URL(raw).hostname;
             if (host) return t('providerDialog.keyName.autoFill', {title: host});
         } catch { /* not a URL */ }
-        return t('providerDialog.keyName.autoFill', {title: 'Custom'});
+        return t('providerDialog.keyName.fallback', {defaultValue: 'Custom Provider'});
     }, [selectedProvider, data.apiBase, providerInputValue, t]);
 
     // Ensure a name exists before submit/verify. Writes back to parent so the
