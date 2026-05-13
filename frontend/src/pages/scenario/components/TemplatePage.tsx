@@ -6,12 +6,14 @@ import {useNavigate} from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import RuleCard from '@/components/RuleCard.tsx';
 import ImportModal from '@/components/ImportModal';
+import ProviderFormDialog from '@/components/ProviderFormDialog';
 import UnifiedCard from '@/components/UnifiedCard';
 import type {TabTemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
 import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
 import {useScrollToNewRule} from '@/components/hooks/useScrollToNewRule';
 import {useModelSelectDialog} from '@/hooks/useModelSelectDialog';
+import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
 import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
 import api from '@/services/api';
@@ -152,10 +154,26 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         openModelSelect({ruleUuid, configRecord, providerUuid, mode});
     }, [openModelSelect]);
 
-    // Unified action handlers
+    // Add-provider dialog opened in place (rather than navigating away).
+    // Refreshes providers locally on success so the new key shows up
+    // without leaving the current scenario.
+    const {
+        providerDialogOpen,
+        providerFormData,
+        handleAddProviderClick,
+        handleProviderSubmit,
+        handleProviderForceAdd,
+        handleCloseDialog,
+        handleFieldChange,
+    } = useProviderDialog(showNotification, {
+        onProviderAdded: () => {
+            void onProvidersLoad?.();
+        },
+    });
+
     const handleAddApiKeyClick = useCallback(() => {
-        navigate('/api-keys?dialog=add');
-    }, [navigate]);
+        handleAddProviderClick();
+    }, [handleAddProviderClick]);
 
     const handleCreateRule = useCallback(() => {
         openModelSelectForCreate();
@@ -407,6 +425,16 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                 onClose={() => setShowImportModal(false)}
                 onImport={handleImportData}
                 loading={importing}
+            />
+
+            <ProviderFormDialog
+                open={providerDialogOpen}
+                onClose={handleCloseDialog}
+                onSubmit={handleProviderSubmit}
+                onForceAdd={handleProviderForceAdd}
+                data={providerFormData}
+                onChange={handleFieldChange}
+                mode="add"
             />
 
             {showScrollTop && (

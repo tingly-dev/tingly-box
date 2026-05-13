@@ -237,7 +237,9 @@ export default {
     "keyName": {
       "label": "API 密钥名称",
       "placeholder": "例如：OpenAI API Key",
-      "autoFill": "{{title}} API 密钥"
+      "autoFill": "{{title}} API 密钥",
+      "helper": "可选。留空将自动生成，创建后可随时重命名。",
+      "customizeAction": "自定义名称（可选）"
     },
     "providerOrUrl": {
       "label": "提供商或自定义基础 URL",

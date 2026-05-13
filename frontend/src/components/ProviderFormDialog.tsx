@@ -116,6 +116,10 @@ const ProviderFormDialog = ({
     const [protocolOpenAI, setProtocolOpenAI] = useState(false);
     const [protocolAnthropic, setProtocolAnthropic] = useState(false);
     const [nameIsAutoFilled, setNameIsAutoFilled] = useState(true);
+    // In add mode the name field is hidden by default — almost everyone wants
+    // the auto-generated label and can rename later. Edit mode always shows
+    // the field so users can see/edit the existing name.
+    const [showNameField, setShowNameField] = useState(mode === 'edit');
     const [providerInputValue, setProviderInputValue] = useState('');
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
@@ -214,6 +218,9 @@ const ProviderFormDialog = ({
         if (!open) return;
 
         setVerificationResult(null);
+        // Hide the optional name field on each add-mode open; edit-mode keeps
+        // it visible so users can review the existing name.
+        setShowNameField(mode === 'edit');
 
         if (mode === 'edit') {
             // Hydrate fusion state: existing fusion URLs imply the protocol
@@ -450,6 +457,31 @@ const ProviderFormDialog = ({
         }
     };
 
+    // Compute a sensible default name when the user leaves the field blank.
+    // Prefers the selected provider's display label; otherwise derives from
+    // the apiBase hostname; falls back to a generic label.
+    const computeAutoName = useCallback((): string => {
+        if (selectedProvider) {
+            const displayName = selectedProvider.alias || selectedProvider.name;
+            return t('providerDialog.keyName.autoFill', {title: displayName});
+        }
+        const raw = data.apiBase || providerInputValue || '';
+        try {
+            const host = new URL(raw).hostname;
+            if (host) return t('providerDialog.keyName.autoFill', {title: host});
+        } catch { /* not a URL */ }
+        return t('providerDialog.keyName.autoFill', {title: 'Custom'});
+    }, [selectedProvider, data.apiBase, providerInputValue, t]);
+
+    // Ensure a name exists before submit/verify. Writes back to parent so the
+    // submit payload carries the generated value.
+    const ensureName = (): string => {
+        if (data.name && data.name.trim()) return data.name;
+        const auto = computeAutoName();
+        onChangeRef.current('name', auto);
+        return auto;
+    };
+
     const handleVerify = async () => {
         if (noApiKey) {
             setVerificationResult(null);
@@ -464,7 +496,9 @@ const ProviderFormDialog = ({
                     ? selectedProvider.baseUrlAnthropic
                     : data.apiBase || providerInputValue;
 
-        if (!data.name || !apiBase || !data.token || !apiStyle) {
+        const effectiveName = ensureName();
+
+        if (!effectiveName || !apiBase || !data.token || !apiStyle) {
             setVerificationResult({
                 success: false,
                 message: t('providerDialog.verification.missingFields'),
@@ -516,6 +550,8 @@ const ProviderFormDialog = ({
             onChangeRef.current('apiBase', providerInputValue);
             onChangeRef.current('providerBaseUrls', undefined);
         }
+
+        ensureName();
 
         const shouldVerify = mode === 'add' ? !noApiKey : data.token !== '' && !noApiKey;
 
@@ -888,19 +924,37 @@ const ProviderFormDialog = ({
                             </Box>
                         </Box>
 
-                        <TextField
-                            size="small"
-                            fullWidth
-                            label={t('providerDialog.keyName.label')}
-                            value={data.name}
-                            onChange={(e) => {
-                                onChange('name', e.target.value);
-                                setVerificationResult(null);
-                                setNameIsAutoFilled(false);
-                            }}
-                            required
-                            placeholder={t('providerDialog.keyName.placeholder')}
-                        />
+                        {showNameField ? (
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label={t('providerDialog.keyName.label')}
+                                value={data.name}
+                                onChange={(e) => {
+                                    onChange('name', e.target.value);
+                                    setVerificationResult(null);
+                                    setNameIsAutoFilled(false);
+                                }}
+                                placeholder={computeAutoName()}
+                                helperText={t('providerDialog.keyName.helper', {
+                                    defaultValue: 'Optional. Leave blank to auto-generate. You can rename later.',
+                                })}
+                            />
+                        ) : (
+                            <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: -1}}>
+                                <Button
+                                    type="button"
+                                    size="small"
+                                    variant="text"
+                                    onClick={() => setShowNameField(true)}
+                                    sx={{textTransform: 'none', color: 'text.secondary'}}
+                                >
+                                    {t('providerDialog.keyName.customizeAction', {
+                                        defaultValue: 'Customize name (optional)',
+                                    })}
+                                </Button>
+                            </Box>
+                        )}
 
                         <Box>
                             <TextField
@@ -1016,6 +1070,7 @@ const ProviderFormDialog = ({
                                 onChangeRef.current('apiBase', providerInputValue);
                                 onChangeRef.current('providerBaseUrls', undefined);
                             }
+                            ensureName();
                             onClose();
                             await onForceAdd?.();
                         }}
