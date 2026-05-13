@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 # Mirror-aware variant of install.sh for mainland China networks.
 #
-# Mirrors used (override via env vars):
-#   GH_PROXY     github.com / raw.githubusercontent.com proxy
-#   NODE_MIRROR  nvm's NVM_NODEJS_ORG_MIRROR target
-#   NPM_REGISTRY npm registry
+# Defaults:
+#   nvm        cloned from gitee.com/mirrors/nvm
+#   node       fetched from npmmirror.com (Taobao)
+#   npm reg    registry.npmmirror.com (Taobao)
 #
-# Usage:
-#   bash script/install-mirror.sh
+# Override via env vars:
+#   NVM_GITEE_REPO   git URL for the nvm mirror
+#   NVM_VERSION      nvm tag/branch to checkout
+#   NODE_VERSION     node version (e.g. 20, --lts)
+#   NODE_MIRROR      NVM_NODEJS_ORG_MIRROR target
+#   NPM_REGISTRY     npm registry to write into ~/.npmrc
 
 set -euo pipefail
 
 NVM_VERSION="${NVM_VERSION:-v0.40.1}"
+NVM_GITEE_REPO="${NVM_GITEE_REPO:-https://gitee.com/mirrors/nvm.git}"
 NODE_VERSION="${NODE_VERSION:---lts}"
-GH_PROXY="${GH_PROXY:-https://gh-proxy.com}"
 NODE_MIRROR="${NODE_MIRROR:-https://npmmirror.com/mirrors/node/}"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
+
+NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 log() { printf '\033[1;34m[install-mirror]\033[0m %s\n' "$*"; }
 err() { printf '\033[1;31m[install-mirror]\033[0m %s\n' "$*" >&2; }
@@ -26,21 +32,38 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 install_nvm() {
-  if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
-    log "nvm already installed at ${NVM_DIR:-$HOME/.nvm}, skipping"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then
+    log "nvm already installed at $NVM_DIR, skipping"
     return
   fi
-  log "installing nvm ${NVM_VERSION} via ${GH_PROXY}"
-  # nvm's installer fetches its own files from raw.githubusercontent.com via
-  # NVM_SOURCE; route those through the same proxy so both the bootstrap and
-  # the per-file fetch succeed in restricted networks.
-  local installer="${GH_PROXY}/https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh"
-  NVM_SOURCE="${GH_PROXY}/https://github.com/nvm-sh/nvm.git" \
-    curl -fsSL "$installer" | bash
+  log "cloning nvm ${NVM_VERSION} from ${NVM_GITEE_REPO}"
+  git clone --depth 1 --branch "$NVM_VERSION" "$NVM_GITEE_REPO" "$NVM_DIR"
+  ensure_profile_snippet
+}
+
+# ensure_profile_snippet appends NVM_DIR sourcing to the user's shell rc so
+# subsequent shells pick up nvm. nvm's official install.sh does this — since
+# we're cloning manually, we replicate it. Idempotent: grep before append.
+ensure_profile_snippet() {
+  local snippet
+  snippet="$(cat <<'EOF'
+# nvm (added by tingly-box install-mirror.sh)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+EOF
+  )"
+  for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    [ -f "$rc" ] || continue
+    if ! grep -q 'NVM_DIR="$HOME/.nvm"' "$rc"; then
+      log "appending nvm init to $rc"
+      printf '\n%s\n' "$snippet" >> "$rc"
+    fi
+  done
 }
 
 load_nvm() {
-  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  export NVM_DIR
   # shellcheck disable=SC1091
   . "$NVM_DIR/nvm.sh"
 }
