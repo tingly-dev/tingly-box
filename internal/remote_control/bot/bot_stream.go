@@ -163,13 +163,31 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 
 	switch msg.GetType() {
 	case agentboot.EventTypeAssistant:
-		// Assistant message - send to user (always show final assistant messages)
+		// Assistant message - send to user (always show final assistant messages).
+		// Flush any buffered tool renders first so messages remain the
+		// splitting boundary on this path too.
 		if assistantMsg, ok := msg.(*agentboot.AssistantMessage); ok {
 			text := assistantMsg.GetText()
 			if strings.TrimSpace(text) != "" {
+				h.flushToolBufferLocked()
 				h.sendMessage(text)
 			}
 		}
+		return nil
+
+	case agentboot.EventTypeToolUse:
+		// agentboot has no typed ToolUseMessage; fall back to raw data.
+		raw := msg.GetRawData()
+		name, _ := raw["tool_name"].(string)
+		input, _ := raw["input"].(map[string]interface{})
+		h.appendToolBuffer(renderToolUseSummary(name, input))
+		return nil
+
+	case agentboot.EventTypeToolResult:
+		raw := msg.GetRawData()
+		name, _ := raw["tool_name"].(string)
+		isError, _ := raw["is_error"].(bool)
+		h.appendToolBuffer(renderToolResultSummary(name, isError))
 		return nil
 
 	case agentboot.EventTypePermissionRequest:
@@ -201,7 +219,9 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 		return nil
 
 	case agentboot.EventTypeResult:
-		// Result events are handled by OnComplete
+		// Result events are handled by OnComplete; still flush so a trailing
+		// run of tool events shows up before OnComplete's completion banner.
+		h.flushToolBufferLocked()
 		if resultMsg, ok := msg.(*agentboot.ResultMessage); ok {
 			logrus.WithFields(logrus.Fields{
 				"status":  resultMsg.Status,
@@ -227,6 +247,54 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 		logrus.WithField("type", msg.GetType()).Debug("Unhandled agent message type")
 		return nil
 	}
+}
+
+// renderToolUseSummary produces a one-line summary of a tool invocation
+// for the main-path handlers (handleAgentMessage / handleAgentbootEvent /
+// handleMapMessage), where the rich claude.TextFormatter isn't available.
+// Output goes into the shared toolBuffer and is rendered the same as
+// handleClaudeMessage renders — verbose joins by newline, quiet collapses
+// to a count + preview.
+func renderToolUseSummary(name string, input map[string]interface{}) string {
+	if name == "" {
+		name = "tool"
+	}
+	summary := IconTool + " " + name
+	if hint := briefInputHint(input); hint != "" {
+		summary += " " + hint
+	}
+	return summary
+}
+
+// renderToolResultSummary mirrors renderToolUseSummary for tool_result events.
+func renderToolResultSummary(name string, isError bool) string {
+	label := "ok"
+	if isError {
+		label = "error"
+	}
+	if name == "" {
+		return "↳ " + label
+	}
+	return "↳ " + name + " " + label
+}
+
+// briefInputHint picks a short, recognizable string from a tool's input map
+// (file path, command, URL, query) so each buffered tool render carries
+// enough context to be useful in the aggregated message.
+func briefInputHint(input map[string]interface{}) string {
+	if input == nil {
+		return ""
+	}
+	for _, k := range []string{"command", "file_path", "path", "url", "query"} {
+		if v, ok := input[k].(string); ok && v != "" {
+			const max = 80
+			if len(v) > max {
+				v = v[:max-3] + "..."
+			}
+			return v
+		}
+	}
+	return ""
 }
 
 // handleClaudeMessage processes claude-specific messages.
@@ -356,12 +424,23 @@ func (h *streamingMessageHandler) handleAgentbootEvent(event agentboot.Event) er
 
 	switch event.Type {
 	case agentboot.EventTypeAssistant:
-		// Handle assistant message from event
+		// Handle assistant message from event. Flush buffered tool renders
+		// first so messages remain the splitting boundary.
 		if msg, ok := event.Data["message"].(string); ok && strings.TrimSpace(msg) != "" {
+			h.flushToolBufferLocked()
 			h.sendMessage(msg)
 		} else if msg, ok := event.Data["text"].(string); ok && strings.TrimSpace(msg) != "" {
+			h.flushToolBufferLocked()
 			h.sendMessage(msg)
 		}
+	case agentboot.EventTypeToolUse:
+		name, _ := event.Data["tool_name"].(string)
+		input, _ := event.Data["input"].(map[string]interface{})
+		h.appendToolBuffer(renderToolUseSummary(name, input))
+	case agentboot.EventTypeToolResult:
+		name, _ := event.Data["tool_name"].(string)
+		isError, _ := event.Data["is_error"].(bool)
+		h.appendToolBuffer(renderToolResultSummary(name, isError))
 	case agentboot.EventTypePermissionRequest:
 		logrus.WithFields(logrus.Fields{
 			"request_id": event.Data["request_id"],
@@ -370,6 +449,8 @@ func (h *streamingMessageHandler) handleAgentbootEvent(event agentboot.Event) er
 	case agentboot.EventTypePermissionResult:
 		logrus.WithField("request_id", event.Data["request_id"]).Debug("Permission result event")
 	case agentboot.EventTypeResult:
+		// Flush trailing tool renders before OnComplete emits the banner.
+		h.flushToolBufferLocked()
 		status, _ := event.Data["status"].(string)
 		logrus.WithField("status", status).Info("Agent result event received")
 	case agentboot.EventTypeInit, agentboot.EventTypeSystem:
@@ -404,20 +485,82 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 			}).Info("Permission request received (will be handled by IMPrompter)")
 		}
 	case agentboot.EventTypeAssistant:
-		// Assistant message - check for message in data
+		// Assistant message - check for message in data. Flush buffered tool
+		// renders first so messages remain the splitting boundary.
+		var text string
 		if data, ok := m["data"].(map[string]interface{}); ok {
-			if msg, ok := data["message"].(string); ok && strings.TrimSpace(msg) != "" {
-				h.sendMessage(msg)
-			}
-		} else if msg, ok := m["message"].(string); ok && strings.TrimSpace(msg) != "" {
-			h.sendMessage(msg)
-		} else if msg, ok := m["text"].(string); ok && strings.TrimSpace(msg) != "" {
-			h.sendMessage(msg)
+			text, _ = data["message"].(string)
 		}
+		if strings.TrimSpace(text) == "" {
+			text, _ = m["message"].(string)
+		}
+		if strings.TrimSpace(text) == "" {
+			text, _ = m["text"].(string)
+		}
+		if strings.TrimSpace(text) != "" {
+			h.flushToolBufferLocked()
+			h.sendMessage(text)
+		}
+	case agentboot.EventTypeToolUse:
+		name, input := toolFieldsFromMap(m)
+		h.appendToolBuffer(renderToolUseSummary(name, input))
+	case agentboot.EventTypeToolResult:
+		name, _ := mapToolName(m)
+		isError, _ := mapBoolField(m, "is_error")
+		h.appendToolBuffer(renderToolResultSummary(name, isError))
+	case agentboot.EventTypeResult:
+		// Flush trailing tool renders before OnComplete's banner.
+		h.flushToolBufferLocked()
 	default:
 		logrus.WithField("type", msgType).Debug("Unhandled map message type")
 	}
 	return nil
+}
+
+// toolFieldsFromMap pulls tool_name + input out of a map message that may
+// carry the fields either at the top level or under a "data" sub-object.
+func toolFieldsFromMap(m map[string]interface{}) (string, map[string]interface{}) {
+	name, _ := mapToolName(m)
+	if input, ok := mapFieldAsMap(m, "input"); ok {
+		return name, input
+	}
+	return name, nil
+}
+
+func mapToolName(m map[string]interface{}) (string, bool) {
+	if v, ok := m["tool_name"].(string); ok && v != "" {
+		return v, true
+	}
+	if data, ok := m["data"].(map[string]interface{}); ok {
+		if v, ok := data["tool_name"].(string); ok && v != "" {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+func mapBoolField(m map[string]interface{}, key string) (bool, bool) {
+	if v, ok := m[key].(bool); ok {
+		return v, true
+	}
+	if data, ok := m["data"].(map[string]interface{}); ok {
+		if v, ok := data[key].(bool); ok {
+			return v, true
+		}
+	}
+	return false, false
+}
+
+func mapFieldAsMap(m map[string]interface{}, key string) (map[string]interface{}, bool) {
+	if v, ok := m[key].(map[string]interface{}); ok {
+		return v, true
+	}
+	if data, ok := m["data"].(map[string]interface{}); ok {
+		if v, ok := data[key].(map[string]interface{}); ok {
+			return v, true
+		}
+	}
+	return nil, false
 }
 
 // OnError implements agentboot.MessageStreamer

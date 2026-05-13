@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	imbot "github.com/tingly-dev/tingly-box/imbot/core"
 )
@@ -188,6 +189,128 @@ func TestStreamingHandler_QuietSuppressedMessageStillFlushesBuffer(t *testing.T)
 	sent := bot.snapshot()
 	require.Len(t, sent, 1, "buffer should flush even though the user message itself is suppressed")
 	assert.Contains(t, sent[0], "2 tool call(s)")
+}
+
+// --- Main-path handler tests (handleAgentMessage / handleAgentbootEvent /
+// handleMapMessage). These are the production paths for both Claude Code and
+// Tingly Box agents; aggregation must work here, not only on the claude
+// stream path.
+
+func agentToolUseMsg(name, input string) agentboot.AgentMessage {
+	return agentboot.MessageFromEvent(agentboot.Event{
+		Type: agentboot.EventTypeToolUse,
+		Data: map[string]interface{}{
+			"tool_name": name,
+			"input":     map[string]interface{}{"command": input},
+		},
+	}, agentboot.AgentType("claude"))
+}
+
+func agentAssistantMsg(text string) agentboot.AgentMessage {
+	return agentboot.MessageFromEvent(agentboot.Event{
+		Type: agentboot.EventTypeAssistant,
+		Data: map[string]interface{}{"message": text},
+	}, agentboot.AgentType("claude"))
+}
+
+func TestHandleAgentMessage_AggregatesToolEvents(t *testing.T) {
+	bot := &captureBot{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
+
+	require.NoError(t, h.OnMessage(agentToolUseMsg("Bash", "ls -la")))
+	require.NoError(t, h.OnMessage(agentToolUseMsg("Read", "/x.go")))
+	assert.Empty(t, bot.snapshot(), "tool events on the AgentMessage path should buffer")
+
+	require.NoError(t, h.OnMessage(agentAssistantMsg("done")))
+	sent := bot.snapshot()
+	require.Len(t, sent, 2, "expected one aggregated tool message then the assistant text")
+	assert.Contains(t, sent[0], "Bash")
+	assert.Contains(t, sent[0], "Read")
+	assert.Contains(t, sent[1], "done")
+}
+
+func TestHandleAgentbootEvent_AggregatesToolEvents(t *testing.T) {
+	bot := &captureBot{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
+
+	// Force the Event path: pass an Event whose Type has no MessageFromEvent
+	// case, so OnMessage routes via handleAgentbootEvent fallback. We do this
+	// by calling handleAgentbootEvent directly under the handler lock to
+	// mirror what OnMessage does.
+	h.mu.Lock()
+	require.NoError(t, h.handleAgentbootEvent(agentboot.Event{
+		Type: agentboot.EventTypeToolUse,
+		Data: map[string]interface{}{
+			"tool_name": "Bash",
+			"input":     map[string]interface{}{"command": "ls"},
+		},
+	}))
+	require.NoError(t, h.handleAgentbootEvent(agentboot.Event{
+		Type: agentboot.EventTypeToolResult,
+		Data: map[string]interface{}{"tool_name": "Bash", "is_error": false},
+	}))
+	h.mu.Unlock()
+	assert.Empty(t, bot.snapshot(), "tool events on the Event path should buffer")
+
+	h.mu.Lock()
+	require.NoError(t, h.handleAgentbootEvent(agentboot.Event{
+		Type: agentboot.EventTypeAssistant,
+		Data: map[string]interface{}{"message": "wrap up"},
+	}))
+	h.mu.Unlock()
+
+	sent := bot.snapshot()
+	require.Len(t, sent, 2)
+	assert.Contains(t, sent[0], "Bash")
+	assert.Contains(t, sent[1], "wrap up")
+}
+
+func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
+	bot := &captureBot{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
+
+	// Buffer two tool events (mix top-level fields and nested data) ...
+	require.NoError(t, h.OnMessage(map[string]interface{}{
+		"type":      agentboot.EventTypeToolUse,
+		"tool_name": "Read",
+		"input":     map[string]interface{}{"file_path": "/a.go"},
+	}))
+	require.NoError(t, h.OnMessage(map[string]interface{}{
+		"type": agentboot.EventTypeToolResult,
+		"data": map[string]interface{}{
+			"tool_name": "Read",
+			"is_error":  true,
+		},
+	}))
+	assert.Empty(t, bot.snapshot(), "tool events on the map path should buffer")
+
+	// ... and confirm an assistant map flushes them.
+	require.NoError(t, h.OnMessage(map[string]interface{}{
+		"type":    agentboot.EventTypeAssistant,
+		"message": "ok",
+	}))
+
+	sent := bot.snapshot()
+	require.Len(t, sent, 2)
+	assert.Contains(t, sent[0], "Read")
+	assert.Contains(t, sent[0], "error", "tool_result with is_error=true should surface as error")
+	assert.Contains(t, sent[1], "ok")
+}
+
+func TestBriefInputHint_PicksKnownKeys(t *testing.T) {
+	assert.Equal(t, "ls -la", briefInputHint(map[string]interface{}{"command": "ls -la"}))
+	assert.Equal(t, "/a.go", briefInputHint(map[string]interface{}{"file_path": "/a.go"}))
+	assert.Equal(t, "", briefInputHint(nil))
+	assert.Equal(t, "", briefInputHint(map[string]interface{}{"unrelated": 1}))
+
+	// Long values truncate to <=80 chars with an ellipsis.
+	long := ""
+	for i := 0; i < 100; i++ {
+		long += "x"
+	}
+	got := briefInputHint(map[string]interface{}{"command": long})
+	assert.LessOrEqual(t, len(got), 80)
+	assert.Contains(t, got, "...")
 }
 
 func TestIsToolOnlyClaudeMessage(t *testing.T) {
