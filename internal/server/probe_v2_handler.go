@@ -131,45 +131,45 @@ func (s *Server) probeStream(ctx context.Context, req *ProbeV2Request) (*client.
 
 // resolveTargetToProviderModel resolves a probe request (rule or provider) to a provider and model
 func (s *Server) resolveTargetToProviderModel(ctx context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
-	provider, model, err := s.resolveTargetToProviderModelRaw(ctx, req)
+	var (
+		provider *typ.Provider
+		model    string
+		err      error
+	)
+	switch req.TargetType {
+	case ProbeV2TargetProvider:
+		provider, model, err = s.resolveProviderTarget(ctx, req)
+	case ProbeV2TargetProviderConfig:
+		provider, model, err = s.resolveProviderConfigTarget(ctx, req)
+	case ProbeV2TargetRule:
+		provider, model, err = s.resolveRuleTarget(ctx, req)
+	default:
+		return nil, "", fmt.Errorf("invalid target type: %s", req.TargetType)
+	}
 	if err != nil {
 		return nil, "", err
 	}
 	if provider.IsVirtual() {
-		// Vmodel APIBase ("vmodel://local") is a sentinel that no HTTP client
-		// can dial. Re-resolve as an inline provider_config pointing at this
-		// server's own /virtual/{style}/v1 loopback route. The probe then
-		// exercises the in-process vmodel handler end-to-end (route, auth
-		// middleware, registry lookup, streaming response) without mutating
+		// vmodel://local can't be dialed; reroute through loopback so the
+		// probe exercises the in-process handler end-to-end without mutating
 		// the stored provider record.
 		return s.resolveVModelLoopbackTarget(ctx, provider, model)
 	}
 	return provider, model, nil
 }
 
-func (s *Server) resolveTargetToProviderModelRaw(ctx context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
-	switch req.TargetType {
-	case ProbeV2TargetProvider:
-		return s.resolveProviderTarget(ctx, req)
-	case ProbeV2TargetProviderConfig:
-		return s.resolveProviderConfigTarget(ctx, req)
-	case ProbeV2TargetRule:
-		return s.resolveRuleTarget(ctx, req)
-	default:
-		return nil, "", fmt.Errorf("invalid target type: %s", req.TargetType)
-	}
-}
-
-// resolveVModelLoopbackTarget reuses the resolveProviderConfigTarget shape:
-// it synthesizes an inline provider config that points at this server's own
-// /virtual/{style}/v1 route over loopback, authenticated with the global
-// model token.
+// resolveVModelLoopbackTarget synthesizes an inline provider config pointing
+// at this server's own /virtual/<style> loopback route, then delegates to
+// resolveProviderConfigTarget for the rest of the probe pipeline.
 func (s *Server) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.Provider, model string) (*typ.Provider, string, error) {
 	port := s.config.GetServerPort()
 	if port == 0 {
 		return nil, "", fmt.Errorf("server port unknown; cannot probe vmodel provider %q", provider.Name)
 	}
 
+	// Anthropic SDK trims a trailing /v1 from its BaseURL; OpenAI SDK does not.
+	// Pass each base in the form its client expects so the rebuilt request URL
+	// hits /v1/{messages,chat/completions} exactly once.
 	var path string
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:

@@ -207,11 +207,9 @@ func (p *Provider) ResolveEndpoint(clientStyle APIStyle) (string, APIStyle) {
 	return p.APIBase, p.APIStyle
 }
 
-// VModelSentinelToken is the dummy credential returned for vmodel providers.
-// The Anthropic/OpenAI SDK credential sentinel fires at request time and
-// rejects an empty APIKey before the HTTP call. Vmodel requests are
-// short-circuited to the in-process handler before any outbound HTTP, so
-// the value is never transmitted to a real upstream.
+// VModelSentinelToken satisfies the SDK's non-empty APIKey check for vmodel
+// providers. Vmodel requests short-circuit before any outbound HTTP, so this
+// value is never transmitted.
 const VModelSentinelToken = "EMPTY"
 
 // GetAccessToken returns the access token based on auth type
@@ -222,8 +220,6 @@ func (p *Provider) GetAccessToken() string {
 			return p.OAuthDetail.AccessToken
 		}
 	case AuthTypeVirtual:
-		// Return sentinel so SDK credential checks pass.
-		// The real dispatch short-circuits before any outbound HTTP.
 		return VModelSentinelToken
 	case AuthTypeAPIKey, "":
 		// Default to api_key for backward compatibility

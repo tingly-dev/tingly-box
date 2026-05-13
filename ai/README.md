@@ -133,7 +133,8 @@ path.
 The probe resolution layer (`probe_v2_handler.resolveTargetToProviderModel`)
 detects `provider.IsVirtual()` after the initial resolve and re-routes
 through `resolveProviderConfigTarget` with a synthetic inline config:
-`APIBase = http://127.0.0.1:<port>/virtual/{anthropic,openai}/v1`,
+`APIBase = http://127.0.0.1:<port>/virtual/anthropic` (Anthropic SDK appends
+`/v1`) or `…/virtual/openai/v1` (OpenAI SDK appends nothing), and
 `Token = cfg.GetModelToken()`. From there the SDK probe is identical to a
 user-supplied provider_config target — round-tripping through HTTP loopback
 into the in-process vmodel handler, exercising route, auth middleware,
