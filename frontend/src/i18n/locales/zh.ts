@@ -235,11 +235,11 @@ export default {
       "fusionModeDesc": "Fusion 模式（已勾选）：会创建一个同时包含 OpenAI 与 Anthropic Base URL 的 Provider。"
     },
     "keyName": {
-      "label": "API 密钥名称",
+      "label": "名称",
       "placeholder": "例如：OpenAI API Key",
       "autoFill": "{{title}} API 密钥",
-      "helper": "可选。留空将自动生成，创建后可随时重命名。",
-      "customizeAction": "自定义名称（可选）"
+      "helper": "留空将使用上方自动生成的名称，创建后可随时重命名。",
+      "editAction": "编辑名称"
     },
     "providerOrUrl": {
       "label": "提供商或自定义基础 URL",

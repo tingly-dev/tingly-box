@@ -235,11 +235,11 @@ export default {
       "fusionModeDesc": "Fusion mode (checked): create one provider with both OpenAI and Anthropic base URLs."
     },
     "keyName": {
-      "label": "API Key Name",
+      "label": "Name",
       "placeholder": "e.g., OpenAI API Key",
       "autoFill": "{{title}} API Key",
-      "helper": "Optional. Leave blank to auto-generate. You can rename later.",
-      "customizeAction": "Customize name (optional)"
+      "helper": "Leave blank to use the auto-generated name. You can rename later.",
+      "editAction": "Edit name"
     },
     "providerOrUrl": {
       "label": "Provider or Custom Base URL",

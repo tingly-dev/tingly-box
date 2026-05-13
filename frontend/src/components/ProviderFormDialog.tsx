@@ -1,4 +1,4 @@
-import {Close, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
+import {Close, Edit, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -928,6 +928,7 @@ const ProviderFormDialog = ({
                             <TextField
                                 size="small"
                                 fullWidth
+                                autoFocus
                                 label={t('providerDialog.keyName.label')}
                                 value={data.name}
                                 onChange={(e) => {
@@ -937,22 +938,57 @@ const ProviderFormDialog = ({
                                 }}
                                 placeholder={computeAutoName()}
                                 helperText={t('providerDialog.keyName.helper', {
-                                    defaultValue: 'Optional. Leave blank to auto-generate. You can rename later.',
+                                    defaultValue: 'Leave blank to use the auto-generated name. You can rename later.',
                                 })}
                             />
                         ) : (
-                            <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: -1}}>
-                                <Button
-                                    type="button"
-                                    size="small"
-                                    variant="text"
-                                    onClick={() => setShowNameField(true)}
-                                    sx={{textTransform: 'none', color: 'text.secondary'}}
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    px: 1.5,
+                                    py: 0.75,
+                                    borderRadius: 1,
+                                    bgcolor: 'background.default',
+                                    border: 1,
+                                    borderColor: 'divider',
+                                }}
+                            >
+                                <Typography variant="caption" color="text.secondary">
+                                    {t('providerDialog.keyName.label')}
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    sx={{
+                                        flex: 1,
+                                        color: 'text.primary',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                    }}
                                 >
-                                    {t('providerDialog.keyName.customizeAction', {
-                                        defaultValue: 'Customize name (optional)',
+                                    {data.name || computeAutoName()}
+                                </Typography>
+                                <Tooltip
+                                    title={t('providerDialog.keyName.editAction', {
+                                        defaultValue: 'Edit name',
                                     })}
-                                </Button>
+                                    arrow
+                                >
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => {
+                                            if (!data.name) {
+                                                onChangeRef.current('name', computeAutoName());
+                                            }
+                                            setShowNameField(true);
+                                        }}
+                                        sx={{color: 'text.secondary'}}
+                                    >
+                                        <Edit fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
                             </Box>
                         )}
 
