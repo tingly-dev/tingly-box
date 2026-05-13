@@ -80,8 +80,22 @@ Provider {
     VModelDetail: {
         Models: ["claude-instant", "claude-echo", ...]
     }
+    // Token is implicitly "EMPTY" — see GetAccessToken
 }
 ```
+
+### Credential sentinel (`VModelSentinelToken`)
+
+The Anthropic and OpenAI SDKs install a lazy credential check that fires
+**at request time**: if `APIKey` is empty the SDK returns `ErrNoCredentials`
+before the HTTP call. Because vmodel requests are short-circuited to the
+in-process handler (see below) no real HTTP call is ever made, but the SDK
+client may still be constructed on code paths shared with real providers.
+
+To satisfy the check without requiring every vmodel provider to carry a real
+token, `GetAccessToken()` returns the sentinel string `"EMPTY"` for all
+`AuthTypeVirtual` providers. The sentinel is exported as `VModelSentinelToken`
+and is never transmitted to a real upstream.
 
 ### How the dispatcher routes a vmodel request
 
