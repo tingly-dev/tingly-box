@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -315,42 +314,28 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported by this connection")
+	}
+
 	var inputTokens, outputTokens, cacheTokens int64
 	var hasUsage bool
 
-	// Panic recovery
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Responses streaming handler: %v", r)
-			if hasUsage {
-				// Track panic as error with any usage we accumulated
-				// Usage tracking will be handled by caller
-			}
-			// Try to send an error event if possible
-			if c.Writer != nil {
-				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
-				if flusher, ok := c.Writer.(http.Flusher); ok {
-					flusher.Flush()
-				}
-			}
-		}
-	}()
-
-	// Process the stream with context cancellation checking
-	c.Stream(func(w io.Writer) bool {
-		// Check context cancellation first
+	// MENTION: Do NOT replace this loop with c.Stream(). c.Stream() finalizes the HTTP response writer
+	// when it returns, so any writes after the loop (error events, etc.) are silently dropped.
+	// This manual loop + explicit flusher.Flush() keeps full control over connection lifetime.
+	for {
+		// Check context cancellation
 		select {
 		case <-c.Request.Context().Done():
 			logrus.Debug("Client disconnected, stopping Responses stream")
-			return false
+			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 		default:
 		}
 
-		// Try to get next event
 		if !stream.Next() {
-			// Stream ended naturally
-			return false
+			break
 		}
 
 		evt := stream.Current()
@@ -363,6 +348,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		if evt.Response.Usage.OutputTokens > 0 {
 			outputTokens = evt.Response.Usage.OutputTokens
 		}
+
 		// Note: Responses API may include cache tokens in usage details
 		// Check if available in the raw JSON
 		// Marshal event using RawJSON() to avoid serializing empty union fields
@@ -370,7 +356,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		eventType := evt.Type
 
 		// Extract cached tokens using gjson
-		if token_details := gjson.Get(eventRaw, "response.usage.input_tokens_details"); token_details.Exists() {
+		if gjson.Get(eventRaw, "response.usage.input_tokens_details").Exists() {
 			if cachedTokens := gjson.Get(eventRaw, "response.usage.input_tokens_details.cached_tokens"); cachedTokens.Exists() {
 				cacheTokens = cachedTokens.Int()
 				logrus.Debugf("cached tokens: %v", cacheTokens)
@@ -378,7 +364,6 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 				// set raw use "0" as 0
 				if modified, err := sjson.SetRaw(eventRaw, "response.usage.input_tokens_details.cached_tokens", "0"); err == nil {
 					eventRaw = modified
-					logrus.Debugf("event raw missing cached tokens: %v", eventRaw)
 				} else {
 					logrus.WithError(err).Error("Failed to set cached tokens")
 				}
@@ -387,37 +372,24 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 
 		// Apply model override if the event contains a response object with a model field
 		if len(eventRaw) > 0 {
-			// Use gjson to check if response.model exists and is non-empty
 			if model := gjson.Get(eventRaw, "response.model"); model.Exists() && model.String() != "" {
-				// Use sjson to set the new model value
 				if modified, err := sjson.Set(eventRaw, "response.model", responseModel); err == nil {
 					eventRaw = modified
 				}
 			}
 		}
 
-		// Send SSE event with event type (e.g., "response.created", "response.output_text.delta")
 		OpenAIResponsesEvent(c, eventType, eventRaw)
-		return true
-	})
+		flusher.Flush()
+	}
 
-	// Check for stream errors after loop completes
 	if err := stream.Err(); err != nil {
-		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Responses stream canceled by client")
-			if hasUsage {
-				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
-			}
-			return protocol.ZeroTokenUsage(), nil
+			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 		}
 
 		logrus.Errorf("Responses stream error: %v", err)
-		if hasUsage {
-			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
-		}
-
-		// Send error chunk
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
 				"message": err.Error(),
@@ -425,17 +397,13 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 				"code":    "stream_failed",
 			},
 		}
-
 		OpenAIResponsesEvent(c, "error", errorChunk)
+		flusher.Flush()
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 	}
 
-	// Track successful streaming completion
-	if hasUsage {
-		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
-	}
-
-	return protocol.ZeroTokenUsage(), nil
+	_ = hasUsage
+	return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 }
 
 // ===================================================================
