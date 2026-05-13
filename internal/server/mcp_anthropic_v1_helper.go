@@ -386,7 +386,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 
 	// Add recorder hooks if available
 	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+		onEvent, onComplete, onError := NewRecorderHooks(recorder, actualModel, provider)
 		if onEvent != nil {
 			hc.WithOnStreamEvent(onEvent)
 		}
@@ -508,7 +508,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 
 	// Add recorder hooks if available
 	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+		onEvent, onComplete, onError := NewRecorderHooks(recorder, actualModel, provider)
 		if onEvent != nil {
 			hc.WithOnStreamEvent(onEvent)
 		}
@@ -620,7 +620,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Add recorder hooks if available
 	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+		onEvent, onComplete, onError := NewRecorderHooks(recorder, actualModel, provider)
 		if onEvent != nil {
 			hc.WithOnStreamEvent(onEvent)
 		}

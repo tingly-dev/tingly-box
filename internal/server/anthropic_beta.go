@@ -85,7 +85,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
 	var recorder *ProtocolRecorder
 	if s.ApplyRecording(scenarioType) {
-		recorder = s.GetOrCreateScenarioRecorderV2(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
+		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
 	}
 
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType)
@@ -117,7 +117,7 @@ func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthro
 
 	// Add recorder hooks if recorder is available
 	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
+		onEvent, onComplete, onError := NewRecorderHooks(recorder, actualModel, provider)
 		if onEvent != nil {
 			hc.WithOnStreamEvent(onEvent)
 		}
