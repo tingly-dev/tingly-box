@@ -24,6 +24,11 @@ const (
 	RuleUUIDBuiltinCCOpus     = "built-in-cc-opus"
 	RuleUUIDBuiltinCCDefault  = "built-in-cc-default"
 	RuleUUIDBuiltinCCSubagent = "built-in-cc-subagent"
+
+	// Claude Desktop built-in rules (locked, using builtin: prefix)
+	RuleUUIDBuiltinClaudeDesktopSonnet46 = "builtin:claude_desktop:claude-sonnet-4-6"
+	RuleUUIDBuiltinClaudeDesktopOpus46   = "builtin:claude_desktop:claude-opus-4-6"
+	RuleUUIDBuiltinClaudeDesktopOpus47   = "builtin:claude_desktop:claude-opus-4-7"
 )
 
 func Migrate(c *Config) error {
@@ -38,6 +43,7 @@ func Migrate(c *Config) error {
 	migrate20260416(c) // Enable multi-tenant by default
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
 	migrate20260502(c) // Remove wildcard (*) rules for smart_guide scenario
+	migrate20260513(c) // Add Claude Desktop built-in rules
 	return nil
 }
 
@@ -432,5 +438,74 @@ func migrate20260502(c *Config) {
 		c.Rules = filteredRules
 		_ = c.Save()
 		logrus.Info("Migration 2026-05-02 completed: removed smart_guide wildcard rules")
+	}
+}
+
+// migrate20260513 adds Claude Desktop built-in rules
+// Claude Desktop has 3 locked rules with builtin: UUID format:
+// - builtin:claude_desktop:claude-sonnet-4-6
+// - builtin:claude_desktop:claude-opus-4-6
+// - builtin:claude_desktop:claude-opus-4-7
+func migrate20260513(c *Config) {
+	needsSave := false
+
+	// Check if Claude Desktop rules already exist
+	existingRules := map[string]bool{
+		RuleUUIDBuiltinClaudeDesktopSonnet46: false,
+		RuleUUIDBuiltinClaudeDesktopOpus46:   false,
+		RuleUUIDBuiltinClaudeDesktopOpus47:   false,
+	}
+
+	for _, rule := range c.Rules {
+		if _, exists := existingRules[rule.UUID]; exists {
+			existingRules[rule.UUID] = true
+		}
+	}
+
+	// Find a reference rule to copy services from (prefer claude_code or codex)
+	var referenceRule *typ.Rule
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if rule.Scenario == typ.ScenarioClaudeCode || rule.Scenario == typ.ScenarioCodex {
+			if len(rule.Services) > 0 {
+				referenceRule = rule
+				break
+			}
+		}
+	}
+
+	// Add missing Claude Desktop rules
+	for _, defaultRule := range DefaultRules {
+		uuid := defaultRule.UUID
+		alreadyExists, exists := existingRules[uuid]
+		if !exists {
+			continue // Not a Claude Desktop rule
+		}
+
+		if alreadyExists {
+			continue // Rule already exists, skip
+		}
+
+		// Add the rule
+		newRule := defaultRule
+		// Copy services from reference rule if available
+		if referenceRule != nil && len(referenceRule.Services) > 0 {
+			newRule.Services = make([]*loadbalance.Service, len(referenceRule.Services))
+			copy(newRule.Services, referenceRule.Services)
+		}
+
+		c.Rules = append(c.Rules, newRule)
+		needsSave = true
+
+		logrus.WithFields(logrus.Fields{
+			"rule_uuid":      newRule.UUID,
+			"request_model":  newRule.RequestModel,
+			"response_model": newRule.ResponseModel,
+		}).Info("Added Claude Desktop built-in rule")
+	}
+
+	if needsSave {
+		_ = c.Save()
+		logrus.Info("Migration 2026-05-13 completed: added Claude Desktop built-in rules")
 	}
 }

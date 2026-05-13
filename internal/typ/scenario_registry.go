@@ -64,7 +64,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 		}
 	case ScenarioImageGen:
 		return ScenarioDescriptor{
-			ID:                 scenario,
+			ID: scenario,
 			// Two parallel surfaces: TransportOpenAI for /responses & /chat/completions
 			// (image_generation tool), TransportImageGen for /images/generations.
 			// The caller chooses; tingly-box does not probe the upstream.
@@ -79,7 +79,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	case ScenarioAgent, ScenarioCodex, ScenarioOpenCode, ScenarioXcode, ScenarioVSCode, ScenarioSmartGuide:
+	case ScenarioAgent, ScenarioCodex, ScenarioOpenCode, ScenarioXcode, ScenarioVSCode, ScenarioClaudeDesktop, ScenarioSmartGuide:
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI},

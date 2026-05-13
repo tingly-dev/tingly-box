@@ -165,5 +165,44 @@ func init() {
 			},
 			Active: true,
 		},
+		{
+			UUID:          "builtin:claude_desktop:claude-sonnet-4-6",
+			Scenario:      typ.ScenarioClaudeDesktop,
+			RequestModel:  "claude-sonnet-4-6",
+			ResponseModel: "",
+			Description:   "Claude Desktop - Sonnet 4.6 model for balanced performance",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "builtin:claude_desktop:claude-opus-4-6",
+			Scenario:      typ.ScenarioClaudeDesktop,
+			RequestModel:  "claude-opus-4-6",
+			ResponseModel: "",
+			Description:   "Claude Desktop - Opus 4.6 model for complex tasks",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
+			},
+			Active: true,
+		},
+		{
+			UUID:          "builtin:claude_desktop:claude-opus-4-7",
+			Scenario:      typ.ScenarioClaudeDesktop,
+			RequestModel:  "claude-opus-4-7",
+			ResponseModel: "",
+			Description:   "Claude Desktop - Opus 4.7 model for advanced reasoning",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
+			},
+			Active: true,
+		},
 	}
 }

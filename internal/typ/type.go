@@ -50,18 +50,19 @@ func (fb FlexibleBool) MarshalJSON() ([]byte, error) {
 type RuleScenario string
 
 const (
-	ScenarioOpenAI     RuleScenario = "openai"
-	ScenarioAnthropic  RuleScenario = "anthropic"
-	ScenarioAgent      RuleScenario = "agent"
-	ScenarioCodex      RuleScenario = "codex"
-	ScenarioClaudeCode RuleScenario = "claude_code"
-	ScenarioOpenCode   RuleScenario = "opencode"
-	ScenarioXcode      RuleScenario = "xcode"
-	ScenarioVSCode     RuleScenario = "vscode"
-	ScenarioSmartGuide RuleScenario = "_smart_guide"
-	ScenarioGlobal     RuleScenario = "_global"  // Global flags that apply to all scenarios
-	ScenarioEmbed      RuleScenario = "embed"    // Embedding application scenario; only serves /embeddings
-	ScenarioImageGen   RuleScenario = "imagegen" // Image generation scenario; only serves /images/generations
+	ScenarioOpenAI        RuleScenario = "openai"
+	ScenarioAnthropic     RuleScenario = "anthropic"
+	ScenarioAgent         RuleScenario = "agent"
+	ScenarioCodex         RuleScenario = "codex"
+	ScenarioClaudeCode    RuleScenario = "claude_code"
+	ScenarioOpenCode      RuleScenario = "opencode"
+	ScenarioXcode         RuleScenario = "xcode"
+	ScenarioVSCode        RuleScenario = "vscode"
+	ScenarioClaudeDesktop RuleScenario = "claude_desktop"
+	ScenarioSmartGuide    RuleScenario = "_smart_guide"
+	ScenarioGlobal        RuleScenario = "_global"  // Global flags that apply to all scenarios
+	ScenarioEmbed         RuleScenario = "embed"    // Embedding application scenario; only serves /embeddings
+	ScenarioImageGen      RuleScenario = "imagegen" // Image generation scenario; only serves /images/generations
 )
 
 func BuiltinScenarios() []RuleScenario {
@@ -74,6 +75,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioOpenCode,
 		ScenarioXcode,
 		ScenarioVSCode,
+		ScenarioClaudeDesktop,
 		ScenarioSmartGuide,
 		ScenarioGlobal,
 		ScenarioEmbed,
