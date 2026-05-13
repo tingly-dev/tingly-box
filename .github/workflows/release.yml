@@ -83,9 +83,7 @@ jobs:
 
       - name: Install frontend dependencies
         run: |
-          echo "@swc/core" | pnpm approve-builds
-          echo "esbuild" | pnpm approve-builds
-          echo "msw" | pnpm approve-builds
+          pnpm approve-builds --all
           pnpm install --frozen-lockfile
         working-directory: ./frontend
 
@@ -366,9 +364,7 @@ jobs:
       - name: Install frontend dependencies
         shell: bash
         run: |
-          echo "@swc/core" | pnpm approve-builds
-          echo "esbuild" | pnpm approve-builds
-          echo "msw" | pnpm approve-builds
+          pnpm approve-builds --all
           pnpm install --frozen-lockfile
         working-directory: ./frontend
 
