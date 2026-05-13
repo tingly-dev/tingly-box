@@ -108,7 +108,7 @@ func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance
 	if strings.TrimSpace(desc) == "" {
 		return imageUnavailableText
 	}
-	return "[image: " + desc + "]"
+	return "Here is an [image] with message and is parsed into description [image: " + desc + "]"
 }
 
 func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.BetaMessageNewParams, usable *loadbalance.Service) {
@@ -191,4 +191,3 @@ func extractV1ImageSource(img *anthropic.ImageBlockParam) (mediaType, b64, remot
 	}
 	return
 }
-
