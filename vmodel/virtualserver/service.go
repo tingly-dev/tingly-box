@@ -46,9 +46,44 @@ func (s *Service) GetHandler() *Handler {
 	return s.handler
 }
 
-// SetupRoutes sets up virtual model routes on a Gin router group.
+// SetupRoutes mounts virtual-model endpoints on a single mixed-protocol
+// group at <group>/{models,chat/completions,messages}.
+//
+// Deprecated: prefer SetupOpenAIRoutes + SetupAnthropicRoutes so OpenAI and
+// Anthropic clients each see only their own model IDs. Retained for test
+// fixtures.
 func (s *Service) SetupRoutes(group *gin.RouterGroup) {
 	group.GET("/models", s.handler.ListModels)
 	group.POST("/chat/completions", s.handler.ChatCompletions)
 	group.POST("/messages", s.handler.Messages)
+}
+
+// SetupOpenAIRoutes mounts the OpenAI-only entrypoints on the given group.
+// Typical wiring:
+//
+//	openai := engine.Group("/virtual/openai")
+//	svc.SetupOpenAIRoutes(openai)
+//
+// This produces /virtual/openai/v1/models and
+// /virtual/openai/v1/chat/completions — drop-in compatible with the OpenAI
+// SDK base URL convention.
+func (s *Service) SetupOpenAIRoutes(group *gin.RouterGroup) {
+	v1 := group.Group("/v1")
+	v1.GET("/models", s.handler.ListOpenAIModels)
+	v1.POST("/chat/completions", s.handler.ChatCompletions)
+}
+
+// SetupAnthropicRoutes mounts the Anthropic-only entrypoints on the given
+// group. Typical wiring:
+//
+//	anthropic := engine.Group("/virtual/anthropic")
+//	svc.SetupAnthropicRoutes(anthropic)
+//
+// This produces /virtual/anthropic/v1/models and
+// /virtual/anthropic/v1/messages — drop-in compatible with the Anthropic
+// SDK base URL convention.
+func (s *Service) SetupAnthropicRoutes(group *gin.RouterGroup) {
+	v1 := group.Group("/v1")
+	v1.GET("/models", s.handler.ListAnthropicModels)
+	v1.POST("/messages", s.handler.Messages)
 }

@@ -1292,27 +1292,32 @@ func (s *Server) SetupPassthroughAnthropicEndpoints(group *gin.RouterGroup) {
 	group.GET("/models", s.getModelAuthMiddleware(), s.AnthropicListModels)
 }
 
-// UseVirtualModelEndpoints sets up the direct virtual-model entrypoints
-// (/virtual and /virtual/v1). These bypass the provider/rule/scenario
-// pipeline and call the in-process handler directly — useful for smoke
-// tests and tooling that wants a fixed URL without configuring a provider.
+// UseVirtualModelEndpoints sets up the direct virtual-model entrypoints,
+// split per protocol:
 //
-// The canonical path for virtual models is now the standard /v1/messages
-// and /v1/chat/completions, where the dispatcher short-circuits to the
-// same handler when it resolves to a vmodel provider (see
-// HandleAnthropicMessages and HandleOpenAIChatCompletions). These /virtual
-// routes are retained for one release cycle for backward compatibility and
-// will be removed in a follow-up.
+//	/virtual/openai/v1/{models,chat/completions}
+//	/virtual/anthropic/v1/{models,messages}
+//
+// These bypass the provider/rule/scenario pipeline and call the in-process
+// handler directly — useful when a client wants a fixed URL pointed at the
+// vmodel registry without configuring a provider. The protocol split
+// ensures /models returns only the model IDs the chosen protocol can
+// actually dispatch.
+//
+// The canonical path for virtual models in normal use is still
+// /v1/messages and /v1/chat/completions, where the dispatcher
+// short-circuits to the same handler when it resolves to a vmodel provider
+// (see HandleAnthropicMessages and HandleOpenAIChatCompletions).
 func (s *Server) UseVirtualModelEndpoints() {
-	virtual := s.engine.Group("/virtual")
-	virtual.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
-	virtual.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
-	virtual.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
+	mw := s.getModelAuthMiddleware()
 
-	virtualV1 := s.engine.Group("/virtual/v1")
-	virtualV1.GET("/models", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ListModels)
-	virtualV1.POST("/chat/completions", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().ChatCompletions)
-	virtualV1.POST("/messages", s.getModelAuthMiddleware(), s.virtualModelService.GetHandler().Messages)
+	openai := s.engine.Group("/virtual/openai")
+	openai.Use(mw)
+	s.virtualModelService.SetupOpenAIRoutes(openai)
+
+	anthropic := s.engine.Group("/virtual/anthropic")
+	anthropic.Use(mw)
+	s.virtualModelService.SetupAnthropicRoutes(anthropic)
 }
 
 func (s *Server) UseLoadBalanceEndpoints() {

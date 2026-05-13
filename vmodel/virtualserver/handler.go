@@ -38,12 +38,35 @@ func NewHandler(anthropicReg *anthropicvm.Registry, openaiReg *openaivm.Registry
 }
 
 // ListModels handles GET /virtual/v1/models — returns the union of both registries.
+//
+// Deprecated: prefer ListOpenAIModels / ListAnthropicModels for the
+// protocol-split entrypoints. Retained for the legacy mixed-protocol route
+// and for test fixtures that want both registries on one endpoint.
 func (h *Handler) ListModels(c *gin.Context) {
 	models := h.anthropicReg.ListModels()
 	models = append(models, h.openaiReg.ListModels()...)
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
 		Object: "list",
 		Data:   models,
+	})
+}
+
+// ListOpenAIModels handles GET /virtual/openai/v1/models — returns only the
+// OpenAI-protocol registry so clients pointed at the OpenAI base URL don't
+// see Anthropic-only model IDs they cannot dispatch.
+func (h *Handler) ListOpenAIModels(c *gin.Context) {
+	c.JSON(http.StatusOK, OpenAIModelsResponse{
+		Object: "list",
+		Data:   h.openaiReg.ListModels(),
+	})
+}
+
+// ListAnthropicModels handles GET /virtual/anthropic/v1/models — returns
+// only the Anthropic-protocol registry.
+func (h *Handler) ListAnthropicModels(c *gin.Context) {
+	c.JSON(http.StatusOK, OpenAIModelsResponse{
+		Object: "list",
+		Data:   h.anthropicReg.ListModels(),
 	})
 }
 
