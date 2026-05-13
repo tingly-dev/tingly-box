@@ -3,7 +3,10 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -82,12 +85,18 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		}
 
 		models = append(models, OpenAIModel{
-			ID:      rule.RequestModel,
-			Object:  "model",
-			Created: created,
-			OwnedBy: ownedBy,
+			ID:       rule.RequestModel,
+			Object:   "model",
+			Created:  created,
+			OwnedBy:  ownedBy,
+			AuthType: string(primaryAuthTypeForRule(cfg, rule)),
 		})
 	}
+
+	sort.SliceStable(models, func(i, j int) bool {
+		return authTypeSortWeight(typ.AuthType(models[i].AuthType)) <
+			authTypeSortWeight(typ.AuthType(models[j].AuthType))
+	})
 
 	c.JSON(http.StatusOK, OpenAIModelsResponse{
 		Object: "list",
@@ -196,6 +205,15 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 				Type:    "invalid_request_error",
 			},
 		})
+		return
+	}
+
+	// Virtual-model providers are served by the in-process vmodel handler.
+	// Resolution went through the normal routing pipeline so rules/scenarios
+	// still apply, but no outbound HTTP is performed.
+	if provider.IsVirtual() && s.virtualModelService != nil {
+		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+		s.virtualModelService.GetHandler().ChatCompletions(c)
 		return
 	}
 

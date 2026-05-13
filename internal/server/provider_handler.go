@@ -28,6 +28,8 @@ func maskProviderForResponse(provider *typ.Provider) ProviderResponse {
 		Enabled:          provider.Enabled,
 		ProxyURL:         provider.ProxyURL,
 		AuthType:         string(provider.AuthType),
+		VModelDetail:     provider.VModelDetail,
+		Source:           string(provider.Source),
 	}
 
 	switch provider.AuthType {
@@ -230,6 +232,16 @@ func (s *Server) DeleteProvider(c *gin.Context) {
 		return
 	}
 
+	// Builtin providers (e.g. virtual-model defaults) are not deletable.
+	// They are re-seeded at startup so any deletion would just race back.
+	if existing, err := s.config.GetProviderByUUID(uid); err == nil && existing.IsBuiltin() {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Builtin providers cannot be deleted (you can disable them instead)",
+		})
+		return
+	}
+
 	err := s.config.DeleteProvider(uid)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
@@ -299,6 +311,17 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"error":   "Provider not found",
+		})
+		return
+	}
+
+	// Builtin providers are immutable except for Enabled (toggled via the
+	// dedicated ToggleProvider endpoint). Reject mutating updates here so the
+	// store always reflects the in-process registries on the next restart.
+	if provider.IsBuiltin() {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error":   "Builtin providers are read-only (use the toggle endpoint to enable/disable)",
 		})
 		return
 	}

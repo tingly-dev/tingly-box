@@ -32,6 +32,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server/module/skill"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
+	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
 	pkgobs "github.com/tingly-dev/tingly-box/pkg/obs"
 	"github.com/tingly-dev/tingly-box/pkg/swagger"
 	"github.com/tingly-dev/tingly-box/remote/audit"
@@ -119,6 +120,15 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	oauthmodule.RegisterRoutes(apiV1, s.getUserAuthMiddleware(), s.oauthHandler)
 	// Register callback routes (unauthenticated)
 	oauthmodule.RegisterCallbackRoutes(manager, s.oauthHandler)
+
+	// Virtual-model management routes — expose registry contents for the
+	// Credentials > Virtual Models sub-tab. The providers themselves are
+	// served via the standard provider CRUD endpoints (Source=builtin).
+	virtualmodelmodule.RegisterRoutes(
+		apiV1,
+		s.getUserAuthMiddleware(),
+		virtualmodelmodule.NewHandler(s.virtualModelService),
+	)
 
 	// Usage API routes - register from usage module
 	// Note: apiV1 is already created above with auth middleware

@@ -1,0 +1,48 @@
+package server
+
+import (
+	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
+
+// primaryAuthTypeForRule returns the AuthType of the first active service's
+// provider in a rule. It is used by /v1/models endpoints so the frontend can
+// order picker entries oauth -> api_key -> vmodel.
+//
+// Returns AuthTypeAPIKey as the fallback for empty/unresolvable rules so they
+// land in the middle group rather than at the head or tail.
+func primaryAuthTypeForRule(cfg *config.Config, rule typ.Rule) typ.AuthType {
+	if cfg == nil {
+		return typ.AuthTypeAPIKey
+	}
+	for _, svc := range rule.GetServices() {
+		if svc == nil || !svc.Active {
+			continue
+		}
+		provider, err := cfg.GetProviderByUUID(svc.Provider)
+		if err != nil || provider == nil {
+			continue
+		}
+		switch provider.AuthType {
+		case typ.AuthTypeOAuth, typ.AuthTypeAPIKey, typ.AuthTypeVirtual:
+			return provider.AuthType
+		default:
+			return typ.AuthTypeAPIKey
+		}
+	}
+	return typ.AuthTypeAPIKey
+}
+
+// authTypeSortWeight ranks auth types for /v1/models ordering:
+// oauth (0) -> api_key (1) -> vmodel (2). Any unknown value is treated as
+// api_key so legacy entries cluster with regular providers.
+func authTypeSortWeight(a typ.AuthType) int {
+	switch a {
+	case typ.AuthTypeOAuth:
+		return 0
+	case typ.AuthTypeVirtual:
+		return 2
+	default:
+		return 1
+	}
+}

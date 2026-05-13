@@ -11,9 +11,30 @@ import (
 type AuthType string
 
 const (
-	AuthTypeAPIKey AuthType = "api_key"
-	AuthTypeOAuth  AuthType = "oauth"
+	AuthTypeAPIKey  AuthType = "api_key"
+	AuthTypeOAuth   AuthType = "oauth"
+	AuthTypeVirtual AuthType = "vmodel"
 )
+
+// ProviderSource indicates whether a provider was created by a user or seeded
+// by the system at startup. Builtin providers cannot be deleted or have their
+// configuration mutated (only Enabled may be toggled).
+type ProviderSource string
+
+const (
+	ProviderSourceUser    ProviderSource = "user"
+	ProviderSourceBuiltin ProviderSource = "builtin"
+)
+
+// VModelDetail contains virtual-model provider configuration. The dispatcher
+// short-circuits to the in-process vmodel handler when AuthType == vmodel,
+// bypassing any outbound HTTP. Models lists the protocol-specific model IDs
+// enabled on this provider; an empty list means "all defaults registered for
+// the matching protocol".
+type VModelDetail struct {
+	Models         []string `json:"models,omitempty"`
+	LatencyProfile string   `json:"latency_profile,omitempty"`
+}
 
 // OAuthDetail contains OAuth-specific authentication information
 type OAuthDetail struct {
@@ -120,8 +141,22 @@ type Provider struct {
 	APIBaseAnthropic string `json:"api_base_anthropic,omitempty"`
 
 	// Auth configuration
-	AuthType    AuthType     `json:"auth_type"`              // api_key or oauth
-	OAuthDetail *OAuthDetail `json:"oauth_detail,omitempty"` // OAuth credentials (only for oauth auth type)
+	AuthType     AuthType       `json:"auth_type"`               // api_key, oauth, or vmodel
+	OAuthDetail  *OAuthDetail   `json:"oauth_detail,omitempty"`  // OAuth credentials (only for oauth auth type)
+	VModelDetail *VModelDetail  `json:"vmodel_detail,omitempty"` // Virtual-model config (only for vmodel auth type)
+	Source       ProviderSource `json:"source,omitempty"`        // "user" (default) or "builtin"
+}
+
+// IsVirtual reports whether this provider routes to the in-process vmodel
+// service instead of an outbound HTTP upstream.
+func (p *Provider) IsVirtual() bool {
+	return p != nil && p.AuthType == AuthTypeVirtual
+}
+
+// IsBuiltin reports whether this provider was seeded by the system and is
+// therefore protected from deletion/mutation.
+func (p *Provider) IsBuiltin() bool {
+	return p != nil && p.Source == ProviderSourceBuiltin
 }
 
 // HasFusionURL reports whether the provider has a fusion URL configured for

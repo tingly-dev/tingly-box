@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,10 @@ type (
 		CreatedAt   string `json:"created_at"`
 		DisplayName string `json:"display_name"`
 		Type        string `json:"type"`
+		// AuthType is a tingly-box extension (not in Anthropic's wire format)
+		// consumed by the frontend to order model picker entries:
+		// oauth -> api_key -> vmodel.
+		AuthType string `json:"auth_type,omitempty"`
 	}
 	AnthropicModelsResponse struct {
 		Data    []AnthropicModel `json:"data"`
@@ -176,6 +181,15 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		c.Set("rule", rule)
 	}
 
+	// Virtual-model providers are served by the in-process vmodel handler.
+	// Resolution went through the normal routing pipeline so rules/scenarios
+	// still apply, but no outbound HTTP is performed.
+	if provider.IsVirtual() && s.virtualModelService != nil {
+		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+		s.virtualModelService.GetHandler().Messages(c)
+		return
+	}
+
 	// sessionID is automatically stored by SelectService
 
 	actualModel := selectedService.Model
@@ -245,8 +259,14 @@ func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.R
 			CreatedAt:   "2024-01-01T00:00:00Z",
 			DisplayName: displayName,
 			Type:        "model",
+			AuthType:    string(primaryAuthTypeForRule(cfg, rule)),
 		})
 	}
+
+	sort.SliceStable(models, func(i, j int) bool {
+		return authTypeSortWeight(typ.AuthType(models[i].AuthType)) <
+			authTypeSortWeight(typ.AuthType(models[j].AuthType))
+	})
 
 	firstID := ""
 	lastID := ""

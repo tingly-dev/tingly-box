@@ -778,6 +778,18 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.virtualModelService = virtualserver.NewService()
 	logrus.Debugf("Virtual model service initialized with default models")
 
+	// Seed builtin virtual-model providers (idempotent). These become first-class
+	// rows in the provider store so they show up in the standard UI and dispatch
+	// pipeline; the dispatcher short-circuits to the in-process handler when it
+	// resolves to a vmodel provider.
+	if store := cfg.GetProviderStore(); store != nil {
+		if err := server.virtualModelService.EnsureBuiltinProviders(store); err != nil {
+			logrus.WithError(err).Warn("Failed to seed builtin virtual-model providers")
+		} else {
+			logrus.Debugf("Builtin virtual-model providers seeded")
+		}
+	}
+
 	// Initialize provider quota manager
 	if err := server.initQuotaManager(cfg); err != nil {
 		logrus.WithError(err).Warn("Failed to initialize provider quota manager")

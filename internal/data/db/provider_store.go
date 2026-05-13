@@ -27,7 +27,8 @@ type ProviderRecord struct {
 	Name     string `gorm:"column:name;not null;index"`
 	APIBase  string `gorm:"column:api_base;not null"`
 	APIStyle string `gorm:"column:api_style;not null"` // "openai" or "anthropic"
-	AuthType string `gorm:"column:auth_type;not null"` // "api_key" or "oauth"
+	AuthType string `gorm:"column:auth_type;not null"` // "api_key", "oauth", or "vmodel"
+	Source   string `gorm:"column:source"`             // "user" (default) or "builtin"
 
 	// Configuration fields
 	NoKeyRequired bool   `gorm:"column:no_key_required;default:false"`
@@ -51,6 +52,9 @@ type ProviderRecord struct {
 	OAuthExpiresAt    string `gorm:"column:oauth_expires_at"`             // For oauth: token expiration (RFC3339)
 	OAuthExtraFields  string `gorm:"column:oauth_extra_fields;type:text"` // For oauth: JSON
 
+	// VModel-specific fields (only populated when AuthType == "vmodel")
+	VModelDetail string `gorm:"column:vmodel_detail;type:text"` // JSON-encoded typ.VModelDetail
+
 	CreatedAt time.Time `gorm:"column:created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
@@ -70,6 +74,7 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		APIBaseOpenAI:    r.APIBaseOpenAI,
 		APIBaseAnthropic: r.APIBaseAnthropic,
 		AuthType:         typ.AuthType(r.AuthType),
+		Source:           typ.ProviderSource(r.Source),
 		NoKeyRequired:    r.NoKeyRequired,
 		Enabled:          r.Enabled,
 		ProxyURL:         r.ProxyURL,
@@ -95,6 +100,13 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 		if r.OAuthExtraFields != "" {
 			json.Unmarshal([]byte(r.OAuthExtraFields), &provider.OAuthDetail.ExtraFields)
 		}
+	case typ.AuthTypeVirtual:
+		if r.VModelDetail != "" {
+			var detail typ.VModelDetail
+			if err := json.Unmarshal([]byte(r.VModelDetail), &detail); err == nil {
+				provider.VModelDetail = &detail
+			}
+		}
 	case typ.AuthTypeAPIKey, "":
 		provider.Token = r.Token
 		provider.AuthType = typ.AuthTypeAPIKey
@@ -115,6 +127,7 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 		APIBaseOpenAI:    p.APIBaseOpenAI,
 		APIBaseAnthropic: p.APIBaseAnthropic,
 		AuthType:         string(p.AuthType),
+		Source:           string(p.Source),
 		NoKeyRequired:    p.NoKeyRequired,
 		Enabled:          p.Enabled,
 		ProxyURL:         p.ProxyURL,
@@ -148,6 +161,11 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 				record.OAuthExtraFields = string(extraJSON)
 			}
 		}
+	case typ.AuthTypeVirtual:
+		if p.VModelDetail != nil {
+			vmJSON, _ := json.Marshal(p.VModelDetail)
+			record.VModelDetail = string(vmJSON)
+		}
 	case typ.AuthTypeAPIKey, "":
 		record.Token = p.Token
 	}
@@ -163,6 +181,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 	record.APIBaseOpenAI = p.APIBaseOpenAI
 	record.APIBaseAnthropic = p.APIBaseAnthropic
 	record.AuthType = string(p.AuthType)
+	record.Source = string(p.Source)
 	record.NoKeyRequired = p.NoKeyRequired
 	record.Enabled = p.Enabled
 	record.ProxyURL = p.ProxyURL
@@ -194,6 +213,19 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 				record.OAuthExtraFields = ""
 			}
 		}
+	case typ.AuthTypeVirtual:
+		if p.VModelDetail != nil {
+			vmJSON, _ := json.Marshal(p.VModelDetail)
+			record.VModelDetail = string(vmJSON)
+		} else {
+			record.VModelDetail = ""
+		}
+		record.Token = ""
+		record.OAuthProviderType = ""
+		record.OAuthUserID = ""
+		record.OAuthRefreshToken = ""
+		record.OAuthExpiresAt = ""
+		record.OAuthExtraFields = ""
 	case typ.AuthTypeAPIKey, "":
 		record.Token = p.Token
 		record.OAuthProviderType = ""
@@ -201,6 +233,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 		record.OAuthRefreshToken = ""
 		record.OAuthExpiresAt = ""
 		record.OAuthExtraFields = ""
+		record.VModelDetail = ""
 	}
 }
 

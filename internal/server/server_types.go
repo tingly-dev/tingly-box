@@ -198,8 +198,10 @@ type ProviderResponse struct {
 	NoKeyRequired    bool             `json:"no_key_required" example:"false"`
 	Enabled          bool             `json:"enabled" example:"true"`
 	ProxyURL         string           `json:"proxy_url,omitempty" example:"http://127.0.0.1:7890"`
-	AuthType         string           `json:"auth_type,omitempty" example:"api_key"` // api_key or oauth
+	AuthType         string           `json:"auth_type,omitempty" example:"api_key"` // api_key, oauth, or vmodel
 	OAuthDetail      *typ.OAuthDetail `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
+	VModelDetail     *typ.VModelDetail `json:"vmodel_detail,omitempty"`              // Virtual-model config (only for vmodel auth type)
+	Source           string           `json:"source,omitempty" example:"user"`       // "user" (default) or "builtin"
 }
 
 // ProvidersResponse represents the response for listing providers
@@ -326,6 +328,11 @@ type OpenAIModel struct {
 	Object  string `json:"object"`
 	Created int64  `json:"created"`
 	OwnedBy string `json:"owned_by"`
+	// AuthType reflects the primary backing provider's auth type. It is
+	// non-standard (OpenAI's models API has no such field) and consumed by
+	// the tingly-box frontend to order model picker entries:
+	// oauth -> api_key -> vmodel.
+	AuthType string `json:"auth_type,omitempty"`
 }
 
 // OpenAIModelsResponse represents OpenAI's models API response format

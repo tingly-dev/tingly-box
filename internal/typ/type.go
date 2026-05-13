@@ -195,13 +195,26 @@ type AuthType = ai.AuthType
 
 // AuthType constants - re-exported for backward compatibility
 const (
-	AuthTypeAPIKey = ai.AuthTypeAPIKey
-	AuthTypeOAuth  = ai.AuthTypeOAuth
+	AuthTypeAPIKey  = ai.AuthTypeAPIKey
+	AuthTypeOAuth   = ai.AuthTypeOAuth
+	AuthTypeVirtual = ai.AuthTypeVirtual
+)
+
+// ProviderSource constants - re-exported for backward compatibility
+type ProviderSource = ai.ProviderSource
+
+const (
+	ProviderSourceUser    = ai.ProviderSourceUser
+	ProviderSourceBuiltin = ai.ProviderSourceBuiltin
 )
 
 // OAuthDetail contains OAuth-specific authentication information
 // Type alias for backward compatibility with common/provider
 type OAuthDetail = ai.OAuthDetail
+
+// VModelDetail contains virtual-model provider configuration
+// Type alias for backward compatibility with common/provider
+type VModelDetail = ai.VModelDetail
 
 // MCPMode defines MCP runtime mode
 type MCPMode string
