@@ -28,15 +28,14 @@ type CICmdKong struct {
 // message (Kong's per-flag required errors are noisy and exit before we can
 // suggest related missing flags).
 type CIApplyCmdKong struct {
-	Agent          string `kong:"flag,name='agent',help='Agent type: cc | oc | cx (aliases of claude-code / opencode / codex)'"`
-	ProviderName   string `kong:"flag,name='provider-name',help='Provider name (used as upsert key)'"`
-	ProviderURL    string `kong:"flag,name='provider-url',help='Provider API base URL'"`
-	ProviderToken  string `kong:"flag,name='provider-token',help='Provider API token'"`
-	ProviderStyle  string `kong:"flag,name='provider-style',help='Provider API style: openai | anthropic'"`
-	Model          string `kong:"flag,name='model',help='Model name'"`
-	Unified        bool   `kong:"flag,name='unified',default='true',negatable,help='Unified mode (claude-code only)'"`
-	StatusLine     bool   `kong:"flag,name='status-line',help='Install status line script (claude-code only)'"`
-	DryRun         bool   `kong:"flag,name='dry-run',help='Print the plan without applying changes'"`
+	Agent         string `kong:"flag,name='agent',help='Agent type: cc | oc | cx (aliases of claude-code / opencode / codex)'"`
+	ProviderURL   string `kong:"flag,name='provider-url',help='Provider API base URL (used as upsert key)'"`
+	ProviderToken string `kong:"flag,name='provider-token',help='Provider API token'"`
+	ProviderStyle string `kong:"flag,name='provider-style',help='Provider API style: openai | anthropic'"`
+	Model         string `kong:"flag,name='model',help='Model name'"`
+	Unified       bool   `kong:"flag,name='unified',default='true',negatable,help='Unified mode (claude-code only)'"`
+	StatusLine    bool   `kong:"flag,name='status-line',help='Install status line script (claude-code only)'"`
+	DryRun        bool   `kong:"flag,name='dry-run',help='Print the plan without applying changes'"`
 }
 
 // Run validates flags, parses the agent type, normalises the API style, then
@@ -63,7 +62,6 @@ func (c *CIApplyCmdKong) Run(appManager *AppManager) error {
 // future YAML loader) can build one without going through Kong.
 type ciSpec struct {
 	AgentType     agent.AgentType
-	ProviderName  string
 	ProviderURL   string
 	ProviderToken string
 	ProviderStyle protocol.APIStyle
@@ -79,9 +77,6 @@ func (c *CIApplyCmdKong) toSpec() (*ciSpec, error) {
 	var missing []string
 	if strings.TrimSpace(c.Agent) == "" {
 		missing = append(missing, "--agent")
-	}
-	if strings.TrimSpace(c.ProviderName) == "" {
-		missing = append(missing, "--provider-name")
 	}
 	if strings.TrimSpace(c.ProviderURL) == "" {
 		missing = append(missing, "--provider-url")
@@ -115,7 +110,6 @@ func (c *CIApplyCmdKong) toSpec() (*ciSpec, error) {
 	// agent-specific branch in ApplyAgent.
 	return &ciSpec{
 		AgentType:     agentType,
-		ProviderName:  c.ProviderName,
 		ProviderURL:   c.ProviderURL,
 		ProviderToken: c.ProviderToken,
 		ProviderStyle: style,
@@ -144,8 +138,7 @@ func parseAPIStyle(s string) (protocol.APIStyle, error) {
 func printCIPlan(s *ciSpec) {
 	fmt.Println("ci apply (dry-run):")
 	fmt.Printf("  agent:    %s\n", s.AgentType)
-	fmt.Printf("  provider: %s\n", s.ProviderName)
-	fmt.Printf("    url:    %s\n", s.ProviderURL)
+	fmt.Printf("  provider: %s\n", s.ProviderURL)
 	fmt.Printf("    token:  %s\n", redactToken(s.ProviderToken))
 	fmt.Printf("    style:  %s\n", s.ProviderStyle)
 	fmt.Printf("  model:    %s\n", s.Model)

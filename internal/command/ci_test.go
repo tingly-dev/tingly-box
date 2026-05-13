@@ -12,7 +12,6 @@ import (
 func validApplyFlags() *CIApplyCmdKong {
 	return &CIApplyCmdKong{
 		Agent:         "cc",
-		ProviderName:  "ci-openrouter",
 		ProviderURL:   "https://openrouter.ai/api/v1",
 		ProviderToken: "sk-test-token-1234567890",
 		ProviderStyle: "openai",
@@ -33,6 +32,9 @@ func TestCIApply_toSpec_OK(t *testing.T) {
 	if spec.ProviderStyle != protocol.APIStyleOpenAI {
 		t.Errorf("provider style: got %v want %v", spec.ProviderStyle, protocol.APIStyleOpenAI)
 	}
+	if spec.ProviderURL != "https://openrouter.ai/api/v1" {
+		t.Errorf("provider URL: got %v", spec.ProviderURL)
+	}
 }
 
 func TestCIApply_toSpec_MissingFlagsCollected(t *testing.T) {
@@ -43,12 +45,15 @@ func TestCIApply_toSpec_MissingFlagsCollected(t *testing.T) {
 	}
 	msg := err.Error()
 	for _, want := range []string{
-		"--agent", "--provider-name", "--provider-url",
-		"--provider-token", "--provider-style", "--model",
+		"--agent", "--provider-url", "--provider-token", "--provider-style", "--model",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q missing %q", msg, want)
 		}
+	}
+	// --provider-name must not appear — it no longer exists
+	if strings.Contains(msg, "--provider-name") {
+		t.Errorf("error should not mention --provider-name (removed flag)")
 	}
 }
 
@@ -61,8 +66,6 @@ func TestCIApply_toSpec_InvalidAgent(t *testing.T) {
 }
 
 func TestCIApply_toSpec_RejectsOAuthStyle(t *testing.T) {
-	// OAuth-style providers (e.g. "anthropic-oauth", "google") are intentionally
-	// out of scope for `ci apply` — they require a browser flow.
 	for _, bad := range []string{"google", "anthropic-oauth", "oauth", ""} {
 		c := validApplyFlags()
 		c.ProviderStyle = bad
@@ -86,18 +89,17 @@ func TestCIApply_toSpec_StyleIsCaseInsensitive(t *testing.T) {
 }
 
 // TestCI_UpsertProvider_CreateThenUpdate exercises the idempotency contract:
-// the second call with the same provider name must update in place rather
-// than create a duplicate row.
+// the second call with the same URL must update in place rather than create
+// a duplicate provider row.
 func TestCI_UpsertProvider_CreateThenUpdate(t *testing.T) {
 	am := newTestAppManager(t)
 
 	first := &ciSpec{
-		ProviderName:  "ci-openrouter",
 		ProviderURL:   "https://example.com/v1",
 		ProviderToken: "token-A",
 		ProviderStyle: protocol.APIStyleOpenAI,
 	}
-	uuid1, action, err := upsertProviderByName(am, first)
+	uuid1, action, err := upsertProviderByURL(am, first)
 	if err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
@@ -105,14 +107,13 @@ func TestCI_UpsertProvider_CreateThenUpdate(t *testing.T) {
 		t.Errorf("first action: got %q want %q", action, "created")
 	}
 
-	// Second call: same name, different token+url. Must update, not create.
+	// Second call: same URL, different token+style. Must update, not create.
 	second := &ciSpec{
-		ProviderName:  "ci-openrouter",
-		ProviderURL:   "https://example.com/v2",
+		ProviderURL:   "https://example.com/v1",
 		ProviderToken: "token-B",
 		ProviderStyle: protocol.APIStyleAnthropic,
 	}
-	uuid2, action, err := upsertProviderByName(am, second)
+	uuid2, action, err := upsertProviderByURL(am, second)
 	if err != nil {
 		t.Fatalf("second upsert: %v", err)
 	}
@@ -124,12 +125,9 @@ func TestCI_UpsertProvider_CreateThenUpdate(t *testing.T) {
 	}
 
 	// Confirm the in-place update actually took.
-	got, err := am.GetProviderByName("ci-openrouter")
+	got, err := am.GetProvider(uuid1)
 	if err != nil || got == nil {
 		t.Fatalf("provider lookup after upsert failed: %v", err)
-	}
-	if got.APIBase != "https://example.com/v2" {
-		t.Errorf("APIBase not updated: got %q", got.APIBase)
 	}
 	if got.Token != "token-B" {
 		t.Errorf("Token not updated: got %q", got.Token)
@@ -138,9 +136,32 @@ func TestCI_UpsertProvider_CreateThenUpdate(t *testing.T) {
 		t.Errorf("APIStyle not updated: got %q", got.APIStyle)
 	}
 
-	// And there is still exactly one provider.
+	// Still exactly one provider.
 	if got := len(am.ListProviders()); got != 1 {
 		t.Errorf("expected 1 provider after upsert, got %d", got)
+	}
+}
+
+// TestCI_UpsertProvider_DifferentURLsCreateSeparate ensures two different
+// URLs produce two distinct provider rows (no cross-contamination).
+func TestCI_UpsertProvider_DifferentURLsCreateSeparate(t *testing.T) {
+	am := newTestAppManager(t)
+
+	for _, url := range []string{"https://a.example.com/v1", "https://b.example.com/v1"} {
+		_, action, err := upsertProviderByURL(am, &ciSpec{
+			ProviderURL:   url,
+			ProviderToken: "tok",
+			ProviderStyle: protocol.APIStyleOpenAI,
+		})
+		if err != nil {
+			t.Fatalf("upsert %s: %v", url, err)
+		}
+		if action != "created" {
+			t.Errorf("upsert %s: got action %q want created", url, action)
+		}
+	}
+	if got := len(am.ListProviders()); got != 2 {
+		t.Errorf("expected 2 providers, got %d", got)
 	}
 }
 
