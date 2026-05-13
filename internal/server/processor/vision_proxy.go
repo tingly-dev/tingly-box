@@ -49,6 +49,16 @@ type VisionProxyProcessor struct {
 
 const imageUnavailableText = "[image: (description unavailable)]"
 
+// imageHistoricalText replaces image blocks that appear in messages PRIOR to
+// the latest one. Enabling the proxy implies the fallback model is
+// text-only, so every image must be removed from the serialized request —
+// but describing every historical image via the vision upstream would be
+// prohibitively expensive (and is unnecessary: the model is rarely asked
+// about images that aren't in the latest turn). Historical images are
+// therefore stripped with a fixed marker, while only images in the latest
+// message are sent through the vision upstream for description.
+const imageHistoricalText = "[image: (omitted from history)]"
+
 // Process mutates pctx.Request in place: every image block becomes a text
 // block. On any failure (no usable service, vision client error, empty
 // upstream response) the image is still removed so a downstream text-only
@@ -111,57 +121,107 @@ func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance
 	return "Here is an [image] with message and is parsed into description [image: " + desc + "]"
 }
 
+// processBeta walks Beta messages and replaces every image content block
+// with a text block. Images in messages PRIOR to the last one are stripped
+// with a fixed historical marker (no vision call). Images in the LAST
+// message are sent to the vision upstream for description.
 func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.BetaMessageNewParams, usable *loadbalance.Service) {
-	for mi := range req.Messages {
+	if len(req.Messages) == 0 {
+		return
+	}
+	lastIdx := len(req.Messages) - 1
+	historicalBlock := anthropic.BetaContentBlockParamUnion{
+		OfText: &anthropic.BetaTextBlockParam{Text: imageHistoricalText},
+	}
+	for mi := 0; mi < lastIdx; mi++ {
 		blocks := req.Messages[mi].Content
 		for bi := range blocks {
-			img := blocks[bi].OfImage
-			if img == nil {
+			if blocks[bi].OfImage == nil {
 				continue
 			}
-			mediaType, b64, remoteURL := extractBetaImageSource(img)
-			text := p.describe(ctx, usable, mediaType, b64, remoteURL)
-			blocks[bi] = anthropic.BetaContentBlockParamUnion{
-				OfText: &anthropic.BetaTextBlockParam{Text: text},
-			}
+			blocks[bi] = historicalBlock
+		}
+	}
+	blocks := req.Messages[lastIdx].Content
+	for bi := range blocks {
+		img := blocks[bi].OfImage
+		if img == nil {
+			continue
+		}
+		mediaType, b64, remoteURL := extractBetaImageSource(img)
+		text := p.describe(ctx, usable, mediaType, b64, remoteURL)
+		blocks[bi] = anthropic.BetaContentBlockParamUnion{
+			OfText: &anthropic.BetaTextBlockParam{Text: text},
 		}
 	}
 }
 
 func (p *VisionProxyProcessor) processV1(ctx context.Context, req *anthropic.MessageNewParams, usable *loadbalance.Service) {
-	for mi := range req.Messages {
+	if len(req.Messages) == 0 {
+		return
+	}
+	lastIdx := len(req.Messages) - 1
+	historicalBlock := anthropic.ContentBlockParamUnion{
+		OfText: &anthropic.TextBlockParam{Text: imageHistoricalText},
+	}
+	for mi := 0; mi < lastIdx; mi++ {
 		blocks := req.Messages[mi].Content
 		for bi := range blocks {
-			img := blocks[bi].OfImage
-			if img == nil {
+			if blocks[bi].OfImage == nil {
 				continue
 			}
-			mediaType, b64, remoteURL := extractV1ImageSource(img)
-			text := p.describe(ctx, usable, mediaType, b64, remoteURL)
-			blocks[bi] = anthropic.ContentBlockParamUnion{
-				OfText: &anthropic.TextBlockParam{Text: text},
-			}
+			blocks[bi] = historicalBlock
+		}
+	}
+	blocks := req.Messages[lastIdx].Content
+	for bi := range blocks {
+		img := blocks[bi].OfImage
+		if img == nil {
+			continue
+		}
+		mediaType, b64, remoteURL := extractV1ImageSource(img)
+		text := p.describe(ctx, usable, mediaType, b64, remoteURL)
+		blocks[bi] = anthropic.ContentBlockParamUnion{
+			OfText: &anthropic.TextBlockParam{Text: text},
 		}
 	}
 }
 
 func (p *VisionProxyProcessor) processOpenAI(ctx context.Context, req *openai.ChatCompletionNewParams, usable *loadbalance.Service) {
-	for mi := range req.Messages {
+	if len(req.Messages) == 0 {
+		return
+	}
+	lastIdx := len(req.Messages) - 1
+	historicalPart := openai.ChatCompletionContentPartUnionParam{
+		OfText: &openai.ChatCompletionContentPartTextParam{Text: imageHistoricalText},
+	}
+	for mi := 0; mi < lastIdx; mi++ {
 		um := req.Messages[mi].OfUser
 		if um == nil {
 			continue
 		}
 		parts := um.Content.OfArrayOfContentParts
 		for pi := range parts {
-			ip := parts[pi].OfImageURL
-			if ip == nil {
+			if parts[pi].OfImageURL == nil {
 				continue
 			}
-			mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
-			text := p.describe(ctx, usable, mediaType, b64, remoteURL)
-			parts[pi] = openai.ChatCompletionContentPartUnionParam{
-				OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
-			}
+			parts[pi] = historicalPart
+		}
+	}
+	um := req.Messages[lastIdx].OfUser
+	if um == nil {
+		return
+	}
+	parts := um.Content.OfArrayOfContentParts
+	for pi := range parts {
+		ip := parts[pi].OfImageURL
+		if ip == nil {
+			continue
+		}
+		mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
+		text := p.describe(ctx, usable, mediaType, b64, remoteURL)
+		parts[pi] = openai.ChatCompletionContentPartUnionParam{
+			OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
 		}
 	}
 }

@@ -174,6 +174,76 @@ func openaiReqWithImage(prompt, b64 string) *openai.ChatCompletionNewParams {
 	}
 }
 
+// betaMessage builds a Beta user/assistant message with one optional image
+// followed by a text prompt. Used to assemble multi-turn fixtures for the
+// historical-strip tests.
+func betaMessage(role anthropic.BetaMessageParamRole, text string, imageB64 string) anthropic.BetaMessageParam {
+	var blocks []anthropic.BetaContentBlockParamUnion
+	if text != "" {
+		blocks = append(blocks, anthropic.BetaContentBlockParamUnion{
+			OfText: &anthropic.BetaTextBlockParam{Text: text},
+		})
+	}
+	if imageB64 != "" {
+		blocks = append(blocks, anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+			Data:      imageB64,
+			MediaType: anthropic.BetaBase64ImageSourceMediaType(tinyPNGMediaType),
+		}))
+	}
+	return anthropic.BetaMessageParam{Role: role, Content: blocks}
+}
+
+func betaReqWithMessages(msgs ...anthropic.BetaMessageParam) *anthropic.BetaMessageNewParams {
+	return &anthropic.BetaMessageNewParams{
+		Model:    anthropic.Model("claude-3-5-sonnet-latest"),
+		Messages: msgs,
+	}
+}
+
+func v1Message(role anthropic.MessageParamRole, text string, imageB64 string) anthropic.MessageParam {
+	var blocks []anthropic.ContentBlockParamUnion
+	if text != "" {
+		blocks = append(blocks, anthropic.ContentBlockParamUnion{
+			OfText: &anthropic.TextBlockParam{Text: text},
+		})
+	}
+	if imageB64 != "" {
+		blocks = append(blocks, anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
+			Data:      imageB64,
+			MediaType: anthropic.Base64ImageSourceMediaType(tinyPNGMediaType),
+		}))
+	}
+	return anthropic.MessageParam{Role: role, Content: blocks}
+}
+
+func v1ReqWithMessages(msgs ...anthropic.MessageParam) *anthropic.MessageNewParams {
+	return &anthropic.MessageNewParams{
+		Model:    anthropic.Model("claude-3-5-sonnet-latest"),
+		Messages: msgs,
+	}
+}
+
+func openaiUserMessageWithImage(text, imageB64 string) openai.ChatCompletionMessageParamUnion {
+	parts := []openai.ChatCompletionContentPartUnionParam{
+		{OfText: &openai.ChatCompletionContentPartTextParam{Text: text}},
+	}
+	if imageB64 != "" {
+		dataURL := "data:" + tinyPNGMediaType + ";base64," + imageB64
+		parts = append(parts, openai.ChatCompletionContentPartUnionParam{
+			OfImageURL: &openai.ChatCompletionContentPartImageParam{
+				ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: dataURL},
+			},
+		})
+	}
+	return openai.ChatCompletionMessageParamUnion{
+		OfUser: &openai.ChatCompletionUserMessageParam{
+			Content: openai.ChatCompletionUserMessageParamContentUnion{
+				OfArrayOfContentParts: parts,
+			},
+		},
+	}
+}
+
 // countImages returns the number of remaining image blocks across all
 // supported request shapes; -1 for unsupported.
 func countImages(req any) int {
@@ -349,6 +419,80 @@ func TestVisionProxy_EmptyDescription_StripImageWithUnavailableMarker(t *testing
 	require.Equal(t, 0, countImages(req))
 	require.Contains(t, collectText(req), "description unavailable",
 		"empty upstream response treated as fail-strip")
+}
+
+// TestVisionProxy_HistoricalImages_StrippedWithoutDescribe verifies the
+// two-responsibility split: images in the LAST message go through the
+// vision upstream; images in older messages are replaced with a fixed
+// historical marker without any describe call. Calling Describe on every
+// historical image would be cost-prohibitive and is unnecessary because
+// the model rarely needs to reason about images outside the current turn.
+func TestVisionProxy_HistoricalImages_StrippedWithoutDescribe(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("latest description")
+	p := mkProcessor(t, fake, prov)
+
+	req := betaReqWithMessages(
+		betaMessage(anthropic.BetaMessageParamRoleUser, "earlier turn", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleAssistant, "previous reply", ""),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "second user turn", tinyPNGBase64),
+		betaMessage(anthropic.BetaMessageParamRoleUser, "current question", tinyPNGBase64),
+	)
+	pctx := mkPctx(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	require.Equal(t, 1, fake.callCount(),
+		"only the LAST message's image triggers a describe call; historical images are stripped without upstream cost")
+	require.Equal(t, 0, countImages(req), "all images removed from the request")
+
+	text := collectText(req)
+	require.Contains(t, text, "latest description", "latest image was described")
+	// Historical images get the fixed omitted marker, not the description text.
+	require.Contains(t, text, "omitted from history", "historical images carry the omitted marker")
+}
+
+// TestVisionProxy_HistoricalImages_V1AndOpenAI covers v1 and OpenAI request
+// shapes with the same split contract.
+func TestVisionProxy_HistoricalImages_V1AndOpenAI(t *testing.T) {
+	t.Run("v1", func(t *testing.T) {
+		prov := mkProvider("anthropic-v1")
+		fake := newFakeVisionClient("v1 latest desc")
+		p := mkProcessor(t, fake, prov)
+
+		req := v1ReqWithMessages(
+			v1Message(anthropic.MessageParamRoleUser, "old turn", tinyPNGBase64),
+			v1Message(anthropic.MessageParamRoleUser, "current", tinyPNGBase64),
+		)
+		pctx := mkPctx(req, mkService(prov.UUID, true))
+
+		require.NoError(t, p.Process(pctx))
+		require.Equal(t, 1, fake.callCount(), "describe only the latest")
+		require.Equal(t, 0, countImages(req))
+		text := collectText(req)
+		require.Contains(t, text, "v1 latest desc")
+		require.Contains(t, text, "omitted from history")
+	})
+	t.Run("openai", func(t *testing.T) {
+		prov := mkProvider("openai-vision")
+		fake := newFakeVisionClient("openai latest desc")
+		p := mkProcessor(t, fake, prov)
+
+		req := &openai.ChatCompletionNewParams{
+			Model: openai.ChatModel("gpt-4o"),
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openaiUserMessageWithImage("old turn", tinyPNGBase64),
+				openaiUserMessageWithImage("current", tinyPNGBase64),
+			},
+		}
+		pctx := mkPctx(req, mkService(prov.UUID, true))
+
+		require.NoError(t, p.Process(pctx))
+		require.Equal(t, 1, fake.callCount(), "describe only the latest")
+		require.Equal(t, 0, countImages(req))
+		text := collectText(req)
+		require.Contains(t, text, "openai latest desc")
+		require.Contains(t, text, "omitted from history")
+	})
 }
 
 func TestVisionProxy_NoUsableService_StripImagesAndReturnNil(t *testing.T) {
