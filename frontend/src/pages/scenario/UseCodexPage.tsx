@@ -24,19 +24,32 @@ const UseCodexPageContent: React.FC = () => {
     } = useScenarioPageInternal(scenario);
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [isApplyLoading, setIsApplyLoading] = useState(false);
 
     const handleApply = async (): Promise<AgentApplyResult> => {
         try {
+            setIsApplyLoading(true);
             const result = await api.applyCodexConfig();
             if (result.success) {
-                return {
-                    success: true,
-                    files: ['~/.codex/config.toml', '~/.codex/auth.json'],
-                };
+                // Extract files from config and auth results
+                const files: string[] = [];
+                if (result.configResult?.created) {
+                    files.push('~/.codex/config.toml');
+                } else if (result.configResult?.updated) {
+                    files.push('~/.codex/config.toml');
+                }
+                if (result.authResult?.created) {
+                    files.push('~/.codex/auth.json');
+                } else if (result.authResult?.updated) {
+                    files.push('~/.codex/auth.json');
+                }
+                return { success: true, files };
             }
             return { success: false, error: result.message || 'Unknown error' };
         } catch (err: any) {
             return { success: false, error: err?.message || 'Failed to apply Codex config' };
+        } finally {
+            setIsApplyLoading(false);
         }
     };
 
@@ -81,6 +94,7 @@ const UseCodexPageContent: React.FC = () => {
                     installCommand="npm install -g @openai/codex"
                     installMirrorCommand="npm install -g @openai/codex --registry=https://registry.npmmirror.com"
                     onApply={handleApply}
+                    isApplyLoading={isApplyLoading}
                     onViewConfig={() => setConfigModalOpen(true)}
                     hasModelSelected={hasModelOnAnyRule(rules)}
                     onSelectModel={scrollToModelsCard}
