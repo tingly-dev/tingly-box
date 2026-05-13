@@ -164,6 +164,10 @@ func (tr *OAuthRefresher) CheckAndRefreshTokens() {
 			continue
 		}
 
+		if provider.OAuthDetail.ExpiresAt == "" {
+			continue
+		}
+
 		expiresAt, err := time.Parse(time.RFC3339, provider.OAuthDetail.ExpiresAt)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
