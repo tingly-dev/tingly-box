@@ -15,6 +15,8 @@ import (
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 )
@@ -375,41 +377,34 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 		// Note: Responses API may include cache tokens in usage details
 		// Check if available in the raw JSON
-		var evtParsed map[string]interface{}
-		if err := json.Unmarshal([]byte(evt.RawJSON()), &evtParsed); err == nil {
-			if response, ok := evtParsed["response"].(map[string]interface{}); ok {
-				if usage, ok := response["usage"].(map[string]interface{}); ok {
-					if details, ok := usage["input_tokens_details"].(map[string]interface{}); ok {
-						if cached, ok := details["cached_tokens"].(float64); ok {
-							cacheTokens = int64(cached)
-						}
-					}
-				}
+		// Marshal event using RawJSON() to avoid serializing empty union fields
+		eventRaw := evt.RawJSON()
+
+		// Extract cached tokens using gjson
+		if cachedTokens := gjson.Get(eventRaw, "response.usage.input_tokens_details.cached_tokens"); cachedTokens.Exists() {
+			cacheTokens = cachedTokens.Int()
+		} else {
+			// set raw use "0" as 0
+			if modified, err := sjson.SetRaw(eventRaw, "response.usage.input_tokens_details.cached_tokens", "0"); err == nil {
+				eventRaw = modified
+			} else {
+				logrus.WithError(err).Error("Failed to set cached tokens")
 			}
 		}
 
-		// Marshal event using RawJSON() to avoid serializing empty union fields
-		jsonBytes := []byte(evt.RawJSON())
-
 		// Apply model override if the event contains a response object with a model field
-		if len(jsonBytes) > 0 {
-			var parsed map[string]interface{}
-			if err := json.Unmarshal(jsonBytes, &parsed); err == nil {
-				// Check if this event has a response field with a model
-				if response, ok := parsed["response"].(map[string]interface{}); ok {
-					if model, ok2 := response["model"].(string); ok2 && model != "" {
-						response["model"] = responseModel
-						modified, err := json.Marshal(parsed)
-						if err == nil {
-							jsonBytes = modified
-						}
-					}
+		if len(eventRaw) > 0 {
+			// Use gjson to check if response.model exists and is non-empty
+			if model := gjson.Get(eventRaw, "response.model"); model.Exists() && model.String() != "" {
+				// Use sjson to set the new model value
+				if modified, err := sjson.SetRaw(eventRaw, "response.model", responseModel); err == nil {
+					eventRaw = modified
 				}
 			}
 		}
 
 		// Send SSE event with event type (e.g., "response.created", "response.output_text.delta")
-		OpenAISSE(c, json.RawMessage(jsonBytes))
+		OpenAISSE(c, eventRaw)
 		return true
 	})
 

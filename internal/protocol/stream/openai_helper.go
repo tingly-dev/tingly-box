@@ -15,14 +15,27 @@ import (
 // OpenAISSE marshals v to JSON and writes it as an OpenAI-style SSE data line, then flushes.
 // MENTION: Must keep extra space after "data:" to match OpenAI wire format.
 func OpenAISSE(c *gin.Context, v any) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		logrus.Errorf("OpenAISSE: failed to marshal: %v", err)
-		return
-	}
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", data))
-	if flusher, ok := c.Writer.(http.Flusher); ok {
-		flusher.Flush()
+	switch vv := v.(type) {
+	case []byte:
+		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", string(vv)))
+		if flusher, ok := c.Writer.(http.Flusher); ok {
+			flusher.Flush()
+		}
+	case string:
+		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", vv))
+		if flusher, ok := c.Writer.(http.Flusher); ok {
+			flusher.Flush()
+		}
+	default:
+		data, err := json.Marshal(v)
+		if err != nil {
+			logrus.Errorf("OpenAISSE: failed to marshal: %v", err)
+			return
+		}
+		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", data))
+		if flusher, ok := c.Writer.(http.Flusher); ok {
+			flusher.Flush()
+		}
 	}
 }
 
