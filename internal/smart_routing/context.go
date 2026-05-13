@@ -29,7 +29,14 @@ type RequestContext struct {
 	ToolUses          []string
 	LatestRole        string // Latest message role (user, assistant, tool, function, etc.)
 	LatestContentType string
-	EstimatedTokens   int
+	// HasImage is true when ANY message in the conversation (any role,
+	// any position — not just the latest) contains an image content block.
+	// proxy_vision uses this because its responsibilities include cleaning
+	// historical images from the request before the text-only downstream
+	// model sees them — so a rule that only matched on the latest message
+	// would let historical images slip through.
+	HasImage        bool
+	EstimatedTokens int
 
 	// ClaudeCodeRequestKind is one of "main", "subagent", "compact" — populated by the
 	// SmartRoutingStage only when the request scenario is claude_code. Empty otherwise.
@@ -94,17 +101,24 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 		for _, msg := range req.Messages {
 			ctx.LatestRole = string(msg.Role)
 
+			// HasImage tracks images across every role so proxy_vision
+			// (which cleans historical images) matches when the image
+			// lives in an assistant message or tool result — not only
+			// when it's in a user message.
+			if hasImageInBetaContent(msg.Content) {
+				ctx.HasImage = true
+			}
+
 			if string(msg.Role) != "user" {
 				continue
 			}
 
 			contentStr, toolUses := extractBetaContent(msg.Content)
-			hasImage := hasImageInBetaContent(msg.Content)
 
 			if contentStr != "" {
 				ctx.UserMessages = append(ctx.UserMessages, contentStr)
 			}
-			if hasImage {
+			if ctx.HasImage {
 				ctx.LatestContentType = "image"
 			}
 

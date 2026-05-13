@@ -264,6 +264,98 @@ func TestEvaluateProxyVision_MatchesWhenImagePresent(t *testing.T) {
 	require.Equal(t, 0, idx)
 }
 
+// TestEvaluateProxyVision_MatchesWhenImageOnlyInHistory verifies that the
+// op matches even when the LATEST user message is text-only, as long as
+// some earlier message has an image. The processor still needs to run so
+// the historical image is stripped before the text-only downstream sees
+// it. The literal "image in history only" case is the whole reason we
+// match on HasImage instead of LatestContentType.
+func TestEvaluateProxyVision_MatchesWhenImageOnlyInHistory(t *testing.T) {
+	req := &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-latest"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "earlier turn"}},
+					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+						Data:      tinyPNGBase64,
+						MediaType: anthropic.BetaBase64ImageSourceMediaType(tinyPNGMediaType),
+					}),
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "previous reply"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "current question, no image"}},
+				},
+			},
+		},
+	}
+	reqCtx := ExtractContext(req)
+	require.NotNil(t, reqCtx)
+	require.True(t, reqCtx.HasImage, "HasImage must reflect any image anywhere in the conversation")
+
+	rules := []SmartRouting{{
+		Description: "vision proxy",
+		Ops:         []SmartOp{{Position: PositionProxyVision, Operation: OpProxyVisionEnabled}},
+		Services:    []*loadbalance.Service{{Provider: "p", Model: "m", Active: true}},
+	}}
+	r, err := NewRouter(rules)
+	require.NoError(t, err)
+
+	_, _, matched, _ := r.Evaluate(reqCtx)
+	require.True(t, matched, "historical image must trigger proxy_vision so the processor can clean it up")
+}
+
+// TestEvaluateProxyVision_MatchesWhenImageInAssistantMessage covers the
+// rarer edge case where the image block lives in a non-user role (e.g.
+// assistant or tool result). The processor walks every message so the
+// matcher must too.
+func TestEvaluateProxyVision_MatchesWhenImageInAssistantMessage(t *testing.T) {
+	req := &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-latest"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "no image here"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "but I returned one"}},
+					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+						Data:      tinyPNGBase64,
+						MediaType: anthropic.BetaBase64ImageSourceMediaType(tinyPNGMediaType),
+					}),
+				},
+			},
+		},
+	}
+	reqCtx := ExtractContext(req)
+	require.NotNil(t, reqCtx)
+	require.True(t, reqCtx.HasImage, "image in assistant message must still be detected")
+
+	rules := []SmartRouting{{
+		Description: "vision proxy",
+		Ops:         []SmartOp{{Position: PositionProxyVision, Operation: OpProxyVisionEnabled}},
+		Services:    []*loadbalance.Service{{Provider: "p", Model: "m", Active: true}},
+	}}
+	r, err := NewRouter(rules)
+	require.NoError(t, err)
+
+	_, _, matched, _ := r.Evaluate(reqCtx)
+	require.True(t, matched)
+}
+
 func TestEvaluateProxyVision_DoesNotMatchTextOnly(t *testing.T) {
 	reqCtx := ExtractContext(betaReqText("hello"))
 	require.NotNil(t, reqCtx)
