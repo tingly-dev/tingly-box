@@ -14,6 +14,26 @@ interface CodexConfigModalProps {
 type ScriptTab = 'json' | 'windows' | 'unix';
 type SessionAction = 'import' | 'undo';
 
+interface ApplyCodexConfigResponse {
+    success: boolean;
+    configResult?: {
+        success: boolean;
+        backupPath?: string;
+        message?: string;
+        created?: boolean;
+        updated?: boolean;
+    };
+    authResult?: {
+        success: boolean;
+        backupPath?: string;
+        message?: string;
+        created?: boolean;
+        updated?: boolean;
+    };
+    models?: string[];
+    message?: string;
+}
+
 const SHOW_CODEX_SESSION_IMPORT = false;
 
 const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
@@ -35,8 +55,16 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [configToml, setConfigToml] = React.useState<string>('# Loading...');
     const [authJson, setAuthJson] = React.useState<string>(`{\n  "OPENAI_API_KEY": "${token}"\n}`);
 
+    // Apply configuration state
+    const [isApplying, setIsApplying] = React.useState(false);
+    const [applyResult, setApplyResult] = React.useState<ApplyCodexConfigResponse | null>(null);
+    const [applyError, setApplyError] = React.useState<string | null>(null);
+
     React.useEffect(() => {
-        if (!open) return;
+        if (!open) {
+            resetApplyState();
+            return;
+        }
         let cancelled = false;
         (async () => {
             try {
@@ -109,6 +137,29 @@ EOF`;
         }
     };
 
+    const handleApplyConfiguration = async () => {
+        setIsApplying(true);
+        setApplyError(null);
+        setApplyResult(null);
+        try {
+            const response = await api.applyCodexConfig();
+            if (response?.success) {
+                setApplyResult(response);
+            } else {
+                setApplyError(response?.message || 'Failed to apply configuration');
+            }
+        } catch (err: any) {
+            setApplyError(err?.message || 'Failed to apply configuration');
+        } finally {
+            setIsApplying(false);
+        }
+    };
+
+    const resetApplyState = () => {
+        setApplyResult(null);
+        setApplyError(null);
+    };
+
     return (
         <Dialog
             open={open}
@@ -116,6 +167,7 @@ EOF`;
                 if (shouldIgnoreDialogClose(reason)) {
                     return;
                 }
+                resetApplyState();
                 onClose();
             }}
             maxWidth="lg"
@@ -288,10 +340,59 @@ EOF`;
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, pb: 2 }}>
-                <Button onClick={onClose} variant="contained">
-                    Close
-                </Button>
+            <DialogActions sx={{ px: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {applyResult?.success && (
+                    <Alert severity="success" sx={{ width: '100%' }}>
+                        <Typography variant="body2" fontWeight={600}>
+                            Configuration applied successfully!
+                        </Typography>
+                        <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {applyResult.configResult?.created && (
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                    ✓ Created ~/.codex/config.toml
+                                </Typography>
+                            )}
+                            {applyResult.configResult?.updated && (
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                    ✓ Updated ~/.codex/config.toml
+                                </Typography>
+                            )}
+                            {applyResult.authResult?.created && (
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                    ✓ Created ~/.codex/auth.json
+                                </Typography>
+                            )}
+                            {applyResult.authResult?.updated && (
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                    ✓ Updated ~/.codex/auth.json
+                                </Typography>
+                            )}
+                            {applyResult.configResult?.backupPath && (
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                    Backup: {applyResult.configResult.backupPath}
+                                </Typography>
+                            )}
+                        </Box>
+                    </Alert>
+                )}
+                {applyError && (
+                    <Alert severity="error" sx={{ width: '100%' }}>
+                        {applyError}
+                    </Alert>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, width: '100%' }}>
+                    <Button onClick={onClose} variant="outlined">
+                        Close
+                    </Button>
+                    <Button
+                        onClick={handleApplyConfiguration}
+                        variant="contained"
+                        disabled={isApplying}
+                        startIcon={isApplying ? <CircularProgress size={16} color="inherit" /> : null}
+                    >
+                        {isApplying ? 'Applying...' : 'Apply Configuration'}
+                    </Button>
+                </Box>
             </DialogActions>
 
             <Dialog
