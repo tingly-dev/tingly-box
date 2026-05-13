@@ -12,14 +12,24 @@ export interface UseTemplatePageRulesParams {
     loadRules?: (scenario: string) => Promise<void>;
 }
 
+export interface CreateRuleOptions {
+    providerUuid: string;
+    model: string;
+}
+
 export interface UseTemplatePageRulesReturn {
     providerModelsByUuid: ProviderModelsDataByUuid;
     refreshingProviders: string[];
     handleRuleChange: (updatedRule: Rule) => void;
     handleProviderModelsChange: (providerUuid: string, models: any) => void;
     handleRefreshModels: (providerUuid: string) => Promise<void>;
-    handleCreateRule: () => Promise<string | null>;
+    handleCreateRule: (options?: CreateRuleOptions) => Promise<string | null>;
 }
+
+const resolveRuleName = (desiredName: string, existingNames: Set<string>): string => {
+    if (!existingNames.has(desiredName)) return desiredName;
+    return `${desiredName}-${uuidv4().slice(0, 6)}`;
+};
 
 export const useTemplatePageRules = ({
     rules,
@@ -70,19 +80,33 @@ export const useTemplatePageRules = ({
         }
     }, [showNotification]);
 
-    const handleCreateRule = useCallback(async (): Promise<string | null> => {
+    const handleCreateRule = useCallback(async (options?: CreateRuleOptions): Promise<string | null> => {
         if (!scenario) {
             showNotification('Cannot create rule: scenario not specified', 'error');
             return null;
         }
 
         try {
+            const existingNames = new Set(rules.map(r => r.request_model).filter(Boolean) as string[]);
+            const requestModel = options?.model
+                ? resolveRuleName(options.model, existingNames)
+                : `model-${uuidv4().slice(0, 8)}`;
+            const initialServices = options
+                ? [{
+                    provider: options.providerUuid,
+                    model: options.model,
+                    weight: 0,
+                    active: true,
+                    time_window: 0,
+                }]
+                : [];
+
             const newRuleData = {
                 scenario: scenario,
-                request_model: `model-${uuidv4().slice(0, 8)}`,
+                request_model: requestModel,
                 response_model: '',
                 active: true,
-                services: []
+                services: initialServices,
             };
 
             // Create rule via API (empty string for UUID signals backend to generate new UUID)

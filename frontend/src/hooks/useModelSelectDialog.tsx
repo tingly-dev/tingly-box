@@ -18,6 +18,7 @@ export interface UseModelSelectDialogOptions {
     rules: Rule[];
     onRuleChange?: (updatedRule: Rule) => void;
     showNotification: (message: string, severity: 'success' | 'error') => void;
+    onCreateFromModel?: (option: ProviderSelectTabOption) => void;
 }
 
 interface EditingServiceContext {
@@ -36,11 +37,12 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         rules,
         onRuleChange,
         showNotification,
+        onCreateFromModel,
     } = options;
 
     // Dialog state
     const [open, setOpen] = useState(false);
-    const [mode, setMode] = useState<'edit' | 'add'>('add');
+    const [mode, setMode] = useState<'edit' | 'add' | 'create-rule'>('add');
     const [editingProviderUuid, setEditingProviderUuid] = useState<string | null>(null);
     const [currentRuleUuid, setCurrentRuleUuid] = useState<string | null>(null);
     const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
@@ -112,8 +114,24 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setOpen(true);
     }, [findService]);
 
+    const openModelSelectForCreate = useCallback(() => {
+        setMode('create-rule');
+        setCurrentRuleUuid(null);
+        setCurrentConfigRecord(null);
+        setEditingProviderUuid(null);
+        setModelSelectionCleared(false);
+        currentSmartRuleIndexRef.current = null;
+        editingServiceContextRef.current = null;
+        setOpen(true);
+    }, []);
+
     // Handle model selection
     const handleModelSelect = useCallback((option: ProviderSelectTabOption) => {
+        if (mode === 'create-rule') {
+            setOpen(false);
+            onCreateFromModel?.(option);
+            return;
+        }
         if (!currentConfigRecord || !currentRuleUuid) return;
 
         const smartRuleIndex = currentSmartRuleIndexRef.current;
@@ -238,7 +256,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setEditingProviderUuid(null);
         currentSmartRuleIndexRef.current = null;
         editingServiceContextRef.current = null;
-    }, [currentConfigRecord, currentRuleUuid, mode, editingProviderUuid, rules, onRuleChange, showNotification]);
+    }, [currentConfigRecord, currentRuleUuid, mode, editingProviderUuid, rules, onRuleChange, showNotification, onCreateFromModel]);
 
     // Get selected provider and model for pre-selection
     const getSelectedProvider = useCallback(() => {
@@ -289,7 +307,11 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
             }}
         >
             <DialogTitle sx={{ textAlign: 'center' }}>
-                {mode === 'add' ? 'Add API Key' : 'Choose Model'}
+                {mode === 'create-rule'
+                    ? 'Select a model for your new rule'
+                    : mode === 'add'
+                        ? 'Add API Key'
+                        : 'Choose Model'}
             </DialogTitle>
             <DialogContent>
                 <ModelSelectDialog
@@ -306,6 +328,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
 
     return {
         openModelSelect,
+        openModelSelectForCreate,
         closeModelSelect,
         ModelSelectDialog: WrappedModelSelectDialog,
         isOpen: open,

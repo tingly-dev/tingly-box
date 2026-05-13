@@ -1,5 +1,5 @@
 import ApiKeyModal from '@/components/ApiKeyModal';
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Alert, Box, Fab, Snackbar} from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import {useNavigate} from 'react-router-dom';
@@ -104,12 +104,42 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         setNewRuleUuid,
     } = useScrollToNewRule({rules});
 
+    // Routed through a ref so onCreateFromModel doesn't capture a stale createRule.
+    const createRuleRef = useRef(createRule);
+    useEffect(() => {
+        createRuleRef.current = createRule;
+    }, [createRule]);
+
+    const runCreateRuleAndScroll = useCallback(async (
+        options?: { providerUuid: string; model: string }
+    ) => {
+        const newUuid = await createRuleRef.current(options);
+        if (newUuid) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    setNewRuleUuid(newUuid);
+                });
+            });
+        }
+    }, [setNewRuleUuid]);
+
     // Model select dialog
-    const {openModelSelect, ModelSelectDialog, isOpen: modelSelectDialogOpen} = useModelSelectDialog({
+    const {
+        openModelSelect,
+        openModelSelectForCreate,
+        ModelSelectDialog,
+        isOpen: modelSelectDialogOpen,
+    } = useModelSelectDialog({
         providers,
         rules,
         onRuleChange: handleRuleChange,
         showNotification,
+        onCreateFromModel: (option) => {
+            void runCreateRuleAndScroll({
+                providerUuid: option.provider.uuid,
+                model: option.model,
+            });
+        },
     });
 
     // Wrapper to maintain compatibility with existing RuleCard interface
@@ -127,18 +157,9 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         navigate('/api-keys?dialog=add');
     }, [navigate]);
 
-    const handleCreateRule = useCallback(async () => {
-        const newUuid = await createRule();
-        if (newUuid) {
-            // Set new rule UUID for scrolling after DOM is fully updated
-            // Use double RAF to ensure parent component has re-rendered
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    setNewRuleUuid(newUuid);
-                });
-            });
-        }
-    }, [createRule, setNewRuleUuid]);
+    const handleCreateRule = useCallback(() => {
+        openModelSelectForCreate();
+    }, [openModelSelectForCreate]);
 
     // Handle expand/collapse all
     const handleToggleExpandAll = useCallback(() => {
