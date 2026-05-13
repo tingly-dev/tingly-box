@@ -173,7 +173,7 @@ func (s *Server) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.
 	var path string
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		path = "/virtual/anthropic/v1"
+		path = "/virtual/anthropic"
 	case protocol.APIStyleOpenAI:
 		path = "/virtual/openai/v1"
 	default:
