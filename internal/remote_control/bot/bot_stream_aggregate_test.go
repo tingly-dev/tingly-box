@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -71,7 +72,9 @@ func TestStreamingHandler_BuffersToolsUntilTextFlush_Verbose(t *testing.T) {
 
 	sent := bot.snapshot()
 	require.Len(t, sent, 2, "expected one aggregated tool message followed by the text message")
-	assert.Contains(t, sent[0], "\n", "verbose flush should keep each tool on its own line")
+	// Both tool renders must end up in the same aggregated message.
+	assert.Contains(t, sent[0], "b.go", "Read render should appear in the aggregated message")
+	assert.Contains(t, sent[0], "ls", "Bash render should appear in the aggregated message")
 	assert.Contains(t, sent[1], "All done reading.")
 }
 
@@ -145,6 +148,46 @@ func TestStreamingHandler_AssistantWithTextDoesNotBuffer(t *testing.T) {
 	sent := bot.snapshot()
 	require.Len(t, sent, 1, "text-bearing assistant message should send immediately")
 	assert.Contains(t, sent[0], "Looking up file...")
+}
+
+func TestStreamingHandler_OnErrorFlushesBuffer(t *testing.T) {
+	bot := &captureBot{}
+	meta := &ResponseMeta{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, meta)
+
+	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-1", map[string]interface{}{"file_path": "/a.go"})))
+	h.OnError(errors.New("boom"))
+
+	sent := bot.snapshot()
+	require.Len(t, sent, 2, "OnError should flush buffered tools, then send the error message")
+	assert.Contains(t, sent[0], "a.go", "buffered tool render must surface before the error")
+	assert.Contains(t, sent[1], "boom")
+}
+
+// TestStreamingHandler_QuietSuppressedMessageStillFlushesBuffer guards the
+// "messages are the splitting boundary" invariant: even when a text-bearing
+// claude message would itself be suppressed by the quiet filter (e.g. a
+// UserMessage echo), the act of receiving it must still flush the buffered
+// tool renders so they don't pile up across boundaries.
+func TestStreamingHandler_QuietSuppressedMessageStillFlushesBuffer(t *testing.T) {
+	bot := &captureBot{}
+	meta := &ResponseMeta{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false, meta)
+
+	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-1", map[string]interface{}{"file_path": "/a.go"})))
+	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-2", map[string]interface{}{"file_path": "/b.go"})))
+	assert.Empty(t, bot.snapshot(), "tools should be buffered before any text-bearing message")
+
+	// UserMessage is text-bearing but quiet mode drops it; the flush must
+	// still happen so the boundary is honored.
+	require.NoError(t, h.OnMessage(&claude.UserMessage{
+		Type:    claude.SDKUserMessage,
+		Message: "ignored in quiet mode",
+	}))
+
+	sent := bot.snapshot()
+	require.Len(t, sent, 1, "buffer should flush even though the user message itself is suppressed")
+	assert.Contains(t, sent[0], "2 tool call(s)")
 }
 
 func TestIsToolOnlyClaudeMessage(t *testing.T) {

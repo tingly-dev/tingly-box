@@ -251,18 +251,21 @@ func (h *streamingMessageHandler) handleClaudeMessage(claudeMsg claude.Message) 
 		return nil
 	}
 
-	// Text-bearing message. In quiet mode, still suppress user-echo and
-	// stream-event noise — only assistant text, agent results, and system
-	// notices reach the chat.
+	// Text-bearing message. Flush the buffered tool renders first so messages
+	// always act as the splitting boundary, even when the current message is
+	// itself going to be suppressed by the quiet filter below.
+	h.flushToolBufferLocked()
+
+	// In quiet mode, only assistant text and final agent results reach the
+	// chat; user echoes, system events, and stream-event noise are dropped.
 	if !h.verbose {
 		msgType := claudeMsg.GetType()
-		if msgType != "result" && msgType != "assistant" && msgType != "system" {
+		if msgType != "result" && msgType != "assistant" {
 			logrus.WithField("msgType", msgType).Debug("Quiet mode: suppressing non-result message")
 			return nil
 		}
 	}
 
-	h.flushToolBufferLocked()
 	h.sendMessage(formatted)
 	return nil
 }
@@ -332,7 +335,7 @@ func (h *streamingMessageHandler) renderToolBuffer(items []string) string {
 		previewN = len(items)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "🔧 %d tool call(s)\n", len(items))
+	fmt.Fprintf(&b, "%s %d tool call(s)\n", IconTool, len(items))
 	for _, p := range items[:previewN] {
 		b.WriteString("• ")
 		b.WriteString(p)

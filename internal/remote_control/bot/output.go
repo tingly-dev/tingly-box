@@ -20,6 +20,7 @@ const (
 	IconStop    = "🛑"  // Stopped
 	IconProcess = "⏳"  // Processing
 	IconMock    = "🧪"  // Mock agent
+	IconTool    = "🔧"  // Tool call
 )
 
 // Agent display names
