@@ -76,11 +76,8 @@ export default defineConfig(({ mode }) => {
                             }
                         }
                         // App pages chunked by feature area
-                        if (id.includes('/pages/remote-control/')) {
-                            return 'pages-remote-control';
-                        }
-                        if (id.includes('/pages/remote-coder/')) {
-                            return 'pages-remote-coder';
+                        if (id.includes('/pages/remote-control/') || id.includes('/pages/remote-coder/')) {
+                            return 'pages-remote';
                         }
                         if (id.includes('/pages/scenario/')) {
                             return 'pages-scenario';
@@ -88,8 +85,11 @@ export default defineConfig(({ mode }) => {
                         if (id.includes('/pages/prompt/')) {
                             return 'pages-prompt';
                         }
-                        if (id.includes('/pages/overview/') || id.includes('/pages/system/')) {
-                            return 'pages-misc';
+                        if (id.includes('/pages/guardrails/')) {
+                            return 'pages-guardrails';
+                        }
+                        if (id.includes('/pages/system/')) {
+                            return 'pages-system';
                         }
                         return undefined;
                     },
