@@ -408,8 +408,7 @@ const ProviderFormDialog = ({
             setProviderInputValue(displayName);
 
             if (nameIsAutoFilled || !data.name) {
-                const autoName = t('providerDialog.keyName.autoFill', {title: displayName});
-                cb('name', autoName);
+                cb('name', displayName);
                 setNameIsAutoFilled(true);
             }
             return;
@@ -458,17 +457,17 @@ const ProviderFormDialog = ({
     };
 
     // Compute a sensible default name when the user leaves the field blank.
-    // Prefers the selected provider's display label; otherwise derives from
-    // the apiBase hostname; falls back to a generic label.
+    // Uses the provider's display label directly (no " API Key" suffix — the
+    // credential is already in the API Keys section, so the suffix is noise).
+    // Falls back to apiBase hostname or a generic label.
     const computeAutoName = useCallback((): string => {
         if (selectedProvider) {
-            const displayName = selectedProvider.alias || selectedProvider.name;
-            return t('providerDialog.keyName.autoFill', {title: displayName});
+            return selectedProvider.alias || selectedProvider.name;
         }
         const raw = data.apiBase || providerInputValue || '';
         try {
             const host = new URL(raw).hostname;
-            if (host) return t('providerDialog.keyName.autoFill', {title: host});
+            if (host) return host;
         } catch { /* not a URL */ }
         return t('providerDialog.keyName.fallback', {defaultValue: 'Custom Provider'});
     }, [selectedProvider, data.apiBase, providerInputValue, t]);

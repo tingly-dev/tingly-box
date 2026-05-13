@@ -236,8 +236,7 @@ export default {
     },
     "keyName": {
       "label": "名称",
-      "placeholder": "例如：OpenAI API Key",
-      "autoFill": "{{title}} API 密钥",
+      "placeholder": "例如：OpenAI",
       "fallback": "自定义供应商",
       "helper": "留空将使用上方自动生成的名称，创建后可随时重命名。",
       "editAction": "编辑名称"

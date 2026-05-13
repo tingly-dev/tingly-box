@@ -236,8 +236,7 @@ export default {
     },
     "keyName": {
       "label": "Name",
-      "placeholder": "e.g., OpenAI API Key",
-      "autoFill": "{{title}} API Key",
+      "placeholder": "e.g., OpenAI",
       "fallback": "Custom Provider",
       "helper": "Leave blank to use the auto-generated name. You can rename later.",
       "editAction": "Edit name"
