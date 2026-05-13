@@ -127,6 +127,17 @@ The model list for a vmodel provider lives on the provider record itself
 return `VModelDetail.Models` directly, bypassing the normal upstream-fetch
 path.
 
+### Probe
+
+`APIBase` is the sentinel `vmodel://local`, which no HTTP client can dial.
+The probe path (`probe_v2_sdk.getClientForProvider`) detects
+`provider.IsVirtual()` and substitutes a shallow-copy provider whose
+`APIBase` points at this server's own loopback route
+(`http://127.0.0.1:<port>/virtual/{anthropic,openai}/v1`) with the global
+model token. The probe then round-trips through HTTP loopback into the
+in-process vmodel handler — validating the full request/response pipeline
+without leaving the process.
+
 ### Builtin providers
 
 Two builtin providers — `vmodel-builtin-anthropic` and `vmodel-builtin-openai`

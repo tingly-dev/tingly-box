@@ -9,8 +9,46 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// rewriteVModelProviderForProbe returns a shallow copy of provider whose
+// APIBase points at this server's in-process /virtual/{style}/v1 route over
+// loopback, with the global model token. The unmodified provider record
+// stores "vmodel://local" as a sentinel that is never dialable; SDK clients
+// (Anthropic, OpenAI) cannot probe it directly. Rewriting here keeps the
+// probe path end-to-end (request actually hits the vmodel handler) without
+// mutating the stored provider.
+func (s *Server) rewriteVModelProviderForProbe(provider *typ.Provider) (*typ.Provider, error) {
+	port := s.config.GetServerPort()
+	if port == 0 {
+		return nil, fmt.Errorf("server port unknown; cannot probe vmodel provider %q", provider.Name)
+	}
+
+	var path string
+	switch provider.APIStyle {
+	case protocol.APIStyleAnthropic:
+		path = "/virtual/anthropic/v1"
+	case protocol.APIStyleOpenAI:
+		path = "/virtual/openai/v1"
+	default:
+		return nil, fmt.Errorf("vmodel probe unsupported for APIStyle %q", provider.APIStyle)
+	}
+
+	clone := *provider
+	clone.AuthType = typ.AuthTypeAPIKey
+	clone.Token = s.config.GetModelToken()
+	clone.APIBase = fmt.Sprintf("http://127.0.0.1:%d%s", port, path)
+	return &clone, nil
+}
+
 // getClientForProvider gets the appropriate Prober for a provider
 func (s *Server) getClientForProvider(provider *typ.Provider, model string) (client.Prober, error) {
+	if provider.IsVirtual() {
+		rewritten, err := s.rewriteVModelProviderForProbe(provider)
+		if err != nil {
+			return nil, err
+		}
+		provider = rewritten
+	}
+
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
 		c := s.clientPool.GetAnthropicClient(context.Background(), provider, model)
