@@ -404,7 +404,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 
 		// Send SSE event with event type (e.g., "response.created", "response.output_text.delta")
-		OpenAISSE(c, eventRaw)
+		OpenAIResponsesEvent(c, eventType, eventRaw)
 		return true
 	})
 
@@ -436,9 +436,6 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		OpenAISSE(c, errorChunk)
 		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
 	}
-
-	// Send final [DONE] message
-	OpenAISSEDone(c)
 
 	// Track successful streaming completion
 	if hasUsage {
