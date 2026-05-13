@@ -128,6 +128,9 @@ export const OpenRouter = createBrandIcon(OpenRouterSvg, 'OpenRouter', false, tr
 export const Xcode = createBrandIcon(XcodeSvg, 'Xcode', true);
 export const VSCode = createBrandIcon(VSCodeSvg, 'VS Code', true);
 
+// Reuse Claude icon for Claude Desktop
+export const ClaudeDesktop = Claude;
+
 export const Telegram = createBrandIcon(TelegramSvg, 'Telegram', true);
 export const Feishu = createBrandIcon(FeishuSvg, 'Feishu', true);
 export const Lark = createBrandIcon(LarkSvg, 'Lark', true);

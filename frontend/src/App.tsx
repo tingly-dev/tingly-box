@@ -27,6 +27,7 @@ import UseAnthropicPage from './pages/scenario/UseAnthropicPage';
 import UseCodexPage from './pages/scenario/UseCodexPage';
 import UseClaudeCodePage from './pages/scenario/UseClaudeCodePage';
 import ClaudeCodeProfilePage from './pages/scenario/ClaudeCodeProfilePage';
+import UseClaudeDesktopPage from './pages/scenario/UseClaudeDesktopPage';
 import UseAgentPage from './pages/scenario/UseAgentPage';
 import AgentOverviewPage from './pages/scenario/AgentOverviewPage';
 import UseOpenCodePage from './pages/scenario/UseOpenCodePage';
@@ -348,6 +349,7 @@ function AppContent() {
                     <Route path="/agent/codex" element={<UseCodexPage />} />
                     <Route path="/agent/claude_code" element={<UseClaudeCodePage />} />
                     <Route path="/agent/claude_code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
+                    <Route path="/agent/claude_desktop" element={<UseClaudeDesktopPage />} />
                     <Route path="/agent/agent" element={<UseAgentPage />} />
                     <Route path="/agent/opencode" element={<UseOpenCodePage />} />
                     <Route path="/agent/xcode" element={<UseXcodePage />} />

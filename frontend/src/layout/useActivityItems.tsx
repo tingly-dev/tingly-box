@@ -26,7 +26,7 @@ import {
     IconTools,
     IconServer,
 } from '@tabler/icons-react';
-import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw } from '../components/BrandIcons';
+import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
 import { SettingsApplications } from '@mui/icons-material';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
@@ -96,6 +96,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'opencode', nav: { path: '/agent/opencode', label: t('layout.nav.useOpenCode', { defaultValue: 'OpenCode' }), icon: <OpenCode size={20} /> } },
             { id: 'xcode', nav: { path: '/agent/xcode', label: t('layout.nav.useXcode', { defaultValue: 'Xcode' }), icon: <Xcode size={20} /> } },
             { id: 'vscode', nav: { path: '/agent/vscode', label: t('layout.nav.useVSCode', { defaultValue: 'VS Code' }), icon: <VSCode size={20} /> } },
+            { id: 'claude_desktop', nav: { path: '/agent/claude_desktop', label: t('layout.nav.useClaudeDesktop', { defaultValue: 'Claude Desktop' }), icon: <ClaudeDesktop size={20} /> } },
         ]);
         const sdkTools = visible([
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },

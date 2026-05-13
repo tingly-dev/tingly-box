@@ -10,7 +10,7 @@ import React, { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '@/components/BrandIcons';
+import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw, ClaudeDesktop } from '@/components/BrandIcons';
 import {
     activityBarWidth,
     activityContainerPaddingY,

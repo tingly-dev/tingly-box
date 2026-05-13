@@ -14,6 +14,7 @@ export const SCENARIOS = {
   ANTHROPIC: 'anthropic',
   CODEX: 'codex',
   CLAUDE_CODE: 'claude_code',
+  CLAUDE_DESKTOP: 'claude_desktop',
   OPENCODE: 'opencode',
   VSCODE: 'vscode',
   EMBED: 'embed', // Embedding application scenario

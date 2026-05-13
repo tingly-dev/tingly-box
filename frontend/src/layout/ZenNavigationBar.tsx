@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useActivityItems } from './useActivityItems';
 import { ZenButton } from './ZenButton';
 import { headerHeight } from './constants';
-import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '../components/BrandIcons';
+import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
 
 /**
  * Navigation action types for zen mode
@@ -241,6 +241,7 @@ function getActivityKeyForAgent(agent: string): string {
     opencode: 'scenario',
     xcode: 'scenario',
     vscode: 'scenario',
+    claude_desktop: 'scenario',
     openai: 'scenario',
     anthropic: 'scenario',
     agent: 'scenario',
@@ -359,6 +360,22 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
         label: 'Anthropic',
         action: 'path',
         path: '/use-anthropic',
+      },
+      showProfile: false,
+      additionalButtons: [
+        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
+        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
+        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+      ],
+    },
+    claude_desktop: {
+      agent: 'claude_desktop',
+      primaryButton: {
+        icon: <ClaudeDesktop size={22} />,
+        label: 'Claude Desktop',
+        action: 'path',
+        path: '/agent/claude_desktop',
       },
       showProfile: false,
       additionalButtons: [
