@@ -20,7 +20,8 @@ import (
 // `apply`; it is wired as the default so plain `tingly-box ci ...` keeps
 // working even before any other subcommand is added.
 type CICmdKong struct {
-	Apply CIApplyCmdKong `kong:"cmd,name='apply',default='1',help='Apply a (provider, model, agent) configuration in one shot'"`
+	Apply   CIApplyCmdKong   `kong:"cmd,name='apply',default='1',help='Apply a (provider, model, agent) configuration in one shot'"`
+	Install CIInstallCmdKong `kong:"cmd,name='install',help='Install an agent CLI via npm'"`
 }
 
 // CIApplyCmdKong carries all flags accepted by `ci apply`. Every required
