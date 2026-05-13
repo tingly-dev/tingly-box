@@ -23,7 +23,6 @@ import {
     ExpandMore as ExpandMoreIcon,
     Speed as SpeedIcon,
     Token as TokenIcon,
-    Build as ToolIcon,
     ContentCopy as CopyIcon,
     Refresh as RefreshIcon,
 } from '@mui/icons-material';
@@ -49,23 +48,16 @@ interface ProbeV2DialogProps {
 const TEST_MODE_LABELS: Record<ProbeV2TestMode, string> = {
     simple: 'Direct Request',
     streaming: 'Streaming Request',
-    tool: 'Tool Calling',
 };
 
 const TEST_MODE_ICONS: Record<ProbeV2TestMode, React.ReactElement> = {
     simple: <SpeedIcon fontSize="small" />,
     streaming: <SpeedIcon fontSize="small" />,
-    tool: <ToolIcon fontSize="small" />,
 };
 
 // Preset messages
 const getDefaultMessage = (mode: ProbeV2TestMode): string => {
-    switch (mode) {
-        case 'tool':
-            return 'Please use the add_numbers tool to calculate 123 + 456.';
-        default:
-            return 'Hello, this is a test message. Please respond with a short greeting.';
-    }
+    return 'Hello, this is a test message. Please respond with a short greeting.';
 };
 
 // Status Response Card Component
@@ -124,19 +116,10 @@ const StatusResponseCard = memo(({
                                         sx={{ height: 24, minWidth: 'auto' }}
                                     />
                                 )}
-                                {result.data.usage && (
+                                {result.data.total_tokens && (
                                     <Chip
                                         icon={<TokenIcon sx={{ fontSize: 14 }} />}
-                                        label={`${result.data.usage.total_tokens} tokens`}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{ height: 24, minWidth: 'auto' }}
-                                    />
-                                )}
-                                {result.data.tool_calls && result.data.tool_calls.length > 0 && (
-                                    <Chip
-                                        icon={<ToolIcon sx={{ fontSize: 14 }} />}
-                                        label={`${result.data.tool_calls.length} tool calls`}
+                                        label={`${result.data.total_tokens} tokens`}
                                         size="small"
                                         variant="outlined"
                                         sx={{ height: 24, minWidth: 'auto' }}
@@ -178,62 +161,21 @@ const StatusResponseCard = memo(({
                     </Box>
                 )}
 
-                {/* Tool Calls */}
-                {result.data?.tool_calls && result.data.tool_calls.length > 0 && (
-                    <Box sx={{ p: 2, bgcolor: 'info.50' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
-                            Tool Calls
-                        </Typography>
-                        {result.data.tool_calls.map((tc, index: number) => (
-                            <Paper
-                                key={index}
-                                variant="outlined"
-                                sx={{ p: 2, mb: 1, bgcolor: 'background.paper' }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                    <Typography variant="body2" fontWeight="bold" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                                        {tc.name}
-                                    </Typography>
-                                    {tc.id && (
-                                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'text.secondary' }}>
-                                            ID: {tc.id}
-                                        </Typography>
-                                    )}
-                                </Box>
-                                <Typography
-                                    variant="caption"
-                                    component="pre"
-                                    sx={{
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-word',
-                                        fontFamily: 'monospace',
-                                        fontSize: '0.75rem',
-                                    }}
-                                >
-                                    {tc.arguments && Object.keys(tc.arguments).length > 0
-                                        ? JSON.stringify(tc.arguments, null, 2)
-                                        : '(no arguments)'}
-                                </Typography>
-                            </Paper>
-                        ))}
-                    </Box>
-                )}
-
                 {/* Token Usage */}
-                {result.data?.usage && (
+                {result.data?.total_tokens && (
                     <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
                         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
                             Token Usage
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 2 }}>
                             <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Prompt: {result.data.usage.prompt_tokens}
+                                Prompt: {result.data.prompt_tokens}
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Completion: {result.data.usage.completion_tokens}
+                                Completion: {result.data.completion_tokens}
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Total: {result.data.usage.total_tokens}
+                                Total: {result.data.total_tokens}
                             </Typography>
                         </Box>
                     </Box>
@@ -288,21 +230,20 @@ interface ProbeV2Response {
     };
     data?: {
         content?: string;
-        tool_calls?: ProbeV2ToolCall[];
-        usage?: {
-            prompt_tokens: number;
-            completion_tokens: number;
-            total_tokens: number;
-        };
         latency_ms: number;
         request_url?: string;
+        stream?: boolean;
+        // Token usage (flattened)
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        // Tool calls
+        tool_calls?: Array<{
+            id: string;
+            name: string;
+            input: Record<string, unknown>;
+        }>;
     };
-}
-
-interface ProbeV2ToolCall {
-    id: string;
-    name: string;
-    arguments: Record<string, unknown>;
 }
 
 export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({

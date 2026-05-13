@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
@@ -243,20 +245,71 @@ func (c *ClaudeClient) Client() *anthropic.Client {
 }
 
 // ProbeChatEndpoint tests the messages endpoint.
-func (c *ClaudeClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
-	return c.AnthropicClient.ProbeChatEndpoint(ctx, model)
-}
-
-// ProbeModelsEndpoint tests the models endpoint.
-// For Claude Code OAuth, this returns an error as the endpoint is not supported.
-func (c *ClaudeClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
-	return ProbeResult{
-		Success:      false,
-		ErrorMessage: "Claude Code does not support /models endpoint",
+func (c *ClaudeClient) Probe(ctx context.Context, model string) ProbeResult {
+	res, err := c.ProbeStream(ctx, model, "hi", ProbeModeStreaming)
+	if err != nil {
+		return ProbeResult{
+			Success: false,
+			Message: err.Error(),
+		}
 	}
+	return *res
 }
 
-// ProbeOptionsEndpoint tests basic connectivity with an OPTIONS request.
-func (c *ClaudeClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
-	return c.AnthropicClient.ProbeOptionsEndpoint(ctx)
+// ProbeStream performs a streaming probe with configurable test mode for Claude Code OAuth.
+// This uses the ClaudeClient's own MessagesNewStreaming method which properly applies:
+// - Beta headers (only for probe operations)
+// - Thinking field disabling
+// - Session ID injection via Guard pattern
+//
+// Note: Beta headers are ONLY applied during probe, not during normal message passing.
+func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	startTime := time.Now()
+
+	// Build system message
+	systemMessages := []anthropic.TextBlockParam{
+		{
+			Text: ClaudeCodeSystemHeader,
+		},
+		{
+			Text: ClaudeCodeSystemBody,
+		},
+	}
+
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock(message)),
+	}
+
+	params := &anthropic.MessageNewParams{
+		Model:     anthropic.Model(model),
+		MaxTokens: 1024,
+		System:    systemMessages,
+		Messages:  messages,
+	}
+
+	// Disable thinking for Claude Code probe
+	params.Thinking = anthropic.ThinkingConfigParamUnion{
+		OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
+	}
+
+	// must use tool && stream
+	params.Tools = GetProbeToolsAnthropic()
+	params.ToolChoice = GetProbeToolChoiceAutoAnthropic()
+
+	// For streaming and tool modes, use streaming
+	stream := c.MessagesNewStreaming(ctx, params)
+	defer stream.Close()
+
+	var chunks []interface{}
+	for stream.Next() {
+		event := stream.Current()
+		chunks = append(chunks, event)
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+
+	chunksJSON, _ := json.Marshal(chunks)
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages", true), nil
 }

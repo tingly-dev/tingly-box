@@ -2,307 +2,84 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/packages/param"
-	"github.com/openai/openai-go/v3/responses"
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// SDKProbeBuilder builds SDK requests for probe operations
-type SDKProbeBuilder struct{}
-
-// NewSDKProbeBuilder creates a new SDK probe builder
-func NewSDKProbeBuilder() *SDKProbeBuilder {
-	return &SDKProbeBuilder{}
-}
-
-// buildAnthropicMessageRequest builds an Anthropic MessageNewParams for probing
-func (b *SDKProbeBuilder) buildAnthropicMessageRequest(model, message string, testMode ProbeMode) *anthropic.MessageNewParams {
-	systemMessages := []anthropic.TextBlockParam{
-		{
-			Text: "work as `echo` if possible",
-		},
-	}
-
-	messages := []anthropic.MessageParam{
-		anthropic.NewUserMessage(anthropic.NewTextBlock(message)),
-	}
-
-	params := &anthropic.MessageNewParams{
-		Model:     anthropic.Model(model),
-		MaxTokens: 1024,
-		System:    systemMessages,
-		Messages:  messages,
-	}
-
-	if testMode == ProbeV2ModeTool {
-		params.Tools = GetProbeToolsAnthropic()
-		params.ToolChoice = GetProbeToolChoiceAutoAnthropic()
-	}
-
-	return params
-}
-
-// buildOpenAIChatRequest builds an OpenAI ChatCompletionNewParams for probing
-func (b *SDKProbeBuilder) buildOpenAIChatRequest(model, message string, testMode ProbeMode) openai.ChatCompletionNewParams {
-	messages := []openai.ChatCompletionMessageParamUnion{
-		openai.SystemMessage("work as `echo` if possible"),
-		openai.UserMessage(message),
-	}
-
-	params := openai.ChatCompletionNewParams{
-		Model:    model,
-		Messages: messages,
-	}
-
-	if testMode == ProbeV2ModeTool {
-		params.Tools = GetProbeToolsOpenAI()
-		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{
-			OfAuto: openai.Opt("auto"),
-		}
-	}
-
-	return params
-}
-
-func (b *SDKProbeBuilder) buildOpenAIResponsesRequest(model, message string, testMode ProbeMode) responses.ResponseNewParams {
-	params := responses.ResponseNewParams{
-		Model:        model,
-		Instructions: param.NewOpt("work as `echo` if possible"),
-		Input: responses.ResponseNewParamsInputUnion{
-			OfInputItemList: []responses.ResponseInputItemUnionParam{
-				responses.ResponseInputItemParamOfMessage(
-					responses.ResponseInputMessageContentListParam{
-						responses.ResponseInputContentParamOfInputText(message),
-					},
-					responses.EasyInputMessageRoleUser,
-				),
-			},
-		},
-	}
-
-	if testMode == ProbeV2ModeTool {
-		params.Tools = GetProbeToolsResponses()
-		params.ToolChoice = responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsAuto),
-		}
-	}
-
-	return params
-}
-
-func shouldUseResponsesProbe(provider *typ.Provider) bool {
-	return provider.AuthType == typ.AuthTypeOAuth &&
-		provider.OAuthDetail != nil &&
-		provider.OAuthDetail.GetIssuer() == ai.IssuerCodex
-}
-
-// getClientForProvider gets the appropriate SDK client for a provider
-func (s *Server) getClientForProvider(provider *typ.Provider, model string) (interface{}, error) {
+// getClientForProvider gets the appropriate Prober for a provider
+func (s *Server) getClientForProvider(provider *typ.Provider, model string) (client.Prober, error) {
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		client := s.clientPool.GetAnthropicClient(context.Background(), provider, model)
-		if client == nil {
+		c := s.clientPool.GetAnthropicClient(context.Background(), provider, model)
+		if c == nil {
 			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
 		}
-		return client, nil
+		return c, nil
 	case protocol.APIStyleOpenAI:
-		client := s.clientPool.GetOpenAIClient(context.Background(), provider, model)
-		if client == nil {
+		c := s.clientPool.GetOpenAIClient(context.Background(), provider, model)
+		if c == nil {
 			return nil, fmt.Errorf("failed to get OpenAI client for provider: %s", provider.Name)
 		}
-		return client, nil
+		return c, nil
 	case protocol.APIStyleGoogle:
-		client := s.clientPool.GetGoogleClient(context.Background(), provider, model)
-		if client == nil {
+		c := s.clientPool.GetGoogleClient(context.Background(), provider, model)
+		if c == nil {
 			return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
 		}
-		return client, nil
+		return c, nil
 	default:
 		return nil, fmt.Errorf("unsupported API style: %s", provider.APIStyle)
 	}
 }
 
-// probeProviderWithSDK performs a non-streaming probe for a provider using SDK
-func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*ProbeV2Data, error) {
-	startTime := time.Now()
-
-	clientInterface, err := s.getClientForProvider(provider, model)
+// probeProviderWithSDK performs a non-streaming probe for a provider using Prober interface
+func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*client.ProbeResult, error) {
+	prober, err := s.getClientForProvider(provider, model)
 	if err != nil {
 		return nil, err
 	}
 
-	builder := NewSDKProbeBuilder()
-
-	url := provider.APIBase
-	if provider.APIStyle == protocol.APIStyleAnthropic {
-		url += "/v1/messages"
-	} else if shouldUseResponsesProbe(provider) {
-		url += "/responses"
-	} else {
-		url += "/chat/completions"
+	// Use simple mode for non-streaming probe
+	// Convert server.ProbeMode to client.ProbeMode
+	clientMode := client.ProbeMode(testMode)
+	res, err := prober.ProbeStream(ctx, model, message, clientMode)
+	if err == nil {
+		return res, nil
 	}
 
-	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		anthropicClient := clientInterface.(*client.AnthropicClient)
-		params := builder.buildAnthropicMessageRequest(model, message, testMode)
-		resp, err := anthropicClient.MessagesNew(ctx, params)
-		if err != nil {
-			return nil, err
+	if provider.APIStyle == protocol.APIStyleOpenAI {
+		if c, ok := prober.(client.OpenAIClientInterface); ok {
+			res, err = c.ProbeResponsesStream(ctx, model, message, clientMode)
+			return res, err
 		}
-		// Convert response to JSON string as content
-		respJSON, _ := json.Marshal(resp)
-		return &ProbeV2Data{
-			Content:    string(respJSON),
-			LatencyMs:  time.Since(startTime).Milliseconds(),
-			RequestURL: url,
-		}, nil
-
-	case protocol.APIStyleOpenAI:
-		openaiClient := clientInterface.(*client.OpenAIClient)
-		if shouldUseResponsesProbe(provider) {
-			params := builder.buildOpenAIResponsesRequest(model, message, testMode)
-			stream := openaiClient.ResponsesNewStreaming(ctx, params)
-			defer stream.Close()
-
-			var chunks []interface{}
-			for stream.Next() {
-				chunks = append(chunks, stream.Current())
-			}
-
-			if err := stream.Err(); err != nil {
-				return nil, err
-			}
-
-			respJSON, err := json.Marshal(chunks)
-			if err != nil {
-				return nil, err
-			}
-			return &ProbeV2Data{
-				Content:    string(respJSON),
-				LatencyMs:  time.Since(startTime).Milliseconds(),
-				RequestURL: url,
-			}, nil
-		}
-
-		params := builder.buildOpenAIChatRequest(model, message, testMode)
-		resp, err := openaiClient.ChatCompletionsNew(ctx, params)
-		if err != nil {
-			return nil, err
-		}
-		respJSON, _ := json.Marshal(resp)
-		return &ProbeV2Data{
-			Content:    string(respJSON),
-			LatencyMs:  time.Since(startTime).Milliseconds(),
-			RequestURL: url,
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported API style: %s", provider.APIStyle)
 	}
+
+	return nil, err
 }
 
-// probeProviderStream performs a streaming probe for a provider using SDK
-func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*ProbeV2Data, error) {
-	startTime := time.Now()
-
-	clientInterface, err := s.getClientForProvider(provider, model)
+// probeProviderStream performs a streaming probe for a provider using Prober interface
+func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*client.ProbeResult, error) {
+	prober, err := s.getClientForProvider(provider, model)
 	if err != nil {
 		return nil, err
 	}
 
-	builder := NewSDKProbeBuilder()
-
-	url := provider.APIBase
-	if provider.APIStyle == protocol.APIStyleAnthropic {
-		url += "/v1/messages"
-	} else if shouldUseResponsesProbe(provider) {
-		url += "/responses"
-	} else {
-		url += "/chat/completions"
+	// Convert server.ProbeMode to client.ProbeMode
+	clientMode := client.ProbeMode(testMode)
+	res, err := prober.ProbeStream(ctx, model, message, clientMode)
+	if err == nil {
+		return res, nil
 	}
 
-	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		anthropicClient := clientInterface.(*client.AnthropicClient)
-		params := builder.buildAnthropicMessageRequest(model, message, testMode)
-		stream := anthropicClient.MessagesNewStreaming(ctx, params)
-		defer stream.Close()
-
-		var chunks []interface{}
-		for stream.Next() {
-			event := stream.Current()
-			// Collect each event as-is
-			chunks = append(chunks, event)
+	if provider.APIStyle == protocol.APIStyleOpenAI {
+		if c, ok := prober.(client.OpenAIClientInterface); ok {
+			res, err = c.ProbeResponsesStream(ctx, model, message, clientMode)
+			return res, err
 		}
-
-		if err := stream.Err(); err != nil {
-			return nil, err
-		}
-
-		// Convert chunks to JSON string as content
-		chunksJSON, _ := json.Marshal(chunks)
-		return &ProbeV2Data{
-			Content:    string(chunksJSON),
-			LatencyMs:  time.Since(startTime).Milliseconds(),
-			RequestURL: url,
-		}, nil
-
-	case protocol.APIStyleOpenAI:
-		openaiClient := clientInterface.(*client.OpenAIClient)
-		if shouldUseResponsesProbe(provider) {
-			params := builder.buildOpenAIResponsesRequest(model, message, testMode)
-			stream := openaiClient.ResponsesNewStreaming(ctx, params)
-			defer stream.Close()
-
-			var chunks []interface{}
-			for stream.Next() {
-				chunks = append(chunks, stream.Current())
-			}
-
-			if err := stream.Err(); err != nil {
-				return nil, err
-			}
-
-			chunksJSON, _ := json.Marshal(chunks)
-			return &ProbeV2Data{
-				Content:    string(chunksJSON),
-				LatencyMs:  time.Since(startTime).Milliseconds(),
-				RequestURL: url,
-			}, nil
-		}
-
-		params := builder.buildOpenAIChatRequest(model, message, testMode)
-		stream := openaiClient.ChatCompletionsNewStreaming(ctx, params)
-		defer stream.Close()
-
-		var chunks []interface{}
-		for stream.Next() {
-			chunk := stream.Current()
-			chunks = append(chunks, chunk)
-		}
-
-		if err := stream.Err(); err != nil {
-			return nil, err
-		}
-
-		chunksJSON, _ := json.Marshal(chunks)
-		return &ProbeV2Data{
-			Content:    string(chunksJSON),
-			LatencyMs:  time.Since(startTime).Milliseconds(),
-			RequestURL: url,
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported API style: %s", provider.APIStyle)
 	}
+
+	return nil, err
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -11,8 +12,9 @@ import (
 type ProbeTarget string
 
 const (
-	ProbeV2TargetRule     ProbeTarget = "rule"
-	ProbeV2TargetProvider ProbeTarget = "provider"
+	ProbeV2TargetRule           ProbeTarget = "rule"
+	ProbeV2TargetProvider       ProbeTarget = "provider"
+	ProbeV2TargetProviderConfig ProbeTarget = "provider_config"
 )
 
 // ProbeMode defines the test mode
@@ -24,9 +26,9 @@ const (
 	ProbeV2ModeTool      ProbeMode = "tool"
 )
 
-// ProbeV2Request represents a Probe V3 request
+// ProbeV2Request represents a Probe V2 request
 type ProbeV2Request struct {
-	// Target type: rule or provider
+	// Target type: rule, provider, or provider_config
 	TargetType ProbeTarget `json:"target_type" binding:"required"`
 
 	// Rule test (required when target_type is rule)
@@ -37,6 +39,12 @@ type ProbeV2Request struct {
 	ProviderUUID string `json:"provider_uuid,omitempty" binding:"required_if=TargetType provider"`
 	Model        string `json:"model,omitempty" binding:"required_if=TargetType provider"`
 
+	// Provider config test (required when target_type is provider_config)
+	Name     string `json:"name,omitempty"`
+	APIBase  string `json:"api_base,omitempty"`
+	APIStyle string `json:"api_style,omitempty"`
+	Token    string `json:"token,omitempty"`
+
 	// Test mode
 	TestMode ProbeMode `json:"test_mode" binding:"required"`
 
@@ -44,56 +52,28 @@ type ProbeV2Request struct {
 	Message string `json:"message,omitempty"`
 }
 
-// ProbeV2Response represents a Probe V3 response
+// ProbeV2Response represents a Probe V2 response
 type ProbeV2Response struct {
 	Success bool         `json:"success"`
 	Error   *ErrorDetail `json:"error,omitempty"`
 	Data    *ProbeV2Data `json:"data,omitempty"`
 }
 
-// ProbeV2Data represents the probe result data
-type ProbeV2Data struct {
-	Content    string            `json:"content,omitempty"`
-	ToolCalls  []ProbeV2ToolCall `json:"tool_calls,omitempty"`
-	Usage      *ProbeV2Usage     `json:"usage,omitempty"`
-	LatencyMs  int64             `json:"latency_ms"`
-	RequestURL string            `json:"request_url,omitempty"`
-}
-
-// ProbeV2ToolCall represents a tool call in the response
-type ProbeV2ToolCall struct {
-	ID        string                 `json:"id"`
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments"`
-}
-
-// ProbeV2Usage represents token usage
-type ProbeV2Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
+// ProbeV2Data is an alias to client.ProbeResult with JSON tags
+// We use client.ProbeResult directly to maintain consistency
+type ProbeV2Data = client.ProbeResult
 
 // ProbeV2ResponseChunk represents a streaming response chunk
 type ProbeV2ResponseChunk struct {
-	Type      string           `json:"type"` // content, tool_call, error, done
-	Content   string           `json:"content,omitempty"`
-	ToolCall  *ProbeV2ToolCall `json:"tool_call,omitempty"`
-	Error     string           `json:"error,omitempty"`
-	Usage     *ProbeV2Usage    `json:"usage,omitempty"`
-	LatencyMs int64            `json:"latency_ms,omitempty"`
-}
+	Type      string `json:"type"` // content, error, done
+	Content   string `json:"content,omitempty"`
+	Error     string `json:"error,omitempty"`
+	LatencyMs int64  `json:"latency_ms,omitempty"`
 
-// ProbeV2Service handles probe V3 operations
-type ProbeV2Service struct {
-	server *Server
-}
-
-// NewProbeV2Service creates a new Probe V3 service
-func NewProbeV2Service(server *Server) *ProbeV2Service {
-	return &ProbeV2Service{
-		server: server,
-	}
+	// Token usage (flattened for consistency)
+	PromptTokens     int `json:"prompt_tokens,omitempty"`
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
 }
 
 // validateProbeV2Request validates the probe request
@@ -113,8 +93,18 @@ func validateProbeV2Request(req *ProbeV2Request) error {
 		if req.Model == "" {
 			return &ValidationError{Field: "model", Message: "model is required for provider test"}
 		}
+	case ProbeV2TargetProviderConfig:
+		if req.APIBase == "" {
+			return &ValidationError{Field: "api_base", Message: "api_base is required for provider config test"}
+		}
+		if req.APIStyle == "" {
+			return &ValidationError{Field: "api_style", Message: "api_style is required for provider config test"}
+		}
+		if req.Token == "" {
+			return &ValidationError{Field: "token", Message: "token is required for provider config test"}
+		}
 	default:
-		return &ValidationError{Field: "target_type", Message: "target_type must be 'rule' or 'provider'"}
+		return &ValidationError{Field: "target_type", Message: "target_type must be 'rule', 'provider', or 'provider_config'"}
 	}
 
 	// Validate test mode
@@ -146,7 +136,7 @@ func getProbeMessage(mode ProbeMode, customMsg string) string {
 
 	switch mode {
 	case ProbeV2ModeTool:
-		return "Please use the add_numbers tool to calculate 123 + 456."
+		return "Please use the bash tool to list the current directory contents with 'ls -la'."
 	default:
 		return "Hello, this is a test message. Please respond with a short greeting."
 	}

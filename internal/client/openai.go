@@ -13,6 +13,7 @@ import (
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/ai"
@@ -41,9 +42,9 @@ type OpenAIClientInterface interface {
 	SetRecordSink(sink *obs.Sink)
 
 	// Prober interface methods
-	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
-	ProbeModelsEndpoint(ctx context.Context) ProbeResult
-	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+	Probe(ctx context.Context, model string) ProbeResult
+	ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
+	ProbeResponsesStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
 
 	// Client returns the underlying OpenAI SDK client (for advanced usage)
 	Client() *openai.Client
@@ -295,7 +296,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // ProbeChatEndpoint tests the chat completions endpoint with a minimal request
-func (c *OpenAIClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *OpenAIClient) Probe(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
 	// Check if this is a Codex OAuth provider
@@ -357,6 +358,111 @@ func (c *OpenAIClient) ProbeChatEndpoint(ctx context.Context, model string) Prob
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,
 	}
+}
+
+// probeStream performs a streaming probe with configurable test mode
+
+// ProbeStream performs a streaming probe with configurable test mode (public interface)
+func (c *OpenAIClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	return c.probeStream(ctx, model, message, testMode)
+}
+func (c *OpenAIClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+
+	// Check if this is a Codex OAuth provider
+	if c.provider.AuthType == typ.AuthTypeOAuth &&
+		c.provider.OAuthDetail != nil &&
+		c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
+		return c.ProbeResponsesStream(ctx, model, message, testMode)
+	}
+
+	startTime := time.Now()
+
+	// Build request based on test mode
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage("work as `echo` if possible"),
+		openai.UserMessage(message),
+	}
+
+	params := openai.ChatCompletionNewParams{
+		Model:    model,
+		Messages: messages,
+	}
+
+	if testMode == ProbeModeTool {
+		params.Tools = GetProbeToolsOpenAI()
+		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{
+			OfAuto: openai.Opt("auto"),
+		}
+	}
+
+	// For simple mode, use non-streaming request
+	if testMode == ProbeModeSimple {
+		resp, err := c.client.Chat.Completions.New(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		respJSON, _ := json.Marshal(resp)
+		return ToProbeResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/chat/completions", false), nil
+	}
+
+	// For streaming and tool modes, use streaming
+	stream := c.client.Chat.Completions.NewStreaming(ctx, params)
+	defer stream.Close()
+
+	var chunks []interface{}
+	for stream.Next() {
+		chunks = append(chunks, stream.Current())
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+
+	chunksJSON, _ := json.Marshal(chunks)
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/chat/completions", true), nil
+}
+
+// ProbeResponsesStream performs a streaming probe using Responses API (for Codex)
+func (c *OpenAIClient) ProbeResponsesStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	startTime := time.Now()
+
+	params := responses.ResponseNewParams{
+		Model:        model,
+		Instructions: param.NewOpt("work as `echo` if possible"),
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: []responses.ResponseInputItemUnionParam{
+				responses.ResponseInputItemParamOfMessage(
+					responses.ResponseInputMessageContentListParam{
+						responses.ResponseInputContentParamOfInputText(message),
+					},
+					responses.EasyInputMessageRoleUser,
+				),
+			},
+		},
+	}
+
+	if testMode == ProbeModeTool {
+		params.Tools = GetProbeToolsResponses()
+		params.ToolChoice = responses.ResponseNewParamsToolChoiceUnion{
+			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsAuto),
+		}
+	}
+
+	stream := c.ResponsesNewStreaming(ctx, params)
+	defer stream.Close()
+
+	var chunks []interface{}
+	for stream.Next() {
+		chunks = append(chunks, stream.Current())
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+
+	chunksJSON, _ := json.Marshal(chunks)
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/responses", true), nil
 }
 
 // ProbeModelsEndpoint tests the models list endpoint

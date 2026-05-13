@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"iter"
 	"net/http"
@@ -139,7 +140,7 @@ func (c *GoogleClient) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // ProbeChatEndpoint tests the chat endpoint with a minimal request
-func (c *GoogleClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *GoogleClient) Probe(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
 	// Create minimal content for probe
@@ -204,6 +205,57 @@ func (c *GoogleClient) ProbeChatEndpoint(ctx context.Context, model string) Prob
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,
 	}
+}
+
+// probeStream performs a streaming probe with configurable test mode
+// Note: Google genai SDK has limited tool support in probe context
+
+// ProbeStream performs a streaming probe with configurable test mode (public interface)
+func (c *GoogleClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	return c.probeStream(ctx, model, message, testMode)
+}
+func (c *GoogleClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	startTime := time.Now()
+
+	// Create minimal content for probe
+	contents := []*genai.Content{
+		{
+			Role: "user",
+			Parts: []*genai.Part{
+				{Text: message},
+			},
+		},
+	}
+
+	// Configure generation
+	config := &genai.GenerateContentConfig{
+		MaxOutputTokens: 1024,
+	}
+
+	// For simple mode, use non-streaming request
+	if testMode == ProbeModeSimple {
+		resp, err := c.client.Models.GenerateContent(ctx, model, contents, config)
+		if err != nil {
+			return nil, err
+		}
+
+		respJSON, _ := json.Marshal(resp)
+		return ToProbeResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase, false), nil
+	}
+
+	// For streaming and tool modes, use streaming
+	stream := c.client.Models.GenerateContentStream(ctx, model, contents, config)
+
+	var chunks []interface{}
+	for resp, err := range stream {
+		if err != nil {
+			return nil, err
+		}
+		chunks = append(chunks, resp)
+	}
+
+	chunksJSON, _ := json.Marshal(chunks)
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase, true), nil
 }
 
 // ProbeModelsEndpoint tests the models list endpoint

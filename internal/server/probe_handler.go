@@ -2,105 +2,15 @@ package server
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
-
-	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// HandleProbeProvider tests a provider's API key and connectivity
-func (s *Server) HandleProbeProvider(c *gin.Context) {
-	var req ProbeProviderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ProbeProviderResponse{
-			Success: false,
-			Error: &ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Validate required fields
-	if req.Name == "" || req.APIBase == "" || req.APIStyle == "" || req.Token == "" {
-		c.JSON(http.StatusBadRequest, ProbeProviderResponse{
-			Success: false,
-			Error: &ErrorDetail{
-				Message: "All fields (name, api_base, api_style, token) are required",
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Start timing
-	startTime := time.Now()
-
-	// Test the provider by calling their models endpoint
-	valid, message, modelsCount, err := s.testProviderConnectivity(&req)
-	responseTime := time.Since(startTime).Milliseconds()
-
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"action":   obs.ActionFetchModels,
-			"success":  false,
-			"provider": req.Name,
-			"api_base": req.APIBase,
-		}).Error(err.Error())
-
-		c.JSON(http.StatusOK, ProbeProviderResponse{
-			Success: false,
-			Error: &ErrorDetail{
-				Message: err.Error(),
-				Type:    "provider_test_failed",
-			},
-		})
-		return
-	}
-
-	// Log successful test
-	logrus.WithFields(logrus.Fields{
-		"action":        obs.ActionFetchModels,
-		"success":       true,
-		"provider":      req.Name,
-		"api_base":      req.APIBase,
-		"valid":         valid,
-		"models_count":  modelsCount,
-		"response_time": responseTime,
-	}).Info(message)
-
-	// Determine test result
-	testResult := "models_endpoint_success"
-	if !valid {
-		testResult = "models_endpoint_invalid"
-	}
-
-	c.JSON(http.StatusOK, ProbeProviderResponse{
-		Success: true,
-		Data: &ProbeProviderResponseData{
-			Provider:     req.Name,
-			APIBase:      req.APIBase,
-			APIStyle:     req.APIStyle,
-			Valid:        valid,
-			Message:      message,
-			TestResult:   testResult,
-			ResponseTime: responseTime,
-			ModelsCount:  modelsCount,
-		},
-	})
-}
-
-// testProviderConnectivity tests if a provider's API key and connectivity are working using cascading validation
+// testProviderConnectivity tests if a provider's API key and connectivity are working.
+// Kept for use by provider_handler.go provider onboarding/verification.
 func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, string, int, error) {
-	// Create a temporary provider config
 	provider := &typ.Provider{
 		Name:     req.Name,
 		APIBase:  req.APIBase,
@@ -109,48 +19,27 @@ func (s *Server) testProviderConnectivity(req *ProbeProviderRequest) (bool, stri
 		Enabled:  true,
 	}
 
+	// Reuse v2 provider-config probing: simple mode with default model
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Get the appropriate client based on API style
-	var prober client.Prober
-	switch provider.APIStyle {
-	case protocol.APIStyleOpenAI:
-		prober = s.clientPool.GetOpenAIClient(context.Background(), provider, "")
-	case protocol.APIStyleAnthropic:
-		prober = s.clientPool.GetAnthropicClient(context.Background(), provider, "")
-	default:
-		return false, "unsupported API style", 0, nil
+	model := s.getDefaultModelForAPIStyle(provider.APIStyle)
+	message := "Hello, this is a test message. Please respond with a short greeting."
+
+	// Use SDK-based probe from probe_v2_sdk.go
+	data, err := s.probeProviderWithSDK(ctx, provider, model, message, ProbeV2ModeSimple)
+	if err != nil {
+		return false, err.Error(), 0, nil
 	}
 
-	if prober == nil {
-		return false, "failed to create client for provider", 0, nil
+	if data.Content != "" {
+		return true, "Provider verified successfully", 0, nil
 	}
 
-	// Tier 1: Try models list endpoint
-	result := prober.ProbeModelsEndpoint(ctx)
-	if result.Success {
-		return true, result.Message, result.ModelsCount, nil
-	}
-
-	// Tier 2: Try chat/messages endpoint with minimal message
-	defaultModel := s.getDefaultModelForAPIStyle(provider.APIStyle)
-	result = prober.ProbeChatEndpoint(ctx, defaultModel)
-	if result.Success {
-		return true, result.Message, 0, nil
-	}
-
-	// Both tiers failed - provider is not accessible or not compatible
-	errorMsg := "Provider connectivity check failed. "
-	if result.ErrorMessage != "" {
-		errorMsg += result.ErrorMessage
-	} else {
-		errorMsg += "Neither models nor chat endpoints are accessible. This provider may not be compatible."
-	}
-	return false, errorMsg, 0, nil
+	return false, "Provider verification failed: no response content", 0, nil
 }
 
-// getDefaultModelForAPIStyle returns a default model name for probing based on API style
+// getDefaultModelForAPIStyle returns a default model name for probing based on API style.
 func (s *Server) getDefaultModelForAPIStyle(apiStyle protocol.APIStyle) string {
 	switch apiStyle {
 	case protocol.APIStyleOpenAI:
@@ -160,79 +49,6 @@ func (s *Server) getDefaultModelForAPIStyle(apiStyle protocol.APIStyle) string {
 	default:
 		return "gpt-3.5-turbo"
 	}
-}
-
-// HandleProbeModelEndpoints handles adaptive probe for model endpoints (chat and responses)
-func (s *Server) HandleProbeModelEndpoints(c *gin.Context) {
-	var req ModelProbeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ModelProbeResponse{
-			Success: false,
-			Error: &ErrorDetail{
-				Message: "Invalid request body: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Validate provider exists
-	provider, err := s.config.GetProviderByUUID(req.ProviderUUID)
-	if err != nil || provider == nil {
-		c.JSON(http.StatusNotFound, ModelProbeResponse{
-			Success: false,
-			Error: &ErrorDetail{
-				Message: fmt.Sprintf("Provider not found: %s", req.ProviderUUID),
-				Type:    "provider_not_found",
-			},
-		})
-		return
-	}
-
-	// Create adaptive probe instance
-	adaptiveProbe := NewAdaptiveProbe(s)
-
-	// Execute probe
-	result, err := adaptiveProbe.ProbeModelEndpoints(c.Request.Context(), req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ModelProbeResponse{
-			Success: false,
-			Error: &ErrorDetail{
-				Message: err.Error(),
-				Type:    "probe_failed",
-			},
-		})
-		return
-	}
-
-	// Convert endpoint status to API response format
-	chatStatus := EndpointProbeStatus{
-		Available:    result.ChatEndpoint.Available,
-		LatencyMs:    result.ChatEndpoint.LatencyMs,
-		ErrorMessage: result.ChatEndpoint.ErrorMessage,
-		LastChecked:  result.ChatEndpoint.LastChecked.Format(time.RFC3339),
-	}
-
-	responsesStatus := EndpointProbeStatus{
-		Available:    result.ResponsesEndpoint.Available,
-		LatencyMs:    result.ResponsesEndpoint.LatencyMs,
-		ErrorMessage: result.ResponsesEndpoint.ErrorMessage,
-		LastChecked:  result.ResponsesEndpoint.LastChecked.Format(time.RFC3339),
-	}
-
-	data := &ModelProbeData{
-		ProviderUUID:      result.ProviderUUID,
-		ModelID:           result.ModelID,
-		ChatEndpoint:      chatStatus,
-		ResponsesEndpoint: responsesStatus,
-		PreferredEndpoint: result.PreferredEndpoint,
-		LastUpdated:       result.LastUpdated.Format(time.RFC3339),
-	}
-
-	c.JSON(http.StatusOK, ModelProbeResponse{
-		Success: true,
-		Data:    data,
-	})
 }
 
 // InvalidateProviderCache invalidates cached capabilities for a provider

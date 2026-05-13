@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
@@ -107,7 +108,7 @@ func (s *Server) handleProbeStream(c *gin.Context, req *ProbeV2Request) {
 }
 
 // probe performs a probe using SDK for both rule and provider targets
-func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
+func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*client.ProbeResult, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
@@ -118,7 +119,7 @@ func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, 
 }
 
 // probeStream performs a streaming probe using SDK for both rule and provider targets
-func (s *Server) probeStream(ctx context.Context, req *ProbeV2Request) (*ProbeV2Data, error) {
+func (s *Server) probeStream(ctx context.Context, req *ProbeV2Request) (*client.ProbeResult, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
@@ -133,6 +134,8 @@ func (s *Server) resolveTargetToProviderModel(ctx context.Context, req *ProbeV2R
 	switch req.TargetType {
 	case ProbeV2TargetProvider:
 		return s.resolveProviderTarget(ctx, req)
+	case ProbeV2TargetProviderConfig:
+		return s.resolveProviderConfigTarget(ctx, req)
 	case ProbeV2TargetRule:
 		return s.resolveRuleTarget(ctx, req)
 	default:
@@ -164,6 +167,36 @@ func (s *Server) resolveProviderTarget(_ context.Context, req *ProbeV2Request) (
 			} else {
 				model = "gpt-3.5-turbo"
 			}
+		}
+	}
+
+	return provider, model, nil
+}
+
+// resolveProviderConfigTarget builds a temporary provider from inline config
+func (s *Server) resolveProviderConfigTarget(_ context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
+	if req.APIBase == "" || req.APIStyle == "" || req.Token == "" {
+		return nil, "", fmt.Errorf("provider_config target requires api_base, api_style, and token")
+	}
+
+	provider := &typ.Provider{
+		Name:     req.Name,
+		APIBase:  req.APIBase,
+		APIStyle: protocol.APIStyle(req.APIStyle),
+		Token:    req.Token,
+		Enabled:  true,
+	}
+
+	model := req.Model
+	if model == "" {
+		// Choose default model based on API style
+		switch provider.APIStyle {
+		case protocol.APIStyleAnthropic:
+			model = "claude-3-haiku-20240307"
+		case protocol.APIStyleGoogle:
+			model = "gemini-2.0-flash-exp"
+		default:
+			model = "gpt-3.5-turbo"
 		}
 	}
 

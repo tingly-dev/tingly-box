@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 // ClaudeCodeSystemHeader is a special system message for Claude Code OAuth subscriptions
 const ClaudeCodeSystemHeader = "You are Claude Code, Anthropic's official CLI for Claude."
+const ClaudeCodeSystemBody = "You are a file search specialist for Claude Code, Anthropic's official CLI for Claude. You excel at thoroughly navigating and exploring codebases.\n\n"
 
 // AnthropicClientInterface defines the contract for Anthropic-compatible clients.
 // Both AnthropicClient and ClaudeClient (for Claude Code OAuth) implement this interface.
@@ -41,9 +43,8 @@ type AnthropicClientInterface interface {
 	Client() *anthropic.Client
 
 	// Prober interface methods
-	ProbeChatEndpoint(ctx context.Context, model string) ProbeResult
-	ProbeModelsEndpoint(ctx context.Context) ProbeResult
-	ProbeOptionsEndpoint(ctx context.Context) ProbeResult
+	Probe(ctx context.Context, model string) ProbeResult
+	ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
 }
 
 // AnthropicClient wraps the Anthropic SDK client
@@ -193,7 +194,7 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // ProbeChatEndpoint tests the messages endpoint with a minimal request
-func (c *AnthropicClient) ProbeChatEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *AnthropicClient) Probe(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
 	// Determine system message based on OAuth provider type
@@ -264,6 +265,74 @@ func (c *AnthropicClient) ProbeChatEndpoint(ctx context.Context, model string) P
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,
 	}
+}
+
+// ProbeStream performs a streaming probe with configurable test mode (public interface)
+func (c *AnthropicClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	return c.probeStream(ctx, model, message, testMode)
+}
+
+// probeStream performs a streaming probe with configurable test mode
+func (c *AnthropicClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	startTime := time.Now()
+
+	// Determine system message based on OAuth provider type
+	systemMessages := []anthropic.TextBlockParam{
+		{
+			Text: "work as `echo` if possible",
+		},
+	}
+	if c.provider.AuthType == typ.AuthTypeOAuth && c.provider.OAuthDetail != nil &&
+		c.provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode {
+		// Prepend Claude Code system message as the first block
+		systemMessages = append([]anthropic.TextBlockParam{{
+			Text: ClaudeCodeSystemHeader,
+		}}, systemMessages...)
+	}
+
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock(message)),
+	}
+
+	params := &anthropic.MessageNewParams{
+		Model:     anthropic.Model(model),
+		MaxTokens: 1024,
+		System:    systemMessages,
+		Messages:  messages,
+	}
+
+	if testMode == ProbeModeTool {
+		params.Tools = GetProbeToolsAnthropic()
+		params.ToolChoice = GetProbeToolChoiceAutoAnthropic()
+	}
+
+	// For simple mode, use non-streaming request
+	if testMode == ProbeModeSimple {
+		resp, err := c.client.Messages.New(ctx, *params)
+		if err != nil {
+			return nil, err
+		}
+
+		respJSON, _ := json.Marshal(resp)
+		return ToProbeResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/v1/messages", false), nil
+	}
+
+	// For streaming and tool modes, use streaming
+	stream := c.client.Messages.NewStreaming(ctx, *params)
+	defer stream.Close()
+
+	var chunks []interface{}
+	for stream.Next() {
+		event := stream.Current()
+		chunks = append(chunks, event)
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+
+	chunksJSON, _ := json.Marshal(chunks)
+	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/v1/messages", true), nil
 }
 
 // ProbeModelsEndpoint tests the models list endpoint
