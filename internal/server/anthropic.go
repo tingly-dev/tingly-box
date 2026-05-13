@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/constant"
@@ -181,18 +182,46 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		c.Set("rule", rule)
 	}
 
+	// sessionID is automatically stored by SelectService
+
+	actualModel := selectedService.Model
+
 	// Virtual-model providers are served by the in-process vmodel handler.
 	// Resolution went through the normal routing pipeline so rules/scenarios
-	// still apply, but no outbound HTTP is performed.
+	// still apply, but no outbound HTTP is performed. We must rewrite Model
+	// in the forwarded body so the vmodel registry sees the rule's resolved
+	// model ID (actualModel) rather than the client-facing requestModel.
+	//
+	// NOTE: this path intentionally skips outbound dispatch helpers
+	// (pre-chain, guardrails, post-recording). Usage/quota tracking for
+	// vmodel is a separate concern tracked in the roadmap.
 	if provider.IsVirtual() && s.virtualModelService != nil {
-		c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+		var (
+			rewritten []byte
+			err       error
+		)
+		if beta {
+			betaMessages.Model = anthropic.Model(actualModel)
+			rewritten, err = json.Marshal(betaMessages)
+		} else {
+			messages.Model = anthropic.Model(actualModel)
+			rewritten, err = json.Marshal(messages)
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to prepare virtual-model request: " + err.Error(),
+					Type:    "internal_error",
+				},
+			})
+			return
+		}
+		c.Request.Body = io.NopCloser(strings.NewReader(string(rewritten)))
+		c.Request.ContentLength = int64(len(rewritten))
 		s.virtualModelService.GetHandler().Messages(c)
 		return
 	}
 
-	// sessionID is automatically stored by SelectService
-
-	actualModel := selectedService.Model
 	// Delegate to the appropriate implementation based on beta parameter
 	if beta {
 		s.AnthropicMessagesV1Beta(c, betaMessages, requestModel, provider, actualModel, rule)

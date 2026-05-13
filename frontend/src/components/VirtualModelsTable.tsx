@@ -42,7 +42,7 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                     {providers.map((p) => {
                         const models = p.vmodel_detail?.models ?? [];
                         return (
-                            <TableRow key={p.uuid} hover>
+                            <TableRow key={p.uuid ?? p.name} hover>
                                 <TableCell>
                                     <Stack direction="row" spacing={1} alignItems="center">
                                         <Typography variant="body2" fontWeight={500}>
@@ -83,7 +83,10 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                                         <Switch
                                             size="small"
                                             checked={!!p.enabled}
-                                            onChange={() => onToggle?.(p.uuid!)}
+                                            disabled={!p.uuid}
+                                            onChange={() => {
+                                                if (p.uuid) onToggle?.(p.uuid);
+                                            }}
                                         />
                                     </Tooltip>
                                 </TableCell>

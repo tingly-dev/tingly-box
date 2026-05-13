@@ -27,8 +27,8 @@ type ProviderRecord struct {
 	Name     string `gorm:"column:name;not null;index"`
 	APIBase  string `gorm:"column:api_base;not null"`
 	APIStyle string `gorm:"column:api_style;not null"` // "openai" or "anthropic"
-	AuthType string `gorm:"column:auth_type;not null"` // "api_key", "oauth", or "vmodel"
-	Source   string `gorm:"column:source"`             // "user" (default) or "builtin"
+	AuthType string `gorm:"column:auth_type;not null"`       // "api_key", "oauth", or "vmodel"
+	Source   string `gorm:"column:source;default:'user'"`    // "user" (default) or "builtin"
 
 	// Configuration fields
 	NoKeyRequired bool   `gorm:"column:no_key_required;default:false"`

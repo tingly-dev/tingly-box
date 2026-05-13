@@ -28,8 +28,12 @@ func maskProviderForResponse(provider *typ.Provider) ProviderResponse {
 		Enabled:          provider.Enabled,
 		ProxyURL:         provider.ProxyURL,
 		AuthType:         string(provider.AuthType),
-		VModelDetail:     provider.VModelDetail,
 		Source:           string(provider.Source),
+	}
+	// Only surface vmodel_detail on vmodel providers so a stale blob on a
+	// flipped-auth row can never leak via the masked response.
+	if provider.AuthType == typ.AuthTypeVirtual {
+		resp.VModelDetail = provider.VModelDetail
 	}
 
 	switch provider.AuthType {

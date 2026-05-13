@@ -31,6 +31,17 @@ type OpenAIModelsResponse struct {
 	Data   []vmodel.Model `json:"data"`
 }
 
+// AnthropicModelsResponse is Anthropic's native /v1/models envelope. It
+// differs from OpenAI's shape (no "object" field; cursor fields instead).
+// We always emit has_more=false because vmodel returns the full registry in
+// one shot.
+type AnthropicModelsResponse struct {
+	Data    []vmodel.Model `json:"data"`
+	FirstID string         `json:"first_id"`
+	LastID  string         `json:"last_id"`
+	HasMore bool           `json:"has_more"`
+}
+
 // Request types aliased from protocol / Anthropic SDK
 type (
 	AnthropicMessageRequest = protocol.AnthropicBetaMessagesRequest

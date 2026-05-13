@@ -62,12 +62,16 @@ func (h *Handler) ListOpenAIModels(c *gin.Context) {
 }
 
 // ListAnthropicModels handles GET /virtual/anthropic/v1/models — returns
-// only the Anthropic-protocol registry.
+// only the Anthropic-protocol registry in Anthropic's native envelope shape
+// (data + first_id/last_id/has_more, no "object" field).
 func (h *Handler) ListAnthropicModels(c *gin.Context) {
-	c.JSON(http.StatusOK, OpenAIModelsResponse{
-		Object: "list",
-		Data:   h.anthropicReg.ListModels(),
-	})
+	models := h.anthropicReg.ListModels()
+	resp := AnthropicModelsResponse{Data: models, HasMore: false}
+	if len(models) > 0 {
+		resp.FirstID = models[0].ID
+		resp.LastID = models[len(models)-1].ID
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // ChatCompletions handles POST /virtual/v1/chat/completions.
