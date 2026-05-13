@@ -57,7 +57,7 @@ func (a *poolVisionClient) Describe(ctx context.Context, service *loadbalance.Se
 	}
 
 	switch provider.APIStyle {
-	case "", protocol.APIStyleAnthropic:
+	case protocol.APIStyleAnthropic:
 		return a.describeViaAnthropic(ctx, provider, service.Model, mediaType, b64Data, remoteURL)
 	case protocol.APIStyleOpenAI:
 		return a.describeViaOpenAI(ctx, provider, service.Model, mediaType, b64Data, remoteURL)
@@ -171,9 +171,11 @@ func (a *poolVisionClient) describeViaOpenAI(ctx context.Context, provider *typ.
 	resp := asm.Finish()
 	for _, ch := range resp.Choices {
 		if text := strings.TrimSpace(ch.Message.Content); text != "" {
+			logrus.Debugf("openai: image description: %s", text)
 			return text, nil
 		}
 	}
+
 	return "", nil
 }
 
@@ -195,4 +197,3 @@ func openAIImageURL(mediaType, b64Data, remoteURL string) (string, error) {
 		return "", errors.New("vision adapter: no image source")
 	}
 }
-
