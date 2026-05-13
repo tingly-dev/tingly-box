@@ -297,6 +297,52 @@ func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
 	assert.Contains(t, sent[1], "ok")
 }
 
+// TestBufferToolEvent_SharedAcrossSources is the dispatcher-level test: it
+// asserts that the same eventType+fields produces the same buffer entry
+// regardless of which source extractor (Raw vs NestedMap) fed it. That's
+// the whole point of the refactor — if these ever diverge, all three
+// main-path handlers diverge too.
+func TestBufferToolEvent_SharedAcrossSources(t *testing.T) {
+	bot := &captureBot{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
+
+	flatFields := toolFieldsFromRaw(map[string]interface{}{
+		"tool_name": "Bash",
+		"input":     map[string]interface{}{"command": "echo hi"},
+	})
+	nestedFields := toolFieldsFromNestedMap(map[string]interface{}{
+		"data": map[string]interface{}{
+			"tool_name": "Bash",
+			"input":     map[string]interface{}{"command": "echo hi"},
+		},
+	})
+	assert.Equal(t, flatFields, nestedFields,
+		"flat and nested extractors must produce identical toolEventFields")
+
+	h.mu.Lock()
+	require.True(t, h.bufferToolEvent(agentboot.EventTypeToolUse, flatFields))
+	require.True(t, h.bufferToolEvent(agentboot.EventTypeToolUse, nestedFields))
+	// Non-tool types are not handled by the dispatcher.
+	require.False(t, h.bufferToolEvent(agentboot.EventTypeAssistant, flatFields))
+	h.mu.Unlock()
+	assert.Empty(t, bot.snapshot(), "buffered tool events must not send yet")
+
+	// sendText flushes the buffer, then sends the text. Empty text is a no-op.
+	h.mu.Lock()
+	h.sendText("   ")
+	h.mu.Unlock()
+	assert.Empty(t, bot.snapshot(), "sendText(empty) must be a no-op")
+
+	h.mu.Lock()
+	h.sendText("done")
+	h.mu.Unlock()
+	sent := bot.snapshot()
+	require.Len(t, sent, 2)
+	// Aggregated tool message contains both Bash entries.
+	assert.Contains(t, sent[0], "Bash")
+	assert.Equal(t, "done", sent[1])
+}
+
 func TestBriefInputHint_PicksKnownKeys(t *testing.T) {
 	assert.Equal(t, "ls -la", briefInputHint(map[string]interface{}{"command": "ls -la"}))
 	assert.Equal(t, "/a.go", briefInputHint(map[string]interface{}{"file_path": "/a.go"}))
