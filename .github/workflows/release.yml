@@ -245,20 +245,16 @@ jobs:
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
       - name: Install UPX 5.1.1
-        if: matrix.goos != 'darwin'
+        if: matrix.goos != 'darwin' && matrix.goos != 'windows'
         shell: bash
         run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            choco install upx -y
-          else
-            # Linux: download UPX 5.1.1
-            wget -q https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-amd64_linux.tar.xz
-            tar -xf upx-5.1.1-amd64_linux.tar.xz
-            export PATH="$PWD/upx-5.1.1-amd64_linux:$PATH"
-          fi
+          # Linux: download UPX 5.1.1
+          wget -q https://github.com/upx/upx/releases/download/v5.1.1/upx-5.1.1-amd64_linux.tar.xz
+          tar -xf upx-5.1.1-amd64_linux.tar.xz
+          export PATH="$PWD/upx-5.1.1-amd64_linux:$PATH"
 
       - name: Compress binary with UPX
-        if: matrix.goos != 'darwin'
+        if: matrix.goos != 'darwin' && matrix.goos != 'windows'
         shell: bash
         run: |
           if command -v upx &> /dev/null || [ -f "./upx-5.1.1-amd64_linux/upx" ]; then
@@ -468,7 +464,9 @@ jobs:
                 # Package the binary with platform suffix in zip filename
                 binary=$(ls "$artifact_dir"/tingly-box* 2>/dev/null | head -1)
                 if [ -n "$binary" ]; then
-                  (cd "$artifact_dir" && zip "${RELEASE_DIR}/tingly-box-${platform}.zip" "$(basename "$binary")")
+                  (cd "$artifact_dir" && \
+                   sha256sum "$(basename "$binary")" > "$(basename "$binary").sha256" && \
+                   zip "${RELEASE_DIR}/tingly-box-${platform}.zip" "$(basename "$binary")" "$(basename "$binary").sha256")
                 fi
               fi
             done
@@ -479,14 +477,28 @@ jobs:
             # GUI artifacts are also in subdirectories
             for artifact_dir in dist/gui/gui-*; do
               if [ -d "$artifact_dir" ]; then
-                cp "$artifact_dir"/*.zip "$RELEASE_DIR/" 2>/dev/null || true
+                for zip in "$artifact_dir"/*.zip; do
+                  if [ -f "$zip" ]; then
+                    # Generate SHA256 for the zip
+                    (cd "$artifact_dir" && sha256sum "$(basename "$zip")" > "$(basename "$zip").sha256")
+                    # Create new zip containing both the original zip and its sha256
+                    base_name=$(basename "$zip" .zip)
+                    (cd "$artifact_dir" && zip "${RELEASE_DIR}/${base_name}.zip" "$(basename "$zip")" "$(basename "$zip").sha256")
+                  fi
+                done
               fi
             done
             # Also check for direct files
-            find dist/gui -maxdepth 1 -name "*.zip" -exec cp {} "$RELEASE_DIR/" \; 2>/dev/null || true
+            for zip in dist/gui/*.zip; do
+              if [ -f "$zip" ]; then
+                sha256sum "$zip" > "$zip.sha256"
+                base_name=$(basename "$zip" .zip)
+                (cd dist/gui && zip "${RELEASE_DIR}/${base_name}.zip" "$(basename "$zip")" "$(basename "$zip").sha256")
+              fi
+            done 2>/dev/null || true
           fi
 
-          # Create checksums for all files (only if we have zip files)
+          # Create overall checksums for all release zips
           if ls "$RELEASE_DIR"/*.zip 1> /dev/null 2>&1; then
             (cd "$RELEASE_DIR" && sha256sum *.zip > checksums.txt)
           else
