@@ -76,22 +76,22 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        1. Create a Feishu bot (one-click)
+                        1. Scan to create (recommended)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" above, choose <strong>One-click (scan QR)</strong>, and scan the QR code with the Feishu mobile app. The app, permissions and events are created automatically and the credentials are saved for you.
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        2. Or create manually
                     </Typography>
                     <Typography variant="body2" color="text.secondary" component="div">
                         <Box component="ul" sx={{ pl: 2, m: 0 }}>
                             <li>Open <Link href="https://open.feishu.cn/page/launcher?from=backend_oneclick" target="_blank">Feishu one-click app creation <OpenInNew sx={{ fontSize: 10 }} /></Link> and log in</li>
                             <li>Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you</li>
-                            <li>Copy the generated <strong>App ID</strong> and <strong>App Secret</strong></li>
+                            <li>Copy the generated <strong>App ID</strong> and <strong>App Secret</strong>, then enter them via "Add Bot" → <strong>Enter manually</strong></li>
                         </Box>
-                    </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        2. Add bot
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
                     </Typography>
                 </Box>
             </Stack>
@@ -115,22 +115,22 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        1. Create a Lark bot (one-click)
+                        1. Scan to create (recommended)
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" above, choose <strong>One-click (scan QR)</strong>, and scan the QR code with the Lark mobile app. The app, permissions and events are created automatically and the credentials are saved for you.
+                    </Typography>
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                        2. Or create manually
                     </Typography>
                     <Typography variant="body2" color="text.secondary" component="div">
                         <Box component="ul" sx={{ pl: 2, m: 0 }}>
                             <li>Open <Link href="https://open.larksuite.com/page/launcher?from=backend_oneclick" target="_blank">Lark one-click app creation <OpenInNew sx={{ fontSize: 10 }} /></Link> and log in</li>
                             <li>Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you</li>
-                            <li>Copy the generated <strong>App ID</strong> and <strong>App Secret</strong></li>
+                            <li>Copy the generated <strong>App ID</strong> and <strong>App Secret</strong>, then enter them via "Add Bot" → <strong>Enter manually</strong></li>
                         </Box>
-                    </Typography>
-                </Box>
-                <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        2. Add bot
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
                     </Typography>
                 </Box>
             </Stack>

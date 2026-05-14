@@ -101,3 +101,41 @@ type DeleteResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
+
+// =============================================
+// Feishu/Lark One-Click Registration API Types
+// =============================================
+
+// FeishuRegStartRequest is the request to start one-click app registration.
+type FeishuRegStartRequest struct {
+	BotUUID     string `json:"bot_uuid" binding:"required"`
+	BotName     string `json:"bot_name,omitempty"`     // Optional: bot display name (for deferred creation)
+	BotPlatform string `json:"bot_platform,omitempty"` // Optional: "feishu" or "lark" (for deferred creation)
+}
+
+// FeishuRegStartData is the data for the registration start response.
+type FeishuRegStartData struct {
+	QRURL     string `json:"qr_url"`     // Verification link; render as a QR code or open directly
+	ExpiresIn int    `json:"expires_in"` // Link lifetime in seconds
+}
+
+// FeishuRegStartResponse is the response for starting one-click registration.
+type FeishuRegStartResponse struct {
+	Success bool               `json:"success"`
+	Data    FeishuRegStartData `json:"data"`
+	Error   string             `json:"error,omitempty"`
+}
+
+// FeishuRegStatusData is the data for the registration status response.
+type FeishuRegStatusData struct {
+	Status      string `json:"status"`                 // pending, confirmed, expired, denied, error
+	BotUUID     string `json:"bot_uuid,omitempty"`     // Real bot UUID after confirmed (may differ for deferred creation)
+	TenantBrand string `json:"tenant_brand,omitempty"` // "feishu" or "lark", reported by the SDK on confirmation
+}
+
+// FeishuRegStatusResponse is the response for polling registration status.
+type FeishuRegStatusResponse struct {
+	Success bool                `json:"success"`
+	Data    FeishuRegStatusData `json:"data,omitempty"`
+	Error   string              `json:"error,omitempty"`
+}

@@ -30,10 +30,11 @@ type LifecycleController interface {
 
 // Handler handles ImBot settings HTTP requests
 type Handler struct {
-	config         *config.Config
-	store          *db.ImBotSettingsStore
-	botMgr         *BotManager           // Local bot manager, not global
-	qrLoginHandler *WeChatQRLoginHandler // WeChat QR login handler
+	config           *config.Config
+	store            *db.ImBotSettingsStore
+	botMgr           *BotManager           // Local bot manager, not global
+	qrLoginHandler   *WeChatQRLoginHandler // WeChat QR login handler
+	feishuRegHandler *FeishuRegHandler     // Feishu/Lark one-click registration handler
 }
 
 // NewHandler creates a new ImBot settings handler
@@ -50,6 +51,8 @@ func NewHandler(ctx context.Context, cfg *config.Config) (*Handler, error) {
 	}
 	// Initialize QR login handler
 	h.qrLoginHandler = NewWeChatQRLoginHandler(h.store)
+	// Initialize Feishu/Lark one-click registration handler
+	h.feishuRegHandler = NewFeishuRegHandler(h.store)
 	return h, nil
 }
 

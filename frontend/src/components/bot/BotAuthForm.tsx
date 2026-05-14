@@ -9,10 +9,13 @@ import {
     Link,
     Button,
     Chip,
+    ToggleButton,
+    ToggleButtonGroup,
 } from '@mui/material';
 import { Visibility, VisibilityOff, OpenInNew, CheckCircle as CheckCircleIcon, QrCode as QrCodeIcon } from '@mui/icons-material';
 import { type FieldSpec } from '@/types/bot.ts';
 import { WeixinQRAuth } from './WeixinQRAuth.tsx';
+import { FeishuQRAuth } from './FeishuQRAuth.tsx';
 
 interface BotAuthFormProps {
     platform: string;
@@ -59,6 +62,12 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
 }) => {
     const [visibleFields, setVisibleFields] = React.useState<Record<string, boolean>>({});
     const [showQR, setShowQR] = React.useState(false);
+
+    // Feishu/Lark support one-click QR registration in addition to manual entry.
+    // Default to manual when credentials already exist (edit mode), QR otherwise.
+    const isFeishuFamily = (platform === 'feishu' || platform === 'lark') && authType === 'oauth';
+    const hasFeishuCreds = !!(authData?.clientId && authData?.clientSecret);
+    const [feishuMode, setFeishuMode] = React.useState<'qr' | 'manual'>(hasFeishuCreds ? 'manual' : 'qr');
 
     const toggleVisibility = (key: string) => {
         setVisibleFields(prev => ({ ...prev, [key]: !prev[key] }));
@@ -145,7 +154,7 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
 
     const helpLink = oauthHelpLinks[platform];
 
-    return (
+    const manualFields = (
         <Stack spacing={2}>
             <Box>
                 {authType === 'oauth' && (
@@ -203,6 +212,38 @@ export const BotAuthForm: React.FC<BotAuthFormProps> = ({
             })}
         </Stack>
     );
+
+    if (isFeishuFamily) {
+        return (
+            <Stack spacing={2}>
+                <ToggleButtonGroup
+                    value={feishuMode}
+                    exclusive
+                    size="small"
+                    onChange={(_, v) => v && setFeishuMode(v)}
+                    disabled={disabled}
+                >
+                    <ToggleButton value="qr">
+                        <QrCodeIcon fontSize="small" sx={{ mr: 0.5 }} />
+                        One-click (scan QR)
+                    </ToggleButton>
+                    <ToggleButton value="manual">Enter manually</ToggleButton>
+                </ToggleButtonGroup>
+                {feishuMode === 'qr' ? (
+                    <FeishuQRAuth
+                        botUUID={botUUID}
+                        platform={platform}
+                        botName={botName}
+                        onComplete={(realUUID) => onBindingComplete?.(realUUID)}
+                    />
+                ) : (
+                    manualFields
+                )}
+            </Stack>
+        );
+    }
+
+    return manualFields;
 };
 
 export default BotAuthForm;
