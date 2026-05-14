@@ -9,7 +9,6 @@ import {
     CircularProgress,
     FormControlLabel,
     IconButton,
-    Snackbar,
     Stack,
     Switch,
     Tooltip,
@@ -21,6 +20,7 @@ import {
     Edit as EditIcon,
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
+import { useNotify } from '@/hooks/useNotify';
 import MCPSourceEditor from './MCPSourceEditor';
 import { BUILTIN_IDS, MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
@@ -33,9 +33,9 @@ const emptyCustomTemplate = (): MCPSourceFormValue => ({
 });
 
 const MCPCustom = () => {
+    const notify = useNotify();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [customSources, setCustomSources] = useState<MCPSourceConfig[]>([]);
     const [editingId, setEditingId] = useState<string>('');
@@ -78,15 +78,15 @@ const MCPCustom = () => {
 
         if (hasEditorOpen) {
             if (!source.id) {
-                setNotification({ open: true, message: 'Server name is required', severity: 'error' });
+                notify.error('Server name is required');
                 return;
             }
             if (source.transport === 'http' && !source.endpoint) {
-                setNotification({ open: true, message: 'HTTP endpoint is required', severity: 'error' });
+                notify.error('HTTP endpoint is required');
                 return;
             }
             if (source.transport === 'stdio' && !source.command) {
-                setNotification({ open: true, message: 'Command is required', severity: 'error' });
+                notify.error('Command is required');
                 return;
             }
             const idx = mergedCustom.findIndex((s) => s.id === source.id);
@@ -102,12 +102,12 @@ const MCPCustom = () => {
         const newSources = [...builtinSources, ...mergedCustom];
         const result = await api.setMCPConfig({ sources: newSources });
         if (result.success) {
-            setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
+            notify.success('Saved. Restart server to apply.');
             setAllSources(newSources);
             setCustomSources(mergedCustom);
             setEditorMode('none');
         } else {
-            setNotification({ open: true, message: result.error || 'Failed to save', severity: 'error' });
+            notify.error(result.error || 'Failed to save');
         }
         setSaving(false);
     };
@@ -225,17 +225,6 @@ const MCPCustom = () => {
                     </Button>
                 </Stack>
             </Stack>
-
-            <Snackbar
-                open={notification.open}
-                autoHideDuration={3000}
-                onClose={() => setNotification({ open: false, message: '', severity: 'success' })}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert severity={notification.severity} sx={{ width: '100%' }}>
-                    {notification.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

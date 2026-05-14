@@ -12,13 +12,12 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    Snackbar,
-    Alert,
     Stack,
     Typography,
 } from '@mui/material';
 import { IconBrain } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
+import { useNotify } from '@/hooks/useNotify';
 import {
     BUILTIN_ADVISOR_ID,
     BUILTIN_IDS,
@@ -153,10 +152,10 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expand
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const ServerToolPage = () => {
+    const notify = useNotify();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
-    const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [filter, setFilter] = useState<ToolFilter>('all');
     const [allExpanded, setAllExpanded] = useState(true);
 
@@ -176,9 +175,9 @@ const ServerToolPage = () => {
         const result = await api.setMCPConfig({ sources });
         if (result.success) {
             setAllSources(sources);
-            setNotification({ open: true, message: 'Saved.', severity: 'success' });
+            notify.success('Saved.');
         } else {
-            setNotification({ open: true, message: result.error || 'Failed to save', severity: 'error' });
+            notify.error(result.error || 'Failed to save');
         }
         setSaving(false);
     };
@@ -231,17 +230,6 @@ const ServerToolPage = () => {
                 {(filter === 'all' || (filter === 'active' ? (advisorSource?.enabled ?? false) : !(advisorSource?.enabled ?? false))) && (
                     <AdvisorCard advisorSource={advisorSource} onSave={upsertSource} expanded={allExpanded ? true : undefined} />
                 )}            </Stack>
-
-            <Snackbar
-                open={notification.open}
-                autoHideDuration={3000}
-                onClose={() => setNotification({ open: false, message: '', severity: 'success' })}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert severity={notification.severity} sx={{ width: '100%' }}>
-                    {notification.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

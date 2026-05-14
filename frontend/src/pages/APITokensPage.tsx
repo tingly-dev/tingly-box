@@ -36,6 +36,7 @@ import {
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNotify } from '@/hooks/useNotify';
 
 interface APIToken {
     token_id: string;
@@ -49,13 +50,9 @@ interface APIToken {
 
 const APITokensPage = () => {
     const { t } = useTranslation();
+    const notify = useNotify();
     const [tokens, setTokens] = useState<APIToken[]>([]);
     const [loading, setLoading] = useState(true);
-    const [notification, setNotification] = useState<{
-        open: boolean;
-        message?: string;
-        severity?: 'success' | 'error' | 'info' | 'warning';
-    }>({ open: false });
 
     // Create token dialog state
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -101,11 +98,7 @@ const APITokensPage = () => {
 
     const handleCreateToken = async () => {
         if (!newTokenDisplayName) {
-            setNotification({
-                open: true,
-                message: 'Display Name is required',
-                severity: 'error',
-            });
+            notify.error('Display Name is required');
             return;
         }
 
@@ -118,39 +111,23 @@ const APITokensPage = () => {
         setCreateDialogOpen(false);
 
         if (result.success && result.data) {
-            setNotification({
-                open: true,
-                message: 'Token created successfully',
-                severity: 'success',
-            });
+            notify.success('Token created successfully');
             loadTokens();
 
             // Reset form
             setNewTokenDisplayName('');
         } else {
-            setNotification({
-                open: true,
-                message: result.error?.message || 'Failed to create token',
-                severity: 'error',
-            });
+            notify.error(result.error?.message || 'Failed to create token');
         }
     };
 
     const handleToggleTokenEnabled = async (token: APIToken) => {
         const result = await api.setAPITokenEnabled(token.token_id, !token.enabled);
         if (result.success) {
-            setNotification({
-                open: true,
-                message: token.enabled ? 'Token disabled' : 'Token enabled',
-                severity: 'success',
-            });
+            notify.success(token.enabled ? 'Token disabled' : 'Token enabled');
             loadTokens();
         } else {
-            setNotification({
-                open: true,
-                message: result.error?.message || 'Failed to update token',
-                severity: 'error',
-            });
+            notify.error(result.error?.message || 'Failed to update token');
         }
     };
 
@@ -165,18 +142,10 @@ const APITokensPage = () => {
         setTokenToDelete(null);
 
         if (result.success) {
-            setNotification({
-                open: true,
-                message: 'Token deleted successfully',
-                severity: 'success',
-            });
+            notify.success('Token deleted successfully');
             loadTokens();
         } else {
-            setNotification({
-                open: true,
-                message: result.error?.message || 'Failed to delete token',
-                severity: 'error',
-            });
+            notify.error(result.error?.message || 'Failed to delete token');
         }
     };
 
@@ -192,7 +161,7 @@ const APITokensPage = () => {
     };
 
     return (
-        <PageLayout loading={loading} notification={notification}>
+        <PageLayout loading={loading}>
             <Stack spacing={3}>
                 {/* Tokens Table — the page-level explanation now lives as a hover tooltip
                     on the Sharing sidebar item (see useActivityItems.tsx). */}
@@ -349,11 +318,7 @@ const APITokensPage = () => {
                                                                 sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
                                                                 onClick={() => {
                                                                     navigator.clipboard.writeText(token.token_id);
-                                                                    setNotification({
-                                                                        open: true,
-                                                                        message: 'Token copied to clipboard',
-                                                                        severity: 'success',
-                                                                    });
+                                                                    notify.success('Token copied to clipboard');
                                                                 }}
                                                             >
                                                                 <IconCopy size={13} />

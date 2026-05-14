@@ -5,7 +5,6 @@ import {
     Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
-    Alert,
     Box,
     Button,
     Card,
@@ -13,13 +12,13 @@ import {
     Chip,
     Collapse,
     IconButton,
-    Snackbar,
     Stack,
     Tooltip,
     Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import React, { useState } from 'react';
+import React from 'react';
+import { notify } from '@/utils/notify';
 import type { Provider } from '../types/provider';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
@@ -187,17 +186,13 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     // When collapsible, parent controls expanded state (defaults to false when collapsible=true)
     // When not collapsible, always show expanded
     const isExpanded = !collapsible || expanded;
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-    }>({ open: false, message: '' });
     const getApiStyle = (providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
     };
 
     const showNotification = (message: string) => {
-        setSnackbar({ open: true, message });
+        notify.success(message);
     };
 
     const handleCopyModel = (e: React.MouseEvent) => {
@@ -593,21 +588,6 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                     </Stack>
                 </CardContent>
             </Collapse>
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={3000}
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    severity="success"
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
         </StyledCard>
     );
 };

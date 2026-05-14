@@ -11,6 +11,7 @@ import { useHealth } from '@/contexts/HealthContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeContext';
+import { useNotify } from '@/hooks/useNotify';
 import { api } from '@/services/api';
 
 const System = () => {
@@ -19,8 +20,8 @@ const System = () => {
     const { isHealthy, checking, checkHealth } = useHealth();
     const { logout: authLogout } = useAuth();
     const { mode: themeMode, setTheme } = useThemeMode();
+    const notify = useNotify();
     const [serverStatus, setServerStatus] = useState<any>(null);
-    const [notification, setNotification] = useState<{ open: boolean; message?: string; severity?: 'success' | 'error' | 'info' | 'warning' }>({ open: false });
     const [loading, setLoading] = useState(true);
     const [respectEnvProxy, setRespectEnvProxy] = useState<boolean | null>(null);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
@@ -29,7 +30,7 @@ const System = () => {
 
     const handleForceLogout = () => {
         authLogout();
-        setNotification({ open: true, message: 'Logged out successfully', severity: 'info' });
+        notify.info('Logged out successfully');
         setTimeout(() => {
             window.location.href = '/login';
         }, 500);
@@ -39,11 +40,7 @@ const System = () => {
         i18n.changeLanguage(lng);
         // Save language preference to localStorage
         localStorage.setItem('i18nextLng', lng);
-        setNotification({
-            open: true,
-            message: t('system.language.saveSuccess'),
-            severity: 'success'
-        });
+        notify.success(t('system.language.saveSuccess'));
     };
 
     useEffect(() => {
@@ -85,9 +82,9 @@ const System = () => {
         });
         if (result.success) {
             setGlobalProxyUrl(globalProxyInput);
-            setNotification({ open: true, message: t('system.proxy.globalProxyUrl.saveSuccess'), severity: 'success' });
+            notify.success(t('system.proxy.globalProxyUrl.saveSuccess'));
         } else {
-            setNotification({ open: true, message: t('system.proxy.globalProxyUrl.saveFailed'), severity: 'error' });
+            notify.error(t('system.proxy.globalProxyUrl.saveFailed'));
         }
         setProxyUrlSaving(false);
     };
@@ -115,7 +112,7 @@ const System = () => {
     };
 
     return (
-        <PageLayout loading={loading} notification={notification}>
+        <PageLayout loading={loading}>
             <CardGrid>
                 {/* Server Status - Simplified one-line-per-status design */}
                 <UnifiedCard

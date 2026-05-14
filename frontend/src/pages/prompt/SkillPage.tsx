@@ -42,6 +42,7 @@ import { getIdeSourceLabel } from '@/constants/ideSources';
 import { api } from '@/services/api';
 import AddSkillLocationDialog from '@/components/prompt/skill/AddSkillLocationDialog';
 import AutoDiscoveryDialog from '@/components/prompt/skill/AutoDiscoveryDialog';
+import { notify } from '@/utils/notify';
 
 interface AddSkillLocationData {
     name: string;
@@ -70,11 +71,6 @@ const normalizePatternForMatch = (value: string): string => {
 const SkillPage = () => {
     const [locations, setLocations] = useState<SkillLocation[]>([]);
     const [loading, setLoading] = useState(true);
-    const [notification, setNotification] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error';
-    }>({ open: false, message: '', severity: 'success' });
 
     // Location list state
     const [locationSearch, setLocationSearch] = useState('');
@@ -127,7 +123,7 @@ const SkillPage = () => {
     }, [selectedSkill]);
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
-        setNotification({ open: true, message, severity });
+        notify.show(severity, message);
     };
 
     const loadLocations = async () => {
@@ -591,7 +587,7 @@ const SkillPage = () => {
     };
 
     return (
-        <PageLayout loading={loading} notification={notification}>
+        <PageLayout loading={loading}>
             {/* Header */}
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>

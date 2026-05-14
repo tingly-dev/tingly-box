@@ -11,6 +11,7 @@ import { SunlitBackground } from './components/SunlitBackground';
 import { AuthProvider } from './contexts/AuthContext';
 import { FeatureFlagsProvider } from './contexts/FeatureFlagsContext';
 import { HealthProvider, useHealth } from './contexts/HealthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeModeProvider, useThemeMode } from './contexts/ThemeContext';
 import { useVersion, VersionProvider } from './contexts/VersionContext';
 import { ProfileProvider } from './contexts/ProfileContext';
@@ -460,20 +461,22 @@ function AppWithTheme() {
             <CssBaseline />
             {/* Sunlit background effect */}
             {mode === 'sunlit' && <SunlitBackground />}
-            <BrowserRouter>
-                <HealthProvider>
-                    <VersionProvider>
-                        <AuthProvider>
-                            <FeatureFlagsProvider>
-                                <ProfileProvider>
-                                    <AppContent />
-                                    <AppDialogs />
-                                </ProfileProvider>
-                            </FeatureFlagsProvider>
-                        </AuthProvider>
-                    </VersionProvider>
-                </HealthProvider>
-            </BrowserRouter>
+            <NotificationProvider>
+                <BrowserRouter>
+                    <HealthProvider>
+                        <VersionProvider>
+                            <AuthProvider>
+                                <FeatureFlagsProvider>
+                                    <ProfileProvider>
+                                        <AppContent />
+                                        <AppDialogs />
+                                    </ProfileProvider>
+                                </FeatureFlagsProvider>
+                            </AuthProvider>
+                        </VersionProvider>
+                    </HealthProvider>
+                </BrowserRouter>
+            </NotificationProvider>
         </ThemeProvider>
     );
 }
