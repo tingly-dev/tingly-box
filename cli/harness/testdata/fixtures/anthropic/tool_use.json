@@ -1,0 +1,27 @@
+{
+  "model": "tingly/cc",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What is the weather in Paris? Use the get_weather tool." }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get the current weather for a location",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": { "type": "string", "description": "City name" },
+          "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] }
+        },
+        "required": ["location"]
+      }
+    }
+  ],
+  "stream": false
+}

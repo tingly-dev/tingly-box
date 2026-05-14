@@ -25,6 +25,7 @@ type CLI struct {
 	Version    VersionCmd    `kong:"cmd,help='Show version'"`
 	Matrix     MatrixCmd     `kong:"cmd,help='Run protocol validation matrix tests'"`
 	Agent      AgentCmd      `kong:"cmd,help='Run agent e2e tests (use --mock or --config <file>)'"`
+	Replay     ReplayCmd     `kong:"cmd,help='Replay a captured agent request fixture through the gateway'"`
 	Provider   ProviderCmd   `kong:"cmd,help='Real provider API tests (Phase 3 - not yet implemented)'"`
 	InitConfig InitConfigCmd `kong:"cmd,name='init-config',help='Create a providers config file template for agent --config'"`
 }

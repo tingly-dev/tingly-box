@@ -228,7 +228,7 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 	var agentResult *AgentTestResult
 	switch agentType {
 	case protocol_validate.AgentTypeClaudeCode:
-		agentResult, err = executeClaudeWithEnv(env, requestModel, prompt)
+		agentResult, err = executeClaudeWithEnv(env, prompt)
 	case protocol_validate.AgentTypeCodex:
 		agentResult, err = executeCodexWithEnv(env, requestModel, prompt)
 	case protocol_validate.AgentTypeOpenCode:

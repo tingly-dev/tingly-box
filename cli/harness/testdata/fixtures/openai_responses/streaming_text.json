@@ -1,0 +1,13 @@
+{
+  "model": "tingly-codex",
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        { "type": "input_text", "text": "What is the capital of France? Answer in one word." }
+      ]
+    }
+  ],
+  "stream": true
+}

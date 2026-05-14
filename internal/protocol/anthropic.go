@@ -19,6 +19,38 @@ type (
 	}
 )
 
+func (r AnthropicMessagesRequest) MarshalJSON() ([]byte, error) {
+	inner, err := json.Marshal(r.MessageNewParams)
+	if err != nil {
+		return nil, err
+	}
+	if !r.Stream {
+		return inner, nil
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(inner, &raw); err != nil {
+		return nil, err
+	}
+	raw["stream"] = json.RawMessage("true")
+	return json.Marshal(raw)
+}
+
+func (r AnthropicBetaMessagesRequest) MarshalJSON() ([]byte, error) {
+	inner, err := json.Marshal(r.BetaMessageNewParams)
+	if err != nil {
+		return nil, err
+	}
+	if !r.Stream {
+		return inner, nil
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(inner, &raw); err != nil {
+		return nil, err
+	}
+	raw["stream"] = json.RawMessage("true")
+	return json.Marshal(raw)
+}
+
 func (r *AnthropicBetaMessagesRequest) UnmarshalJSON(data []byte) error {
 	var inner anthropic.BetaMessageNewParams
 	aux := &struct {

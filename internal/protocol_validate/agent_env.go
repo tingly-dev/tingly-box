@@ -13,6 +13,7 @@ import (
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server_validate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
 // AgentType represents the type of agent Agent to test
@@ -368,6 +369,38 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 	}
 
 	return nil
+}
+
+// SetupVModelAgent configures the environment so the agent's built-in rule
+// routes to a seeded builtin virtual-model provider.
+//
+// Unlike SetupAgent (external VirtualServer mock) and SetupRealAgent (real
+// upstream), this exercises the in-process vmodel dispatch path:
+//
+//	gateway → built-in-<agent> rule → vmodel builtin provider
+//	        → provider.IsVirtual() short-circuit → in-process vmodel handler
+//
+// The builtin vmodel providers are seeded into the provider store by
+// server.NewServer, so no provider is added here — only the rule is repointed.
+//
+// vmodelID must be a model registered in the vmodel registry for the agent's
+// protocol (e.g. "virtual-claude-3", "echo-model" for Anthropic-style agents).
+func (env *AgentTestEnv) SetupVModelAgent(AgentType AgentType, vmodelID string) error {
+	var providerUUID string
+	switch AgentType {
+	case AgentTypeClaudeCode, AgentTypeOpenCode:
+		providerUUID = virtualserver.BuiltinAnthropicUUID
+	case AgentTypeCodex:
+		providerUUID = virtualserver.BuiltinOpenAIUUID
+	default:
+		return fmt.Errorf("unknown Agent type: %s", AgentType)
+	}
+
+	if _, err := env.appConfig.GetGlobalConfig().GetProviderByUUID(providerUUID); err != nil {
+		return fmt.Errorf("builtin vmodel provider %q not seeded: %w", providerUUID, err)
+	}
+
+	return env.repointBuiltinRule(AgentType, providerUUID, vmodelID)
 }
 
 // AppConfig returns the application configuration

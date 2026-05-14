@@ -31,6 +31,22 @@ func AssertContentContains(substring string) Assertion {
 	}
 }
 
+// AssertContentNonEmpty returns an Assertion that the response carries some
+// payload — either text content or at least one tool call. Useful as an
+// upstream-independent structural check when the exact response text is not
+// controlled by the test (e.g. vmodel or real upstreams).
+func AssertContentNonEmpty() Assertion {
+	return Assertion{
+		Name: "content_non_empty",
+		Check: func(r *RoundTripResult) error {
+			if strings.TrimSpace(r.Content) == "" && len(r.ToolCalls) == 0 {
+				return fmt.Errorf("response has neither text content nor tool calls")
+			}
+			return nil
+		},
+	}
+}
+
 // AssertRoleEquals returns an Assertion that the response role equals expected.
 func AssertRoleEquals(expected string) Assertion {
 	return Assertion{

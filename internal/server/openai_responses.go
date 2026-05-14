@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -144,6 +147,35 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 	req.ResponseNewParams = params
 	// req.Model is replaced with actualModel (resolved backend model) from this point on
 	req.Model = actualModel
+
+	// Virtual-model providers are served by the in-process vmodel handler.
+	// The vmodel handler speaks OpenAI Chat format, so the Responses request is
+	// converted before forwarding. req.ResponseNewParams already carries actualModel.
+	//
+	// NOTE: this path intentionally skips outbound dispatch helpers (pre-chain,
+	// guardrails, post-recording). Usage/quota tracking for vmodel is tracked separately.
+	if provider.IsVirtual() && s.virtualModelService != nil {
+		chatParams := request.ConvertOpenAIResponsesToChat(&req.ResponseNewParams, int64(maxAllowed))
+		chatReq := protocol.OpenAIChatCompletionRequest{
+			ChatCompletionNewParams: *chatParams,
+			Stream:                  req.Stream,
+		}
+		rewritten, err := json.Marshal(chatReq)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to prepare virtual-model request: " + err.Error(),
+					Type:    "internal_error",
+				},
+			})
+			return
+		}
+		c.Request.Body = io.NopCloser(strings.NewReader(string(rewritten)))
+		c.Request.ContentLength = int64(len(rewritten))
+		s.virtualModelService.GetHandler().ChatCompletions(c)
+		return
+	}
+
 	s.ResponsesCreate(c, scenarioType, provider, rule, req, rule.RequestModel, maxAllowed)
 }
 
