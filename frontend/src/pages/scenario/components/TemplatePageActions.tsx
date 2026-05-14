@@ -8,7 +8,7 @@ import {
     Upload as ImportIcon,
     Speed as SpeedIcon,
 } from '@mui/icons-material';
-import { Button, Stack, Tooltip, IconButton } from '@mui/material';
+import { Button, Stack, Tooltip } from '@mui/material';
 import { ProbeMenu } from '@/components/probe';
 
 export interface TemplatePageActionsProps {
@@ -56,11 +56,14 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     return (
         <Stack direction="row" spacing={1}>
             {onViewLogs && (
-                <Tooltip title="View scenario logs">
-                    <IconButton size="small" onClick={onViewLogs}>
-                        <LogsIcon fontSize="small" />
-                    </IconButton>
-                </Tooltip>
+                <Button
+                    variant="outlined"
+                    startIcon={<LogsIcon />}
+                    onClick={onViewLogs}
+                    size="small"
+                >
+                    Logs
+                </Button>
             )}
             {showExpandCollapseButton && collapsible && (
                 <Tooltip title={allExpanded ? "Collapse all rules" : "Expand all rules"}>
