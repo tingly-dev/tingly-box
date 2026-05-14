@@ -12,7 +12,6 @@ import {
     Speed as SpeedIcon,
     Stream as StreamIcon,
     Build as ToolIcon,
-    Article as LogsIcon,
 } from '@mui/icons-material';
 import { IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
@@ -34,7 +33,6 @@ export interface GraphSettingsMenuProps {
     onToggleCursorCompat?: () => void;
     onToggleCursorCompatAuto?: () => void;
     onEditFlags?: () => void;
-    onViewLogs?: () => void;
     // Probe V2 props
     ruleUuid?: string;
     ruleName?: string;
@@ -57,7 +55,6 @@ export const GraphSettingsMenu = ({
     onToggleCursorCompat,
     onToggleCursorCompatAuto,
     onEditFlags,
-    onViewLogs,
     ruleUuid,
     ruleName,
     scenario,
@@ -101,12 +98,6 @@ export const GraphSettingsMenu = ({
                     <ProbeIcon fontSize="small" sx={{ mr: 1 }} />Test Probe
                     <ExportMenuIcon fontSize="small" sx={{ ml: 1, fontSize: '1rem' }} />
                 </MenuItem>
-
-                {onViewLogs && (
-                    <MenuItem onClick={() => { closeMenu(); onViewLogs(); }}>
-                        <LogsIcon fontSize="small" sx={{ mr: 1 }} />View Logs
-                    </MenuItem>
-                )}
 
                 <MenuItem onClick={(e) => { setExportMenuAnchorEl(e.currentTarget); closeMenu(); }}>
                     <ExportIcon fontSize="small" sx={{ mr: 1 }} />Export

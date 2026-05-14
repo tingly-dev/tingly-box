@@ -16,19 +16,19 @@ import SystemLogViewer from '@/components/SystemLogViewer';
 import SmartRoutingLogViewer from '@/components/SmartRoutingLogViewer';
 import type { SmartRoutingLogEntry } from '@/components/SmartRoutingLogViewer';
 
-interface RuleLogDialogProps {
+interface ScenarioLogDialogProps {
     open: boolean;
     onClose: () => void;
     scenario: string;
-    ruleUuid: string;
-    ruleName: string;
+    /** UUIDs of all rules in this scenario — used to scope smart routing logs */
+    ruleUuids?: string[];
 }
 
 const getAuthHeader = () => ({
     Authorization: `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
 });
 
-const RuleLogDialog = ({ open, onClose, scenario, ruleUuid, ruleName }: RuleLogDialogProps) => {
+const ScenarioLogDialog = ({ open, onClose, scenario, ruleUuids }: ScenarioLogDialogProps) => {
     const [tab, setTab] = useState(0);
 
     const getLogs = useCallback(
@@ -55,13 +55,14 @@ const RuleLogDialog = ({ open, onClose, scenario, ruleUuid, ruleName }: RuleLogD
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            // Filter to this rule only
-            const logs: SmartRoutingLogEntry[] = (data.logs || []).filter(
-                (e: SmartRoutingLogEntry) => e.fields?.rule_uuid === ruleUuid,
-            );
+            const uuidSet = ruleUuids && ruleUuids.length > 0 ? new Set(ruleUuids) : null;
+            const logs: SmartRoutingLogEntry[] = uuidSet
+                ? (data.logs || []).filter((e: SmartRoutingLogEntry) => uuidSet.has(String(e.fields?.rule_uuid ?? '')))
+                : (data.logs || []);
+
             return { total: logs.length, logs };
         },
-        [ruleUuid],
+        [ruleUuids],
     );
 
     const getRequestBody = useCallback(async (bodyRef: string) => {
@@ -76,11 +77,10 @@ const RuleLogDialog = ({ open, onClose, scenario, ruleUuid, ruleName }: RuleLogD
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { height: '80vh' } }}>
             <DialogTitle sx={{ pb: 0 }}>
-                <Stack direction="row" alignItems="center" spacing={1} justifyContent="space-between">
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Stack direction="row" alignItems="center" spacing={1}>
                         <Typography variant="h6">Logs</Typography>
                         <Chip label={scenario} size="small" variant="outlined" sx={{ fontSize: '0.72rem', height: 22 }} />
-                        <Chip label={ruleName} size="small" sx={{ fontSize: '0.72rem', height: 22 }} />
                     </Stack>
                     <IconButton size="small" onClick={onClose}>
                         <CloseIcon />
@@ -108,4 +108,4 @@ const RuleLogDialog = ({ open, onClose, scenario, ruleUuid, ruleName }: RuleLogD
     );
 };
 
-export default RuleLogDialog;
+export default ScenarioLogDialog;

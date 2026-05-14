@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
     Add as AddIcon,
+    Article as LogsIcon,
     ExpandMore as ExpandMoreIcon,
     Key as KeyIcon,
     UnfoldMore as UnfoldMoreIcon,
@@ -21,6 +22,7 @@ export interface TemplatePageActionsProps {
     showExpandCollapseButton?: boolean;
     showImportButton?: boolean;
     onImportFromClipboard?: () => void;
+    onViewLogs?: () => void;
     // Probe V2 props
     scenario?: string;
 }
@@ -36,6 +38,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     showExpandCollapseButton = true,
     showImportButton = true,
     onImportFromClipboard,
+    onViewLogs,
     scenario,
 }) => {
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -52,6 +55,13 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
 
     return (
         <Stack direction="row" spacing={1}>
+            {onViewLogs && (
+                <Tooltip title="View scenario logs">
+                    <IconButton size="small" onClick={onViewLogs}>
+                        <LogsIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            )}
             {showExpandCollapseButton && collapsible && (
                 <Tooltip title={allExpanded ? "Collapse all rules" : "Expand all rules"}>
                     <Button
