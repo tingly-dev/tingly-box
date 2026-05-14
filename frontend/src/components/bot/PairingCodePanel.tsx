@@ -8,12 +8,12 @@ import {
     Box,
     CircularProgress,
     IconButton,
-    Snackbar,
     Tooltip,
     Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/services/api';
+import { notify } from '@/utils/notify';
 import type { BotSettings } from '@/types/bot';
 
 // Token-DM platforms default to TOFU pairing on. Mirrors
@@ -53,8 +53,6 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
     const [expiresAt, setExpiresAt] = useState('');
     const [message, setMessage] = useState('');
     const [revealed, setRevealed] = useState(false);
-    const [snackOpen, setSnackOpen] = useState(false);
-    const [snackMessage, setSnackMessage] = useState('');
 
     // Re-render countdown once per second while a code is active and revealed
     const [, setTick] = useState(0);
@@ -96,11 +94,10 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
         if (!code) return;
         try {
             await navigator.clipboard.writeText(code);
-            setSnackMessage('Pairing code copied');
+            notify.success('Pairing code copied');
         } catch {
-            setSnackMessage('Copy failed — check clipboard permissions');
+            notify.error('Copy failed — check clipboard permissions');
         }
-        setSnackOpen(true);
     }, [code]);
 
     const handleRotate = useCallback(async () => {
@@ -114,11 +111,10 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
                 setExpiresAt(res.expires_at || '');
                 setMessage('');
                 setRevealed(true);
-                setSnackMessage('Pairing code rotated');
+                notify.success('Pairing code rotated');
             } else {
-                setSnackMessage(res.error || res.message || 'Rotate failed');
+                notify.error(res.error || res.message || 'Rotate failed');
             }
-            setSnackOpen(true);
         } finally {
             setLoading(false);
         }
@@ -189,14 +185,6 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
                     </IconButton>
                 </span>
             </Tooltip>
-
-            <Snackbar
-                open={snackOpen}
-                autoHideDuration={3000}
-                onClose={() => setSnackOpen(false)}
-                message={snackMessage}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            />
         </Box>
     );
 };

@@ -9,7 +9,6 @@ import { ModelSelectProvider, useModelSelectContext } from '@/contexts/ModelSele
 import type { Provider } from '@/types/provider';
 import { getModelTypeInfo } from '@/utils/modelUtils';
 import { ProviderSidebar, ModelsPanel, CustomModelDialog } from './model-select';
-import { Alert, Snackbar } from '@mui/material';
 
 export interface ProviderSelectTabOption {
     provider: Provider;
@@ -52,8 +51,6 @@ function ModelSelectTabInner({
         setInternalCurrentTab,
         isInitialized,
         setIsInitialized,
-        snackbar,
-        hideSnackbar,
         openCustomModelDialog,
         closeCustomModelDialog,
         customModelDialog,
@@ -196,22 +193,6 @@ function ModelSelectTabInner({
 
             {/* Custom Model Dialog */}
             <CustomModelDialog onSave={handleCustomModelSave} />
-
-            {/* Snackbar for notifications */}
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={6000}
-                onClose={hideSnackbar}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert
-                    onClose={hideSnackbar}
-                    severity={snackbar.severity}
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
         </Box>
     );
 }

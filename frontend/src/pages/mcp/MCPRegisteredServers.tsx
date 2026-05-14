@@ -4,7 +4,6 @@ import ToolCard from '@/components/ToolCard';
 import ToolFilterBar, { type ToolFilter } from '@/components/ToolFilterBar';
 import { api } from '@/services/api';
 import {
-    Alert,
     Box,
     Button,
     CircularProgress,
@@ -14,7 +13,6 @@ import {
     DialogTitle,
     IconButton,
     InputAdornment,
-    Snackbar,
     Stack,
     TextField,
     Tooltip,
@@ -34,6 +32,7 @@ import {
     IconServer,
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
+import { useNotify } from '@/hooks/useNotify';
 import MCPSourceEditor from './MCPSourceEditor';
 import {
     BUILTIN_IDS,
@@ -247,10 +246,10 @@ const AddServerCard: React.FC<AddServerCardProps> = ({ onClick }) => (
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const MCPRegisteredServers = () => {
+    const notify = useNotify();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
-    const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
     // Shared filter / expand state for the merged "Config your tools" section
     const [toolFilter, setToolFilter] = useState<ToolFilter>('all');
@@ -283,9 +282,9 @@ const MCPRegisteredServers = () => {
         const result = await api.setMCPConfig({ sources });
         if (result.success) {
             setAllSources(sources);
-            setNotification({ open: true, message: 'Saved. Reconnect MCP client to apply.', severity: 'success' });
+            notify.success('Saved. Reconnect MCP client to apply.');
         } else {
-            setNotification({ open: true, message: result.error || 'Failed to save', severity: 'error' });
+            notify.error(result.error || 'Failed to save');
         }
         setSaving(false);
     };
@@ -467,17 +466,6 @@ const MCPRegisteredServers = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
-            <Snackbar
-                open={notification.open}
-                autoHideDuration={3000}
-                onClose={() => setNotification({ open: false, message: '', severity: 'success' })}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert severity={notification.severity} sx={{ width: '100%' }}>
-                    {notification.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

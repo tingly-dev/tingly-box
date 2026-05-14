@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import type { Provider } from '../types/provider';
+import { notify } from '@/utils/notify';
 
 export interface NotificationState {
     open: boolean;
@@ -10,11 +11,14 @@ export interface NotificationState {
     onClose?: () => void;
 }
 
+// Notifications now render through the global NotificationProvider; this stub is
+// kept so consumers that still pass `notification` to PageLayout keep compiling.
+const CLOSED_NOTIFICATION: NotificationState = { open: false };
+
 export const useFunctionPanelData = () => {
     const [showTokenModal, setShowTokenModal] = useState(false);
     const [generatedToken, setGeneratedToken] = useState<string>('');
     const [apiKey, setApiKey] = useState<string>('');
-    const [notification, setNotification] = useState<NotificationState>({ open: false });
     const [providers, setProviders] = useState<Provider[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -23,13 +27,7 @@ export const useFunctionPanelData = () => {
         severity: 'success' | 'info' | 'warning' | 'error' = 'info',
         autoHideDuration: number = 6000
     ) => {
-        setNotification({
-            open: true,
-            message,
-            severity,
-            autoHideDuration,
-            onClose: () => setNotification(prev => ({ ...prev, open: false }))
-        });
+        notify.show(severity, message, { duration: autoHideDuration });
     }, []);
 
     const copyToClipboard = useCallback(async (text: string, label: string) => {
@@ -89,7 +87,7 @@ export const useFunctionPanelData = () => {
         providers,
         loading,
         hasProviders,
-        notification,
+        notification: CLOSED_NOTIFICATION,
         loadProviders,
     };
 };

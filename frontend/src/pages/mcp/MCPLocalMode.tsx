@@ -7,7 +7,6 @@ import {
     Divider,
     IconButton,
     Paper,
-    Snackbar,
     Stack,
     Typography,
 } from '@mui/material';
@@ -17,9 +16,10 @@ import {
     Terminal as TerminalIcon,
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
+import { useNotify } from '@/hooks/useNotify';
 
 const MCPLocalMode = () => {
-    const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+    const notify = useNotify();
     const [baseUrl, setBaseUrl] = useState('');
     const [copiedCommand, setCopiedCommand] = useState(false);
 
@@ -55,7 +55,7 @@ const MCPLocalMode = () => {
             setCopiedCommand(true);
             setTimeout(() => setCopiedCommand(false), 2000);
         }
-        setNotification({ open: true, message: 'Copied to clipboard', severity: 'success' });
+        notify.success('Copied to clipboard');
     };
 
     return (
@@ -214,17 +214,6 @@ const MCPLocalMode = () => {
                     </Stack>
                 </UnifiedCard>
             </Stack>
-
-            <Snackbar
-                open={notification.open}
-                autoHideDuration={3000}
-                onClose={() => setNotification({ open: false, message: '', severity: 'success' })}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert severity={notification.severity} sx={{ width: '100%' }}>
-                    {notification.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };

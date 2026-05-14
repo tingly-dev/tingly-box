@@ -1,8 +1,15 @@
 /**
- * Shared hook for snackbar/notification state management.
- * Standardizes notification patterns across 30+ files.
+ * Backward-compatible shim over the global notification system (src/lib/notify.ts).
+ *
+ * Existing callers keep the same `showSuccess` / `showError` / ... API, but the
+ * notifications now render through the unified NotificationProvider. The returned
+ * `notification` object is always closed — components no longer need to feed it
+ * into PageLayout or a local Snackbar.
+ *
+ * New code should prefer `useNotify` from './useNotify' directly.
  */
-import { useState, useCallback, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react';
+import { notify } from '@/utils/notify';
 
 export interface NotificationState {
   open: boolean;
@@ -21,48 +28,32 @@ export interface UseNotificationResult {
   setNotification: Dispatch<SetStateAction<NotificationState>>;
 }
 
+const CLOSED_STATE: NotificationState = { open: false, message: '', severity: 'info' };
+
 export function useNotification(): UseNotificationResult {
-  const [notification, setNotification] = useState<NotificationState>({
-    open: false,
-    message: '',
-    severity: 'info',
-  });
+  const showNotification = useCallback(
+    (message: string, severity: NotificationState['severity'] = 'info') => {
+      notify.show(severity, message);
+    },
+    [],
+  );
+  const showSuccess = useCallback((message: string) => notify.success(message), []);
+  const showError = useCallback((message: string) => notify.error(message), []);
+  const showWarning = useCallback((message: string) => notify.warning(message), []);
+  const showInfo = useCallback((message: string) => notify.info(message), []);
+  const noop = useCallback(() => {}, []);
 
-  const showNotification = useCallback((
-    message: string,
-    severity: NotificationState['severity'] = 'info'
-  ) => {
-    setNotification({ open: true, message, severity });
-  }, []);
-
-  const showSuccess = useCallback((message: string) => {
-    showNotification(message, 'success');
-  }, [showNotification]);
-
-  const showError = useCallback((message: string) => {
-    showNotification(message, 'error');
-  }, [showNotification]);
-
-  const showWarning = useCallback((message: string) => {
-    showNotification(message, 'warning');
-  }, [showNotification]);
-
-  const showInfo = useCallback((message: string) => {
-    showNotification(message, 'info');
-  }, [showNotification]);
-
-  const hideNotification = useCallback(() => {
-    setNotification(prev => ({ ...prev, open: false }));
-  }, []);
-
-  return {
-    notification,
-    showNotification,
-    showSuccess,
-    showError,
-    showWarning,
-    showInfo,
-    hideNotification,
-    setNotification,
-  };
+  return useMemo(
+    () => ({
+      notification: CLOSED_STATE,
+      showNotification,
+      showSuccess,
+      showError,
+      showWarning,
+      showInfo,
+      hideNotification: noop,
+      setNotification: noop as Dispatch<SetStateAction<NotificationState>>,
+    }),
+    [showNotification, showSuccess, showError, showWarning, showInfo, noop],
+  );
 }

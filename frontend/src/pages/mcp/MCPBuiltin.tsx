@@ -9,7 +9,6 @@ import {
     Checkbox,
     FormControlLabel,
     IconButton,
-    Snackbar,
     Stack,
     Switch,
     Tooltip,
@@ -22,6 +21,7 @@ import {
     Edit as EditIcon,
 } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
+import { useNotify } from '@/hooks/useNotify';
 import MCPSourceEditor from './MCPSourceEditor';
 import { MCP_DEFAULT_CWD, defaultMCPSourceFormValue, formValueToSource, sourceToFormValue, type MCPConfigResponse, type MCPSourceConfig, type MCPSourceFormValue } from './types';
 
@@ -39,9 +39,9 @@ const defaultBuiltinForm = (): MCPSourceFormValue => ({
 });
 
 const MCPBuiltin = () => {
+    const notify = useNotify();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
     const [allSources, setAllSources] = useState<MCPSourceConfig[]>([]);
     const [form, setForm] = useState<MCPSourceFormValue>(defaultBuiltinForm());
     const [editorMode, setEditorMode] = useState<'none' | 'add' | 'edit'>('none');
@@ -92,7 +92,7 @@ const MCPBuiltin = () => {
         const next = allSources.filter((s) => s.id !== 'webtools');
         setAllSources(next);
         setEditorMode('none');
-        setNotification({ open: true, message: 'Builtin server removed from draft', severity: 'success' });
+        notify.success('Builtin server removed from draft');
     };
 
     const toggleBuiltinEnabled = async (enabled: boolean) => {
@@ -105,9 +105,9 @@ const MCPBuiltin = () => {
         setSaving(true);
         const result = await api.setMCPConfig({ sources: updated });
         if (result.success) {
-            setNotification({ open: true, message: enabled ? 'Enabled. Restart server to apply.' : 'Disabled. Restart server to apply.', severity: 'success' });
+            notify.success(enabled ? 'Enabled. Restart server to apply.' : 'Disabled. Restart server to apply.');
         } else {
-            setNotification({ open: true, message: result.error || 'Failed to update', severity: 'error' });
+            notify.error(result.error || 'Failed to update');
             // Revert on failure
             setAllSources(allSources);
         }
@@ -121,7 +121,7 @@ const MCPBuiltin = () => {
             if (enableSearch) tools.push('mcp_web_search');
             if (enableFetch) tools.push('mcp_web_fetch');
             if (tools.length === 0) {
-                setNotification({ open: true, message: 'At least one tool must be enabled', severity: 'error' });
+                notify.error('At least one tool must be enabled');
                 return;
             }
             const source = formValueToSource({ ...form, id: 'webtools' as const, tools });
@@ -133,9 +133,9 @@ const MCPBuiltin = () => {
         if (result.success) {
             setAllSources(next);
             setEditorMode('none');
-            setNotification({ open: true, message: 'Saved. Restart server to apply.', severity: 'success' });
+            notify.success('Saved. Restart server to apply.');
         } else {
-            setNotification({ open: true, message: result.error || 'Failed to save', severity: 'error' });
+            notify.error(result.error || 'Failed to save');
         }
         setSaving(false);
     };
@@ -241,17 +241,6 @@ const MCPBuiltin = () => {
                     </Button>
                 </Stack>
             </Stack>
-
-            <Snackbar
-                open={notification.open}
-                autoHideDuration={3000}
-                onClose={() => setNotification({ open: false, message: '', severity: 'success' })}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-            >
-                <Alert severity={notification.severity} sx={{ width: '100%' }}>
-                    {notification.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };
