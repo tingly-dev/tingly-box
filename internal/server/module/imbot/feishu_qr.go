@@ -2,7 +2,6 @@ package imbot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,8 +9,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/larksuite/oapi-sdk-go/v3/scene/registration"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
@@ -45,7 +44,7 @@ type feishuRegSession struct {
 	status   string // pending, confirmed, expired, denied, error
 	qrURL    string
 	expireIn int
-	result   *registration.RegisterAppResult
+	result   *feishu.RegistrationResult
 	errMsg   string
 }
 
@@ -113,49 +112,45 @@ func (h *FeishuRegHandler) QRStart(c *gin.Context) {
 
 	qrReady := make(chan struct{})
 	var qrOnce sync.Once
-	opts := &registration.Options{
+	opts := feishu.RegistrationOptions{
 		Source: "tingly-box",
-		OnQRCode: func(info *registration.QRCodeInfo) {
+		OnQRCode: func(qr feishu.RegistrationQRCode) {
 			sess.mu.Lock()
-			sess.qrURL = info.URL
-			sess.expireIn = info.ExpireIn
+			sess.qrURL = qr.URL
+			sess.expireIn = qr.ExpireIn
 			sess.mu.Unlock()
 			qrOnce.Do(func() { close(qrReady) })
 		},
-		OnStatusChange: func(info *registration.StatusChangeInfo) {
+		OnDomainSwitch: func() {
 			// The SDK auto-switches to the Lark domain when it detects a Lark
 			// tenant; reflect that so the saved bot lands on the right platform.
-			if info.Status == registration.StatusDomainSwitched {
-				sess.mu.Lock()
-				sess.platform = "lark"
-				sess.mu.Unlock()
-			}
+			sess.mu.Lock()
+			sess.platform = "lark"
+			sess.mu.Unlock()
 		},
 	}
 
 	go func() {
 		defer cancel()
-		result, err := registration.RegisterApp(ctx, opts)
+		outcome, result, err := feishu.RegisterApp(ctx, opts)
 		sess.mu.Lock()
 		defer sess.mu.Unlock()
-		if err != nil {
-			var accessDenied *registration.AccessDeniedError
-			var expired *registration.ExpiredError
-			switch {
-			case errors.As(err, &accessDenied):
-				sess.status = "denied"
-			case errors.As(err, &expired):
-				sess.status = "expired"
-			default:
-				sess.status = "error"
-				sess.errMsg = err.Error()
-			}
-			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu RegisterApp failed")
-			return
+		switch outcome {
+		case feishu.RegistrationConfirmed:
+			sess.result = result
+			sess.status = "confirmed"
+			logrus.WithField("bot", botUUID).Info("Feishu one-click registration succeeded")
+		case feishu.RegistrationDenied:
+			sess.status = "denied"
+			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu one-click registration denied")
+		case feishu.RegistrationExpired:
+			sess.status = "expired"
+			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu one-click registration expired")
+		default:
+			sess.status = "error"
+			sess.errMsg = err.Error()
+			logrus.WithError(err).WithField("bot", botUUID).Warn("Feishu one-click registration failed")
 		}
-		sess.result = result
-		sess.status = "confirmed"
-		logrus.WithField("bot", botUUID).Info("Feishu one-click registration succeeded")
 	}()
 
 	select {
@@ -239,8 +234,8 @@ func (h *FeishuRegHandler) QRStatus(c *gin.Context) {
 		h.mu.Unlock()
 
 		tenantBrand := ""
-		if result != nil && result.UserInfo != nil {
-			tenantBrand = result.UserInfo.TenantBrand
+		if result != nil {
+			tenantBrand = result.TenantBrand
 		}
 		c.JSON(http.StatusOK, FeishuRegStatusResponse{
 			Success: true,
@@ -289,7 +284,7 @@ func (h *FeishuRegHandler) QRCancel(c *gin.Context) {
 // saveCredentials persists the App ID / App Secret returned by RegisterApp.
 // If the bot already exists it updates the record in place; otherwise (deferred
 // temp- creation) it creates a new, disabled bot and returns the real UUID.
-func (h *FeishuRegHandler) saveCredentials(sess *feishuRegSession, result *registration.RegisterAppResult, platform string) (string, error) {
+func (h *FeishuRegHandler) saveCredentials(sess *feishuRegSession, result *feishu.RegistrationResult, platform string) (string, error) {
 	if result == nil {
 		return "", fmt.Errorf("empty registration result")
 	}
@@ -298,8 +293,8 @@ func (h *FeishuRegHandler) saveCredentials(sess *feishuRegSession, result *regis
 	}
 	// The SDK reports the tenant brand it actually authorized against; trust it
 	// over the platform the request came in on.
-	if result.UserInfo != nil && (result.UserInfo.TenantBrand == "feishu" || result.UserInfo.TenantBrand == "lark") {
-		platform = result.UserInfo.TenantBrand
+	if result.TenantBrand == "feishu" || result.TenantBrand == "lark" {
+		platform = result.TenantBrand
 	}
 
 	authConfig := map[string]string{

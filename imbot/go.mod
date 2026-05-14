@@ -7,7 +7,7 @@ go 1.25.6
 require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-telegram/bot v1.20.0
-	github.com/larksuite/oapi-sdk-go/v3 v3.5.3
+	github.com/larksuite/oapi-sdk-go/v3 v3.7.5
 	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.1
 	github.com/slack-go/slack v0.19.0
 	github.com/stretchr/testify v1.11.1
