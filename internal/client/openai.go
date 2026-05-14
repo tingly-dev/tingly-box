@@ -18,6 +18,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -124,9 +125,28 @@ func (c *OpenAIClient) EmbeddingsNew(ctx context.Context, req openai.EmbeddingNe
 	return c.client.Embeddings.New(ctx, req)
 }
 
-// ImagesGenerate creates a new image generation request
+// ImagesGenerate creates a new image generation request. Most providers speak
+// the OpenAI /images/generations contract and are served directly by the SDK
+// client. Vendors with a bespoke image API (DashScope async tasks, MiniMax's
+// custom endpoint) are dispatched through the imagegen adapters, which
+// translate to and from the OpenAI request/response shape so callers see one
+// uniform surface regardless of the upstream.
 func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
-	return c.client.Images.Generate(ctx, req)
+	switch imagegen.DetectVendor(c.provider) {
+	case imagegen.VendorDashScope, imagegen.VendorMinimax:
+		adapter, err := imagegen.New(c.provider, string(req.Model))
+		if err != nil {
+			return nil, err
+		}
+		defer adapter.Close()
+		resp, err := adapter.Generate(ctx, imagegen.RequestFromOpenAI(&req))
+		if err != nil {
+			return nil, err
+		}
+		return resp.ToOpenAI(), nil
+	default:
+		return c.client.Images.Generate(ctx, req)
+	}
 }
 
 // ResponsesNew creates a new Responses API request

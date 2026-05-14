@@ -9,7 +9,6 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
-	"github.com/tingly-dev/tingly-box/internal/client/imagegen"
 )
 
 // ForwardOpenAIChat sends a non-streaming OpenAI chat completion request.
@@ -52,8 +51,12 @@ func ForwardOpenAIEmbeddings(fc *ForwardContext, wrapper client.OpenAIClientInte
 	return resp, cancel, err
 }
 
-// ForwardOpenAIImageGeneration sends an OpenAI image generation request.
-// Image generation has no streaming and skips the chat transform chain.
+// ForwardOpenAIImageGeneration sends an image generation request. The wrapper's
+// ImagesGenerate handles vendor fragmentation internally — OpenAI-compatible
+// providers go through the SDK directly, DashScope / MiniMax are dispatched to
+// their native adapters, and Codex rides the Responses API — so this forwarder
+// stays a thin, uniform entry point. Image generation has no streaming and
+// skips the chat transform chain.
 func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *openai.ImageGenerateParams) (*openai.ImagesResponse, context.CancelFunc, error) {
 	if wrapper == nil {
 		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
@@ -64,26 +67,6 @@ func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClien
 	logrus.Infof("provider: %s, model: %s (image generation)", fc.Provider.Name, req.Model)
 
 	resp, err := wrapper.ImagesGenerate(ctx, *req)
-	fc.Complete(ctx, resp, err)
-
-	return resp, cancel, err
-}
-
-// ForwardImageGeneration sends an image generation request through the
-// vendor-neutral imagegen.Client. Unlike ForwardOpenAIImageGeneration (which is
-// pinned to the OpenAI /images/generations surface), this routes to whichever
-// native API the upstream vendor actually exposes — OpenAI-compatible,
-// DashScope async tasks, MiniMax's bespoke endpoint, etc.
-func ForwardImageGeneration(fc *ForwardContext, c imagegen.Client, req *imagegen.Request) (*imagegen.Response, context.CancelFunc, error) {
-	if c == nil {
-		return nil, nil, fmt.Errorf("failed to get image generation client for provider: %s", fc.Provider.Name)
-	}
-
-	ctx, cancel := fc.PrepareContext(req)
-
-	logrus.Infof("provider: %s, model: %s (image generation, vendor: %s)", fc.Provider.Name, req.Model, c.Vendor())
-
-	resp, err := c.Generate(ctx, req)
 	fc.Complete(ctx, resp, err)
 
 	return resp, cancel, err

@@ -1,9 +1,7 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -11,7 +9,6 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/client/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -127,42 +124,12 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
-	// Route through the vendor-neutral imagegen abstraction so any provider's
-	// native image API is reachable — not just the OpenAI /images/generations
-	// surface. Codex (ChatGPT OAuth) is the one vendor whose image generation
-	// rides the Responses API; for it imagegen.New signals ErrResponsesAPIRequired
-	// and we fall back to the OpenAI client wrapper, which already implements
-	// that transformation.
-	var (
-		resp   *imagegen.Response
-		cancel context.CancelFunc
-	)
-	igClient, igErr := imagegen.New(provider, actualModel)
-	switch {
-	case igErr == nil:
-		defer igClient.Close()
-		resp, cancel, err = forwarding.ForwardImageGeneration(fc, igClient, imagegen.RequestFromOpenAI(&req))
-	case errors.Is(igErr, imagegen.ErrDelegateRequired):
-		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
-		igClient = imagegen.NewDelegate(provider, imagegen.VendorOpenAICompat, func(ctx context.Context, r *imagegen.Request) (*imagegen.Response, error) {
-			oaResp, dErr := wrapper.ImagesGenerate(ctx, r.ToOpenAIParams())
-			if dErr != nil {
-				return nil, dErr
-			}
-			return imagegen.ResponseFromOpenAI(r.Model, oaResp), nil
-		})
-		defer igClient.Close()
-		resp, cancel, err = forwarding.ForwardImageGeneration(fc, igClient, imagegen.RequestFromOpenAI(&req))
-	case errors.Is(igErr, imagegen.ErrResponsesAPIRequired):
-		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
-		var oaResp *openai.ImagesResponse
-		oaResp, cancel, err = forwarding.ForwardOpenAIImageGeneration(fc, wrapper, &req)
-		if err == nil {
-			resp = imagegen.ResponseFromOpenAI(actualModel, oaResp)
-		}
-	default:
-		err = igErr
-	}
+	// The OpenAI client wrapper handles vendor fragmentation internally:
+	// OpenAI-compatible providers go straight through the SDK, DashScope and
+	// MiniMax are dispatched to their native imagegen adapters, and Codex
+	// (ChatGPT OAuth) rides the Responses API. The handler stays uniform.
+	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
+	resp, cancel, err := forwarding.ForwardOpenAIImageGeneration(fc, wrapper, &req)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -182,7 +149,7 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens), 0)
 	s.trackUsageWithTokenUsage(c, usage, nil)
 
-	responseJSON, err := json.Marshal(resp.ToOpenAI())
+	responseJSON, err := json.Marshal(resp)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{

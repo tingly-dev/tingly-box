@@ -1,25 +1,26 @@
-// Package imagegen provides a vendor-neutral abstraction for text-to-image
-// generation. Image generation is one of the most fragmented surfaces across
-// AI providers: some expose an OpenAI-compatible POST /images/generations,
-// some require the OpenAI Responses API with an image_generation tool, and
-// others ship entirely bespoke schemas (async task polling, custom request
-// bodies). This package hides that fragmentation behind a single Client
-// interface so the gateway can route any provider through one code path.
+// Package imagegen provides vendor adapters for the text-to-image surfaces
+// that do NOT speak the OpenAI /images/generations contract. Image generation
+// is one of the most fragmented surfaces across AI providers: some ship
+// entirely bespoke schemas (async task polling, custom request bodies). This
+// package hides that fragmentation behind a single Client interface.
+//
+// It is an implementation detail of client.OpenAIClient: that client's
+// ImagesGenerate dispatches DashScope / MiniMax providers here and serves
+// every OpenAI-compatible provider through its own native path. The package
+// is intentionally a leaf (it does not import internal/client) so the client
+// layer can depend on it without an import cycle.
 //
 // Vendor landscape (derived from internal/data/providers.json):
 //
 //	OpenAI-compatible (POST {base}/images/generations, OpenAI request/response):
-//	  openai-com, x-ai, volces-com(+coding), z-ai(+coding)/bigmodel-cn(+coding),
-//	  siliconflow-cn/com, stepfun-com/ai, together-xyz, modelscope-cn,
-//	  googleapis-com (Gemini OpenAI-compat layer), baidubce-com (v2),
+//	  openai-com, x-ai, volces-com, z-ai/bigmodel-cn, siliconflow, stepfun,
+//	  together-xyz, modelscope-cn, googleapis-com (Gemini compat), baidubce-com,
 //	  deepinfra-com, novita-ai, fireworks-ai, openrouter-ai, ...
-//	  -> New returns ErrDelegateRequired; the caller injects the pool's existing
-//	     OpenAI client via NewDelegate to avoid duplicating client construction.
+//	  -> NOT handled here; client.OpenAIClient serves these natively.
 //
 //	OpenAI Responses API (image_generation tool, no /images/generations):
 //	  codex (ChatGPT OAuth).
-//	  -> New returns ErrResponsesAPIRequired; the caller forwards through the
-//	     existing OpenAIClientInterface (client.CodexClient) instead.
+//	  -> NOT handled here; client.CodexClient.ImagesGenerate serves these.
 //
 //	Native async task API (submit -> poll task_id):
 //	  dashscope-cn, dashscope-intl (Alibaba Wan / Tongyi Wanxiang, qwen-image).
@@ -39,20 +40,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ErrResponsesAPIRequired is returned by New for providers whose image
-// generation can only be reached through the OpenAI Responses API (currently
-// Codex / ChatGPT OAuth). Callers should fall back to forwarding the request
-// through client.OpenAIClientInterface.ImagesGenerate, which already contains
-// the Responses-API transformation.
-var ErrResponsesAPIRequired = errors.New("imagegen: provider requires the OpenAI Responses API for image generation")
-
-// ErrDelegateRequired is returned by New for VendorOpenAICompat providers.
-// The caller must construct a delegate via NewDelegate, injecting the existing
-// pool OpenAI client, so imagegen does not duplicate client construction.
-var ErrDelegateRequired = errors.New("imagegen: provider requires an injected delegate client")
-
-// ErrUnsupported is returned by New when a provider has no known image
-// generation surface wired up yet.
+// ErrUnsupported is returned by New when a provider has no native image
+// generation adapter in this package. The caller (client.OpenAIClient) only
+// dispatches DashScope / MiniMax providers here, so in practice this signals a
+// detection/routing bug rather than an expected condition.
 var ErrUnsupported = errors.New("imagegen: provider does not support image generation")
 
 // Client is the vendor-neutral image generation contract. Every vendor adapter
