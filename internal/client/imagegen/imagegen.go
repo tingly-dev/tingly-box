@@ -13,7 +13,8 @@
 //	  siliconflow-cn/com, stepfun-com/ai, together-xyz, modelscope-cn,
 //	  googleapis-com (Gemini OpenAI-compat layer), baidubce-com (v2),
 //	  deepinfra-com, novita-ai, fireworks-ai, openrouter-ai, ...
-//	  -> handled by openAICompatClient.
+//	  -> New returns ErrDelegateRequired; the caller injects the pool's existing
+//	     OpenAI client via NewDelegate to avoid duplicating client construction.
 //
 //	OpenAI Responses API (image_generation tool, no /images/generations):
 //	  codex (ChatGPT OAuth).
@@ -44,6 +45,11 @@ import (
 // through client.OpenAIClientInterface.ImagesGenerate, which already contains
 // the Responses-API transformation.
 var ErrResponsesAPIRequired = errors.New("imagegen: provider requires the OpenAI Responses API for image generation")
+
+// ErrDelegateRequired is returned by New for VendorOpenAICompat providers.
+// The caller must construct a delegate via NewDelegate, injecting the existing
+// pool OpenAI client, so imagegen does not duplicate client construction.
+var ErrDelegateRequired = errors.New("imagegen: provider requires an injected delegate client")
 
 // ErrUnsupported is returned by New when a provider has no known image
 // generation surface wired up yet.

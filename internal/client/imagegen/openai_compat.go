@@ -2,60 +2,40 @@ package imagegen
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// openAICompatClient handles every provider that exposes the OpenAI
-// /images/generations contract. It wraps the openai-go SDK and simply
-// translates between the normalized Request/Response and the SDK types.
-type openAICompatClient struct {
-	provider   *typ.Provider
-	client     openai.Client
-	httpClient *http.Client
+// delegateClient wraps an externally-provided Generate function. It lets
+// callers inject a transport-bound client (e.g. the pool's OpenAI client)
+// without imagegen importing internal/client, avoiding an import cycle.
+type delegateClient struct {
+	provider *typ.Provider
+	vendor   Vendor
+	fn       func(ctx context.Context, req *Request) (*Response, error)
 }
 
-func newOpenAICompatClient(provider *typ.Provider) (*openAICompatClient, error) {
-	httpClient := &http.Client{Transport: http.DefaultTransport}
-	options := []option.RequestOption{
-		option.WithAPIKey(provider.GetAccessToken()),
-		option.WithBaseURL(provider.APIBase),
-		option.WithMaxRetries(0),
-		option.WithHTTPClient(httpClient),
-	}
-	return &openAICompatClient{
-		provider:   provider,
-		client:     openai.NewClient(options...),
-		httpClient: httpClient,
-	}, nil
+// NewDelegate creates a Client that delegates Generate to fn. Use it when
+// the caller already holds a suitable client (e.g. for VendorOpenAICompat
+// after New returns ErrDelegateRequired) rather than having imagegen
+// construct a new transport client from scratch.
+func NewDelegate(provider *typ.Provider, vendor Vendor, fn func(ctx context.Context, req *Request) (*Response, error)) Client {
+	return &delegateClient{provider: provider, vendor: vendor, fn: fn}
 }
 
-func (c *openAICompatClient) Provider() *typ.Provider { return c.provider }
+func (c *delegateClient) Provider() *typ.Provider { return c.provider }
+func (c *delegateClient) Vendor() Vendor          { return c.vendor }
+func (c *delegateClient) Close() error            { return nil }
 
-func (c *openAICompatClient) Vendor() Vendor { return VendorOpenAICompat }
-
-func (c *openAICompatClient) Close() error {
-	if c.httpClient != nil && c.httpClient != http.DefaultClient {
-		c.httpClient.CloseIdleConnections()
-	}
-	return nil
+func (c *delegateClient) Generate(ctx context.Context, req *Request) (*Response, error) {
+	return c.fn(ctx, req)
 }
 
-func (c *openAICompatClient) Generate(ctx context.Context, req *Request) (*Response, error) {
-	params := req.ToOpenAIParams()
-	resp, err := c.client.Images.Generate(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	return ResponseFromOpenAI(req.Model, resp), nil
-}
-
-// ResponseFromOpenAI normalizes an OpenAI SDK ImagesResponse. It is exported so
-// callers that still go through the OpenAI client wrapper (e.g. the Codex
-// Responses-API path) can converge on the same normalized Response type.
+// ResponseFromOpenAI normalizes an OpenAI SDK ImagesResponse into the imagegen
+// Response type. Exported so callers that go through the OpenAI client wrapper
+// (e.g. the Codex Responses-API path and the OpenAI-compat delegate) can
+// converge on the same normalized type.
 func ResponseFromOpenAI(model string, resp *openai.ImagesResponse) *Response {
 	if resp == nil {
 		return &Response{Model: model}

@@ -32,7 +32,7 @@ func New(provider *typ.Provider, model string) (Client, error) {
 	case VendorMinimax:
 		return newMinimaxClient(provider)
 	case VendorOpenAICompat:
-		return newOpenAICompatClient(provider)
+		return nil, ErrDelegateRequired
 	default:
 		return nil, fmt.Errorf("%w: provider %s (api_base=%s)", ErrUnsupported, provider.Name, provider.APIBase)
 	}

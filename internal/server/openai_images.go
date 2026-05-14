@@ -142,6 +142,17 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	case igErr == nil:
 		defer igClient.Close()
 		resp, cancel, err = forwarding.ForwardImageGeneration(fc, igClient, imagegen.RequestFromOpenAI(&req))
+	case errors.Is(igErr, imagegen.ErrDelegateRequired):
+		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
+		igClient = imagegen.NewDelegate(provider, imagegen.VendorOpenAICompat, func(ctx context.Context, r *imagegen.Request) (*imagegen.Response, error) {
+			oaResp, dErr := wrapper.ImagesGenerate(ctx, r.ToOpenAIParams())
+			if dErr != nil {
+				return nil, dErr
+			}
+			return imagegen.ResponseFromOpenAI(r.Model, oaResp), nil
+		})
+		defer igClient.Close()
+		resp, cancel, err = forwarding.ForwardImageGeneration(fc, igClient, imagegen.RequestFromOpenAI(&req))
 	case errors.Is(igErr, imagegen.ErrResponsesAPIRequired):
 		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
 		var oaResp *openai.ImagesResponse

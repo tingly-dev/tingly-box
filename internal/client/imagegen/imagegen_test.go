@@ -1,6 +1,7 @@
 package imagegen
 
 import (
+	"context"
 	"testing"
 
 	"github.com/openai/openai-go/v3"
@@ -122,5 +123,35 @@ func TestNewCodexReturnsSentinel(t *testing.T) {
 	_, err := New(p, "gpt-image-1")
 	if err != ErrResponsesAPIRequired {
 		t.Fatalf("New(codex) err = %v, want ErrResponsesAPIRequired", err)
+	}
+}
+
+func TestNewOpenAICompatReturnsDelegateRequired(t *testing.T) {
+	p := &typ.Provider{Name: "openai", APIBase: "https://api.openai.com/v1", APIStyle: protocol.APIStyleOpenAI}
+	_, err := New(p, "dall-e-3")
+	if err != ErrDelegateRequired {
+		t.Fatalf("New(openai-compat) err = %v, want ErrDelegateRequired", err)
+	}
+}
+
+func TestNewDelegateGenerate(t *testing.T) {
+	p := &typ.Provider{Name: "openai", APIBase: "https://api.openai.com/v1"}
+	called := false
+	client := NewDelegate(p, VendorOpenAICompat, func(_ context.Context, req *Request) (*Response, error) {
+		called = true
+		return &Response{Model: req.Model, Data: []Image{{URL: "https://example.com/img.png"}}}, nil
+	})
+	if client.Vendor() != VendorOpenAICompat {
+		t.Fatalf("vendor = %s, want %s", client.Vendor(), VendorOpenAICompat)
+	}
+	resp, err := client.Generate(context.Background(), &Request{Model: "dall-e-3", Prompt: "a cat"})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !called {
+		t.Fatal("delegate fn not called")
+	}
+	if len(resp.Data) != 1 || resp.Data[0].URL != "https://example.com/img.png" {
+		t.Fatalf("unexpected response: %+v", resp)
 	}
 }
