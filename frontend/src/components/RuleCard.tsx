@@ -10,6 +10,7 @@ import {
     useSmartRoutingHandlers,
 } from '@/components/rule-card/useRuleCardHooks';
 import { RuleCardDeleteDialog, RuleFlagEditDialog } from '@/components/rule-card/dialogs';
+import RuleLogDialog from '@/components/RuleLogDialog';
 import RoutingGraph from '@/components/RoutingGraph';
 import SmartRoutingGraph from '@/components/SmartRoutingGraph';
 import SmartRuleEditDialog from '@/components/SmartRuleEditDialog';
@@ -84,6 +85,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // Delete confirmation state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [flagDialogOpen, setFlagDialogOpen] = useState(false);
+    const [logDialogOpen, setLogDialogOpen] = useState(false);
     const [flagInput, setFlagInput] = useState('');
     const [flagError, setFlagError] = useState<string | undefined>(undefined);
 
@@ -217,6 +219,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 cursorCompatAuto: !cursorCompatAutoEnabled,
             })}
             onEditFlags={handleOpenFlagEditor}
+            onViewLogs={() => setLogDialogOpen(true)}
             ruleUuid={rule.uuid}
             ruleName={rule.request_model || rule.uuid}
             scenario={rule.scenario}
@@ -286,6 +289,15 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 }}
                 onClose={() => setFlagDialogOpen(false)}
                 onSave={handleSaveFlags}
+            />
+
+            {/* Rule Log Dialog */}
+            <RuleLogDialog
+                open={logDialogOpen}
+                onClose={() => setLogDialogOpen(false)}
+                scenario={rule.scenario}
+                ruleUuid={rule.uuid}
+                ruleName={rule.request_model || rule.uuid}
             />
 
             {/* Smart Rule Edit Dialog */}
