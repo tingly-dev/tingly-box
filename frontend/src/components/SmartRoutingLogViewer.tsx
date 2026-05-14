@@ -73,7 +73,7 @@ interface SmartRoutingLogFields {
     [k: string]: unknown;
 }
 
-interface SmartRoutingLogEntry {
+export interface SmartRoutingLogEntry {
     time: string;
     level: string;
     message: string;

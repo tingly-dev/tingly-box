@@ -1,4 +1,5 @@
 import ApiKeyModal from '@/components/ApiKeyModal';
+import ScenarioLogDialog from '@/components/RuleLogDialog';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Alert, Box, Fab, Snackbar} from '@mui/material';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -80,6 +81,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
     const [expandedStates, setExpandedStates] = useState<Record<string, boolean>>({});
     const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
     const [showImportModal, setShowImportModal] = useState<boolean>(false);
+    const [logDialogOpen, setLogDialogOpen] = useState<boolean>(false);
     const [importing, setImporting] = useState<boolean>(false);
     const [importError, setImportError] = useState<{ open: boolean; message: string }>({open: false, message: ''});
 
@@ -329,6 +331,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
             showExpandCollapseButton={showExpandCollapseButton}
             showImportButton={showImportButton}
             onImportFromClipboard={handleImportFromClipboard}
+            onViewLogs={scenario ? () => setLogDialogOpen(true) : undefined}
             scenario={scenario}
         />
     );
@@ -462,6 +465,14 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                     {importError.message}
                 </Alert>
             </Snackbar>
+
+            {scenario && (
+                <ScenarioLogDialog
+                    open={logDialogOpen}
+                    onClose={() => setLogDialogOpen(false)}
+                    scenario={scenario}
+                />
+            )}
         </>
     );
 };

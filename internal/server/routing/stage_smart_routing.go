@@ -89,6 +89,7 @@ func (s *SmartRoutingStage) emitTrace(
 	matched := matchedRuleIndex >= 0
 	fields := logrus.Fields{
 		"rule_uuid":           ctx.Rule.UUID,
+		"scenario":            string(ctx.Scenario),
 		"request_model":       ctx.Rule.RequestModel,
 		"matched":             matched,
 		"matched_rule_index":  matchedRuleIndex,
