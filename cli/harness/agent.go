@@ -622,6 +622,11 @@ func executeOpenCodeTest(prompt string) (*AgentTestResult, error) {
 }
 
 // executeOpenCodeWithEnv writes XDG config and runs opencode CLI against a pre-configured env.
+//
+// The opencode config is built via internalagent.BuildOpenCodeConfig — the
+// same logic the production `agent apply` flow uses — so the harness exercises
+// the real provider layout (provider key "tingly-box", model map shape)
+// instead of a hand-rolled variant that could drift from production.
 func executeOpenCodeWithEnv(env *protocol_validate.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
@@ -629,7 +634,8 @@ func executeOpenCodeWithEnv(env *protocol_validate.AgentTestEnv, model string, p
 		Prompt: prompt,
 	}
 
-	const providerKey = "harness"
+	// providerKey must match the provider key BuildOpenCodeConfig writes.
+	const providerKey = "tingly-box"
 	gatewayURL := env.BaseURL() + "/tingly/opencode"
 	apiKey := env.ModelToken()
 
@@ -644,22 +650,9 @@ func executeOpenCodeWithEnv(env *protocol_validate.AgentTestEnv, model string, p
 		return nil, fmt.Errorf("create opencode config dir: %w", err)
 	}
 
-	configContent := map[string]interface{}{
-		"$schema": "https://opencode.ai/config.json",
-		"provider": map[string]interface{}{
-			providerKey: map[string]interface{}{
-				"name": providerKey,
-				"npm":  "@ai-sdk/anthropic",
-				"models": map[string]interface{}{
-					model: map[string]interface{}{"name": model},
-				},
-				"options": map[string]interface{}{
-					"apiKey":  apiKey,
-					"baseURL": gatewayURL,
-				},
-			},
-		},
-	}
+	configContent := internalagent.BuildOpenCodeConfig(gatewayURL, apiKey, map[string]interface{}{
+		model: map[string]interface{}{"name": model},
+	})
 	configJSON, err := json.MarshalIndent(configContent, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal opencode config: %w", err)
