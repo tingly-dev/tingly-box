@@ -8,18 +8,20 @@ import (
 // Centralized for easy customization and i18n support
 const (
 	// Icons
-	IconProject = "📁"  // Project/folder
-	IconChat    = "💬"  // Chat/conversation
-	IconUser    = "👤"  // User
-	IconSession = "🔄"  // Session
-	IconAgentTB = "🎯"  // Tingly-Box agent (@tb)
-	IconAgentCC = "💬"  // Claude Code agent (@cc)
-	IconDone    = "✅"  // Task completed
-	IconError   = "❌"  // Error
-	IconWarning = "⚠️" // Warning
-	IconStop    = "🛑"  // Stopped
-	IconProcess = "⏳"  // Processing
-	IconMock    = "🧪"  // Mock agent
+	IconProject    = "📁"  // Project/folder
+	IconChat       = "💬"  // Chat/conversation
+	IconUser       = "👤"  // User
+	IconSession    = "🔄"  // Session
+	IconAgentTB    = "🎯"  // Tingly-Box agent (@tb)
+	IconAgentCC    = "💬"  // Claude Code agent (@cc)
+	IconDone       = "✅"  // Task completed
+	IconError      = "❌"  // Error
+	IconWarning    = "⚠️" // Warning
+	IconStop       = "🛑"  // Stopped
+	IconProcess    = "⏳"  // Processing
+	IconMock       = "🧪"  // Mock agent
+	IconTool       = "🔧"  // Tool call
+	IconToolResult = "↳"  // Tool result
 )
 
 // Agent display names
