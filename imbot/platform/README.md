@@ -47,6 +47,23 @@ platform.Register(core.Platform("myplatform"), func(cfg *core.Config) (core.Bot,
 
 ## Platform reference
 
+Each platform has its own README with full configuration and design details:
+
+| Platform | README | Auth | Connection |
+|---|---|---|---|
+| Telegram | [telegram/README.md](telegram/README.md) | token | Long-polling |
+| Discord | [discord/README.md](discord/README.md) | token | WebSocket (Gateway) |
+| Slack | [slack/README.md](slack/README.md) | token | RTM |
+| Feishu | [feishu/README.md](feishu/README.md) | oauth | WebSocket (Event Push) |
+| Lark | [lark/README.md](lark/README.md) | oauth | WebSocket (Event Push) |
+| DingTalk | [dingtalk/README.md](dingtalk/README.md) | oauth | Stream SDK |
+| Weixin | [weixin/README.md](weixin/README.md) | token | WebSocket |
+| WeCom | [wecom/README.md](wecom/README.md) | oauth | WebSocket |
+| WhatsApp | [whatsapp/README.md](whatsapp/README.md) | token | REST (Meta Cloud API) |
+| Tingly | [tingly/README.md](tingly/README.md) | none | InProcess / pluggable |
+
+---
+
 ### Telegram
 
 | | |
