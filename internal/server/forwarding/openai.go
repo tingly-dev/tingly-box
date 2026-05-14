@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/client/imagegen"
 )
 
 // ForwardOpenAIChat sends a non-streaming OpenAI chat completion request.
@@ -63,6 +64,26 @@ func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClien
 	logrus.Infof("provider: %s, model: %s (image generation)", fc.Provider.Name, req.Model)
 
 	resp, err := wrapper.ImagesGenerate(ctx, *req)
+	fc.Complete(ctx, resp, err)
+
+	return resp, cancel, err
+}
+
+// ForwardImageGeneration sends an image generation request through the
+// vendor-neutral imagegen.Client. Unlike ForwardOpenAIImageGeneration (which is
+// pinned to the OpenAI /images/generations surface), this routes to whichever
+// native API the upstream vendor actually exposes — OpenAI-compatible,
+// DashScope async tasks, MiniMax's bespoke endpoint, etc.
+func ForwardImageGeneration(fc *ForwardContext, c imagegen.Client, req *imagegen.Request) (*imagegen.Response, context.CancelFunc, error) {
+	if c == nil {
+		return nil, nil, fmt.Errorf("failed to get image generation client for provider: %s", fc.Provider.Name)
+	}
+
+	ctx, cancel := fc.PrepareContext(req)
+
+	logrus.Infof("provider: %s, model: %s (image generation, vendor: %s)", fc.Provider.Name, req.Model, c.Vendor())
+
+	resp, err := c.Generate(ctx, req)
 	fc.Complete(ctx, resp, err)
 
 	return resp, cancel, err

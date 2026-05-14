@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/client/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -114,16 +117,6 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
-	if provider.APIStyle != protocol.APIStyleOpenAI {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: fmt.Sprintf("unsupported provider api style for image generation: %s", provider.APIStyle),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
 	actualModel := selectedService.Model
 	req.Model = openai.ImageModel(actualModel)
 
@@ -132,10 +125,33 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, false)
 
-	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
 	fc := forwarding.NewForwardContext(c.Request.Context(), provider)
 
-	resp, cancel, err := forwarding.ForwardOpenAIImageGeneration(fc, wrapper, &req)
+	// Route through the vendor-neutral imagegen abstraction so any provider's
+	// native image API is reachable — not just the OpenAI /images/generations
+	// surface. Codex (ChatGPT OAuth) is the one vendor whose image generation
+	// rides the Responses API; for it imagegen.New signals ErrResponsesAPIRequired
+	// and we fall back to the OpenAI client wrapper, which already implements
+	// that transformation.
+	var (
+		resp   *imagegen.Response
+		cancel context.CancelFunc
+	)
+	igClient, igErr := imagegen.New(provider, actualModel)
+	switch {
+	case igErr == nil:
+		defer igClient.Close()
+		resp, cancel, err = forwarding.ForwardImageGeneration(fc, igClient, imagegen.RequestFromOpenAI(&req))
+	case errors.Is(igErr, imagegen.ErrResponsesAPIRequired):
+		wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
+		var oaResp *openai.ImagesResponse
+		oaResp, cancel, err = forwarding.ForwardOpenAIImageGeneration(fc, wrapper, &req)
+		if err == nil {
+			resp = imagegen.ResponseFromOpenAI(actualModel, oaResp)
+		}
+	default:
+		err = igErr
+	}
 	if cancel != nil {
 		defer cancel()
 	}
@@ -155,7 +171,7 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens), 0)
 	s.trackUsageWithTokenUsage(c, usage, nil)
 
-	responseJSON, err := json.Marshal(resp)
+	responseJSON, err := json.Marshal(resp.ToOpenAI())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
