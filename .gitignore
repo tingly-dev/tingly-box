@@ -113,3 +113,8 @@ MANIFEST
 go.work.sum
 /docs/plans/
 /.codex-scratch/
+
+# harness run artifacts
+/harness
+/harness-summary.csv
+/harness-output/
