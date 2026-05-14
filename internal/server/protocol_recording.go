@@ -18,7 +18,7 @@ import (
 
 // recorderContextKey is the gin context key under which the active
 // ProtocolRecorder is stored so later handler stages can reuse it.
-const recorderContextKey = "scenario_recorder"
+const recorderContextKey = "protocol_recorder"
 
 // ProtocolRecorder captures a single client→tingly-box→provider cycle.
 //
