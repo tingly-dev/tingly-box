@@ -4,6 +4,9 @@ A standalone CLI (`harness`) that validates the tingly-box gateway end-to-end:
 protocol transforms, routing rules, scenario dispatch, and real agent-CLI
 compatibility — without needing a deployed server.
 
+> Forward-looking work — new scenarios, fixture capture, CI integration,
+> closing the defect skip list — is tracked in [PLANNING.md](./PLANNING.md).
+
 ```
                           ┌─────────────────────────┐
                           │   harness  (this CLI)   │
@@ -167,6 +170,9 @@ the underlying bug is fixed. Currently:
 
 - `*/codex/tool_use` — Responses-API source path's tool_call conversion is
   incomplete (mirrors Tier A's `skipSourceScenarios`).
+
+Closing this list out — plus planned scenario expansion and fixture capture —
+is tracked in [PLANNING.md](./PLANNING.md).
 
 **Use it for:** exercising the real gateway pipeline (rules, dispatch, vmodel
 short-circuit) across every agent × scenario × upstream — fast and hermetic.
