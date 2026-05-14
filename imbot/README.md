@@ -15,16 +15,21 @@ A unified, extensible framework for building IM bots that work across multiple m
 
 ## Supported Platforms
 
-- ✅ **Telegram** - Full support with inline keyboards, menus, commands, and media
-- ✅ **Feishu/Lark** - Full support with quick actions and interactive cards
-- ✅ **DingTalk** - Basic support with message handling
-- ✅ **Weixin** - Basic support
-- ✅ **WeWork** - Basic support (enterprise WeChat)
-- 🚧 **Discord** - Planned
-- 🚧 **Slack** - Planned
-- 🚧 **WhatsApp** - Planned
-- 🚧 **Google Chat** - Planned
-- 🚧 **Signal** - Planned
+| Platform | Status | Auth | Connection |
+|---|---|---|---|
+| **Telegram** | ✅ Full | Token | Polling / WebSocket |
+| **Discord** | ✅ Full | Token | WebSocket (Gateway) |
+| **Slack** | ✅ Full | Token | RTM |
+| **Feishu** | ✅ Full | OAuth | WebSocket (Event Push) |
+| **Lark** | ✅ Full | OAuth | WebSocket (Event Push) |
+| **DingTalk** | ✅ Full | OAuth | Stream SDK |
+| **Weixin** | ✅ Basic | Token + AccountID | WebSocket |
+| **WeCom** | ✅ Basic | OAuth | WebSocket |
+| **WhatsApp** | ✅ Basic | Token | HTTP Webhook |
+| **Google Chat** | 🚧 Planned | — | — |
+| **Signal** | 🚧 Planned | — | — |
+
+See [`platform/README.md`](platform/README.md) for per-platform design details and configuration reference.
 
 ## Architecture
 
