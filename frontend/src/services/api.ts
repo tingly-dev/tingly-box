@@ -1799,6 +1799,30 @@ export const api = {
         });
     },
 
+    // ========== Feishu/Lark One-Click Registration API ==========
+
+    // Start Feishu/Lark one-click app registration; returns a QR verification link
+    feishuRegStart: async (botUUID: string, platform?: string, botName?: string): Promise<any> => {
+        return uiAPI(`/imbot-settings/${botUUID}/feishu/qr-start`, {
+            method: 'POST',
+            body: JSON.stringify({bot_uuid: botUUID, bot_platform: platform, bot_name: botName}),
+        });
+    },
+
+    // Poll Feishu/Lark one-click registration status
+    feishuRegStatus: async (botUUID: string): Promise<any> => {
+        return uiAPI(`/imbot-settings/${botUUID}/feishu/qr-status`, {
+            method: 'GET',
+        });
+    },
+
+    // Cancel a pending Feishu/Lark one-click registration
+    feishuRegCancel: async (botUUID: string): Promise<any> => {
+        return uiAPI(`/imbot-settings/${botUUID}/feishu/qr-cancel`, {
+            method: 'POST',
+        });
+    },
+
     // ========== System Configuration API ==========
 
     // Get system configuration

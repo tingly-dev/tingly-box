@@ -140,6 +140,36 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		),
 	)
 
+	// Feishu/Lark one-click registration endpoints (OAuth 2.0 Device Authorization Grant)
+	if fr := handler.feishuRegHandler; fr != nil {
+		// POST /imbot-settings/:uuid/feishu/qr-start - Start one-click app registration
+		router.POST("/imbot-settings/:uuid/feishu/qr-start", fr.QRStart,
+			swagger.WithTags("imbot-settings", "feishu"),
+			swagger.WithDescription("Starts Feishu/Lark one-click app registration and returns a QR verification link"),
+			swagger.WithPathParam("uuid", "string", "ImBot configuration UUID (use a temp- prefix for deferred creation)"),
+			swagger.WithRequestModel(FeishuRegStartRequest{}),
+			swagger.WithResponseModel(FeishuRegStartResponse{}),
+		)
+
+		// GET /imbot-settings/:uuid/feishu/qr-status - Poll one-click registration status
+		router.GET("/imbot-settings/:uuid/feishu/qr-status", fr.QRStatus,
+			swagger.WithTags("imbot-settings", "feishu"),
+			swagger.WithDescription("Polls Feishu/Lark one-click app registration status"),
+			swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
+			swagger.WithResponseModel(FeishuRegStatusResponse{}),
+			swagger.WithErrorResponses(
+				swagger.ErrorResponseConfig{Code: 404, Message: "No active registration session found"},
+			),
+		)
+
+		// POST /imbot-settings/:uuid/feishu/qr-cancel - Cancel pending registration
+		router.POST("/imbot-settings/:uuid/feishu/qr-cancel", fr.QRCancel,
+			swagger.WithTags("imbot-settings", "feishu"),
+			swagger.WithDescription("Cancels a pending Feishu/Lark one-click app registration"),
+			swagger.WithPathParam("uuid", "string", "ImBot configuration UUID"),
+		)
+	}
+
 	// Weixin QR Login endpoints - use handler's persistent QR login handler
 	qrHandler := handler.qrLoginHandler
 	if qrHandler == nil {

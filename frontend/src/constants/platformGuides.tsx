@@ -76,26 +76,22 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        1. Create a Feishu bot
+                        1. Scan to create (recommended)
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://open.feishu.cn/" target="_blank">Feishu Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
-                            <li>Create a new app - Enable Bot capability</li>
-                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
-                            <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
-                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to establish connection)</li>
-                            <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
-                            <li>Publish the app</li>
-                        </Box>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" above, choose <strong>One-click (scan QR)</strong>, and scan the QR code with the Feishu mobile app. The app, permissions and events are created automatically and the credentials are saved for you.
                     </Typography>
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        2. Add bot
+                        2. Or create manually
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                            <li>Open <Link href="https://open.feishu.cn/page/launcher?from=backend_oneclick" target="_blank">Feishu one-click app creation <OpenInNew sx={{ fontSize: 10 }} /></Link> and log in</li>
+                            <li>Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you</li>
+                            <li>Copy the generated <strong>App ID</strong> and <strong>App Secret</strong>, then enter them via "Add Bot" → <strong>Enter manually</strong></li>
+                        </Box>
                     </Typography>
                 </Box>
             </Stack>
@@ -119,26 +115,22 @@ export const platformGuides: Record<string, PlatformGuideConfig> = {
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        1. Create a Lark bot
+                        1. Scan to create (recommended)
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" component="div">
-                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                            <li>Visit <Link href="https://open.larksuite.com/" target="_blank">Lark Open Platform <OpenInNew sx={{ fontSize: 10 }} /></Link></li>
-                            <li>Create a new app - Enable Bot capability</li>
-                            <li>Permissions: Add <code>im:message</code> (send messages) and <code>im:message.p2p_msg:readonly</code> (receive messages)</li>
-                            <li>Events: Add <code>im.message.receive_v1</code> (receive messages)</li>
-                            <li>Select <strong>Long Connection</strong> mode (requires running nanobot first to establish connection)</li>
-                            <li>Get App ID and App Secret from "Credentials & Basic Info"</li>
-                            <li>Publish the app</li>
-                        </Box>
+                    <Typography variant="body2" color="text.secondary">
+                        Click "Add Bot" above, choose <strong>One-click (scan QR)</strong>, and scan the QR code with the Lark mobile app. The app, permissions and events are created automatically and the credentials are saved for you.
                     </Typography>
                 </Box>
                 <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                        2. Add bot
+                        2. Or create manually
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Click "Add Bot" button above and fill in App ID and App Secret to create your bot.
+                    <Typography variant="body2" color="text.secondary" component="div">
+                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                            <li>Open <Link href="https://open.larksuite.com/page/launcher?from=backend_oneclick" target="_blank">Lark one-click app creation <OpenInNew sx={{ fontSize: 10 }} /></Link> and log in</li>
+                            <li>Enter an app name and confirm — bot capability, permissions, events and Long Connection mode are pre-configured for you</li>
+                            <li>Copy the generated <strong>App ID</strong> and <strong>App Secret</strong>, then enter them via "Add Bot" → <strong>Enter manually</strong></li>
+                        </Box>
                     </Typography>
                 </Box>
             </Stack>
