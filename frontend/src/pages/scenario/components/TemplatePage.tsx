@@ -471,7 +471,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                     open={logDialogOpen}
                     onClose={() => setLogDialogOpen(false)}
                     scenario={scenario}
-                    ruleUuids={rules?.map((r) => r.uuid)}
                 />
             )}
         </>

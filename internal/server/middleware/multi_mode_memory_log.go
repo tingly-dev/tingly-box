@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
@@ -146,6 +147,22 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		if statusCode >= 400 && w.body.Len() > 0 {
 			respBytes := w.body.Bytes()
 			fields["response_body"] = string(respBytes)
+		}
+
+		// Append routing metadata when set by AI handlers (absent for non-AI routes)
+		if rm := c.GetString("tracking_request_model"); rm != "" {
+			fields["request_model"] = rm
+		}
+		if am := c.GetString("tracking_model"); am != "" {
+			fields["routed_model"] = am
+		}
+		if sc := c.GetString("tracking_scenario"); sc != "" {
+			fields["scenario"] = sc
+		}
+		if pv, exists := c.Get("tracking_provider"); exists {
+			if p, ok := pv.(*typ.Provider); ok && p != nil {
+				fields["routed_provider"] = p.Name
+			}
 		}
 
 		// Log with structured fields including error details

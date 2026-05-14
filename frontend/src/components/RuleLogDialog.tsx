@@ -20,15 +20,13 @@ interface ScenarioLogDialogProps {
     open: boolean;
     onClose: () => void;
     scenario: string;
-    /** UUIDs of all rules in this scenario — used to scope smart routing logs */
-    ruleUuids?: string[];
 }
 
 const getAuthHeader = () => ({
     Authorization: `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
 });
 
-const ScenarioLogDialog = ({ open, onClose, scenario, ruleUuids }: ScenarioLogDialogProps) => {
+const ScenarioLogDialog = ({ open, onClose, scenario }: ScenarioLogDialogProps) => {
     const [tab, setTab] = useState(0);
 
     const getLogs = useCallback(
@@ -55,14 +53,12 @@ const ScenarioLogDialog = ({ open, onClose, scenario, ruleUuids }: ScenarioLogDi
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            const uuidSet = ruleUuids && ruleUuids.length > 0 ? new Set(ruleUuids) : null;
-            const logs: SmartRoutingLogEntry[] = uuidSet
-                ? (data.logs || []).filter((e: SmartRoutingLogEntry) => uuidSet.has(String(e.fields?.rule_uuid ?? '')))
-                : (data.logs || []);
-
+            const logs: SmartRoutingLogEntry[] = (data.logs || []).filter(
+                (e: SmartRoutingLogEntry) => e.fields?.scenario === scenario,
+            );
             return { total: logs.length, logs };
         },
-        [ruleUuids],
+        [scenario],
     );
 
     const getRequestBody = useCallback(async (bodyRef: string) => {
