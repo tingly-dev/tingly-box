@@ -76,7 +76,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		}
 	}
 
-	// Get or create recorder for dual-stage recording (when V2 flag is enabled)
+	// Get or create the recorder for dual-stage recording
 	var recorder *ProtocolRecorder
 	if s.ApplyRecording(scenarioType) {
 		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
@@ -99,7 +99,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get protocol recorder if exists
 	var recorder *ProtocolRecorder
-	if r, exists := c.Get("scenario_recorder"); exists {
+	if r, exists := c.Get(recorderContextKey); exists {
 		recorder = r.(*ProtocolRecorder)
 	}
 
@@ -160,12 +160,12 @@ func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string
 func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ProtocolRecorder
-	if r, exists := c.Get("scenario_recorder"); exists {
+	if r, exists := c.Get(recorderContextKey); exists {
 		recorder = r.(*ProtocolRecorder)
 	}
 	streamRec := newStreamRecorder(recorder)
 	if streamRec != nil {
-		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+		streamRec.SetupStreamRecorderInContext(c)
 	}
 
 	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)
@@ -213,12 +213,12 @@ func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, a
 func (s *Server) assembleResponsesToAnthropic(c *gin.Context, proxyModel string, actualModel string, provider *typ.Provider, responsesReq responses.ResponseNewParams) {
 	// Get scenario recorder and set up stream recorder
 	var recorder *ProtocolRecorder
-	if r, exists := c.Get("scenario_recorder"); exists {
+	if r, exists := c.Get(recorderContextKey); exists {
 		recorder = r.(*ProtocolRecorder)
 	}
 	streamRec := newStreamRecorder(recorder)
 	if streamRec != nil {
-		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+		streamRec.SetupStreamRecorderInContext(c)
 	}
 
 	// For standard OpenAI providers, use the OpenAI SDK (session ID already in c.Request.Context)

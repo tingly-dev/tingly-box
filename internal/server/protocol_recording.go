@@ -3,9 +3,9 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -16,12 +16,16 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// recorderContextKey is the gin context key under which the active
+// ProtocolRecorder is stored so later handler stages can reuse it.
+const recorderContextKey = "scenario_recorder"
+
 // ProtocolRecorder captures a single client→tingly-box→provider cycle.
 //
 // It carries both the scenario-level (client/final) and protocol-level
-// (transformed/provider) request/response pairs, plus optional streaming
-// state. The recorder is mode-driven: which fields are emitted to the sink
-// is decided by RecordMode (set at construction).
+// (transformed) request/response pairs, plus optional streaming state. The
+// recorder is mode-driven: which fields are emitted to the sink is decided
+// by RecordMode (set at construction).
 //
 // Lifecycle:
 //   1. EnsureProtocolRecorder at handler entry — captures client request,
@@ -36,19 +40,14 @@ type ProtocolRecorder struct {
 	scenario     string
 	startTime    time.Time
 	c            *gin.Context
-	bodyBytes    []byte
 	sessionShort string
 	sessionSrc   string
 
-	// Streaming state
-	streamChunks      []map[string]interface{}
-	isStreaming       bool
-	assembledResponse map[string]interface{}
+	streamChunks []map[string]interface{}
+	isStreaming  bool
 
-	// Captured request/response stages.
 	originalRequest    *obs.RecordRequest
 	transformedRequest *obs.RecordRequest
-	providerResponse   *obs.RecordResponse
 	finalResponse      *obs.RecordResponse
 
 	transformSteps []string
@@ -79,7 +78,7 @@ func (s *Server) EnsureProtocolRecorder(c *gin.Context, scenario string, provide
 		return nil
 	}
 	rec.bindProvider(provider, model, mode)
-	c.Set("scenario_recorder", rec)
+	c.Set(recorderContextKey, rec)
 	return rec
 }
 
@@ -131,7 +130,6 @@ func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode o
 		scenario:        scenario,
 		startTime:       time.Now(),
 		c:               c,
-		bodyBytes:       bodyBytes,
 		sessionShort:    short,
 		sessionSrc:      src,
 		originalRequest: req,
@@ -140,7 +138,7 @@ func newProtocolRecorder(c *gin.Context, sink *obs.Sink, scenario string, mode o
 }
 
 func getRecorderFromContext(c *gin.Context) (*ProtocolRecorder, bool) {
-	v, exists := c.Get("scenario_recorder")
+	v, exists := c.Get(recorderContextKey)
 	if !exists {
 		return nil, false
 	}
@@ -208,14 +206,6 @@ func (sr *ProtocolRecorder) RecordStreamChunk(eventType string, chunk interface{
 	sr.streamChunks = append(sr.streamChunks, chunkData)
 }
 
-// GetStreamChunks returns the collected stream chunks.
-func (sr *ProtocolRecorder) GetStreamChunks() []map[string]interface{} {
-	if sr == nil {
-		return nil
-	}
-	return sr.streamChunks
-}
-
 // SetAssembledResponse stores the final assembled (post-stream) response.
 // Accepts map, []byte, or any JSON-marshallable value.
 func (sr *ProtocolRecorder) SetAssembledResponse(response any) {
@@ -226,7 +216,6 @@ func (sr *ProtocolRecorder) SetAssembledResponse(response any) {
 	if !ok {
 		return
 	}
-	sr.assembledResponse = responseMap
 
 	statusCode := 200
 	headers := map[string]string{}
@@ -256,22 +245,6 @@ func (sr *ProtocolRecorder) SetTransformedRequest(req *obs.RecordRequest) {
 		return
 	}
 	sr.transformedRequest = req
-}
-
-// SetProviderResponse stores the raw provider response.
-func (sr *ProtocolRecorder) SetProviderResponse(resp *obs.RecordResponse) {
-	if sr == nil {
-		return
-	}
-	sr.providerResponse = resp
-}
-
-// SetFinalResponse stores the final response sent to the client.
-func (sr *ProtocolRecorder) SetFinalResponse(resp *obs.RecordResponse) {
-	if sr == nil {
-		return
-	}
-	sr.finalResponse = resp
 }
 
 // SetTransformSteps records which transforms were applied.
@@ -307,7 +280,6 @@ func (sr *ProtocolRecorder) emit(err error) {
 		return
 	}
 
-	model := sr.resolveModel()
 	r := &obs.Record{
 		Timestamp:  time.Now().UTC(),
 		RequestID:  uuid.New().String(),
@@ -315,7 +287,7 @@ func (sr *ProtocolRecorder) emit(err error) {
 		SessionSrc: sr.sessionSrc,
 		Provider:   sr.providerName,
 		Scenario:   sr.scenario,
-		Model:      model,
+		Model:      sr.resolveModel(),
 		Steps:      sr.transformSteps,
 		Duration:   time.Since(sr.startTime),
 	}
@@ -324,18 +296,13 @@ func (sr *ProtocolRecorder) emit(err error) {
 	}
 
 	switch sr.mode {
-	case obs.RecordModeAll, obs.RecordModeScenario:
+	case obs.RecordModeAll, obs.RecordModeScenario, obs.RecordModeStagedRequestResponse:
 		r.OriginalRequest = sr.originalRequest
 		r.TransformedRequest = sr.transformedRequest
-		r.ProviderResponse = sr.providerResponse
 		r.FinalResponse = sr.finalResponse
 	case obs.RecordModeRequestOnly:
 		r.TransformedRequest = sr.transformedRequest
 	case obs.RecordModeRequestResponse:
-		r.TransformedRequest = sr.transformedRequest
-		r.FinalResponse = sr.finalResponse
-	case obs.RecordModeStagedRequestResponse:
-		r.OriginalRequest = sr.originalRequest
 		r.TransformedRequest = sr.transformedRequest
 		r.FinalResponse = sr.finalResponse
 	}
@@ -355,9 +322,9 @@ func (sr *ProtocolRecorder) resolveModel() string {
 	return ""
 }
 
-// synthesizeFinalResponse builds a final response from the gin writer or
-// streaming fallback, used when no upstream code called SetFinalResponse /
-// SetAssembledResponse before RecordResponse.
+// synthesizeFinalResponse builds a final response from the gin writer or a
+// streaming fallback, used when RecordResponse runs without an earlier
+// SetAssembledResponse.
 func (sr *ProtocolRecorder) synthesizeFinalResponse() *obs.RecordResponse {
 	statusCode := 0
 	var headers map[string]string
@@ -367,18 +334,10 @@ func (sr *ProtocolRecorder) synthesizeFinalResponse() *obs.RecordResponse {
 	}
 
 	var bodyJSON map[string]interface{}
-	if sr.isStreaming && sr.assembledResponse != nil {
-		bodyJSON = sr.assembledResponse
-	} else if sr.isStreaming && len(sr.streamChunks) > 0 {
-		bodyJSON = map[string]interface{}{
-			"id":             fmt.Sprintf("msg_%d", sr.startTime.Unix()),
-			"type":           "message",
-			"role":           "assistant",
-			"content":        []interface{}{},
-			"model":          sr.model,
-			"_stream_chunks": len(sr.streamChunks),
-			"_note":          "assembled response unavailable",
-		}
+	if sr.isStreaming && len(sr.streamChunks) > 0 {
+		bodyJSON = baseMessageMap(sr.model, sr.startTime)
+		bodyJSON["_stream_chunks"] = len(sr.streamChunks)
+		bodyJSON["_note"] = "assembled response unavailable"
 		logrus.Debugf("obs: ProtocolRecorder fallback response, chunks=%d", len(sr.streamChunks))
 	} else if sr.c != nil {
 		if responseBody, exists := sr.c.Get("response_body"); exists {
@@ -404,6 +363,18 @@ func (sr *ProtocolRecorder) synthesizeFinalResponse() *obs.RecordResponse {
 		resp.StreamChunks = chunks
 	}
 	return resp
+}
+
+// baseMessageMap builds the common skeleton of a synthesised assistant
+// message used by streaming fallbacks.
+func baseMessageMap(model string, startTime time.Time) map[string]interface{} {
+	return map[string]interface{}{
+		"id":      "msg_" + strconv.FormatInt(startTime.Unix(), 10),
+		"type":    "message",
+		"role":    "assistant",
+		"content": []interface{}{},
+		"model":   model,
+	}
 }
 
 // coerceToMap normalises an arbitrary value to map[string]interface{}.

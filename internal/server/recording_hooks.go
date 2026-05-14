@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -10,6 +9,10 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// streamRecorderContextKey is the gin context key under which the active
+// streamRecorder is published for protocol-layer code to feed events into.
+const streamRecorderContextKey = "stream_event_recorder"
 
 // streamRecorder couples a ProtocolRecorder with a stream assembler so that
 // raw SSE events are mirrored into both the recorder's chunk log and an
@@ -63,17 +66,11 @@ func (sr *streamRecorder) Finish(model string, inputTokens, outputTokens int) {
 		return
 	}
 	if len(sr.recorder.streamChunks) > 0 {
-		fallback := map[string]interface{}{
-			"id":          fmt.Sprintf("msg_%d", sr.recorder.startTime.Unix()),
-			"type":        "message",
-			"role":        "assistant",
-			"content":     []interface{}{},
-			"model":       model,
-			"stop_reason": sr.recorder.c.Query("stop_reason"),
-			"usage": map[string]interface{}{
-				"input_tokens":  inputTokens,
-				"output_tokens": outputTokens,
-			},
+		fallback := baseMessageMap(model, sr.recorder.startTime)
+		fallback["stop_reason"] = sr.recorder.c.Query("stop_reason")
+		fallback["usage"] = map[string]interface{}{
+			"input_tokens":  inputTokens,
+			"output_tokens": outputTokens,
 		}
 		sr.recorder.SetAssembledResponse(fallback)
 		logrus.Debugf("obs: streamRecorder using fallback response, chunks=%d", len(sr.recorder.streamChunks))
@@ -112,19 +109,26 @@ func (sr *streamRecorder) RecordRawMapEvent(eventType string, event map[string]i
 
 	if eventType == "message_delta" {
 		if usage, ok := event["usage"].(map[string]interface{}); ok {
-			if v, ok := usage["input_tokens"].(float64); ok {
-				sr.inputTokens = int(v)
-			} else if v, ok := usage["input_tokens"].(int64); ok {
-				sr.inputTokens = int(v)
+			if v, ok := mapInt(usage, "input_tokens"); ok {
+				sr.inputTokens = v
 			}
-			if v, ok := usage["output_tokens"].(float64); ok {
-				sr.outputTokens = int(v)
-			} else if v, ok := usage["output_tokens"].(int64); ok {
-				sr.outputTokens = int(v)
+			if v, ok := mapInt(usage, "output_tokens"); ok {
+				sr.outputTokens = v
 			}
 			sr.hasUsage = true
 		}
 	}
+}
+
+// mapInt reads a JSON-decoded numeric value (float64 or int64) from m.
+func mapInt(m map[string]interface{}, key string) (int, bool) {
+	switch v := m[key].(type) {
+	case float64:
+		return int(v), true
+	case int64:
+		return int(v), true
+	}
+	return 0, false
 }
 
 func (sr *streamRecorder) StreamEventRecorder() interface{} {
@@ -134,14 +138,13 @@ func (sr *streamRecorder) StreamEventRecorder() interface{} {
 	return sr
 }
 
-func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context, key string) {
+func (sr *streamRecorder) SetupStreamRecorderInContext(c *gin.Context) {
 	if sr == nil {
 		return
 	}
-	c.Set(key, sr)
+	c.Set(streamRecorderContextKey, sr)
 }
 
-// updateUsageFromTyped extracts usage from a typed SDK event into streamRecorder counters.
 func (sr *streamRecorder) updateUsageFromTyped(in, out int64) {
 	if in > 0 {
 		sr.inputTokens = int(in)

@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-
 // RecordMode defines which fields are captured by the Sink.
 type RecordMode string
 
