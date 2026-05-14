@@ -273,6 +273,10 @@ Special badges are minted to recognize the contributions from following contribu
   </tr>
 </table>
 
+## Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=tingly-dev/tingly-box)](https://github.com/tingly-dev/tingly-box/graphs/contributors)
+
 ## License
 
 This project is available under:
