@@ -247,6 +247,10 @@ task wails:build
 | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/56022b70-97da-498f-bf83-822a11668fa7" /> | <img width="196" height="196" alt="image" src="https://github.com/user-attachments/assets/30d24cc5-666c-425a-b8d2-5f353af453de" /> |
 | https://t.me/+V1sqeajw1pYwMzU1 | tingly-box |
 
+## Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=tingly-dev/tingly-box)](https://github.com/tingly-dev/tingly-box/graphs/contributors)
+
 ## Early Contributors
 
 Special badges are minted to recognize the contributions from following contributors:
