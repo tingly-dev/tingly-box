@@ -2,25 +2,22 @@
 package imbot
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/imbot/platform/weixin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
 // WeChatQRLoginHandler handles Weixin QR code login flow
 type WeChatQRLoginHandler struct {
 	settingsStore *db.ImBotSettingsStore
+	qrClient      *weixin.QRClient
 	sessions      map[string]*qrSession
 	mu            sync.RWMutex
 	// Rate limiting: track recent QR requests per bot
@@ -46,15 +43,11 @@ type qrSession struct {
 	botPlatform string
 }
 
-type wechatQRClient struct {
-	baseURL    string
-	httpClient *http.Client
-}
-
 // NewWeChatQRLoginHandler creates a new Weixin QR login handler
 func NewWeChatQRLoginHandler(settingsStore *db.ImBotSettingsStore) *WeChatQRLoginHandler {
 	return &WeChatQRLoginHandler{
 		settingsStore: settingsStore,
+		qrClient:      weixin.NewQRClient(""),
 		sessions:      make(map[string]*qrSession),
 		rateLimitMap:  make(map[string][]time.Time),
 	}
@@ -141,16 +134,8 @@ func (h *WeChatQRLoginHandler) QRStart(c *gin.Context) {
 		return
 	}
 
-	// Create QR code client
-	client := &wechatQRClient{
-		baseURL: "https://ilinkai.weixin.qq.com",
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-	}
-
 	// Fetch QR code
-	qrResp, err := client.GetBotQRCode(c.Request.Context(), botType)
+	qrResp, err := h.qrClient.GetBotQRCode(c.Request.Context(), botType)
 	if err != nil {
 		logrus.WithError(err).WithField("bot", botUUID).Error("Failed to get QR code")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get QR code"})
@@ -234,16 +219,8 @@ func (h *WeChatQRLoginHandler) QRStatus(c *gin.Context) {
 		return
 	}
 
-	// Create client for this request
-	client := &wechatQRClient{
-		baseURL: "https://ilinkai.weixin.qq.com",
-		httpClient: &http.Client{
-			Timeout: 35 * time.Second, // Longer timeout for long-poll
-		},
-	}
-
 	// Poll QR status
-	statusResp, err := client.GetQRStatus(c.Request.Context(), qrID)
+	statusResp, err := h.qrClient.GetQRStatus(c.Request.Context(), qrID)
 	if err != nil {
 		h.mu.Lock()
 		delete(h.sessions, botUUID)
@@ -316,7 +293,7 @@ func (h *WeChatQRLoginHandler) QRCancel(c *gin.Context) {
 
 // saveCredentials saves the Weixin credentials to the database.
 // If the bot doesn't exist yet (temp UUID), it creates a new record and returns the real UUID.
-func (h *WeChatQRLoginHandler) saveCredentials(session *qrSession, status *qrStatusResponse) (string, error) {
+func (h *WeChatQRLoginHandler) saveCredentials(session *qrSession, status *weixin.QRStatus) (string, error) {
 	authConfig := map[string]string{
 		"token":    status.BotToken,
 		"bot_id":   status.IlinkBotID,
@@ -368,130 +345,6 @@ func (h *WeChatQRLoginHandler) saveCredentials(session *qrSession, status *qrSta
 		"bot_id": status.IlinkBotID,
 	}).Info("Weixin bot created with credentials")
 	return created.UUID, nil
-}
-
-// qrBotQRCodeResponse represents the QR code response from Weixin API
-type qrBotQRCodeResponse struct {
-	Qrcode           string `json:"qrcode,omitempty"`
-	QrcodeImgContent string `json:"qrcode_img_content,omitempty"`
-}
-
-// qrStatusResponse represents the QR status response from Weixin API
-type qrStatusResponse struct {
-	Status      string `json:"status,omitempty"` // wait, scaned, confirmed, expired
-	BotToken    string `json:"bot_token,omitempty"`
-	IlinkBotID  string `json:"ilink_bot_id,omitempty"`
-	IlinkUserID string `json:"ilink_user_id,omitempty"`
-	BaseURL     string `json:"baseurl,omitempty"`
-}
-
-// GetBotQRCode fetches a QR code for Weixin bot login
-func (c *wechatQRClient) GetBotQRCode(ctx context.Context, botType string) (*qrBotQRCodeResponse, error) {
-	if botType == "" {
-		botType = "3" // Default bot type
-	}
-
-	// Build URL with query params (GET request)
-	u, err := url.Parse(c.baseURL + "/ilink/bot/get_bot_qrcode")
-	if err != nil {
-		return nil, fmt.Errorf("parse URL: %w", err)
-	}
-	query := u.Query()
-	query.Set("bot_type", botType)
-	u.RawQuery = query.Encode()
-
-	logrus.Debugf("GetBotQRCode URL: %s", u.String())
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	// Set headers (no Authorization for QR code request)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	// Log response for debugging
-	logrus.Debugf("GetBotQRCode response: %s", string(body))
-
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: %d %s: %s", resp.StatusCode, resp.Status, string(body))
-	}
-
-	// Unmarshal response
-	var result qrBotQRCodeResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// GetQRStatus polls the QR code status
-func (c *wechatQRClient) GetQRStatus(ctx context.Context, qrcode string) (*qrStatusResponse, error) {
-	// Build URL with query params
-	u, err := url.Parse(c.baseURL + "/ilink/bot/get_qrcode_status")
-	if err != nil {
-		return nil, fmt.Errorf("parse URL: %w", err)
-	}
-	query := u.Query()
-	query.Set("qrcode", qrcode)
-	u.RawQuery = query.Encode()
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	// Add required header for QR status polling
-	req.Header.Set("iLink-App-ClientVersion", "1")
-
-	// Send request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		// Timeout is normal, return "wait" status
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return &qrStatusResponse{Status: "wait"}, nil
-		}
-		return nil, fmt.Errorf("send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: %d %s: %s", resp.StatusCode, resp.Status, string(body))
-	}
-
-	// Unmarshal response
-	var result qrStatusResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	return &result, nil
 }
 
 // checkRateLimit checks if the bot has exceeded the QR code request rate limit

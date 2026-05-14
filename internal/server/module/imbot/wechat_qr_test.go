@@ -4,13 +4,12 @@
 package imbot
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/imbot/platform/weixin"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 )
 
@@ -128,45 +127,6 @@ func TestQRStatusResponse_ValidStatuses(t *testing.T) {
 	}
 }
 
-// TestWeChatQRClient_GetBotQRCode tests QR code generation (mock)
-func TestWeChatQRClient_GetBotQRCode(t *testing.T) {
-	client := &wechatQRClient{
-		baseURL: "https://ilinkai.weixin.qq.com",
-	}
-
-	ctx := context.Background()
-	resp, err := client.GetBotQRCode(ctx, "3")
-
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-
-	if resp.Qrcode == "" {
-		t.Error("Expected non-empty QR code")
-	}
-	if resp.QrcodeImgContent == "" {
-		t.Error("Expected non-empty QR image content")
-	}
-}
-
-// TestWeChatQRClient_GetQRStatus tests QR status polling (mock)
-func TestWeChatQRClient_GetQRStatus(t *testing.T) {
-	client := &wechatQRClient{
-		baseURL: "https://ilinkai.weixin.qq.com",
-	}
-
-	ctx := context.Background()
-	resp, err := client.GetQRStatus(ctx, "test-qr-id")
-
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-
-	if resp.Status == "" {
-		t.Error("Expected non-empty status")
-	}
-	// Mock returns "wait"
-	assert.Contains(t, []string{"wait", "scaned", "confirmed", "expired"}, resp.Status)
-}
-
 // TestQRSessionCreation tests QR session creation
 func TestQRSessionCreation(t *testing.T) {
 	session := &qrSession{
@@ -216,7 +176,7 @@ func TestQRSessionExpiration(t *testing.T) {
 
 // TestCredentialMapping tests credential mapping from QR response
 func TestCredentialMapping(t *testing.T) {
-	status := &qrStatusResponse{
+	status := &weixin.QRStatus{
 		Status:      "confirmed",
 		BotToken:    "test-bot-token",
 		IlinkBotID:  "ilink-bot-123",
@@ -271,30 +231,6 @@ func TestJSONSerialization(t *testing.T) {
 	}
 	if decoded.Data.ExpiresIn != startResp.Data.ExpiresIn {
 		t.Errorf("JSON roundtrip failed for ExpiresIn")
-	}
-}
-
-// TestWeChatQRClientBaseURL tests client base URL handling
-func TestWeChatQRClientBaseURL(t *testing.T) {
-	tests := []struct {
-		name     string
-		baseURL  string
-		expected string
-	}{
-		{"Default URL", "https://ilinkai.weixin.qq.com", "https://ilinkai.weixin.qq.com"},
-		{"Custom URL", "https://custom.wechat.com", "https://custom.wechat.com"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := &wechatQRClient{
-				baseURL: tt.baseURL,
-			}
-
-			if client.baseURL != tt.expected {
-				t.Errorf("Expected base URL '%s', got '%s'", tt.expected, client.baseURL)
-			}
-		})
 	}
 }
 
