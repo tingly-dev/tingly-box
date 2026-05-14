@@ -3,8 +3,10 @@ package bot
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
@@ -349,14 +351,16 @@ func TestBriefInputHint_PicksKnownKeys(t *testing.T) {
 	assert.Equal(t, "", briefInputHint(nil))
 	assert.Equal(t, "", briefInputHint(map[string]interface{}{"unrelated": 1}))
 
-	// Long values truncate to <=80 chars with an ellipsis.
-	long := ""
-	for i := 0; i < 100; i++ {
-		long += "x"
-	}
-	got := briefInputHint(map[string]interface{}{"command": long})
-	assert.LessOrEqual(t, len(got), 80)
-	assert.Contains(t, got, "...")
+	// Long ASCII values truncate to <=80 runes with an ellipsis.
+	got := briefInputHint(map[string]interface{}{"command": strings.Repeat("x", 100)})
+	assert.LessOrEqual(t, utf8.RuneCountInString(got), maxToolHintLen)
+	assert.Contains(t, got, "…")
+
+	// Multibyte values truncate on a rune boundary — the result must stay
+	// valid UTF-8, never sliced mid-rune.
+	gotCJK := briefInputHint(map[string]interface{}{"command": strings.Repeat("查", 100)})
+	assert.LessOrEqual(t, utf8.RuneCountInString(gotCJK), maxToolHintLen)
+	assert.True(t, utf8.ValidString(gotCJK), "truncated hint must be valid UTF-8")
 }
 
 func TestIsToolOnlyClaudeMessage(t *testing.T) {

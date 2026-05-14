@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
@@ -231,12 +232,11 @@ func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage)
 	}
 }
 
-// renderToolUseSummary produces a one-line summary of a tool invocation
-// for the main-path handlers (handleAgentMessage / handleAgentbootEvent /
-// handleMapMessage), where the rich claude.TextFormatter isn't available.
-// Output goes into the shared toolBuffer and is rendered the same as
-// handleClaudeMessage renders — verbose joins by newline, quiet collapses
-// to a count + preview.
+// maxToolHintLen bounds the input hint appended to a tool-use render.
+const maxToolHintLen = 80
+
+// renderToolUseSummary produces a one-line summary of a tool invocation for
+// the main-path handlers, which don't carry the rich claude.TextFormatter.
 func renderToolUseSummary(name string, input map[string]interface{}) string {
 	if name == "" {
 		name = "tool"
@@ -254,35 +254,34 @@ func renderToolResultSummary(name string, isError bool) string {
 	if isError {
 		label = "error"
 	}
-	if name == "" {
-		return "↳ " + label
+	if name != "" {
+		label = name + " " + label
 	}
-	return "↳ " + name + " " + label
+	return IconToolResult + " " + label
 }
 
 // briefInputHint picks a short, recognizable string from a tool's input map
-// (file path, command, URL, query) so each buffered tool render carries
-// enough context to be useful in the aggregated message.
+// (file path, command, URL, query). The result is rune-safe truncated so a
+// multibyte path or command can't be sliced mid-rune.
 func briefInputHint(input map[string]interface{}) string {
 	if input == nil {
 		return ""
 	}
 	for _, k := range []string{"command", "file_path", "path", "url", "query"} {
-		if v, ok := input[k].(string); ok && v != "" {
-			const max = 80
-			if len(v) > max {
-				v = v[:max-3] + "..."
-			}
-			return v
+		v, ok := input[k].(string)
+		if !ok || v == "" {
+			continue
 		}
+		if utf8.RuneCountInString(v) > maxToolHintLen {
+			v = string([]rune(v)[:maxToolHintLen-1]) + "…"
+		}
+		return v
 	}
 	return ""
 }
 
-// toolEventFields captures the fields the main-path handlers need from a
-// tool-related event, regardless of source shape (typed AgentMessage, Event,
-// or raw map). Field extraction lives per-source so the shared dispatcher
-// stays format-agnostic.
+// toolEventFields is the source-agnostic shape the main-path handlers feed
+// into bufferToolEvent. Per-source extraction lives in toolFieldsFrom*.
 type toolEventFields struct {
 	Name    string
 	Input   map[string]interface{}
@@ -304,19 +303,25 @@ func toolFieldsFromRaw(raw map[string]interface{}) toolEventFields {
 // toolFieldsFromNestedMap reads tool fields from a map message whose fields
 // may live either at the top level or nested under a "data" sub-object.
 func toolFieldsFromNestedMap(m map[string]interface{}) toolEventFields {
-	name, _ := mapToolName(m)
-	input, _ := mapFieldAsMap(m, "input")
-	isError, _ := mapBoolField(m, "is_error")
+	name, _ := mapNestedField[string](m, "tool_name")
+	input, _ := mapNestedField[map[string]interface{}](m, "input")
+	isError, _ := mapNestedField[bool](m, "is_error")
 	return toolEventFields{Name: name, Input: input, IsError: isError}
 }
 
-// bufferToolEvent appends the right render for a tool_use / tool_result event
-// to the shared tool buffer. Returns true when the event was a tool event and
-// fully handled, so callers can early-return. The caller must hold h.mu.
-//
-// This is the one place all three main-path handlers (AgentMessage / Event /
-// map) agree on: same fields in, same buffer out. Source-specific field
-// extraction stays in the caller via toolFieldsFrom* helpers.
+// assistantTextFromMap resolves assistant text from a map message: a "message"
+// field (top-level or nested under "data") preferred over a top-level "text".
+func assistantTextFromMap(m map[string]interface{}) string {
+	if v, ok := mapNestedField[string](m, "message"); ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	text, _ := m["text"].(string)
+	return text
+}
+
+// bufferToolEvent appends the render for a tool_use / tool_result event to the
+// shared tool buffer. Returns true when the event was a tool event and fully
+// handled, so callers can early-return. The caller must hold h.mu.
 func (h *streamingMessageHandler) bufferToolEvent(eventType string, f toolEventFields) bool {
 	switch eventType {
 	case agentboot.EventTypeToolUse:
@@ -330,9 +335,7 @@ func (h *streamingMessageHandler) bufferToolEvent(eventType string, f toolEventF
 }
 
 // sendText flushes any buffered tool renders and then sends text to the user.
-// No-op when text is effectively empty. Keeps messages the splitting boundary
-// for output — the same invariant handleClaudeMessage relies on. The caller
-// must hold h.mu.
+// No-op when text is effectively empty. The caller must hold h.mu.
 func (h *streamingMessageHandler) sendText(text string) {
 	if strings.TrimSpace(text) == "" {
 		return
@@ -472,11 +475,7 @@ func (h *streamingMessageHandler) handleAgentbootEvent(event agentboot.Event) er
 
 	switch event.Type {
 	case agentboot.EventTypeAssistant:
-		text, _ := event.Data["message"].(string)
-		if strings.TrimSpace(text) == "" {
-			text, _ = event.Data["text"].(string)
-		}
-		h.sendText(text)
+		h.sendText(assistantTextFromMap(event.Data))
 	case agentboot.EventTypePermissionRequest:
 		logrus.WithFields(logrus.Fields{
 			"request_id": event.Data["request_id"],
@@ -525,17 +524,7 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 			}).Info("Permission request received (will be handled by IMPrompter)")
 		}
 	case agentboot.EventTypeAssistant:
-		var text string
-		if data, ok := m["data"].(map[string]interface{}); ok {
-			text, _ = data["message"].(string)
-		}
-		if strings.TrimSpace(text) == "" {
-			text, _ = m["message"].(string)
-		}
-		if strings.TrimSpace(text) == "" {
-			text, _ = m["text"].(string)
-		}
-		h.sendText(text)
+		h.sendText(assistantTextFromMap(m))
 	case agentboot.EventTypeResult:
 		// Flush trailing tool renders before OnComplete's banner.
 		h.flushToolBufferLocked()
@@ -545,40 +534,20 @@ func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) err
 	return nil
 }
 
-func mapToolName(m map[string]interface{}) (string, bool) {
-	if v, ok := m["tool_name"].(string); ok && v != "" {
+// mapNestedField reads a typed field from a map message, looking at the top
+// level first and then under a "data" sub-object. Map messages from different
+// agents put fields at either depth.
+func mapNestedField[T any](m map[string]interface{}, key string) (T, bool) {
+	if v, ok := m[key].(T); ok {
 		return v, true
 	}
 	if data, ok := m["data"].(map[string]interface{}); ok {
-		if v, ok := data["tool_name"].(string); ok && v != "" {
+		if v, ok := data[key].(T); ok {
 			return v, true
 		}
 	}
-	return "", false
-}
-
-func mapBoolField(m map[string]interface{}, key string) (bool, bool) {
-	if v, ok := m[key].(bool); ok {
-		return v, true
-	}
-	if data, ok := m["data"].(map[string]interface{}); ok {
-		if v, ok := data[key].(bool); ok {
-			return v, true
-		}
-	}
-	return false, false
-}
-
-func mapFieldAsMap(m map[string]interface{}, key string) (map[string]interface{}, bool) {
-	if v, ok := m[key].(map[string]interface{}); ok {
-		return v, true
-	}
-	if data, ok := m["data"].(map[string]interface{}); ok {
-		if v, ok := data[key].(map[string]interface{}); ok {
-			return v, true
-		}
-	}
-	return nil, false
+	var zero T
+	return zero, false
 }
 
 // OnError implements agentboot.MessageStreamer
