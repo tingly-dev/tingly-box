@@ -46,6 +46,8 @@ type OpenAIClientInterface interface {
 	Probe(ctx context.Context, model string) ProbeResult
 	ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
 	ProbeResponsesStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
+	ProbeChatEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error)
+	ProbeResponsesEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error)
 
 	// Client returns the underlying OpenAI SDK client (for advanced usage)
 	Client() *openai.Client
@@ -324,7 +326,7 @@ func (c *OpenAIClient) Probe(ctx context.Context, model string) ProbeResult {
 	if c.provider.AuthType == typ.AuthTypeOAuth &&
 		c.provider.OAuthDetail != nil &&
 		c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
-		return c.probeResponsesEndpoint(ctx, model)
+		return c.probeCodexResponsesEndpoint(ctx, model)
 	}
 
 	// Create chat completion request using OpenAI SDK
@@ -380,24 +382,24 @@ func (c *OpenAIClient) Probe(ctx context.Context, model string) ProbeResult {
 	}
 }
 
-// probeStream performs a streaming probe with configurable test mode
-
-// ProbeStream performs a streaming probe with configurable test mode (public interface)
-func (c *OpenAIClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-	return c.probeStream(ctx, model, message, testMode)
-}
-func (c *OpenAIClient) probeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-
-	// Check if this is a Codex OAuth provider
-	if c.provider.AuthType == typ.AuthTypeOAuth &&
-		c.provider.OAuthDetail != nil &&
-		c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
-		return c.ProbeResponsesStream(ctx, model, message, testMode)
+// ProbeChatEndpoint explicitly probes the Chat Completions endpoint.
+func (c *OpenAIClient) ProbeChatEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error) {
+	message := opts.Message
+	if message == "" {
+		message = "Hi"
 	}
+	mode := opts.Mode
+	if mode == "" {
+		mode = ProbeModeSimple
+	}
+	if opts.Stream {
+		mode = ProbeModeStreaming
+	}
+	return c.probeChatEndpoint(ctx, model, message, mode, opts.Stream)
+}
 
+func (c *OpenAIClient) probeChatEndpoint(ctx context.Context, model, message string, testMode ProbeMode, forceStream bool) (*ProbeResult, error) {
 	startTime := time.Now()
-
-	// Build request based on test mode
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage("work as `echo` if possible"),
 		openai.UserMessage(message),
@@ -407,7 +409,6 @@ func (c *OpenAIClient) probeStream(ctx context.Context, model, message string, t
 		Model:    model,
 		Messages: messages,
 	}
-
 	if testMode == ProbeModeTool {
 		params.Tools = GetProbeToolsOpenAI()
 		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{
@@ -415,18 +416,15 @@ func (c *OpenAIClient) probeStream(ctx context.Context, model, message string, t
 		}
 	}
 
-	// For simple mode, use non-streaming request
-	if testMode == ProbeModeSimple {
+	if !forceStream && testMode == ProbeModeSimple {
 		resp, err := c.client.Chat.Completions.New(ctx, params)
 		if err != nil {
 			return nil, err
 		}
-
 		respJSON, _ := json.Marshal(resp)
 		return ToProbeResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/chat/completions", false), nil
 	}
 
-	// For streaming and tool modes, use streaming
 	stream := c.client.Chat.Completions.NewStreaming(ctx, params)
 	defer stream.Close()
 
@@ -434,19 +432,28 @@ func (c *OpenAIClient) probeStream(ctx context.Context, model, message string, t
 	for stream.Next() {
 		chunks = append(chunks, stream.Current())
 	}
-
 	if err := stream.Err(); err != nil {
 		return nil, err
 	}
-
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/chat/completions", true), nil
 }
 
-// ProbeResponsesStream performs a streaming probe using Responses API (for Codex)
-func (c *OpenAIClient) ProbeResponsesStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-	startTime := time.Now()
+// ProbeResponsesEndpoint explicitly probes the Responses API endpoint.
+func (c *OpenAIClient) ProbeResponsesEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error) {
+	message := opts.Message
+	if message == "" {
+		message = "Hi"
+	}
+	mode := opts.Mode
+	if mode == "" {
+		mode = ProbeModeSimple
+	}
+	return c.probeResponsesEndpoint(ctx, model, message, mode, opts.Stream)
+}
 
+func (c *OpenAIClient) probeResponsesEndpoint(ctx context.Context, model, message string, testMode ProbeMode, stream bool) (*ProbeResult, error) {
+	startTime := time.Now()
 	params := responses.ResponseNewParams{
 		Model:        model,
 		Instructions: param.NewOpt("work as `echo` if possible"),
@@ -461,7 +468,6 @@ func (c *OpenAIClient) ProbeResponsesStream(ctx context.Context, model, message 
 			},
 		},
 	}
-
 	if testMode == ProbeModeTool {
 		params.Tools = GetProbeToolsResponses()
 		params.ToolChoice = responses.ResponseNewParamsToolChoiceUnion{
@@ -469,20 +475,45 @@ func (c *OpenAIClient) ProbeResponsesStream(ctx context.Context, model, message 
 		}
 	}
 
-	stream := c.ResponsesNewStreaming(ctx, params)
-	defer stream.Close()
+	if !stream {
+		resp, err := c.ResponsesNew(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		respJSON, _ := json.Marshal(resp)
+		return ToProbeResult(string(respJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/responses", false), nil
+	}
+
+	streamResp := c.ResponsesNewStreaming(ctx, params)
+	defer streamResp.Close()
 
 	var chunks []interface{}
-	for stream.Next() {
-		chunks = append(chunks, stream.Current())
+	for streamResp.Next() {
+		chunks = append(chunks, streamResp.Current())
 	}
-
-	if err := stream.Err(); err != nil {
+	if err := streamResp.Err(); err != nil {
 		return nil, err
 	}
-
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/responses", true), nil
+}
+
+// probeStream performs a streaming probe with configurable test mode
+
+// ProbeStream performs a streaming probe with configurable test mode (public interface)
+func (c *OpenAIClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	// Keep legacy Codex behavior. Non-Codex legacy probes target Chat explicitly.
+	if c.provider.AuthType == typ.AuthTypeOAuth &&
+		c.provider.OAuthDetail != nil &&
+		c.provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
+		return c.ProbeResponsesStream(ctx, model, message, testMode)
+	}
+	return c.probeChatEndpoint(ctx, model, message, testMode, testMode != ProbeModeSimple)
+}
+
+// ProbeResponsesStream performs a streaming probe using Responses API (for Codex)
+func (c *OpenAIClient) ProbeResponsesStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
+	return c.probeResponsesEndpoint(ctx, model, message, testMode, true)
 }
 
 // ProbeModelsEndpoint tests the models list endpoint
@@ -570,7 +601,7 @@ func (c *OpenAIClient) ProbeOptionsEndpoint(ctx context.Context) ProbeResult {
 }
 
 // probeResponsesEndpoint tests the Responses API (for Codex OAuth providers)
-func (c *OpenAIClient) probeResponsesEndpoint(ctx context.Context, model string) ProbeResult {
+func (c *OpenAIClient) probeCodexResponsesEndpoint(ctx context.Context, model string) ProbeResult {
 	startTime := time.Now()
 
 	// Build ChatGPT backend API request format

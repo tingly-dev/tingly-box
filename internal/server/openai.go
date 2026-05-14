@@ -280,12 +280,18 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		prefer := s.GetPreferredEndpointForModel(provider, actualModel)
-		if prefer == "responses" {
-			target = protocol.TypeOpenAIResponses
-		} else {
-			target = protocol.TypeOpenAIChat
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIChat, isStreaming, nil)
+		if routeErr != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: routeErr.Error(),
+					Type:    "invalid_request_error",
+					Code:    "unsupported_endpoint",
+				},
+			})
+			return
 		}
+		target = selection.Target
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
