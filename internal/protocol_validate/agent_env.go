@@ -13,6 +13,7 @@ import (
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server_validate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
 // AgentType represents the type of agent Agent to test
@@ -367,6 +368,72 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 		return fmt.Errorf("update rule: %w", err)
 	}
 
+	return nil
+}
+
+// SetupVModelAgent configures the environment so the agent's built-in rule
+// routes to a seeded builtin virtual-model provider.
+//
+// Unlike SetupAgent (external VirtualServer mock) and SetupRealAgent (real
+// upstream), this exercises the in-process vmodel dispatch path:
+//
+//	gateway → built-in-<agent> rule → vmodel builtin provider
+//	        → provider.IsVirtual() short-circuit → in-process vmodel handler
+//
+// The builtin vmodel providers are seeded into the provider store by
+// server.NewServer, so no provider is added here — only the rule is repointed.
+//
+// vmodelID must be a model registered in the vmodel registry for the agent's
+// protocol (e.g. "virtual-claude-3", "echo-model" for Anthropic-style agents).
+func (env *AgentTestEnv) SetupVModelAgent(AgentType AgentType, vmodelID string) error {
+	var providerUUID string
+	switch AgentType {
+	case AgentTypeClaudeCode, AgentTypeOpenCode:
+		providerUUID = virtualserver.BuiltinAnthropicUUID
+	case AgentTypeCodex:
+		providerUUID = virtualserver.BuiltinOpenAIUUID
+	default:
+		return fmt.Errorf("unknown Agent type: %s", AgentType)
+	}
+
+	cfg := env.appConfig.GetGlobalConfig()
+	if _, err := cfg.GetProviderByUUID(providerUUID); err != nil {
+		return fmt.Errorf("builtin vmodel provider %q not seeded: %w", providerUUID, err)
+	}
+
+	var builtinUUID, requestModel string
+	switch AgentType {
+	case AgentTypeClaudeCode:
+		builtinUUID, requestModel = "built-in-cc", "tingly/cc"
+	case AgentTypeCodex:
+		builtinUUID, requestModel = "built-in-codex", "tingly-codex"
+	case AgentTypeOpenCode:
+		builtinUUID, requestModel = "built-in-opencode", "tingly-opencode"
+	}
+
+	rule := typ.Rule{
+		UUID:          builtinUUID,
+		Scenario:      AgentType.Scenario(),
+		RequestModel:  requestModel,
+		ResponseModel: vmodelID,
+		Services: []*loadbalance.Service{
+			{
+				Provider: providerUUID,
+				Model:    vmodelID,
+				Weight:   1,
+				Active:   true,
+			},
+		},
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticRandom,
+			Params: typ.DefaultRandomParams(),
+		},
+		Active: true,
+	}
+
+	if err := cfg.UpdateRequestConfigByUUID(builtinUUID, rule); err != nil {
+		return fmt.Errorf("update rule: %w", err)
+	}
 	return nil
 }
 
