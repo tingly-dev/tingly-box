@@ -1,16 +1,7 @@
 # Rule Flags 设计与实操
 
 > 适用对象：tingly-box 后端 / 前端贡献者。
-> 本文档描述**当前**的 rule flag 系统，按"现在是怎样"来读，不是"演变到这里"。
-
-## 历史（仅留索引，不再溯源叙述）
-
-- 2026-05 引入 registry，把原本零散的 2 个布尔 flag 升级为 catalog 化扩展系统。
-- 2026-05 把 `max_tokens` / `max_completion_tokens` 字段重写从 handler 层
-  pre-chain mutation 改为 post-base Transform 链路阶段；新增反向
-  `use_max_tokens`；删除路由图齿轮菜单中的 Cursor 专用入口。
-- 2026-05 将上述 Transform 从 `internal/server/` 迁回 `internal/protocol/transform/`
-  （它只依赖协议层类型）。
+> 本文档描述**当前**的 rule flag 系统的最终设计与实操。
 
 ---
 
