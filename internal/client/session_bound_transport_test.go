@@ -517,8 +517,9 @@ func TestCreateSessionBoundTransport(t *testing.T) {
 	}
 }
 
-// TestCreateSessionBoundTransport_Antigravity tests Antigravity provider
-// which has special wrapping requirements.
+// TestCreateSessionBoundTransport_Antigravity verifies that the transport
+// layer stays generic for Antigravity — provider-specific request/response
+// transformation lives in AntigravityClient, not in createSessionBoundTransport.
 func TestCreateSessionBoundTransport_Antigravity(t *testing.T) {
 	provider := &typ.Provider{
 		UUID:     "test-provider-antigravity",
@@ -536,20 +537,15 @@ func TestCreateSessionBoundTransport_Antigravity(t *testing.T) {
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "antigravity-test"}
 
 	transport := createSessionBoundTransport(provider, sessionID)
-
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-
-	// Should be antigravityRoundTripper wrapping SessionBoundTransport
-	if _, ok := transport.(*antigravityRoundTripper); !ok {
-		t.Error("Expected antigravityRoundTripper for Antigravity provider")
+	if _, ok := transport.(*SessionBoundTransport); !ok {
+		t.Errorf("Expected bare SessionBoundTransport (Code Assist envelope is applied by AntigravityClient), got %T", transport)
 	}
 }
 
-// TestCreateSessionBoundTransport_Gemini tests Gemini CLI provider which is
-// wrapped by geminiRoundTripper so requests get routed through the Code Assist
-// API envelope (URL rewrite, project_id wrapping, Bearer auth).
+// TestCreateSessionBoundTransport_Gemini is the symmetric check for Gemini.
 func TestCreateSessionBoundTransport_Gemini(t *testing.T) {
 	provider := &typ.Provider{
 		UUID:     "test-provider-gemini",
@@ -567,22 +563,17 @@ func TestCreateSessionBoundTransport_Gemini(t *testing.T) {
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "gemini-test"}
 
 	transport := createSessionBoundTransport(provider, sessionID)
-
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-
-	rt, ok := transport.(*geminiRoundTripper)
-	if !ok {
-		t.Fatalf("Expected geminiRoundTripper for Gemini provider, got %T", transport)
-	}
-	if rt.project != "test-project" {
-		t.Errorf("Expected project_id propagated to geminiRoundTripper, got %q", rt.project)
+	if _, ok := transport.(*SessionBoundTransport); !ok {
+		t.Errorf("Expected bare SessionBoundTransport (Code Assist envelope is applied by GeminiClient), got %T", transport)
 	}
 }
 
-// TestCreateSessionBoundTransport_Codex tests Codex provider
-// which uses codexRoundTripper for response transformation.
+// TestCreateSessionBoundTransport_Codex verifies that the transport layer
+// stays generic for Codex too — codexRoundTripper is layered on top by
+// NewCodexClient, not by createSessionBoundTransport.
 func TestCreateSessionBoundTransport_Codex(t *testing.T) {
 	provider := &typ.Provider{
 		UUID:     "test-provider-codex",
@@ -597,14 +588,11 @@ func TestCreateSessionBoundTransport_Codex(t *testing.T) {
 	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "codex-test"}
 
 	transport := createSessionBoundTransport(provider, sessionID)
-
 	if transport == nil {
 		t.Fatal("Expected non-nil transport")
 	}
-
-	// Should be codexRoundTripper wrapping SessionBoundTransport
-	if _, ok := transport.(*codexRoundTripper); !ok {
-		t.Error("Expected codexRoundTripper for Codex provider")
+	if _, ok := transport.(*SessionBoundTransport); !ok {
+		t.Errorf("Expected bare SessionBoundTransport (codex envelope is applied by CodexClient), got %T", transport)
 	}
 }
 

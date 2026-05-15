@@ -139,12 +139,14 @@ func (p *ClientPool) GetAnthropicClient(ctx context.Context, provider *typ.Provi
 }
 
 // GetGoogleClient returns a Google client wrapper for the specified provider.
+// For Gemini CLI / Antigravity OAuth providers it dispatches to the dedicated
+// xxx_client constructors, which layer the Code Assist envelope transport.
 // sessionID is resolved from ctx via typ.GetSessionID; pass context.Background() when no session is available.
 func (p *ClientPool) GetGoogleClient(ctx context.Context, provider *typ.Provider, model string) *GoogleClient {
 	sessionID := typ.GetSessionID(ctx)
 	logrus.Debugf("Creating Google client for provider: %s, session: %s", provider.Name, sessionID.Value)
 
-	client, err := NewGoogleClient(provider, model, sessionID)
+	client, err := newGoogleClientForProvider(provider, model, sessionID)
 	if err != nil {
 		logrus.Errorf("Failed to create Google client for provider %s: %v", provider.Name, err)
 		return nil
@@ -163,6 +165,30 @@ func (p *ClientPool) GetGoogleClient(ctx context.Context, provider *typ.Provider
 	})
 
 	return client
+}
+
+// newGoogleClientForProvider selects the right Google-flavored constructor
+// based on the provider's OAuth issuer. Returns *GoogleClient so existing
+// forwarding code keeps working unchanged — the provider-specific transport
+// is already baked into the embedded client.
+func newGoogleClientForProvider(provider *typ.Provider, model string, sessionID typ.SessionID) (*GoogleClient, error) {
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
+		switch provider.OAuthDetail.GetIssuer() {
+		case ai.IssuerGemini:
+			c, err := NewGeminiClient(provider, model, sessionID)
+			if err != nil {
+				return nil, err
+			}
+			return c.GoogleClient, nil
+		case ai.IssuerAntigravity:
+			c, err := NewAntigravityClient(provider, model, sessionID)
+			if err != nil {
+				return nil, err
+			}
+			return c.GoogleClient, nil
+		}
+	}
+	return NewGoogleClient(provider, model, sessionID)
 }
 
 // SetRecordSink sets the record sink for the client pool.

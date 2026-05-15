@@ -26,13 +26,16 @@ type GoogleClient struct {
 	recordSink *obs.Sink
 }
 
-// NewGoogleClient creates a new Google client wrapper
-// sessionID is used for session-scoped transport creation for OAuth providers
+// NewGoogleClient creates a new Google client wrapper.
+// sessionID is used for session-scoped transport creation for OAuth providers.
+//
+// For provider-specific wire formats (Gemini CLI / Antigravity Code Assist
+// envelope), prefer the dedicated *Client constructors (NewGeminiClient,
+// NewAntigravityClient) — they layer the right round tripper on top of the
+// session-bound transport. NewGoogleClient itself stays generic.
 func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.SessionID) (*GoogleClient, error) {
-	// Create HTTP client with session-bound transport
 	var transport http.RoundTripper
 	if provider.AuthType == typ.AuthTypeOAuth || provider.ProxyURL != "" {
-		// Use createSessionBoundTransport which applies OAuth hooks and uses shared transport
 		transport = createSessionBoundTransport(provider, sessionID)
 
 		issuer := ""
@@ -49,11 +52,14 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 		transport = http.DefaultTransport
 	}
 
-	httpClient := &http.Client{
-		Transport: transport,
-	}
+	httpClient := &http.Client{Transport: transport}
+	return newGoogleClientFromHTTPClient(provider, httpClient)
+}
 
-	// Create Google client config
+// newGoogleClientFromHTTPClient builds a GoogleClient around an already-configured
+// http.Client. Provider-specific clients (Gemini, Antigravity) use this to
+// inject their round tripper without going through the generic transport path.
+func newGoogleClientFromHTTPClient(provider *typ.Provider, httpClient *http.Client) (*GoogleClient, error) {
 	httpOptions := genai.HTTPOptions{
 		BaseURL: provider.APIBase,
 	}
@@ -64,7 +70,6 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 		HTTPClient:  httpClient,
 	}
 
-	// Create Google client (requires context)
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, config)
 	if err != nil {
