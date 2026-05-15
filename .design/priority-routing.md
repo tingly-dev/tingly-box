@@ -97,6 +97,90 @@ admits one probe naturally. Active probing was considered and rejected
 for v1 — for hot rules it's redundant, and for cold rules there is no
 one to serve anyway.
 
+### End-to-end flow: how the tactic switch actually takes effect
+
+The "user clicks a number on a service node" event has to cross five
+layers before it changes how the next API request is routed. Each layer
+is wired explicitly:
+
+```
+┌─ Frontend ───────────────────────────────────────────────────────────┐
+│  PriorityBadge click → handleProviderPriorityChange                   │
+│       ↓                                                               │
+│  updateField('providers', updated)  ← service gets priority: 10       │
+│       ↓                                                               │
+│  autoSave → pickLbTactic(record)                                      │
+│             returns { type: 'priority',                               │
+│                       params: { within_tier_tactic: 'random' } }      │
+│             whenever any service has priority > 0                     │
+│       ↓                                                               │
+│  POST /api/v1/rule/:uuid  with body containing lb_tactic              │
+└──────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌─ Backend deserialize ────────────────────────────────────────────────┐
+│  rule/handler.go: ShouldBindJSON(&rule)                               │
+│       ↓                                                               │
+│  typ.Tactic.UnmarshalJSON (tactics.go):                               │
+│    – TacticType.UnmarshalJSON parses "priority" → TacticPriority      │
+│    – switch on tc.Type allocates tc.Params = &PriorityParams{}        │
+│    – aux.Params (raw bytes) unmarshalled into the PriorityParams     │
+│       ↓                                                               │
+│  config.UpdateRule(uid, rule)  → persisted to SQLite                  │
+└──────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌─ Backend runtime: every LLM request ─────────────────────────────────┐
+│  anthropic.go / openai.go / openai_responses.go / ... :               │
+│       routingSelector.SelectService(c, scenario, rule, req)           │
+│       ↓                                                               │
+│  routing.SimpleSelector → ServiceSelector pipeline →                  │
+│       LoadBalancerStage.Evaluate  (or SmartRoutingStage when matched) │
+│       ↓                                                               │
+│  Both stages call:                                                    │
+│       lb.SelectService(&tempRule)        (load_balancer.go:55)        │
+│       ↓                                                               │
+│  load_balancer.go:92                                                  │
+│       actualTactic := rule.LBTactic.Instantiate()                     │
+│       ↓                                                               │
+│  typ.Tactic.Instantiate → CreateTacticWithTypedParams(type, params)   │
+│       case TacticPriority → NewPriorityTactic(pp.WithinTierTactic)    │
+│       ↓                                                               │
+│  load_balancer.go:111                                                 │
+│       actualTactic.SelectService(tempRule)                            │
+│       ↓                                                               │
+│  PriorityTactic.SelectService:                                        │
+│    – groupServicesByPriority(active) — descending, 0 last             │
+│    – for each bucket: collect svc where DefaultBreakerStore.Allow()   │
+│    – first non-empty bucket → pickWithinTier(sub-tactic)              │
+└──────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌─ Per-request feedback into the breaker ──────────────────────────────┐
+│  Dispatch finishes → ProtocolRecorder:                                │
+│       RecordResponse → loadbalance.RecordServiceSuccess(serviceID)    │
+│       RecordError    → loadbalance.RecordServiceFailure(serviceID)    │
+│  Same DefaultBreakerStore the selection logic consulted, so the next  │
+│  request's PriorityTactic sees the updated state.                     │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+The single transformation point that turns the JSON payload into live
+runtime behaviour is `Tactic.Instantiate()` at
+`internal/server/load_balancer.go:92`. Every dispatch path — Anthropic
+v1/Beta, OpenAI Chat/Responses/Embeddings/Images, Google, smart routing
+matches — funnels through `LoadBalancer.SelectService`, so the tactic
+switch is enforced uniformly with no per-protocol changes required.
+
+This is pinned down by `TestPriorityRouting_EndToEnd` in
+`internal/server/priority_routing_e2e_test.go`, which:
+
+1. Unmarshals a Rule JSON with `lb_tactic.type = "priority"`,
+2. Asserts `LBTactic.Params` is a `*PriorityParams` after decode,
+3. Calls `LoadBalancer.SelectService` and asserts the high-priority
+   service is picked,
+4. Trips the breaker via `DefaultBreakerStore.RecordFailure` exactly
+   as the recorder does,
+5. Asserts the next pick falls back,
+6. Records a success and asserts the pick returns to the primary.
+
 ### Wiring failures to the breaker
 
 `ProtocolRecorder` already sees every success and failure of every
