@@ -175,6 +175,10 @@ type RuleFlags struct {
 	// UseMaxCompletionTokens rewrites the `max_tokens` request field to `max_completion_tokens`
 	// (OpenAI's newer field name for o1/o3/gpt-5 family models).
 	UseMaxCompletionTokens bool `json:"use_max_completion_tokens,omitempty" yaml:"use_max_completion_tokens,omitempty"`
+
+	// UseMaxTokens rewrites the `max_completion_tokens` request field back to the legacy
+	// `max_tokens` field. Use this for providers or models that reject `max_completion_tokens`.
+	UseMaxTokens bool `json:"use_max_tokens,omitempty" yaml:"use_max_tokens,omitempty"`
 }
 
 // ProfileMeta stores metadata for a scenario profile.

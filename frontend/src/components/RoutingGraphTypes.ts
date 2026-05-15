@@ -50,6 +50,7 @@ export interface RuleFlags {
     skipUsage?: boolean;
     customUserAgent?: string;
     useMaxCompletionTokens?: boolean;
+    useMaxTokens?: boolean;
 }
 
 export interface RuleFlagsApi {
@@ -58,6 +59,7 @@ export interface RuleFlagsApi {
     skip_usage?: boolean;
     custom_user_agent?: string;
     use_max_completion_tokens?: boolean;
+    use_max_tokens?: boolean;
 }
 
 export type FlagValueType = 'bool' | 'string';

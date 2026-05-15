@@ -28,6 +28,20 @@ func applyMaxCompletionTokensRewrite(req *openai.ChatCompletionNewParams) {
 	}
 }
 
+// applyMaxTokensRewrite moves the value of `max_completion_tokens` back into
+// the legacy `max_tokens` field. Some providers and older model endpoints
+// reject the newer field name; this rewrite lets callers force the legacy
+// field per rule.
+func applyMaxTokensRewrite(req *openai.ChatCompletionNewParams) {
+	if req == nil {
+		return
+	}
+	if req.MaxCompletionTokens.Valid() {
+		req.MaxTokens = param.NewOpt(req.MaxCompletionTokens.Value)
+		req.MaxCompletionTokens = param.Opt[int64]{}
+	}
+}
+
 // shouldStripUsage merges the cursor_compat and skip_usage hints carried in
 // reqCtx.Extra. The dispatch layer ORs both together so a rule that only
 // flips skip_usage still strips the usage block, and cursor_compat keeps its

@@ -70,6 +70,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             skipUsage: rule.flags?.skip_usage || false,
             customUserAgent: rule.flags?.custom_user_agent || '',
             useMaxCompletionTokens: rule.flags?.use_max_completion_tokens || false,
+            useMaxTokens: rule.flags?.use_max_tokens || false,
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -160,6 +161,7 @@ interface ExportRule {
         skip_usage?: boolean;
         custom_user_agent?: string;
         use_max_completion_tokens?: boolean;
+        use_max_tokens?: boolean;
     };
     smart_enabled?: boolean;
     smart_routing: any[];
@@ -195,6 +197,7 @@ export function formatRuleFlags(flags?: RuleFlags): string {
     if (flags.cursorCompatAuto) entries.push('cursor_compat_auto=true');
     if (flags.skipUsage) entries.push('skip_usage=true');
     if (flags.useMaxCompletionTokens) entries.push('use_max_completion_tokens=true');
+    if (flags.useMaxTokens) entries.push('use_max_tokens=true');
     if (flags.customUserAgent) entries.push(`custom_user_agent=${flags.customUserAgent}`);
     return entries.join(',');
 }
@@ -208,6 +211,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         skipUsage: false,
         customUserAgent: '',
         useMaxCompletionTokens: false,
+        useMaxTokens: false,
     };
 
     const trimmed = input.trim();
@@ -259,6 +263,9 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             case 'use_max_completion_tokens':
                 flags.useMaxCompletionTokens = parsedValue;
                 break;
+            case 'use_max_tokens':
+                flags.useMaxTokens = parsedValue;
+                break;
             default:
                 return { flags, error: `Unknown flag "${rawKey}".` };
         }
@@ -275,6 +282,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.cursorCompatAuto) n++;
     if (flags.skipUsage) n++;
     if (flags.useMaxCompletionTokens) n++;
+    if (flags.useMaxTokens) n++;
     if (flags.customUserAgent && flags.customUserAgent.trim() !== '') n++;
     return n;
 }

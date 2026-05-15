@@ -62,6 +62,13 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryRequest,
 		},
 		{
+			Key:         "use_max_tokens",
+			Label:       "Use max_tokens (legacy)",
+			Description: "Rewrite request field `max_completion_tokens` back to the legacy `max_tokens`. Use for providers that reject the newer field name.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryRequest,
+		},
+		{
 			Key:         "custom_user_agent",
 			Label:       "Custom User-Agent",
 			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent.",
