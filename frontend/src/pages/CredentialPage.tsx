@@ -92,6 +92,7 @@ const CredentialPage = () => {
                     enabled: true,
                     noKeyRequired: false,
                     proxyUrl: '',
+                    userAgent: '',
                     createFusionProvider: false,
                 } as any);
                 setApiKeyDialogOpen(true);
@@ -125,6 +126,7 @@ const CredentialPage = () => {
             enabled: true,
             noKeyRequired: false,
             proxyUrl: '',
+            userAgent: '',
             createFusionProvider: false,
         } as any);
         setApiKeyDialogOpen(true);
@@ -178,6 +180,7 @@ const CredentialPage = () => {
                 no_key_required: (providerFormData as any).noKeyRequired || false,
                 enabled: true,
                 proxy_url: (providerFormData as any).proxyUrl ?? '',
+                user_agent: (providerFormData as any).userAgent ?? '',
                 auth_type: 'api_key',
             };
         }
@@ -190,6 +193,7 @@ const CredentialPage = () => {
                 no_key_required: (providerFormData as any).noKeyRequired || false,
                 enabled: true,
                 proxy_url: (providerFormData as any).proxyUrl ?? '',
+                user_agent: (providerFormData as any).userAgent ?? '',
                 auth_type: 'api_key',
             };
             return [
@@ -218,6 +222,7 @@ const CredentialPage = () => {
             no_key_required: (providerFormData as any).noKeyRequired || false,
             enabled: true,
             proxy_url: (providerFormData as any).proxyUrl ?? '',
+            user_agent: (providerFormData as any).userAgent ?? '',
             auth_type: 'api_key',
         };
     };
@@ -234,6 +239,7 @@ const CredentialPage = () => {
             no_key_required: (providerFormData as any).noKeyRequired || false,
             enabled: providerFormData.enabled,
             proxy_url: (providerFormData as any).proxyUrl ?? '',
+            user_agent: (providerFormData as any).userAgent ?? '',
         };
         if (enableFusion) {
             base.api_base_openai = (providerFormData as any).apiBaseOpenAI ?? '';
@@ -356,6 +362,7 @@ const CredentialPage = () => {
                     enabled: provider.enabled,
                     noKeyRequired: provider.no_key_required || false,
                     proxyUrl: provider.proxy_url || '',
+                    userAgent: (provider as any).user_agent || '',
                     authType: provider.auth_type || 'api_key',
                 } as any);
                 setApiKeyDialogOpen(true);

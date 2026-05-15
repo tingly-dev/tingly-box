@@ -13,6 +13,33 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// userAgentRoundTripper forces the outbound User-Agent header to a fixed
+// value. It is layered as the INNERMOST wrapper (closer to the network) so it
+// takes precedence over any provider-specific UA set by outer round trippers
+// (claudeRoundTripper, antigravityRoundTripper, codexRoundTripper, etc.) that
+// rewrite headers before delegating downstream.
+type userAgentRoundTripper struct {
+	http.RoundTripper
+	userAgent string
+}
+
+func (t *userAgentRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.userAgent != "" {
+		req.Header.Set("User-Agent", t.userAgent)
+	}
+	return t.RoundTripper.RoundTrip(req)
+}
+
+// wrapWithUserAgent wraps a transport with a User-Agent override when the
+// provider has a custom UA configured. Returns the original transport unchanged
+// when no override is set.
+func wrapWithUserAgent(inner http.RoundTripper, provider *typ.Provider) http.RoundTripper {
+	if provider == nil || provider.UserAgent == "" {
+		return inner
+	}
+	return &userAgentRoundTripper{RoundTripper: inner, userAgent: provider.UserAgent}
+}
+
 // CreateHTTPClientWithProxy creates an HTTP client with proxy support.
 // Supports http(s) and socks5 proxy URLs; falls back to http.DefaultClient
 // for any parse/scheme failure (logged).
@@ -126,6 +153,10 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 // adapters (Code Assist envelope, ChatGPT backend translation, etc.) live in
 // their dedicated xxx_client.go files and layer their RoundTripper on top of
 // what this returns.
+//
+// A custom User-Agent override (provider.UserAgent) is layered here at the
+// innermost position so it wins against any outer adapter that rewrites
+// headers before delegating downstream.
 func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID) http.RoundTripper {
 	var issuer ai.Issuer
 	if provider.OAuthDetail != nil {
@@ -136,11 +167,13 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 		logrus.Debugf("Using proxy for provider %s: %s", provider.UUID, provider.ProxyURL)
 	}
 
-	return &SessionBoundTransport{
+	base := &SessionBoundTransport{
 		transportPool: GetGlobalTransportPool(),
 		providerUUID:  provider.UUID,
 		proxyURL:      provider.ProxyURL,
 		issuer:        issuer,
 		sessionID:     sessionID,
 	}
+
+	return wrapWithUserAgent(base, provider)
 }

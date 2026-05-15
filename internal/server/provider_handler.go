@@ -27,6 +27,7 @@ func maskProviderForResponse(provider *typ.Provider) ProviderResponse {
 		NoKeyRequired:    provider.NoKeyRequired,
 		Enabled:          provider.Enabled,
 		ProxyURL:         provider.ProxyURL,
+		UserAgent:        provider.UserAgent,
 		AuthType:         string(provider.AuthType),
 		Source:           string(provider.Source),
 	}
@@ -186,6 +187,7 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		NoKeyRequired:    req.NoKeyRequired,
 		Enabled:          true, // always make new provider enabled
 		ProxyURL:         req.ProxyURL,
+		UserAgent:        req.UserAgent,
 		AuthType:         typ.AuthType(req.AuthType),
 		Timeout:          constant.DefaultRequestTimeout,
 	}
@@ -364,6 +366,9 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 	if req.ProxyURL != nil {
 		provider.ProxyURL = *req.ProxyURL
+	}
+	if req.UserAgent != nil {
+		provider.UserAgent = *req.UserAgent
 	}
 
 	// Fusion-mode constraints: dual base URLs are only valid for api_key auth,
