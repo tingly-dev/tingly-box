@@ -9,8 +9,10 @@ import (
 // append to the protocol chain. Returns nil when no rule-level flag requires
 // a chain stage so callers can pass the result straight to a variadic
 // `extraTransforms ...transform.Transform` parameter.
-func ruleExtraTransforms(rule *typ.Rule) []transform.Transform {
-	flags := resolveRuleFlags(rule)
+//
+// Takes already-resolved flags so callers that need other fields off
+// RuleFlags (CustomUserAgent, SkipUsage) can resolve once and share.
+func ruleExtraTransforms(flags typ.RuleFlags) []transform.Transform {
 	var extras []transform.Transform
 	if flags.UseMaxCompletionTokens || flags.UseMaxTokens {
 		extras = append(extras, NewOpenAIMaxTokensRewriteTransform(

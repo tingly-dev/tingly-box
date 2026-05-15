@@ -8,6 +8,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// appendExtraTransforms tacks rule-driven post-base transforms onto a chain
+// built by BuildTransformChain. Kept rule-agnostic — the caller decides what
+// to append.
+func appendExtraTransforms(chain *transform.TransformChain, extras []transform.Transform) {
+	for _, t := range extras {
+		chain.Add(t)
+	}
+}
+
 func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
 
 	// Build transform chain with recording support
@@ -15,9 +24,7 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range extraTransforms {
-		chain.Add(t)
-	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -86,9 +93,7 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range extraTransforms {
-		chain.Add(t)
-	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -154,9 +159,7 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range extraTransforms {
-		chain.Add(t)
-	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -211,9 +214,7 @@ func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseC
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range extraTransforms {
-		chain.Add(t)
-	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags

@@ -84,3 +84,48 @@ func TestShouldStripUsage_NonBoolValueIgnored(t *testing.T) {
 		t.Errorf("non-bool values should be treated as false, not strip")
 	}
 }
+
+func TestRuleExtraTransforms_NoFlags(t *testing.T) {
+	got := ruleExtraTransforms(typ.RuleFlags{})
+	if got != nil {
+		t.Errorf("expected nil for zero-value flags, got %d transforms", len(got))
+	}
+}
+
+func TestRuleExtraTransforms_UseMaxCompletionTokens(t *testing.T) {
+	got := ruleExtraTransforms(typ.RuleFlags{UseMaxCompletionTokens: true})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 transform, got %d", len(got))
+	}
+	tf, ok := got[0].(*OpenAIMaxTokensRewriteTransform)
+	if !ok {
+		t.Fatalf("expected *OpenAIMaxTokensRewriteTransform, got %T", got[0])
+	}
+	if !tf.UseMaxCompletionTokens || tf.UseMaxTokens {
+		t.Errorf("flag values not propagated: %#v", tf)
+	}
+}
+
+func TestRuleExtraTransforms_UseMaxTokens(t *testing.T) {
+	got := ruleExtraTransforms(typ.RuleFlags{UseMaxTokens: true})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 transform, got %d", len(got))
+	}
+	tf := got[0].(*OpenAIMaxTokensRewriteTransform)
+	if tf.UseMaxCompletionTokens || !tf.UseMaxTokens {
+		t.Errorf("flag values not propagated: %#v", tf)
+	}
+}
+
+func TestRuleExtraTransforms_OtherFlagsAlone_NoTransform(t *testing.T) {
+	// Flags that have their own injection paths (UA via context, skip_usage
+	// via Extra) shouldn't surface here.
+	got := ruleExtraTransforms(typ.RuleFlags{
+		CursorCompat:    true,
+		SkipUsage:       true,
+		CustomUserAgent: "Foo/1.0",
+	})
+	if got != nil {
+		t.Errorf("expected nil, got %d transforms", len(got))
+	}
+}
