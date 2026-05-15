@@ -36,6 +36,7 @@ export default {
     "nav": {
       "home": "智能应用",
       "settings": "设置",
+      // Scenario names intentionally kept in English — do not translate.
       "useOpenAI": "OpenAI SDK",
       "useAnthropic": "Anthropic SDK",
       "useCodex": "Codex",
@@ -878,6 +879,7 @@ export default {
     "showInSidebar": "在侧边栏显示",
     "hidden": "已隐藏",
     "editTooltip": "管理可见的智能应用",
+    // Scenario descriptions intentionally omitted — falls back to English. Do not add Chinese translations here.
     "descriptions": {}
   }
 };
