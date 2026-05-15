@@ -242,7 +242,7 @@ export default {
     "keyName": {
       "label": "Name",
       "placeholder": "e.g., OpenAI",
-      "fallback": "Custom Provider",
+      "default": "Default Provider",
       "helper": "Leave blank to use the auto-generated name. You can rename later.",
       "editAction": "Edit name"
     },
