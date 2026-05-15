@@ -262,6 +262,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     onAddDefaultProvider={handleAddProviderButtonClick}
                     onDeleteDefaultProvider={smartHandlers.handleDeleteDefaultProvider}
                     onProviderNodeClick={handleProviderNodeClick}
+                    onProviderPriorityChange={handleProviderPriorityChange}
                     onSwitchRoutingMode={handleRoutingModeSwitch}
                 />
             ) : (

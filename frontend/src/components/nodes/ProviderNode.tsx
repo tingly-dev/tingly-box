@@ -64,15 +64,17 @@ export interface ProviderNodeComponentProps {
     onPriorityChange?: (priority: number) => void;
 }
 
-// Clickable priority badge that overlaps the top-left corner of the
-// node, matching the existing badge convention elsewhere in the app
-// (e.g. SmartOpNode's index badge). Click → small popover with a number
-// input. Setting 0 clears the priority (the rule falls back to its
-// default tactic when no service has an explicit priority).
+// Clickable priority badge anchored to the top-left corner of the node.
+// The button itself sits *inside* the node so the click target is always
+// on the node (avoids the badge floating into the gap between siblings
+// where adjacent nodes may swallow the click). A small CSS translate
+// shifts the visual position outward so the badge still reads as
+// "attached to the corner", matching the existing badge convention.
 const PriorityBadgeButton = styled(Button)(({ theme }) => ({
     position: 'absolute',
-    top: -10,
-    left: -10,
+    top: 4,
+    left: 4,
+    transform: 'translate(-30%, -30%)',
     minWidth: 0,
     width: 26,
     height: 26,
@@ -83,6 +85,10 @@ const PriorityBadgeButton = styled(Button)(({ theme }) => ({
     lineHeight: 1,
     boxShadow: theme.shadows[2],
     zIndex: 3,
+    // Belt-and-suspenders: even though we stopPropagation in the handler,
+    // some MUI internals re-fire click events from the wrapping span. A
+    // dedicated pointer-events region keeps clicks on the badge alone.
+    pointerEvents: 'auto',
 }));
 
 interface PriorityBadgeProps {
