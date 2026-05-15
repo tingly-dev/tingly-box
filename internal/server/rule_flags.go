@@ -1,8 +1,6 @@
 package server
 
 import (
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -13,33 +11,6 @@ func resolveRuleFlags(rule *typ.Rule) typ.RuleFlags {
 		return typ.RuleFlags{}
 	}
 	return rule.Flags
-}
-
-// applyMaxCompletionTokensRewrite moves the value of `max_tokens` into the
-// newer `max_completion_tokens` field. OpenAI's o1/o3/gpt-5 families reject
-// `max_tokens`; this rewrite lets callers opt in per rule.
-func applyMaxCompletionTokensRewrite(req *openai.ChatCompletionNewParams) {
-	if req == nil {
-		return
-	}
-	if req.MaxTokens.Valid() {
-		req.MaxCompletionTokens = param.NewOpt(req.MaxTokens.Value)
-		req.MaxTokens = param.Opt[int64]{}
-	}
-}
-
-// applyMaxTokensRewrite moves the value of `max_completion_tokens` back into
-// the legacy `max_tokens` field. Some providers and older model endpoints
-// reject the newer field name; this rewrite lets callers force the legacy
-// field per rule.
-func applyMaxTokensRewrite(req *openai.ChatCompletionNewParams) {
-	if req == nil {
-		return
-	}
-	if req.MaxCompletionTokens.Valid() {
-		req.MaxTokens = param.NewOpt(req.MaxCompletionTokens.Value)
-		req.MaxCompletionTokens = param.Opt[int64]{}
-	}
 }
 
 // shouldStripUsage merges the cursor_compat and skip_usage hints carried in

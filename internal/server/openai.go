@@ -253,10 +253,10 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
 	ruleFlags := resolveRuleFlags(rule)
 	if ruleFlags.UseMaxCompletionTokens {
-		applyMaxCompletionTokensRewrite(&req.ChatCompletionNewParams)
+		ops.ApplyMaxCompletionTokensRewrite(&req.ChatCompletionNewParams)
 	}
 	if ruleFlags.UseMaxTokens {
-		applyMaxTokensRewrite(&req.ChatCompletionNewParams)
+		ops.ApplyMaxTokensRewrite(&req.ChatCompletionNewParams)
 	}
 	if ruleFlags.CustomUserAgent != "" {
 		c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), ruleFlags.CustomUserAgent))
