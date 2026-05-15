@@ -118,9 +118,7 @@ func (ap *AdaptiveProbe) probeChatEndpoint(ctx context.Context, provider *typ.Pr
 				LastChecked:  time.Now(),
 			}
 		}
-		probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
-		defer cancel()
-		result, err := wrapper.ProbeChatEndpoint(probeCtx, modelID, client.ProbeEndpointOptions{Message: "Hi", Stream: true, Mode: client.ProbeModeStreaming})
+		result, err := wrapper.ProbeChatEndpoint(ctx, modelID, client.ProbeEndpointOptions{Message: "Hi", Stream: true, Mode: client.ProbeModeStreaming})
 		latency := int(time.Since(startTime).Milliseconds())
 		if err != nil {
 			return EndpointStatus{Available: false, LatencyMs: latency, ErrorMessage: fmt.Sprintf("Chat probe failed: %v", err), LastChecked: time.Now()}
