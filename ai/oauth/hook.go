@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -85,37 +86,162 @@ func (h *GeminiHook) BeforeToken(body map[string]string, header http.Header) err
 }
 
 func (h *GeminiHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
+	metadata := make(map[string]any)
+
 	// Fetch user email from Google userinfo endpoint
 	type userInfo struct {
 		Email string `json:"email"`
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.googleapis.com/oauth2/v1/userinfo?alt=json", nil)
+	if err == nil {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		resp, err := httpClient.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+				var info userInfo
+				if json.NewDecoder(resp.Body).Decode(&info) == nil && info.Email != "" {
+					metadata["email"] = info.Email
+				}
+			}
+		}
+	}
+
+	// Discover Code Assist project ID via loadCodeAssist + onboardUser.
+	// Gemini CLI calls https://cloudcode-pa.googleapis.com/v1internal:* to obtain
+	// the cloudaicompanionProject required by every subsequent generateContent
+	// request. Without it the Code Assist API rejects the call.
+	if projectID, err := fetchGeminiProjectID(ctx, accessToken, httpClient); err == nil && projectID != "" {
+		metadata["project_id"] = projectID
+	}
+
+	return metadata, nil
+}
+
+// Gemini Code Assist API constants (shared with Antigravity host).
+const (
+	geminiCodeAssistEndpoint = "https://cloudcode-pa.googleapis.com"
+	geminiCodeAssistVersion  = "v1internal"
+	geminiCodeAssistUA       = "GeminiCLI/0.1.0 (linux; amd64)"
+)
+
+// fetchGeminiProjectID resolves the cloudaicompanionProject for the authenticated
+// user. It first calls loadCodeAssist; if the current tier is missing or the
+// response does not include a project ID, it falls back to onboardUser to create
+// one and waits for the long-running operation to finish.
+func fetchGeminiProjectID(ctx context.Context, accessToken string, httpClient *http.Client) (string, error) {
+	loadResp, err := geminiCodeAssistCall(ctx, accessToken, httpClient, "loadCodeAssist", map[string]any{
+		"metadata": map[string]string{
+			"ideType":    "IDE_UNSPECIFIED",
+			"platform":   "PLATFORM_UNSPECIFIED",
+			"pluginType": "GEMINI",
+		},
+	})
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+
+	if id := extractGeminiProjectID(loadResp); id != "" {
+		return id, nil
+	}
+
+	tierID := "free-tier"
+	if tiers, ok := loadResp["allowedTiers"].([]any); ok {
+		for _, t := range tiers {
+			tier, ok := t.(map[string]any)
+			if !ok {
+				continue
+			}
+			if def, _ := tier["isDefault"].(bool); def {
+				if id, _ := tier["id"].(string); id != "" {
+					tierID = id
+				}
+				break
+			}
+		}
+	}
+
+	onboardBody := map[string]any{
+		"tierId": tierID,
+		"metadata": map[string]string{
+			"ideType":    "IDE_UNSPECIFIED",
+			"platform":   "PLATFORM_UNSPECIFIED",
+			"pluginType": "GEMINI",
+		},
+	}
+
+	for attempt := 0; attempt < 6; attempt++ {
+		lroResp, err := geminiCodeAssistCall(ctx, accessToken, httpClient, "onboardUser", onboardBody)
+		if err != nil {
+			return "", err
+		}
+		if done, _ := lroResp["done"].(bool); done {
+			if response, ok := lroResp["response"].(map[string]any); ok {
+				if id := extractGeminiProjectID(response); id != "" {
+					return id, nil
+				}
+			}
+			return "", fmt.Errorf("onboardUser completed without project id")
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return "", fmt.Errorf("onboardUser did not complete in time")
+}
+
+func geminiCodeAssistCall(ctx context.Context, accessToken string, httpClient *http.Client, method string, body map[string]any) (map[string]any, error) {
+	rawBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal %s body: %w", method, err)
+	}
+
+	endpoint := fmt.Sprintf("%s/%s:%s", geminiCodeAssistEndpoint, geminiCodeAssistVersion, method)
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, strings.NewReader(string(rawBody)))
+	if err != nil {
+		return nil, fmt.Errorf("build %s request: %w", method, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", geminiCodeAssistUA)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("execute %s: %w", method, err)
 	}
 	defer resp.Body.Close()
 
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read %s response: %w", method, err)
+	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, nil
+		return nil, fmt.Errorf("%s failed with status %d: %s", method, resp.StatusCode, string(respBody))
 	}
 
-	var info userInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, err
+	parsed := make(map[string]any)
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, fmt.Errorf("decode %s response: %w", method, err)
 	}
+	return parsed, nil
+}
 
-	metadata := make(map[string]any)
-	if info.Email != "" {
-		metadata["email"] = info.Email
+// extractGeminiProjectID pulls cloudaicompanionProject from a loadCodeAssist or
+// onboardUser response. It accepts the field as either a raw string or a nested
+// object with an "id" key (gemini-cli observes both shapes in the wild).
+func extractGeminiProjectID(resp map[string]any) string {
+	if id, ok := resp["cloudaicompanionProject"].(string); ok {
+		return strings.TrimSpace(id)
 	}
-	return metadata, nil
+	if projectMap, ok := resp["cloudaicompanionProject"].(map[string]any); ok {
+		if id, okID := projectMap["id"].(string); okID {
+			return strings.TrimSpace(id)
+		}
+	}
+	return ""
 }
 
 // AntigravityHook implements Antigravity OAuth specific behavior.

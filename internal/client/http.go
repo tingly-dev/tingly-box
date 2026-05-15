@@ -1,16 +1,11 @@
 package client
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"golang.org/x/net/proxy"
@@ -18,346 +13,20 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// HookFunc is a function that can modify the request before it's sent
-type HookFunc func(req *http.Request) error
-
-// oauthHookFunctions defines custom hooks for OAuth providers based on provider type
-// Each hook handles custom headers, query params, and any special request modifications
-var oauthHookFunctions = map[ai.Issuer]HookFunc{
-	ai.IssuerAntigravity: antigravityHook,
-}
-
-func antigravityHook(req *http.Request) error {
-	key := req.Header.Get("X-Goog-Api-Key")
-
-	// Rewrite URL path from standard Google format to Antigravity format
-	// Standard: /v1beta/models/{model}:generateContent
-	// Antigravity: /v1internal:generateContent
-	originalPath := req.URL.Path
-	newPath := originalPath
-
-	// Check if this is a generateContent request
-	if strings.Contains(newPath, ":generateContent") {
-		// Extract the operation name (generateContent, streamGenerateContent, etc.)
-		parts := strings.Split(newPath, ":")
-		if len(parts) >= 2 {
-			operation := parts[1]
-			// Rewrite to Antigravity format
-			newPath = fmt.Sprintf("/v1internal:%s", operation)
-		}
-	}
-
-	// Apply the path rewrite if changed
-	if newPath != originalPath {
-		logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
-		req.URL.Path = newPath
-	}
-
-	// Set headers (will be applied after URL rewrite)
-	req.Header = http.Header{}
-	req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
-	req.Header.Set("Content-Type", "application/json")
-	if key != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-	}
-	return nil
-}
-
-// requestModifier wraps an http.RoundTripper to apply hooks to each request
-type requestModifier struct {
-	http.RoundTripper
-	hooks []HookFunc
-}
-
-func (t *requestModifier) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Execute hooks in order
-	for _, hook := range t.hooks {
-		if err := hook(req); err != nil {
-			return nil, err
-		}
-	}
-	return t.RoundTripper.RoundTrip(req)
-}
-
-// antigravityRoundTripper wraps an http.RoundTripper to handle Antigravity's
-// custom request/response format
-type antigravityRoundTripper struct {
-	http.RoundTripper
-	project, model string
-	proxyURL       string
-}
-
-// isStreamingRequest checks if the request is for streaming generate content
-func isStreamingRequest(req *http.Request) bool {
-	return strings.Contains(req.URL.Path, ":streamGenerateContent")
-}
-
-// streamingUnwrapReader wraps an io.Reader to unwrap Antigravity's streaming response format
-// Antigravity wraps each SSE event's data in a "response" field, e.g.:
-//
-//	data: {"response": {...actual google response...}}
-//
-// This reader unwraps it to:
-//
-//	data: {...actual google response...}
-type streamingUnwrapReader struct {
-	reader io.ReadCloser
-	buffer []byte
-	err    error
-}
-
-func (r *streamingUnwrapReader) Read(p []byte) (n int, err error) {
-	// Return any buffered data first
-	if len(r.buffer) > 0 {
-		n = copy(p, r.buffer)
-		r.buffer = r.buffer[n:]
-		return n, nil
-	}
-
-	// Return previous error if any
-	if r.err != nil {
-		return 0, r.err
-	}
-
-	// Read data line by line from source
-	buf := make([]byte, 4096)
-	var lineBuffer bytes.Buffer
-
-	for {
-		nn, readErr := r.reader.Read(buf)
-		if nn > 0 {
-			lineBuffer.Write(buf[:nn])
-		}
-		if readErr != nil {
-			if readErr == io.EOF {
-				// Flush remaining buffer at EOF
-				if lineBuffer.Len() > 0 {
-					r.buffer = r.processBuffer(lineBuffer.Bytes())
-					n = copy(p, r.buffer)
-					r.buffer = r.buffer[n:]
-					if len(r.buffer) == 0 {
-						r.err = io.EOF
-					}
-					return n, nil
-				}
-				return 0, io.EOF
-			}
-			r.err = readErr
-			return 0, readErr
-		}
-
-		// Process the buffer to extract complete lines
-		processed := r.processBuffer(lineBuffer.Bytes())
-		if len(processed) > 0 {
-			// Return processed data
-			n = copy(p, processed)
-			r.buffer = processed[n:]
-			return n, nil
-		}
-
-		// Check if we have enough data to work with
-		if lineBuffer.Len() > 40960 {
-			// Buffer too large, return as-is (fallback)
-			n = copy(p, lineBuffer.Bytes())
-			lineBuffer.Next(n)
-			return n, nil
-		}
-	}
-}
-
-func (r *streamingUnwrapReader) processBuffer(data []byte) []byte {
-	// Process SSE format, unwrapping "response" field in data lines
-	lines := bytes.Split(data, []byte("\n"))
-	var result bytes.Buffer
-
-	for i, line := range lines {
-		if bytes.HasPrefix(line, []byte("data:")) {
-			// Extract JSON from data line
-			jsonData := bytes.TrimSpace(line[5:]) // Skip "data:"
-			if len(jsonData) == 0 {
-				result.Write(line)
-			} else {
-				// Try to unwrap the JSON
-				var wrapped map[string]any
-				if err := json.Unmarshal(jsonData, &wrapped); err == nil {
-					if innerResponse, ok := wrapped["response"]; ok {
-						// Unwrap: extract inner "response" field
-						unwrapped, err := json.Marshal(innerResponse)
-						if err == nil {
-							result.Write([]byte("data: "))
-							result.Write(unwrapped)
-						} else {
-							// Failed to marshal, keep original
-							result.Write(line)
-						}
-					} else {
-						// No "response" field, keep original
-						result.Write(line)
-					}
-				} else {
-					// Not valid JSON, keep original
-					result.Write(line)
-				}
-			}
-		} else {
-			result.Write(line)
-		}
-
-		// Add newline back (except for last line if original didn't end with \n)
-		if i < len(lines)-1 || data[len(data)-1] == '\n' {
-			result.WriteByte('\n')
-		}
-	}
-
-	return result.Bytes()
-}
-
-func (r *streamingUnwrapReader) Close() error {
-	return r.reader.Close()
-}
-
-func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	key := req.Header.Get("X-Goog-Api-Key")
-	isStreaming := isStreamingRequest(req)
-
-	// Rewrite URL path from standard Google format to Antigravity format
-	originalPath := req.URL.Path
-	newPath := originalPath
-	model := ""
-
-	if strings.Contains(newPath, ":generateContent") || strings.Contains(newPath, ":streamGenerateContent") {
-		parts := strings.Split(newPath, ":")
-		if len(parts) >= 2 {
-			subparts := strings.Split(parts[0], "/")
-			model = subparts[len(subparts)-1]
-			operation := parts[1]
-			newPath = fmt.Sprintf("/v1internal:%s", operation)
-		}
-	}
-
-	if newPath != originalPath {
-		logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
-		req.URL.Path = newPath
-	}
-
-	// Read and wrap request body
-	if req.Body != nil && t.project != "" && model != "" {
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read request body: %w", err)
-		}
-		req.Body.Close()
-
-		// Parse original body
-		var originalBody map[string]any
-		if err := json.Unmarshal(body, &originalBody); err == nil {
-			// Remove model from original body
-			cleanBody := make(map[string]any)
-			for k, v := range originalBody {
-				if k != "model" {
-					cleanBody[k] = v
-				}
-			}
-
-			// Wrap in Antigravity format
-			wrapped := map[string]any{
-				"project":     t.project,
-				"requestId":   fmt.Sprintf("agent-%s", uuid.New().String()),
-				"request":     cleanBody,
-				"model":       model,
-				"userAgent":   "antigravity",
-				"requestType": "agent",
-			}
-
-			wrappedBody, err := json.Marshal(wrapped)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal wrapped body: %w", err)
-			}
-			// Set GetBody to allow retries and redirects
-			req.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(wrappedBody)), nil
-			}
-			req.Body = io.NopCloser(bytes.NewReader(wrappedBody))
-			req.ContentLength = int64(len(wrappedBody))
-		}
-	}
-
-	// Set headers
-	req.Header = http.Header{}
-	req.Header.Set("User-Agent", "antigravity/1.11.5 windows/amd64")
-	req.Header.Set("Content-Type", "application/json")
-	if req.ContentLength > 0 {
-		req.Header.Set("Content-Length", fmt.Sprintf("%d", req.ContentLength))
-	}
-	if key != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-	}
-
-	logrus.Debugf("[Antigravity] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
-
-	// Send request
-	resp, err := t.RoundTripper.RoundTrip(req)
-	if err != nil {
-		logrus.Errorf("[Antigravity] Request failed: %v", err)
-		return nil, err
-	}
-
-	logrus.Debugf("[Antigravity] Response received, status=%d", resp.StatusCode)
-
-	// Unwrap response body
-	// Antigravity wraps the response in a "response" field
-	// For streaming: we need to unwrap each SSE event's data field
-	// For non-streaming: we can unwrap the entire JSON response
-	if resp.Body != nil {
-		if isStreaming {
-			// For streaming responses, wrap the body with streamingUnwrapReader
-			// to unwrap each SSE event's data field on-the-fly
-			resp.Body = &streamingUnwrapReader{reader: resp.Body}
-		} else {
-			// For non-streaming responses, read and unwrap the entire JSON body
-			body, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				return nil, fmt.Errorf("failed to read response body: %w", err)
-			}
-
-			// Try to unwrap the response
-			var wrappedResponse map[string]any
-			if err := json.Unmarshal(body, &wrappedResponse); err == nil {
-				if innerResponse, ok := wrappedResponse["response"]; ok {
-					// Unwrap: extract the inner "response" field
-					unwrappedBody, err := json.Marshal(innerResponse)
-					if err != nil {
-						return nil, fmt.Errorf("failed to marshal unwrapped response: %w", err)
-					}
-					resp.Body = io.NopCloser(bytes.NewReader(unwrappedBody))
-					resp.ContentLength = int64(len(unwrappedBody))
-				}
-			} else {
-				// If parsing fails, return original body (might not be wrapped)
-				resp.Body = io.NopCloser(bytes.NewReader(body))
-				resp.ContentLength = int64(len(body))
-			}
-		}
-	}
-
-	return resp, nil
-}
-
-// CreateHTTPClientWithProxy creates an HTTP client with proxy support
+// CreateHTTPClientWithProxy creates an HTTP client with proxy support.
+// Supports http(s) and socks5 proxy URLs; falls back to http.DefaultClient
+// for any parse/scheme failure (logged).
 func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 	if proxyURL == "" {
 		return http.DefaultClient
 	}
 
-	// Parse the proxy URL
 	parsedURL, err := url.Parse(proxyURL)
 	if err != nil {
 		logrus.Errorf("Failed to parse proxy URL %s: %v, using default client", proxyURL, err)
 		return http.DefaultClient
 	}
 
-	// Create transport with proxy
 	transport := &http.Transport{}
 
 	switch parsedURL.Scheme {
@@ -433,22 +102,18 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 		t.sessionID,
 	)
 
-	// Execute request
 	resp, err := transport.RoundTrip(req)
 	if err != nil {
 		release()
 		return nil, err
 	}
 
-	// Wrap response body to auto-release refCount on close.
-	// This ensures long-running streaming requests keep the transport alive.
 	if resp.Body != nil {
 		resp.Body = &refCountedBody{ReadCloser: resp.Body, onclose: release}
 	} else {
 		release()
 	}
 
-	// Apply response wrapper if needed (e.g., tool prefix stripping)
 	if t.responseWrapper != nil {
 		resp = t.responseWrapper(resp)
 	}
@@ -456,9 +121,11 @@ func (t *SessionBoundTransport) RoundTrip(req *http.Request) (*http.Response, er
 	return resp, nil
 }
 
-// createSessionBoundTransport creates a session-bound transport with
-// optional provider-specific wrapping (claudeRoundTripper, codexRoundTripper, etc.).
-// This helper builds the layered transport chain based on provider configuration.
+// createSessionBoundTransport builds the base session-bound transport for a
+// provider. It is intentionally generic — provider-specific wire-format
+// adapters (Code Assist envelope, ChatGPT backend translation, etc.) live in
+// their dedicated xxx_client.go files and layer their RoundTripper on top of
+// what this returns.
 func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID) http.RoundTripper {
 	var issuer ai.Issuer
 	if provider.OAuthDetail != nil {
@@ -466,154 +133,14 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 	}
 
 	if provider.ProxyURL != "" {
-		logrus.Infof("Using proxy for OpenAI client: %s", provider.ProxyURL)
+		logrus.Debugf("Using proxy for provider %s: %s", provider.UUID, provider.ProxyURL)
 	}
 
-	// Base: SessionBoundTransport
-	baseTransport := &SessionBoundTransport{
+	return &SessionBoundTransport{
 		transportPool: GetGlobalTransportPool(),
 		providerUUID:  provider.UUID,
 		proxyURL:      provider.ProxyURL,
 		issuer:        issuer,
 		sessionID:     sessionID,
 	}
-
-	// Layer provider-specific transformations
-	if provider.AuthType == typ.AuthTypeOAuth {
-		switch issuer {
-		case ai.IssuerAntigravity:
-			// Antigravity needs extra config (project_id) and special wrapping
-			project := ""
-			model := ""
-			if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
-				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
-					project = p
-				}
-			}
-			return &antigravityRoundTripper{
-				RoundTripper: baseTransport,
-				project:      project,
-				model:        model,
-				proxyURL:     provider.ProxyURL,
-			}
-		}
-	}
-
-	return baseTransport
-}
-
-// CreateHTTPClientForProvider creates an HTTP client configured for the given provider
-// It handles proxy and OAuth hooks if applicable
-// The model parameter is used for transport pool keying (provider+model+proxy)
-// The sessionID parameter is used for session-scoped transport creation for OAuth providers
-//
-// Deprecated: Use createSessionBoundTransport instead. This function is kept for
-// backward compatibility during the migration to SessionBoundTransport.
-//
-// Returns a configured http.Client
-func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID typ.SessionID) *http.Client {
-	var issuer ai.Issuer
-	if provider.OAuthDetail != nil {
-		issuer = ai.Issuer(provider.OAuthDetail.GetIssuer())
-	}
-
-	// Get shared transport from transport pool (keyed by providerUUID + sessionID for OAuth)
-	// proxyURL is used to configure the transport but is NOT part of the key
-	transport := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, issuer, sessionID)
-
-	client := &http.Client{
-		Transport: transport,
-	}
-
-	if provider.AuthType == typ.AuthTypeOAuth {
-		switch issuer {
-		case ai.IssuerAntigravity:
-			// For Antigravity, create a specialized RoundTripper with provider-specific config
-			if provider.OAuthDetail == nil {
-				return nil
-			}
-			project, model := "", ""
-			if provider.OAuthDetail.ExtraFields != nil {
-				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
-					project = p
-				}
-			}
-			// Create a separate transport with proxy for Antigravity
-			var antigravityTransport http.RoundTripper = transport
-			effectiveProxy := provider.ProxyURL
-			if effectiveProxy != "" {
-				// Use CreateHTTPClientWithProxy to create a transport with proxy
-				proxyClient := CreateHTTPClientWithProxy(effectiveProxy)
-				if proxyClient.Transport != nil {
-					antigravityTransport = proxyClient.Transport
-				}
-			}
-
-			// Use antigravityRoundTripper for both request wrapping and response unwrapping
-			client.Transport = &antigravityRoundTripper{
-				RoundTripper: antigravityTransport,
-				project:      project,
-				model:        model,
-				proxyURL:     effectiveProxy,
-			}
-			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, effectiveProxy)
-		case ai.IssuerClaudeCode:
-			// For Claude Code OAuth, use claudeRoundTripper for request/response transformations
-			var claudeTransport http.RoundTripper = transport
-			if ep := provider.ProxyURL; ep != "" {
-				proxyClient := CreateHTTPClientWithProxy(ep)
-				if proxyClient.Transport != nil {
-					claudeTransport = proxyClient.Transport
-				}
-			}
-
-			client.Transport = claudeTransport
-			logrus.Infof("Created Claude Code transport with proxy=%s (SDK middleware handles transformations)", provider.ProxyURL)
-		case ai.IssuerCodex:
-			// Create base transport with proxy support if needed
-			var baseTransport http.RoundTripper = transport
-			if ep := provider.ProxyURL; ep != "" {
-				// Explicitly create transport with proxy for this provider
-				proxyClient := CreateHTTPClientWithProxy(ep)
-				if proxyClient.Transport != nil {
-					baseTransport = proxyClient.Transport
-					logrus.Infof("Created proxy transport for %s: %s", issuer, ep)
-				}
-			}
-
-			// For ChatGPT backend API, wrap with response transformer
-			// This transforms the custom ChatGPT backend response format to OpenAI Responses API format
-			baseTransport = &codexRoundTripper{
-				RoundTripper: baseTransport,
-			}
-			logrus.Infof("Created ChatGPT backend response transformer RoundTripper with proxy=%s", provider.ProxyURL)
-
-			client.Transport = baseTransport
-		default:
-			// For other OAuth providers, use the hook-based approach
-			hook, ok := oauthHookFunctions[issuer]
-			if ok {
-				// Create base transport with proxy support if needed
-				var baseTransport http.RoundTripper = transport
-				if ep := provider.ProxyURL; ep != "" {
-					// Explicitly create transport with proxy for this provider
-					proxyClient := CreateHTTPClientWithProxy(ep)
-					if proxyClient.Transport != nil {
-						baseTransport = proxyClient.Transport
-						logrus.Infof("Created proxy transport for %s: %s", issuer, ep)
-					}
-				}
-
-				// Build the transport chain: base transport -> request modifier (hook) -> response transformer (if ChatGPT backend)
-				baseTransport = &requestModifier{
-					RoundTripper: baseTransport,
-					hooks:        []HookFunc{hook},
-				}
-
-				client.Transport = baseTransport
-			}
-		}
-	}
-
-	return client
 }
