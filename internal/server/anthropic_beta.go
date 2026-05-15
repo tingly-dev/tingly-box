@@ -8,7 +8,6 @@ import (
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/sirupsen/logrus"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
@@ -70,16 +69,18 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		// Check if model prefers Responses API (for models like Codex)
-		// This is used for ChatGPT backend API which only supports Responses API
-		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
-		logrus.Debugf("[AnthropicV1] Preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
-		useResponsesAPI := preferredEndpoint == "responses"
-		if useResponsesAPI {
-			target = protocol.TypeOpenAIResponses
-		} else {
-			target = protocol.TypeOpenAIChat
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, nil)
+		if routeErr != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: routeErr.Error(),
+					Type:    "invalid_request_error",
+					Code:    "unsupported_endpoint",
+				},
+			})
+			return
 		}
+		target = selection.Target
 	}
 
 	// Get or create the recorder for dual-stage recording

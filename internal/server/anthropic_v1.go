@@ -66,14 +66,18 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
-		logrus.Debugf("[AnthropicV1] Preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
-		useResponsesAPI := preferredEndpoint == "responses"
-		if useResponsesAPI {
-			target = protocol.TypeOpenAIResponses
-		} else {
-			target = protocol.TypeOpenAIChat
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, nil)
+		if routeErr != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: routeErr.Error(),
+					Type:    "invalid_request_error",
+					Code:    "unsupported_endpoint",
+				},
+			})
+			return
 		}
+		target = selection.Target
 	}
 
 	// Get or create the recorder for dual-stage recording
