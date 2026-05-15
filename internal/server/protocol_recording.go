@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -53,8 +54,20 @@ type ProtocolRecorder struct {
 	transformSteps []string
 
 	providerName string
+	providerUUID string
 	model        string
 	mode         obs.RecordMode
+}
+
+// breakerServiceID returns the loadbalance service identifier for the
+// active provider+model, or "" if either is unknown. The ID format must
+// match Service.ServiceID() so circuit-breaker lookups line up with the
+// keys used by the priority tactic.
+func (sr *ProtocolRecorder) breakerServiceID() string {
+	if sr == nil || sr.providerUUID == "" || sr.model == "" {
+		return ""
+	}
+	return sr.providerUUID + ":" + sr.model
 }
 
 // EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,
@@ -152,6 +165,7 @@ func (sr *ProtocolRecorder) bindProvider(provider *typ.Provider, model string, m
 	}
 	if provider != nil {
 		sr.providerName = provider.Name
+		sr.providerUUID = provider.UUID
 	}
 	if model != "" {
 		sr.model = model
@@ -264,6 +278,9 @@ func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string)
 	if sr.finalResponse == nil {
 		sr.finalResponse = sr.synthesizeFinalResponse()
 	}
+	if id := sr.breakerServiceID(); id != "" {
+		loadbalance.RecordServiceSuccess(id)
+	}
 	sr.emit(nil)
 }
 
@@ -271,6 +288,11 @@ func (sr *ProtocolRecorder) RecordResponse(provider *typ.Provider, model string)
 func (sr *ProtocolRecorder) RecordError(err error) {
 	if sr == nil {
 		return
+	}
+	if err != nil {
+		if id := sr.breakerServiceID(); id != "" {
+			loadbalance.RecordServiceFailure(id)
+		}
 	}
 	sr.emit(err)
 }

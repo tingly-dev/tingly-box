@@ -6,10 +6,14 @@ import {
 } from '@mui/icons-material';
 import {
     Box,
+    Button,
     Divider,
     IconButton,
+    Popover,
+    Stack,
+    TextField,
     Tooltip,
-    Typography
+    Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -56,7 +60,113 @@ export interface ProviderNodeComponentProps {
     active: boolean;
     onDelete: () => void;
     onNodeClick: () => void;
+    /** Called when the user edits this service's priority order. Omit to hide the badge. */
+    onOrderChange?: (order: number) => void;
 }
+
+// Small clickable badge in the top-left of the node showing the service's
+// priority order. Click → small popover with a number input. Setting 0
+// clears the priority (the rule falls back to its default tactic when no
+// service has an explicit order).
+const OrderBadgeButton = styled(Button)({
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    minWidth: 0,
+    width: 24,
+    height: 24,
+    padding: 0,
+    borderRadius: '50%',
+    fontSize: '0.75rem',
+    fontWeight: 700,
+    lineHeight: 1,
+    zIndex: 2,
+});
+
+interface OrderBadgeProps {
+    order: number;
+    onChange: (order: number) => void;
+    active: boolean;
+}
+
+const OrderBadge: React.FC<OrderBadgeProps> = ({ order, onChange, active }) => {
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const [draft, setDraft] = useState<string>(String(order || ''));
+
+    const open = (e: React.MouseEvent<HTMLElement>) => {
+        e.stopPropagation();
+        setDraft(String(order || ''));
+        setAnchor(e.currentTarget);
+    };
+    const close = () => setAnchor(null);
+
+    const commit = () => {
+        const parsed = parseInt(draft, 10);
+        const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+        if (next !== order) {
+            onChange(next);
+        }
+        close();
+    };
+
+    const label = order > 0 ? String(order) : '–';
+    const tooltip = order > 0
+        ? `Priority order ${order} (lower = tried first). Click to change.`
+        : 'No priority set. Click to assign an order (1 = primary, 2 = fallback, …).';
+
+    return (
+        <>
+            <Tooltip title={tooltip} arrow placement="top">
+                <span>
+                    <OrderBadgeButton
+                        variant={order > 0 ? 'contained' : 'outlined'}
+                        color={order > 0 ? 'primary' : 'inherit'}
+                        size="small"
+                        onClick={open}
+                        disabled={!active}
+                    >
+                        {label}
+                    </OrderBadgeButton>
+                </span>
+            </Tooltip>
+            <Popover
+                open={Boolean(anchor)}
+                anchorEl={anchor}
+                onClose={close}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <Box sx={{ p: 1.5, width: 220 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Priority order
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                        <TextField
+                            type="number"
+                            size="small"
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') commit();
+                                if (e.key === 'Escape') close();
+                            }}
+                            inputProps={{ min: 0, step: 1 }}
+                            autoFocus
+                            fullWidth
+                            placeholder="0 = unset"
+                        />
+                        <Button size="small" variant="contained" onClick={commit}>
+                            Set
+                        </Button>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                        Lower number runs first. Same number = parallel tier.
+                    </Typography>
+                </Box>
+            </Popover>
+        </>
+    );
+};
 
 // Provider Node Component for Graph View
 export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
@@ -65,7 +175,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     providersData,
     active,
     onDelete,
-    onNodeClick
+    onNodeClick,
+    onOrderChange,
 }) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -122,6 +233,13 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
             )}
 
             <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
+                {onOrderChange && (
+                    <OrderBadge
+                        order={provider.order ?? 0}
+                        onChange={onOrderChange}
+                        active={active}
+                    />
+                )}
                 {/* Top Layer - Provider/Model Field */}
                 <Box sx={NODE_LAYER_STYLES.topLayer}>
                     <Tooltip title={

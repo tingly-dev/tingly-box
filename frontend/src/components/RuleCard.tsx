@@ -126,6 +126,21 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
+    // Handler: Update a service's priority order. Setting any service's
+    // order to > 0 flips the rule into "priority" tactic on save (handled
+    // in pickLbTactic), so users get direct/fallback routing just by
+    // clicking a number badge — no separate tactic selector to learn.
+    const handleProviderOrderChange = useCallback(
+        async (providerUuid: string, order: number) => {
+            if (!configRecord) return;
+            const updated = configRecord.providers.map((p) =>
+                p.uuid === providerUuid ? { ...p, order } : p,
+            );
+            await updateField(configRecord, setConfigRecord, 'providers', updated);
+        },
+        [configRecord, updateField, setConfigRecord]
+    );
+
     // Adapter: Convert ruleUuid to ruleIndex for smart routing handlers
     const handleAddServiceToSmartRuleByUuid = useCallback(
         (ruleUuid: string) => {
@@ -259,6 +274,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     allowToggleRule={allowToggleRule}
                     onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                     onDeleteProvider={handleDeleteProvider}
+                    onProviderOrderChange={handleProviderOrderChange}
                     onToggleExpanded={handleToggleExpanded}
                     onProviderNodeClick={handleProviderNodeClick}
                     onAddProviderButtonClick={handleAddProviderButtonClick}

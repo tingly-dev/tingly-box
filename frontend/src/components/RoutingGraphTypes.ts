@@ -10,6 +10,10 @@ export interface ConfigProvider {
     weight?: number;
     active?: boolean;
     time_window?: number;
+    // Priority order within a rule. Lower = higher priority; 0 / undefined
+    // = unset, treated as same tier. Setting this on any service flips the
+    // rule's load-balancing tactic to "priority" (direct + fallback).
+    order?: number;
 }
 
 export interface SmartOp {
@@ -42,6 +46,9 @@ export interface ConfigRecord {
     // Smart routing fields
     smartEnabled?: boolean;
     smartRouting?: SmartRouting[];
+    // Current load-balancing tactic name. Round-tripped so the priority
+    // tactic flips on automatically once a user assigns service order.
+    lbTactic?: string;
 }
 
 export interface RuleFlags {
@@ -68,8 +75,13 @@ export interface Rule {
         weight?: number;
         active?: boolean;
         time_window?: number;
+        order?: number;
     }>;
     // Smart routing fields
     smart_enabled?: boolean;
     smart_routing?: SmartRouting[];
+    lb_tactic?: {
+        type?: string;
+        params?: Record<string, unknown>;
+    };
 }

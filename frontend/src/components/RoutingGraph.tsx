@@ -86,6 +86,7 @@ interface RuleGraphProps {
     recordUuid: string;
     onUpdateRecord: (field: keyof ConfigRecord, value: any) => void;
     onDeleteProvider: (recordId: string, providerId: string) => void;
+    onProviderOrderChange?: (providerUuid: string, order: number) => void;
     onToggleExpanded: () => void;
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
@@ -170,6 +171,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     recordUuid,
     onUpdateRecord,
     onDeleteProvider,
+    onProviderOrderChange,
     onToggleExpanded,
     onProviderNodeClick,
     onAddProviderButtonClick,
@@ -183,6 +185,23 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     // Routing mode switch
     onSwitchRoutingMode,
 }) => {
+    // When users explicitly set priority orders on services we render the
+    // default-providers list sorted by Order (ascending) so the visual
+    // sequence matches the runtime fallback sequence. Without explicit
+    // orders we preserve the array order from the rule.
+    const sortedDefaultProviders = React.useMemo(() => {
+        const list = record.providers;
+        const hasAnyOrder = list.some((p) => (p.order ?? 0) > 0);
+        if (!hasAnyOrder) return list;
+        return [...list].sort((a, b) => {
+            const ao = a.order ?? 0;
+            const bo = b.order ?? 0;
+            // 0 sinks to the bottom so explicitly-ordered services appear first.
+            if (ao === 0 && bo !== 0) return 1;
+            if (bo === 0 && ao !== 0) return -1;
+            return ao - bo;
+        });
+    }, [record.providers]);
     // When collapsible, parent controls expanded state (defaults to false when collapsible=true)
     // When not collapsible, always show expanded
     const isExpanded = !collapsible || expanded;
@@ -543,15 +562,17 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                     {/* Providers Container - Default providers for normal mode or default for smart routing */}
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
-                                            {record.providers.map((provider, index) => (
+                                            {sortedDefaultProviders.map((provider, index) => (
                                                 <Tooltip
                                                     key={provider.uuid}
                                                     title={
                                                         smartEnabled && hasSmartRules
                                                             ? 'Default provider (default when no smart rules match)'
-                                                            : record.providers.length >= 2
-                                                                ? `Provider ${index + 1} of ${record.providers.length} (requests are load balanced)`
-                                                                : 'Provider for request forwarding'
+                                                            : (provider.order ?? 0) > 0
+                                                                ? `Priority ${provider.order} — used in order ${provider.order} (lower = tried first)`
+                                                                : record.providers.length >= 2
+                                                                    ? `Provider ${index + 1} of ${record.providers.length} (requests are load balanced)`
+                                                                    : 'Provider for request forwarding'
                                                     }
                                                     placement="top"
                                                     arrow
@@ -564,6 +585,11 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                             active={record.active && provider.active !== false}
                                                             onDelete={() => onDeleteProvider(recordUuid, provider.uuid)}
                                                             onNodeClick={() => onProviderNodeClick(provider.uuid)}
+                                                            onOrderChange={
+                                                                onProviderOrderChange
+                                                                    ? (order) => onProviderOrderChange(provider.uuid, order)
+                                                                    : undefined
+                                                            }
                                                         />
                                                     </Box>
                                                 </Tooltip>
