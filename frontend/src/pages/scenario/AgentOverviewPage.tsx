@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Anthropic,
     Claude,
+    ClaudeDesktop,
     Codex,
     OpenAI,
     OpenClaw,
@@ -33,7 +34,7 @@ export interface ScenarioDescriptor {
     labelKey: string;
     descKey: string;
     path: string;
-    icon: React.ReactNode;
+    icon: (size: number) => React.ReactNode;
     /** Hideable from the sidebar. Claude Code is always shown (anchors profiles). */
     hideable: boolean;
 }
@@ -46,7 +47,15 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useClaudeCode',
         descKey: 'scenarioOverview.descriptions.claude_code',
         path: '/agent/claude_code',
-        icon: <Claude size={scenarioIconSize} />,
+        icon: (size) => <Claude size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'claude_desktop',
+        labelKey: 'layout.nav.useClaudeDesktop',
+        descKey: 'scenarioOverview.descriptions.claude_desktop',
+        path: '/agent/claude_desktop',
+        icon: (size) => <ClaudeDesktop size={size} />,
         hideable: true,
     },
     {
@@ -54,7 +63,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useCodex',
         descKey: 'scenarioOverview.descriptions.codex',
         path: '/agent/codex',
-        icon: <Codex size={scenarioIconSize} />,
+        icon: (size) => <Codex size={size} />,
         hideable: true,
     },
     {
@@ -62,7 +71,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useOpenCode',
         descKey: 'scenarioOverview.descriptions.opencode',
         path: '/agent/opencode',
-        icon: <OpenCode size={scenarioIconSize} />,
+        icon: (size) => <OpenCode size={size} />,
         hideable: true,
     },
     {
@@ -70,7 +79,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useXcode',
         descKey: 'scenarioOverview.descriptions.xcode',
         path: '/agent/xcode',
-        icon: <Xcode size={scenarioIconSize} />,
+        icon: (size) => <Xcode size={size} />,
         hideable: true,
     },
     {
@@ -78,7 +87,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useVSCode',
         descKey: 'scenarioOverview.descriptions.vscode',
         path: '/agent/vscode',
-        icon: <VSCode size={scenarioIconSize} />,
+        icon: (size) => <VSCode size={size} />,
         hideable: true,
     },
     {
@@ -86,7 +95,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useOpenAI',
         descKey: 'scenarioOverview.descriptions.openai',
         path: '/agent/openai',
-        icon: <OpenAI size={scenarioIconSize} />,
+        icon: (size) => <OpenAI size={size} />,
         hideable: true,
     },
     {
@@ -94,7 +103,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useAnthropic',
         descKey: 'scenarioOverview.descriptions.anthropic',
         path: '/agent/anthropic',
-        icon: <Anthropic size={scenarioIconSize} />,
+        icon: (size) => <Anthropic size={size} />,
         hideable: true,
     },
     {
@@ -102,7 +111,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useEmbed',
         descKey: 'scenarioOverview.descriptions.embed',
         path: '/agent/embed',
-        icon: <IconVector size={scenarioIconSize} />,
+        icon: (size) => <IconVector size={size} />,
         hideable: true,
     },
     {
@@ -110,7 +119,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useImageGen',
         descKey: 'scenarioOverview.descriptions.imagegen',
         path: '/agent/imagegen',
-        icon: <IconPhoto size={scenarioIconSize} />,
+        icon: (size) => <IconPhoto size={size} />,
         hideable: true,
     },
     {
@@ -118,7 +127,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'common.openClaw',
         descKey: 'scenarioOverview.descriptions.agent',
         path: '/agent/agent',
-        icon: <OpenClaw size={scenarioIconSize} />,
+        icon: (size) => <OpenClaw size={size} />,
         hideable: true,
     },
 ];
@@ -216,7 +225,7 @@ const AgentOverviewPage: React.FC = () => {
                                     >
                                         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
                                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}>
-                                                {s.icon}
+                                                {s.icon(scenarioIconSize)}
                                             </Box>
                                             <Box sx={{ flex: 1, minWidth: 0 }}>
                                                 <Stack direction="row" spacing={1} alignItems="center">
