@@ -371,7 +371,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                 <Tooltip title={t('layout.activityBar.feedbackTooltip')} placement="right" arrow>
                     <ListItemButton
                         component="a"
-                        href="https://github.com/tingly-dev/tingly-box/issues/new"
+                        href="https://github.com/tingly-dev/tingly-box/issues/new/choose"
                         target="_blank"
                         rel="noopener noreferrer"
                         sx={{
