@@ -23,15 +23,11 @@ export interface GraphSettingsMenuProps {
     active: boolean;
     allowToggleRule: boolean;
     saving: boolean;
-    cursorCompatEnabled?: boolean;
-    cursorCompatAutoEnabled?: boolean;
     onExport: (format: ExportFormat) => void;
     onExportAsJsonlToClipboard?: () => void;
     onExportAsBase64ToClipboard?: () => void;
     onDelete: () => void;
     onToggleActive: () => void;
-    onToggleCursorCompat?: () => void;
-    onToggleCursorCompatAuto?: () => void;
     onEditFlags?: () => void;
     // Probe V2 props
     ruleUuid?: string;
@@ -45,15 +41,11 @@ export const GraphSettingsMenu = ({
     active,
     allowToggleRule,
     saving,
-    cursorCompatEnabled,
-    cursorCompatAutoEnabled,
     onExport,
     onExportAsJsonlToClipboard,
     onExportAsBase64ToClipboard,
     onDelete,
     onToggleActive,
-    onToggleCursorCompat,
-    onToggleCursorCompatAuto,
     onEditFlags,
     ruleUuid,
     ruleName,
@@ -119,34 +111,6 @@ export const GraphSettingsMenu = ({
                         </>
                     )}
                 </MenuItem>
-
-                {onToggleCursorCompat && (
-                    <MenuItem onClick={() => { closeMenu(); onToggleCursorCompat(); }}>
-                        {cursorCompatEnabled ? (
-                            <>
-                                <ActiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Compatibility: On
-                            </>
-                        ) : (
-                            <>
-                                <InactiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Compatibility: Off
-                            </>
-                        )}
-                    </MenuItem>
-                )}
-
-                {onToggleCursorCompatAuto && (
-                    <MenuItem onClick={() => { closeMenu(); onToggleCursorCompatAuto(); }}>
-                        {cursorCompatAutoEnabled ? (
-                            <>
-                                <ActiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Auto-Detect: On
-                            </>
-                        ) : (
-                            <>
-                                <InactiveIcon fontSize="small" sx={{ mr: 1 }} />Cursor Auto-Detect: Off
-                            </>
-                        )}
-                    </MenuItem>
-                )}
 
                 {onEditFlags && (
                     <MenuItem onClick={() => { closeMenu(); onEditFlags(); }}>

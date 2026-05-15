@@ -211,8 +211,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     }, [rule.uuid, onRuleDelete, showNotification]);
 
     const isSmartMode = rule.smart_enabled;
-    const cursorCompatEnabled = configRecord?.flags?.cursorCompat || false;
-    const cursorCompatAutoEnabled = configRecord?.flags?.cursorCompatAuto || false;
 
     const handleOpenFlagEditor = useCallback(() => {
         if (!configRecord) return;
@@ -285,21 +283,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             active={configRecord.active}
             allowToggleRule={allowToggleRule}
             saving={saving}
-            cursorCompatEnabled={cursorCompatEnabled}
-            cursorCompatAutoEnabled={cursorCompatAutoEnabled}
             onExport={handleExport}
             onExportAsJsonlToClipboard={handleExportAsJsonlToClipboard}
             onExportAsBase64ToClipboard={handleExportAsBase64ToClipboard}
             onDelete={handleDeleteButtonClick}
             onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
-            onToggleCursorCompat={() => updateField(configRecord, setConfigRecord, 'flags', {
-                ...(configRecord.flags || {}),
-                cursorCompat: !cursorCompatEnabled,
-            })}
-            onToggleCursorCompatAuto={() => updateField(configRecord, setConfigRecord, 'flags', {
-                ...(configRecord.flags || {}),
-                cursorCompatAuto: !cursorCompatAutoEnabled,
-            })}
             onEditFlags={handleOpenFlagEditor}
             ruleUuid={rule.uuid}
             ruleName={rule.request_model || rule.uuid}
