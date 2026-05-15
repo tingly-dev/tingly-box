@@ -45,7 +45,7 @@ export default {
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
       "useEmbed": "Embedding",
-      "useImageGen": "图像生成",
+      "useImageGen": "Image Gen",
       "playground": "Playground",
       "apiKeys": "API 密钥",
       "oauth": "OAuth 凭证",
@@ -878,18 +878,6 @@ export default {
     "showInSidebar": "在侧边栏显示",
     "hidden": "已隐藏",
     "editTooltip": "管理可见的智能应用",
-    "descriptions": {
-      "claude_code": "为 Claude Code 配置自定义路由、配置文件与按任务的模型。",
-      "claude_desktop": "将 Claude Desktop 作为 MCP 客户端通过 Tingly Box 接入。",
-      "codex": "用你的提供商凭证配置 Codex CLI。",
-      "opencode": "使用你的提供商驱动的开源代码 Agent。",
-      "xcode": "将你的模型接入 Xcode 编码智能。",
-      "vscode": "通过 Tingly Box 驱动 VS Code Copilot Chat。",
-      "openai": "兼容 OpenAI 的 SDK 直连端点。",
-      "anthropic": "兼容 Anthropic 的 SDK 直连端点。",
-      "embed": "将 Embedding 请求路由到你的提供商。",
-      "imagegen": "通过 Tingly Box 路由图像生成。",
-      "agent": "OpenClaw — 通用 Agent 运行器。"
-    }
+    "descriptions": {}
   }
 };
