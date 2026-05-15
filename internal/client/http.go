@@ -33,6 +33,13 @@ func (t *userAgentRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 // wrapWithUserAgent wraps a transport with a User-Agent override when the
 // provider has a custom UA configured. Returns the original transport unchanged
 // when no override is set.
+//
+// Design note: provider.UserAgent is treated as a deliberate debug knob — when
+// non-empty it intentionally overrides even vendor-pinned UAs (claude-cli,
+// GeminiCLI, codex, …) because we don't want to hide the configured value
+// behind silent precedence rules. Operators who set this should know what
+// they're doing; the catch lives in ai/provider.go's UserAgent doc comment.
+// Rule-level custom_user_agent layers innermost so it still wins over both.
 func wrapWithUserAgent(inner http.RoundTripper, provider *typ.Provider) http.RoundTripper {
 	if provider == nil || provider.UserAgent == "" {
 		return inner

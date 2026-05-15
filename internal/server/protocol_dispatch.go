@@ -182,10 +182,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 	fc := forwarding.NewForwardContext(ctx, provider)
 
 	if isStreaming {
-		disableStreamUsage := false
-		if v, ok := reqCtx.Extra["cursor_compat"]; ok {
-			disableStreamUsage = v.(bool)
-		}
+		disableStreamUsage := shouldStripUsage(reqCtx.Extra)
 		if reqCtx.ScenarioFlags != nil {
 			disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
 		}
@@ -279,11 +276,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 			}
 			openaiResp = roundtripped
 		}
-		cursorCompat := false
-		if v, ok := reqCtx.Extra["cursor_compat"]; ok {
-			cursorCompat = v.(bool)
-		}
-		if cursorCompat {
+		if shouldStripUsage(reqCtx.Extra) {
 			delete(openaiResp, "usage")
 		}
 
@@ -657,10 +650,7 @@ func (s *Server) dispatchOpenAIChat(
 			s.streamOpenAIChatToAnthropicBetaWithMCP(c, provider, req, actualModel, responseModel, recorder)
 		case protocol.TypeOpenAIChat:
 			// OpenAI passthrough: source and target are both OpenAI Chat format
-			disableStreamUsage := false
-			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
-				disableStreamUsage = v.(bool)
-			}
+			disableStreamUsage := shouldStripUsage(reqCtx.Extra)
 			if reqCtx.ScenarioFlags != nil {
 				disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
 			}
@@ -678,10 +668,7 @@ func (s *Server) dispatchOpenAIChat(
 		switch reqCtx.SourceAPI {
 		case protocol.TypeOpenAIChat:
 			// OpenAI passthrough: delegate to handleNonStreamingRequest for tool interceptor support
-			stripUsage := false
-			if v, ok := reqCtx.Extra["cursor_compat"]; ok {
-				stripUsage = v.(bool)
-			}
+			stripUsage := shouldStripUsage(reqCtx.Extra)
 
 			if hasDeclaredMCPTools(req) && s.mcpEnabled() {
 				s.dispatchGenericOpenAIChatNonStream(c, reqCtx, rule, provider, recorder)

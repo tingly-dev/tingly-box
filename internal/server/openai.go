@@ -251,6 +251,10 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
 	cursorCompat := resolveCursorCompat(c, rule)
 	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
+	ruleFlags := resolveRuleFlags(rule)
+	if ruleFlags.CustomUserAgent != "" {
+		c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), ruleFlags.CustomUserAgent))
+	}
 
 	// Inject session ID into request context so all downstream code can access it
 	sessionID := resolveSessionID(c, &req.ChatCompletionNewParams)
@@ -297,7 +301,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	}
 
 	// === Transform via pipeline ===
-	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType)
+	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, ruleExtraTransforms(ruleFlags)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
@@ -308,6 +312,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		return
 	}
 	reqCtx.Extra["cursor_compat"] = cursorCompat
+	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
 	// === Dispatch via transform chain ===
 	reqCtx.RequestModel = actualModel

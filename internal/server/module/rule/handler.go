@@ -272,6 +272,14 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetFlagRegistry returns the catalog of supported rule-level flags.
+func (h *Handler) GetFlagRegistry(c *gin.Context) {
+	c.JSON(http.StatusOK, FlagRegistryResponse{
+		Success: true,
+		Data:    typ.RuleFlagRegistry(),
+	})
+}
+
 // ImportRule imports a rule from base64 encoded data
 func (h *Handler) ImportRule(c *gin.Context) {
 	cfg := h.config

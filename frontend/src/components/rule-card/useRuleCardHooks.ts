@@ -117,6 +117,10 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                     flags: {
                         cursor_compat: newConfigRecord.flags?.cursorCompat || false,
                         cursor_compat_auto: newConfigRecord.flags?.cursorCompatAuto || false,
+                        skip_usage: newConfigRecord.flags?.skipUsage || false,
+                        custom_user_agent: newConfigRecord.flags?.customUserAgent || '',
+                        use_max_completion_tokens: newConfigRecord.flags?.useMaxCompletionTokens || false,
+                        use_max_tokens: newConfigRecord.flags?.useMaxTokens || false,
                     },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)

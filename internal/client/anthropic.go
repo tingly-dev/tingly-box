@@ -81,7 +81,14 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 				provider.OAuthDetail.GetIssuer(), sessionID.Value)
 		}
 	} else {
+		// Generic non-OAuth Anthropic provider. Apply the same User-Agent
+		// layering as the generic OpenAI client (rule > provider): rule-UA
+		// wraps innermost so it overwrites the header last, provider-UA sits
+		// outside. OAuth issuers above keep their dedicated transport chain
+		// unchanged because vendor-specific round-trippers manage UA themselves.
 		transport = http.DefaultTransport
+		transport = &customUserAgentTransport{base: transport}
+		transport = wrapWithUserAgent(transport, provider)
 	}
 
 	httpClient := &http.Client{

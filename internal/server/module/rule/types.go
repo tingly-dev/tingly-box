@@ -81,3 +81,10 @@ type ProviderInfo struct {
 	Name   string `json:"name" example:"openai"`
 	Action string `json:"action" example:"created"` // "created", "used", "skipped"
 }
+
+// FlagRegistryResponse exposes the catalog of supported rule-level flags so the
+// UI can render an extension catalog without hard-coding the list.
+type FlagRegistryResponse struct {
+	Success bool           `json:"success" example:"true"`
+	Data    []typ.FlagSpec `json:"data"`
+}

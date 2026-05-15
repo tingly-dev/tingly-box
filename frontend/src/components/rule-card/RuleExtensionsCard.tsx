@@ -1,0 +1,162 @@
+import { Add as AddIcon, Extension as ExtensionIcon } from '@mui/icons-material';
+import { Box, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { styled } from '@mui/material/styles';
+import React from 'react';
+import { PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
+import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
+
+// Matches ProviderNode dimensions so the extensions card aligns with the
+// providers row visually. Content overflow scrolls inside the card body.
+const CARD_STYLES = {
+    width: 180,
+    height: PROVIDER_NODE_STYLES.height,
+    padding: 6,
+} as const;
+
+const StyledExtensionsCard = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'active',
+})<{ active: boolean }>(({ active, theme }) => ({
+    display: 'flex',
+    flexDirection: 'column',
+    padding: CARD_STYLES.padding,
+    borderRadius: theme.shape.borderRadius,
+    border: '1px dashed',
+    borderColor: theme.palette.divider,
+    backgroundColor: theme.palette.background.paper,
+    width: CARD_STYLES.width,
+    height: CARD_STYLES.height,
+    boxShadow: theme.shadows[1],
+    opacity: active ? 1 : 0.6,
+    transition: 'all 0.2s ease-in-out',
+    overflow: 'hidden',
+}));
+
+export interface RuleExtensionsCardProps {
+    flags?: RuleFlags;
+    registry?: FlagSpec[];
+    active: boolean;
+    onOpenCatalog: () => void;
+    onToggleFlag?: (key: string) => void;
+}
+
+const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean => {
+    if (!flags) return false;
+    switch (key) {
+        case 'cursor_compat':
+            return !!flags.cursorCompat;
+        case 'cursor_compat_auto':
+            return !!flags.cursorCompatAuto;
+        case 'skip_usage':
+            return !!flags.skipUsage;
+        case 'use_max_completion_tokens':
+            return !!flags.useMaxCompletionTokens;
+        default:
+            return false;
+    }
+};
+
+const flagStringValue = (flags: RuleFlags | undefined, key: string): string => {
+    if (!flags) return '';
+    switch (key) {
+        case 'custom_user_agent':
+            return flags.customUserAgent || '';
+        default:
+            return '';
+    }
+};
+
+/**
+ * RuleExtensionsCard renders a compact card displaying the rule's enabled
+ * extension flags. The "+ Add" action opens the catalog dialog where users
+ * pick which flags to enable and supply any parameters they require.
+ */
+export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
+    flags,
+    registry,
+    active,
+    onOpenCatalog,
+    onToggleFlag,
+}) => {
+    const enabled = (registry || []).filter((spec) => {
+        if (spec.type === 'bool') return flagBoolValue(flags, spec.key);
+        return flagStringValue(flags, spec.key) !== '';
+    });
+
+    return (
+        <StyledExtensionsCard active={active}>
+            {/* Fixed-height header so the body has a stable scroll region */}
+            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0, mb: 0.25 }}>
+                <ExtensionIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem', color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
+                    Extensions{enabled.length > 0 ? ` (${enabled.length})` : ''}
+                </Typography>
+                <Tooltip title="Configure rule extensions">
+                    <IconButton size="small" onClick={onOpenCatalog} sx={{ p: 0.125 }}>
+                        <AddIcon sx={{ fontSize: 12 }} />
+                    </IconButton>
+                </Tooltip>
+            </Stack>
+
+            {enabled.length === 0 ? (
+                <Box
+                    onClick={onOpenCatalog}
+                    sx={{
+                        flexGrow: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'text.disabled',
+                        fontSize: '0.65rem',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        px: 0.25,
+                    }}
+                >
+                    None enabled. Click to configure.
+                </Box>
+            ) : (
+                <Box
+                    sx={{
+                        flexGrow: 1,
+                        minHeight: 0,
+                        overflowY: 'auto',
+                        // Hide scrollbar visually but keep it functional.
+                        scrollbarWidth: 'thin',
+                        '&::-webkit-scrollbar': { width: 4 },
+                        '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 2 },
+                    }}
+                >
+                    <Stack direction="row" flexWrap="wrap" gap={0.25}>
+                        {enabled.map((spec) => {
+                            const isString = spec.type === 'string';
+                            const stringVal = isString ? flagStringValue(flags, spec.key) : '';
+                            const label = isString && stringVal ? `${spec.label}: ${stringVal}` : spec.label;
+                            const title = isString && stringVal
+                                ? `${spec.description}\nValue: ${stringVal}`
+                                : spec.description;
+                            return (
+                                <Tooltip key={spec.key} title={title}>
+                                    <Chip
+                                        size="small"
+                                        label={label}
+                                        color="primary"
+                                        variant="outlined"
+                                        onClick={onOpenCatalog}
+                                        onDelete={
+                                            spec.type === 'bool' && onToggleFlag
+                                                ? () => onToggleFlag(spec.key)
+                                                : undefined
+                                        }
+                                        sx={{ maxWidth: '100%', fontSize: '0.6rem', height: 18 }}
+                                    />
+                                </Tooltip>
+                            );
+                        })}
+                    </Stack>
+                </Box>
+            )}
+        </StyledExtensionsCard>
+    );
+};
+
+export default RuleExtensionsCard;

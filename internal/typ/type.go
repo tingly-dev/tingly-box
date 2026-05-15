@@ -164,6 +164,21 @@ type RuleFlags struct {
 
 	// CursorCompatAuto enables Cursor auto-detection based on request headers.
 	CursorCompatAuto bool `json:"cursor_compat_auto,omitempty" yaml:"cursor_compat_auto,omitempty"`
+
+	// SkipUsage strips the `usage` field from both streaming and non-streaming responses.
+	SkipUsage bool `json:"skip_usage,omitempty" yaml:"skip_usage,omitempty"`
+
+	// CustomUserAgent overrides the User-Agent header sent to upstream providers.
+	// Empty value means do not override.
+	CustomUserAgent string `json:"custom_user_agent,omitempty" yaml:"custom_user_agent,omitempty"`
+
+	// UseMaxCompletionTokens rewrites the `max_tokens` request field to `max_completion_tokens`
+	// (OpenAI's newer field name for o1/o3/gpt-5 family models).
+	UseMaxCompletionTokens bool `json:"use_max_completion_tokens,omitempty" yaml:"use_max_completion_tokens,omitempty"`
+
+	// UseMaxTokens rewrites the `max_completion_tokens` request field back to the legacy
+	// `max_tokens` field. Use this for providers or models that reject `max_completion_tokens`.
+	UseMaxTokens bool `json:"use_max_tokens,omitempty" yaml:"use_max_tokens,omitempty"`
 }
 
 // ProfileMeta stores metadata for a scenario profile.

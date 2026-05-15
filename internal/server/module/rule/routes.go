@@ -44,6 +44,13 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(DeleteRuleResponse{}),
 	)
 
+	// GET /rule/flags/registry - Get catalog of supported rule-level flags
+	router.GET("/rule/flags/registry", handler.GetFlagRegistry,
+		swagger.WithDescription("Get the catalog of supported rule-level flags"),
+		swagger.WithTags("rules"),
+		swagger.WithResponseModel(FlagRegistryResponse{}),
+	)
+
 	// POST /rule/import - Import a rule from base64 encoded data
 	router.POST("/rule/import", handler.ImportRule,
 		swagger.WithDescription("Import a rule from base64 encoded data"),

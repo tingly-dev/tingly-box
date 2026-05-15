@@ -491,6 +491,12 @@ export const api = {
         }
     },
 
+    // PLACEHOLDER: replace with codegen client once openapi schema is regenerated.
+    // Backend: GET /api/v1/rule/flags/registry returns { success, data: FlagSpec[] }
+    getRuleFlagRegistry: async (): Promise<any> => {
+        return uiAPI('/rule/flags/registry', {method: 'GET'});
+    },
+
     importRule: async (data: string, onProviderConflict: string = 'use', onRuleConflict: string = 'new'): Promise<any> => {
         return uiAPI('/rule/import', {
             method: 'POST',

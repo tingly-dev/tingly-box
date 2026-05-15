@@ -54,6 +54,30 @@ export interface ConfigRecord {
 export interface RuleFlags {
     cursorCompat?: boolean;
     cursorCompatAuto?: boolean;
+    skipUsage?: boolean;
+    customUserAgent?: string;
+    useMaxCompletionTokens?: boolean;
+    useMaxTokens?: boolean;
+}
+
+export interface RuleFlagsApi {
+    cursor_compat?: boolean;
+    cursor_compat_auto?: boolean;
+    skip_usage?: boolean;
+    custom_user_agent?: string;
+    use_max_completion_tokens?: boolean;
+    use_max_tokens?: boolean;
+}
+
+export type FlagValueType = 'bool' | 'string';
+
+export interface FlagSpec {
+    key: string;
+    label: string;
+    description: string;
+    type: FlagValueType;
+    category: string;
+    placeholder?: string;
 }
 
 export interface Rule {
@@ -63,10 +87,7 @@ export interface Rule {
     response_model?: string;
     active?: boolean;
     description?: string;
-    flags?: {
-        cursor_compat?: boolean;
-        cursor_compat_auto?: boolean;
-    };
+    flags?: RuleFlagsApi;
     services?: Array<{
         id?: string;
         uuid?: string;

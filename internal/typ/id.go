@@ -112,6 +112,10 @@ type contextKey string
 
 const SessionIDKey contextKey = "session_id"
 
+// CustomUserAgentKey carries a rule-level User-Agent override down to the
+// outbound HTTP transport.
+const CustomUserAgentKey contextKey = "custom_user_agent"
+
 // WithSessionID adds a sessionID to the context.
 // This allows sessionID to be propagated through the call chain
 // without explicit parameter passing.
@@ -129,4 +133,24 @@ func GetSessionID(ctx context.Context) SessionID {
 		return sid
 	}
 	return SessionID{}
+}
+
+// WithCustomUserAgent attaches a User-Agent override that an outbound HTTP
+// transport may read at request time.
+func WithCustomUserAgent(ctx context.Context, ua string) context.Context {
+	if ua == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, CustomUserAgentKey, ua)
+}
+
+// GetCustomUserAgent returns the per-request User-Agent override, or "" if none.
+func GetCustomUserAgent(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if ua, ok := ctx.Value(CustomUserAgentKey).(string); ok {
+		return ua
+	}
+	return ""
 }

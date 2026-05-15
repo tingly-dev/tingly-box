@@ -91,6 +91,8 @@ interface RuleGraphProps {
     onProviderNodeClick: (providerUuid: string) => void;
     onAddProviderButtonClick: () => void;
     extraActions?: React.ReactNode;
+    // Slot rendered at the right end of the rule group (e.g. rule extensions card)
+    extensionsCard?: React.ReactNode;
     // Smart routing props
     onAddSmartRule?: () => void;
     onEditSmartRule?: (ruleUuid: string) => void;
@@ -176,6 +178,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     onProviderNodeClick,
     onAddProviderButtonClick,
     extraActions,
+    extensionsCard,
     // Smart routing props
     onAddSmartRule,
     onEditSmartRule,
@@ -327,12 +330,13 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <CardContent sx={{ pt: 0, pb: 0.25, '&:last-child': { pb: 0.25 } }}>
                     <Stack spacing={graph.stackSpacing}>
-                        {/* Graph Visualization */}
-                        <Box sx={{ overflowX: 'auto' }}>
-                            <GraphContainer>
-                                <GraphRow>
-                                    {/* Request Model section */}
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, }}>
+                        {/* Graph row: scrollable graph + pinned extensions card */}
+                        <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 0 }}>
+                            <Box sx={{ flexGrow: 1, minWidth: 0, overflowX: 'auto' }}>
+                                <GraphContainer>
+                                    <GraphRow>
+                                        {/* Request Model section */}
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pr: 1, }}>
                                         <NodeContainer>
                                             {record.responseModel ? (
                                                 // Split display when response model is configured
@@ -609,8 +613,25 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         </Box>
                                     </Box>
 
-                                </GraphRow>
-                            </GraphContainer>
+                                    </GraphRow>
+                                </GraphContainer>
+                            </Box>
+                            {/* Rule Extensions slot - pinned to the right of the rule group, outside horizontal scroll */}
+                            {extensionsCard && (
+                                <Box
+                                    onClick={(e) => e.stopPropagation()}
+                                    sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        flexShrink: 0,
+                                        pl: 1,
+                                        pr: `${graphContainer.marginX}px`,
+                                        py: `${graphContainer.marginY}px`,
+                                    }}
+                                >
+                                    {extensionsCard}
+                                </Box>
+                            )}
                         </Box>
                     </Stack>
                 </CardContent>

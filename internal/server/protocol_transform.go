@@ -8,13 +8,23 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+// appendExtraTransforms tacks rule-driven post-base transforms onto a chain
+// built by BuildTransformChain. Kept rule-agnostic — the caller decides what
+// to append.
+func appendExtraTransforms(chain *transform.TransformChain, extras []transform.Transform) {
+	for _, t := range extras {
+		chain.Add(t)
+	}
+}
+
+func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
 
 	// Build transform chain with recording support
 	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -77,12 +87,13 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	return finalCtx, nil
 }
 
-func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
 	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -142,12 +153,13 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	return finalCtx, nil
 }
 
-func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario) (*transform.TransformContext, error) {
+func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
 	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -196,12 +208,13 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 	return finalCtx, nil
 }
 
-func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, maxAllowed int) (*transform.TransformContext, error) {
+func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, maxAllowed int, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
 	// Build transform chain with recording support
 	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
 	if err != nil {
 		return nil, err
 	}
+	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags

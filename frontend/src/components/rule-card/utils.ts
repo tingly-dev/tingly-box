@@ -68,6 +68,10 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
         flags: {
             cursorCompat: rule.flags?.cursor_compat || false,
             cursorCompatAuto: rule.flags?.cursor_compat_auto || false,
+            skipUsage: rule.flags?.skip_usage || false,
+            customUserAgent: rule.flags?.custom_user_agent || '',
+            useMaxCompletionTokens: rule.flags?.use_max_completion_tokens || false,
+            useMaxTokens: rule.flags?.use_max_tokens || false,
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -183,6 +187,10 @@ interface ExportRule {
     flags?: {
         cursor_compat?: boolean;
         cursor_compat_auto?: boolean;
+        skip_usage?: boolean;
+        custom_user_agent?: string;
+        use_max_completion_tokens?: boolean;
+        use_max_tokens?: boolean;
     };
     smart_enabled?: boolean;
     smart_routing: any[];
@@ -216,13 +224,23 @@ export function formatRuleFlags(flags?: RuleFlags): string {
     const entries: string[] = [];
     if (flags.cursorCompat) entries.push('cursor_compat=true');
     if (flags.cursorCompatAuto) entries.push('cursor_compat_auto=true');
+    if (flags.skipUsage) entries.push('skip_usage=true');
+    if (flags.useMaxCompletionTokens) entries.push('use_max_completion_tokens=true');
+    if (flags.useMaxTokens) entries.push('use_max_tokens=true');
+    if (flags.customUserAgent) entries.push(`custom_user_agent=${flags.customUserAgent}`);
     return entries.join(',');
 }
+
+const STRING_FLAG_KEYS = new Set(['custom_user_agent']);
 
 export function parseRuleFlags(input: string): { flags: RuleFlags; error?: string } {
     const flags: RuleFlags = {
         cursorCompat: false,
         cursorCompatAuto: false,
+        skipUsage: false,
+        customUserAgent: '',
+        useMaxCompletionTokens: false,
+        useMaxTokens: false,
     };
 
     const trimmed = input.trim();
@@ -232,9 +250,23 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
 
     const parts = trimmed.split(',').map((part) => part.trim()).filter(Boolean);
     for (const part of parts) {
-        const [rawKey, rawValue] = part.split('=').map((chunk) => chunk.trim());
-        if (!rawKey || rawValue === undefined || rawValue === '') {
+        const eqIdx = part.indexOf('=');
+        if (eqIdx === -1) {
             return { flags, error: `Invalid flag format: "${part}". Use key=value.` };
+        }
+        const rawKey = part.slice(0, eqIdx).trim();
+        const rawValue = part.slice(eqIdx + 1).trim();
+        if (!rawKey || rawValue === '') {
+            return { flags, error: `Invalid flag format: "${part}". Use key=value.` };
+        }
+
+        if (STRING_FLAG_KEYS.has(rawKey)) {
+            switch (rawKey) {
+                case 'custom_user_agent':
+                    flags.customUserAgent = rawValue;
+                    break;
+            }
+            continue;
         }
 
         const valueLower = rawValue.toLowerCase();
@@ -254,12 +286,34 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             case 'cursor_compat_auto':
                 flags.cursorCompatAuto = parsedValue;
                 break;
+            case 'skip_usage':
+                flags.skipUsage = parsedValue;
+                break;
+            case 'use_max_completion_tokens':
+                flags.useMaxCompletionTokens = parsedValue;
+                break;
+            case 'use_max_tokens':
+                flags.useMaxTokens = parsedValue;
+                break;
             default:
                 return { flags, error: `Unknown flag "${rawKey}".` };
         }
     }
 
     return { flags };
+}
+
+// Counts how many flags have a meaningful (non-default) value set.
+export function countActiveFlags(flags?: RuleFlags): number {
+    if (!flags) return 0;
+    let n = 0;
+    if (flags.cursorCompat) n++;
+    if (flags.cursorCompatAuto) n++;
+    if (flags.skipUsage) n++;
+    if (flags.useMaxCompletionTokens) n++;
+    if (flags.useMaxTokens) n++;
+    if (flags.customUserAgent && flags.customUserAgent.trim() !== '') n++;
+    return n;
 }
 
 // Generic export handler
