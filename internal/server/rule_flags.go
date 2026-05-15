@@ -15,7 +15,7 @@ import (
 func ruleExtraTransforms(flags typ.RuleFlags) []transform.Transform {
 	var extras []transform.Transform
 	if flags.UseMaxCompletionTokens || flags.UseMaxTokens {
-		extras = append(extras, NewOpenAIMaxTokensRewriteTransform(
+		extras = append(extras, transform.NewOpenAIMaxTokensRewriteTransform(
 			flags.UseMaxCompletionTokens,
 			flags.UseMaxTokens,
 		))

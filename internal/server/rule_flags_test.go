@@ -3,6 +3,7 @@ package server
 import (
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -97,9 +98,9 @@ func TestRuleExtraTransforms_UseMaxCompletionTokens(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
-	tf, ok := got[0].(*OpenAIMaxTokensRewriteTransform)
+	tf, ok := got[0].(*transform.OpenAIMaxTokensRewriteTransform)
 	if !ok {
-		t.Fatalf("expected *OpenAIMaxTokensRewriteTransform, got %T", got[0])
+		t.Fatalf("expected *transform.OpenAIMaxTokensRewriteTransform, got %T", got[0])
 	}
 	if !tf.UseMaxCompletionTokens || tf.UseMaxTokens {
 		t.Errorf("flag values not propagated: %#v", tf)
@@ -111,7 +112,7 @@ func TestRuleExtraTransforms_UseMaxTokens(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
-	tf := got[0].(*OpenAIMaxTokensRewriteTransform)
+	tf := got[0].(*transform.OpenAIMaxTokensRewriteTransform)
 	if tf.UseMaxCompletionTokens || !tf.UseMaxTokens {
 		t.Errorf("flag values not propagated: %#v", tf)
 	}

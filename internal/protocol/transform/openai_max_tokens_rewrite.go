@@ -1,8 +1,7 @@
-package server
+package transform
 
 import (
 	"github.com/openai/openai-go/v3"
-	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 )
 
@@ -37,7 +36,7 @@ func (t *OpenAIMaxTokensRewriteTransform) Name() string {
 
 // Apply rewrites the token field on OpenAI Chat requests. For any other
 // post-base shape (Anthropic, Responses, Google) it is a no-op.
-func (t *OpenAIMaxTokensRewriteTransform) Apply(ctx *protocoltransform.TransformContext) error {
+func (t *OpenAIMaxTokensRewriteTransform) Apply(ctx *TransformContext) error {
 	req, ok := ctx.Request.(*openai.ChatCompletionNewParams)
 	if !ok {
 		return nil

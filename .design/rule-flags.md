@@ -171,13 +171,14 @@ func RuleFlagRegistry() []FlagSpec { … }
 
 ### 5.1 ops vs Transform — Type 1 内部的分层
 
-`internal/protocol/transform/ops/` 与 `internal/server/transform_*.go`
-承担不同职责：
+`internal/protocol/transform/ops/` 与 `internal/protocol/transform/`
+（含 `internal/server/transform_*.go` 中 server-domain 相关者）承担不同职责：
 
 | 层 | 位置 | 职责 | 例子 |
 |----|------|------|------|
 | **op（操作原语）** | `internal/protocol/transform/ops/` | 纯函数，对某个具体 request 类型做无副作用的字段改写。不感知链路、不感知 rule。 | `ops.ApplyMaxCompletionTokensRewrite(*openai.ChatCompletionNewParams)` |
-| **Transform（链路阶段）** | `internal/server/transform_*.go` | 实现 `protocoltransform.Transform` 接口，按 `ctx.Request` 实际类型决定是否调 op；按 rule flag 配置构造。 | `OpenAIMaxTokensRewriteTransform`（构造期接受 `UseMaxCompletionTokens`、`UseMaxTokens` 两个 bool） |
+| **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口，按 `ctx.Request` 实际类型决定是否调 op；构造期接受配置参数。仅依赖协议层 / SDK 类型。 | `transform.OpenAIMaxTokensRewriteTransform`（构造期接受 `UseMaxCompletionTokens`、`UseMaxTokens` 两个 bool） |
+| **Transform（链路阶段，server-domain）** | `internal/server/transform_*.go` | 实现 `Transform` 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）。 | `ThinkingModeTransform`、`MaxTokensTransform`（Anthropic 上限）、`CleanHeaderTransform` |
 
 **为什么必须分两层？**
 
@@ -324,13 +325,15 @@ vendor-specialized 路径不接 rule UA，是因为它们 UA 跟整个 OAuth/握
    │   ① internal/protocol/transform/ops/<xxx>.go：写 op 原语，    │
    │      签名形如 ApplyXxx(*openai.ChatCompletionNewParams) 或    │
    │      其他具体 request 类型。op 必须是纯函数、无 rule 感知。   │
-   │   ② internal/server/transform_<xxx>.go：写 Transform，        │
+   │   ② internal/protocol/transform/<xxx>.go：写 Transform，      │
    │      构造期接受 rule flag bool，Apply() 里 type-switch        │
-   │      ctx.Request，匹配目标类型时调 op。                       │
+   │      ctx.Request，匹配目标类型时调 op。仅依赖协议层类型；     │
+   │      如需 server-domain 类型，才放到 internal/server/。       │
    │   ③ internal/server/rule_flags.go::ruleExtraTransforms：     │
    │      根据 flag 决定是否 append 新 Transform 到 extras 切片。  │
    │   ④ 4 个 handler 入口不需要再改，他们都已经传                  │
-   │      ruleExtraTransforms(rule)... 给 transformXxxx。          │
+   │      ruleExtraTransforms(resolveRuleFlags(rule))... 给        │
+   │      transformXxxx。                                          │
    │                                                              │
    │ Type 2 (context-passed hint)                                 │
    │   ① 在 internal/typ/id.go 加 contextKey + 一对                │

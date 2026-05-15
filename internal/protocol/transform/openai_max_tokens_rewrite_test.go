@@ -1,4 +1,4 @@
-package server
+package transform
 
 import (
 	"testing"
@@ -7,7 +7,6 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
-	protocoltransform "github.com/tingly-dev/tingly-box/internal/protocol/transform"
 )
 
 func TestOpenAIMaxTokensRewriteTransform_Name(t *testing.T) {
@@ -21,7 +20,7 @@ func TestOpenAIMaxTokensRewriteTransform_AppliesOnOpenAIChat(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		MaxTokens: param.NewOpt(int64(1024)),
 	}
-	ctx := &protocoltransform.TransformContext{Request: req}
+	ctx := &TransformContext{Request: req}
 
 	tf := NewOpenAIMaxTokensRewriteTransform(true, false)
 	if err := tf.Apply(ctx); err != nil {
@@ -39,7 +38,7 @@ func TestOpenAIMaxTokensRewriteTransform_ReverseDirection(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		MaxCompletionTokens: param.NewOpt(int64(2048)),
 	}
-	ctx := &protocoltransform.TransformContext{Request: req}
+	ctx := &TransformContext{Request: req}
 
 	tf := NewOpenAIMaxTokensRewriteTransform(false, true)
 	if err := tf.Apply(ctx); err != nil {
@@ -57,7 +56,7 @@ func TestOpenAIMaxTokensRewriteTransform_BothFlagsOff_NoOp(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		MaxTokens: param.NewOpt(int64(1024)),
 	}
-	ctx := &protocoltransform.TransformContext{Request: req}
+	ctx := &TransformContext{Request: req}
 
 	tf := NewOpenAIMaxTokensRewriteTransform(false, false)
 	if err := tf.Apply(ctx); err != nil {
@@ -73,7 +72,7 @@ func TestOpenAIMaxTokensRewriteTransform_BothFlagsOff_NoOp(t *testing.T) {
 
 func TestOpenAIMaxTokensRewriteTransform_NoOpOnAnthropicV1(t *testing.T) {
 	req := &anthropic.MessageNewParams{MaxTokens: 1024}
-	ctx := &protocoltransform.TransformContext{Request: req}
+	ctx := &TransformContext{Request: req}
 
 	tf := NewOpenAIMaxTokensRewriteTransform(true, false)
 	if err := tf.Apply(ctx); err != nil {
@@ -86,7 +85,7 @@ func TestOpenAIMaxTokensRewriteTransform_NoOpOnAnthropicV1(t *testing.T) {
 
 func TestOpenAIMaxTokensRewriteTransform_NoOpOnAnthropicBeta(t *testing.T) {
 	req := &anthropic.BetaMessageNewParams{MaxTokens: 1024}
-	ctx := &protocoltransform.TransformContext{Request: req}
+	ctx := &TransformContext{Request: req}
 
 	tf := NewOpenAIMaxTokensRewriteTransform(true, false)
 	if err := tf.Apply(ctx); err != nil {
@@ -99,7 +98,7 @@ func TestOpenAIMaxTokensRewriteTransform_NoOpOnAnthropicBeta(t *testing.T) {
 
 func TestOpenAIMaxTokensRewriteTransform_NoOpOnResponses(t *testing.T) {
 	req := &responses.ResponseNewParams{}
-	ctx := &protocoltransform.TransformContext{Request: req}
+	ctx := &TransformContext{Request: req}
 
 	tf := NewOpenAIMaxTokensRewriteTransform(true, true)
 	if err := tf.Apply(ctx); err != nil {
@@ -110,7 +109,7 @@ func TestOpenAIMaxTokensRewriteTransform_NoOpOnResponses(t *testing.T) {
 }
 
 func TestOpenAIMaxTokensRewriteTransform_NilRequest(t *testing.T) {
-	ctx := &protocoltransform.TransformContext{Request: nil}
+	ctx := &TransformContext{Request: nil}
 	tf := NewOpenAIMaxTokensRewriteTransform(true, true)
 	if err := tf.Apply(ctx); err != nil {
 		t.Fatalf("Apply on nil request failed: %v", err)
@@ -124,7 +123,7 @@ type stubBaseTransform struct{}
 
 func (stubBaseTransform) Name() string { return "stub_base" }
 
-func (stubBaseTransform) Apply(ctx *protocoltransform.TransformContext) error {
+func (stubBaseTransform) Apply(ctx *TransformContext) error {
 	if a, ok := ctx.Request.(*anthropic.MessageNewParams); ok {
 		ctx.Request = &openai.ChatCompletionNewParams{
 			MaxTokens: param.NewOpt(a.MaxTokens),
@@ -140,9 +139,9 @@ func (stubBaseTransform) Apply(ctx *protocoltransform.TransformContext) error {
 // chain ordering works correctly.
 func TestOpenAIMaxTokensRewriteTransform_FiresAfterBase(t *testing.T) {
 	original := &anthropic.MessageNewParams{MaxTokens: 4096}
-	ctx := &protocoltransform.TransformContext{Request: original}
+	ctx := &TransformContext{Request: original}
 
-	chain := protocoltransform.NewTransformChain([]protocoltransform.Transform{
+	chain := NewTransformChain([]Transform{
 		stubBaseTransform{},
 		NewOpenAIMaxTokensRewriteTransform(true, false),
 	})
