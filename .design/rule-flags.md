@@ -1,8 +1,13 @@
 # Rule Flags 设计与实操
 
 > 适用对象：tingly-box 后端 / 前端贡献者。
-> 历史回溯：2026-05 引入 registry，把原本仅 2 个布尔 flag 的隐藏入口
-> 升级为 catalog 化的"路由规则扩展"系统。
+> 历史回溯：
+> - 2026-05 引入 registry，把原本仅 2 个布尔 flag 的隐藏入口
+>   升级为 catalog 化的"路由规则扩展"系统。
+> - 2026-05（后期）把 `max_tokens` 字段重写从 openai.go 直接 mutate
+>   上移到 **post-base Transform 链路阶段**，使其在 Anthropic→OpenAI
+>   等跨协议路径上也能正确生效。同时新增 `use_max_tokens`（反向重写
+>   到旧字段）。
 
 ---
 
@@ -14,7 +19,7 @@
 |------|------|------|------|
 | Provider | provider 实例 | `user_agent`、`api_base`、`proxy_url`、`timeout` | 全局静态生效 |
 | Scenario flags | scenario | `disable_stream_usage` 等 | 跨 rule 共享 |
-| **Rule flags** | **单条 rule** | **`cursor_compat`、`skip_usage`、`use_max_completion_tokens` …** | **本文档讨论** |
+| **Rule flags** | **单条 rule** | **`cursor_compat`、`skip_usage`、`use_max_completion_tokens`、`use_max_tokens` …** | **本文档讨论** |
 
 很多场景介于"provider 通用"和"协议层通用"之间——它们只对**某一类客户端 / 某一类模型 / 某一种调试目的**有意义。把这些行为塞到 Provider 配置里会污染默认值；做成 Scenario flag 又过于粗粒度。Rule flag 是这一类"局部、可选、可叠加的开关"的归宿。
 
@@ -60,21 +65,41 @@
               └─────────────────────┬──────────────────────────────┘
                                     │ rule resolved at request time
                                     ▼
-              ┌─────────────────────────────────────────────────────┐
-              │   internal/server/openai.go : OpenAIChatCompletion   │
-              │   ── ruleFlags := resolveRuleFlags(rule)             │
-              │   ├─ applyMaxCompletionTokensRewrite(&req)           │ ← request mutation
-              │   ├─ WithCustomUserAgent(ctx, ruleFlags.UA)          │ ← context-passed
-              │   ├─ reqCtx.Extra["skip_usage"] = …                  │ ← downstream hint
-              │   └─ (existing) applyCursorCompatFlag                │
-              └─────────────────────┬───────────────────────────────┘
+              ┌─────────────────────────────────────────────────────────┐
+              │   inbound handler (openai.go / anthropic_v1.go /         │
+              │                    anthropic_beta.go / openai_responses) │
+              │   ── ruleFlags := resolveRuleFlags(rule)                 │
+              │   ├─ WithCustomUserAgent(ctx, ruleFlags.UA)              │ ← context-passed
+              │   ├─ reqCtx.Extra["skip_usage"] = …                      │ ← downstream hint
+              │   ├─ (existing) applyCursorCompatFlag(extra hint)        │ ← pre-chain marker
+              │   └─ extras := ruleExtraTransforms(rule)                 │ ← post-base stages
+              │       → [OpenAIMaxTokensRewriteTransform{Use…, Use…}]    │
+              └─────────────────────┬───────────────────────────────────┘
+                                    │
+                                    ▼
+              ┌─────────────────────────────────────────────────────────┐
+              │   transformXxxx(..., extras...) :                        │
+              │     chain := BuildTransformChain(...)                    │
+              │     for _, t := range extras { chain.Add(t) }            │
+              │     chain.Execute(ctx)                                   │
+              │                                                          │
+              │     ┌───────────────────────────────────────────────┐    │
+              │     │ Base  →  MCP  →  Consistency  →  Vendor       │    │
+              │     │                                          │    │    │
+              │     │                                          ▼    │    │
+              │     │                          OpenAIMaxTokensRewrite│   │
+              │     │                          (type-switches on    │    │
+              │     │                           *openai.ChatCompletion;   │
+              │     │                           delegates to ops.*)│    │
+              │     └───────────────────────────────────────────────┘    │
+              └─────────────────────┬───────────────────────────────────┘
                                     │
                 ┌───────────────────┼───────────────────┐
                 ▼                   ▼                   ▼
           request mutation     transport chain      response mutation
-        (max_tokens rewrite,  (UA injection via   (skip_usage strips
-         cursor norm. etc.)    customUA RT)        `usage` field in
-                                                   stream + nonstream)
+         (chain stage:        (UA injection via    (skip_usage strips
+          field rewrite;       customUA RT)         `usage` field in
+          cursor norm.)                              stream + nonstream)
                                     │
                                     ▼
                               upstream provider
@@ -110,10 +135,11 @@ func RuleFlagRegistry() []FlagSpec { … }
 
 | Key | Type | 类别 | 作用 | 注入点 |
 |-----|------|------|------|--------|
-| `cursor_compat` | bool | compatibility | Cursor IDE 内容归一化 + 工具门控 + stream usage 抑制 | `cursor_compat.go` |
+| `cursor_compat` | bool | compatibility | Cursor IDE 内容归一化 + 工具门控 + stream usage 抑制 | `cursor_compat.go`（pre-chain，配合 ops 同步执行）|
 | `cursor_compat_auto` | bool | compatibility | 通过请求头识别 Cursor，自动启用 cursor_compat | `cursor_compat.go::resolveCursorCompat` |
 | `skip_usage` | bool | response | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)` |
-| `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `applyMaxCompletionTokensRewrite` |
+| `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite` |
+| `use_max_tokens` | bool | request | 反向重写：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| `OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxTokensRewrite` |
 | `custom_user_agent` | string | request | 覆盖出站 User-Agent header | `customUserAgentTransport` + `WithCustomUserAgent(ctx, …)` |
 
 ---
@@ -122,14 +148,17 @@ func RuleFlagRegistry() []FlagSpec { … }
 
 ```
 ┌────────────────────────┐
-│       Request body     │   ← Type 1: 直接改 request struct
-│   (e.g. max_completion │     调用位置：openai.go 在 transform 链之前
-│    _tokens 重写)        │     函数形态：applyXxx(&req)
+│       Request body     │   ← Type 1: 改 request struct，按时机分两小类
+│                        │      1a. pre-chain：handler 入口直接 mutate
+│                        │          inbound 请求（如 cursor 内容归一化标记）
+│                        │      1b. post-base Transform：作为链路阶段，
+│                        │          在 BaseTransform 完成协议转换之后运行
+│                        │          （如 max_tokens 字段重写）
 └────────────────────────┘
 
 ┌────────────────────────┐
 │   Per-request context  │   ← Type 2: 通过 context 把"hint"带到深层组件
-│  (e.g. custom UA)       │     调用位置：openai.go 把 c.Request 的 ctx 替换
+│  (e.g. custom UA)       │     调用位置：handler 把 c.Request 的 ctx 替换
 └────────────────────────┘     消费位置：transport / round-tripper
 
 ┌────────────────────────┐
@@ -139,6 +168,57 @@ func RuleFlagRegistry() []FlagSpec { … }
 ```
 
 任何新 flag 都应归入这三类之一；如果有第四类，先在 PR 描述里说明。
+
+### 5.1 ops vs Transform — Type 1 内部的分层
+
+`internal/protocol/transform/ops/` 与 `internal/server/transform_*.go`
+承担不同职责：
+
+| 层 | 位置 | 职责 | 例子 |
+|----|------|------|------|
+| **op（操作原语）** | `internal/protocol/transform/ops/` | 纯函数，对某个具体 request 类型做无副作用的字段改写。不感知链路、不感知 rule。 | `ops.ApplyMaxCompletionTokensRewrite(*openai.ChatCompletionNewParams)` |
+| **Transform（链路阶段）** | `internal/server/transform_*.go` | 实现 `protocoltransform.Transform` 接口，按 `ctx.Request` 实际类型决定是否调 op；按 rule flag 配置构造。 | `OpenAIMaxTokensRewriteTransform`（构造期接受 `UseMaxCompletionTokens`、`UseMaxTokens` 两个 bool） |
+
+**为什么必须分两层？**
+
+- `BaseTransform` 负责跨协议转换（Anthropic ↔ OpenAI / Responses /
+  Google）。如果在链外直接改 inbound 请求，遇到 "Anthropic inbound →
+  OpenAI Chat target" 的路径，改的还是 Anthropic 形态，rewrite 在
+  Base 转换之后就丢失了。
+- 把 rewrite 包成一个 Transform 并加在 Base **之后**，它看见的是已经
+  转换好的 `*openai.ChatCompletionNewParams`，无论 inbound 是什么形态
+  都能命中——这就是为什么 `use_max_completion_tokens` / `use_max_tokens`
+  在 4 个 handler 路径上都能生效。
+
+### 5.2 链路位置与 wiring
+
+```
+handler                         transformXxxx                       chain
+  │                                  │                                │
+  │ extras := ruleExtraTransforms(   │                                │
+  │             rule)                │                                │
+  │  (e.g. [OpenAIMaxTokensRewrite]) │                                │
+  ├──────── extras... ──────────────►│                                │
+  │                                  │  chain := BuildTransformChain  │
+  │                                  │           (...)                │
+  │                                  ├──────────────────────────────►│
+  │                                  │  for _, t := range extras {    │
+  │                                  │      chain.Add(t)              │
+  │                                  │  }                             │
+  │                                  │  chain.Execute(ctx)            │
+  │                                  ├──────────────────────────────►│
+```
+
+- `BuildTransformChain` 故意不感知 rule flag——它的输入仍只有 scenario
+  / provider / recording。把"哪些 rule-extra transform 要追加"这件事
+  留给 handler 层，handler 通过新增的 variadic `extraTransforms
+  ...transform.Transform` 把列表传给 `transformAnthropicV1` /
+  `transformAnthropicBeta` / `transformOpenAIChat` /
+  `transformOpenAIResponses`。每个 `transformXxxx` 拿到 `chain` 后用
+  `chain.Add()` 追加 extra，再 `Execute`。
+- `ruleExtraTransforms(rule)`（位于 `internal/server/rule_flags.go`）
+  是这条链路的唯一聚合点；今后再有新的 rule-driven Transform 也都
+  挂到这里返回，handler 不需要再加新的调用。
 
 ---
 
@@ -234,13 +314,44 @@ vendor-specialized 路径不接 rule UA，是因为它们 UA 跟整个 OAuth/握
    └─ 在 RuleFlagRegistry() 返回值里追加一个 FlagSpec，
       key 必须与上一步的 json tag 一字不差
 
-3. internal/server/  (行为落地)
-   ├─ 选定 §5 中的注入类型 (1/2/3)
-   ├─ 在对应 helper（applyXxx / WithXxx / shouldXxx）里加分支
-   └─ 在 openai.go / protocol_dispatch.go 等"枢纽"调用 helper
+3. 选定 §5 中的注入类型：
 
-4. internal/server/rule_flags_test.go  或  与新逻辑同包的 _test.go
-   └─ 覆盖：nil-safe / no-op when flag absent / 启用时的实际效果
+   ┌─────────────────────────────────────────────────────────────┐
+   │ Type 1a (pre-chain 请求 mutation)                            │
+   │   handler 入口直接调 helper，例：cursor_compat              │
+   │                                                              │
+   │ Type 1b (post-base Transform — 推荐)                         │
+   │   ① internal/protocol/transform/ops/<xxx>.go：写 op 原语，    │
+   │      签名形如 ApplyXxx(*openai.ChatCompletionNewParams) 或    │
+   │      其他具体 request 类型。op 必须是纯函数、无 rule 感知。   │
+   │   ② internal/server/transform_<xxx>.go：写 Transform，        │
+   │      构造期接受 rule flag bool，Apply() 里 type-switch        │
+   │      ctx.Request，匹配目标类型时调 op。                       │
+   │   ③ internal/server/rule_flags.go::ruleExtraTransforms：     │
+   │      根据 flag 决定是否 append 新 Transform 到 extras 切片。  │
+   │   ④ 4 个 handler 入口不需要再改，他们都已经传                  │
+   │      ruleExtraTransforms(rule)... 给 transformXxxx。          │
+   │                                                              │
+   │ Type 2 (context-passed hint)                                 │
+   │   ① 在 internal/typ/id.go 加 contextKey + 一对                │
+   │      WithXxx/GetXxx helper。                                  │
+   │   ② handler 入口 c.Request = c.Request.WithContext(WithXxx)。  │
+   │   ③ 消费方（如 transport / round-tripper）读 GetXxx。         │
+   │                                                              │
+   │ Type 3 (response 后置加工)                                    │
+   │   ① handler 把 flag 值写进 reqCtx.Extra。                    │
+   │   ② internal/server/protocol_dispatch.go：在派发分支调用       │
+   │      shouldStripUsage(...) 这类聚合判定。                     │
+   └─────────────────────────────────────────────────────────────┘
+
+4. 测试位置随注入类型走：
+   ├─ op 单元测试 → 与 op 同包 (`internal/protocol/transform/ops/`)
+   ├─ Transform 行为测试 → 与 Transform 同包 (`internal/server/`)
+   │     必备 case：在目标 request 类型上启用 / 在其他类型上 no-op /
+   │              chain 中跟一个 stub BaseTransform，验证 post-base
+   │              生效（前述 max_tokens 即此模式）。
+   └─ wire 序列化测试（仅对改字段名的 op 有意义）：marshal 前后断言
+       JSON 顶层 key 是否出现/消失，挡 SDK omitzero tag 失效。
 
 5. frontend/src/components/RoutingGraphTypes.ts
    ├─ RuleFlags 接口加 camelCase 字段
@@ -276,6 +387,10 @@ vendor-specialized 路径不接 rule UA，是因为它们 UA 跟整个 OAuth/握
 | 卡片放路由图内 vs. 路由图外（固定右侧） | 固定右侧 | 卡片随路由图滚动 | flag 是 rule 级而非 provider 级，常驻可见更符合心智模型 |
 | string flag 的"启用"语义 | 空 = 未启用 | 独立 enable Switch + 文本 | 一个字段一个状态，UI 更简单；权衡是无法区分"空字符串"和"未配置" |
 | UA 链 vendor pin 是否不可覆盖 | 否，可被 provider/rule 覆盖 | vendor pin 强制 | 把 `provider.UserAgent` 当调试 override 更灵活；用 doc comment 规约用法 |
+| 请求字段重写：handler 直接 mutate vs. post-base Transform | post-base Transform | handler 链外直改 | 链外直改会在 Anthropic→OpenAI 等跨协议路径上失效；Transform 在 Base 之后看见的是最终形态，所有 inbound 类型都能命中 |
+| op vs Transform 是否合并成一类 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（无 rule 感知、可直接被多处复用、易于做 wire 序列化测试）；Transform 才感知 rule 与链路位置。混在一起会让原语难复用、测试难写 |
+| `BuildTransformChain` 是否感知 rule | 否 | 把 ruleFlags 作为参数传入 | 让 chain builder 只懂 scenario/provider/recording；rule 级关心点放在 handler，并通过 `extraTransforms ...transform.Transform` variadic 注入。signature 加 variadic 是 additive 改动 |
+| 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Extensions 卡片 | Extensions 卡片已经能覆盖 cursor_compat / cursor_compat_auto；两套入口对同一字段语义会引发混淆 |
 
 ---
 
@@ -283,6 +398,14 @@ vendor-specialized 路径不接 rule UA，是因为它们 UA 跟整个 OAuth/握
 
 - **UI**：string flag 加独立 enable Switch（让"空"与"未启用"可区分）。
 - **UI**：Catalog 加搜索框 / category collapse（flag 数量超过 ~8 个时会拥挤）。
+- **后端**：`cursor_compat` 内容归一化目前仍走 §5 Type 1a（pre-chain，
+  在 `openai.go` 入口直接调 `ops.ApplyCursorCompatContentNormalization`）。
+  长期看可以把它也包成一个 post-base Transform，让 inbound 是 Anthropic
+  时也能在 Base 转换后正确生效——但与 `max_tokens` 不同，cursor 归一化
+  只对 OpenAI 入站才有意义（其它入站不会经过 Cursor 客户端），所以优先
+  级不高。
 - **后端**：`internal/client/openai.go` 通用 OpenAI client 用 `http.DefaultTransport` 而非 `createSessionBoundTransport`，导致它**没有**走 transport pool / session 隔离——这是个独立问题，不在 rule flag 范畴，但补齐时记得保留 §6 的两层 UA 包装顺序。
 - **后端**：长期看，部分 ScenarioFlags 可以下沉成 rule flag（例如 `disable_stream_usage` 已与 `skip_usage` 高度重叠），等业务确认后做一次合并。
-- **测试**：当前测试覆盖 helper 级，缺一个 "rule 配了 skip_usage → 真实 HTTP 响应里没有 usage" 的端到端 case；待 mock provider fixture 成熟后补。
+- **测试**：当前测试覆盖 helper / Transform / op / wire 序列化共 4 层，
+  但缺一个 "rule 配了 skip_usage → 真实 HTTP 响应里没有 usage" 的端到
+  端 case；待 mock provider fixture 成熟后补。
