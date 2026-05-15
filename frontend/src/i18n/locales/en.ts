@@ -77,7 +77,9 @@ export default {
       "enterZenMode": "Enter Zen Mode:",
       "more": "More",
       "exitZen": "Exit",
-      "click": "Click"
+      "click": "Click",
+      "feedback": "Feedback",
+      "feedbackTooltip": "Send Feedback (opens GitHub Issues)"
     },
     "themeMenu": {
       "switchTo": "Switch to:",

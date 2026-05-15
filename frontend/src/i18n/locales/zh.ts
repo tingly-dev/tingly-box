@@ -78,7 +78,9 @@ export default {
       "enterZenMode": "进入禅模式：",
       "more": "更多",
       "exitZen": "退出",
-      "click": "点击"
+      "click": "点击",
+      "feedback": "反馈",
+      "feedbackTooltip": "发送反馈（跳转到 GitHub Issues）"
     },
     "themeMenu": {
       "switchTo": "切换到：",
