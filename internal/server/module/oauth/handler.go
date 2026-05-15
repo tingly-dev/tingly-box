@@ -279,6 +279,8 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 					(p.Models != nil && len(p.Models) > 0 && strings.HasPrefix(p.Models[0], "gpt"))
 				isAnthropicProvider := p.APIStyle == protocol.APIStyleAnthropic ||
 					strings.Contains(p.APIBase, "anthropic.com")
+				isGoogleProvider := p.APIStyle == protocol.APIStyleGoogle ||
+					strings.Contains(p.APIBase, "googleapis.com")
 
 				var matches bool
 				switch baseProvider {
@@ -286,6 +288,8 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 					matches = isOpenAIProvider
 				case "anthropic":
 					matches = isAnthropicProvider
+				case "google":
+					matches = isGoogleProvider
 				}
 
 				if matches && p.ProxyURL != "" {

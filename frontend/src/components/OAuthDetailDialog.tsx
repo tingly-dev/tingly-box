@@ -138,12 +138,13 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                             value={formData.apiStyle}
                             onChange={(e) => setFormData(prev => ({
                                 ...prev,
-                                apiStyle: e.target.value as 'openai' | 'anthropic',
+                                apiStyle: e.target.value as 'openai' | 'anthropic' | 'google',
                             }))}
                             SelectProps={{ native: true }}
                         >
                             <option value="openai">OpenAI Compatible</option>
                             <option value="anthropic">Anthropic Compatible</option>
+                            <option value="google">Google Compatible</option>
                         </TextField>
 
                         {/* Editable Fields */}
@@ -167,7 +168,9 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                             placeholder={
                                 formData.apiStyle === 'openai'
                                     ? "https://api.openai.com/v1"
-                                    : "https://api.anthropic.com"
+                                    : formData.apiStyle === 'google'
+                                        ? "https://cloudcode-pa.googleapis.com"
+                                        : "https://api.anthropic.com"
                             }
                         />
 
