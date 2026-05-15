@@ -76,11 +76,8 @@ export interface ProviderNodeComponentProps {
 // non-Tooltip wrapper keeps the visible disk and the hit region in sync.
 const PriorityBadgeAnchor = styled(Box)({
     position: 'absolute',
-    // Pulled out of the corner — about 60% of the disk sits outside the
-    // node, 40% inside. The disk's centre lands inside the node so
-    // clicks land on the badge, not in the gap between siblings.
-    top: -8,
-    left: -8,
+    top: -10,
+    left: -10,
     width: 26,
     height: 26,
     zIndex: 3,
