@@ -540,7 +540,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                         </>
                                     ) : <></>}
 
-                                    {/* Providers Container - Default providers for normal mode or fallback for smart routing */}
+                                    {/* Providers Container - Default providers for normal mode or default for smart routing */}
                                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'nowrap', justifyContent: 'flex-start', alignItems: 'center' }}>
                                             {record.providers.map((provider, index) => (
@@ -548,7 +548,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                     key={provider.uuid}
                                                     title={
                                                         smartEnabled && hasSmartRules
-                                                            ? 'Default provider (fallback when no smart rules match)'
+                                                            ? 'Default provider (default when no smart rules match)'
                                                             : record.providers.length >= 2
                                                                 ? `Provider ${index + 1} of ${record.providers.length} (requests are load balanced)`
                                                                 : 'Provider for request forwarding'

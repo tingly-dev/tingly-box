@@ -21,7 +21,7 @@ import type { Provider } from '../types/provider';
 import {
     SmartOpNode,
     ActionAddNode,
-    SmartFallbackNode,
+    SmartDefaultNode,
     ArrowNode,
     ModelNode,
     NodeContainer,
@@ -231,7 +231,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                         </Tooltip>
                     )}
                     {active && record.providers.length === 0 && (
-                        <Tooltip title="No fallback providers - please add fallback providers to confirm rule works">
+                        <Tooltip title="No default providers - please add default providers to confirm rule works">
                             <WarningIcon
                                 sx={{
                                     fontSize: '1.1rem',
@@ -440,7 +440,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                         <GraphRow>
                                             {/* Default Node */}
                                             <NodeContainer>
-                                                <SmartFallbackNode
+                                                <SmartDefaultNode
                                                     providersCount={record.providers.length}
                                                     active={active}
                                                     onAddProvider={() => onAddDefaultProvider?.()}
@@ -463,8 +463,8 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                         key={provider.uuid}
                                                         title={
                                                             record.providers.length >= 2
-                                                                ? `Fallback provider ${providerIndex + 1} of ${record.providers.length} (requests are load balanced)`
-                                                                : 'Fallback provider for request forwarding'
+                                                                ? `Default provider ${providerIndex + 1} of ${record.providers.length} (requests are load balanced)`
+                                                                : 'Default provider for request forwarding'
                                                         }
                                                         placement="top"
                                                         arrow

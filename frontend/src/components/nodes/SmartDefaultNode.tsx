@@ -21,7 +21,7 @@ export interface DefaultNodeProps {
     onAddProvider: () => void;
 }
 
-export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
+export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
     providersCount,
     active,
     onAddProvider,
@@ -59,7 +59,7 @@ export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
                                     fontWeight: 500,
                                 }}
                             >
-                                Fallback
+                                Default
                             </Typography>
                         </Box>
                     </Box>
@@ -70,4 +70,4 @@ export const SmartFallbackNode: React.FC<DefaultNodeProps> = ({
     );
 };
 
-export default SmartFallbackNode;
+export default SmartDefaultNode;

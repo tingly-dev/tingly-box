@@ -1,7 +1,7 @@
 // Re-exports from split node files
 export * from './ActionAddNode';
 export * from './ArrowNode';
-export * from './SmartFallbackNode';
+export * from './SmartDefaultNode';
 export * from './ModelNode';
 export * from './ProviderNode';
 export * from './SmartOpNode';
