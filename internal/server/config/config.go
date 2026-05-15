@@ -91,6 +91,11 @@ type Config struct {
 	// MultiTenantConfig holds settings for multi-tenant API token authentication
 	MultiTenantConfig MultiTenantConfig `yaml:"multi_tenant,omitempty" json:"multi_tenant,omitempty"`
 
+	// MigrationsCompleted tracks which one-time migrations have already been applied.
+	// This prevents idempotency-breaking migrations (e.g. service auto-fill) from
+	// re-running on every restart and overwriting intentional user changes.
+	MigrationsCompleted []string `json:"migrations_completed,omitempty" yaml:"migrations_completed,omitempty"`
+
 	ConfigFile string `yaml:"-" json:"-"` // Not serialized to YAML (exported to preserve field)
 	ConfigDir  string `yaml:"-" json:"-"`
 
@@ -2064,4 +2069,21 @@ func (c *Config) ApplyHTTPTransportConfig() {
 		RespectEnvProxy:     c.HTTPTransport.RespectEnvProxy,
 	}
 	client.SetTransportConfig(config)
+}
+
+// hasMigrationCompleted reports whether the named one-time migration has already run.
+func (c *Config) hasMigrationCompleted(name string) bool {
+	for _, m := range c.MigrationsCompleted {
+		if m == name {
+			return true
+		}
+	}
+	return false
+}
+
+// markMigrationCompleted records a one-time migration as done so it is skipped on future startups.
+func (c *Config) markMigrationCompleted(name string) {
+	if !c.hasMigrationCompleted(name) {
+		c.MigrationsCompleted = append(c.MigrationsCompleted, name)
+	}
 }

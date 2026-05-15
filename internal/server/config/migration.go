@@ -200,9 +200,13 @@ func migrate20260103(c *Config) {
 	}
 }
 
-// migrate20260110 copies services from built-in-cc to built-in-cc-* rules if they are empty
+// migrate20260110 copies services from built-in-cc to built-in-cc-* rules if they are empty.
+// This migration runs only once; subsequent restarts skip it so that a user who intentionally
+// clears a rule's services does not have them silently refilled.
 func migrate20260110(c *Config) {
-	needsSave := false
+	if c.hasMigrationCompleted("20260110") {
+		return
+	}
 
 	// Find the source rule (built-in-cc)
 	var fallbackRule *typ.Rule
@@ -213,8 +217,10 @@ func migrate20260110(c *Config) {
 		}
 	}
 
-	// If source rule doesn't exist or has no services, skip migration
+	// If source rule doesn't exist or has no services, nothing to copy.
+	// Still mark as completed so we don't keep retrying on every restart.
 	if fallbackRule == nil || len(fallbackRule.Services) == 0 {
+		c.markMigrationCompleted("20260110")
 		return
 	}
 
@@ -237,6 +243,7 @@ func migrate20260110(c *Config) {
 		}
 	}
 
+	needsSave := false
 	for i := range c.Rules {
 		rule := &c.Rules[i]
 
@@ -260,6 +267,7 @@ func migrate20260110(c *Config) {
 		needsSave = true
 	}
 
+	c.markMigrationCompleted("20260110")
 	if needsSave {
 		_ = c.Save()
 	}
@@ -282,7 +290,13 @@ func migrate20260114(c *Config) {
 }
 
 // migrate20260210 ensures the subagent rule exists and mirrors the haiku model.
+// This migration runs only once so that a user who intentionally clears the subagent
+// rule's services does not have them silently restored on the next restart.
 func migrate20260210(c *Config) {
+	if c.hasMigrationCompleted("20260210") {
+		return
+	}
+
 	// Find required rules.
 	var haikuRule *typ.Rule
 	var subagentRule *typ.Rule
@@ -298,7 +312,9 @@ func migrate20260210(c *Config) {
 	}
 
 	// Without a haiku model, there's nothing to mirror.
+	// Mark as completed so we don't retry every restart.
 	if haikuRule == nil {
+		c.markMigrationCompleted("20260210")
 		return
 	}
 
@@ -315,6 +331,7 @@ func migrate20260210(c *Config) {
 			}
 		}
 		if subagentRule == nil {
+			c.markMigrationCompleted("20260210")
 			if needsSave {
 				_ = c.Save()
 			}
@@ -330,6 +347,7 @@ func migrate20260210(c *Config) {
 		needsSave = true
 	}
 
+	c.markMigrationCompleted("20260210")
 	if needsSave {
 		_ = c.Save()
 	}
