@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -48,51 +47,8 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 		}
 	}
 
-	// Step 3: Run probes concurrently
-	var wg sync.WaitGroup
-	var chatStatus, responsesStatus EndpointStatus
-
-	// Create context with timeout for both probes
-	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
-	defer cancel()
-
-	// Probe chat endpoint
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		chatStatus = ap.probeChatEndpoint(probeCtx, provider, req.ModelID)
-	}()
-
-	// Probe responses endpoint (only for OpenAI-style providers)
-	if provider.APIStyle == protocol.APIStyleOpenAI {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			responsesStatus = ap.probeOpenAIResponsesEndpoint(probeCtx, provider, req.ModelID)
-		}()
-	} else {
-		// Mark responses as unavailable for non-OpenAI providers
-		responsesStatus = EndpointStatus{
-			Available:    false,
-			ErrorMessage: "Responses API is only supported by OpenAI-style providers",
-			LastChecked:  time.Now(),
-		}
-	}
-
-	// Wait for all probes to complete
-	wg.Wait()
-
-	// Step 4: Determine preferred endpoint
-	preferred := ap.determinePreferredEndpoint(&chatStatus, &responsesStatus)
-
-	result := &ProbeResult{
-		ProviderUUID:      req.ProviderUUID,
-		ModelID:           req.ModelID,
-		ChatEndpoint:      chatStatus,
-		ResponsesEndpoint: responsesStatus,
-		PreferredEndpoint: preferred,
-		LastUpdated:       time.Now(),
-	}
+	// Step 3: Run probes concurrently.
+	result := ap.runEndpointProbes(ctx, provider, req)
 
 	// Step 5: Cache results
 	if ap.server.probeCache != nil {
@@ -105,6 +61,45 @@ func (ap *AdaptiveProbe) ProbeModelEndpoints(ctx context.Context, req ModelProbe
 	}
 
 	return result, nil
+}
+
+func (ap *AdaptiveProbe) runEndpointProbes(ctx context.Context, provider *typ.Provider, req ModelProbeRequest) *ProbeResult {
+	var wg sync.WaitGroup
+	var chatStatus, responsesStatus EndpointStatus
+
+	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
+	defer cancel()
+
+	if !isCodexProvider(provider) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			chatStatus = ap.probeChatEndpoint(probeCtx, provider, req.ModelID)
+		}()
+	} else {
+		chatStatus = EndpointStatus{Available: false, ErrorMessage: "Codex provider does not support Chat Completions API", LastChecked: time.Now()}
+	}
+
+	if provider.APIStyle == protocol.APIStyleOpenAI {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			responsesStatus = ap.probeOpenAIResponsesEndpoint(probeCtx, provider, req.ModelID)
+		}()
+	} else {
+		responsesStatus = EndpointStatus{Available: false, ErrorMessage: "Responses API is only supported by OpenAI-style providers", LastChecked: time.Now()}
+	}
+
+	wg.Wait()
+	preferred := ap.determinePreferredEndpoint(&chatStatus, &responsesStatus)
+	return &ProbeResult{
+		ProviderUUID:      req.ProviderUUID,
+		ModelID:           req.ModelID,
+		ChatEndpoint:      chatStatus,
+		ResponsesEndpoint: responsesStatus,
+		PreferredEndpoint: preferred,
+		LastUpdated:       time.Now(),
+	}
 }
 
 // probeChatEndpoint probes the chat completions endpoint for a model using Prober interface
@@ -123,7 +118,15 @@ func (ap *AdaptiveProbe) probeChatEndpoint(ctx context.Context, provider *typ.Pr
 				LastChecked:  time.Now(),
 			}
 		}
-		prober = wrapper
+		result, err := wrapper.ProbeChatEndpoint(ctx, modelID, client.ProbeEndpointOptions{Message: "Hi", Stream: true, Mode: client.ProbeModeStreaming})
+		latency := int(time.Since(startTime).Milliseconds())
+		if err != nil {
+			return EndpointStatus{Available: false, LatencyMs: latency, ErrorMessage: fmt.Sprintf("Chat probe failed: %v", err), LastChecked: time.Now()}
+		}
+		if result != nil && result.Content != "" {
+			return EndpointStatus{Available: true, SupportsStream: true, LatencyMs: latency, LastChecked: time.Now()}
+		}
+		return EndpointStatus{Available: false, LatencyMs: latency, ErrorMessage: "Chat probe returned no content", LastChecked: time.Now()}
 	case protocol.APIStyleAnthropic:
 		wrapper := ap.server.clientPool.GetAnthropicClient(context.Background(), provider, "")
 		if wrapper == nil {
@@ -161,10 +164,11 @@ func (ap *AdaptiveProbe) probeChatEndpoint(ctx context.Context, provider *typ.Pr
 
 	if result != nil && result.Content != "" {
 		return EndpointStatus{
-			Available:    true,
-			LatencyMs:    latency,
-			ErrorMessage: "",
-			LastChecked:  time.Now(),
+			Available:      true,
+			SupportsStream: true,
+			LatencyMs:      latency,
+			ErrorMessage:   "",
+			LastChecked:    time.Now(),
 		}
 	}
 
@@ -195,8 +199,8 @@ func (ap *AdaptiveProbe) probeOpenAIResponsesEndpoint(ctx context.Context, provi
 	probeCtx, cancel := context.WithTimeout(ctx, DefaultProbeTimeout)
 	defer cancel()
 
-	// Use ProbeStream with simple mode to test the Responses endpoint
-	result, err := wrapper.ProbeStream(probeCtx, modelID, "Hi", client.ProbeModeSimple)
+	// Explicitly probe the Responses endpoint.
+	result, err := wrapper.ProbeResponsesEndpoint(probeCtx, modelID, client.ProbeEndpointOptions{Message: "Hi", Stream: true, Mode: client.ProbeModeStreaming})
 	latency := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {
@@ -261,11 +265,12 @@ func (ap *AdaptiveProbe) determinePreferredEndpoint(chat, responses *EndpointSta
 // persistResult persists probe result to database
 func (ap *AdaptiveProbe) persistResult(result *ProbeResult) {
 	// Save chat endpoint capability
-	err := ap.server.capabilityStore.SaveCapability(
+	err := ap.server.capabilityStore.SaveEndpointCapability(
 		result.ProviderUUID,
 		result.ModelID,
 		db.EndpointTypeChat,
 		result.ChatEndpoint.Available,
+		result.ChatEndpoint.SupportsStream,
 		result.ChatEndpoint.LatencyMs,
 		result.ChatEndpoint.ErrorMessage,
 	)
@@ -274,11 +279,12 @@ func (ap *AdaptiveProbe) persistResult(result *ProbeResult) {
 	}
 
 	// Save responses endpoint capability
-	err = ap.server.capabilityStore.SaveCapability(
+	err = ap.server.capabilityStore.SaveEndpointCapability(
 		result.ProviderUUID,
 		result.ModelID,
 		db.EndpointTypeResponses,
 		result.ResponsesEndpoint.Available,
+		result.ResponsesEndpoint.SupportsStream,
 		result.ResponsesEndpoint.LatencyMs,
 		result.ResponsesEndpoint.ErrorMessage,
 	)
@@ -293,16 +299,18 @@ func (ap *AdaptiveProbe) cachedCapabilityToResult(capability *ModelEndpointCapab
 		ProviderUUID: capability.ProviderUUID,
 		ModelID:      capability.ModelID,
 		ChatEndpoint: EndpointStatus{
-			Available:    capability.SupportsChat,
-			LatencyMs:    capability.ChatLatencyMs,
-			ErrorMessage: capability.ChatError,
-			LastChecked:  capability.LastVerified,
+			Available:      capability.SupportsChat,
+			SupportsStream: capability.ChatSupportsStream,
+			LatencyMs:      capability.ChatLatencyMs,
+			ErrorMessage:   capability.ChatError,
+			LastChecked:    capability.LastVerified,
 		},
 		ResponsesEndpoint: EndpointStatus{
-			Available:    capability.SupportsResponses,
-			LatencyMs:    capability.ResponsesLatencyMs,
-			ErrorMessage: capability.ResponsesError,
-			LastChecked:  capability.LastVerified,
+			Available:      capability.SupportsResponses,
+			SupportsStream: capability.ResponsesSupportsStream,
+			LatencyMs:      capability.ResponsesLatencyMs,
+			ErrorMessage:   capability.ResponsesError,
+			LastChecked:    capability.LastVerified,
 		},
 		PreferredEndpoint: capability.PreferredEndpoint,
 		LastUpdated:       capability.LastVerified,
@@ -327,16 +335,18 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 		if dbCapability, found := ap.server.capabilityStore.GetModelCapability(providerUUID, modelID); found {
 			// Reconstruct endpoint status from database
 			chatStatus := EndpointStatus{
-				Available:    dbCapability.SupportsChat,
-				LatencyMs:    dbCapability.ChatLatencyMs,
-				ErrorMessage: dbCapability.ChatError,
-				LastChecked:  dbCapability.LastVerified,
+				Available:      dbCapability.SupportsChat,
+				SupportsStream: dbCapability.ChatSupportsStream,
+				LatencyMs:      dbCapability.ChatLatencyMs,
+				ErrorMessage:   dbCapability.ChatError,
+				LastChecked:    dbCapability.LastVerified,
 			}
 			responsesStatus := EndpointStatus{
-				Available:    dbCapability.SupportsResponses,
-				LatencyMs:    dbCapability.ResponsesLatencyMs,
-				ErrorMessage: dbCapability.ResponsesError,
-				LastChecked:  dbCapability.LastVerified,
+				Available:      dbCapability.SupportsResponses,
+				SupportsStream: dbCapability.ResponsesSupportsStream,
+				LatencyMs:      dbCapability.ResponsesLatencyMs,
+				ErrorMessage:   dbCapability.ResponsesError,
+				LastChecked:    dbCapability.LastVerified,
 			}
 
 			// Recalculate PreferredEndpoint using current logic (NOT from database)
@@ -344,16 +354,18 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 			preferredEndpoint := ap.determinePreferredEndpoint(&chatStatus, &responsesStatus)
 
 			capability := &ModelEndpointCapability{
-				ProviderUUID:       dbCapability.ProviderUUID,
-				ModelID:            dbCapability.ModelID,
-				SupportsChat:       dbCapability.SupportsChat,
-				ChatLatencyMs:      dbCapability.ChatLatencyMs,
-				ChatError:          dbCapability.ChatError,
-				SupportsResponses:  dbCapability.SupportsResponses,
-				ResponsesLatencyMs: dbCapability.ResponsesLatencyMs,
-				ResponsesError:     dbCapability.ResponsesError,
-				PreferredEndpoint:  preferredEndpoint, // Recalculated, not from DB
-				LastVerified:       dbCapability.LastVerified,
+				ProviderUUID:            dbCapability.ProviderUUID,
+				ModelID:                 dbCapability.ModelID,
+				SupportsChat:            dbCapability.SupportsChat,
+				ChatSupportsStream:      dbCapability.ChatSupportsStream,
+				ChatLatencyMs:           dbCapability.ChatLatencyMs,
+				ChatError:               dbCapability.ChatError,
+				SupportsResponses:       dbCapability.SupportsResponses,
+				ResponsesSupportsStream: dbCapability.ResponsesSupportsStream,
+				ResponsesLatencyMs:      dbCapability.ResponsesLatencyMs,
+				ResponsesError:          dbCapability.ResponsesError,
+				PreferredEndpoint:       preferredEndpoint, // Recalculated, not from DB
+				LastVerified:            dbCapability.LastVerified,
 			}
 
 			// Cache the recalculated capability
@@ -391,12 +403,8 @@ func (ap *AdaptiveProbe) GetModelCapability(providerUUID, modelID string) (*Mode
 // NOTE: The PreferredEndpoint is ALWAYS calculated by determinePreferredEndpoint(),
 // never read from database. This ensures behavior changes take effect immediately.
 func (ap *AdaptiveProbe) GetPreferredEndpoint(provider *typ.Provider, modelID string) string {
-	// For now, all models with "codex" in their name (case insensitive) prefer completions
-	// In the future, this can be extended to support more models or be configured per-model
-	if strings.Contains(strings.ToLower(modelID), "codex") {
-		return string(db.EndpointTypeResponses)
-	}
-	if strings.Contains(strings.ToLower(provider.APIBase), "chatgpt.com") {
+	// Codex providers only support Responses API — never probe or route to chat
+	if provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == "codex" {
 		return string(db.EndpointTypeResponses)
 	}
 

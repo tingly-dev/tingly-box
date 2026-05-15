@@ -202,12 +202,18 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	case protocol.APIStyleOpenAI:
-		if provider.APIBase != protocol.CodexAPIBase {
-			preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
-			if preferredEndpoint != "responses" {
-				target = protocol.TypeOpenAIChat
-			}
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, &req)
+		if routeErr != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: routeErr.Error(),
+					Type:    "invalid_request_error",
+					Code:    "unsupported_endpoint",
+				},
+			})
+			return
 		}
+		target = selection.Target
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

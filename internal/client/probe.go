@@ -58,8 +58,9 @@ type Prober interface {
 	// Returns a ProbeResult with success status, latency, and any response content
 	Probe(ctx context.Context, model string) ProbeResult
 
-	// ProbeStream performs a streaming probe with configurable test mode
-	// Returns ProbeResult with streaming content, tool calls, usage, and latency
+	// ProbeStream performs a streaming probe with configurable test mode.
+	// Deprecated for endpoint capability routing: use endpoint-explicit probe methods
+	// such as OpenAIClient.ProbeChatEndpoint and OpenAIClient.ProbeResponsesEndpoint.
 	ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
 }
 
@@ -71,4 +72,19 @@ func ToProbeResult(content string, latencyMs int64, requestURL string, isStreami
 		RequestURL: requestURL,
 		Stream:     isStreaming,
 	}
+}
+
+// ProbeEndpointType identifies which OpenAI-compatible endpoint a probe must hit.
+type ProbeEndpointType string
+
+const (
+	ProbeEndpointChat      ProbeEndpointType = "chat"
+	ProbeEndpointResponses ProbeEndpointType = "responses"
+)
+
+// ProbeEndpointOptions controls endpoint-explicit probing.
+type ProbeEndpointOptions struct {
+	Message string
+	Stream  bool
+	Mode    ProbeMode
 }

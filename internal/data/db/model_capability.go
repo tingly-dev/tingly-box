@@ -24,15 +24,16 @@ const (
 
 // ModelCapability stores endpoint capability information for each model
 type ModelCapability struct {
-	ProviderUUID string       `gorm:"primaryKey;column:provider_uuid"`
-	ModelID      string       `gorm:"primaryKey;column:model_id"`
-	EndpointType EndpointType `gorm:"primaryKey;column:endpoint_type"`
-	Available    bool         `gorm:"column:available"`
-	LatencyMs    int          `gorm:"column:latency_ms"`
-	LastChecked  time.Time    `gorm:"column:last_checked"`
-	ErrorMessage string       `gorm:"column:error_message"`
-	CreatedAt    time.Time    `gorm:"column:created_at"`
-	UpdatedAt    time.Time    `gorm:"column:updated_at"`
+	ProviderUUID   string       `gorm:"primaryKey;column:provider_uuid"`
+	ModelID        string       `gorm:"primaryKey;column:model_id"`
+	EndpointType   EndpointType `gorm:"primaryKey;column:endpoint_type"`
+	Available      bool         `gorm:"column:available"`
+	SupportsStream bool         `gorm:"column:supports_stream"`
+	LatencyMs      int          `gorm:"column:latency_ms"`
+	LastChecked    time.Time    `gorm:"column:last_checked"`
+	ErrorMessage   string       `gorm:"column:error_message"`
+	CreatedAt      time.Time    `gorm:"column:created_at"`
+	UpdatedAt      time.Time    `gorm:"column:updated_at"`
 }
 
 // TableName specifies the table name for ModelCapability
@@ -42,16 +43,18 @@ func (ModelCapability) TableName() string {
 
 // ModelEndpointCapability represents aggregated endpoint capabilities for a model
 type ModelEndpointCapability struct {
-	ProviderUUID       string
-	ModelID            string
-	SupportsChat       bool
-	ChatLatencyMs      int
-	ChatError          string
-	SupportsResponses  bool
-	ResponsesLatencyMs int
-	ResponsesError     string
-	PreferredEndpoint  string // "chat", "responses", or ""
-	LastVerified       time.Time
+	ProviderUUID            string
+	ModelID                 string
+	SupportsChat            bool
+	ChatSupportsStream      bool
+	ChatLatencyMs           int
+	ChatError               string
+	SupportsResponses       bool
+	ResponsesSupportsStream bool
+	ResponsesLatencyMs      int
+	ResponsesError          string
+	PreferredEndpoint       string // deprecated: routing must not rely on persisted preferred endpoint
+	LastVerified            time.Time
 }
 
 // ModelCapabilityStore persists model endpoint capability information in SQLite using GORM.
@@ -90,31 +93,34 @@ func NewModelCapabilityStore(baseDir string) (*ModelCapabilityStore, error) {
 	return store, nil
 }
 
-// SaveCapability saves a single endpoint capability for a model
+// SaveCapability saves a single endpoint capability for a model.
+// Deprecated: use SaveEndpointCapability when stream/non-stream state is available.
 func (mcs *ModelCapabilityStore) SaveCapability(providerUUID, modelID string, endpointType EndpointType, available bool, latencyMs int, errorMsg string) error {
+	return mcs.SaveEndpointCapability(providerUUID, modelID, endpointType, available, false, latencyMs, errorMsg)
+}
+
+// SaveEndpointCapability saves a single endpoint capability for a model, including stream support.
+func (mcs *ModelCapabilityStore) SaveEndpointCapability(providerUUID, modelID string, endpointType EndpointType, available, supportsStream bool, latencyMs int, errorMsg string) error {
 	mcs.mu.Lock()
 	defer mcs.mu.Unlock()
 
 	now := time.Now()
-
-	// Use Save to create or update the record
 	record := ModelCapability{
-		ProviderUUID: providerUUID,
-		ModelID:      modelID,
-		EndpointType: endpointType,
-		Available:    available,
-		LatencyMs:    latencyMs,
-		LastChecked:  now,
-		ErrorMessage: errorMsg,
-		UpdatedAt:    now,
+		ProviderUUID:   providerUUID,
+		ModelID:        modelID,
+		EndpointType:   endpointType,
+		Available:      available,
+		SupportsStream: supportsStream,
+		LatencyMs:      latencyMs,
+		LastChecked:    now,
+		ErrorMessage:   errorMsg,
+		UpdatedAt:      now,
 	}
 
-	// Check if record exists
 	var existing ModelCapability
 	err := mcs.db.Where("provider_uuid = ? AND model_id = ? AND endpoint_type = ?",
 		providerUUID, modelID, endpointType).First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// Create new record
 		record.CreatedAt = now
 		if err := mcs.db.Create(&record).Error; err != nil {
 			return fmt.Errorf("failed to create capability record: %w", err)
@@ -122,7 +128,6 @@ func (mcs *ModelCapabilityStore) SaveCapability(providerUUID, modelID string, en
 	} else if err != nil {
 		return fmt.Errorf("failed to query existing record: %w", err)
 	} else {
-		// Update existing record, preserve CreatedAt
 		record.CreatedAt = existing.CreatedAt
 		if err := mcs.db.Model(&existing).Updates(&record).Error; err != nil {
 			return fmt.Errorf("failed to update capability record: %w", err)
@@ -176,10 +181,12 @@ func (mcs *ModelCapabilityStore) GetModelCapability(providerUUID, modelID string
 		switch record.EndpointType {
 		case EndpointTypeChat:
 			capability.SupportsChat = record.Available
+			capability.ChatSupportsStream = record.SupportsStream
 			capability.ChatLatencyMs = record.LatencyMs
 			capability.ChatError = record.ErrorMessage
 		case EndpointTypeResponses:
 			capability.SupportsResponses = record.Available
+			capability.ResponsesSupportsStream = record.SupportsStream
 			capability.ResponsesLatencyMs = record.LatencyMs
 			capability.ResponsesError = record.ErrorMessage
 		}
@@ -187,12 +194,7 @@ func (mcs *ModelCapabilityStore) GetModelCapability(providerUUID, modelID string
 
 	capability.LastVerified = maxLastChecked
 
-	// NOTE: PreferredEndpoint is NOT calculated here.
-	// The database stores only raw state (availability, latency, errors).
-	// PreferredEndpoint is calculated by AdaptiveProbe.determinePreferredEndpoint()
-	// which has access to more information (like streaming support) and can be
-	// updated without database migrations.
-	// The PreferredEndpoint field in the returned struct will be set by the caller.
+	// NOTE: PreferredEndpoint is not calculated or persisted here. Routing is decided per request.
 
 	return capability, true
 }
@@ -231,10 +233,12 @@ func (mcs *ModelCapabilityStore) GetProviderCapabilities(providerUUID string) ma
 			switch record.EndpointType {
 			case EndpointTypeChat:
 				capability.SupportsChat = record.Available
+				capability.ChatSupportsStream = record.SupportsStream
 				capability.ChatLatencyMs = record.LatencyMs
 				capability.ChatError = record.ErrorMessage
 			case EndpointTypeResponses:
 				capability.SupportsResponses = record.Available
+				capability.ResponsesSupportsStream = record.SupportsStream
 				capability.ResponsesLatencyMs = record.LatencyMs
 				capability.ResponsesError = record.ErrorMessage
 			}
@@ -242,11 +246,7 @@ func (mcs *ModelCapabilityStore) GetProviderCapabilities(providerUUID string) ma
 
 		capability.LastVerified = maxLastChecked
 
-		// Determine preferred endpoint
-		// NOTE: This is REMOVED - PreferredEndpoint is now calculated by
-		// AdaptiveProbe.determinePreferredEndpoint() which has access to
-		// streaming support information. The database only stores raw state.
-		// The PreferredEndpoint field will remain empty ("") here.
+		// PreferredEndpoint is intentionally not calculated here.
 
 		result[modelID] = capability
 	}
