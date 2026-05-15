@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
+	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -207,8 +208,8 @@ func (tr *OAuthRefresher) refreshProviderToken(provider *typ.Provider) {
 
 	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
 	if issuer == ai.IssuerKimiCode {
-		if v, ok := provider.OAuthDetail.ExtraFields[oauth.KimiDeviceIDMetadataKey].(string); ok && v != "" {
-			refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(v))
+		if id := oauthmodule.KimiDeviceIDFromExtraFields(provider.OAuthDetail.ExtraFields); id != "" {
+			refreshOpts = append(refreshOpts, oauthmodule.WithKimiDeviceID(id))
 		}
 	}
 	token, err := tr.manager.RefreshToken(

@@ -21,11 +21,13 @@ type Options struct {
 	// HTTPClient allows passing a custom HTTP client
 	HTTPClient *http.Client
 
-	// KimiDeviceID is the per-flow X-Msh-Device-Id sent to Kimi's auth/token
-	// endpoints. It must be stable across the device-authorize, polling, and
-	// refresh requests of a single flow, then persisted with the token so
-	// future refresh / inference calls reuse the same id.
-	KimiDeviceID string
+	// ExtraHeaders are merged into every token-related outbound request
+	// (device-code, polling, refresh, code exchange). It's a generic escape
+	// hatch for providers that need per-flow header state — for example,
+	// binding a stable X-Msh-Device-Id across all requests of a Kimi flow.
+	// The OAuth manager itself stays oblivious to provider semantics; callers
+	// own the per-provider semantics.
+	ExtraHeaders http.Header
 }
 
 // WithProxyURL sets a proxy URL for the request
@@ -76,11 +78,19 @@ func WithBaseURL(baseURL string) Option {
 	}
 }
 
-// WithKimiDeviceID sets the X-Msh-Device-Id used for Kimi OAuth requests in
-// this flow. Pass the stored id when refreshing an existing Kimi token.
-func WithKimiDeviceID(deviceID string) Option {
+// WithExtraHeader appends a header to be applied to every token-related
+// OAuth request in this flow. Use it for per-flow header state (e.g.
+// pinning a device id binding for the entire authorize → poll → refresh
+// lifecycle). Repeated calls accumulate; values for the same key replace.
+func WithExtraHeader(key, value string) Option {
 	return func(o *Options) {
-		o.KimiDeviceID = deviceID
+		if key == "" {
+			return
+		}
+		if o.ExtraHeaders == nil {
+			o.ExtraHeaders = make(http.Header)
+		}
+		o.ExtraHeaders.Set(key, value)
 	}
 }
 

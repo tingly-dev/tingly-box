@@ -468,6 +468,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		req.Body = io.NopCloser(reqBody)
 	}
 
+	applyExtraHeaders(req.Header, opts.ExtraHeaders)
+
 	// Debug: print request details
 	m.debugRequest(req, config.TokenRequestFormat)
 
@@ -631,10 +633,7 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 	// Set Content-Type after hook (hook may have modified it)
 	req.Header.Set("Content-Type", contentType)
 
-	// Kimi refresh requires the same X-Msh-Device-Id that was bound to the token.
-	if providerType == ai.IssuerKimiCode && opts.KimiDeviceID != "" {
-		req.Header.Set("X-Msh-Device-Id", opts.KimiDeviceID)
-	}
+	applyExtraHeaders(req.Header, opts.ExtraHeaders)
 
 	// Debug: print request details
 	m.debugRequest(req, config.TokenRequestFormat)
@@ -825,16 +824,7 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		req.Header.Set("Content-Type", contentType)
 	}
 
-	// Kimi: bind a fresh device id to this flow if the caller did not supply one.
-	// The same id must travel through device-authorize, token polling, and the
-	// stored credential so refresh and inference reuse it.
-	kimiDeviceID := options.KimiDeviceID
-	if providerType == ai.IssuerKimiCode {
-		if kimiDeviceID == "" {
-			kimiDeviceID = NewKimiDeviceID()
-		}
-		req.Header.Set("X-Msh-Device-Id", kimiDeviceID)
-	}
+	applyExtraHeaders(req.Header, options.ExtraHeaders)
 
 	client := m.getHTTPClient(options)
 	client.Timeout = 30 * time.Second
@@ -866,10 +856,21 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		InitiatedAt:        now,
 		ExpiresAt:          now.Add(time.Duration(deviceResp.ExpiresIn) * time.Second),
 		CodeVerifier:       codeVerifier, // Store PKCE verifier for token polling
-		KimiDeviceID:       kimiDeviceID, // empty for non-Kimi providers
 	}
 
 	return data, nil
+}
+
+// applyExtraHeaders merges caller-supplied per-flow headers onto an outbound
+// request. Called by every token-related request site in the manager so that
+// provider-specific header state (e.g. Kimi's X-Msh-Device-Id) can be injected
+// without the manager knowing about any specific provider.
+func applyExtraHeaders(dst http.Header, src http.Header) {
+	for k, vs := range src {
+		for _, v := range vs {
+			dst.Set(k, v)
+		}
+	}
 }
 
 // PollForToken polls the token endpoint until the user completes authentication
@@ -909,12 +910,7 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 			return nil, ctx.Err()
 		case <-ticker.C:
 			fmt.Printf("[OAuth] Polling token endpoint for %s...\n", data.Provider)
-			// Ensure the same Kimi device id used at authorize travels into the poll request.
-			pollOpts := *options
-			if data.KimiDeviceID != "" {
-				pollOpts.KimiDeviceID = data.KimiDeviceID
-			}
-			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier, &pollOpts)
+			token, err := m.pollTokenRequest(ctx, config, data.DeviceCode, data.CodeVerifier, options)
 			if err != nil {
 				// Check if error is a transient error that we should retry
 				if isTransientDeviceCodeError(err) {
@@ -931,15 +927,6 @@ func (m *Manager) PollForToken(ctx context.Context, data *DeviceCodeData, callba
 			token.Provider = data.Provider
 			token.RedirectTo = data.RedirectTo
 			token.Name = data.Name
-
-			// Persist the per-flow Kimi device id with the token so refresh and
-			// inference calls can reuse it from the credential DB.
-			if data.Provider == ai.IssuerKimiCode && data.KimiDeviceID != "" {
-				if token.Metadata == nil {
-					token.Metadata = make(map[string]any)
-				}
-				token.Metadata[KimiDeviceIDMetadataKey] = data.KimiDeviceID
-			}
 
 			// Save token
 			if err := m.config.TokenStorage.SaveToken(data.UserID, data.Provider, token); err != nil {
@@ -997,10 +984,7 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		req.Body = io.NopCloser(reqBody)
 	}
 
-	// Kimi: send the per-flow device id with every poll.
-	if config.Type == ai.IssuerKimiCode && opts.KimiDeviceID != "" {
-		req.Header.Set("X-Msh-Device-Id", opts.KimiDeviceID)
-	}
+	applyExtraHeaders(req.Header, opts.ExtraHeaders)
 
 	client := m.getHTTPClient(opts)
 	client.Timeout = 30 * time.Second

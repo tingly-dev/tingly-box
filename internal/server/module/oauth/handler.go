@@ -344,6 +344,17 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	}
 
 	deviceOpts := OAuthOptions(proxyURL, callbackBaseURL)
+
+	// Kimi binds a single X-Msh-Device-Id to every request of a flow and
+	// expects refresh / inference to keep using it. Generate it here so the
+	// device-authorize call, polling, and the eventual persisted credential
+	// all carry the same id.
+	var kimiDeviceID string
+	if issuer == ai.IssuerKimiCode {
+		kimiDeviceID = newKimiDeviceID()
+		deviceOpts = append(deviceOpts, WithKimiDeviceID(kimiDeviceID))
+	}
+
 	// Handle device code flow
 	if config.OAuthMethod == oauth.OAuthMethodDeviceCode || config.OAuthMethod == oauth.OAuthMethodDeviceCodePKCE {
 		deviceCodeData, err := h.oauthManager.InitiateDeviceCodeFlow(c.Request.Context(), userID, issuer, req.Redirect, req.Name, deviceOpts...)
@@ -356,7 +367,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		}
 
 		// Start polling for token in background
-		go h.pollForDeviceCodeToken(c.Request.Context(), deviceCodeData, issuer, req.Name, sessionID, proxyURL)
+		go h.pollForDeviceCodeToken(c.Request.Context(), deviceCodeData, issuer, req.Name, sessionID, proxyURL, kimiDeviceID)
 
 		// Return device code flow response
 		resp := OAuthAuthorizeResponse{
@@ -399,16 +410,29 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 }
 
 // pollForDeviceCodeToken polls for token in background after device code flow initiation
-func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oauth.DeviceCodeData, issuer ai.Issuer, customName, sessionID, proxyURL string) {
+func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oauth.DeviceCodeData, issuer ai.Issuer, customName, sessionID, proxyURL, kimiDeviceID string) {
 	fmt.Printf("[OAuth] Starting device code polling for %s in background\n", issuer)
 	ctx, cancel := context.WithTimeout(context.Background(), oauth.DefaultSessionExpiry)
 	defer cancel()
 
-	token, err := h.oauthManager.PollForToken(ctx, deviceCodeData, nil, OAuthOptions(proxyURL, "")...)
+	pollOpts := OAuthOptions(proxyURL, "")
+	if kimiDeviceID != "" {
+		pollOpts = append(pollOpts, WithKimiDeviceID(kimiDeviceID))
+	}
+	token, err := h.oauthManager.PollForToken(ctx, deviceCodeData, nil, pollOpts...)
 	if err != nil {
 		fmt.Printf("[OAuth] Device code polling failed for %s: %v\n", issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
 		return
+	}
+
+	// Stash the per-flow Kimi device id onto the token so the existing
+	// provider-creation path persists it into OAuthDetail.ExtraFields.
+	if kimiDeviceID != "" {
+		if token.Metadata == nil {
+			token.Metadata = make(map[string]any)
+		}
+		token.Metadata[oauth.KimiDeviceIDMetadataKey] = kimiDeviceID
 	}
 
 	fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", issuer)
@@ -560,8 +584,8 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	// Refresh token
 	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
 	if issuer == ai.IssuerKimiCode {
-		if deviceID := kimiDeviceIDFromExtraFields(provider.OAuthDetail.ExtraFields); deviceID != "" {
-			refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(deviceID))
+		if deviceID := KimiDeviceIDFromExtraFields(provider.OAuthDetail.ExtraFields); deviceID != "" {
+			refreshOpts = append(refreshOpts, WithKimiDeviceID(deviceID))
 		}
 	}
 	token, err := h.oauthManager.RefreshToken(
@@ -1102,18 +1126,6 @@ func SafeTokenPreview(token string) string {
 		return token
 	}
 	return token[:20] + "..."
-}
-
-// kimiDeviceIDFromExtraFields safely extracts the per-provider Kimi device id
-// stored on OAuthDetail.ExtraFields. Returns "" when missing or malformed.
-func kimiDeviceIDFromExtraFields(extra map[string]interface{}) string {
-	if extra == nil {
-		return ""
-	}
-	if v, ok := extra[oauth.KimiDeviceIDMetadataKey].(string); ok {
-		return v
-	}
-	return ""
 }
 
 func OAuthOptions(proxyURL, baseURL string) []oauth.Option {

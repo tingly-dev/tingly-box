@@ -486,12 +486,17 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 	return metadata, nil
 }
 
+// KimiDeviceIDMetadataKey is the Token.Metadata / OAuthDetail.ExtraFields
+// key under which the per-credential Kimi X-Msh-Device-Id is persisted.
+// Co-located with KimiHook because both belong to the Kimi provider's wire
+// contract — not part of the generic OAuth surface.
+const KimiDeviceIDMetadataKey = "kimi_device_id"
+
 // KimiHook implements Kimi OAuth device-code flow specific behavior.
 // Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
 //
 // The X-Msh-Device-Id header is intentionally NOT set here: device id is
-// per-flow state managed by the OAuth manager (generated on authorize,
-// reused on polling, stored with the token, reused on refresh). The hook
+// per-flow state injected by the caller via oauth.WithExtraHeader. The hook
 // only sets headers that are constant for the Kimi auth wire format.
 type KimiHook struct{}
 
@@ -511,18 +516,6 @@ func (h *KimiHook) AfterToken(ctx context.Context, accessToken string, httpClien
 	// Kimi has no public userinfo endpoint; CLIProxyAPI hardcodes the display label.
 	return nil, nil
 }
-
-// NewKimiDeviceID returns a fresh, random Kimi device id (UUID v4) to be
-// bound to a single OAuth flow / token. Matches CLIProxyAPI's behavior of
-// generating one device id per Auth instance, except we persist it in the
-// credential DB instead of a local file.
-func NewKimiDeviceID() string {
-	return uuid.New().String()
-}
-
-// KimiDeviceIDMetadataKey is the Token.Metadata / ExtraFields key under
-// which the per-provider Kimi device id is stored.
-const KimiDeviceIDMetadataKey = "kimi_device_id"
 
 // CodexHook implements Codex (OpenAI) OAuth specific behavior.
 type CodexHook struct{}

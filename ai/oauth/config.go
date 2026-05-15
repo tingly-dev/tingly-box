@@ -320,7 +320,6 @@ type DeviceCodeData struct {
 	ExpiresAt    time.Time
 	InitiatedAt  time.Time
 	CodeVerifier string // PKCE code verifier (for Device Code PKCE flow)
-	KimiDeviceID string // Kimi X-Msh-Device-Id, generated on authorize, reused on polling
 }
 
 // DeviceTokenRequest represents the request to poll for token with device code
