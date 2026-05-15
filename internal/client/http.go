@@ -344,6 +344,138 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	return resp, nil
 }
 
+// geminiRoundTripper wraps requests to the Gemini CLI Code Assist endpoint
+// (https://cloudcode-pa.googleapis.com). It mirrors what Antigravity does but
+// follows the Gemini CLI request envelope:
+//
+//	{
+//	  "model":          "<model>",
+//	  "project":        "<project_id>",
+//	  "user_prompt_id": "<uuid>",
+//	  "request":        { /* original google genai body without "model" */ }
+//	}
+//
+// It also rewrites the URL path from /v1beta/models/<model>:<op> to
+// /v1internal:<op>, swaps X-Goog-Api-Key for Authorization: Bearer, and unwraps
+// the "response" field from Code Assist responses (both streaming and not).
+type geminiRoundTripper struct {
+	http.RoundTripper
+	project  string
+	proxyURL string
+}
+
+func (t *geminiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	key := req.Header.Get("X-Goog-Api-Key")
+	isStreaming := isStreamingRequest(req)
+
+	originalPath := req.URL.Path
+	newPath := originalPath
+	model := ""
+
+	if strings.Contains(newPath, ":generateContent") || strings.Contains(newPath, ":streamGenerateContent") {
+		parts := strings.Split(newPath, ":")
+		if len(parts) >= 2 {
+			subparts := strings.Split(parts[0], "/")
+			model = subparts[len(subparts)-1]
+			newPath = fmt.Sprintf("/v1internal:%s", parts[1])
+		}
+	}
+
+	if newPath != originalPath {
+		logrus.Debugf("[Gemini] Rewriting URL path: %s -> %s", originalPath, newPath)
+		req.URL.Path = newPath
+	}
+
+	if req.Body != nil && t.project != "" && model != "" {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
+		req.Body.Close()
+
+		var originalBody map[string]any
+		if err := json.Unmarshal(body, &originalBody); err == nil {
+			cleanBody := make(map[string]any)
+			for k, v := range originalBody {
+				if k != "model" {
+					cleanBody[k] = v
+				}
+			}
+
+			wrapped := map[string]any{
+				"model":          model,
+				"project":        t.project,
+				"user_prompt_id": uuid.New().String(),
+				"request":        cleanBody,
+			}
+
+			wrappedBody, err := json.Marshal(wrapped)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal wrapped body: %w", err)
+			}
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(wrappedBody)), nil
+			}
+			req.Body = io.NopCloser(bytes.NewReader(wrappedBody))
+			req.ContentLength = int64(len(wrappedBody))
+		}
+	}
+
+	req.Header = http.Header{}
+	req.Header.Set("User-Agent", "GeminiCLI/0.1.0 (linux; amd64)")
+	req.Header.Set("Content-Type", "application/json")
+	if req.ContentLength > 0 {
+		req.Header.Set("Content-Length", fmt.Sprintf("%d", req.ContentLength))
+	}
+	if key != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
+	}
+
+	logrus.Debugf("[Gemini] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
+
+	resp, err := t.RoundTripper.RoundTrip(req)
+	if err != nil {
+		logrus.Errorf("[Gemini] Request failed: %v", err)
+		return nil, err
+	}
+
+	logrus.Debugf("[Gemini] Response received, status=%d", resp.StatusCode)
+
+	// Code Assist API wraps the underlying response in a "response" field —
+	// same envelope Antigravity uses, so we reuse the unwrap logic.
+	if resp.Body != nil {
+		if isStreaming {
+			resp.Body = &streamingUnwrapReader{reader: resp.Body}
+		} else {
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read response body: %w", err)
+			}
+
+			var wrappedResponse map[string]any
+			if err := json.Unmarshal(body, &wrappedResponse); err == nil {
+				if innerResponse, ok := wrappedResponse["response"]; ok {
+					unwrappedBody, err := json.Marshal(innerResponse)
+					if err != nil {
+						return nil, fmt.Errorf("failed to marshal unwrapped response: %w", err)
+					}
+					resp.Body = io.NopCloser(bytes.NewReader(unwrappedBody))
+					resp.ContentLength = int64(len(unwrappedBody))
+				} else {
+					resp.Body = io.NopCloser(bytes.NewReader(body))
+					resp.ContentLength = int64(len(body))
+				}
+			} else {
+				resp.Body = io.NopCloser(bytes.NewReader(body))
+				resp.ContentLength = int64(len(body))
+			}
+		}
+	}
+
+	return resp, nil
+}
+
 // CreateHTTPClientWithProxy creates an HTTP client with proxy support
 func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 	if proxyURL == "" {
@@ -496,6 +628,20 @@ func createSessionBoundTransport(provider *typ.Provider, sessionID typ.SessionID
 				model:        model,
 				proxyURL:     provider.ProxyURL,
 			}
+		case ai.IssuerGemini:
+			// Gemini CLI uses Google Code Assist API and needs a project_id discovered
+			// by the OAuth hook (loadCodeAssist/onboardUser) and stored in ExtraFields.
+			project := ""
+			if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
+				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
+					project = p
+				}
+			}
+			return &geminiRoundTripper{
+				RoundTripper: baseTransport,
+				project:      project,
+				proxyURL:     provider.ProxyURL,
+			}
 		}
 	}
 
@@ -557,6 +703,30 @@ func CreateHTTPClientForProvider(provider *typ.Provider, model string, sessionID
 				proxyURL:     effectiveProxy,
 			}
 			logrus.Infof("Created Antigravity RoundTripper with project=%s, model=%s, proxy=%s", project, model, effectiveProxy)
+		case ai.IssuerGemini:
+			if provider.OAuthDetail == nil {
+				return nil
+			}
+			project := ""
+			if provider.OAuthDetail.ExtraFields != nil {
+				if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
+					project = p
+				}
+			}
+			var geminiTransport http.RoundTripper = transport
+			effectiveProxy := provider.ProxyURL
+			if effectiveProxy != "" {
+				proxyClient := CreateHTTPClientWithProxy(effectiveProxy)
+				if proxyClient.Transport != nil {
+					geminiTransport = proxyClient.Transport
+				}
+			}
+			client.Transport = &geminiRoundTripper{
+				RoundTripper: geminiTransport,
+				project:      project,
+				proxyURL:     effectiveProxy,
+			}
+			logrus.Infof("Created Gemini RoundTripper with project=%s, proxy=%s", project, effectiveProxy)
 		case ai.IssuerClaudeCode:
 			// For Claude Code OAuth, use claudeRoundTripper for request/response transformations
 			var claudeTransport http.RoundTripper = transport

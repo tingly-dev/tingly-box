@@ -547,6 +547,40 @@ func TestCreateSessionBoundTransport_Antigravity(t *testing.T) {
 	}
 }
 
+// TestCreateSessionBoundTransport_Gemini tests Gemini CLI provider which is
+// wrapped by geminiRoundTripper so requests get routed through the Code Assist
+// API envelope (URL rewrite, project_id wrapping, Bearer auth).
+func TestCreateSessionBoundTransport_Gemini(t *testing.T) {
+	provider := &typ.Provider{
+		UUID:     "test-provider-gemini",
+		Name:     "Gemini Provider",
+		Token:    "test-token",
+		APIBase:  "https://cloudcode-pa.googleapis.com",
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			ProviderType: "gemini",
+			ExtraFields: map[string]interface{}{
+				"project_id": "test-project",
+			},
+		},
+	}
+	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "gemini-test"}
+
+	transport := createSessionBoundTransport(provider, sessionID)
+
+	if transport == nil {
+		t.Fatal("Expected non-nil transport")
+	}
+
+	rt, ok := transport.(*geminiRoundTripper)
+	if !ok {
+		t.Fatalf("Expected geminiRoundTripper for Gemini provider, got %T", transport)
+	}
+	if rt.project != "test-project" {
+		t.Errorf("Expected project_id propagated to geminiRoundTripper, got %q", rt.project)
+	}
+}
+
 // TestCreateSessionBoundTransport_Codex tests Codex provider
 // which uses codexRoundTripper for response transformation.
 func TestCreateSessionBoundTransport_Codex(t *testing.T) {

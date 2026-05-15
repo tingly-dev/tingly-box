@@ -551,6 +551,10 @@ func getProviderConfig(issuer string) (*ProviderOAuthConfig, error) {
 	case ai.IssuerAntigravity:
 		apiBase = "https://api.antigravity.com/v1"
 		apiStyle = "openai"
+	case ai.IssuerGemini:
+		// Gemini CLI uses Google Code Assist API
+		apiBase = "https://cloudcode-pa.googleapis.com"
+		apiStyle = "google"
 	default:
 		// For other providers, use a default
 		apiBase = "https://api.example.com/v1"

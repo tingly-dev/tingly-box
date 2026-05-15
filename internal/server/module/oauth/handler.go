@@ -972,6 +972,10 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		case ai.IssuerAntigravity:
 			apiBase = "https://cloudcode-pa.googleapis.com"
 			apiStyle = protocol.APIStyleGoogle
+		case ai.IssuerGemini:
+			// Gemini CLI authenticates via Google Code Assist endpoint (same host as Antigravity)
+			apiBase = "https://cloudcode-pa.googleapis.com"
+			apiStyle = protocol.APIStyleGoogle
 		case ai.IssuerOpenAI:
 			apiBase = "https://api.openai.com/v1"
 			apiStyle = protocol.APIStyleOpenAI
