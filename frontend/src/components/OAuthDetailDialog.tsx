@@ -140,11 +140,18 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                                 ...prev,
                                 apiStyle: e.target.value as 'openai' | 'anthropic' | 'google',
                             }))}
+                            disabled={formData.apiStyle === 'google'}
+                            helperText={formData.apiStyle === 'google' ? 'Google-style providers use a fixed API style' : undefined}
                             SelectProps={{ native: true }}
                         >
-                            <option value="openai">OpenAI Compatible</option>
-                            <option value="anthropic">Anthropic Compatible</option>
-                            <option value="google">Google Compatible</option>
+                            {formData.apiStyle === 'google' ? (
+                                <option value="google">Google Compatible</option>
+                            ) : (
+                                <>
+                                    <option value="openai">OpenAI Compatible</option>
+                                    <option value="anthropic">Anthropic Compatible</option>
+                                </>
+                            )}
                         </TextField>
 
                         {/* Editable Fields */}
