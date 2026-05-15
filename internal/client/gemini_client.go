@@ -15,6 +15,16 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// Gemini CLI Code Assist routing constants. Requests authenticated with a
+// Gemini CLI OAuth credential are always sent to cloudcode-pa.googleapis.com,
+// even when the provider's api_base is the canonical Gemini endpoint — the
+// round tripper rewrites the host transparently.
+const (
+	geminiCodeAssistHost     = "cloudcode-pa.googleapis.com"
+	geminiCLIUserAgent       = "GeminiCLI/0.1.0 (linux; amd64)"
+	geminiCLIApiClientHeader = "gl-node/22.0.0 google-api-nodejs-client/9.0.0"
+)
+
 // GeminiClient wraps GoogleClient with Gemini CLI OAuth-specific behaviors.
 // It embeds *GoogleClient to inherit standard genai SDK functionality, while
 // swapping in a transport that speaks the Google Code Assist envelope.
@@ -84,13 +94,17 @@ func (t *geminiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	originalPath := req.URL.Path
 	newPath := originalPath
 	model := ""
+	operation := ""
 
-	if strings.Contains(newPath, ":generateContent") || strings.Contains(newPath, ":streamGenerateContent") {
+	if strings.Contains(newPath, ":generateContent") ||
+		strings.Contains(newPath, ":streamGenerateContent") ||
+		strings.Contains(newPath, ":countTokens") {
 		parts := strings.Split(newPath, ":")
 		if len(parts) >= 2 {
 			subparts := strings.Split(parts[0], "/")
 			model = subparts[len(subparts)-1]
-			newPath = fmt.Sprintf("/v1internal:%s", parts[1])
+			operation = parts[1]
+			newPath = fmt.Sprintf("/v1internal:%s", operation)
 		}
 	}
 
@@ -98,6 +112,15 @@ func (t *geminiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		logrus.Debugf("[Gemini] Rewriting URL path: %s -> %s", originalPath, newPath)
 		req.URL.Path = newPath
 	}
+
+	// Code Assist requests always go to cloudcode-pa.googleapis.com regardless
+	// of the provider's user-facing api_base (e.g. generativelanguage.googleapis.com).
+	if req.URL.Host != geminiCodeAssistHost {
+		logrus.Debugf("[Gemini] Rewriting host: %s -> %s", req.URL.Host, geminiCodeAssistHost)
+		req.URL.Host = geminiCodeAssistHost
+		req.Host = geminiCodeAssistHost
+	}
+	req.URL.Scheme = "https"
 
 	if req.Body != nil && t.project != "" && model != "" {
 		body, err := io.ReadAll(req.Body)
@@ -113,6 +136,12 @@ func (t *geminiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 				if k != "model" {
 					cleanBody[k] = v
 				}
+			}
+
+			// countTokens does not accept safetySettings on the Code Assist
+			// envelope — strip it to avoid INVALID_ARGUMENT.
+			if operation == "countTokens" {
+				delete(cleanBody, "safetySettings")
 			}
 
 			wrapped := map[string]any{
@@ -135,7 +164,8 @@ func (t *geminiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	}
 
 	req.Header = http.Header{}
-	req.Header.Set("User-Agent", "GeminiCLI/0.1.0 (linux; amd64)")
+	req.Header.Set("User-Agent", geminiCLIUserAgent)
+	req.Header.Set("X-Goog-Api-Client", geminiCLIApiClientHeader)
 	req.Header.Set("Content-Type", "application/json")
 	if req.ContentLength > 0 {
 		req.Header.Set("Content-Length", fmt.Sprintf("%d", req.ContentLength))

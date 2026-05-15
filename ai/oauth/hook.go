@@ -112,11 +112,27 @@ func (h *GeminiHook) AfterToken(ctx context.Context, accessToken string, httpCli
 	// Gemini CLI calls https://cloudcode-pa.googleapis.com/v1internal:* to obtain
 	// the cloudaicompanionProject required by every subsequent generateContent
 	// request. Without it the Code Assist API rejects the call.
-	if projectID, err := fetchGeminiProjectID(ctx, accessToken, httpClient); err == nil && projectID != "" {
-		metadata["project_id"] = projectID
+	if discovery, err := fetchGeminiProjectInfo(ctx, accessToken, httpClient); err == nil {
+		if discovery.ProjectID != "" {
+			metadata["project_id"] = discovery.ProjectID
+		}
+		if discovery.UserTier != "" {
+			metadata["user_tier"] = discovery.UserTier
+		}
+		metadata["onboarded"] = discovery.Onboarded
 	}
 
 	return metadata, nil
+}
+
+// geminiProjectInfo captures what loadCodeAssist / onboardUser told us about
+// the user's Code Assist state. It is persisted on OAuthDetail.ExtraFields so
+// the UI and diagnostics can show tier and onboarding status without having
+// to re-call the Code Assist API.
+type geminiProjectInfo struct {
+	ProjectID string
+	UserTier  string
+	Onboarded bool // true when the project came from onboardUser (newly onboarded)
 }
 
 // Gemini Code Assist API constants (shared with Antigravity host).
@@ -126,11 +142,15 @@ const (
 	geminiCodeAssistUA       = "GeminiCLI/0.1.0 (linux; amd64)"
 )
 
-// fetchGeminiProjectID resolves the cloudaicompanionProject for the authenticated
-// user. It first calls loadCodeAssist; if the current tier is missing or the
-// response does not include a project ID, it falls back to onboardUser to create
-// one and waits for the long-running operation to finish.
-func fetchGeminiProjectID(ctx context.Context, accessToken string, httpClient *http.Client) (string, error) {
+// fetchGeminiProjectInfo resolves the cloudaicompanionProject and tier for the
+// authenticated user. It first calls loadCodeAssist; if the current tier is
+// missing or the response does not include a project ID, it falls back to
+// onboardUser to create one and waits for the long-running operation to
+// finish. The returned struct also carries the resolved tier id and whether
+// the project was newly created via onboardUser.
+func fetchGeminiProjectInfo(ctx context.Context, accessToken string, httpClient *http.Client) (geminiProjectInfo, error) {
+	info := geminiProjectInfo{}
+
 	loadResp, err := geminiCodeAssistCall(ctx, accessToken, httpClient, "loadCodeAssist", map[string]any{
 		"metadata": map[string]string{
 			"ideType":    "IDE_UNSPECIFIED",
@@ -139,11 +159,14 @@ func fetchGeminiProjectID(ctx context.Context, accessToken string, httpClient *h
 		},
 	})
 	if err != nil {
-		return "", err
+		return info, err
 	}
 
+	info.UserTier = extractGeminiCurrentTier(loadResp)
+
 	if id := extractGeminiProjectID(loadResp); id != "" {
-		return id, nil
+		info.ProjectID = id
+		return info, nil
 	}
 
 	tierID := "free-tier"
@@ -161,6 +184,9 @@ func fetchGeminiProjectID(ctx context.Context, accessToken string, httpClient *h
 			}
 		}
 	}
+	if info.UserTier == "" {
+		info.UserTier = tierID
+	}
 
 	onboardBody := map[string]any{
 		"tierId": tierID,
@@ -174,23 +200,50 @@ func fetchGeminiProjectID(ctx context.Context, accessToken string, httpClient *h
 	for attempt := 0; attempt < 6; attempt++ {
 		lroResp, err := geminiCodeAssistCall(ctx, accessToken, httpClient, "onboardUser", onboardBody)
 		if err != nil {
-			return "", err
+			return info, err
 		}
 		if done, _ := lroResp["done"].(bool); done {
 			if response, ok := lroResp["response"].(map[string]any); ok {
 				if id := extractGeminiProjectID(response); id != "" {
-					return id, nil
+					info.ProjectID = id
+					info.Onboarded = true
+					return info, nil
 				}
 			}
-			return "", fmt.Errorf("onboardUser completed without project id")
+			return info, fmt.Errorf("onboardUser completed without project id")
 		}
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return info, ctx.Err()
 		case <-time.After(2 * time.Second):
 		}
 	}
-	return "", fmt.Errorf("onboardUser did not complete in time")
+	return info, fmt.Errorf("onboardUser did not complete in time")
+}
+
+// extractGeminiCurrentTier reads the user's active tier id from a
+// loadCodeAssist response. It first looks at the top-level currentTier object,
+// then falls back to the allowedTiers entry marked isCurrent / isDefault.
+func extractGeminiCurrentTier(resp map[string]any) string {
+	if cur, ok := resp["currentTier"].(map[string]any); ok {
+		if id, _ := cur["id"].(string); id != "" {
+			return id
+		}
+	}
+	if tiers, ok := resp["allowedTiers"].([]any); ok {
+		for _, t := range tiers {
+			tier, ok := t.(map[string]any)
+			if !ok {
+				continue
+			}
+			if cur, _ := tier["isCurrent"].(bool); cur {
+				if id, _ := tier["id"].(string); id != "" {
+					return id
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func geminiCodeAssistCall(ctx context.Context, accessToken string, httpClient *http.Client, method string, body map[string]any) (map[string]any, error) {

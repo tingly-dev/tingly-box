@@ -977,8 +977,10 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			apiBase = "https://cloudcode-pa.googleapis.com"
 			apiStyle = protocol.APIStyleGoogle
 		case ai.IssuerGemini:
-			// Gemini CLI authenticates via Google Code Assist endpoint (same host as Antigravity)
-			apiBase = "https://cloudcode-pa.googleapis.com"
+			// Gemini CLI authenticates via Google Code Assist (cloudcode-pa) but
+			// the user-facing API base is the canonical Gemini endpoint. The
+			// gemini round tripper rewrites the upstream host transparently.
+			apiBase = "https://generativelanguage.googleapis.com"
 			apiStyle = protocol.APIStyleGoogle
 		case ai.IssuerOpenAI:
 			apiBase = "https://api.openai.com/v1"
@@ -1001,6 +1003,21 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		expiresAt = token.Expiry.Format(time.RFC3339)
 	}
 
+	// Derive a meaningful UserID from token metadata: email for Google/Anthropic
+	// flows, account_id for Codex, else fall back to a random UUID so the field
+	// is never empty.
+	userID := ""
+	if token.Metadata != nil {
+		if v, ok := token.Metadata["email"].(string); ok && v != "" {
+			userID = v
+		} else if v, ok := token.Metadata["account_id"].(string); ok && v != "" {
+			userID = v
+		}
+	}
+	if userID == "" {
+		userID = uuid.New().String()
+	}
+
 	provider := &typ.Provider{
 		UUID:     providerUUID.String(),
 		Name:     providerName,
@@ -1013,7 +1030,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			AccessToken:  token.AccessToken,
 			ProviderType: string(issuer),
 			Issuer:       issuer,
-			UserID:       uuid.New().String(),
+			UserID:       userID,
 			RefreshToken: token.RefreshToken,
 			ExpiresAt:    expiresAt,
 			ExtraFields:  make(map[string]interface{}),

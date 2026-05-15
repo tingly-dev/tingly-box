@@ -215,6 +215,48 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                                 disabled
                             />
 
+                            {/* Surface Google Code Assist metadata (Gemini/Antigravity)
+                                that would otherwise only be visible in the raw
+                                Extra Fields JSON dump. */}
+                            {provider.api_style === 'google' && (() => {
+                                const extra = (provider.oauth_detail as { extra_fields?: Record<string, unknown> } | undefined)?.extra_fields ?? {};
+                                const email = typeof extra.email === 'string' ? extra.email : '';
+                                const projectId = typeof extra.project_id === 'string' ? extra.project_id : '';
+                                const userTier = typeof extra.user_tier === 'string' ? extra.user_tier : '';
+                                const onboarded = extra.onboarded === true;
+                                return (
+                                    <>
+                                        {email && (
+                                            <TextField
+                                                size="small"
+                                                fullWidth
+                                                label="Email"
+                                                value={email}
+                                                disabled
+                                            />
+                                        )}
+                                        {projectId && (
+                                            <TextField
+                                                size="small"
+                                                fullWidth
+                                                label="Project ID"
+                                                value={projectId}
+                                                disabled
+                                            />
+                                        )}
+                                        {userTier && (
+                                            <TextField
+                                                size="small"
+                                                fullWidth
+                                                label="User Tier"
+                                                value={onboarded ? `${userTier} (newly onboarded)` : userTier}
+                                                disabled
+                                            />
+                                        )}
+                                    </>
+                                );
+                            })()}
+
                             <TextField
                                 size="small"
                                 fullWidth

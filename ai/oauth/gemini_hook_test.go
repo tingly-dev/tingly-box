@@ -25,7 +25,7 @@ func TestGeminiHook_AfterToken_LoadCodeAssistDirect(t *testing.T) {
 			if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
 				t.Errorf("expected Bearer auth, got %q", got)
 			}
-			_, _ = io.WriteString(w, `{"cloudaicompanionProject":"discovered-project"}`)
+			_, _ = io.WriteString(w, `{"cloudaicompanionProject":"discovered-project","currentTier":{"id":"standard-tier"}}`)
 		case strings.HasSuffix(r.URL.Path, ":onboardUser"):
 			onboardCalled = true
 			_, _ = io.WriteString(w, `{"done":true,"response":{"cloudaicompanionProject":{"id":"onboarded"}}}`)
@@ -57,6 +57,12 @@ func TestGeminiHook_AfterToken_LoadCodeAssistDirect(t *testing.T) {
 	}
 	if got := meta["project_id"]; got != "discovered-project" {
 		t.Errorf("expected project_id=discovered-project, got %v", got)
+	}
+	if got := meta["user_tier"]; got != "standard-tier" {
+		t.Errorf("expected user_tier=standard-tier (from currentTier), got %v", got)
+	}
+	if got, ok := meta["onboarded"].(bool); !ok || got {
+		t.Errorf("expected onboarded=false when project came from loadCodeAssist, got %v", meta["onboarded"])
 	}
 }
 
@@ -95,6 +101,12 @@ func TestGeminiHook_AfterToken_OnboardFallback(t *testing.T) {
 	}
 	if got := meta["project_id"]; got != "onboarded-project" {
 		t.Errorf("expected project_id=onboarded-project, got %v", got)
+	}
+	if got, ok := meta["onboarded"].(bool); !ok || !got {
+		t.Errorf("expected onboarded=true when onboardUser created the project, got %v", meta["onboarded"])
+	}
+	if got := meta["user_tier"]; got != "free-tier" {
+		t.Errorf("expected user_tier=free-tier (default tier), got %v", got)
 	}
 }
 

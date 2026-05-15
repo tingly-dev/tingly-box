@@ -49,8 +49,10 @@ func TestGeminiRoundTripper_WrapsGenerateContent(t *testing.T) {
 	}
 	rawInner, _ := json.Marshal(innerBody)
 
+	// Send through the canonical user-facing Gemini host; the transport must
+	// rewrite it to cloudcode-pa.googleapis.com transparently.
 	req, err := http.NewRequest("POST",
-		"https://cloudcode-pa.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
 		bytes.NewReader(rawInner))
 	if err != nil {
 		t.Fatalf("build request: %v", err)
@@ -67,6 +69,9 @@ func TestGeminiRoundTripper_WrapsGenerateContent(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
+	if fake.captured.URL.Host != "cloudcode-pa.googleapis.com" {
+		t.Errorf("expected host rewrite to cloudcode-pa.googleapis.com, got %s", fake.captured.URL.Host)
+	}
 	if fake.captured.URL.Path != "/v1internal:generateContent" {
 		t.Errorf("expected path rewrite to /v1internal:generateContent, got %s", fake.captured.URL.Path)
 	}
@@ -79,6 +84,9 @@ func TestGeminiRoundTripper_WrapsGenerateContent(t *testing.T) {
 	}
 	if got := fake.captured.Header.Get("Content-Type"); got != "application/json" {
 		t.Errorf("expected Content-Type application/json, got %q", got)
+	}
+	if got := fake.captured.Header.Get("X-Goog-Api-Client"); got == "" {
+		t.Errorf("expected X-Goog-Api-Client header to be set")
 	}
 
 	var wrapped map[string]any
@@ -128,7 +136,7 @@ func TestGeminiRoundTripper_WrapsGenerateContent(t *testing.T) {
 func TestGeminiRoundTripper_NoProjectIDSkipsWrap(t *testing.T) {
 	raw := []byte(`{"model":"gemini-2.5-pro","contents":[]}`)
 	req, _ := http.NewRequest("POST",
-		"https://cloudcode-pa.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
 		bytes.NewReader(raw))
 	req.Header.Set("X-Goog-Api-Key", "tok")
 	req.ContentLength = int64(len(raw))
@@ -145,5 +153,56 @@ func TestGeminiRoundTripper_NoProjectIDSkipsWrap(t *testing.T) {
 	}
 	if fake.captured.URL.Path != "/v1internal:generateContent" {
 		t.Errorf("expected path rewrite even without project, got %s", fake.captured.URL.Path)
+	}
+	if fake.captured.URL.Host != "cloudcode-pa.googleapis.com" {
+		t.Errorf("expected host rewrite even without project, got %s", fake.captured.URL.Host)
+	}
+}
+
+// TestGeminiRoundTripper_CountTokensStripsSafetySettings verifies that the
+// Code Assist countTokens envelope drops safetySettings (which the endpoint
+// rejects) while preserving the rest of the request.
+func TestGeminiRoundTripper_CountTokensStripsSafetySettings(t *testing.T) {
+	innerBody := map[string]any{
+		"model": "gemini-2.5-pro",
+		"contents": []map[string]any{
+			{"role": "user", "parts": []map[string]any{{"text": "hi"}}},
+		},
+		"safetySettings": []map[string]any{
+			{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+		},
+	}
+	raw, _ := json.Marshal(innerBody)
+
+	req, _ := http.NewRequest("POST",
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:countTokens",
+		bytes.NewReader(raw))
+	req.Header.Set("X-Goog-Api-Key", "tok")
+	req.ContentLength = int64(len(raw))
+
+	fake := &fakeRoundTripper{}
+	rt := &geminiRoundTripper{RoundTripper: fake, project: "my-project"}
+
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip returned error: %v", err)
+	}
+
+	if fake.captured.URL.Path != "/v1internal:countTokens" {
+		t.Errorf("expected path rewrite to /v1internal:countTokens, got %s", fake.captured.URL.Path)
+	}
+
+	var wrapped map[string]any
+	if err := json.Unmarshal(fake.body, &wrapped); err != nil {
+		t.Fatalf("body is not valid JSON: %v\nbody=%s", err, string(fake.body))
+	}
+	inner, ok := wrapped["request"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected wrapped.request to be a JSON object, got %T", wrapped["request"])
+	}
+	if _, has := inner["safetySettings"]; has {
+		t.Errorf("expected safetySettings to be stripped from countTokens body, got %v", inner["safetySettings"])
+	}
+	if _, has := inner["contents"]; !has {
+		t.Error("expected contents to be preserved on countTokens body")
 	}
 }
