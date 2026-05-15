@@ -54,7 +54,7 @@ const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Gemini CLI models via OAuth',
         icon: <Gemini size={32}/>,
         color: '#4285F4',
-        enabled: false,
+        enabled: true,
     },
     {
         id: 'antigravity',
