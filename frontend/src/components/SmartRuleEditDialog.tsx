@@ -33,6 +33,7 @@ const POSITION_OPTIONS = [
     { value: 'token', label: 'Token Count', description: 'Token count' },
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)' },
     { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)' },
+    { value: 'proxy_vision', label: 'Proxy Vision', description: 'Vision-proxy bypass: matched rule\'s services describe images, request continues to downstream with image blocks replaced by text' },
 ] as const;
 
 // Per-position enumerated value options. When a position has an entry here,
@@ -67,6 +68,9 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
     latest_user: [
         { value: 'contains', label: 'Contains', description: 'Latest user message contains the value', valueType: 'string' },
         // { value: 'type', label: 'Type', description: 'Latest user message content type (e.g., image)', valueType: 'string' },
+    ],
+    proxy_vision: [
+        { value: 'enabled', label: 'Enabled', description: 'Vision-proxy bypass is enabled — image-bearing requests are described by the matched rule\'s services and forwarded as text to the downstream model', valueType: 'bool' },
     ],
     tool_use: [
         { value: 'equals', label: 'Equals', description: 'Latest message is tool use and its name equals the value', valueType: 'string' },
@@ -177,6 +181,17 @@ const SmartRuleEditDialog: React.FC<SmartRuleEditDialogProps> = ({
                     description: '',
                     type: 'string',
                 };
+                // If the new position has exactly one operation, auto-select it.
+                // Keeps single-choice positions (e.g. proxy_vision) to one click.
+                const opts = OPERATION_OPTIONS[updates.position as string];
+                if (opts && opts.length === 1) {
+                    const only = opts[0];
+                    updatedOp.operation = only.value;
+                    updatedOp.meta = {
+                        description: only.description,
+                        type: only.valueType,
+                    };
+                }
             }
             // Update operation-specific metadata when operation is set
             else if ('operation' in updates && updates.operation !== undefined) {

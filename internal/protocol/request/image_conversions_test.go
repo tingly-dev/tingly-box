@@ -30,7 +30,7 @@ func TestParseImageURLToAnthropicSource(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mt, d, u := parseImageURLToAnthropicSource(tc.in)
+			mt, d, u := ParseImageURLToAnthropicSource(tc.in)
 			assert.Equal(t, tc.mediaType, mt)
 			assert.Equal(t, tc.data, d)
 			assert.Equal(t, tc.remoteURL, u)

@@ -36,6 +36,7 @@ import (
 	imbotmodule "github.com/tingly-dev/tingly-box/internal/server/module/imbot"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
+	"github.com/tingly-dev/tingly-box/internal/server/processor"
 	"github.com/tingly-dev/tingly-box/internal/server/routing"
 	"github.com/tingly-dev/tingly-box/internal/server/servertool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -705,6 +706,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.oauthRefresher = tokenRefresher
 	server.affinityStore = affinityStore
 	server.routingSelector = simpleSelector
+
+	// Register op-level processors (vision proxy, etc.) into the smart-routing
+	// registry. Idempotent — safe across config reloads.
+	processor.RegisterAll(server.clientPool, server.config, logrus.StandardLogger())
 
 	// Start affinity store background GC
 	affinityStore.StartGC()

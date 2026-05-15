@@ -1,6 +1,8 @@
 package routing
 
 import (
+	"context"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -144,7 +146,13 @@ func indexToString(i int) string {
 	return string(digits)
 }
 
-// Evaluate evaluates smart routing rules and selects a service
+// Evaluate evaluates smart routing rules and selects a service. When a
+// matched rule carries op-level processors, the stage runs them (the
+// "implicit bypass") and then returns (nil, false) so the LoadBalancer
+// (global fallback) picks an upstream with the mutated request. The
+// mutated request is NOT re-evaluated against the smart-routing rules —
+// re-entering evaluation with a post-processor request invites surprising
+// matches and is intentionally avoided.
 func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool) {
 	rule := ctx.Rule
 
@@ -192,6 +200,61 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	if !matched || len(matchedServices) == 0 {
 		logrus.Debugf("[smart_routing] no rule matched - matched=%v, services=%d", matched, len(matchedServices))
 		s.emitTrace(ctx, reqCtx, trace, -1, 0, 0, nil, "no_match", "no rule matched the request")
+		return nil, false
+	}
+
+	matchedRule := rule.SmartRouting[matchedRuleIndex]
+
+	// If this rule was already bypassed in an earlier pass, do not run its
+	// processors again — fall through to the LoadBalancer instead.
+	if _, already := ctx.BypassedSmartRules[matchedRuleIndex]; already {
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), 0, nil,
+			"bypass_already_done", "rule already bypassed by op-level processor; falling through to LoadBalancer")
+		return nil, false
+	}
+
+	// Implicit bypass: if the matched rule's ops carry registered processors,
+	// run them (they mutate ctx.Request in place) and return (nil, false).
+	// The LoadBalancer stage then picks an upstream from the parent rule's
+	// top-level Services with the mutated request. We do NOT re-evaluate
+	// smart-routing rules against the mutated request — keeping the bypass
+	// strictly one-shot prevents post-processor inputs from triggering
+	// unintended matches downstream.
+	type collectedProc struct {
+		op   smartrouting.SmartOp
+		proc smartrouting.OpProcessor
+	}
+	var procs []collectedProc
+	for _, op := range matchedRule.Ops {
+		if p, ok := smartrouting.LookupProcessor(op.Position, op.Operation); ok {
+			procs = append(procs, collectedProc{op: op, proc: p})
+		}
+	}
+	if len(procs) > 0 {
+		processorCtx := context.Background()
+		if ctx.GinContext != nil && ctx.GinContext.Request != nil {
+			processorCtx = ctx.GinContext.Request.Context()
+		}
+		pctx := &smartrouting.ProcessorContext{
+			Ctx:       processorCtx,
+			Request:   ctx.Request,
+			ReqCtx:    reqCtx,
+			RuleIndex: matchedRuleIndex,
+			Services:  matchedServices,
+		}
+		for _, cp := range procs {
+			pctx.OpUUID = cp.op.UUID
+			if err := cp.proc.Process(pctx); err != nil {
+				logrus.Debugf("[smart_routing] processor %s/%s error: %v",
+					cp.op.Position, cp.op.Operation, err)
+			}
+		}
+		if ctx.BypassedSmartRules == nil {
+			ctx.BypassedSmartRules = make(map[int]struct{})
+		}
+		ctx.BypassedSmartRules[matchedRuleIndex] = struct{}{}
+		s.emitTrace(ctx, reqCtx, trace, matchedRuleIndex, len(matchedServices), 0, nil,
+			"bypass_processor_run", "op-level processor ran; falling through to LoadBalancer")
 		return nil, false
 	}
 

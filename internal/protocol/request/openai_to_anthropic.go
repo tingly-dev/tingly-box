@@ -151,7 +151,7 @@ func ConvertOpenAIToAnthropicRequest(req *openai.ChatCompletionNewParams, defaul
 // remote URLs become URL image sources. Returns ok=false for empty/malformed
 // inputs the caller should drop.
 func openAIImageURLToAnthropicBetaBlock(url string) (anthropic.BetaContentBlockParamUnion, bool) {
-	mediaType, data, remoteURL := parseImageURLToAnthropicSource(url)
+	mediaType, data, remoteURL := ParseImageURLToAnthropicSource(url)
 	switch {
 	case mediaType != "" && data != "":
 		return anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
@@ -169,7 +169,7 @@ func openAIImageURLToAnthropicBetaBlock(url string) (anthropic.BetaContentBlockP
 // openAIImageURLToAnthropicV1Block is the v1 counterpart of
 // openAIImageURLToAnthropicBetaBlock.
 func openAIImageURLToAnthropicV1Block(url string) (anthropic.ContentBlockParamUnion, bool) {
-	mediaType, data, remoteURL := parseImageURLToAnthropicSource(url)
+	mediaType, data, remoteURL := ParseImageURLToAnthropicSource(url)
 	switch {
 	case mediaType != "" && data != "":
 		return anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
