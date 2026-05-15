@@ -68,7 +68,7 @@ func (s *Server) streamOpenAIChatToAnthropicBetaWithMCP(
 ) {
 	streamRec := newStreamRecorder(recorder)
 	if streamRec != nil {
-		streamRec.SetupStreamRecorderInContext(c, "stream_event_recorder")
+		streamRec.SetupStreamRecorderInContext(c)
 	}
 
 	for round := 0; round < 3; round++ {

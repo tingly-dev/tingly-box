@@ -385,18 +385,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 	})
 
 	// Add recorder hooks if available
-	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
-		if onEvent != nil {
-			hc.WithOnStreamEvent(onEvent)
-		}
-		if onComplete != nil {
-			hc.WithOnStreamComplete(onComplete)
-		}
-		if onError != nil {
-			hc.WithOnStreamError(onError)
-		}
-	}
+	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Response guardrails
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)
@@ -507,18 +496,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 	})
 
 	// Add recorder hooks if available
-	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
-		if onEvent != nil {
-			hc.WithOnStreamEvent(onEvent)
-		}
-		if onComplete != nil {
-			hc.WithOnStreamComplete(onComplete)
-		}
-		if onError != nil {
-			hc.WithOnStreamError(onError)
-		}
-	}
+	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Create and run generic interceptor
 	interceptor := mcp.NewGenericStreamInterceptor(
@@ -619,18 +597,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 	})
 
 	// Add recorder hooks if available
-	if recorder != nil {
-		onEvent, onComplete, onError := NewRecorderHooksWithModel(recorder, actualModel, provider)
-		if onEvent != nil {
-			hc.WithOnStreamEvent(onEvent)
-		}
-		if onComplete != nil {
-			hc.WithOnStreamComplete(onComplete)
-		}
-		if onError != nil {
-			hc.WithOnStreamError(onError)
-		}
-	}
+	AttachRecorderHooks(hc, recorder, actualModel, provider)
 
 	// Response guardrails
 	_, _, _, _, scenario, _, _ := GetTrackingContext(c)

@@ -73,10 +73,10 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 	// Start scenario-level recording (client -> tingly-box traffic) only if enabled
 	var recorder *ProtocolRecorder
 	if s.GetScenarioRecordMode(scenarioType) != "" {
-		recorder = s.RecordScenarioRequest(c, scenario)
+		recorder = s.BeginProtocolRecording(c, scenario)
 		if recorder != nil {
 			// Store recorder in context for use in handlers
-			c.Set("scenario_recorder", recorder)
+			c.Set(recorderContextKey, recorder)
 			// Note: RecordResponse will be called by handler after stream completes
 		}
 	}

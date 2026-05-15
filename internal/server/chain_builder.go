@@ -30,7 +30,7 @@ func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType
 
 	// 1. Pre-transform recording (if request recording is enabled)
 	if shouldRecord && requestRecordingEnabled {
-		transforms = append(transforms, NewPreTransformRecorder(c, recorder))
+		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePre))
 	}
 
 	// 2. Base transform (protocol conversion)
@@ -46,7 +46,7 @@ func (s *Server) BuildTransformChain(c *gin.Context, targetType protocol.APIType
 
 	// 3. Post-transform recording (if request recording is enabled)
 	if shouldRecord && requestRecordingEnabled {
-		transforms = append(transforms, NewPostTransformRecorder(recorder, c))
+		transforms = append(transforms, NewTransformRecorder(c, recorder, StagePost))
 	}
 
 	return transform.NewTransformChain(transforms), nil
