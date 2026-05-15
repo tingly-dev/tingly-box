@@ -65,12 +65,17 @@ export interface ProviderNodeComponentProps {
 }
 
 // Clickable priority badge anchored to the top-left corner of the node.
-// The button itself sits *inside* the node so the click target is always
-// on the node (avoids the badge floating into the gap between siblings
-// where adjacent nodes may swallow the click). A small CSS translate
-// shifts the visual position outward so the badge still reads as
-// "attached to the corner", matching the existing badge convention.
-const PriorityBadgeButton = styled(Button)(({ theme }) => ({
+// The button sits *inside* the node so the click target is always on
+// the node (the badge floating into the gap between siblings would let
+// adjacent nodes swallow the click). A small CSS translate shifts the
+// visual position outward so it still reads as "attached to the corner".
+//
+// Styling is driven by a `hasPriority` prop on the styled element rather
+// than MUI's `variant` / `color` props, because contained-button defaults
+// otherwise win over sx and force a primary background.
+const PriorityBadgeButton = styled(Button, {
+    shouldForwardProp: (prop) => prop !== 'hasPriority',
+})<{ hasPriority: boolean }>(({ theme, hasPriority }) => ({
     position: 'absolute',
     top: 4,
     left: 4,
@@ -85,10 +90,28 @@ const PriorityBadgeButton = styled(Button)(({ theme }) => ({
     lineHeight: 1,
     boxShadow: theme.shadows[2],
     zIndex: 3,
-    // Belt-and-suspenders: even though we stopPropagation in the handler,
-    // some MUI internals re-fire click events from the wrapping span. A
-    // dedicated pointer-events region keeps clicks on the badge alone.
     pointerEvents: 'auto',
+    border: '1px solid',
+    ...(hasPriority
+        ? {
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              borderColor: theme.palette.primary.main,
+              '&:hover': {
+                  backgroundColor: theme.palette.primary.dark,
+                  borderColor: theme.palette.primary.dark,
+              },
+          }
+        : {
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.secondary,
+              borderColor: theme.palette.divider,
+              '&:hover': {
+                  backgroundColor: theme.palette.background.paper,
+                  borderColor: theme.palette.primary.main,
+                  color: theme.palette.primary.main,
+              },
+          }),
 }));
 
 interface PriorityBadgeProps {
@@ -127,26 +150,10 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
             <Tooltip title={tooltip} arrow placement="top">
                 <span>
                     <PriorityBadgeButton
-                        variant="contained"
-                        // Unset state still needs an opaque background so the
-                        // badge visually covers the node corner underneath
-                        // (the outlined variant was transparent and let the
-                        // node bleed through, reading as "穿透").
-                        color={priority > 0 ? 'primary' : 'inherit'}
+                        hasPriority={priority > 0}
                         size="small"
                         onClick={open}
                         disabled={!active}
-                        sx={priority > 0 ? undefined : {
-                            backgroundColor: 'background.paper',
-                            color: 'text.secondary',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            '&:hover': {
-                                backgroundColor: 'background.paper',
-                                borderColor: 'primary.main',
-                                color: 'primary.main',
-                            },
-                        }}
                     >
                         {label}
                     </PriorityBadgeButton>
