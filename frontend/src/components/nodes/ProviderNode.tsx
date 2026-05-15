@@ -127,11 +127,26 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
             <Tooltip title={tooltip} arrow placement="top">
                 <span>
                     <PriorityBadgeButton
-                        variant={priority > 0 ? 'contained' : 'outlined'}
+                        variant="contained"
+                        // Unset state still needs an opaque background so the
+                        // badge visually covers the node corner underneath
+                        // (the outlined variant was transparent and let the
+                        // node bleed through, reading as "穿透").
                         color={priority > 0 ? 'primary' : 'inherit'}
                         size="small"
                         onClick={open}
                         disabled={!active}
+                        sx={priority > 0 ? undefined : {
+                            backgroundColor: 'background.paper',
+                            color: 'text.secondary',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            '&:hover': {
+                                backgroundColor: 'background.paper',
+                                borderColor: 'primary.main',
+                                color: 'primary.main',
+                            },
+                        }}
                     >
                         {label}
                     </PriorityBadgeButton>
