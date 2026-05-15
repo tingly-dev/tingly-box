@@ -40,6 +40,7 @@ export default {
       "useAnthropic": "Anthropic SDK",
       "useCodex": "Codex",
       "useClaudeCode": "Claude Code",
+      "useClaudeDesktop": "Claude Desktop",
       "useOpenCode": "OpenCode",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
@@ -879,6 +880,7 @@ export default {
     "editTooltip": "管理可见的智能应用",
     "descriptions": {
       "claude_code": "为 Claude Code 配置自定义路由、配置文件与按任务的模型。",
+      "claude_desktop": "将 Claude Desktop 作为 MCP 客户端通过 Tingly Box 接入。",
       "codex": "用你的提供商凭证配置 Codex CLI。",
       "opencode": "使用你的提供商驱动的开源代码 Agent。",
       "xcode": "将你的模型接入 Xcode 编码智能。",

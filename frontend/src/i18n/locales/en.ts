@@ -40,6 +40,7 @@ export default {
       "useAnthropic": "Anthropic SDK",
       "useCodex": "Codex",
       "useClaudeCode": "Claude Code",
+      "useClaudeDesktop": "Claude Desktop",
       "useOpenCode": "OpenCode",
       "useXcode": "Xcode",
       "useVSCode": "VS Code",
@@ -879,6 +880,7 @@ export default {
     "editTooltip": "Manage visible agents",
     "descriptions": {
       "claude_code": "Route Claude Code with custom profiles and per-task models.",
+      "claude_desktop": "Connect Claude Desktop as an MCP client through Tingly Box.",
       "codex": "Configure Codex CLI through your provider keys.",
       "opencode": "Open-source coding agent powered by your provider.",
       "xcode": "Bring your model into Xcode's coding intelligence.",

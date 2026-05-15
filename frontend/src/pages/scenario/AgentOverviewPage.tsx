@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Anthropic,
     Claude,
+    ClaudeDesktop,
     Codex,
     OpenAI,
     OpenClaw,
@@ -47,6 +48,14 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.claude_code',
         path: '/agent/claude_code',
         icon: (size) => <Claude size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'claude_desktop',
+        labelKey: 'layout.nav.useClaudeDesktop',
+        descKey: 'scenarioOverview.descriptions.claude_desktop',
+        path: '/agent/claude_desktop',
+        icon: (size) => <ClaudeDesktop size={size} />,
         hideable: true,
     },
     {
