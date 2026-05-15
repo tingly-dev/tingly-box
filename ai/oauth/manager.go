@@ -783,7 +783,9 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	// Build common parameters
 	params := map[string]string{
 		"client_id": config.ClientID,
-		"scope":     strings.Join(config.Scopes, " "),
+	}
+	if len(config.Scopes) > 0 {
+		params["scope"] = strings.Join(config.Scopes, " ")
 	}
 	// Add PKCE parameters for Device Code PKCE flow
 	if config.OAuthMethod == OAuthMethodDeviceCodePKCE {

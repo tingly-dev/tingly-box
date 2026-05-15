@@ -486,6 +486,8 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 	return metadata, nil
 }
 
+// KimiHook implements Kimi OAuth device-code flow specific behavior.
+// Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
 type KimiHook struct{}
 
 func (h *KimiHook) BeforeAuth(params map[string]string) error {
@@ -493,17 +495,16 @@ func (h *KimiHook) BeforeAuth(params map[string]string) error {
 }
 
 func (h *KimiHook) BeforeToken(body map[string]string, header http.Header) error {
-	// Kimi 需要设备信息头，模拟 kimi-cli 的请求头
-	header.Set("X-Msh-Platform", "mac")
+	header.Set("X-Msh-Platform", "cli-proxy-api")
 	header.Set("X-Msh-Version", "1.0.0")
 	header.Set("X-Msh-Device-Name", getKimiDeviceName())
 	header.Set("X-Msh-Device-Model", getKimiDeviceModel())
-	header.Set("X-Msh-Os-Version", getKimiOsVersion())
 	header.Set("X-Msh-Device-Id", getKimiDeviceId())
 	return nil
 }
 
 func (h *KimiHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
+	// Kimi has no public userinfo endpoint; CLIProxyAPI hardcodes the display label.
 	return nil, nil
 }
 
@@ -581,6 +582,12 @@ var (
 	kimiDeviceIdOnce bool
 )
 
+// GetKimiDeviceID returns a persistent device ID for Kimi OAuth/inference calls.
+// Exported so inference round trippers can reuse the same value the OAuth flow used.
+func GetKimiDeviceID() string {
+	return getKimiDeviceId()
+}
+
 // getKimiDeviceId returns a persistent device ID for Kimi OAuth
 // Attempts to read from ~/.kimi/device_id, generates a new UUID if not found
 func getKimiDeviceId() string {
@@ -625,42 +632,17 @@ func getKimiDeviceName() string {
 	return "unknown"
 }
 
-// getKimiDeviceModel returns the device model for Kimi OAuth
+// getKimiDeviceModel returns the device model for Kimi OAuth in the
+// "<GOOS> <GOARCH>" format used by CLIProxyAPI (e.g. "darwin arm64").
 func getKimiDeviceModel() string {
-	// Return a generic model identifier based on OS and architecture
-	os := runtime.GOOS
-	arch := runtime.GOARCH
-
-	// Map to Kimi's expected format
-	switch os {
+	goos := runtime.GOOS
+	switch goos {
 	case "darwin":
-		if arch == "arm64" {
-			return "Mac14,6" // Apple Silicon Mac
-		}
-		return "MacBookPro18,1" // Intel Mac
+		goos = "macOS"
 	case "linux":
-		return "Linux-" + arch
+		goos = "Linux"
 	case "windows":
-		return "Windows-" + arch
-	default:
-		return os + "-" + arch
+		goos = "Windows"
 	}
-}
-
-// getKimiOsVersion returns the OS version for Kimi OAuth
-func getKimiOsVersion() string {
-	os := runtime.GOOS
-
-	switch os {
-	case "darwin":
-		// Return macOS version (placeholder, should be dynamic in production)
-		return "14.5.0"
-	case "linux":
-		// Return a generic Linux version string
-		return "5.15.0-generic"
-	case "windows":
-		return "10.0.22621"
-	default:
-		return "1.0.0"
-	}
+	return goos + " " + runtime.GOARCH
 }

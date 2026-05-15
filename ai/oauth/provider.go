@@ -191,14 +191,18 @@ func DefaultRegistry() *Registry {
 		Hook:               &CodexHook{},
 	})
 
+	// Kimi OAuth (Device Authorization Flow)
+	// Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
+	// Public device flow, no client secret; no scope parameter on the wire.
 	registry.Register(&ProviderConfig{
 		Type:               ai.IssuerKimiCode,
+		GrantType:          "urn:ietf:params:oauth:grant-type:device_code",
 		DisplayName:        "Kimi CLI",
 		ClientID:           "17e5f671-d194-4dfb-9706-5516cb48c098",
-		ClientSecret:       "", // No ClientSecret for Device Authorization Flow
+		ClientSecret:       "",
 		DeviceCodeURL:      "https://auth.kimi.com/api/oauth/device_authorization",
 		TokenURL:           "https://auth.kimi.com/api/oauth/token",
-		Scopes:             []string{"kimi-code"},
+		Scopes:             nil,
 		AuthStyle:          AuthStyleInNone,
 		OAuthMethod:        OAuthMethodDeviceCode,
 		TokenRequestFormat: TokenRequestFormatForm,

@@ -983,7 +983,9 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			apiBase = protocol.CodexAPIBase
 			apiStyle = protocol.APIStyleOpenAI
 		case ai.IssuerKimiCode:
-			apiBase = "https://api.moonshot.cn/v1"
+			// Kimi OAuth tokens target kimi.com's coding API, not Moonshot.
+			// Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
+			apiBase = "https://api.kimi.com/coding/v1"
 			apiStyle = protocol.APIStyleOpenAI
 		default:
 			apiBase = "mock"
