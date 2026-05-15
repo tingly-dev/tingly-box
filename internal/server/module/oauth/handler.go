@@ -426,13 +426,13 @@ func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oa
 		return
 	}
 
-	// Stash the per-flow Kimi device id onto the token so the existing
-	// provider-creation path persists it into OAuthDetail.ExtraFields.
+	// Hand the per-flow device id to createProviderFromToken via the token's
+	// metadata bag; it'll be lifted onto the typed OAuthDetail.DeviceID field.
 	if kimiDeviceID != "" {
 		if token.Metadata == nil {
 			token.Metadata = make(map[string]any)
 		}
-		token.Metadata[oauth.KimiDeviceIDMetadataKey] = kimiDeviceID
+		token.Metadata[tokenMetadataDeviceID] = kimiDeviceID
 	}
 
 	fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", issuer)
@@ -583,10 +583,8 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 
 	// Refresh token
 	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
-	if issuer == ai.IssuerKimiCode {
-		if deviceID := KimiDeviceIDFromExtraFields(provider.OAuthDetail.ExtraFields); deviceID != "" {
-			refreshOpts = append(refreshOpts, WithKimiDeviceID(deviceID))
-		}
+	if issuer == ai.IssuerKimiCode && provider.OAuthDetail.DeviceID != "" {
+		refreshOpts = append(refreshOpts, WithKimiDeviceID(provider.OAuthDetail.DeviceID))
 	}
 	token, err := h.oauthManager.RefreshToken(
 		c.Request.Context(),
@@ -1050,10 +1048,19 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		},
 	}
 
-	// Store account_id from token metadata for ChatGPT API
+	// Copy provider-specific metadata into the typed credential schema. Keys
+	// that map to first-class OAuthDetail fields (DeviceID, ...) are lifted
+	// out so the generic ExtraFields bag only carries truly opaque data.
 	if token.Metadata != nil {
 		for k, v := range token.Metadata {
-			provider.OAuthDetail.ExtraFields[k] = v
+			switch k {
+			case tokenMetadataDeviceID:
+				if s, ok := v.(string); ok {
+					provider.OAuthDetail.DeviceID = s
+				}
+			default:
+				provider.OAuthDetail.ExtraFields[k] = v
+			}
 		}
 	}
 

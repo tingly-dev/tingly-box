@@ -486,12 +486,6 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 	return metadata, nil
 }
 
-// KimiDeviceIDMetadataKey is the Token.Metadata / OAuthDetail.ExtraFields
-// key under which the per-credential Kimi X-Msh-Device-Id is persisted.
-// Co-located with KimiHook because both belong to the Kimi provider's wire
-// contract — not part of the generic OAuth surface.
-const KimiDeviceIDMetadataKey = "kimi_device_id"
-
 // KimiHook implements Kimi OAuth device-code flow specific behavior.
 // Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
 //
