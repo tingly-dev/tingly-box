@@ -77,9 +77,12 @@ const PriorityBadgeButton = styled(Button, {
     shouldForwardProp: (prop) => prop !== 'hasPriority',
 })<{ hasPriority: boolean }>(({ theme, hasPriority }) => ({
     position: 'absolute',
-    top: 4,
-    left: 4,
-    transform: 'translate(-30%, -30%)',
+    // Sit clearly outside the corner so the badge reads as "attached"
+    // visually, while the centre of the hit-box (~width/2 + top) stays
+    // inside the node so clicks always land on this element rather than
+    // bleeding into the gap between siblings.
+    top: -8,
+    left: -8,
     minWidth: 0,
     width: 26,
     height: 26,
