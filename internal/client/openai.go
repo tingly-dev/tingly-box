@@ -93,9 +93,7 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	if provider.AuthType == typ.AuthTypeOAuth &&
 		provider.OAuthDetail != nil &&
 		provider.OAuthDetail.GetIssuer() == ai.IssuerKimiCode {
-		transport = &kimiRoundTripper{
-			RoundTripper: createSessionBoundTransport(provider, sessionID),
-		}
+		transport = newKimiRoundTripper(createSessionBoundTransport(provider, sessionID), provider)
 	}
 
 	httpClient := &http.Client{

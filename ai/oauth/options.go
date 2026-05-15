@@ -20,6 +20,12 @@ type Options struct {
 
 	// HTTPClient allows passing a custom HTTP client
 	HTTPClient *http.Client
+
+	// KimiDeviceID is the per-flow X-Msh-Device-Id sent to Kimi's auth/token
+	// endpoints. It must be stable across the device-authorize, polling, and
+	// refresh requests of a single flow, then persisted with the token so
+	// future refresh / inference calls reuse the same id.
+	KimiDeviceID string
 }
 
 // WithProxyURL sets a proxy URL for the request
@@ -67,6 +73,14 @@ func WithHTTPClient(client *http.Client) Option {
 func WithBaseURL(baseURL string) Option {
 	return func(o *Options) {
 		o.BaseURL = baseURL
+	}
+}
+
+// WithKimiDeviceID sets the X-Msh-Device-Id used for Kimi OAuth requests in
+// this flow. Pass the stored id when refreshing an existing Kimi token.
+func WithKimiDeviceID(deviceID string) Option {
+	return func(o *Options) {
+		o.KimiDeviceID = deviceID
 	}
 }
 

@@ -558,12 +558,18 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	}
 
 	// Refresh token
+	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
+	if issuer == ai.IssuerKimiCode {
+		if deviceID := kimiDeviceIDFromExtraFields(provider.OAuthDetail.ExtraFields); deviceID != "" {
+			refreshOpts = append(refreshOpts, oauth.WithKimiDeviceID(deviceID))
+		}
+	}
 	token, err := h.oauthManager.RefreshToken(
 		c.Request.Context(),
 		provider.OAuthDetail.UserID,
 		issuer,
 		provider.OAuthDetail.RefreshToken,
-		oauth.WithProxyString(provider.ProxyURL),
+		refreshOpts...,
 	)
 
 	if err != nil {
@@ -1096,6 +1102,18 @@ func SafeTokenPreview(token string) string {
 		return token
 	}
 	return token[:20] + "..."
+}
+
+// kimiDeviceIDFromExtraFields safely extracts the per-provider Kimi device id
+// stored on OAuthDetail.ExtraFields. Returns "" when missing or malformed.
+func kimiDeviceIDFromExtraFields(extra map[string]interface{}) string {
+	if extra == nil {
+		return ""
+	}
+	if v, ok := extra[oauth.KimiDeviceIDMetadataKey].(string); ok {
+		return v
+	}
+	return ""
 }
 
 func OAuthOptions(proxyURL, baseURL string) []oauth.Option {

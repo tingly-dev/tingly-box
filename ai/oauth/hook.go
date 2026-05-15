@@ -488,6 +488,11 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 
 // KimiHook implements Kimi OAuth device-code flow specific behavior.
 // Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
+//
+// The X-Msh-Device-Id header is intentionally NOT set here: device id is
+// per-flow state managed by the OAuth manager (generated on authorize,
+// reused on polling, stored with the token, reused on refresh). The hook
+// only sets headers that are constant for the Kimi auth wire format.
 type KimiHook struct{}
 
 func (h *KimiHook) BeforeAuth(params map[string]string) error {
@@ -499,7 +504,6 @@ func (h *KimiHook) BeforeToken(body map[string]string, header http.Header) error
 	header.Set("X-Msh-Version", "1.0.0")
 	header.Set("X-Msh-Device-Name", getKimiDeviceName())
 	header.Set("X-Msh-Device-Model", getKimiDeviceModel())
-	header.Set("X-Msh-Device-Id", getKimiDeviceId())
 	return nil
 }
 
@@ -507,6 +511,18 @@ func (h *KimiHook) AfterToken(ctx context.Context, accessToken string, httpClien
 	// Kimi has no public userinfo endpoint; CLIProxyAPI hardcodes the display label.
 	return nil, nil
 }
+
+// NewKimiDeviceID returns a fresh, random Kimi device id (UUID v4) to be
+// bound to a single OAuth flow / token. Matches CLIProxyAPI's behavior of
+// generating one device id per Auth instance, except we persist it in the
+// credential DB instead of a local file.
+func NewKimiDeviceID() string {
+	return uuid.New().String()
+}
+
+// KimiDeviceIDMetadataKey is the Token.Metadata / ExtraFields key under
+// which the per-provider Kimi device id is stored.
+const KimiDeviceIDMetadataKey = "kimi_device_id"
 
 // CodexHook implements Codex (OpenAI) OAuth specific behavior.
 type CodexHook struct{}
@@ -572,56 +588,6 @@ func (h *CodexHook) AfterToken(ctx context.Context, accessToken string, httpClie
 		metadata["name"] = info.Name
 	}
 	return metadata, nil
-}
-
-// Kimi device info helpers
-// These functions generate device information headers required by Kimi OAuth
-
-var (
-	kimiDeviceId     string
-	kimiDeviceIdOnce bool
-)
-
-// GetKimiDeviceID returns a persistent device ID for Kimi OAuth/inference calls.
-// Exported so inference round trippers can reuse the same value the OAuth flow used.
-func GetKimiDeviceID() string {
-	return getKimiDeviceId()
-}
-
-// getKimiDeviceId returns a persistent device ID for Kimi OAuth
-// Attempts to read from ~/.kimi/device_id, generates a new UUID if not found
-func getKimiDeviceId() string {
-	if kimiDeviceIdOnce {
-		return kimiDeviceId
-	}
-
-	// Try to read from kimi-cli's device file
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		deviceIDPath := homeDir + "/.kimi/device_id"
-		if data, err := os.ReadFile(deviceIDPath); err == nil {
-			kimiDeviceId = strings.TrimSpace(string(data))
-			kimiDeviceIdOnce = true
-			if kimiDeviceId != "" {
-				return kimiDeviceId
-			}
-		}
-	}
-
-	// Generate a new device ID
-	kimiDeviceId = uuid.New().String()
-	kimiDeviceIdOnce = true
-
-	// Try to save to kimi-cli's device file
-	if homeDir, err := os.UserHomeDir(); err == nil {
-		kimiDir := homeDir + "/.kimi"
-		if err := os.MkdirAll(kimiDir, 0755); err == nil {
-			deviceIDPath := kimiDir + "/device_id"
-			_ = os.WriteFile(deviceIDPath, []byte(kimiDeviceId), 0644)
-		}
-	}
-
-	return kimiDeviceId
 }
 
 // getKimiDeviceName returns the hostname for Kimi OAuth
