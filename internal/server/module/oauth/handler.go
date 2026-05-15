@@ -50,7 +50,7 @@ func (h *Handler) SetCallbackServerManager(csm CallbackServerManager) {
 
 // CreateProviderFromToken is exported for use by the server's root OAuth callback
 func (h *Handler) CreateProviderFromToken(token *oauth.Token, issuer ai.Issuer, customName, sessionID string) (string, error) {
-	return h.createProviderFromToken(token, issuer, customName, sessionID)
+	return h.createProviderFromToken(token, issuer, customName, sessionID, "")
 }
 
 // =============================================
@@ -345,13 +345,11 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 
 	deviceOpts := OAuthOptions(proxyURL, callbackBaseURL)
 
-	// Kimi binds a single X-Msh-Device-Id to every request of a flow and
-	// expects refresh / inference to keep using it. Generate it here so the
-	// device-authorize call, polling, and the eventual persisted credential
-	// all carry the same id.
+	// Kimi binds one X-Msh-Device-Id to every request of a flow and to the
+	// persisted credential — refresh and inference must keep using it.
 	var kimiDeviceID string
 	if issuer == ai.IssuerKimiCode {
-		kimiDeviceID = newKimiDeviceID()
+		kimiDeviceID = uuid.New().String()
 		deviceOpts = append(deviceOpts, WithKimiDeviceID(kimiDeviceID))
 	}
 
@@ -426,17 +424,8 @@ func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oa
 		return
 	}
 
-	// Hand the per-flow device id to createProviderFromToken via the token's
-	// metadata bag; it'll be lifted onto the typed OAuthDetail.DeviceID field.
-	if kimiDeviceID != "" {
-		if token.Metadata == nil {
-			token.Metadata = make(map[string]any)
-		}
-		token.Metadata[tokenMetadataDeviceID] = kimiDeviceID
-	}
-
 	fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", issuer)
-	providerUUID, err := h.createProviderFromToken(token, issuer, customName, sessionID)
+	providerUUID, err := h.createProviderFromToken(token, issuer, customName, sessionID, kimiDeviceID)
 	if err != nil {
 		fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
@@ -907,7 +896,7 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 
 	// Use createProviderFromToken to create the provider
 	// Pass session ID to retrieve proxy URL from the session
-	providerUUID, err := h.createProviderFromToken(token, token.Provider, "", token.SessionID)
+	providerUUID, err := h.createProviderFromToken(token, token.Provider, "", token.SessionID, "")
 	if err != nil {
 		log.Printf("[OAuth] Failed to create provider for token.SessionID %s: %v", token.SessionID, err)
 		_ = h.oauthManager.UpdateSessionStatus(token.SessionID, oauth.SessionStatusFailed, "", err.Error())
@@ -950,7 +939,7 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 // =============================================
 
 // createProviderFromToken creates a provider from OAuth token
-func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, customName, sessionID string) (string, error) {
+func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, customName, sessionID, deviceID string) (string, error) {
 	// Get custom name from token (stored in state during authorize)
 	if customName == "" {
 		customName = token.Name
@@ -1044,23 +1033,15 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			UserID:       uuid.New().String(),
 			RefreshToken: token.RefreshToken,
 			ExpiresAt:    expiresAt,
+			DeviceID:     deviceID,
 			ExtraFields:  make(map[string]interface{}),
 		},
 	}
 
-	// Copy provider-specific metadata into the typed credential schema. Keys
-	// that map to first-class OAuthDetail fields (DeviceID, ...) are lifted
-	// out so the generic ExtraFields bag only carries truly opaque data.
+	// Store account_id from token metadata for ChatGPT API
 	if token.Metadata != nil {
 		for k, v := range token.Metadata {
-			switch k {
-			case tokenMetadataDeviceID:
-				if s, ok := v.(string); ok {
-					provider.OAuthDetail.DeviceID = s
-				}
-			default:
-				provider.OAuthDetail.ExtraFields[k] = v
-			}
+			provider.OAuthDetail.ExtraFields[k] = v
 		}
 	}
 

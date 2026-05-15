@@ -22,11 +22,8 @@ type Options struct {
 	HTTPClient *http.Client
 
 	// ExtraHeaders are merged into every token-related outbound request
-	// (device-code, polling, refresh, code exchange). It's a generic escape
-	// hatch for providers that need per-flow header state — for example,
-	// binding a stable X-Msh-Device-Id across all requests of a Kimi flow.
-	// The OAuth manager itself stays oblivious to provider semantics; callers
-	// own the per-provider semantics.
+	// (device-code, polling, refresh, code exchange). Escape hatch for
+	// per-flow header state like Kimi's X-Msh-Device-Id binding.
 	ExtraHeaders http.Header
 }
 
@@ -78,10 +75,8 @@ func WithBaseURL(baseURL string) Option {
 	}
 }
 
-// WithExtraHeader appends a header to be applied to every token-related
-// OAuth request in this flow. Use it for per-flow header state (e.g.
-// pinning a device id binding for the entire authorize → poll → refresh
-// lifecycle). Repeated calls accumulate; values for the same key replace.
+// WithExtraHeader sets a header applied to every token-related OAuth
+// request in this flow. Repeated calls accumulate; same-key values replace.
 func WithExtraHeader(key, value string) Option {
 	return func(o *Options) {
 		if key == "" {

@@ -489,9 +489,8 @@ func (h *IFlowHook) AfterToken(ctx context.Context, accessToken string, httpClie
 // KimiHook implements Kimi OAuth device-code flow specific behavior.
 // Reference: https://github.com/router-for-me/CLIProxyAPI internal/auth/kimi/kimi.go
 //
-// The X-Msh-Device-Id header is intentionally NOT set here: device id is
-// per-flow state injected by the caller via oauth.WithExtraHeader. The hook
-// only sets headers that are constant for the Kimi auth wire format.
+// X-Msh-Device-Id is NOT set here — it's per-flow state injected by the
+// caller via oauth.WithExtraHeader, so refresh and inference can reuse it.
 type KimiHook struct{}
 
 func (h *KimiHook) BeforeAuth(params map[string]string) error {
@@ -501,8 +500,8 @@ func (h *KimiHook) BeforeAuth(params map[string]string) error {
 func (h *KimiHook) BeforeToken(body map[string]string, header http.Header) error {
 	header.Set("X-Msh-Platform", "cli-proxy-api")
 	header.Set("X-Msh-Version", "1.0.0")
-	header.Set("X-Msh-Device-Name", getKimiDeviceName())
-	header.Set("X-Msh-Device-Model", getKimiDeviceModel())
+	header.Set("X-Msh-Device-Name", KimiDeviceName())
+	header.Set("X-Msh-Device-Model", KimiDeviceModel())
 	return nil
 }
 
@@ -577,17 +576,17 @@ func (h *CodexHook) AfterToken(ctx context.Context, accessToken string, httpClie
 	return metadata, nil
 }
 
-// getKimiDeviceName returns the hostname for Kimi OAuth
-func getKimiDeviceName() string {
+// KimiDeviceName returns the hostname for Kimi headers (auth and inference).
+func KimiDeviceName() string {
 	if hostname, err := os.Hostname(); err == nil {
 		return hostname
 	}
 	return "unknown"
 }
 
-// getKimiDeviceModel returns the device model for Kimi OAuth in the
-// "<GOOS> <GOARCH>" format used by CLIProxyAPI (e.g. "darwin arm64").
-func getKimiDeviceModel() string {
+// KimiDeviceModel returns the device model in the "<OS> <GOARCH>" format
+// CLIProxyAPI uses for Kimi headers (e.g. "macOS arm64").
+func KimiDeviceModel() string {
 	goos := runtime.GOOS
 	switch goos {
 	case "darwin":

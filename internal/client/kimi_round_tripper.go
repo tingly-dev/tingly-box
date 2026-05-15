@@ -2,31 +2,30 @@ package client
 
 import (
 	"net/http"
-	"os"
-	"runtime"
 
+	"github.com/tingly-dev/tingly-box/ai/oauth"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// Kimi CLI client identification headers used when calling Kimi's coding API.
-// Reference: https://github.com/router-for-me/CLIProxyAPI internal/runtime/executor/kimi_executor.go
+// Kimi-cli impersonation values sent with every inference request.
+// Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
 const (
 	kimiCLIUserAgent = "KimiCLI/1.10.6"
 	kimiCLIPlatform  = "kimi_cli"
 	kimiCLIVersion   = "1.10.6"
 )
 
-// kimiRoundTripper layers the kimi-cli impersonation headers on top of an
-// inner transport. The Authorization Bearer header is set by the OpenAI SDK
-// from the provider's access token.
+// kimiRoundTripper layers kimi-cli impersonation headers on an inner
+// transport. The Authorization Bearer is set by the OpenAI SDK.
 //
-// deviceID is bound at construction time from the credential's typed
-// OAuthDetail.DeviceID — the same id Kimi minted the token against. Matches
-// CLIProxyAPI's per-token device-id binding, persisted to our credential DB
-// instead of a kimi-cli file path.
+// All header values are bound at construction so per-request RoundTrip stays
+// allocation-free: device id (per-credential, persisted in OAuthDetail.DeviceID),
+// hostname (one os.Hostname syscall), and the GOOS/GOARCH-derived model.
 type kimiRoundTripper struct {
 	http.RoundTripper
-	deviceID string
+	deviceID    string
+	deviceName  string
+	deviceModel string
 }
 
 func newKimiRoundTripper(inner http.RoundTripper, provider *typ.Provider) *kimiRoundTripper {
@@ -34,37 +33,22 @@ func newKimiRoundTripper(inner http.RoundTripper, provider *typ.Provider) *kimiR
 	if provider != nil && provider.OAuthDetail != nil {
 		deviceID = provider.OAuthDetail.DeviceID
 	}
-	return &kimiRoundTripper{RoundTripper: inner, deviceID: deviceID}
+	return &kimiRoundTripper{
+		RoundTripper: inner,
+		deviceID:     deviceID,
+		deviceName:   oauth.KimiDeviceName(),
+		deviceModel:  oauth.KimiDeviceModel(),
+	}
 }
 
 func (t *kimiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", kimiCLIUserAgent)
 	req.Header.Set("X-Msh-Platform", kimiCLIPlatform)
 	req.Header.Set("X-Msh-Version", kimiCLIVersion)
-	req.Header.Set("X-Msh-Device-Name", kimiDeviceName())
-	req.Header.Set("X-Msh-Device-Model", kimiDeviceModel())
+	req.Header.Set("X-Msh-Device-Name", t.deviceName)
+	req.Header.Set("X-Msh-Device-Model", t.deviceModel)
 	if t.deviceID != "" {
 		req.Header.Set("X-Msh-Device-Id", t.deviceID)
 	}
 	return t.RoundTripper.RoundTrip(req)
-}
-
-func kimiDeviceName() string {
-	if h, err := os.Hostname(); err == nil && h != "" {
-		return h
-	}
-	return "unknown"
-}
-
-func kimiDeviceModel() string {
-	goos := runtime.GOOS
-	switch goos {
-	case "darwin":
-		goos = "macOS"
-	case "linux":
-		goos = "Linux"
-	case "windows":
-		goos = "Windows"
-	}
-	return goos + " " + runtime.GOARCH
 }

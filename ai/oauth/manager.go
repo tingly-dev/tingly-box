@@ -861,10 +861,8 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	return data, nil
 }
 
-// applyExtraHeaders merges caller-supplied per-flow headers onto an outbound
-// request. Called by every token-related request site in the manager so that
-// provider-specific header state (e.g. Kimi's X-Msh-Device-Id) can be injected
-// without the manager knowing about any specific provider.
+// applyExtraHeaders lets callers inject provider-specific header state
+// (e.g. Kimi's X-Msh-Device-Id) without the manager knowing the provider.
 func applyExtraHeaders(dst http.Header, src http.Header) {
 	for k, vs := range src {
 		for _, v := range vs {
