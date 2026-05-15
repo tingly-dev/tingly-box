@@ -1,38 +1,16 @@
 import { Box, Card, CardContent, Typography, Tooltip, Divider } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-    Claude,
-    Codex,
-    OpenAI as OpenAIIcon,
-    Anthropic as AnthropicIcon,
-    OpenCode,
-    Xcode,
-    VSCode,
-    OpenClaw,
-} from '../BrandIcons';
+import { SCENARIOS, useHiddenScenarios } from '@/pages/scenario/AgentOverviewPage';
 
-interface AgentItem {
-    path: string;
-    label: string;
-    icon: React.ReactNode;
-    description: string;
-}
+const QUICK_NAV_ICON_SIZE = 20;
 
 const AgentQuickNav: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const { isHidden } = useHiddenScenarios();
 
-    const agents: AgentItem[] = [
-        { path: '/agent/claude_code', label: 'Claude Code', icon: <Claude size={20} />, description: 'AI-powered coding assistant' },
-        { path: '/agent/codex',       label: 'Codex',       icon: <Codex size={20} />, description: 'OpenAI Codex integration' },
-        { path: '/agent/opencode',    label: 'OpenCode',    icon: <OpenCode size={20} />, description: 'OpenCode agent' },
-        { path: '/agent/xcode',       label: 'Xcode',       icon: <Xcode size={20} />, description: 'Xcode integration' },
-        { path: '/agent/vscode',      label: 'VS Code',     icon: <VSCode size={20} />, description: 'VS Code integration' },
-        { path: '/agent/openai',      label: 'OpenAI',      icon: <OpenAIIcon size={20} />, description: 'OpenAI SDK' },
-        { path: '/agent/anthropic',   label: 'Anthropic',   icon: <AnthropicIcon size={20} />, description: 'Anthropic SDK' },
-        { path: '/agent/agent',       label: 'OpenClaw',    icon: <OpenClaw size={20} />, description: 'Advanced agent framework' },
-    ];
+    const visibleScenarios = SCENARIOS.filter((s) => !isHidden(s.id));
 
     return (
         <Card
@@ -61,15 +39,15 @@ const AgentQuickNav: React.FC = () => {
 
                 {/* Agent List */}
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    {agents.map((agent) => (
+                    {visibleScenarios.map((s) => (
                         <Tooltip
-                            key={agent.path}
-                            title={agent.description}
+                            key={s.id}
+                            title={t(s.descKey)}
                             arrow
                             placement="right"
                         >
                             <Box
-                                onClick={() => navigate(agent.path)}
+                                onClick={() => navigate(s.path)}
                                 sx={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -110,7 +88,7 @@ const AgentQuickNav: React.FC = () => {
                                         flexShrink: 0,
                                     }}
                                 >
-                                    {agent.icon}
+                                    {s.icon(QUICK_NAV_ICON_SIZE)}
                                 </Box>
 
                                 {/* Label */}
@@ -124,7 +102,7 @@ const AgentQuickNav: React.FC = () => {
                                         lineHeight: 1.3,
                                     }}
                                 >
-                                    {agent.label}
+                                    {t(s.labelKey)}
                                 </Typography>
                             </Box>
                         </Tooltip>
