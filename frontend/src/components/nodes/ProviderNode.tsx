@@ -6,10 +6,14 @@ import {
 } from '@mui/icons-material';
 import {
     Box,
+    Button,
     Divider,
     IconButton,
+    Popover,
+    Stack,
+    TextField,
     Tooltip,
-    Typography
+    Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -56,7 +60,154 @@ export interface ProviderNodeComponentProps {
     active: boolean;
     onDelete: () => void;
     onNodeClick: () => void;
+    /** Called when the user edits this service's priority. Omit to hide the badge. */
+    onPriorityChange?: (priority: number) => void;
 }
+
+// Clickable priority badge anchored to the top-left corner of the node.
+//
+// Implementation note: this mirrors the existing SmartOpNode index badge
+// — a styled `Box` rather than a `Button`. When a `Button` is wrapped in
+// `Tooltip`, MUI injects a `<span>` anchor that sizes to the rendered
+// flow of its child; an absolutely-positioned button has zero flow size,
+// so the span's hit region collapses and the visually-overflowing
+// portion of the badge becomes unresponsive to hover/click. Using a
+// `Box` with its own onClick and putting the `position: absolute` on a
+// non-Tooltip wrapper keeps the visible disk and the hit region in sync.
+const PriorityBadgeAnchor = styled(Box)({
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    width: 26,
+    height: 26,
+    zIndex: 3,
+    pointerEvents: 'auto',
+});
+
+const PriorityBadgeDisk = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'hasPriority' && prop !== 'active',
+})<{ hasPriority: boolean; active: boolean }>(({ theme, hasPriority, active }) => ({
+    width: '100%',
+    height: '100%',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.8rem',
+    fontWeight: 700,
+    lineHeight: 1,
+    border: '1px solid',
+    boxShadow: theme.shadows[2],
+    userSelect: 'none',
+    cursor: active ? 'pointer' : 'not-allowed',
+    transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
+    ...(hasPriority
+        ? {
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              borderColor: theme.palette.primary.main,
+              '&:hover': active
+                  ? {
+                        backgroundColor: theme.palette.primary.dark,
+                        borderColor: theme.palette.primary.dark,
+                    }
+                  : {},
+          }
+        : {
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.secondary,
+              borderColor: theme.palette.divider,
+              '&:hover': active
+                  ? {
+                        borderColor: theme.palette.primary.main,
+                        color: theme.palette.primary.main,
+                    }
+                  : {},
+          }),
+}));
+
+interface PriorityBadgeProps {
+    priority: number;
+    onChange: (priority: number) => void;
+    active: boolean;
+}
+
+const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, active }) => {
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const [draft, setDraft] = useState<string>(String(priority || ''));
+
+    const open = (e: React.MouseEvent<HTMLElement>) => {
+        e.stopPropagation();
+        setDraft(String(priority || ''));
+        setAnchor(e.currentTarget);
+    };
+    const close = () => setAnchor(null);
+
+    const commit = () => {
+        const parsed = parseInt(draft, 10);
+        const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+        if (next !== priority) {
+            onChange(next);
+        }
+        close();
+    };
+
+    const label = priority > 0 ? String(priority) : '–';
+    const tooltip = priority > 0
+        ? `Priority ${priority} (higher = tried first). Click to change.`
+        : 'No priority set. Click to assign a priority (higher = tried first).';
+
+    return (
+        <>
+            <PriorityBadgeAnchor>
+                <Tooltip title={tooltip} arrow placement="top">
+                    <PriorityBadgeDisk
+                        hasPriority={priority > 0}
+                        active={active}
+                        onClick={active ? open : undefined}
+                    >
+                        {label}
+                    </PriorityBadgeDisk>
+                </Tooltip>
+            </PriorityBadgeAnchor>
+            <Popover
+                open={Boolean(anchor)}
+                anchorEl={anchor}
+                onClose={close}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <Box sx={{ p: 1.5, width: 220 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        Priority
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                        <TextField
+                            type="number"
+                            size="small"
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') commit();
+                                if (e.key === 'Escape') close();
+                            }}
+                            inputProps={{ min: 0, step: 1 }}
+                            autoFocus
+                            fullWidth
+                            placeholder="0 = unset"
+                        />
+                        <Button size="small" variant="contained" onClick={commit}>
+                            Set
+                        </Button>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                        Higher number runs first. Same number = parallel tier.
+                    </Typography>
+                </Box>
+            </Popover>
+        </>
+    );
+};
 
 // Provider Node Component for Graph View
 export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
@@ -65,7 +216,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     providersData,
     active,
     onDelete,
-    onNodeClick
+    onNodeClick,
+    onPriorityChange,
 }) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -122,6 +274,13 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
             )}
 
             <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
+                {onPriorityChange && (
+                    <PriorityBadge
+                        priority={provider.priority ?? 0}
+                        onChange={onPriorityChange}
+                        active={active}
+                    />
+                )}
                 {/* Top Layer - Provider/Model Field */}
                 <Box sx={NODE_LAYER_STYLES.topLayer}>
                     <Tooltip title={

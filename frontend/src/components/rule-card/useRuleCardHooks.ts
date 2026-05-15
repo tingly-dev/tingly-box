@@ -10,6 +10,7 @@ import {
     exportRuleWithProviders,
     exportRuleAsJsonlToClipboard,
     exportRuleAsBase64ToClipboard,
+    pickLbTactic,
     type ExportFormat,
 } from './utils';
 
@@ -105,7 +106,8 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
             }
 
             try {
-                const ruleData = {
+                const lbTactic = pickLbTactic(newConfigRecord);
+                const ruleData: Record<string, any> = {
                     uuid: rule.uuid,
                     scenario: rule.scenario,
                     request_model: newConfigRecord.requestModel,
@@ -124,10 +126,14 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                             weight: provider.weight || 0,
                             active: provider.active !== undefined ? provider.active : true,
                             time_window: provider.time_window || 0,
+                            priority: provider.priority || 0,
                         })),
                     smart_enabled: newConfigRecord.smartEnabled || false,
                     smart_routing: newConfigRecord.smartRouting || [],
                 };
+                if (lbTactic) {
+                    ruleData.lb_tactic = lbTactic;
+                }
 
                 const result = await api.updateRule(rule.uuid, ruleData);
                 if (result.success) {
@@ -142,6 +148,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         services: ruleData.services,
                         smart_enabled: ruleData.smart_enabled,
                         smart_routing: ruleData.smart_routing,
+                        lb_tactic: ruleData.lb_tactic,
                     });
                     showNotification('Configuration saved successfully', 'success');
                     return true;

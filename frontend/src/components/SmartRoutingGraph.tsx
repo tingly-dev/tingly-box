@@ -78,6 +78,11 @@ interface SmartRoutingGraphProps {
     onAddDefaultProvider?: () => void;
     onDeleteDefaultProvider?: (providerUuid: string) => void;
     onProviderNodeClick?: (providerUuid: string) => void;
+    // Per-service priority edit on the default-providers row. Smart mode's
+    // default providers behave identically to normal-mode services (same
+    // Rule.Services list, same load-balancing tactic), so the same
+    // priority UI applies.
+    onProviderPriorityChange?: (providerUuid: string, priority: number) => void;
     // Additional props matching RoutingGraph
     saving?: boolean;
     collapsible?: boolean;
@@ -161,6 +166,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                  onAddDefaultProvider,
                                                                  onDeleteDefaultProvider,
                                                                  onProviderNodeClick,
+                                                                 onProviderPriorityChange,
                                                                  saving = false,
                                                                  collapsible = false,
                                                                  expanded = true,
@@ -176,6 +182,21 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
         const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
     };
+
+    // Same priority-sort the normal RoutingGraph applies, so the visual
+    // sequence of default providers matches the runtime failover order.
+    const sortedDefaultProviders = React.useMemo(() => {
+        const list = record.providers;
+        const hasAnyPriority = list.some((p) => (p.priority ?? 0) > 0);
+        if (!hasAnyPriority) return list;
+        return [...list].sort((a, b) => {
+            const ap = a.priority ?? 0;
+            const bp = b.priority ?? 0;
+            if (ap === 0 && bp !== 0) return 1;
+            if (bp === 0 && ap !== 0) return -1;
+            return bp - ap;
+        });
+    }, [record.providers]);
 
     return (
         <StyledCard active={active}>
@@ -458,13 +479,15 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 justifyContent: 'flex-start',
                                                 alignItems: 'center'
                                             }}>
-                                                {record.providers.map((provider, providerIndex) => (
+                                                {sortedDefaultProviders.map((provider, providerIndex) => (
                                                     <Tooltip
                                                         key={provider.uuid}
                                                         title={
-                                                            record.providers.length >= 2
-                                                                ? `Default provider ${providerIndex + 1} of ${record.providers.length} (requests are load balanced)`
-                                                                : 'Default provider for request forwarding'
+                                                            (provider.priority ?? 0) > 0
+                                                                ? `Priority ${provider.priority} (higher = tried first)`
+                                                                : record.providers.length >= 2
+                                                                    ? `Default provider ${providerIndex + 1} of ${record.providers.length} (requests are load balanced)`
+                                                                    : 'Default provider for request forwarding'
                                                         }
                                                         placement="top"
                                                         arrow
@@ -479,6 +502,11 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                     onDeleteDefaultProvider?.(provider.uuid);
                                                                 }}
                                                                 onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
+                                                                onPriorityChange={
+                                                                    onProviderPriorityChange
+                                                                        ? (priority) => onProviderPriorityChange(provider.uuid, priority)
+                                                                        : undefined
+                                                                }
                                                             />
                                                         </Box>
                                                     </Tooltip>

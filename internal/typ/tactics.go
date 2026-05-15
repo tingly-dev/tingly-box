@@ -43,6 +43,8 @@ func (tc *Tactic) UnmarshalJSON(data []byte) error {
 		tc.Params = &AdaptiveParams{}
 	case loadbalance.TacticCapacityBased:
 		tc.Params = &CapacityBasedParams{}
+	case loadbalance.TacticPriority:
+		tc.Params = &PriorityParams{}
 	default:
 		return nil
 	}
@@ -114,6 +116,16 @@ func ParseTacticFromMap(tacticType loadbalance.TacticType, params map[string]int
 		}
 	case loadbalance.TacticCapacityBased:
 		tacticParams = DefaultCapacityBasedParams()
+	case loadbalance.TacticPriority:
+		if params != nil {
+			tacticParams = &PriorityParams{
+				WithinTierTactic: loadbalance.ParseTacticType(
+					getStringParamFromMap(params, "within_tier_tactic", "random"),
+				),
+			}
+		} else {
+			tacticParams = DefaultPriorityParams()
+		}
 	default:
 		tacticParams = DefaultAdaptiveParams()
 	}
@@ -913,6 +925,7 @@ func IsValidTactic(tacticStr string) bool {
 		"latency_based": true,
 		"speed_based":   true,
 		"adaptive":      true,
+		"priority":      true,
 	}
 
 	// Convert to lowercase for case-insensitive comparison
@@ -945,6 +958,12 @@ func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params Tacti
 		return defaultAdaptiveTactic
 	case loadbalance.TacticCapacityBased:
 		return GetCapacityBasedTactic()
+	case loadbalance.TacticPriority:
+		within := loadbalance.TacticRandom
+		if pp, ok := params.(*PriorityParams); ok && pp != nil && pp.WithinTierTactic != 0 {
+			within = pp.WithinTierTactic
+		}
+		return NewPriorityTactic(within)
 	}
 	return GetDefaultTactic(tacticType)
 }
@@ -963,6 +982,8 @@ func GetDefaultTactic(tType loadbalance.TacticType) LoadBalancingTactic {
 		return defaultAdaptiveTactic
 	case loadbalance.TacticCapacityBased:
 		return GetCapacityBasedTactic()
+	case loadbalance.TacticPriority:
+		return defaultPriorityTactic
 	default:
 		return defaultAdaptiveTactic
 	}
@@ -973,6 +994,22 @@ type CapacityBasedParams struct{}
 
 // isTacticParams implements TacticParams interface
 func (c CapacityBasedParams) isTacticParams() {}
+
+// PriorityParams holds parameters for the priority/failover tactic.
+// WithinTierTactic decides how to share load among services that share
+// the same Priority value (i.e. that are "tied" at a priority tier).
+type PriorityParams struct {
+	WithinTierTactic loadbalance.TacticType `json:"within_tier_tactic"`
+}
+
+func (p PriorityParams) isTacticParams() {}
+
+// DefaultPriorityParams returns the default priority-tactic params.
+// Random within a tier is a sensible default: it spreads load across
+// equally-prioritised services without requiring extra config.
+func DefaultPriorityParams() TacticParams {
+	return &PriorityParams{WithinTierTactic: loadbalance.TacticRandom}
+}
 
 // DefaultCapacityBasedParams returns default capacity-based parameters
 func DefaultCapacityBasedParams() TacticParams {
@@ -1059,3 +1096,147 @@ func GetCapacityBasedTactic() *CapacityBasedTactic {
 	}
 	return capacityBasedTactic
 }
+
+// PriorityTactic implements priority/failover load balancing.
+//
+// Services are bucketed by Service.Priority (descending; higher = tried
+// first). The highest-priority bucket containing at least one service
+// whose circuit breaker permits a request is selected. Within that
+// bucket, the WithinTierTactic (e.g. random, token-based) chooses the
+// final service. This yields:
+//
+//   - "Direct + fallback" when each service has a distinct Priority.
+//   - "Two equivalent services share a tier, with a backup tier below"
+//     when several services share the same Priority.
+//
+// Recovery is automatic: every request reconsiders the buckets from the
+// top, so once a higher-priority service's breaker closes the routing
+// returns to it without any extra coordination.
+type PriorityTactic struct {
+	WithinTierTactic loadbalance.TacticType
+}
+
+// NewPriorityTactic creates a priority tactic with the given sub-tactic
+// used to break ties within a priority tier.
+func NewPriorityTactic(within loadbalance.TacticType) *PriorityTactic {
+	if within == 0 || within == loadbalance.TacticPriority {
+		within = loadbalance.TacticRandom
+	}
+	return &PriorityTactic{WithinTierTactic: within}
+}
+
+// SelectService returns the highest-priority service whose breaker is
+// closed (or half-open and unclaimed). It returns nil when every active
+// service is currently tripped — callers should surface the original
+// upstream error in that case.
+func (pt *PriorityTactic) SelectService(rule *Rule) *loadbalance.Service {
+	active := rule.GetActiveServices()
+	if len(active) == 0 {
+		return nil
+	}
+
+	// Group by Priority, deterministic descending iteration.
+	buckets := groupServicesByPriority(active)
+
+	// Pick the highest-priority bucket that has at least one breaker-
+	// permitted service. If every bucket is tripped we fall back to the
+	// highest-priority bucket regardless — better to surface a real
+	// upstream error than to reject the request locally.
+	store := loadbalance.DefaultBreakerStore()
+	var fallback []*loadbalance.Service
+	for _, group := range buckets {
+		if fallback == nil {
+			fallback = group.services
+		}
+		allowed := make([]*loadbalance.Service, 0, len(group.services))
+		for _, svc := range group.services {
+			if store.Allow(svc.ServiceID()) {
+				allowed = append(allowed, svc)
+			}
+		}
+		if len(allowed) > 0 {
+			return pt.pickWithinTier(rule, allowed)
+		}
+	}
+	if len(fallback) > 0 {
+		return pt.pickWithinTier(rule, fallback)
+	}
+	return active[0]
+}
+
+func (pt *PriorityTactic) pickWithinTier(rule *Rule, services []*loadbalance.Service) *loadbalance.Service {
+	if len(services) == 1 {
+		return services[0]
+	}
+	// Construct an ephemeral Rule view containing only the tier's
+	// services so the sub-tactic operates on the right pool.
+	sub := *rule
+	sub.Services = services
+	sub.CurrentServiceID = ""
+	tactic := GetDefaultTactic(pt.WithinTierTactic)
+	if tactic == nil {
+		return services[0]
+	}
+	if chosen := tactic.SelectService(&sub); chosen != nil {
+		return chosen
+	}
+	return services[0]
+}
+
+func (pt *PriorityTactic) GetName() string {
+	return "Priority"
+}
+
+func (pt *PriorityTactic) GetType() loadbalance.TacticType {
+	return loadbalance.TacticPriority
+}
+
+// priorityBucket holds services that share the same Priority value.
+type priorityBucket struct {
+	priority int
+	services []*loadbalance.Service
+}
+
+// groupServicesByPriority buckets services by their Priority field and
+// returns the buckets sorted descending (higher priority first). Services
+// with Priority == 0 are treated as the "unset" tier; placing them last
+// lets explicitly-prioritised services be tried before unset ones even
+// when both are present in a rule.
+func groupServicesByPriority(services []*loadbalance.Service) []priorityBucket {
+	groups := make(map[int][]*loadbalance.Service)
+	for _, svc := range services {
+		groups[svc.Priority] = append(groups[svc.Priority], svc)
+	}
+
+	keys := make([]int, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
+	}
+	// Descending, but 0 (unset) sinks to the bottom regardless of sign.
+	for i := 0; i < len(keys); i++ {
+		for j := i + 1; j < len(keys); j++ {
+			a, b := keys[i], keys[j]
+			swap := false
+			switch {
+			case a == 0 && b != 0:
+				swap = true
+			case a != 0 && b == 0:
+				swap = false
+			case a < b:
+				swap = true
+			}
+			if swap {
+				keys[i], keys[j] = keys[j], keys[i]
+			}
+		}
+	}
+
+	out := make([]priorityBucket, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, priorityBucket{priority: k, services: groups[k]})
+	}
+	return out
+}
+
+// Pre-created singleton priority tactic for the default-tactic registry.
+var defaultPriorityTactic = NewPriorityTactic(loadbalance.TacticRandom)
