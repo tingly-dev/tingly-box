@@ -25,11 +25,11 @@ type CCmdKong struct {
 }
 
 func (c *CCmdKong) Run(appManager *AppManager) error {
-	profile, claudeArgs, err := parseCCFlags(c.Args)
+	profile, port, claudeArgs, err := parseCCFlags(c.Args)
 	if err != nil {
 		return err
 	}
-	return runCC(appManager, profile, claudeArgs)
+	return runCC(appManager, profile, port, claudeArgs)
 }
 
 // ============== Business Logic Functions ==============
@@ -37,30 +37,42 @@ func (c *CCmdKong) Run(appManager *AppManager) error {
 // parseCCFlags consumes tingly-box-specific flags from the beginning of args
 // and returns the remaining args verbatim for claude.
 //
-// Only -p/--profile is consumed. Scanning stops at the first token that is not
-// a recognized tingly-box flag, so everything from that point on is passed to
-// claude unchanged — no "--" separator required.
-func parseCCFlags(args []string) (profile string, claudeArgs []string, err error) {
+// Recognized flags: -p/--profile, --tingly-port. Scanning stops at the first
+// token that is not a recognized tingly-box flag, so everything from that
+// point on is passed to claude unchanged — no "--" separator required.
+func parseCCFlags(args []string) (profile string, port int, claudeArgs []string, err error) {
 	i := 0
 	for i < len(args) {
 		switch {
 		case args[i] == "--profile" || args[i] == "-p":
 			if i+1 >= len(args) {
-				return "", nil, fmt.Errorf("flag %s requires a value", args[i])
+				return "", 0, nil, fmt.Errorf("flag %s requires a value", args[i])
 			}
 			profile = args[i+1]
 			i += 2
 
+		case args[i] == "--tingly-port":
+			if i+1 >= len(args) {
+				return "", 0, nil, fmt.Errorf("flag %s requires a value", args[i])
+			}
+			p, parseErr := strconv.Atoi(args[i+1])
+			if parseErr != nil || p <= 0 || p > 65535 {
+				return "", 0, nil, fmt.Errorf("flag --tingly-port requires a valid port number, got %q", args[i+1])
+			}
+			port = p
+			i += 2
+
 		default:
 			// First unrecognized token — everything from here is claude's
-			return profile, args[i:], nil
+			return profile, port, args[i:], nil
 		}
 	}
-	return profile, nil, nil
+	return profile, port, nil, nil
 }
 
 // runCC orchestrates: ensure server → resolve profile → write settings → exec claude.
-func runCC(appManager *AppManager, profile string, claudeArgs []string) error {
+// If portOverride > 0, it takes precedence over the server's configured port.
+func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs []string) error {
 	globalConfig := appManager.GetGlobalConfig()
 	scenario := typ.ScenarioClaudeCode
 
@@ -97,7 +109,10 @@ func runCC(appManager *AppManager, profile string, claudeArgs []string) error {
 	}
 
 	// Build base URL and token
-	port := appManager.GetServerPort()
+	port := portOverride
+	if port == 0 {
+		port = appManager.GetServerPort()
+	}
 	if port == 0 {
 		port = 12580
 	}
