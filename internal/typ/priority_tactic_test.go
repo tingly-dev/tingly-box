@@ -2,17 +2,16 @@ package typ
 
 import (
 	"testing"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
-func mkService(provider, model string, order int) *loadbalance.Service {
+func mkService(provider, model string, priority int) *loadbalance.Service {
 	return &loadbalance.Service{
 		Provider: provider,
 		Model:    model,
 		Active:   true,
-		Order:    order,
+		Priority: priority,
 	}
 }
 
@@ -28,21 +27,21 @@ func mkPriorityRule(services ...*loadbalance.Service) *Rule {
 	}
 }
 
-func TestPriorityPicksLowestOrderFirst(t *testing.T) {
-	primary := mkService("p1", "m1", 1)
-	backup := mkService("p2", "m1", 2)
+func TestPriorityPicksHighestFirst(t *testing.T) {
+	primary := mkService("p1", "m1", 10)
+	backup := mkService("p2", "m1", 5)
 	rule := mkPriorityRule(primary, backup)
 	tactic := NewPriorityTactic(loadbalance.TacticRandom)
 
 	got := tactic.SelectService(rule)
 	if got != primary {
-		t.Fatalf("want primary (order=1), got %v", got)
+		t.Fatalf("want primary (priority=10), got %v", got)
 	}
 }
 
 func TestPriorityFallsBackWhenBreakerOpen(t *testing.T) {
-	primary := mkService("p1", "m1", 1)
-	backup := mkService("p2", "m1", 2)
+	primary := mkService("fb-p1", "m1", 10)
+	backup := mkService("fb-p2", "m1", 5)
 	rule := mkPriorityRule(primary, backup)
 	tactic := NewPriorityTactic(loadbalance.TacticRandom)
 
@@ -60,8 +59,8 @@ func TestPriorityFallsBackWhenBreakerOpen(t *testing.T) {
 }
 
 func TestPriorityReturnsToHigherWhenBreakerCloses(t *testing.T) {
-	primary := mkService("recover-p1", "recover-m1", 1)
-	backup := mkService("recover-p2", "recover-m1", 2)
+	primary := mkService("recover-p1", "recover-m1", 10)
+	backup := mkService("recover-p2", "recover-m1", 5)
 	rule := mkPriorityRule(primary, backup)
 	tactic := NewPriorityTactic(loadbalance.TacticRandom)
 
@@ -78,10 +77,10 @@ func TestPriorityReturnsToHigherWhenBreakerCloses(t *testing.T) {
 	}
 }
 
-func TestPriorityTiesWithinOrderShareLoad(t *testing.T) {
-	a := mkService("tie-a", "m1", 1)
-	b := mkService("tie-b", "m1", 1)
-	backup := mkService("tie-c", "m1", 2)
+func TestPriorityTiesShareLoad(t *testing.T) {
+	a := mkService("tie-a", "m1", 10)
+	b := mkService("tie-b", "m1", 10)
+	backup := mkService("tie-c", "m1", 5)
 	rule := mkPriorityRule(a, b, backup)
 	tactic := NewPriorityTactic(loadbalance.TacticRandom)
 
@@ -94,56 +93,46 @@ func TestPriorityTiesWithinOrderShareLoad(t *testing.T) {
 		counts[got.ServiceID()]++
 	}
 	if counts[a.ServiceID()] == 0 || counts[b.ServiceID()] == 0 {
-		t.Fatalf("random within-order tactic should hit both tied services, got %v", counts)
+		t.Fatalf("random within-tier tactic should hit both tied services, got %v", counts)
 	}
 }
 
-func TestPriorityOrderZeroTreatedAsLowest(t *testing.T) {
-	ordered := mkService("ord-p1", "m1", 1)
+func TestPriorityZeroTreatedAsUnset(t *testing.T) {
+	prioritised := mkService("ord-p1", "m1", 1)
 	unset := mkService("ord-p2", "m1", 0)
-	rule := mkPriorityRule(ordered, unset)
+	rule := mkPriorityRule(prioritised, unset)
 	tactic := NewPriorityTactic(loadbalance.TacticRandom)
 
-	// Order=1 wins over Order=0 (unset).
-	if got := tactic.SelectService(rule); got != ordered {
-		t.Fatalf("explicit order should beat unset, got %v", got)
+	// Any explicit priority (even 1) beats the unset (0) tier.
+	if got := tactic.SelectService(rule); got != prioritised {
+		t.Fatalf("explicit priority should beat unset, got %v", got)
 	}
 }
 
-func TestPriorityAllBreakersOpenReturnsFirst(t *testing.T) {
+func TestPriorityAllBreakersOpenReturnsHighestTier(t *testing.T) {
 	// Even when every service is tripped we still pick something so the
 	// upstream-error path can surface a real error to the client.
-	a := mkService("allopen-a", "m1", 1)
-	b := mkService("allopen-b", "m1", 2)
-	rule := mkPriorityRule(a, b)
+	high := mkService("allopen-a", "m1", 10)
+	low := mkService("allopen-b", "m1", 1)
+	rule := mkPriorityRule(high, low)
 	tactic := NewPriorityTactic(loadbalance.TacticRandom)
 
 	store := loadbalance.DefaultBreakerStore()
-	for _, svc := range []*loadbalance.Service{a, b} {
+	for _, svc := range []*loadbalance.Service{high, low} {
 		for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
 			store.RecordFailure(svc.ServiceID())
 		}
 	}
 	defer func() {
-		store.RecordSuccess(a.ServiceID())
-		store.RecordSuccess(b.ServiceID())
+		store.RecordSuccess(high.ServiceID())
+		store.RecordSuccess(low.ServiceID())
 	}()
 
 	got := tactic.SelectService(rule)
 	if got == nil {
 		t.Fatal("want a fallback service, got nil")
 	}
-	// Should be the lowest-order bucket (Order=1).
-	if got.Order != 1 {
-		t.Fatalf("want order=1 fallback when all open, got order=%d", got.Order)
+	if got.Priority != 10 {
+		t.Fatalf("want priority=10 fallback when all open, got priority=%d", got.Priority)
 	}
-}
-
-func TestPriorityRoundtripsThroughJSON(t *testing.T) {
-	tactic := Tactic{
-		Type:   loadbalance.TacticPriority,
-		Params: &PriorityParams{WithinOrderTactic: loadbalance.TacticRandom},
-	}
-	_ = tactic // just compile-check; full marshal round-trip is exercised by Rule json tests elsewhere
-	_ = time.Now
 }

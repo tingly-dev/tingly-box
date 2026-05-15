@@ -126,15 +126,16 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
-    // Handler: Update a service's priority order. Setting any service's
-    // order to > 0 flips the rule into "priority" tactic on save (handled
-    // in pickLbTactic), so users get direct/fallback routing just by
-    // clicking a number badge — no separate tactic selector to learn.
-    const handleProviderOrderChange = useCallback(
-        async (providerUuid: string, order: number) => {
+    // Handler: Update a service's priority. Setting any service's
+    // priority to > 0 flips the rule into "priority" tactic on save
+    // (handled in pickLbTactic), so users get direct/fallback routing
+    // just by clicking a number badge — no separate tactic selector to
+    // learn. Higher number = higher priority = tried first.
+    const handleProviderPriorityChange = useCallback(
+        async (providerUuid: string, priority: number) => {
             if (!configRecord) return;
             const updated = configRecord.providers.map((p) =>
-                p.uuid === providerUuid ? { ...p, order } : p,
+                p.uuid === providerUuid ? { ...p, priority } : p,
             );
             await updateField(configRecord, setConfigRecord, 'providers', updated);
         },
@@ -274,7 +275,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     allowToggleRule={allowToggleRule}
                     onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                     onDeleteProvider={handleDeleteProvider}
-                    onProviderOrderChange={handleProviderOrderChange}
+                    onProviderPriorityChange={handleProviderPriorityChange}
                     onToggleExpanded={handleToggleExpanded}
                     onProviderNodeClick={handleProviderNodeClick}
                     onAddProviderButtonClick={handleAddProviderButtonClick}

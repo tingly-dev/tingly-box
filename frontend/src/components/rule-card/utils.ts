@@ -29,7 +29,7 @@ export function serviceToConfigProvider(service: any): ConfigProvider {
         weight: service.weight || 0,
         active: service.active !== undefined ? service.active : true,
         time_window: service.time_window || 0,
-        order: service.order || 0,
+        priority: service.priority || 0,
     };
 }
 
@@ -76,24 +76,24 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
 }
 
 /**
- * Returns whether any service in the record has an explicit priority order
- * set. Used to pick the rule's load-balancing tactic on save: as soon as
- * the user assigns at least one Order > 0, the rule is flipped into the
+ * Returns whether any service in the record has an explicit priority set.
+ * Used to pick the rule's load-balancing tactic on save: as soon as the
+ * user assigns at least one Priority > 0, the rule is flipped into the
  * "priority" (direct + fallback) tactic.
  */
-export function hasPriorityOrdering(record: ConfigRecord): boolean {
-    return record.providers.some((p) => (p.order ?? 0) > 0);
+export function hasPriorityAssigned(record: ConfigRecord): boolean {
+    return record.providers.some((p) => (p.priority ?? 0) > 0);
 }
 
 /**
  * Returns the load-balancing tactic payload to send when saving the rule.
- * If any service has Order > 0 we force "priority"; otherwise we preserve
- * the existing tactic so we don't silently clobber what the user (or the
- * backend default) had selected.
+ * If any service has Priority > 0 we force "priority"; otherwise we
+ * preserve the existing tactic so we don't silently clobber what the user
+ * (or the backend default) had selected.
  */
 export function pickLbTactic(record: ConfigRecord): { type: string; params: Record<string, unknown> } | undefined {
-    if (hasPriorityOrdering(record)) {
-        return { type: 'priority', params: { within_order_tactic: 'random' } };
+    if (hasPriorityAssigned(record)) {
+        return { type: 'priority', params: { within_tier_tactic: 'random' } };
     }
     if (record.lbTactic) {
         return { type: record.lbTactic, params: {} };
@@ -126,7 +126,7 @@ export function cloneSmartRouting(smartRouting: SmartRouting): SmartRouting {
             weight: service.weight,
             active: service.active,
             time_window: service.time_window,
-            order: service.order,
+            priority: service.priority,
         })),
     };
 }

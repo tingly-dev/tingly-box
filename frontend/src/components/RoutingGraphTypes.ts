@@ -10,10 +10,10 @@ export interface ConfigProvider {
     weight?: number;
     active?: boolean;
     time_window?: number;
-    // Priority order within a rule. Lower = higher priority; 0 / undefined
-    // = unset, treated as same tier. Setting this on any service flips the
-    // rule's load-balancing tactic to "priority" (direct + fallback).
-    order?: number;
+    // Priority within a rule. Higher = tried first; 0 / undefined =
+    // unset, sinks to the bottom tier. Setting this on any service flips
+    // the rule's load-balancing tactic to "priority" (direct + fallback).
+    priority?: number;
 }
 
 export interface SmartOp {
@@ -75,7 +75,7 @@ export interface Rule {
         weight?: number;
         active?: boolean;
         time_window?: number;
-        order?: number;
+        priority?: number;
     }>;
     // Smart routing fields
     smart_enabled?: boolean;

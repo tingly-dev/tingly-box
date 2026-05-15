@@ -15,7 +15,7 @@ type Service struct {
 	Active        bool         `yaml:"active" json:"active"`                                     // Whether this service is active
 	TimeWindow    int          `yaml:"time_window" json:"time_window"`                           // Statistics time window in seconds
 	ModelCapacity *int         `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
-	Order         int          `yaml:"order,omitempty" json:"order,omitempty"`                   // Priority order within a rule: lower = higher priority. 0 = unset (treated as same tier). Used by TacticPriority.
+	Priority      int          `yaml:"priority,omitempty" json:"priority,omitempty"`             // Priority within a rule: higher = tried first. 0 = unset (sinks to bottom). Used by TacticPriority.
 	Stats         ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
 }
 
@@ -465,7 +465,7 @@ const (
 	TacticSpeedBased                      // Route based on token generation speed
 	TacticAdaptive                        // Composite multi-dimensional routing
 	TacticCapacityBased                   // 6: capacity-based load balancing
-	TacticPriority                        // 7: priority/failover by Service.Order; ties share via sub-tactic
+	TacticPriority                        // 7: priority/failover by Service.Priority (higher tried first); ties share via sub-tactic
 )
 
 // MarshalJSON implements json.Marshaler for TacticType

@@ -60,42 +60,44 @@ export interface ProviderNodeComponentProps {
     active: boolean;
     onDelete: () => void;
     onNodeClick: () => void;
-    /** Called when the user edits this service's priority order. Omit to hide the badge. */
-    onOrderChange?: (order: number) => void;
+    /** Called when the user edits this service's priority. Omit to hide the badge. */
+    onPriorityChange?: (priority: number) => void;
 }
 
-// Small clickable badge in the top-left of the node showing the service's
-// priority order. Click → small popover with a number input. Setting 0
-// clears the priority (the rule falls back to its default tactic when no
-// service has an explicit order).
-const OrderBadgeButton = styled(Button)({
+// Clickable priority badge that overlaps the top-left corner of the
+// node, matching the existing badge convention elsewhere in the app
+// (e.g. SmartOpNode's index badge). Click → small popover with a number
+// input. Setting 0 clears the priority (the rule falls back to its
+// default tactic when no service has an explicit priority).
+const PriorityBadgeButton = styled(Button)(({ theme }) => ({
     position: 'absolute',
-    top: 4,
-    left: 4,
+    top: -10,
+    left: -10,
     minWidth: 0,
-    width: 24,
-    height: 24,
+    width: 26,
+    height: 26,
     padding: 0,
     borderRadius: '50%',
-    fontSize: '0.75rem',
+    fontSize: '0.8rem',
     fontWeight: 700,
     lineHeight: 1,
-    zIndex: 2,
-});
+    boxShadow: theme.shadows[2],
+    zIndex: 3,
+}));
 
-interface OrderBadgeProps {
-    order: number;
-    onChange: (order: number) => void;
+interface PriorityBadgeProps {
+    priority: number;
+    onChange: (priority: number) => void;
     active: boolean;
 }
 
-const OrderBadge: React.FC<OrderBadgeProps> = ({ order, onChange, active }) => {
+const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, active }) => {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-    const [draft, setDraft] = useState<string>(String(order || ''));
+    const [draft, setDraft] = useState<string>(String(priority || ''));
 
     const open = (e: React.MouseEvent<HTMLElement>) => {
         e.stopPropagation();
-        setDraft(String(order || ''));
+        setDraft(String(priority || ''));
         setAnchor(e.currentTarget);
     };
     const close = () => setAnchor(null);
@@ -103,30 +105,30 @@ const OrderBadge: React.FC<OrderBadgeProps> = ({ order, onChange, active }) => {
     const commit = () => {
         const parsed = parseInt(draft, 10);
         const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-        if (next !== order) {
+        if (next !== priority) {
             onChange(next);
         }
         close();
     };
 
-    const label = order > 0 ? String(order) : '–';
-    const tooltip = order > 0
-        ? `Priority order ${order} (lower = tried first). Click to change.`
-        : 'No priority set. Click to assign an order (1 = primary, 2 = fallback, …).';
+    const label = priority > 0 ? String(priority) : '–';
+    const tooltip = priority > 0
+        ? `Priority ${priority} (higher = tried first). Click to change.`
+        : 'No priority set. Click to assign a priority (higher = tried first).';
 
     return (
         <>
             <Tooltip title={tooltip} arrow placement="top">
                 <span>
-                    <OrderBadgeButton
-                        variant={order > 0 ? 'contained' : 'outlined'}
-                        color={order > 0 ? 'primary' : 'inherit'}
+                    <PriorityBadgeButton
+                        variant={priority > 0 ? 'contained' : 'outlined'}
+                        color={priority > 0 ? 'primary' : 'inherit'}
                         size="small"
                         onClick={open}
                         disabled={!active}
                     >
                         {label}
-                    </OrderBadgeButton>
+                    </PriorityBadgeButton>
                 </span>
             </Tooltip>
             <Popover
@@ -138,7 +140,7 @@ const OrderBadge: React.FC<OrderBadgeProps> = ({ order, onChange, active }) => {
             >
                 <Box sx={{ p: 1.5, width: 220 }}>
                     <Typography variant="caption" color="text.secondary">
-                        Priority order
+                        Priority
                     </Typography>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                         <TextField
@@ -160,7 +162,7 @@ const OrderBadge: React.FC<OrderBadgeProps> = ({ order, onChange, active }) => {
                         </Button>
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                        Lower number runs first. Same number = parallel tier.
+                        Higher number runs first. Same number = parallel tier.
                     </Typography>
                 </Box>
             </Popover>
@@ -176,7 +178,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     active,
     onDelete,
     onNodeClick,
-    onOrderChange,
+    onPriorityChange,
 }) => {
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
@@ -233,10 +235,10 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
             )}
 
             <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
-                {onOrderChange && (
-                    <OrderBadge
-                        order={provider.order ?? 0}
-                        onChange={onOrderChange}
+                {onPriorityChange && (
+                    <PriorityBadge
+                        priority={provider.priority ?? 0}
+                        onChange={onPriorityChange}
                         active={active}
                     />
                 )}

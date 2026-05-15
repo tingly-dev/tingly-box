@@ -119,8 +119,8 @@ func ParseTacticFromMap(tacticType loadbalance.TacticType, params map[string]int
 	case loadbalance.TacticPriority:
 		if params != nil {
 			tacticParams = &PriorityParams{
-				WithinOrderTactic: loadbalance.ParseTacticType(
-					getStringParamFromMap(params, "within_order_tactic", "random"),
+				WithinTierTactic: loadbalance.ParseTacticType(
+					getStringParamFromMap(params, "within_tier_tactic", "random"),
 				),
 			}
 		} else {
@@ -960,8 +960,8 @@ func CreateTacticWithTypedParams(tacticType loadbalance.TacticType, params Tacti
 		return GetCapacityBasedTactic()
 	case loadbalance.TacticPriority:
 		within := loadbalance.TacticRandom
-		if pp, ok := params.(*PriorityParams); ok && pp != nil && pp.WithinOrderTactic != 0 {
-			within = pp.WithinOrderTactic
+		if pp, ok := params.(*PriorityParams); ok && pp != nil && pp.WithinTierTactic != 0 {
+			within = pp.WithinTierTactic
 		}
 		return NewPriorityTactic(within)
 	}
@@ -996,19 +996,19 @@ type CapacityBasedParams struct{}
 func (c CapacityBasedParams) isTacticParams() {}
 
 // PriorityParams holds parameters for the priority/failover tactic.
-// WithinOrderTactic decides how to share load among services that have
-// the same Order (i.e. that are "tied" at a priority tier).
+// WithinTierTactic decides how to share load among services that share
+// the same Priority value (i.e. that are "tied" at a priority tier).
 type PriorityParams struct {
-	WithinOrderTactic loadbalance.TacticType `json:"within_order_tactic"`
+	WithinTierTactic loadbalance.TacticType `json:"within_tier_tactic"`
 }
 
 func (p PriorityParams) isTacticParams() {}
 
 // DefaultPriorityParams returns the default priority-tactic params.
-// Random within an order tier is a sensible default: it spreads load
-// across equally-prioritised services without requiring extra config.
+// Random within a tier is a sensible default: it spreads load across
+// equally-prioritised services without requiring extra config.
 func DefaultPriorityParams() TacticParams {
-	return &PriorityParams{WithinOrderTactic: loadbalance.TacticRandom}
+	return &PriorityParams{WithinTierTactic: loadbalance.TacticRandom}
 }
 
 // DefaultCapacityBasedParams returns default capacity-based parameters
@@ -1099,30 +1099,30 @@ func GetCapacityBasedTactic() *CapacityBasedTactic {
 
 // PriorityTactic implements priority/failover load balancing.
 //
-// Services are bucketed by Service.Order (ascending; lower = higher
-// priority). The lowest-order bucket containing at least one service
+// Services are bucketed by Service.Priority (descending; higher = tried
+// first). The highest-priority bucket containing at least one service
 // whose circuit breaker permits a request is selected. Within that
-// bucket, the WithinOrderTactic (e.g. random, token-based) chooses the
+// bucket, the WithinTierTactic (e.g. random, token-based) chooses the
 // final service. This yields:
 //
-//   - "Direct + fallback" when each service has a distinct Order.
+//   - "Direct + fallback" when each service has a distinct Priority.
 //   - "Two equivalent services share a tier, with a backup tier below"
-//     when several services share the same Order.
+//     when several services share the same Priority.
 //
 // Recovery is automatic: every request reconsiders the buckets from the
 // top, so once a higher-priority service's breaker closes the routing
 // returns to it without any extra coordination.
 type PriorityTactic struct {
-	WithinOrderTactic loadbalance.TacticType
+	WithinTierTactic loadbalance.TacticType
 }
 
 // NewPriorityTactic creates a priority tactic with the given sub-tactic
-// used to break ties within an order bucket.
+// used to break ties within a priority tier.
 func NewPriorityTactic(within loadbalance.TacticType) *PriorityTactic {
 	if within == 0 || within == loadbalance.TacticPriority {
 		within = loadbalance.TacticRandom
 	}
-	return &PriorityTactic{WithinOrderTactic: within}
+	return &PriorityTactic{WithinTierTactic: within}
 }
 
 // SelectService returns the highest-priority service whose breaker is
@@ -1135,13 +1135,13 @@ func (pt *PriorityTactic) SelectService(rule *Rule) *loadbalance.Service {
 		return nil
 	}
 
-	// Group by Order, deterministic ascending iteration.
-	buckets := groupServicesByOrder(active)
+	// Group by Priority, deterministic descending iteration.
+	buckets := groupServicesByPriority(active)
 
-	// Pick the lowest-order bucket that has at least one breaker-permitted
-	// service. If every bucket is tripped we fall back to the lowest-order
-	// bucket regardless — better to surface a real upstream error than to
-	// reject the request locally.
+	// Pick the highest-priority bucket that has at least one breaker-
+	// permitted service. If every bucket is tripped we fall back to the
+	// highest-priority bucket regardless — better to surface a real
+	// upstream error than to reject the request locally.
 	store := loadbalance.DefaultBreakerStore()
 	var fallback []*loadbalance.Service
 	for _, group := range buckets {
@@ -1155,25 +1155,25 @@ func (pt *PriorityTactic) SelectService(rule *Rule) *loadbalance.Service {
 			}
 		}
 		if len(allowed) > 0 {
-			return pt.pickWithinOrder(rule, allowed)
+			return pt.pickWithinTier(rule, allowed)
 		}
 	}
 	if len(fallback) > 0 {
-		return pt.pickWithinOrder(rule, fallback)
+		return pt.pickWithinTier(rule, fallback)
 	}
 	return active[0]
 }
 
-func (pt *PriorityTactic) pickWithinOrder(rule *Rule, services []*loadbalance.Service) *loadbalance.Service {
+func (pt *PriorityTactic) pickWithinTier(rule *Rule, services []*loadbalance.Service) *loadbalance.Service {
 	if len(services) == 1 {
 		return services[0]
 	}
-	// Construct an ephemeral Rule view containing only the bucket's
+	// Construct an ephemeral Rule view containing only the tier's
 	// services so the sub-tactic operates on the right pool.
 	sub := *rule
 	sub.Services = services
 	sub.CurrentServiceID = ""
-	tactic := GetDefaultTactic(pt.WithinOrderTactic)
+	tactic := GetDefaultTactic(pt.WithinTierTactic)
 	if tactic == nil {
 		return services[0]
 	}
@@ -1191,28 +1191,28 @@ func (pt *PriorityTactic) GetType() loadbalance.TacticType {
 	return loadbalance.TacticPriority
 }
 
-// orderBucket holds services that share the same Order value.
-type orderBucket struct {
-	order    int
+// priorityBucket holds services that share the same Priority value.
+type priorityBucket struct {
+	priority int
 	services []*loadbalance.Service
 }
 
-// groupServicesByOrder buckets services by their Order field and returns
-// the buckets sorted ascending. Services with Order == 0 are treated as a
-// single "unset" tier; placing them last lets explicit priorities take
-// precedence even when one of the services in a rule was never assigned
-// an order.
-func groupServicesByOrder(services []*loadbalance.Service) []orderBucket {
+// groupServicesByPriority buckets services by their Priority field and
+// returns the buckets sorted descending (higher priority first). Services
+// with Priority == 0 are treated as the "unset" tier; placing them last
+// lets explicitly-prioritised services be tried before unset ones even
+// when both are present in a rule.
+func groupServicesByPriority(services []*loadbalance.Service) []priorityBucket {
 	groups := make(map[int][]*loadbalance.Service)
 	for _, svc := range services {
-		groups[svc.Order] = append(groups[svc.Order], svc)
+		groups[svc.Priority] = append(groups[svc.Priority], svc)
 	}
 
 	keys := make([]int, 0, len(groups))
 	for k := range groups {
 		keys = append(keys, k)
 	}
-	// Ascending, but 0 (unset) sinks to the bottom.
+	// Descending, but 0 (unset) sinks to the bottom regardless of sign.
 	for i := 0; i < len(keys); i++ {
 		for j := i + 1; j < len(keys); j++ {
 			a, b := keys[i], keys[j]
@@ -1222,7 +1222,7 @@ func groupServicesByOrder(services []*loadbalance.Service) []orderBucket {
 				swap = true
 			case a != 0 && b == 0:
 				swap = false
-			case a > b:
+			case a < b:
 				swap = true
 			}
 			if swap {
@@ -1231,9 +1231,9 @@ func groupServicesByOrder(services []*loadbalance.Service) []orderBucket {
 		}
 	}
 
-	out := make([]orderBucket, 0, len(keys))
+	out := make([]priorityBucket, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, orderBucket{order: k, services: groups[k]})
+		out = append(out, priorityBucket{priority: k, services: groups[k]})
 	}
 	return out
 }
