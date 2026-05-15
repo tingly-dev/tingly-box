@@ -128,6 +128,7 @@ type Provider struct {
 	NoKeyRequired bool     `json:"no_key_required"`
 	Enabled       bool     `json:"enabled"`
 	ProxyURL      string   `json:"proxy_url"`              // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
+	UserAgent     string   `json:"user_agent,omitempty"`   // Custom outbound HTTP User-Agent; empty = use built-in/default
 	Timeout       int64    `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
 	Tags          []string `json:"tags,omitempty"`         // Provider tags for categorization
 	Models        []string `json:"models,omitempty"`       // Available models for this provider (cached)
