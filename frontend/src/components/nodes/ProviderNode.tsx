@@ -65,55 +65,67 @@ export interface ProviderNodeComponentProps {
 }
 
 // Clickable priority badge anchored to the top-left corner of the node.
-// The button sits *inside* the node so the click target is always on
-// the node (the badge floating into the gap between siblings would let
-// adjacent nodes swallow the click). A small CSS translate shifts the
-// visual position outward so it still reads as "attached to the corner".
 //
-// Styling is driven by a `hasPriority` prop on the styled element rather
-// than MUI's `variant` / `color` props, because contained-button defaults
-// otherwise win over sx and force a primary background.
-const PriorityBadgeButton = styled(Button, {
-    shouldForwardProp: (prop) => prop !== 'hasPriority',
-})<{ hasPriority: boolean }>(({ theme, hasPriority }) => ({
+// Implementation note: this mirrors the existing SmartOpNode index badge
+// — a styled `Box` rather than a `Button`. When a `Button` is wrapped in
+// `Tooltip`, MUI injects a `<span>` anchor that sizes to the rendered
+// flow of its child; an absolutely-positioned button has zero flow size,
+// so the span's hit region collapses and the visually-overflowing
+// portion of the badge becomes unresponsive to hover/click. Using a
+// `Box` with its own onClick and putting the `position: absolute` on a
+// non-Tooltip wrapper keeps the visible disk and the hit region in sync.
+const PriorityBadgeAnchor = styled(Box)({
     position: 'absolute',
-    // Sit clearly outside the corner so the badge reads as "attached"
-    // visually, while the centre of the hit-box (~width/2 + top) stays
-    // inside the node so clicks always land on this element rather than
-    // bleeding into the gap between siblings.
+    // Pulled out of the corner — about 60% of the disk sits outside the
+    // node, 40% inside. The disk's centre lands inside the node so
+    // clicks land on the badge, not in the gap between siblings.
     top: -8,
     left: -8,
-    minWidth: 0,
     width: 26,
     height: 26,
-    padding: 0,
+    zIndex: 3,
+    pointerEvents: 'auto',
+});
+
+const PriorityBadgeDisk = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'hasPriority' && prop !== 'active',
+})<{ hasPriority: boolean; active: boolean }>(({ theme, hasPriority, active }) => ({
+    width: '100%',
+    height: '100%',
     borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     fontSize: '0.8rem',
     fontWeight: 700,
     lineHeight: 1,
-    boxShadow: theme.shadows[2],
-    zIndex: 3,
-    pointerEvents: 'auto',
     border: '1px solid',
+    boxShadow: theme.shadows[2],
+    userSelect: 'none',
+    cursor: active ? 'pointer' : 'not-allowed',
+    transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
     ...(hasPriority
         ? {
               backgroundColor: theme.palette.primary.main,
               color: theme.palette.primary.contrastText,
               borderColor: theme.palette.primary.main,
-              '&:hover': {
-                  backgroundColor: theme.palette.primary.dark,
-                  borderColor: theme.palette.primary.dark,
-              },
+              '&:hover': active
+                  ? {
+                        backgroundColor: theme.palette.primary.dark,
+                        borderColor: theme.palette.primary.dark,
+                    }
+                  : {},
           }
         : {
               backgroundColor: theme.palette.background.paper,
               color: theme.palette.text.secondary,
               borderColor: theme.palette.divider,
-              '&:hover': {
-                  backgroundColor: theme.palette.background.paper,
-                  borderColor: theme.palette.primary.main,
-                  color: theme.palette.primary.main,
-              },
+              '&:hover': active
+                  ? {
+                        borderColor: theme.palette.primary.main,
+                        color: theme.palette.primary.main,
+                    }
+                  : {},
           }),
 }));
 
@@ -150,18 +162,17 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
 
     return (
         <>
-            <Tooltip title={tooltip} arrow placement="top">
-                <span>
-                    <PriorityBadgeButton
+            <PriorityBadgeAnchor>
+                <Tooltip title={tooltip} arrow placement="top">
+                    <PriorityBadgeDisk
                         hasPriority={priority > 0}
-                        size="small"
-                        onClick={open}
-                        disabled={!active}
+                        active={active}
+                        onClick={active ? open : undefined}
                     >
                         {label}
-                    </PriorityBadgeButton>
-                </span>
-            </Tooltip>
+                    </PriorityBadgeDisk>
+                </Tooltip>
+            </PriorityBadgeAnchor>
             <Popover
                 open={Boolean(anchor)}
                 anchorEl={anchor}
