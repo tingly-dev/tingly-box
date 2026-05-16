@@ -1241,15 +1241,20 @@ func (s *Server) SetupPassthroughOpenAIEndpoints(group *gin.RouterGroup) {
 	group.GET("/models", s.getModelAuthMiddleware(), s.OpenAIListModels)
 }
 
-// contextMiddleware is a middleware that extracts the scenario parameter from the URL path
-// and injects it into the request context for use by downstream components (e.g., RecordRoundTripper).
-// It also validates profile suffixes (e.g., "claude_code:p1") if present.
+// contextMiddleware extracts the scenario parameter from the URL path and
+// injects it into the request context for downstream components (e.g.,
+// RecordRoundTripper). For profiled scenarios (e.g., "claude_code:p1") it
+// validates the format and the base scenario, but does NOT verify that the
+// profile ID exists in the in-memory config: when the CLI and server run as
+// separate processes, the server's config can briefly lag behind disk, and
+// gating /messages on that lookup makes `cc --profile` fail outright. The
+// CLI validates the profile client-side, and unknown profiles fall through
+// to normal rule matching which reports a clearer downstream error.
 func (s *Server) contextMiddleware(c *gin.Context) {
 	rawScenario := c.Param("scenario")
 	ctx := context.WithValue(c.Request.Context(), client.ScenarioContextKey, rawScenario)
 	c.Request = c.Request.WithContext(ctx)
 
-	// Validate profile if present (e.g., "claude_code:p1")
 	if typ.IsProfiledScenario(typ.RuleScenario(rawScenario)) {
 		base, profileID := typ.ParseScenarioProfile(typ.RuleScenario(rawScenario))
 		if base == "" || profileID == "" {
@@ -1261,7 +1266,6 @@ func (s *Server) contextMiddleware(c *gin.Context) {
 			return
 		}
 
-		// Check base scenario exists in registry
 		if _, ok := typ.GetScenarioDescriptor(typ.RuleScenario(rawScenario)); !ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -1269,18 +1273,6 @@ func (s *Server) contextMiddleware(c *gin.Context) {
 			})
 			c.Abort()
 			return
-		}
-
-		// Check profile exists in config
-		if s.config != nil {
-			if _, ok := s.config.GetProfile(typ.RuleScenario(base), profileID); !ok {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   fmt.Sprintf("unknown profile '%s' for scenario '%s'", profileID, base),
-				})
-				c.Abort()
-				return
-			}
 		}
 	}
 
