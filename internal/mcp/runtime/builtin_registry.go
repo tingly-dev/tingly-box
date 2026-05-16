@@ -59,7 +59,7 @@ func RegisterBuiltinTools(getConfig func() *typ.MCPRuntimeConfig, setConfig func
 
 	// Create webtools configuration
 	visibility := typ.ToolVisibilityClient
-	enabled := typ.BoolPtr(true)
+	enabled := typ.BoolPtr(false)
 	tools := mcptools.DefaultBuiltinWebtoolNames()
 	if existingWebtools != nil {
 		if existingWebtools.Enabled != nil {
