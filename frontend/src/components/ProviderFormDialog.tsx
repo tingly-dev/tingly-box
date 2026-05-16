@@ -1,25 +1,18 @@
-import {Check, Close, Edit, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
+import {Close} from '@mui/icons-material';
 import {
     Alert,
-    Autocomplete,
     Box,
     Button,
-    Checkbox,
-    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
     DialogContent,
     DialogTitle,
-    FormControl,
     FormControlLabel,
-    FormLabel,
     IconButton,
-    InputAdornment,
     Stack,
     Switch,
     TextField,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -27,8 +20,15 @@ import {useTranslation} from 'react-i18next';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
 import {api} from '../services/api';
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
-import {Anthropic, OpenAI} from './BrandIcons';
-import ProviderIcon from './ProviderIcon';
+import ApiKeyField from './providerFormDialog/ApiKeyField';
+import FusionToggle from './providerFormDialog/FusionToggle';
+import KeyNameField from './providerFormDialog/KeyNameField';
+import ProtocolSelector from './providerFormDialog/ProtocolSelector';
+import ProviderAutocomplete from './providerFormDialog/ProviderAutocomplete';
+import ProxyUrlField from './providerFormDialog/ProxyUrlField';
+import VerificationResultPanel from './providerFormDialog/VerificationResultPanel';
+import {detectOpenAICapabilities} from './providerFormDialog/helpers';
+import {type VerificationResult, runProviderProbe} from './providerFormDialog/probe';
 
 export interface EnhancedProviderFormData {
     uuid?: string;
@@ -63,35 +63,10 @@ interface PresetProviderFormDialogProps {
     isFirstProvider?: boolean;
 }
 
-const OPENAI_RESPONSE_HINTS = ['responses', 'response'];
-const OPENAI_CHAT_HINTS = ['chat/completions', '/chat', 'chat'];
-
-const detectOpenAICapabilities = (provider: UniqueProvider | null) => {
-    if (!provider?.baseUrlOpenAI) {
-        return [] as string[];
-    }
-
-    const haystacks = [
-        provider.baseUrlOpenAI,
-        provider.apiDoc || '',
-        provider.name,
-        provider.alias || '',
-    ].map(value => value.toLowerCase());
-
-    const supportsResponses = OPENAI_RESPONSE_HINTS.some(hint => haystacks.some(text => text.includes(hint)));
-    const supportsChat = OPENAI_CHAT_HINTS.some(hint => haystacks.some(text => text.includes(hint)));
-
-    const capabilities: string[] = [];
-    if (supportsChat) capabilities.push('Chat');
-    if (supportsResponses) capabilities.push('Responses');
-    return capabilities;
-};
-
 const ProviderFormDialog = ({
                                 open,
                                 onClose,
                                 onSubmit,
-                                onForceAdd,
                                 data,
                                 onChange,
                                 mode,
@@ -105,14 +80,7 @@ const ProviderFormDialog = ({
 
     const [verifying, setVerifying] = useState(false);
     const [noApiKey, setNoApiKey] = useState(data.noKeyRequired || false);
-    const [showApiKey, setShowApiKey] = useState(false);
-    const [verificationResult, setVerificationResult] = useState<{
-        success: boolean;
-        message: string;
-        details?: string;
-        responseTime?: number;
-        modelsCount?: number;
-    } | null>(null);
+    const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
     const [selectedProvider, setSelectedProvider] = useState<UniqueProvider | null>(null);
     const [protocolOpenAI, setProtocolOpenAI] = useState(false);
     const [protocolAnthropic, setProtocolAnthropic] = useState(false);
@@ -166,36 +134,6 @@ const ProviderFormDialog = ({
         );
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, allProviders]);
-
-    const ProtocolBaseUrlDisplay: React.FC<{ url: string }> = ({url}) => {
-        if (!url) return null;
-        return (
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    mt: 0.75,
-                    px: 1,
-                    py: 0.5,
-                    bgcolor: 'background.default',
-                    borderRadius: 0.75,
-                }}
-            >
-                <Typography
-                    variant="caption"
-                    sx={{
-                        fontFamily: 'monospace',
-                        color: 'primary.main',
-                        fontSize: '0.7rem',
-                        wordBreak: 'break-all',
-                    }}
-                >
-                    {url}
-                </Typography>
-            </Box>
-        );
-    };
 
     useEffect(() => {
         setNoApiKey(data.noKeyRequired || false);
@@ -509,79 +447,16 @@ const ProviderFormDialog = ({
         setVerifying(true);
         setVerificationResult(null);
 
-        try {
-            // Use lightweight probe for optional "Test Connection" feature
-            const result = await api.probeProviderLightweight(effectiveName, apiStyle, apiBase, data.token, data.authType);
-
-            if (result.success && result.data) {
-                const probeData = result.data;
-                const isValid = probeData.valid !== false;
-
-                // Build detailed message from lightweight probe results
-                let message = probeData.message;
-                const details: string[] = [];
-
-                // Add OPTIONS result
-                if (probeData.options_success) {
-                    details.push(`✓ OPTIONS (${probeData.options_response_time}ms)`);
-                } else if (probeData.options_message) {
-                    details.push(`✗ OPTIONS: ${probeData.options_message}`);
-                }
-
-                // Add models endpoint result
-                if (probeData.models_success) {
-                    details.push(`✓ Models (${probeData.models_response_time}ms, ${probeData.models_count} models)`);
-                } else if (probeData.models_message) {
-                    details.push(`✗ Models: ${probeData.models_message}`);
-                }
-
-                // Add Chat endpoint result (if available)
-                if (probeData.chat_success !== undefined) {
-                    if (probeData.chat_success) {
-                        details.push(`✓ Chat (${probeData.chat_response_time}ms)`);
-                    } else if (probeData.chat_message) {
-                        details.push(`✗ Chat: ${probeData.chat_message}`);
-                    }
-                }
-
-                // Add Responses endpoint result (if available)
-                if (probeData.responses_success !== undefined) {
-                    if (probeData.responses_success) {
-                        details.push(`✓ Responses (${probeData.responses_response_time}ms)`);
-                    } else if (probeData.responses_message) {
-                        details.push(`✗ Responses: ${probeData.responses_message}`);
-                    }
-                }
-
-                // Add warning if present
-                if (probeData.warning) {
-                    details.push(`⚠ ${probeData.warning}`);
-                }
-
-                setVerificationResult({
-                    success: isValid,
-                    message: message,
-                    details: details.join(' • '),
-                    responseTime: probeData.options_response_time || probeData.models_response_time,
-                    modelsCount: probeData.models_count,
-                });
-                return true;
-            }
-
-            setVerificationResult({
-                success: false,
-                message: result.error?.message || t('providerDialog.verification.failed'),
-            });
-            return false;
-        } catch (_error) {
-            setVerificationResult({
-                success: false,
-                message: t('providerDialog.verification.networkError'),
-            });
-            return false;
-        } finally {
-            setVerifying(false);
-        }
+        const result = await runProviderProbe(
+            {name: effectiveName, apiStyle, apiBase, token: data.token, authType: data.authType},
+            {
+                failed: t('providerDialog.verification.failed'),
+                networkError: t('providerDialog.verification.networkError'),
+            },
+        );
+        setVerificationResult(result);
+        setVerifying(false);
+        return result.success;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -603,6 +478,7 @@ const ProviderFormDialog = ({
     };
 
     const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
+    const showFusionToggle = enableFusion && mode === 'add' && protocolOpenAI && protocolAnthropic;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{sx: {minHeight: 200}}}>
@@ -632,440 +508,86 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        <Autocomplete
-                            freeSolo
-                            autoHighlight
-                            openOnFocus
-                            selectOnFocus
-                            handleHomeEndKeys
-                            size="small"
+                        <ProviderAutocomplete
                             options={allProviders}
-                            filterOptions={(options, state) => {
-                                const inputValue = state.inputValue.trim().toLowerCase();
-                                if (!inputValue) return options;
-                                return options.filter(option => {
-                                    const displayName = (option.alias || option.name).toLowerCase();
-                                    return (
-                                        displayName.includes(inputValue) ||
-                                        (option.baseUrlOpenAI || '').toLowerCase().includes(inputValue) ||
-                                        (option.baseUrlAnthropic || '').toLowerCase().includes(inputValue)
-                                    );
-                                });
-                            }}
-                            getOptionLabel={(option) => {
-                                if (typeof option === 'string') return option;
-                                return option.alias || option.name;
-                            }}
-                            isOptionEqualToValue={(option, value) =>
-                                typeof option !== 'string' &&
-                                typeof value !== 'string' &&
-                                option.id === value.id
-                            }
                             value={selectedProvider}
-                            onChange={(_event, newValue) => handleProviderSelect(newValue)}
                             inputValue={providerInputValue}
+                            onChange={handleProviderSelect}
                             onInputChange={handleProviderInputChange}
                             onBlur={handleProviderInputBlur}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Provider"
-                                    placeholder="Select a provider or enter custom base URL"
-                                />
-                            )}
-                            renderOption={(props, option) => {
-                                const {key, ...optionProps} = props;
-                                return (
-                                    <Box
-                                        component="li"
-                                        key={key}
-                                        {...optionProps}
-                                        sx={{display: 'flex', alignItems: 'center', gap: 1}}
-                                    >
-                                        {option.icon ? <ProviderIcon identifier={option.icon} size={18}/> : null}
-                                        <Box>
-                                            <Typography variant="body2">{option.alias || option.name}</Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {option.baseUrlOpenAI || option.baseUrlAnthropic}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                );
+                        />
+
+                        <ProtocolSelector
+                            selectedProvider={selectedProvider}
+                            protocolOpenAI={protocolOpenAI}
+                            protocolAnthropic={protocolAnthropic}
+                            fusionLocked={fusionLocked}
+                            openAICapabilities={openAICapabilities}
+                            onToggleOpenAI={toggleOpenAIProtocol}
+                            onToggleAnthropic={toggleAnthropicProtocol}
+                        />
+
+                        {showFusionToggle && (
+                            <FusionToggle
+                                checked={createFusionProvider}
+                                onChange={(checked) => {
+                                    setCreateFusionProvider(checked);
+                                    onChange('createFusionProvider', checked);
+                                    syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
+                                    setVerificationResult(null);
+                                }}
+                            />
+                        )}
+
+                        <ApiKeyField
+                            mode={mode}
+                            token={data.token}
+                            onTokenChange={(value) => {
+                                onChange('token', value);
+                                setVerificationResult(null);
+                            }}
+                            noApiKey={noApiKey}
+                            onNoApiKeyChange={(checked) => {
+                                setNoApiKey(checked);
+                                onChange('noKeyRequired', checked);
+                                setVerificationResult(null);
+                                if (checked) {
+                                    onChange('token', '');
+                                }
                             }}
                         />
 
-                        <FormControl component="fieldset">
-                            <FormLabel component="legend" sx={{mb: 1}}>
-                                {t('providerDialog.apiStyle.label')}
-                            </FormLabel>
-                            <Stack spacing={1}>
-                                <Box
-                                    sx={{
-                                        borderRadius: 1,
-                                        px: 1.5,
-                                        py: 1,
-                                        cursor: fusionLocked ? 'not-allowed' : 'pointer',
-                                        transition: 'all 0.15s',
-                                        bgcolor: protocolOpenAI ? 'action.selected' : 'transparent',
-                                        '&:hover': {
-                                            bgcolor:
-                                                fusionLocked
-                                                    ? protocolOpenAI
-                                                        ? 'action.selected'
-                                                        : 'transparent'
-                                                    : protocolOpenAI
-                                                        ? 'action.selected'
-                                                        : 'action.hover',
-                                        },
-                                    }}
-                                    onClick={toggleOpenAIProtocol}
-                                >
-                                    <Stack direction="row" alignItems="flex-start" spacing={1}>
-                                        <OpenAI size={18} sx={{mt: 0.2}}/>
-                                        <Box sx={{flex: 1}}>
-                                            <Typography variant="body2" fontWeight={500}>
-                                                {t('providerDialog.apiStyle.openAI')}
-                                            </Typography>
-                                            <Typography
-                                                variant="caption"
-                                                color="text.secondary"
-                                                sx={{display: 'block', lineHeight: 1.2}}
-                                            >
-                                                {openAICapabilities.length > 0
-                                                    ? `Supports ${openAICapabilities.join(' + ')}`
-                                                    : t('providerDialog.apiStyle.helperOpenAI')}
-                                            </Typography>
-                                            <Stack
-                                                direction="row"
-                                                spacing={0.75}
-                                                sx={{mt: 0.75, flexWrap: 'wrap', rowGap: 0.75}}
-                                            >
-                                                {openAICapabilities.length > 0 &&
-                                                    openAICapabilities.map(capability => (
-                                                        <Chip
-                                                            key={capability}
-                                                            label={capability}
-                                                            size="small"
-                                                            variant="outlined"
-                                                            color="primary"
-                                                        />
-                                                    ))}
-                                            </Stack>
-                                            {selectedProvider?.baseUrlOpenAI && (
-                                                <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI}/>
-                                            )}
-                                        </Box>
-                                        <Checkbox
-                                            size="small"
-                                            checked={protocolOpenAI}
-                                            disabled={
-                                                fusionLocked ||
-                                                (selectedProvider ? !selectedProvider.supportsOpenAI : false)
-                                            }
-                                            sx={{p: 0, mt: -0.5}}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={toggleOpenAIProtocol}
-                                        />
-                                    </Stack>
-                                </Box>
-
-                                <Box
-                                    sx={{
-                                        borderRadius: 1,
-                                        px: 1.5,
-                                        py: 1,
-                                        cursor: fusionLocked ? 'not-allowed' : 'pointer',
-                                        transition: 'all 0.15s',
-                                        bgcolor: protocolAnthropic ? 'action.selected' : 'transparent',
-                                        '&:hover': {
-                                            bgcolor:
-                                                fusionLocked
-                                                    ? protocolAnthropic
-                                                        ? 'action.selected'
-                                                        : 'transparent'
-                                                    : protocolAnthropic
-                                                        ? 'action.selected'
-                                                        : 'action.hover',
-                                        },
-                                    }}
-                                    onClick={toggleAnthropicProtocol}
-                                >
-                                    <Stack direction="row" alignItems="flex-start" spacing={1}>
-                                        <Anthropic size={18} sx={{mt: 0.2}}/>
-                                        <Box sx={{flex: 1}}>
-                                            <Typography variant="body2" fontWeight={500}>
-                                                {t('providerDialog.apiStyle.anthropic')}
-                                            </Typography>
-                                            <Typography
-                                                variant="caption"
-                                                color="text.secondary"
-                                                sx={{display: 'block', lineHeight: 1.2}}
-                                            >
-                                                {t('providerDialog.apiStyle.helperAnthropic')}
-                                            </Typography>
-                                            {selectedProvider?.baseUrlAnthropic && (
-                                                <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlAnthropic}/>
-                                            )}
-                                        </Box>
-                                        <Checkbox
-                                            size="small"
-                                            checked={protocolAnthropic}
-                                            disabled={
-                                                fusionLocked ||
-                                                (selectedProvider ? !selectedProvider.supportsAnthropic : false)
-                                            }
-                                            sx={{p: 0, mt: -0.5}}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={toggleAnthropicProtocol}
-                                        />
-                                    </Stack>
-                                </Box>
-                            </Stack>
-                        </FormControl>
-                        {enableFusion && mode === 'add' && protocolOpenAI && protocolAnthropic && (
-                            <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: -0.5, pr: 2}}>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            size="small"
-                                            checked={createFusionProvider}
-                                            onChange={(e) => {
-                                                const checked = e.target.checked;
-                                                setCreateFusionProvider(checked);
-                                                onChange('createFusionProvider', checked);
-                                                syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
-                                                setVerificationResult(null);
-                                            }}
-                                        />
-                                    }
-                                    label={(
-                                        <Stack direction="row" spacing={0.75} alignItems="center">
-                                            <Typography variant="body2">
-                                                {t('providerDialog.fusion.modeLabel')}
-                                            </Typography>
-                                            <Tooltip
-                                                arrow
-                                                placement="top"
-                                                slotProps={{
-                                                    tooltip: {
-                                                        sx: (theme) => ({
-                                                            maxWidth: 360,
-                                                            bgcolor: 'background.paper',
-                                                            color: 'text.primary',
-                                                            border: `1px solid ${theme.palette.divider}`,
-                                                            boxShadow: theme.shadows[6],
-                                                            p: 1.25,
-                                                            '& .MuiTypography-caption': {
-                                                                color: 'text.secondary',
-                                                                lineHeight: 1.45,
-                                                            },
-                                                        }),
-                                                    },
-                                                    arrow: {
-                                                        sx: (theme) => ({
-                                                            color: theme.palette.background.paper,
-                                                            '&:before': {
-                                                                border: `1px solid ${theme.palette.divider}`,
-                                                            },
-                                                        }),
-                                                    },
-                                                }}
-                                                title={
-                                                    <Box>
-                                                        <Typography variant="body2" sx={{fontWeight: 600, mb: 0.5}}>
-                                                            {t('providerDialog.fusion.tooltipTitle')}
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{display: 'block'}}>
-                                                            {t('providerDialog.fusion.normalModeDesc')}
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{display: 'block', mt: 0.75}}>
-                                                            {t('providerDialog.fusion.fusionModeDesc')}
-                                                        </Typography>
-                                                    </Box>
-                                                }
-                                            >
-                                                <InfoOutlined sx={{fontSize: 16, color: 'text.secondary'}} />
-                                            </Tooltip>
-                                        </Stack>
-                                    )}
-                                    labelPlacement="start"
-                                />
-                            </Box>
-                        )}
-
-                        <Box>
-                            <TextField
-                                size="small"
-                                fullWidth
-                                label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
-                                type={showApiKey ? 'text' : 'password'}
-                                value={data.token}
-                                onChange={(e) => {
-                                    onChange('token', e.target.value);
-                                    setVerificationResult(null);
-                                }}
-                                required={!noApiKey}
-                                placeholder={
-                                    mode === 'add'
-                                        ? t('providerDialog.apiKey.placeholderAdd')
-                                        : t('providerDialog.apiKey.placeholderEdit')
+                        <KeyNameField
+                            showField={showNameField}
+                            onShowField={() => {
+                                if (!data.name) {
+                                    onChangeRef.current('name', computeAutoName());
                                 }
-                                helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
-                                disabled={noApiKey}
-                                slotProps={{
-                                    input: {
-                                        sx: {
-                                            '& input': {
-                                                textOverflow: 'ellipsis',
-                                            },
-                                        },
-                                        endAdornment: (
-                                            <InputAdornment position="end">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => setShowApiKey(!showApiKey)}
-                                                    edge="end"
-                                                    disabled={noApiKey}
-                                                >
-                                                    {showApiKey ? (
-                                                        <VisibilityOff fontSize="small"/>
-                                                    ) : (
-                                                        <Visibility fontSize="small"/>
-                                                    )}
-                                                </IconButton>
-                                            </InputAdornment>
-                                        ),
-                                    },
-                                }}
-                            />
-                            <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            size="small"
-                                            checked={noApiKey}
-                                            onChange={(e) => {
-                                                setNoApiKey(e.target.checked);
-                                                onChange('noKeyRequired', e.target.checked);
-                                                setVerificationResult(null);
-                                                if (e.target.checked) {
-                                                    onChange('token', '');
-                                                }
-                                            }}
-                                        />
-                                    }
-                                    label="No API Key Required"
-                                    labelPlacement="start"
-                                />
-                            </Box>
-                        </Box>
+                                setShowNameField(true);
+                            }}
+                            name={data.name}
+                            autoName={computeAutoName()}
+                            onNameChange={(value) => {
+                                onChange('name', value);
+                                setVerificationResult(null);
+                                setNameIsAutoFilled(false);
+                            }}
+                        />
 
-                        {showNameField ? (
-                            <TextField
-                                size="small"
-                                fullWidth
-                                autoFocus
-                                label={t('providerDialog.keyName.label')}
-                                value={data.name}
-                                onChange={(e) => {
-                                    onChange('name', e.target.value);
-                                    setVerificationResult(null);
-                                    setNameIsAutoFilled(false);
-                                }}
-                                placeholder={computeAutoName()}
-                                helperText={t('providerDialog.keyName.helper', {
-                                    defaultValue: 'Leave blank to use the auto-generated name. You can rename later.',
-                                })}
-                            />
-                        ) : (
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1,
-                                    px: 1.5,
-                                    py: 0.75,
-                                    borderRadius: 1,
-                                    bgcolor: 'background.default',
-                                    border: 1,
-                                    borderColor: 'divider',
-                                }}
-                            >
-                                <Typography variant="caption" color="text.secondary">
-                                    {t('providerDialog.keyName.label')}
-                                </Typography>
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        flex: 1,
-                                        color: 'text.primary',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                    }}
-                                >
-                                    {data.name || computeAutoName()}
-                                </Typography>
-                                <Tooltip
-                                    title={t('providerDialog.keyName.editAction', {
-                                        defaultValue: 'Edit name',
-                                    })}
-                                    arrow
-                                >
-                                    <IconButton
-                                        size="small"
-                                        onClick={() => {
-                                            if (!data.name) {
-                                                onChangeRef.current('name', computeAutoName());
-                                            }
-                                            setShowNameField(true);
-                                        }}
-                                        sx={{color: 'text.secondary'}}
-                                    >
-                                        <Edit fontSize="small" />
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        )}
-
-                        <Box>
-                            <TextField
-                                size="small"
-                                fullWidth
-                                label={t('providerDialog.advanced.proxyUrl.label')}
-                                placeholder={t('providerDialog.advanced.proxyUrl.placeholder')}
-                                value={data.proxyUrl || ''}
-                                onChange={(e) => {
-                                    onChange('proxyUrl', e.target.value);
-                                    if (useGlobalProxy && e.target.value !== globalProxyUrl) {
-                                        setUseGlobalProxy(false);
-                                        localStorage.setItem('provider_use_global_proxy', 'false');
-                                    }
-                                }}
-                            />
-                            {mode === 'add' && (
-                                <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
-                                    <FormControlLabel
-                                        control={
-                                            <Checkbox
-                                                size="small"
-                                                checked={useGlobalProxy}
-                                                disabled={!globalProxyUrl}
-                                                onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
-                                            />
-                                        }
-                                        label={
-                                            <Typography variant="body2" color={globalProxyUrl ? 'text.secondary' : 'text.disabled'}>
-                                                {globalProxyUrl
-                                                    ? t('providerDialog.advanced.proxyUrl.useGlobal', {url: globalProxyUrl})
-                                                    : t('providerDialog.advanced.proxyUrl.useGlobalNotSet')}
-                                            </Typography>
-                                        }
-                                        labelPlacement="start"
-                                    />
-                                </Box>
-                            )}
-                        </Box>
+                        <ProxyUrlField
+                            mode={mode}
+                            proxyUrl={data.proxyUrl || ''}
+                            onProxyUrlChange={(value) => {
+                                onChange('proxyUrl', value);
+                                if (useGlobalProxy && value !== globalProxyUrl) {
+                                    setUseGlobalProxy(false);
+                                    localStorage.setItem('provider_use_global_proxy', 'false');
+                                }
+                            }}
+                            globalProxyUrl={globalProxyUrl}
+                            useGlobalProxy={useGlobalProxy}
+                            onUseGlobalProxyChange={handleUseGlobalProxyChange}
+                        />
 
                         <TextField
                             size="small"
@@ -1093,102 +615,12 @@ const ProviderFormDialog = ({
                         )}
 
                         {verificationResult && (
-                            <Box
-                                sx={{
-                                    mt: 1,
-                                    p: 1.5,
-                                    borderRadius: 1.5,
-                                    bgcolor: 'background.default',
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                }}
-                            >
-                                <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1}}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Connection Test (for reference)
-                                    </Typography>
-                                    <IconButton
-                                        aria-label="close"
-                                        size="small"
-                                        onClick={() => setVerificationResult(null)}
-                                        sx={{ml: -0.5}}
-                                    >
-                                        <Close fontSize="small"/>
-                                    </IconButton>
-                                </Box>
-
-                                <Stack spacing={0.75}>
-                                    {verificationResult.details.split(' • ').map((detail, index) => {
-                                        const isSuccess = detail.includes('✓');
-                                        const label = detail.replace(/^[✓✗]\s*/, '');
-
-                                        return (
-                                            <Stack key={index} direction="row" spacing={1} alignItems="center" sx={{minHeight: 24}}>
-                                                {isSuccess ? (
-                                                    <Box
-                                                        sx={{
-                                                            width: 18,
-                                                            height: 18,
-                                                            borderRadius: '50%',
-                                                            bgcolor: 'success.main',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            flexShrink: 0,
-                                                        }}
-                                                    >
-                                                        <Check
-                                                            fontSize="small"
-                                                            sx={{
-                                                                color: 'common.white',
-                                                                fontSize: '12px',
-                                                                fontWeight: 'bold',
-                                                            }}
-                                                        />
-                                                    </Box>
-                                                ) : (
-                                                    <Box
-                                                        sx={{
-                                                            width: 18,
-                                                            height: 18,
-                                                            borderRadius: '50%',
-                                                            bgcolor: 'warning.main',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            flexShrink: 0,
-                                                        }}
-                                                    >
-                                                        <Typography
-                                                            variant="caption"
-                                                            sx={{
-                                                                color: 'common.white',
-                                                                fontSize: '12px',
-                                                                fontWeight: 'bold',
-                                                            }}
-                                                        >
-                                                            !
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                                <Typography variant="body2" sx={{fontSize: '0.8rem', flex: 1}}>
-                                                    {label}
-                                                </Typography>
-                                            </Stack>
-                                        );
-                                    })}
-                                </Stack>
-
-                                <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{display: 'block', mt: 1.5, pt: 1, borderTop: '1px solid', borderColor: 'divider'}}
-                                >
-                                    Test results are for reference only - you can add the key even if some tests fail
-                                </Typography>
-                            </Box>
+                            <VerificationResultPanel
+                                result={verificationResult}
+                                onClose={() => setVerificationResult(null)}
+                            />
                         )}
-                        </Stack>
+                    </Stack>
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2, gap: 1, justifyContent: 'flex-end'}}>
                     <Button
