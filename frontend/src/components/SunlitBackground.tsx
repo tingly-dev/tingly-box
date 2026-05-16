@@ -30,8 +30,8 @@ export const SunlitBackground: React.FC = () => {
         // Draw warm base background
         const bgGradient = ctx.createLinearGradient(0, 0, w, h);
         if (isDark) {
-            bgGradient.addColorStop(0, '#0f172a');
-            bgGradient.addColorStop(1, '#1e293b');
+            bgGradient.addColorStop(0, theme.palette.background.default);
+            bgGradient.addColorStop(1, theme.palette.background.paper);
         } else {
             // Read gradient colors from theme palette
             const gradientColors = (theme.palette.background as any).gradient;
