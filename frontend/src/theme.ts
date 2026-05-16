@@ -111,13 +111,16 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
   const isDark = mode === 'dark';
   const isSunlit = mode === 'sunlit';
 
-  // Primary blue: dark mode uses a lighter shade so text-variant buttons
-  // (the default Button color) meet WCAG AA against the dark Paper surface.
-  // #2563eb on #11141c is only ~3.5:1; #60a5fa lifts that to ~7:1.
+  // Primary blue: dark mode shifts one notch up (blue-500 instead of
+  // blue-600) so text-variant Buttons reach WCAG AA against Paper while
+  // staying visually aligned with the contained-Button gradient
+  // (#3b82f6 → #2563eb) — i.e. selected ToggleButton, Tabs indicator,
+  // and nav-active surfaces sit on the same blue ramp instead of a
+  // paler off-shade.
   const primaryColor = isSunlit ? SUNLIT_PALETTE.primary : {
-    main: isDark ? '#60a5fa' : '#2563eb',
-    light: isDark ? '#93c5fd' : '#3b82f6',
-    dark: isDark ? '#3b82f6' : '#1d4ed8',
+    main: isDark ? '#3b82f6' : '#2563eb',
+    light: isDark ? '#60a5fa' : '#3b82f6',
+    dark: isDark ? '#2563eb' : '#1d4ed8',
     contrastText: '#ffffff',
   };
 
@@ -363,7 +366,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
               borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? darkInputBorderHover : '#9ca3af'),
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? sunlitPrimary : (isDark ? '#60a5fa' : '#2563eb'),
+              borderColor: isSunlit ? sunlitPrimary : (isDark ? '#3b82f6' : '#2563eb'),
               borderWidth: 1.5,
             },
             '&.Mui-disabled': {
@@ -421,7 +424,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           root: {
             color: isSunlit ? '#475569' : (isDark ? '#cbd5e1' : '#64748b'),
             '&.Mui-focused': {
-              color: isSunlit ? sunlitPrimary : (isDark ? '#60a5fa' : '#2563eb'),
+              color: isSunlit ? sunlitPrimary : (isDark ? '#3b82f6' : '#2563eb'),
             },
           },
         },
@@ -573,7 +576,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           indicator: {
             height: 4,
             borderRadius: 2,
-            backgroundColor: isSunlit ? sunlitPrimary : (isDark ? '#60a5fa' : '#2563eb'),
+            backgroundColor: isSunlit ? sunlitPrimary : (isDark ? '#3b82f6' : '#2563eb'),
           },
         },
       },
