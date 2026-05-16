@@ -4,11 +4,11 @@ import {
 import {
     Box,
     IconButton,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
+import NodeTooltip from './NodeTooltip';
 
 // ActionAddNode dimensions
 const ADD_PROVIDER_NODE_STYLES = {
@@ -61,7 +61,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     tooltip = 'Add provider',
 }) => {
     return (
-        <Tooltip title={tooltip}>
+        <NodeTooltip title={tooltip} placement="top">
             <StyledAddProviderNode
                 active={active}
                 warning={warning}
@@ -72,7 +72,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
                     Add
                 </Typography>
             </StyledAddProviderNode>
-        </Tooltip>
+        </NodeTooltip>
     );
 };
 

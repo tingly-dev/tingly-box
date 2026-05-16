@@ -1,6 +1,7 @@
-import { Box, styled, Tooltip } from '@mui/material';
+import { Box, styled } from '@mui/material';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import React from 'react';
+import NodeTooltip from './NodeTooltip';
 
 export interface CrossNodeProps {
     size?: number;
@@ -33,7 +34,7 @@ const CrossNode: React.FC<CrossNodeProps> = ({
     color = 'currentColor',
 }) => {
     return (
-        <Tooltip title={label || 'Union'}>
+        <NodeTooltip title={label || 'Union'} placement="top">
             <CrossContainer sx={{ width: size, height: size }}>
                 <StyledCross active={active}>
                     <CompareArrowsIcon
@@ -44,7 +45,7 @@ const CrossNode: React.FC<CrossNodeProps> = ({
                     />
                 </StyledCross>
             </CrossContainer>
-        </Tooltip>
+        </NodeTooltip>
     );
 };
 

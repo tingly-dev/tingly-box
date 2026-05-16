@@ -8,10 +8,10 @@ import {
     ListItemText,
     Menu,
     MenuItem,
-    Tooltip,
     ToggleButton,
     Divider,
 } from '@mui/material';
+import NodeTooltip from './NodeTooltip.tsx';
 import { Settings as SettingsIcon } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -190,7 +190,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                         }}
                     >
                         {isWildcard ? (
-                            <Tooltip title="Matches any model (wildcard)">
+                            <NodeTooltip title="Matches any model (wildcard)" placement="bottom">
                                 <Chip
                                     label={
                                         <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
@@ -205,7 +205,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                         },
                                     }}
                                 />
-                            </Tooltip>
+                            </NodeTooltip>
                         ) : (
                             <Typography variant="body2" sx={{ ...NODE_LAYER_STYLES.typography, color: 'text.primary' }}>
                                 {value || label}
@@ -223,7 +223,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                 {/* Bottom Layer - Smart Switch */}
                 {showSmartSwitch && !editMode && (
                     <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                        <Tooltip title="Direct routing mode" arrow>
+                        <NodeTooltip title="Direct routing mode" placement="top-start">
                             <ToggleButton
                                 value="direct"
                                 selected={!smartEnabled}
@@ -245,8 +245,8 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                             >
                                 Direct
                             </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title="Smart routing mode" arrow>
+                        </NodeTooltip>
+                        <NodeTooltip title="Smart routing mode" placement="top-end">
                             <ToggleButton
                                 value="smart"
                                 selected={smartEnabled}
@@ -268,14 +268,14 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                             >
                                 Smart
                             </ToggleButton>
-                        </Tooltip>
+                        </NodeTooltip>
                     </Box>
                 )}
             </StyledModelNode>
             {/* Action Buttons - visible on hover */}
             {editable && (
                 <ActionButtonsBox className="action-buttons">
-                    <Tooltip title="Change model">
+                    <NodeTooltip title="Change model" placement="left">
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
@@ -283,7 +283,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                         >
                             <SettingsIcon sx={{ fontSize: '1rem', color: 'text.primary' }} />
                         </IconButton>
-                    </Tooltip>
+                    </NodeTooltip>
                 </ActionButtonsBox>
             )}
         </ModelNodeWrapper>

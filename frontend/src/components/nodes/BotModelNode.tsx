@@ -1,6 +1,7 @@
-import { Box, Typography, styled, Divider, Chip, Tooltip } from '@mui/material';
+import { Box, Typography, styled, Divider, Chip } from '@mui/material';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { NODE_LAYER_STYLES } from './styles';
+import NodeTooltip from './NodeTooltip';
 import { useCallback } from 'react';
 
 const StyledBotModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' && prop !== 'clickable' && prop !== 'hasConfig' })<{
@@ -59,11 +60,11 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
         <StyledBotModelNode active={active} clickable={clickable} hasConfig={hasConfig} onClick={handleClick}>
             {/* Top Layer - Provider name and model display (same as ProviderNode) */}
             <Box sx={NODE_LAYER_STYLES.topLayer}>
-                <Tooltip title={
+                <NodeTooltip title={
                     hasConfig
                         ? <>Provider: {providerName || provider}<br/>Model: {model}</>
                         : 'Click to configure bot model'
-                } arrow>
+                } placement="top">
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                         {/* Warning icon when model not configured - inline with text */}
                         {active && !hasConfig && (
@@ -109,7 +110,7 @@ const BotModelNode: React.FC<BotModelNodeProps> = ({
                             </Typography>
                         )}
                     </Box>
-                </Tooltip>
+                </NodeTooltip>
             </Box>
 
             <Divider sx={NODE_LAYER_STYLES.divider} />

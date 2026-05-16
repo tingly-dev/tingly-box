@@ -5,7 +5,6 @@ import {
 import {
     Box,
     IconButton,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import React from 'react';

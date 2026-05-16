@@ -12,7 +12,6 @@ import {
     Popover,
     Stack,
     TextField,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
@@ -23,6 +22,7 @@ import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ProviderNodeContainer, NODE_LAYER_STYLES } from './styles.tsx';
 import ProviderNodeContent from './ProviderNodeContent.tsx';
+import NodeTooltip from './NodeTooltip.tsx';
 
 // Action button container
 const ActionButtonsBox = styled(Box)(({ theme }) => ({
@@ -160,7 +160,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
     return (
         <>
             <PriorityBadgeAnchor>
-                <Tooltip title={tooltip} arrow placement="top">
+                <NodeTooltip title={tooltip} placement="left">
                     <PriorityBadgeDisk
                         hasPriority={priority > 0}
                         active={active}
@@ -168,7 +168,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                     >
                         {label}
                     </PriorityBadgeDisk>
-                </Tooltip>
+                </NodeTooltip>
             </PriorityBadgeAnchor>
             <Popover
                 open={Boolean(anchor)}
@@ -227,6 +227,23 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     const providerInfo = getProviderInfo(provider.provider, providersData);
     const isProviderMissing = provider.provider && !providerInfo.exists;
 
+    const hasDualApiStyle = !!(
+        providerInfo.provider?.api_base_openai && providerInfo.provider?.api_base_anthropic
+    );
+    const apiStyleLabel = hasDualApiStyle ? 'openai / anthropic' : apiStyle;
+
+    const identityTooltip = (() => {
+        if (isProviderMissing) {
+            return 'Provider not found. Please refresh the page or re-import the provider.';
+        }
+        if (!provider.provider) return 'Select Provider';
+        const modelLine = provider.model ? `Model: ${provider.model}` : 'Model: (select model)';
+        const styleLine = apiStyleLabel ? `API Style: ${apiStyleLabel}` : '';
+        return [`Provider: ${providerInfo.name}`, modelLine, styleLine]
+            .filter(Boolean)
+            .join('\n');
+    })();
+
     const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
         event.stopPropagation();
         setMenuAnchorEl(event.currentTarget);
@@ -283,18 +300,13 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 )}
                 {/* Top Layer - Provider/Model Field */}
                 <Box sx={NODE_LAYER_STYLES.topLayer}>
-                    <Tooltip title={
-                        provider.provider && provider.model
-                            ? `Provider: ${providerInfo.name}\nModel: ${provider.model}`
-                            : provider.provider
-                                ? `Provider: ${providerInfo.name}\nModel: (select model)`
-                                : 'Select Provider'
-                    } arrow>
+                    <NodeTooltip
+                        title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
+                        placement="top"
+                    >
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                             {isProviderMissing && (
-                                <Tooltip title="Provider not found. Please refresh the page or re-import the provider." arrow>
-                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main' }} />
-                                </Tooltip>
+                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main' }} />
                             )}
                             <Typography
                                 variant="body2"
@@ -330,7 +342,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                 </Typography>
                             )}
                         </Box>
-                    </Tooltip>
+                    </NodeTooltip>
                 </Box>
 
                 {/* Divider */}
@@ -381,7 +393,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 <ActionButtonsBox className="action-buttons">
                     {/* Probe Button */}
                     {provider.provider && providerInfo.exists && (
-                        <Tooltip title="Test Provider">
+                        <NodeTooltip title="Test Provider" placement="bottom">
                             <IconButton
                                 size="small"
                                 onClick={handleProbeClick}
@@ -389,10 +401,10 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             >
                                 <PlayIcon sx={{ fontSize: '1rem', color: 'success.main' }} />
                             </IconButton>
-                        </Tooltip>
+                        </NodeTooltip>
                     )}
                     {/* Delete Button */}
-                    <Tooltip title="Delete Provider">
+                    <NodeTooltip title="Delete Provider" placement="bottom">
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
@@ -400,7 +412,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         >
                             <DeleteIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
                         </IconButton>
-                    </Tooltip>
+                    </NodeTooltip>
                 </ActionButtonsBox>
             </ProviderNodeContainer>
         </ProviderNodeWrapper>

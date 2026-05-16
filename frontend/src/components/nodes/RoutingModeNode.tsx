@@ -1,8 +1,9 @@
 import {
     Router as RouterIcon
 } from '@mui/icons-material';
-import { Box, Divider, styled, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Box, Divider, styled, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { NODE_LAYER_STYLES } from './styles';
+import NodeTooltip from './NodeTooltip';
 
 const StyledRoutingNode = styled(Box)(({ theme }) => ({
     display: 'flex',
@@ -68,7 +69,7 @@ const RoutingModeNode: React.FC<RoutingModeNodeProps> = ({
                         },
                     }}
                 >
-                    <Tooltip title="Direct routing - send directly to agent" arrow>
+                    <NodeTooltip title="Direct routing - send directly to agent" placement="top-start">
                         <ToggleButton
                             value="direct"
                             sx={{
@@ -87,8 +88,8 @@ const RoutingModeNode: React.FC<RoutingModeNodeProps> = ({
                         >
                             Direct
                         </ToggleButton>
-                    </Tooltip>
-                    <Tooltip title="Smart guide - route through guide agent" arrow>
+                    </NodeTooltip>
+                    <NodeTooltip title="Smart guide - route through guide agent" placement="top-end">
                         <ToggleButton
                             value="smart_guide"
                             sx={{
@@ -107,7 +108,7 @@ const RoutingModeNode: React.FC<RoutingModeNodeProps> = ({
                         >
                             Smart
                         </ToggleButton>
-                    </Tooltip>
+                    </NodeTooltip>
                 </ToggleButtonGroup>
             </Box>
         </StyledRoutingNode>

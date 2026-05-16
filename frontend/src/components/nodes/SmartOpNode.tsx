@@ -1,5 +1,6 @@
 import {Delete as DeleteIcon,} from '@mui/icons-material';
-import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, Typography,} from '@mui/material';
+import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography,} from '@mui/material';
+import NodeTooltip from './NodeTooltip.tsx';
 import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {SmartRouting, SmartOp} from '../RoutingGraphTypes.ts';
@@ -136,23 +137,22 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                 )}
                 {/* Content */}
                 <Box sx={{mt: 1, width: '100%'}}>
-                    {/* Value display - show truncated with operation details on hover */}
-                    <Tooltip title={getMultiOpDisplayFull()} arrow>
-                        <Typography
-                            variant="body2"
-                            sx={{
-                                fontWeight: 600,
-                                color: 'text.primary',
-                                fontSize: '0.85rem',
-                                mb: 1,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                            {getTruncatedValue(firstOp) || t('rule.smart.noValue')}
-                        </Typography>
-                    </Tooltip>
+                    {/* Value display - the truncated value is a subset of the summary
+                        below, so it shares the single tooltip on the summary box. */}
+                    <Typography
+                        variant="body2"
+                        sx={{
+                            fontWeight: 600,
+                            color: 'text.primary',
+                            fontSize: '0.85rem',
+                            mb: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        {getTruncatedValue(firstOp) || t('rule.smart.noValue')}
+                    </Typography>
 
                     {/* Summary Info */}
                     <Box
@@ -160,7 +160,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                             width: '100%',
                         }}
                     >
-                        <Tooltip title={getMultiOpDisplayFull()} arrow>
+                        <NodeTooltip title={getMultiOpDisplayFull()} placement="top">
                             <Box
                                 sx={{
                                     width: '100%',
@@ -190,13 +190,13 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                     {getMultiOpSummary()}
                                 </Typography>
                             </Box>
-                        </Tooltip>
+                        </NodeTooltip>
                     </Box>
                 </Box>
 
                 {/* Action Buttons - visible on hover */}
                 <ActionButtonsBox className="action-buttons">
-                    <Tooltip title={t('rule.smart.deleteTooltip')}>
+                    <NodeTooltip title={t('rule.smart.deleteTooltip')} placement="bottom">
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
@@ -204,7 +204,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                         >
                             <DeleteIcon sx={{fontSize: '1rem', color: 'error.main'}}/>
                         </IconButton>
-                    </Tooltip>
+                    </NodeTooltip>
                 </ActionButtonsBox>
             </StyledSmartNodePrimary>
 
