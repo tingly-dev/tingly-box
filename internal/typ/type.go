@@ -179,6 +179,13 @@ type RuleFlags struct {
 	// UseMaxTokens rewrites the `max_completion_tokens` request field back to the legacy
 	// `max_tokens` field. Use this for providers or models that reject `max_completion_tokens`.
 	UseMaxTokens bool `json:"use_max_tokens,omitempty" yaml:"use_max_tokens,omitempty"`
+
+	// OpenAIEndpointOverride forces the OpenAI endpoint selection (chat or
+	// responses), overriding the capability-aware adaptive router. Empty or
+	// "auto" preserves adaptive behavior. OpenAI providers only; Anthropic
+	// and Google providers ignore this. On Codex OAuth providers, "chat"
+	// is silently ignored (Codex has no Chat endpoint) and a warning is logged.
+	OpenAIEndpointOverride string `json:"openai_endpoint_override,omitempty" yaml:"openai_endpoint_override,omitempty"`
 }
 
 // ProfileMeta stores metadata for a scenario profile.

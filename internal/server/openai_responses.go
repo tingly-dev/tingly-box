@@ -202,11 +202,10 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	case protocol.APIStyleOpenAI:
-		if provider.APIBase != protocol.CodexAPIBase {
-			preferredEndpoint := NewAdaptiveProbe(s).GetPreferredEndpoint(provider, actualModel)
-			if preferredEndpoint != "responses" {
-				target = protocol.TypeOpenAIChat
-			}
+		override := ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride)
+		preferredEndpoint := s.ResolveOpenAIEndpoint(provider, actualModel, override)
+		if preferredEndpoint != "responses" {
+			target = protocol.TypeOpenAIChat
 		}
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{

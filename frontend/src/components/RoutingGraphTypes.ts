@@ -51,6 +51,7 @@ export interface RuleFlags {
     customUserAgent?: string;
     useMaxCompletionTokens?: boolean;
     useMaxTokens?: boolean;
+    openaiEndpointOverride?: string;
 }
 
 export interface RuleFlagsApi {
@@ -60,9 +61,15 @@ export interface RuleFlagsApi {
     custom_user_agent?: string;
     use_max_completion_tokens?: boolean;
     use_max_tokens?: boolean;
+    openai_endpoint_override?: string;
 }
 
-export type FlagValueType = 'bool' | 'string';
+export type FlagValueType = 'bool' | 'string' | 'enum';
+
+export interface FlagOption {
+    value: string;
+    label: string;
+}
 
 export interface FlagSpec {
     key: string;
@@ -71,6 +78,7 @@ export interface FlagSpec {
     type: FlagValueType;
     category: string;
     placeholder?: string;
+    options?: FlagOption[];
 }
 
 export interface Rule {

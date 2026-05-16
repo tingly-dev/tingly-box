@@ -284,7 +284,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		prefer := s.GetPreferredEndpointForModel(provider, actualModel)
+		override := ParseEndpointOverride(ruleFlags.OpenAIEndpointOverride)
+		prefer := s.ResolveOpenAIEndpoint(provider, actualModel, override)
 		if prefer == "responses" {
 			target = protocol.TypeOpenAIResponses
 		} else {

@@ -72,7 +72,8 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	case protocol.APIStyleOpenAI:
 		// Check if model prefers Responses API (for models like Codex)
 		// This is used for ChatGPT backend API which only supports Responses API
-		preferredEndpoint := s.GetPreferredEndpointForModel(provider, actualModel)
+		override := ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride)
+		preferredEndpoint := s.ResolveOpenAIEndpoint(provider, actualModel, override)
 		logrus.Debugf("[AnthropicV1] Preferred endpoint for model=%s: %s", actualModel, preferredEndpoint)
 		useResponsesAPI := preferredEndpoint == "responses"
 		if useResponsesAPI {

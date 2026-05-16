@@ -71,6 +71,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             customUserAgent: rule.flags?.custom_user_agent || '',
             useMaxCompletionTokens: rule.flags?.use_max_completion_tokens || false,
             useMaxTokens: rule.flags?.use_max_tokens || false,
+            openaiEndpointOverride: rule.flags?.openai_endpoint_override || '',
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -162,6 +163,7 @@ interface ExportRule {
         custom_user_agent?: string;
         use_max_completion_tokens?: boolean;
         use_max_tokens?: boolean;
+        openai_endpoint_override?: string;
     };
     smart_enabled?: boolean;
     smart_routing: any[];
@@ -190,6 +192,15 @@ interface ExportProvider {
 const TRUE_VALUES = new Set(['true', '1', 'yes', 'on']);
 const FALSE_VALUES = new Set(['false', '0', 'no', 'off']);
 
+const ENUM_FLAG_VALUES: Record<string, Set<string>> = {
+    openai_endpoint_override: new Set(['auto', 'chat', 'responses']),
+};
+
+function isEnumActive(key: string, value: string): boolean {
+    // "auto" (and empty) are inactive defaults; anything else counts as active.
+    return value !== '' && value !== 'auto';
+}
+
 export function formatRuleFlags(flags?: RuleFlags): string {
     if (!flags) return '';
     const entries: string[] = [];
@@ -199,10 +210,14 @@ export function formatRuleFlags(flags?: RuleFlags): string {
     if (flags.useMaxCompletionTokens) entries.push('use_max_completion_tokens=true');
     if (flags.useMaxTokens) entries.push('use_max_tokens=true');
     if (flags.customUserAgent) entries.push(`custom_user_agent=${flags.customUserAgent}`);
+    if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) {
+        entries.push(`openai_endpoint_override=${flags.openaiEndpointOverride}`);
+    }
     return entries.join(',');
 }
 
 const STRING_FLAG_KEYS = new Set(['custom_user_agent']);
+const ENUM_FLAG_KEYS = new Set(Object.keys(ENUM_FLAG_VALUES));
 
 export function parseRuleFlags(input: string): { flags: RuleFlags; error?: string } {
     const flags: RuleFlags = {
@@ -212,6 +227,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         customUserAgent: '',
         useMaxCompletionTokens: false,
         useMaxTokens: false,
+        openaiEndpointOverride: '',
     };
 
     const trimmed = input.trim();
@@ -235,6 +251,20 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             switch (rawKey) {
                 case 'custom_user_agent':
                     flags.customUserAgent = rawValue;
+                    break;
+            }
+            continue;
+        }
+
+        if (ENUM_FLAG_KEYS.has(rawKey)) {
+            const allowed = ENUM_FLAG_VALUES[rawKey];
+            if (!allowed.has(rawValue)) {
+                const options = Array.from(allowed).join('/');
+                return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use ${options}.` };
+            }
+            switch (rawKey) {
+                case 'openai_endpoint_override':
+                    flags.openaiEndpointOverride = rawValue;
                     break;
             }
             continue;
@@ -284,6 +314,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.useMaxCompletionTokens) n++;
     if (flags.useMaxTokens) n++;
     if (flags.customUserAgent && flags.customUserAgent.trim() !== '') n++;
+    if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) n++;
     return n;
 }
 
