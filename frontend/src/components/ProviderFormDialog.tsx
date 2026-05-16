@@ -1,4 +1,4 @@
-import {Close, Edit, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
+import {Check, Close, Edit, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -510,20 +510,62 @@ const ProviderFormDialog = ({
         setVerificationResult(null);
 
         try {
-            const result = await api.probeProvider(apiStyle, apiBase, data.token);
+            // Use lightweight probe for optional "Test Connection" feature
+            const result = await api.probeProviderLightweight(effectiveName, apiStyle, apiBase, data.token, data.authType);
 
             if (result.success && result.data) {
-                const isValid = result.data.valid !== false;
+                const probeData = result.data;
+                const isValid = probeData.valid !== false;
+
+                // Build detailed message from lightweight probe results
+                let message = probeData.message;
+                const details: string[] = [];
+
+                // Add OPTIONS result
+                if (probeData.options_success) {
+                    details.push(`✓ OPTIONS (${probeData.options_response_time}ms)`);
+                } else if (probeData.options_message) {
+                    details.push(`✗ OPTIONS: ${probeData.options_message}`);
+                }
+
+                // Add models endpoint result
+                if (probeData.models_success) {
+                    details.push(`✓ Models (${probeData.models_response_time}ms, ${probeData.models_count} models)`);
+                } else if (probeData.models_message) {
+                    details.push(`✗ Models: ${probeData.models_message}`);
+                }
+
+                // Add Chat endpoint result (if available)
+                if (probeData.chat_success !== undefined) {
+                    if (probeData.chat_success) {
+                        details.push(`✓ Chat (${probeData.chat_response_time}ms)`);
+                    } else if (probeData.chat_message) {
+                        details.push(`✗ Chat: ${probeData.chat_message}`);
+                    }
+                }
+
+                // Add Responses endpoint result (if available)
+                if (probeData.responses_success !== undefined) {
+                    if (probeData.responses_success) {
+                        details.push(`✓ Responses (${probeData.responses_response_time}ms)`);
+                    } else if (probeData.responses_message) {
+                        details.push(`✗ Responses: ${probeData.responses_message}`);
+                    }
+                }
+
+                // Add warning if present
+                if (probeData.warning) {
+                    details.push(`⚠ ${probeData.warning}`);
+                }
+
                 setVerificationResult({
                     success: isValid,
-                    message: result.data.message,
-                    details: isValid
-                        ? t('providerDialog.verification.testResult', {result: result.data.test_result})
-                        : undefined,
-                    responseTime: result.data.response_time_ms,
-                    modelsCount: result.data.models_count,
+                    message: message,
+                    details: details.join(' • '),
+                    responseTime: probeData.options_response_time || probeData.models_response_time,
+                    modelsCount: probeData.models_count,
                 });
-                return isValid;
+                return true;
             }
 
             setVerificationResult({
@@ -553,14 +595,8 @@ const ProviderFormDialog = ({
 
         ensureName();
 
-        const shouldVerify = mode === 'add' ? !noApiKey : data.token !== '' && !noApiKey;
-
-        if (shouldVerify) {
-            const verified = await handleVerify();
-            if (!verified) {
-                return;
-            }
-        }
+        // NO MANDATORY VERIFICATION - allow adding keys without testing
+        // Verification is optional via the "Test Connection" button
 
         onClose();
         onSubmit(e);
@@ -1057,80 +1093,123 @@ const ProviderFormDialog = ({
                         )}
 
                         {verificationResult && (
-                            <Alert
-                                severity={verificationResult.success ? 'success' : 'warning'}
-                                sx={{mt: 1}}
-                                action={
+                            <Box
+                                sx={{
+                                    mt: 1,
+                                    p: 1.5,
+                                    borderRadius: 1.5,
+                                    bgcolor: 'background.default',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                }}
+                            >
+                                <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1}}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Connection Test (for reference)
+                                    </Typography>
                                     <IconButton
                                         aria-label="close"
-                                        color="inherit"
                                         size="small"
                                         onClick={() => setVerificationResult(null)}
+                                        sx={{ml: -0.5}}
                                     >
-                                        ×
+                                        <Close fontSize="small"/>
                                     </IconButton>
-                                }
-                            >
-                                <Box>
-                                    <Typography variant="body2" fontWeight="bold">
-                                        {verificationResult.message}
-                                    </Typography>
-                                    {verificationResult.details && (
-                                        <Typography variant="caption" display="block">
-                                            {verificationResult.details}
-                                        </Typography>
-                                    )}
-                                    {!verificationResult.success && (
-                                        <Typography
-                                            variant="body2"
-                                            display="block"
-                                            sx={{mt: 1, color: 'text.secondary'}}
-                                        >
-                                            {t('providerDialog.verification.failureHint')}
-                                        </Typography>
-                                    )}
-                                    {verificationResult.responseTime && (
-                                        <Typography variant="caption" display="block">
-                                            {t('providerDialog.verification.responseTime', {
-                                                time: verificationResult.responseTime,
-                                            })}
-                                            {verificationResult.modelsCount &&
-                                                ` • ${t('providerDialog.verification.modelsAvailable', {
-                                                    count: verificationResult.modelsCount,
-                                                })}`}
-                                        </Typography>
-                                    )}
                                 </Box>
-                            </Alert>
+
+                                <Stack spacing={0.75}>
+                                    {verificationResult.details.split(' • ').map((detail, index) => {
+                                        const isSuccess = detail.includes('✓');
+                                        const label = detail.replace(/^[✓✗]\s*/, '');
+
+                                        return (
+                                            <Stack key={index} direction="row" spacing={1} alignItems="center" sx={{minHeight: 24}}>
+                                                {isSuccess ? (
+                                                    <Box
+                                                        sx={{
+                                                            width: 18,
+                                                            height: 18,
+                                                            borderRadius: '50%',
+                                                            bgcolor: 'success.main',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        <Check
+                                                            fontSize="small"
+                                                            sx={{
+                                                                color: 'common.white',
+                                                                fontSize: '12px',
+                                                                fontWeight: 'bold',
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                ) : (
+                                                    <Box
+                                                        sx={{
+                                                            width: 18,
+                                                            height: 18,
+                                                            borderRadius: '50%',
+                                                            bgcolor: 'warning.main',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: 'common.white',
+                                                                fontSize: '12px',
+                                                                fontWeight: 'bold',
+                                                            }}
+                                                        >
+                                                            !
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                <Typography variant="body2" sx={{fontSize: '0.8rem', flex: 1}}>
+                                                    {label}
+                                                </Typography>
+                                            </Stack>
+                                        );
+                                    })}
+                                </Stack>
+
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{display: 'block', mt: 1.5, pt: 1, borderTop: '1px solid', borderColor: 'divider'}}
+                                >
+                                    Test results are for reference only - you can add the key even if some tests fail
+                                </Typography>
+                            </Box>
                         )}
-                    </Stack>
+                        </Stack>
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2, gap: 1, justifyContent: 'flex-end'}}>
                     <Button
                         type="button"
                         variant="outlined"
-                        color="warning"
                         size="small"
                         disabled={!hasAnyProtocol || verifying}
-                        onClick={async () => {
-                            // Make sure any free-form text in the provider input is committed
-                            if (!selectedProvider && data.apiBase !== providerInputValue) {
-                                onChangeRef.current('apiBase', providerInputValue);
-                                onChangeRef.current('providerBaseUrls', undefined);
-                            }
-                            ensureName();
-                            onClose();
-                            await onForceAdd?.();
-                        }}
-                        title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
+                        onClick={handleVerify}
+                        title="Test connection using available endpoints (optional check)"
                     >
-                        {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
+                        {verifying ? (
+                            <CircularProgress size={16} thickness={4}/>
+                        ) : (
+                            'Test Connection'
+                        )}
                     </Button>
                     <Button
                         type="submit"
                         variant="contained"
                         size="small"
-                        disabled={verifying || !hasAnyProtocol}
+                        disabled={!hasAnyProtocol}
                         sx={{
                             minWidth: verifying ? '80px' : 'auto',
                         }}

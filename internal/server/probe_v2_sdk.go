@@ -42,22 +42,10 @@ func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provide
 		return nil, err
 	}
 
-	// Use simple mode for non-streaming probe
 	// Convert server.ProbeMode to client.ProbeMode
 	clientMode := client.ProbeMode(testMode)
 	res, err := prober.ProbeStream(ctx, model, message, clientMode)
-	if err == nil {
-		return res, nil
-	}
-
-	if provider.APIStyle == protocol.APIStyleOpenAI {
-		if c, ok := prober.(client.OpenAIClientInterface); ok {
-			res, err = c.ProbeResponsesStream(ctx, model, message, clientMode)
-			return res, err
-		}
-	}
-
-	return nil, err
+	return res, err
 }
 
 // probeProviderStream performs a streaming probe for a provider using Prober interface
@@ -70,16 +58,5 @@ func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider
 	// Convert server.ProbeMode to client.ProbeMode
 	clientMode := client.ProbeMode(testMode)
 	res, err := prober.ProbeStream(ctx, model, message, clientMode)
-	if err == nil {
-		return res, nil
-	}
-
-	if provider.APIStyle == protocol.APIStyleOpenAI {
-		if c, ok := prober.(client.OpenAIClientInterface); ok {
-			res, err = c.ProbeResponsesStream(ctx, model, message, clientMode)
-			return res, err
-		}
-	}
-
-	return nil, err
+	return res, err
 }

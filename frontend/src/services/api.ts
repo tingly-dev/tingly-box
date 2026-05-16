@@ -717,6 +717,28 @@ export const api = {
         }
     },
 
+    // Lightweight probe for optional key validation using OPTIONS and models endpoint
+    // This is used by the "Test Connection" button - results are informational only
+    probeProviderLightweight: async (name: string, api_style: string, api_base: string, token: string, auth_type?: string): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.POST('/api/v2/probe/lightweight', {
+                headers,
+                body: {
+                    name: name,
+                    api_style: api_style as any,
+                    api_base: api_base,
+                    token: token,
+                    auth_type: auth_type,
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            return {success: false, error: error.message};
+        }
+    },
+
     probeProvider: async (api_style: string, api_base: string, token: string): Promise<any> => {
         try {
             const client = await getClient();
