@@ -219,6 +219,9 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         chart: dashboardColors.chart,
         statCard: dashboardColors.statCard,
       } as any,
+      // Theme mode flag for easy detection in components
+      // @ts-ignore - custom theme flag
+      isSunlit: isSunlit,
     },
     typography: {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica", "Arial", sans-serif',
@@ -591,6 +594,157 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
             backdropFilter: isSunlit ? 'blur(8px)' : 'none',
             willChange: 'auto',
           },
+        },
+      },
+      MuiTableCell: {
+        styleOverrides: {
+          root: {
+            borderBottom: isSunlit
+              ? '1px solid rgba(14, 165, 233, 0.1)'
+              : undefined,
+          },
+          head: {
+            backgroundColor: isSunlit
+              ? 'rgba(14, 165, 233, 0.06)'
+              : (isDark ? 'rgba(255, 255, 255, 0.03)' : undefined),
+            fontWeight: 600,
+          },
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: {
+            '&:hover': {
+              backgroundColor: isSunlit
+                ? 'rgba(14, 165, 233, 0.04)'
+                : undefined,
+            },
+          },
+        },
+      },
+      MuiSwitch: {
+        styleOverrides: {
+          switchBase: {
+            '&.Mui-checked': {
+              color: isSunlit ? sunlitPrimary : undefined,
+              '& + .MuiSwitch-track': {
+                backgroundColor: isSunlit ? sunlitPrimary : undefined,
+                opacity: isSunlit ? 0.6 : undefined,
+              },
+            },
+          },
+          track: {
+            backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.3)' : undefined,
+          },
+        },
+      },
+      MuiSlider: {
+        styleOverrides: {
+          root: {
+            color: isSunlit ? sunlitPrimary : undefined,
+          },
+          thumb: {
+            '&:hover, &.Mui-focusVisible': {
+              boxShadow: isSunlit
+                ? '0 0 0 8px rgba(14, 165, 233, 0.16)'
+                : undefined,
+            },
+          },
+          track: {
+            background: isSunlit
+              ? `linear-gradient(90deg, ${sunlitPrimaryLight} 0%, ${sunlitPrimary} 100%)`
+              : undefined,
+          },
+        },
+      },
+      MuiLinearProgress: {
+        styleOverrides: {
+          root: {
+            backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.15)' : undefined,
+            borderRadius: 4,
+          },
+          bar: {
+            background: isSunlit
+              ? `linear-gradient(90deg, ${sunlitPrimaryLight} 0%, ${sunlitPrimary} 100%)`
+              : undefined,
+            borderRadius: 4,
+          },
+        },
+      },
+      MuiCircularProgress: {
+        styleOverrides: {
+          root: {
+            color: isSunlit ? sunlitPrimary : undefined,
+          },
+        },
+      },
+      MuiToggleButton: {
+        styleOverrides: {
+          root: {
+            borderColor: isSunlit ? 'rgba(14, 165, 233, 0.25)' : undefined,
+            '&.Mui-selected': {
+              backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.15)' : undefined,
+              color: isSunlit ? sunlitPrimary : undefined,
+              '&:hover': {
+                backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.22)' : undefined,
+              },
+            },
+          },
+        },
+      },
+      MuiBadge: {
+        styleOverrides: {
+          badge: {
+            background: isSunlit
+              ? `linear-gradient(135deg, ${sunlitPrimary} 0%, ${sunlitPrimaryDark} 100%)`
+              : undefined,
+          },
+        },
+      },
+      MuiSkeleton: {
+        styleOverrides: {
+          root: {
+            backgroundColor: isSunlit
+              ? 'rgba(14, 165, 233, 0.08)'
+              : undefined,
+          },
+        },
+      },
+      MuiCssBaseline: {
+        styleOverrides: {
+          body: isSunlit ? {
+            // Custom scrollbar for sunlit theme
+            '&::-webkit-scrollbar': {
+              width: 8,
+              height: 8,
+            },
+            '&::-webkit-scrollbar-track': {
+              backgroundColor: 'rgba(14, 165, 233, 0.05)',
+              borderRadius: 4,
+            },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: 'rgba(14, 165, 233, 0.25)',
+              borderRadius: 4,
+              '&:hover': {
+                backgroundColor: 'rgba(14, 165, 233, 0.4)',
+              },
+            },
+            '*::-webkit-scrollbar': {
+              width: 6,
+              height: 6,
+            },
+            '*::-webkit-scrollbar-track': {
+              backgroundColor: 'rgba(14, 165, 233, 0.05)',
+              borderRadius: 3,
+            },
+            '*::-webkit-scrollbar-thumb': {
+              backgroundColor: 'rgba(14, 165, 233, 0.2)',
+              borderRadius: 3,
+              '&:hover': {
+                backgroundColor: 'rgba(14, 165, 233, 0.35)',
+              },
+            },
+          } : undefined,
         },
       },
     },

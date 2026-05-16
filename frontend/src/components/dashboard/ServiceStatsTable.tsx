@@ -43,15 +43,8 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
     // Get theme-aware empty icon background
     const getEmptyIconBg = () => {
         const palette = theme.palette as any;
-        // Sunlit theme uses sky blue color
-        if (palette.isSunlit || palette.mode === 'light' && palette.primary.main === '#0ea5e9') {
-            return 'rgba(14, 165, 233, 0.1)';
-        }
-        // Dark theme
-        if (palette.mode === 'dark') {
-            return 'rgba(148, 163, 184, 0.1)';
-        }
-        // Light theme (default)
+        if (palette.isSunlit) return 'rgba(14, 165, 233, 0.1)';
+        if (palette.mode === 'dark') return 'rgba(148, 163, 184, 0.1)';
         return 'rgba(100, 116, 139, 0.1)';
     };
 
