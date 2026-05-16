@@ -60,10 +60,15 @@ const flagStringValue = (flags: RuleFlags | undefined, key: string): string => {
     switch (key) {
         case 'custom_user_agent':
             return flags.customUserAgent || '';
+        case 'openai_endpoint_override':
+            return flags.openaiEndpointOverride || '';
         default:
             return '';
     }
 };
+
+// Enum default that should be treated as "unset" (registry's first option).
+const ENUM_DEFAULT_VALUE = 'auto';
 
 /**
  * RuleExtensionsCard renders a compact card displaying the rule's enabled
@@ -79,6 +84,10 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
 }) => {
     const enabled = (registry || []).filter((spec) => {
         if (spec.type === 'bool') return flagBoolValue(flags, spec.key);
+        if (spec.type === 'enum') {
+            const v = flagStringValue(flags, spec.key);
+            return v !== '' && v !== ENUM_DEFAULT_VALUE;
+        }
         return flagStringValue(flags, spec.key) !== '';
     });
 
@@ -129,10 +138,18 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                     <Stack direction="row" flexWrap="wrap" gap={0.25}>
                         {enabled.map((spec) => {
                             const isString = spec.type === 'string';
-                            const stringVal = isString ? flagStringValue(flags, spec.key) : '';
-                            const label = isString && stringVal ? `${spec.label}: ${stringVal}` : spec.label;
-                            const title = isString && stringVal
-                                ? `${spec.description}\nValue: ${stringVal}`
+                            const isEnum = spec.type === 'enum';
+                            const stringVal = isString || isEnum ? flagStringValue(flags, spec.key) : '';
+                            let displayVal = stringVal;
+                            if (isEnum) {
+                                const opt = (spec.options || []).find((o) => o.value === stringVal);
+                                if (opt) displayVal = opt.label;
+                            }
+                            const label = (isString || isEnum) && displayVal
+                                ? `${spec.label}: ${displayVal}`
+                                : spec.label;
+                            const title = (isString || isEnum) && stringVal
+                                ? `${spec.description}\nValue: ${displayVal}`
                                 : spec.description;
                             return (
                                 <Tooltip key={spec.key} title={title}>

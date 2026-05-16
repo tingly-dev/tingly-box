@@ -7,6 +7,10 @@ import {
     DialogContent,
     DialogTitle,
     Divider,
+    FormControl,
+    InputLabel,
+    MenuItem,
+    Select,
     Stack,
     Switch,
     TextField,
@@ -14,6 +18,9 @@ import {
 } from '@mui/material';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
+
+// Default enum value treated as "unset" (matches the registry's first option).
+const ENUM_DEFAULT_VALUE = 'auto';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -45,6 +52,8 @@ const flagToString = (flags: RuleFlags | undefined, key: string): string => {
     switch (key) {
         case 'custom_user_agent':
             return flags.customUserAgent || '';
+        case 'openai_endpoint_override':
+            return flags.openaiEndpointOverride || '';
         default:
             return '';
     }
@@ -69,6 +78,9 @@ const setString = (flags: RuleFlags, key: string, value: string): RuleFlags => {
     switch (key) {
         case 'custom_user_agent':
             return { ...flags, customUserAgent: value };
+        case 'openai_endpoint_override':
+            // Persist "auto" as empty string so omitempty hides it on the wire.
+            return { ...flags, openaiEndpointOverride: value === ENUM_DEFAULT_VALUE ? '' : value };
         default:
             return flags;
     }
@@ -143,9 +155,18 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                             </Stack>
                             <Stack spacing={1.5}>
                                 {specs.map((spec) => {
-                                    const enabled = spec.type === 'bool'
-                                        ? flagToBool(draft, spec.key)
-                                        : flagToString(draft, spec.key) !== '';
+                                    let enabled = false;
+                                    if (spec.type === 'bool') {
+                                        enabled = flagToBool(draft, spec.key);
+                                    } else if (spec.type === 'enum') {
+                                        const v = flagToString(draft, spec.key);
+                                        enabled = v !== '' && v !== ENUM_DEFAULT_VALUE;
+                                    } else {
+                                        enabled = flagToString(draft, spec.key) !== '';
+                                    }
+                                    const enumValue = spec.type === 'enum'
+                                        ? (flagToString(draft, spec.key) || ENUM_DEFAULT_VALUE)
+                                        : '';
                                     return (
                                         <Box
                                             key={spec.key}
@@ -191,6 +212,25 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                     onChange={(e) => handleStringChange(spec.key, e.target.value)}
                                                     sx={{ mt: 1 }}
                                                 />
+                                            )}
+                                            {spec.type === 'enum' && (
+                                                <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                                                    <InputLabel id={`flag-enum-${spec.key}-label`}>
+                                                        {spec.label}
+                                                    </InputLabel>
+                                                    <Select
+                                                        labelId={`flag-enum-${spec.key}-label`}
+                                                        label={spec.label}
+                                                        value={enumValue}
+                                                        onChange={(e) => handleStringChange(spec.key, String(e.target.value))}
+                                                    >
+                                                        {(spec.options || []).map((opt) => (
+                                                            <MenuItem key={opt.value} value={opt.value}>
+                                                                {opt.label}
+                                                            </MenuItem>
+                                                        ))}
+                                                    </Select>
+                                                </FormControl>
                                             )}
                                         </Box>
                                     );

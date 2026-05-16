@@ -69,22 +69,32 @@ The probe result is written to:
 
 `SelectOpenAIEndpoint` is the single entry point for all four OpenAI-style handlers:
 
-```
+```go
 SelectOpenAIEndpoint(
-    ctx         context.Context,
-    provider    *typ.Provider,
-    modelID     string,
-    incoming    IncomingAPIType,   // "chat" or "responses"
-    isStreaming bool,
-    responsesReq *protocol.ResponseCreateRequest,  // nil for chat incoming
+    ctx      context.Context,
+    provider *typ.Provider,
+    modelID  string,
+    opts     OpenAIEndpointOptions,
 ) (*EndpointSelection, error)
+
+type OpenAIEndpointOptions struct {
+    Incoming         IncomingAPIType  // "chat" or "responses"
+    IsStreaming      bool
+    Override         EndpointOverride // rule-level force; zero = OverrideAuto
+    RequireResponses bool             // caller pre-computed: request can't downgrade
+}
 ```
+
+Provider and model ID stay as direct parameters because they identify the target; everything else lives on `opts`. The zero `OpenAIEndpointOptions{}` is meaningful: `OverrideAuto` + downgrade-allowed.
 
 Decision tree:
 
 ```
 Codex provider?
-  └─ yes → Responses (always)
+  └─ yes → Responses (always; "chat" override logged and ignored)
+
+Override = chat | responses?
+  └─ yes → forced endpoint (skips capability probe)
 
 No cached capability?
   └─ fire background probe; respect incoming API (non-blocking)
@@ -100,15 +110,19 @@ incoming = responses:
   Responses usable?
     └─ yes → Responses
   Chat usable?
-    └─ can downgrade? (no previous_response_id, include, background, truncation, reasoning)
-       └─ yes → Chat
-       └─ no  → error 400 (unsupported_endpoint)
+    └─ opts.RequireResponses set?
+       └─ no  → Chat
+       └─ yes → error 400 (unsupported_endpoint)
   └─ fallback → Responses
 ```
 
 `endpointUsable(available, supportsStream, isStreaming bool) bool` encodes the stream compatibility check as a single pure function, making it trivially testable.
 
-`CanDowngradeResponsesToChat` checks Responses-API-only fields that cannot be represented in Chat Completions. If any are set, the downgrade is rejected with a 400 rather than silently dropping request semantics.
+`CanDowngradeResponsesToChat` checks Responses-API-only fields (`previous_response_id`, `include`, `background`, `truncation`, `reasoning`) that cannot be represented in Chat Completions. It lives at the caller (`ResponsesCreate`), which feeds the result into `opts.RequireResponses`. The router only sees the boolean — keeping it independent of `*protocol.ResponseCreateRequest`. When the constraint forces an error, the router returns a generic message; the specific blocking field stays known to the caller, which can log details at its own discretion.
+
+### Rule-level override (`openai_endpoint_override`)
+
+The `openai_endpoint_override` rule flag (enum: `auto` | `chat` | `responses`) takes precedence over the capability probe. It surfaces as `EndpointOverride` in `endpoint_override.go` and is parsed via `ParseEndpointOverride` at each handler before being passed in `opts.Override`. Auto = current adaptive behavior. Chat / Responses skip the probe and return the forced endpoint directly. On Codex providers, `chat` is logged as a warning and ignored (Codex has no Chat endpoint).
 
 ### Client probe methods (`openai.go`, `probe.go`)
 

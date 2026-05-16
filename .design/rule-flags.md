@@ -89,9 +89,15 @@ type FlagSpec struct {
     Key         string        // 与 RuleFlags 上的 json tag 完全对应
     Label       string        // UI 展示用人话
     Description string        // hover 详细说明
-    Type        FlagValueType // bool | string
+    Type        FlagValueType // bool | string | enum
     Category    FlagCategory  // compatibility | request | response
     Placeholder string        // string 类型的输入框 hint
+    Options     []FlagOption  // enum 类型的可选值，按显示顺序
+}
+
+type FlagOption struct {
+    Value string // 持久化到 RuleFlags 的字符串
+    Label string // UI 展示
 }
 
 func RuleFlagRegistry() []FlagSpec { … }
@@ -103,6 +109,8 @@ func RuleFlagRegistry() []FlagSpec { … }
   tag。这条测试挡住"加了 spec 忘了加字段"或反过来。
 - `Label` / `Description` 非空。
 - `Type` 必须在已知枚举内。
+- `enum` 类型必须声明 ≥ 2 个 `Options`，每个 Option 的 `Value` / `Label`
+  非空且不重复。首个 Option 视为默认值（UI 显示为"未启用"状态）。
 
 ---
 
@@ -116,10 +124,11 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b）|
 | `use_max_tokens` | bool | request | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b）|
 | `custom_user_agent` | string | request | 覆盖出站 User-Agent header | `customUserAgentTransport` + `WithCustomUserAgent(ctx, ...)`（Type 2）|
+| `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制 OpenAI 出口走 Chat 或 Responses，绕过自适应路由探针 | `ParseEndpointOverride` → `OpenAIEndpointOptions.Override` 透传给 `SelectOpenAIEndpoint`（Type 4：路由层决策）|
 
 ---
 
-## 5. 四种 flag 注入手法
+## 5. 五种 flag 注入手法
 
 ```
 Type 1a  Request body, pre-chain mutation
@@ -140,9 +149,14 @@ Type 3   Response post-processing
          handler 把 flag 写进 reqCtx.Extra；protocol_dispatch.go 的派
          发分支用 shouldStripUsage 这类统一判定来决定剥/改字段。
          例：skip_usage。
+
+Type 4   Routing-decision input
+         handler 把 flag 解析后作为 SelectOpenAIEndpoint 的 opts 字段
+         传入；路由层在 Transform chain 构造**之前**就决定走哪条出口。
+         不进 ExtraFields、不进 ctx。例：openai_endpoint_override。
 ```
 
-任何新 flag 都应归入这四类之一。
+任何新 flag 都应归入这五类之一。
 
 ---
 

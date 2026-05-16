@@ -284,7 +284,11 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIChat, isStreaming, nil)
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, OpenAIEndpointOptions{
+			Incoming:    IncomingAPIChat,
+			IsStreaming: isStreaming,
+			Override:    ParseEndpointOverride(ruleFlags.OpenAIEndpointOverride),
+		})
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
