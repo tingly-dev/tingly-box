@@ -136,7 +136,14 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
   const textSecondary = isSunlit ? '#475569' : (isDark ? '#cbd5e1' : '#64748b');
   const textDisabled = isSunlit ? '#94a3b8' : (isDark ? '#94a3b8' : '#94a3b8');
 
-  const dividerColor = isSunlit ? 'rgba(14, 165, 233, 0.12)' : (isDark ? '#334155' : '#e2e8f0');
+  const dividerColor = isSunlit ? 'rgba(14, 165, 233, 0.12)' : (isDark ? '#475569' : '#e2e8f0');
+
+  // Dark-mode input surface tokens — kept distinct from Paper (#1e293b) so
+  // fields are recognizable without relying on the (low-contrast) border alone.
+  const darkInputBg = 'rgba(255, 255, 255, 0.04)';
+  const darkInputBgHover = 'rgba(255, 255, 255, 0.06)';
+  const darkInputBorder = 'rgba(148, 163, 184, 0.35)';
+  const darkInputBorderHover = 'rgba(148, 163, 184, 0.6)';
 
   // Dashboard-specific colors
   const dashboardColors = isSunlit
@@ -179,9 +186,10 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
       },
       divider: dividerColor,
       action: {
-        hover: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? '#1e293b' : '#f1f5f9'),
-        selected: isSunlit ? 'rgba(14, 165, 233, 0.15)' : (isDark ? '#1e3a8a' : '#e0e7ff'),
-        disabled: isSunlit ? 'rgba(14, 165, 233, 0.04)' : (isDark ? '#1e293b' : '#f1f5f9'),
+        hover: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? 'rgba(148, 163, 184, 0.12)' : '#f1f5f9'),
+        selected: isSunlit ? 'rgba(14, 165, 233, 0.15)' : (isDark ? 'rgba(37, 99, 235, 0.24)' : '#e0e7ff'),
+        disabled: isSunlit ? 'rgba(14, 165, 233, 0.04)' : (isDark ? 'rgba(148, 163, 184, 0.08)' : '#f1f5f9'),
+        focus: isSunlit ? 'rgba(14, 165, 233, 0.12)' : (isDark ? 'rgba(148, 163, 184, 0.16)' : '#e0e7ff'),
       },
       // Dashboard colors palette - custom extension
       // @ts-ignore - custom dashboard colors
@@ -251,7 +259,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
             borderRadius: 12,
             border: isSunlit
               ? '1px solid rgba(14, 165, 233, 0.15)'
-              : (isDark ? '1px solid #334155' : '1px solid #e2e8f0'),
+              : (isDark ? '1px solid #475569' : '1px solid #e2e8f0'),
             backgroundColor: isSunlit
               ? 'rgba(255, 255, 255, 0.82)'
               : (isDark ? '#1e293b' : '#ffffff'),
@@ -305,47 +313,143 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
             },
           },
           outlined: {
-            borderColor: isSunlit ? 'rgba(14, 165, 233, 0.3)' : (isDark ? '#475569' : '#d1d5db'),
-            color: isSunlit ? '#0369a1' : (isDark ? '#cbd5e1' : '#374151'),
+            borderColor: isSunlit ? 'rgba(14, 165, 233, 0.3)' : (isDark ? '#64748b' : '#d1d5db'),
+            color: isSunlit ? '#0369a1' : (isDark ? '#e2e8f0' : '#374151'),
             '&:hover': {
-              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.5)' : (isDark ? '#64748b' : '#9ca3af'),
-              backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? '#334155' : '#f9fafb'),
+              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.5)' : (isDark ? '#94a3b8' : '#9ca3af'),
+              backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? 'rgba(148, 163, 184, 0.12)' : '#f9fafb'),
             },
           },
         },
       },
-      MuiTextField: {
+      MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 6,
-              backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.6)' : 'transparent',
-              '& fieldset': {
-                borderColor: isSunlit ? 'rgba(14, 165, 233, 0.25)' : (isDark ? '#475569' : '#d1d5db'),
+            borderRadius: 6,
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.6)'
+              : (isDark ? darkInputBg : 'transparent'),
+            transition: 'background-color 120ms ease, border-color 120ms ease',
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.25)' : (isDark ? darkInputBorder : '#d1d5db'),
+            },
+            '&:hover': {
+              backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.72)' : (isDark ? darkInputBgHover : 'transparent'),
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? darkInputBorderHover : '#9ca3af'),
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? sunlitPrimary : '#2563eb',
+              borderWidth: 1.5,
+            },
+            '&.Mui-disabled': {
+              backgroundColor: isSunlit
+                ? 'rgba(255, 255, 255, 0.4)'
+                : (isDark ? 'rgba(255, 255, 255, 0.02)' : 'transparent'),
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: isSunlit ? 'rgba(14, 165, 233, 0.12)' : (isDark ? 'rgba(148, 163, 184, 0.18)' : '#e5e7eb'),
               },
-              '&:hover fieldset': {
-                borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? '#64748b' : '#9ca3af'),
-              },
-              '&.Mui-focused fieldset': {
-                borderColor: isSunlit ? sunlitPrimary : '#2563eb',
-                borderWidth: 1.5,
-              },
+            },
+            '&.Mui-error .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? '#ef4444' : (isDark ? '#f87171' : '#dc2626'),
+            },
+          },
+          input: {
+            '&::placeholder': {
+              color: isSunlit ? '#64748b' : (isDark ? '#94a3b8' : '#94a3b8'),
+              opacity: 1,
+            },
+          },
+        },
+      },
+      MuiFilledInput: {
+        styleOverrides: {
+          root: {
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.6)'
+              : (isDark ? darkInputBg : 'rgba(0, 0, 0, 0.04)'),
+            '&:hover': {
+              backgroundColor: isSunlit
+                ? 'rgba(255, 255, 255, 0.72)'
+                : (isDark ? darkInputBgHover : 'rgba(0, 0, 0, 0.06)'),
+            },
+            '&.Mui-focused': {
+              backgroundColor: isSunlit
+                ? 'rgba(255, 255, 255, 0.82)'
+                : (isDark ? darkInputBgHover : 'rgba(0, 0, 0, 0.06)'),
+            },
+          },
+        },
+      },
+      MuiInputBase: {
+        styleOverrides: {
+          input: {
+            color: textPrimary,
+            '&::placeholder': {
+              color: isSunlit ? '#64748b' : (isDark ? '#94a3b8' : '#94a3b8'),
+              opacity: 1,
+            },
+          },
+        },
+      },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            color: isSunlit ? '#475569' : (isDark ? '#cbd5e1' : '#64748b'),
+            '&.Mui-focused': {
+              color: isSunlit ? sunlitPrimary : (isDark ? '#60a5fa' : '#2563eb'),
+            },
+          },
+        },
+      },
+      MuiFormHelperText: {
+        styleOverrides: {
+          root: {
+            color: isSunlit ? '#64748b' : (isDark ? '#94a3b8' : '#6b7280'),
+            '&.Mui-error': {
+              color: isSunlit ? '#ef4444' : (isDark ? '#f87171' : '#dc2626'),
             },
           },
         },
       },
       MuiSelect: {
         styleOverrides: {
+          icon: {
+            color: isSunlit ? '#475569' : (isDark ? '#cbd5e1' : '#64748b'),
+          },
+        },
+      },
+      MuiMenu: {
+        styleOverrides: {
+          paper: {
+            backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.96)' : (isDark ? '#1e293b' : '#ffffff'),
+            border: isSunlit
+              ? '1px solid rgba(14, 165, 233, 0.15)'
+              : (isDark ? '1px solid #475569' : '1px solid #e2e8f0'),
+            boxShadow: isDark
+              ? '0 10px 24px rgba(0, 0, 0, 0.45)'
+              : '0 10px 24px rgba(15, 23, 42, 0.08)',
+          },
+        },
+      },
+      MuiMenuItem: {
+        styleOverrides: {
           root: {
-            '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.25)' : (isDark ? '#475569' : '#d1d5db'),
+            '&:hover': {
+              backgroundColor: isSunlit
+                ? 'rgba(14, 165, 233, 0.08)'
+                : (isDark ? 'rgba(148, 163, 184, 0.12)' : '#f1f5f9'),
             },
-            '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? '#64748b' : '#9ca3af'),
-            },
-            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? sunlitPrimary : '#2563eb',
-              borderWidth: 1.5,
+            '&.Mui-selected': {
+              backgroundColor: isSunlit
+                ? 'rgba(14, 165, 233, 0.16)'
+                : (isDark ? 'rgba(37, 99, 235, 0.28)' : '#e0e7ff'),
+              '&:hover': {
+                backgroundColor: isSunlit
+                  ? 'rgba(14, 165, 233, 0.22)'
+                  : (isDark ? 'rgba(37, 99, 235, 0.36)' : '#c7d2fe'),
+              },
             },
           },
         },
