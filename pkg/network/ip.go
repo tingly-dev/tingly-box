@@ -8,7 +8,7 @@ import (
 func getLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return "127.0.0.1" // fallback to localhost
+		return "localhost" // fallback to localhost
 	}
 
 	for _, addr := range addrs {
@@ -19,7 +19,7 @@ func getLocalIP() string {
 		}
 	}
 
-	return "127.0.0.1" // fallback to localhost
+	return "localhost" // fallback to localhost
 }
 
 // ResolveHost resolves the host to an IP address or returns it as-is if it's already an IP or localhost

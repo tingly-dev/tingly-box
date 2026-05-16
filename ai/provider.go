@@ -127,7 +127,7 @@ type Provider struct {
 	Token         string   `json:"token"`     // API key for api_key auth type
 	NoKeyRequired bool     `json:"no_key_required"`
 	Enabled       bool     `json:"enabled"`
-	ProxyURL      string   `json:"proxy_url"`              // HTTP or SOCKS proxy URL (e.g., "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080")
+	ProxyURL      string   `json:"proxy_url"` // HTTP or SOCKS proxy URL (e.g., "http://localhost:7890" or "socks5://localhost:1080")
 	// UserAgent is treated as a deliberate debug / override knob. Empty means
 	// "use the vendor-appropriate default", which for generic OpenAI / Anthropic
 	// is the SDK default and for specialized clients (Claude Code OAuth,
@@ -136,11 +136,11 @@ type Provider struct {
 	// pins — that is intentional for debugging and bug-reproduction scenarios,
 	// but be aware that some upstreams (notably Claude Code OAuth) verify the
 	// CLI UA and may reject requests with a different value.
-	UserAgent     string   `json:"user_agent,omitempty"`
-	Timeout       int64    `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
-	Tags          []string `json:"tags,omitempty"`         // Provider tags for categorization
-	Models        []string `json:"models,omitempty"`       // Available models for this provider (cached)
-	LastUpdated   string   `json:"last_updated,omitempty"` // Last update timestamp
+	UserAgent   string   `json:"user_agent,omitempty"`
+	Timeout     int64    `json:"timeout,omitempty"`      // Request timeout in seconds (default: 1800 = 30 minutes)
+	Tags        []string `json:"tags,omitempty"`         // Provider tags for categorization
+	Models      []string `json:"models,omitempty"`       // Available models for this provider (cached)
+	LastUpdated string   `json:"last_updated,omitempty"` // Last update timestamp
 
 	// Fusion-mode optional fields. Independent of APIBase/APIStyle.
 	// When set, the dispatcher prefers the URL whose protocol natively matches

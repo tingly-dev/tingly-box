@@ -197,7 +197,7 @@ type ProviderResponse struct {
 	Token            string            `json:"token" example:"sk-***...***"` // Only populated for api_key auth type
 	NoKeyRequired    bool              `json:"no_key_required" example:"false"`
 	Enabled          bool              `json:"enabled" example:"true"`
-	ProxyURL         string            `json:"proxy_url,omitempty" example:"http://127.0.0.1:7890"`
+	ProxyURL         string            `json:"proxy_url,omitempty" example:"http://localhost:7890"`
 	UserAgent        string            `json:"user_agent,omitempty" example:"my-gateway/1.0"`
 	AuthType         string            `json:"auth_type,omitempty" example:"api_key"` // api_key, oauth, or vmodel
 	OAuthDetail      *typ.OAuthDetail  `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
@@ -247,7 +247,7 @@ type CreateProviderRequest struct {
 	Token            string `json:"token" description:"API token" example:"sk-..."`
 	NoKeyRequired    bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
 	Enabled          bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
-	ProxyURL         string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)" example:"http://127.0.0.1:7890"`
+	ProxyURL         string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://localhost:7890"`
 	UserAgent        string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent; empty uses the built-in/default for this provider" example:"my-gateway/1.0"`
 	AuthType         string `json:"auth_type,omitempty" description:"Auth type: api_key or oauth (default: api_key)" example:"api_key"`
 }

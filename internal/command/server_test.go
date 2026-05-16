@@ -77,7 +77,7 @@ func TestServerManagerLifecycle(t *testing.T) {
 		}
 
 		// Test basic HTTP endpoint
-		testServerEndpoint(t, fmt.Sprintf("http://127.0.0.1:%d/health", port))
+		testServerEndpoint(t, fmt.Sprintf("http://localhost:%d/health", port))
 	})
 
 	t.Run("Stop server", func(t *testing.T) {
@@ -339,7 +339,7 @@ func TestServerRestart(t *testing.T) {
 		}
 
 		// Test that server is responding
-		testServerEndpoint(t, fmt.Sprintf("http://127.0.0.1:%d/health", port))
+		testServerEndpoint(t, fmt.Sprintf("http://localhost:%d/health", port))
 	})
 
 	t.Run("Stop server", func(t *testing.T) {
@@ -369,7 +369,7 @@ func TestServerRestart(t *testing.T) {
 		}
 
 		// Test that server is responding again
-		testServerEndpoint(t, fmt.Sprintf("http://127.0.0.1:%d/health", port))
+		testServerEndpoint(t, fmt.Sprintf("http://localhost:%d/health", port))
 
 		// Cleanup
 		serverManager.Stop()
@@ -449,8 +449,8 @@ func TestMultipleServers(t *testing.T) {
 	}
 
 	// Test both endpoints
-	testServerEndpoint(t, fmt.Sprintf("http://127.0.0.1:%d/health", port1))
-	testServerEndpoint(t, fmt.Sprintf("http://127.0.0.1:%d/health", port2))
+	testServerEndpoint(t, fmt.Sprintf("http://localhost:%d/health", port1))
+	testServerEndpoint(t, fmt.Sprintf("http://localhost:%d/health", port2))
 }
 
 // Helper functions
@@ -459,7 +459,7 @@ func TestMultipleServers(t *testing.T) {
 func getAvailablePort(t *testing.T) int {
 	// Try ports in the test range
 	for port := 12000; port < 13000; port++ {
-		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("localhost:%d", port))
 		if err == nil {
 			listener.Close()
 			return port

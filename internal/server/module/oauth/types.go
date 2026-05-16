@@ -36,7 +36,7 @@ type OAuthAuthorizeRequest struct {
 	Redirect     string `json:"redirect" description:"URL to redirect after OAuth completion" example:"http://localhost:3000/callback"`
 	ResponseType string `json:"response_type" description:"Response type: 'redirect' or 'json'" example:"json"`
 	Name         string `json:"name" description:"Custom name for the provider (optional, auto-generated if empty)" example:"my-claude-account"`
-	ProxyURL     string `json:"proxy_url,omitempty" description:"HTTP/SOCKS proxy URL (e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080)" example:"http://proxy.example.com:8080"`
+	ProxyURL     string `json:"proxy_url,omitempty" description:"HTTP/SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://proxy.example.com:8080"`
 }
 
 // OAuthAuthorizeResponse represents the response for OAuth authorization initiation

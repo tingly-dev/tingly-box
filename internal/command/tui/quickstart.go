@@ -386,7 +386,7 @@ func qsDetails(ctx StepContext, s quickstartState) (quickstartState, StepResult,
 	s.apiToken = tokenR.Value
 
 	proxyR, err := Input("Proxy URL (optional):", InputOptions{
-		Header: ctx.Header, Placeholder: "e.g. http://127.0.0.1:7890", CanGoBack: true,
+		Header: ctx.Header, Placeholder: "e.g. http://localhost:7890", CanGoBack: true,
 	})
 	if err != nil {
 		return s, StepCancel, err
@@ -697,7 +697,7 @@ func qsAgent(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		s.ccInstallStatusLine = sl.Value
 	}
 
-	apply := agent.NewAgentApply(s.mgr.GetGlobalConfig(), "127.0.0.1")
+	apply := agent.NewAgentApply(s.mgr.GetGlobalConfig(), "localhost")
 	for _, t := range s.selectedAgents {
 		t := t
 		req := &agent.ApplyAgentRequest{

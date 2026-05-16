@@ -180,7 +180,7 @@ func (a *AgentRestoreFlagCmdKong) Run(appManager *AppManager) error {
 // executeAgentRestore performs the agent restore and prints the result.
 func executeAgentRestore(appManager *AppManager, req *agent.RestoreAgentRequest) error {
 	globalConfig := appManager.GetGlobalConfig()
-	host := "127.0.0.1"
+	host := "localhost"
 
 	agentApply := agent.NewAgentApply(globalConfig, host)
 	result, err := agentApply.RestoreAgent(req)
@@ -521,7 +521,7 @@ func executeAgentApply(appManager *AppManager, req *agent.ApplyAgentRequest) err
 	globalConfig := appManager.GetGlobalConfig()
 
 	// Get host for configuration (pure hostname, port is handled by AgentApply)
-	host := "127.0.0.1"
+	host := "localhost"
 
 	// Create agent apply instance
 	agentApply := agent.NewAgentApply(globalConfig, host)

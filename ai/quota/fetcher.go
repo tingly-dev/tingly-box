@@ -100,7 +100,7 @@ func (e *quotaError) Error() string {
 }
 
 // NewHTTPClient 创建带 proxy 支持的 HTTP client
-// proxyURL 格式: "http://127.0.0.1:7890" 或 "socks5://127.0.0.1:1080"
+// proxyURL 格式: "http://localhost:7890" 或 "socks5://localhost:1080"
 func NewHTTPClient(proxyURL string, timeout time.Duration) *http.Client {
 	client := &http.Client{
 		Timeout: timeout,

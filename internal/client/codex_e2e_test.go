@@ -41,7 +41,7 @@ func TestE2E_CodexRoundTripper(t *testing.T) {
 
 	// Create provider for ChatGPT backend API
 	provider := &typ.Provider{
-		ProxyURL: "socks5://127.0.0.1:7890",
+		ProxyURL: "socks5://localhost:7890",
 		Name:     "codex-e2e-test",
 		APIBase:  protocol.CodexAPIBase,
 		AuthType: typ.AuthTypeOAuth,

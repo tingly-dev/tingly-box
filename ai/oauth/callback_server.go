@@ -44,13 +44,13 @@ func (cs *CallbackServer) Start(port int) error {
 	var err error
 
 	if port > 0 {
-		listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		listener, err = net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 		if err != nil {
 			return fmt.Errorf("failed to bind to port %d: %w", port, err)
 		}
 	} else {
 		// Try to find an available loopback port
-		listener, err = net.Listen("tcp", "127.0.0.1:0")
+		listener, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
 			return fmt.Errorf("failed to bind to any port: %w", err)
 		}

@@ -116,7 +116,7 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	baseURL := fmt.Sprintf("http://localhost:%d", port)
 	apiKey := globalConfig.GetModelToken()
 
 	// Unified mode determination:

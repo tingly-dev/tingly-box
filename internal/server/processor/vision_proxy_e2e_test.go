@@ -12,7 +12,7 @@ package processor
 //     go test -tags=e2e -v -run TestVisionProxy_E2E ./internal/server/processor/...
 //
 // Defaults used when the env var is absent:
-//   TINGLY_BASE_URL   = http://127.0.0.1:12580/anthropic
+//   TINGLY_BASE_URL   = http://localhost:12580/anthropic
 //   TINGLY_MODEL      = claude-3-5-sonnet-latest
 //   TINGLY_IMAGE_PATH = embedded 1x1 black PNG
 //
@@ -51,7 +51,7 @@ import (
 // API key is intentionally NOT defaulted: an unset key skips the test
 // rather than spamming the upstream with bogus auth.
 const (
-	defaultBaseURL = "http://127.0.0.1:12580/anthropic"
+	defaultBaseURL = "http://localhost:12580/anthropic"
 	defaultModel   = "claude-3-5-sonnet-latest"
 	defaultPrompt  = "There's an image attached. Tell me what you see in it, in one short sentence."
 )

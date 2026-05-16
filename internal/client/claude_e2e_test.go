@@ -46,7 +46,7 @@ func TestE2E_ClaudeRoundTripper(t *testing.T) {
 
 	// Create provider for Anthropic API
 	provider := &typ.Provider{
-		ProxyURL: "socks5://127.0.0.1:7890",
+		ProxyURL: "socks5://localhost:7890",
 		Name:     "claude-e2e-test",
 		APIBase:  "https://api.anthropic.com",
 		AuthType: authType,
@@ -367,7 +367,7 @@ func TestE2E_ClaudeOAuthRoundTripper(t *testing.T) {
 
 	// Create provider with OAuth
 	provider := &typ.Provider{
-		ProxyURL: "socks5://127.0.0.1:7890",
+		ProxyURL: "socks5://localhost:7890",
 		Name:     "claude-oauth-e2e-test",
 		APIBase:  "https://api.anthropic.com",
 		AuthType: typ.AuthTypeOAuth,
@@ -482,7 +482,7 @@ func TestE2E_BetaStreaming(t *testing.T) {
 
 	// Create provider for Anthropic API
 	provider := &typ.Provider{
-		ProxyURL: "socks5://127.0.0.1:7890",
+		ProxyURL: "socks5://localhost:7890",
 		Name:     "claude-beta-e2e-test",
 		APIBase:  "https://api.anthropic.com",
 		AuthType: authType,

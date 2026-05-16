@@ -68,7 +68,7 @@ func TestCreateSession(t *testing.T) {
 func TestCreateSessionWithProxy(t *testing.T) {
 	sm := NewSessionManager()
 
-	proxyURL := "http://127.0.0.1:7890"
+	proxyURL := "http://localhost:7890"
 	sessionID := sm.CreateSession("qwen", "user456", "http://localhost:3000", "redirect", "qwen-provider", proxyURL)
 
 	session := sm.GetSession(sessionID)

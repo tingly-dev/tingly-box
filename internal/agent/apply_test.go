@@ -54,7 +54,7 @@ func TestBuildClaudeCodeEnv_Separate(t *testing.T) {
 // TestGenerateClaudeCodeEnv_SettingsJSON verifies the env map produces a valid
 // settings.json structure (the same shape written to ~/.claude/settings.json).
 func TestBuildClaudeCodeEnv_SettingsJSON(t *testing.T) {
-	env := BuildClaudeCodeEnv("http://127.0.0.1:12580", "tok", true)
+	env := BuildClaudeCodeEnv("http://localhost:12580", "tok", true)
 
 	// Simulate what ApplyClaudeSettingsFromEnv writes: {"env": <env map>}
 	payload := map[string]interface{}{"env": env}
@@ -76,7 +76,7 @@ func TestBuildClaudeCodeEnv_SettingsJSON(t *testing.T) {
 	if envSection["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] != "32000" {
 		t.Errorf("CLAUDE_CODE_MAX_OUTPUT_TOKENS missing or wrong in settings JSON")
 	}
-	if envSection["ANTHROPIC_BASE_URL"] != "http://127.0.0.1:12580/tingly/claude_code" {
+	if envSection["ANTHROPIC_BASE_URL"] != "http://localhost:12580/tingly/claude_code" {
 		t.Errorf("ANTHROPIC_BASE_URL missing or wrong in settings JSON")
 	}
 }

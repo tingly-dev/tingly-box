@@ -182,7 +182,7 @@ func (s *Server) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.
 
 	return s.resolveProviderConfigTarget(ctx, &ProbeV2Request{
 		Name:     provider.Name,
-		APIBase:  fmt.Sprintf("http://127.0.0.1:%d%s", port, path),
+		APIBase:  fmt.Sprintf("http://localhost:%d%s", port, path),
 		APIStyle: string(provider.APIStyle),
 		Token:    s.config.GetModelToken(),
 		Model:    model,

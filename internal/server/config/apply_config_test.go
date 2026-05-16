@@ -851,7 +851,7 @@ func TestApplyCodexConfig_NewFile_WritesManagedFields(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	result, err := ApplyCodexConfig("http://127.0.0.1:12580/tingly/codex", []string{"tingly-codex", "tingly-gpt5"})
+	result, err := ApplyCodexConfig("http://localhost:12580/tingly/codex", []string{"tingly-codex", "tingly-gpt5"})
 	if err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
@@ -868,7 +868,7 @@ func TestApplyCodexConfig_NewFile_WritesManagedFields(t *testing.T) {
 	}
 	providers, _ := cfg["model_providers"].(map[string]interface{})
 	tb, _ := providers["tingly-box"].(map[string]interface{})
-	if tb["base_url"] != "http://127.0.0.1:12580/tingly/codex" {
+	if tb["base_url"] != "http://localhost:12580/tingly/codex" {
 		t.Errorf("base_url = %v", tb["base_url"])
 	}
 	if tb["wire_api"] != "responses" {

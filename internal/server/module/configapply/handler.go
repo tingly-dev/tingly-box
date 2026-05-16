@@ -429,7 +429,7 @@ func (h *Handler) restoreAgent(c *gin.Context, agentType agent.AgentType) {
 
 	host := h.host
 	if host == "" {
-		host = "127.0.0.1"
+		host = "localhost"
 	}
 	apply := agent.NewAgentApply(h.config, host)
 
