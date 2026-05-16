@@ -184,7 +184,7 @@ func TestTemplateManagerFetchTemplates(t *testing.T) {
 		{
 			name:        "Successful fetch from GitHub",
 			githubURL:   "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/data/providers.json",
-			expectError: true, // Changed to true because file doesn't exist yet on main branch
+			expectError: false, // File exists on main branch; expectError=false means success is expected
 		},
 		{
 			name:        "No GitHub URL configured",

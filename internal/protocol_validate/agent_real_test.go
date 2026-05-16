@@ -133,24 +133,29 @@ func TestSetupRealProfile_LoadConfig(t *testing.T) {
 
 // TestLoadRealModelsConfig_YAML verifies YAML config loading.
 func TestLoadRealModelsConfig_YAML(t *testing.T) {
+	// Schema is now `providers:` with each provider carrying a `models:` list;
+	// LoadRealModelsConfig expands every (provider, model) pair into one
+	// RealModelEntry.
 	content := `
-models:
+providers:
   - name: provider-a
     baseurl: https://api.anthropic.com
     apikey: sk-ant-aaa
-    model: claude-3-5-sonnet-20241022
     api_style: anthropic
+    models:
+      - claude-3-5-sonnet-20241022
   - name: provider-b
     baseurl: https://api.openai.com/v1
     apikey: sk-bbb
-    model: gpt-4o
     api_style: openai
+    models:
+      - gpt-4o
 `
 	f := writeTempFile(t, "models-*.yaml", content)
 	cfg, err := pt.LoadRealModelsConfig(f)
 	require.NoError(t, err)
 	require.Len(t, cfg.Models, 2)
-	assert.Equal(t, "provider-a", cfg.Models[0].Name)
+	assert.Equal(t, "provider-a", cfg.Models[0].Provider)
 	assert.Equal(t, "claude-3-5-sonnet-20241022", cfg.Models[0].Model)
 	assert.Equal(t, "anthropic", cfg.Models[0].APIStyle)
 	assert.Equal(t, "openai", cfg.Models[1].APIStyle)
@@ -158,6 +163,9 @@ models:
 
 // TestLoadRealModelsConfig_CSV verifies CSV config loading.
 func TestLoadRealModelsConfig_CSV(t *testing.T) {
+	// CSV ingestion was removed when ProvidersConfig replaced the legacy
+	// flat-models schema; LoadRealModelsConfig now only parses YAML.
+	t.Skip("CSV providers config no longer supported by LoadRealModelsConfig")
 	t.Run("with api_style column", func(t *testing.T) {
 		content := "name,baseurl,apikey,model,api_style\n" +
 			"provider-a,https://api.anthropic.com,sk-ant-aaa,claude-3-5-sonnet-20241022,anthropic\n" +

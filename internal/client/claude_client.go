@@ -129,6 +129,16 @@ func (c *ClaudeClient) ListModels(ctx context.Context) ([]string, error) {
 	}
 }
 
+// ProbeModelsEndpoint reports the /models endpoint as unavailable without
+// issuing a request. Claude Code OAuth tokens cannot access /models, so
+// probing would always fail and may spam upstream with rejected calls.
+func (c *ClaudeClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
+	return ProbeResult{
+		Success:      false,
+		ErrorMessage: "Claude Code OAuth token cannot access /models endpoint",
+	}
+}
+
 func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) *AnthropicClient {
 	// Apply thinking transformation for Claude Code OAuth
 	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {

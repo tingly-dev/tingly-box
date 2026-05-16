@@ -62,6 +62,13 @@ func testContext(rule *typ.Rule, sessionID string) *SelectionContext {
 	}
 }
 
+// testSessionKey returns the affinity-store key produced by the production
+// code for a header-sourced session value. The selector uses
+// ctx.SessionID.String() (a JSON encoding), so test fixtures must match.
+func testSessionKey(sessionID string) string {
+	return typ.SessionID{Source: typ.SessionSourceHeader, Value: sessionID}.String()
+}
+
 // testOpenAIRequest creates a minimal OpenAI request for testing.
 func testOpenAIRequest(model string) *openai.ChatCompletionNewParams {
 	return &openai.ChatCompletionNewParams{

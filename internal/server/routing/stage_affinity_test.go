@@ -12,7 +12,7 @@ import (
 func TestAffinity_LockedSession(t *testing.T) {
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", "session-1", testAffinityEntry(svc))
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
@@ -46,7 +46,7 @@ func TestAffinity_NoLock(t *testing.T) {
 func TestAffinity_AffinityDisabled(t *testing.T) {
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", "session-1", testAffinityEntry(svc))
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
@@ -75,7 +75,7 @@ func TestAffinity_SmartDisabled(t *testing.T) {
 func TestAffinity_EmptySession(t *testing.T) {
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", "session-1", testAffinityEntry(svc))
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
@@ -91,7 +91,7 @@ func TestAffinity_EmptySession(t *testing.T) {
 func TestAffinity_SmartRuleScope_NoIndex(t *testing.T) {
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", "session-1", testAffinityEntry(svc))
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
@@ -113,7 +113,7 @@ func TestAffinity_Name(t *testing.T) {
 func TestAffinity_MatchedSmartRuleIndex_Propagated(t *testing.T) {
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", "session-1", testAffinityEntry(svc))
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
@@ -150,8 +150,8 @@ func TestAffinity_MultipleSessions(t *testing.T) {
 	store := newMockAffinityStore()
 	svcA := testService("provider-a", "gpt-4", true)
 	svcB := testService("provider-b", "claude-3", true)
-	store.Set("rule-1", "session-a", testAffinityEntry(svcA))
-	store.Set("rule-1", "session-b", testAffinityEntry(svcB))
+	store.Set("rule-1", testSessionKey("session-a"), testAffinityEntry(svcA))
+	store.Set("rule-1", testSessionKey("session-b"), testAffinityEntry(svcB))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true

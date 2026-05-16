@@ -179,7 +179,10 @@ func TestGetStats_Success(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	assert.Contains(t, body, `"success":true`)
+	// Handler returns the structured UsageStatsResponse directly (meta + data),
+	// not a {success: true, ...} envelope.
+	assert.Contains(t, body, `"meta"`)
+	assert.Contains(t, body, `"data"`)
 	assert.Contains(t, body, "gpt-4")
 }
 

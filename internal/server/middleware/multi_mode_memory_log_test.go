@@ -352,7 +352,15 @@ func TestMiddleware_RequestBodyStorage(t *testing.T) {
 
 	engine := gin.New()
 	engine.Use(middleware.Middleware())
-	engine.POST("/test", func(c *gin.Context) { c.String(http.StatusOK, "OK") })
+	// The middleware uses io.TeeReader to capture the request body, which
+	// only fills the buffer once the handler actually reads from c.Request.
+	// It also only persists the body when status >= 400 (see body_ref
+	// logic in multi_mode_memory_log.go). Drain the body and return 4xx
+	// so both conditions are satisfied.
+	engine.POST("/test", func(c *gin.Context) {
+		_, _ = io.ReadAll(c.Request.Body)
+		c.String(http.StatusBadRequest, "bad")
+	})
 
 	// Make a POST request with body
 	testBody := `{"test": "data", "value": 123}`
@@ -387,7 +395,10 @@ func TestMiddleware_RequestBodyTruncation(t *testing.T) {
 
 	engine := gin.New()
 	engine.Use(middleware.Middleware())
-	engine.POST("/test", func(c *gin.Context) { c.String(http.StatusOK, "OK") })
+	engine.POST("/test", func(c *gin.Context) {
+		_, _ = io.ReadAll(c.Request.Body) // drain body so TeeReader captures it
+		c.String(http.StatusBadRequest, "bad")
+	})
 
 	// Create a body larger than MaxRequestBodySize (1MB)
 	longBody := string(make([]byte, 2*1024*1024)) // 2MB body
@@ -488,7 +499,10 @@ func TestMiddleware_RequestBodyCircularEviction(t *testing.T) {
 
 	engine := gin.New()
 	engine.Use(middleware.Middleware())
-	engine.POST("/test", func(c *gin.Context) { c.String(http.StatusOK, "OK") })
+	engine.POST("/test", func(c *gin.Context) {
+		_, _ = io.ReadAll(c.Request.Body) // drain so TeeReader captures body
+		c.String(http.StatusBadRequest, "bad")
+	})
 
 	// Make 3 POST requests to trigger eviction
 	var bodyRefs []string

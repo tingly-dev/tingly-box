@@ -129,11 +129,16 @@ func (sm *SessionManager) GetStatus(sessionID string) SessionStatus {
 func (sm *SessionManager) CancelSession(sessionID string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	if session, ok := sm.sessions[sessionID]; ok {
-		session.Status = "cancelled"
-		return true
+	session, ok := sm.sessions[sessionID]
+	if !ok {
+		return false
 	}
-	return false
+	if session.Status == "cancelled" {
+		// Idempotent: already cancelled, report no state change.
+		return false
+	}
+	session.Status = "cancelled"
+	return true
 }
 
 // cleanupExpiredSessions removes expired sessions periodically

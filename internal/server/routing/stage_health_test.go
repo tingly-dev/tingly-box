@@ -89,7 +89,11 @@ func TestHealthStage_NilServices(t *testing.T) {
 
 	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "should pass when no services")
-	require.Nil(t, result)
+	// newSelectionState returns an empty (non-nil) candidate slice for a rule
+	// with no Services. HealthStage filters that empty slice and returns a
+	// filter result so downstream stages observe the narrowed state.
+	require.NotNil(t, result)
+	require.Empty(t, result.FilteredServices)
 }
 
 func TestHealthStage_NilFilter(t *testing.T) {
