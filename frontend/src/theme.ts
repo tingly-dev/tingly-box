@@ -111,11 +111,13 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
   const isDark = mode === 'dark';
   const isSunlit = mode === 'sunlit';
 
-  // Use sunlit palette for sunlit theme, otherwise use standard palette
+  // Primary blue: dark mode uses a lighter shade so text-variant buttons
+  // (the default Button color) meet WCAG AA against the dark Paper surface.
+  // #2563eb on #11141c is only ~3.5:1; #60a5fa lifts that to ~7:1.
   const primaryColor = isSunlit ? SUNLIT_PALETTE.primary : {
-    main: '#2563eb',
-    light: '#3b82f6',
-    dark: '#1d4ed8',
+    main: isDark ? '#60a5fa' : '#2563eb',
+    light: isDark ? '#93c5fd' : '#3b82f6',
+    dark: isDark ? '#3b82f6' : '#1d4ed8',
     contrastText: '#ffffff',
   };
 
@@ -179,9 +181,12 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         dark: isSunlit ? '#16a34a' : '#047857',
       },
       error: {
-        main: isSunlit ? '#ef4444' : '#dc2626',
-        light: isSunlit ? '#f87171' : '#ef4444',
-        dark: isSunlit ? '#dc2626' : '#b91c1c',
+        // Dark mode: #dc2626 only reaches ~3.8:1 on Paper #11141c. Use the
+        // lighter shade (#ef4444 → ~4.9:1) so Delete buttons in dialogs and
+        // error helper text meet WCAG AA.
+        main: isSunlit ? '#ef4444' : (isDark ? '#ef4444' : '#dc2626'),
+        light: isSunlit ? '#f87171' : (isDark ? '#f87171' : '#ef4444'),
+        dark: isSunlit ? '#dc2626' : (isDark ? '#dc2626' : '#b91c1c'),
       },
       warning: {
         main: isSunlit ? '#f59e0b' : '#d97706',
@@ -319,11 +324,15 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           contained: {
             background: isSunlit
               ? `linear-gradient(135deg, ${sunlitPrimary} 0%, ${sunlitPrimaryDark} 100%)`
-              : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+              : (isDark
+                ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)'),
             '&:hover': {
               background: isSunlit
                 ? `linear-gradient(135deg, ${sunlitPrimaryDark} 0%, #0369a1 100%)`
-                : 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
+                : (isDark
+                  ? 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)'
+                  : 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)'),
             },
           },
           outlined: {
@@ -354,7 +363,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
               borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? darkInputBorderHover : '#9ca3af'),
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? sunlitPrimary : '#2563eb',
+              borderColor: isSunlit ? sunlitPrimary : (isDark ? '#60a5fa' : '#2563eb'),
               borderWidth: 1.5,
             },
             '&.Mui-disabled': {
@@ -564,7 +573,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           indicator: {
             height: 4,
             borderRadius: 2,
-            backgroundColor: isSunlit ? sunlitPrimary : '#2563eb',
+            backgroundColor: isSunlit ? sunlitPrimary : (isDark ? '#60a5fa' : '#2563eb'),
           },
         },
       },
