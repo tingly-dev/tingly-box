@@ -1,22 +1,18 @@
-import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack, Link } from '@mui/material';
+import { Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack, Link } from '@mui/material';
 import React from 'react';
-import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
 interface VSCodeConfigModalProps {
     open: boolean;
     onClose: () => void;
-    baseUrl: string;
-    copyToClipboard: (text: string, label: string) => Promise<void>;
 }
+
+const MARKETPLACE_URL = 'https://marketplace.visualstudio.com/items?itemName=Tingly-Dev.vscode-tingly-box';
+const VSCODE_INSTALL_URL = 'vscode:extension/Tingly-Dev.vscode-tingly-box';
 
 const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
     open,
     onClose,
-    baseUrl,
-    copyToClipboard,
 }) => {
-    // Get token from context
-    const { token } = useScenarioPageModal();
     return (
         <Dialog
             open={open}
@@ -37,69 +33,31 @@ const VSCodeConfigModal: React.FC<VSCodeConfigModalProps> = ({
 
             <DialogContent sx={{ pt: 1 }}>
                 <Stack spacing={2}>
-                    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                            <strong>1.</strong> Install the <strong>Tingly Box</strong> extension for VS Code
-                        </Typography>
-                        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
-                            <strong>2.</strong> Open <strong>Settings</strong> → search for <strong>Tingly Box</strong>
-                        </Typography>
-                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                            <strong>3.</strong> Configure:
-                        </Typography>
-                        <Box sx={{ pl: 2, mb: 0.5 }}>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
-                                Base URL: <strong>{baseUrl}/tingly/vscode</strong>
-                            </Typography>
-                            <Typography variant="subtitle2" sx={{ fontFamily: 'monospace' }}>
-                                API Key: <strong>{token.slice(0, 16)}...</strong>
-                            </Typography>
-                        </Box>
-                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                        Install the Tingly Box extension, then follow the setup guide inside VS Code.
+                        The extension handles the required endpoint and API key configuration for you.
+                    </Typography>
 
-                    <Stack direction="row" spacing={1}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                         <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(`${baseUrl}/tingly/vscode`, 'Base URL')}
+                            component={Link}
+                            href={VSCODE_INSTALL_URL}
+                            variant="contained"
                             sx={{ flex: 1 }}
                         >
-                            Copy Base URL
+                            Install in VS Code
                         </Button>
                         <Button
+                            component={Link}
+                            href={MARKETPLACE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             variant="outlined"
-                            size="small"
-                            onClick={() => copyToClipboard(token, 'API Key')}
                             sx={{ flex: 1 }}
                         >
-                            Copy API Key
+                            View Marketplace
                         </Button>
                     </Stack>
-
-                    <Box sx={{ bgcolor: 'info.main', p: 2, borderRadius: 1 }}>
-                        <Typography variant="subtitle2" sx={{ color: 'info.contrastText', fontWeight: 600 }}>
-                            Get the Extension
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: 'info.contrastText', mt: 1 }}>
-                            Install the Tingly Box extension from the VS Code Marketplace.
-                        </Typography>
-                        <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                            <Link
-                                href="https://marketplace.visualstudio.com/items?itemName=Tingly-Dev.vscode-tingly-box"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                sx={{ color: 'white', textDecoration: 'underline' }}
-                            >
-                                View on Marketplace
-                            </Link>
-                            <Link
-                                href="vscode:extension/Tingly-Dev.vscode-tingly-box"
-                                sx={{ color: 'white', textDecoration: 'underline' }}
-                            >
-                                Install directly
-                            </Link>
-                        </Stack>
-                    </Box>
                 </Stack>
             </DialogContent>
 
