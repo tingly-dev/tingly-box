@@ -22,13 +22,23 @@ type EndpointSelection struct {
 	Reason string
 }
 
-func (s *Server) SelectOpenAIEndpoint(ctx context.Context, provider *typ.Provider, modelID string, incoming IncomingAPIType, isStreaming bool, responsesReq *protocol.ResponseCreateRequest) (*EndpointSelection, error) {
+func (s *Server) SelectOpenAIEndpoint(ctx context.Context, provider *typ.Provider, modelID string, incoming IncomingAPIType, isStreaming bool, responsesReq *protocol.ResponseCreateRequest, override EndpointOverride) (*EndpointSelection, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("provider is required for endpoint selection")
 	}
 
 	if isCodexProvider(provider) {
+		if override == OverrideChat {
+			logCodexChatOverrideIgnored(provider)
+		}
 		return &EndpointSelection{Target: protocol.TypeOpenAIResponses, Reason: "Codex provider supports Responses API only"}, nil
+	}
+
+	switch override {
+	case OverrideChat:
+		return &EndpointSelection{Target: protocol.TypeOpenAIChat, Reason: "rule override: openai_endpoint_override=chat"}, nil
+	case OverrideResponses:
+		return &EndpointSelection{Target: protocol.TypeOpenAIResponses, Reason: "rule override: openai_endpoint_override=responses"}, nil
 	}
 
 	capability, err := NewAdaptiveProbe(s).GetModelCapability(provider.UUID, modelID)

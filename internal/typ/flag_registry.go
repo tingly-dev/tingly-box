@@ -6,6 +6,7 @@ type FlagValueType string
 const (
 	FlagTypeBool   FlagValueType = "bool"
 	FlagTypeString FlagValueType = "string"
+	FlagTypeEnum   FlagValueType = "enum"
 )
 
 // FlagCategory groups flags for presentation in the UI.
@@ -17,16 +18,25 @@ const (
 	FlagCategoryResponse      FlagCategory = "response"
 )
 
+// FlagOption is one selectable value for a FlagTypeEnum spec.
+type FlagOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
 // FlagSpec describes a single rule-level flag's metadata for the UI catalog.
 // Keys must match the JSON tag name on RuleFlags.
 type FlagSpec struct {
-	Key         string       `json:"key"`
-	Label       string       `json:"label"`
-	Description string       `json:"description"`
+	Key         string        `json:"key"`
+	Label       string        `json:"label"`
+	Description string        `json:"description"`
 	Type        FlagValueType `json:"type"`
-	Category    FlagCategory `json:"category"`
+	Category    FlagCategory  `json:"category"`
 	// Placeholder is the hint text shown in string-type input fields.
 	Placeholder string `json:"placeholder,omitempty"`
+	// Options enumerates the selectable values for FlagTypeEnum flags.
+	// The first option is treated as the default when the stored value is empty.
+	Options []FlagOption `json:"options,omitempty"`
 }
 
 // RuleFlagRegistry returns the catalog of supported rule flags. The order is
@@ -75,6 +85,18 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeString,
 			Category:    FlagCategoryRequest,
 			Placeholder: "e.g. MyApp/1.0",
+		},
+		{
+			Key:         "openai_endpoint_override",
+			Label:       "OpenAI endpoint override",
+			Description: "Force OpenAI Chat Completions or Responses regardless of the adaptive router's probe-based decision. OpenAI providers only; Anthropic/Google providers ignore this. On Codex OAuth providers, \"chat\" is ignored (Codex has no Chat endpoint).",
+			Type:        FlagTypeEnum,
+			Category:    FlagCategoryRequest,
+			Options: []FlagOption{
+				{Value: "auto", Label: "Auto (adaptive)"},
+				{Value: "chat", Label: "Force Chat Completions"},
+				{Value: "responses", Label: "Force Responses API"},
+			},
 		},
 	}
 }

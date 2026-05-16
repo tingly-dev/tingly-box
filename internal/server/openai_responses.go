@@ -202,7 +202,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	case protocol.APIStyleOpenAI:
-		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, &req)
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, &req, ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride))
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{

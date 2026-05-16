@@ -121,6 +121,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         custom_user_agent: newConfigRecord.flags?.customUserAgent || '',
                         use_max_completion_tokens: newConfigRecord.flags?.useMaxCompletionTokens || false,
                         use_max_tokens: newConfigRecord.flags?.useMaxTokens || false,
+                        openai_endpoint_override: newConfigRecord.flags?.openaiEndpointOverride || '',
                     },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)

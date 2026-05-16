@@ -69,7 +69,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, nil)
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, nil, ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride))
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{

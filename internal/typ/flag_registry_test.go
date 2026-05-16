@@ -69,6 +69,7 @@ func TestRuleFlagRegistry_TypesAreValid(t *testing.T) {
 	allowed := map[FlagValueType]bool{
 		FlagTypeBool:   true,
 		FlagTypeString: true,
+		FlagTypeEnum:   true,
 	}
 	for _, spec := range RuleFlagRegistry() {
 		if !allowed[spec.Type] {
@@ -79,6 +80,32 @@ func TestRuleFlagRegistry_TypesAreValid(t *testing.T) {
 		}
 		if spec.Description == "" {
 			t.Errorf("flag %q has empty description", spec.Key)
+		}
+	}
+}
+
+// TestRuleFlagRegistry_EnumOptions asserts that every FlagTypeEnum spec
+// declares at least two options with non-empty Value and Label.
+func TestRuleFlagRegistry_EnumOptions(t *testing.T) {
+	for _, spec := range RuleFlagRegistry() {
+		if spec.Type != FlagTypeEnum {
+			continue
+		}
+		if len(spec.Options) < 2 {
+			t.Errorf("enum flag %q has %d options, expected at least 2", spec.Key, len(spec.Options))
+		}
+		seen := map[string]bool{}
+		for i, opt := range spec.Options {
+			if opt.Value == "" {
+				t.Errorf("enum flag %q option %d has empty Value", spec.Key, i)
+			}
+			if opt.Label == "" {
+				t.Errorf("enum flag %q option %d has empty Label", spec.Key, i)
+			}
+			if seen[opt.Value] {
+				t.Errorf("enum flag %q has duplicate option Value %q", spec.Key, opt.Value)
+			}
+			seen[opt.Value] = true
 		}
 	}
 }
