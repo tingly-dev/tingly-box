@@ -722,8 +722,12 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.mcpRuntime = mcpruntime.NewRuntime(cfg.GetMCPRuntimeConfig)
 	server.mcpRuntime.SetClientPool(server.clientPool)
 	// Auto-register built-in tools (e.g., webtools) if not already present
-	if err := mcpruntime.RegisterBuiltinTools(cfg.GetMCPRuntimeConfig, cfg.SetToolConfig); err != nil {
-		logrus.WithError(err).Warn("mcp: failed to register builtin tools")
+	// Only register when MCP is enabled to avoid unnecessary config pollution
+	// and environment variable warnings for disabled features.
+	if server.mcpEnabled() {
+		if err := mcpruntime.RegisterBuiltinTools(cfg.GetMCPRuntimeConfig, cfg.SetToolConfig); err != nil {
+			logrus.WithError(err).Warn("mcp: failed to register builtin tools")
+		}
 	}
 
 	// Register adviser as virtual tool if configured

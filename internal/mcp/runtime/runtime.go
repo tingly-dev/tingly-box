@@ -36,6 +36,10 @@ type Runtime struct {
 	enabledNamesCache   map[string]struct{}
 	enabledNamesExpires time.Time
 	enabledNamesMu      sync.RWMutex
+
+	// envRefWarnedOnce ensures unresolved environment reference warnings
+	// are only logged once per runtime instance to avoid log spam.
+	envRefWarnedOnce sync.Once
 }
 
 // NewRuntime creates a new MCP runtime.
@@ -535,13 +539,19 @@ func (r *Runtime) getConfigOrDefault() *typ.MCPRuntimeConfig {
 	}
 
 	typ.ApplyMCPRuntimeDefaults(&clone)
-	missing := ExpandMCPRuntimeEnvRefs(&clone)
-	for _, issue := range missing {
-		logrus.WithFields(logrus.Fields{
-			"source": issue.SourceID,
-			"field":  issue.FieldPath,
-			"var":    issue.VarName,
-		}).Warn("mcp: unresolved environment reference in runtime config")
+	// Only validate env refs for enabled sources; skip in-process transports
+	// (advisor) which don't spawn subprocesses and don't consume env maps.
+	missing := ValidateEnabledMCPSourceEnvRefs(clone.Sources)
+	if len(missing) > 0 {
+		r.envRefWarnedOnce.Do(func() {
+			for _, issue := range missing {
+				logrus.WithFields(logrus.Fields{
+					"source": issue.SourceID,
+					"field":  issue.FieldPath,
+					"var":    issue.VarName,
+				}).Warn("mcp: unresolved environment reference in runtime config")
+			}
+		})
 	}
 	return &clone
 }
