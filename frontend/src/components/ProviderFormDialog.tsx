@@ -1,4 +1,4 @@
-import {Close, Edit, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
+import {Check, Close, Edit, InfoOutlined, Visibility, VisibilityOff} from '@mui/icons-material';
 import {
     Alert,
     Autocomplete,
@@ -1093,53 +1093,102 @@ const ProviderFormDialog = ({
                         )}
 
                         {verificationResult && (
-                            <Alert
-                                severity={verificationResult.success ? 'success' : 'warning'}
-                                sx={{mt: 1}}
-                                action={
+                            <Box
+                                sx={{
+                                    mt: 1,
+                                    p: 1.5,
+                                    borderRadius: 1.5,
+                                    bgcolor: 'background.default',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                }}
+                            >
+                                <Box sx={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1}}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Connection Test (for reference)
+                                    </Typography>
                                     <IconButton
                                         aria-label="close"
-                                        color="inherit"
                                         size="small"
                                         onClick={() => setVerificationResult(null)}
+                                        sx={{ml: -0.5}}
                                     >
-                                        ×
+                                        <Close fontSize="small"/>
                                     </IconButton>
-                                }
-                            >
-                                <Box>
-                                    <Typography variant="body2" fontWeight="bold">
-                                        {verificationResult.message}
-                                    </Typography>
-                                    {verificationResult.details && (
-                                        <Typography variant="caption" display="block">
-                                            {verificationResult.details}
-                                        </Typography>
-                                    )}
-                                    {!verificationResult.success && (
-                                        <Typography
-                                            variant="body2"
-                                            display="block"
-                                            sx={{mt: 1, color: 'text.secondary'}}
-                                        >
-                                            {t('providerDialog.verification.failureHint')}
-                                        </Typography>
-                                    )}
-                                    {verificationResult.responseTime && (
-                                        <Typography variant="caption" display="block">
-                                            {t('providerDialog.verification.responseTime', {
-                                                time: verificationResult.responseTime,
-                                            })}
-                                            {verificationResult.modelsCount &&
-                                                ` • ${t('providerDialog.verification.modelsAvailable', {
-                                                    count: verificationResult.modelsCount,
-                                                })}`}
-                                        </Typography>
-                                    )}
                                 </Box>
-                            </Alert>
+
+                                <Stack spacing={0.75}>
+                                    {verificationResult.details.split(' • ').map((detail, index) => {
+                                        const isSuccess = detail.includes('✓');
+                                        const label = detail.replace(/^[✓✗]\s*/, '');
+
+                                        return (
+                                            <Stack key={index} direction="row" spacing={1} alignItems="center" sx={{minHeight: 24}}>
+                                                {isSuccess ? (
+                                                    <Box
+                                                        sx={{
+                                                            width: 18,
+                                                            height: 18,
+                                                            borderRadius: '50%',
+                                                            bgcolor: 'success.main',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        <Check
+                                                            fontSize="small"
+                                                            sx={{
+                                                                color: 'common.white',
+                                                                fontSize: '12px',
+                                                                fontWeight: 'bold',
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                ) : (
+                                                    <Box
+                                                        sx={{
+                                                            width: 18,
+                                                            height: 18,
+                                                            borderRadius: '50%',
+                                                            bgcolor: 'warning.main',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        <Typography
+                                                            variant="caption"
+                                                            sx={{
+                                                                color: 'common.white',
+                                                                fontSize: '12px',
+                                                                fontWeight: 'bold',
+                                                            }}
+                                                        >
+                                                            !
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                <Typography variant="body2" sx={{fontSize: '0.8rem', flex: 1}}>
+                                                    {label}
+                                                </Typography>
+                                            </Stack>
+                                        );
+                                    })}
+                                </Stack>
+
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{display: 'block', mt: 1.5, pt: 1, borderTop: '1px solid', borderColor: 'divider'}}
+                                >
+                                    Test results are for reference only - you can add the key even if some tests fail
+                                </Typography>
+                            </Box>
                         )}
-                    </Stack>
+                        </Stack>
                 </DialogContent>
                 <DialogActions sx={{px: 3, pb: 2, gap: 1, justifyContent: 'flex-end'}}>
                     <Button
@@ -1148,7 +1197,7 @@ const ProviderFormDialog = ({
                         size="small"
                         disabled={!hasAnyProtocol || verifying}
                         onClick={handleVerify}
-                        title="Test connection using OPTIONS and models endpoint (optional check)"
+                        title="Test connection using available endpoints (optional check)"
                     >
                         {verifying ? (
                             <CircularProgress size={16} thickness={4}/>
@@ -1156,28 +1205,6 @@ const ProviderFormDialog = ({
                             'Test Connection'
                         )}
                     </Button>
-                    {onForceAdd && (
-                        <Button
-                            type="button"
-                            variant="outlined"
-                            color="warning"
-                            size="small"
-                            disabled={!hasAnyProtocol || verifying}
-                            onClick={async () => {
-                                // Make sure any free-form text in the provider input is committed
-                                if (!selectedProvider && data.apiBase !== providerInputValue) {
-                                    onChangeRef.current('apiBase', providerInputValue);
-                                    onChangeRef.current('providerBaseUrls', undefined);
-                                }
-                                ensureName();
-                                onClose();
-                                await onForceAdd?.();
-                            }}
-                            title="Save without any validation"
-                        >
-                            {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
-                        </Button>
-                    )}
                     <Button
                         type="submit"
                         variant="contained"
