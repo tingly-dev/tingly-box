@@ -69,10 +69,10 @@ const DARK_DASHBOARD_COLORS = {
     },
   },
   chart: {
-    grid: 'rgba(255, 255, 255, 0.08)',
-    axis: 'rgba(255, 255, 255, 0.2)',
-    tooltipBg: '#1e293b',
-    tooltipBorder: '#334155',
+    grid: 'rgba(255, 255, 255, 0.06)',
+    axis: 'rgba(255, 255, 255, 0.18)',
+    tooltipBg: '#181c26',
+    tooltipBorder: 'rgba(255, 255, 255, 0.12)',
   },
   statCard: {
     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
@@ -111,11 +111,16 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
   const isDark = mode === 'dark';
   const isSunlit = mode === 'sunlit';
 
-  // Use sunlit palette for sunlit theme, otherwise use standard palette
+  // Primary blue: dark mode shifts one notch up (blue-500 instead of
+  // blue-600) so text-variant Buttons reach WCAG AA against Paper while
+  // staying visually aligned with the contained-Button gradient
+  // (#3b82f6 → #2563eb) — i.e. selected ToggleButton, Tabs indicator,
+  // and nav-active surfaces sit on the same blue ramp instead of a
+  // paler off-shade.
   const primaryColor = isSunlit ? SUNLIT_PALETTE.primary : {
-    main: '#2563eb',
-    light: '#3b82f6',
-    dark: '#1d4ed8',
+    main: isDark ? '#3b82f6' : '#2563eb',
+    light: isDark ? '#60a5fa' : '#3b82f6',
+    dark: isDark ? '#2563eb' : '#1d4ed8',
     contrastText: '#ffffff',
   };
 
@@ -126,17 +131,37 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
     contrastText: '#ffffff',
   };
 
+  // Dark-mode surface ladder — aligned with MUI's official dark theme
+  // (~7% / 12% lightness) but keeps a subtle slate hue instead of pure neutral
+  // gray. The previous slate-900/800 pair sat at ~11% / 17% lightness, which
+  // is why it read as "dim gray-blue" rather than truly dark.
+  //   default  #07090f  ~3.5% L  — app background (true near-black)
+  //   paper    #11141c  ~10%  L  — cards, dialogs, dense surfaces
+  //   raised   #181c26  ~13%  L  — menus, drawers, popovers (one step up)
+  const darkBgDefault = '#07090f';
+  const darkBgPaper = '#11141c';
+  const darkBgRaised = '#181c26';
+
   const backgroundColor = isSunlit ? SUNLIT_PALETTE.background : {
-    default: isDark ? '#0f172a' : '#f8fafc',
-    paper: isDark ? '#1e293b' : '#ffffff',
+    default: isDark ? darkBgDefault : '#f8fafc',
+    paper: isDark ? darkBgPaper : '#ffffff',
   };
 
   // Text colors - clear and fresh for sky blue theme
-  const textPrimary = isSunlit ? '#0f172a' : (isDark ? '#f8fafc' : '#1e293b');
-  const textSecondary = isSunlit ? '#475569' : (isDark ? '#cbd5e1' : '#64748b');
-  const textDisabled = isSunlit ? '#94a3b8' : (isDark ? '#94a3b8' : '#94a3b8');
+  const textPrimary = isSunlit ? '#0f172a' : (isDark ? '#f3f5f9' : '#1e293b');
+  const textSecondary = isSunlit ? '#475569' : (isDark ? 'rgba(255, 255, 255, 0.72)' : '#64748b');
+  const textDisabled = isSunlit ? '#94a3b8' : (isDark ? 'rgba(255, 255, 255, 0.42)' : '#94a3b8');
 
-  const dividerColor = isSunlit ? 'rgba(14, 165, 233, 0.12)' : (isDark ? '#334155' : '#e2e8f0');
+  const dividerColor = isSunlit
+    ? 'rgba(14, 165, 233, 0.12)'
+    : (isDark ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0');
+
+  // Dark-mode input surface tokens — sit one elevation step above Paper so
+  // fields are recognizable without relying on the border alone.
+  const darkInputBg = 'rgba(255, 255, 255, 0.05)';
+  const darkInputBgHover = 'rgba(255, 255, 255, 0.08)';
+  const darkInputBorder = 'rgba(255, 255, 255, 0.18)';
+  const darkInputBorderHover = 'rgba(255, 255, 255, 0.32)';
 
   // Dashboard-specific colors
   const dashboardColors = isSunlit
@@ -159,9 +184,12 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         dark: isSunlit ? '#16a34a' : '#047857',
       },
       error: {
-        main: isSunlit ? '#ef4444' : '#dc2626',
-        light: isSunlit ? '#f87171' : '#ef4444',
-        dark: isSunlit ? '#dc2626' : '#b91c1c',
+        // Dark mode: #dc2626 only reaches ~3.8:1 on Paper #11141c. Use the
+        // lighter shade (#ef4444 → ~4.9:1) so Delete buttons in dialogs and
+        // error helper text meet WCAG AA.
+        main: isSunlit ? '#ef4444' : (isDark ? '#ef4444' : '#dc2626'),
+        light: isSunlit ? '#f87171' : (isDark ? '#f87171' : '#ef4444'),
+        dark: isSunlit ? '#dc2626' : (isDark ? '#dc2626' : '#b91c1c'),
       },
       warning: {
         main: isSunlit ? '#f59e0b' : '#d97706',
@@ -179,9 +207,10 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
       },
       divider: dividerColor,
       action: {
-        hover: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? '#1e293b' : '#f1f5f9'),
-        selected: isSunlit ? 'rgba(14, 165, 233, 0.15)' : (isDark ? '#1e3a8a' : '#e0e7ff'),
-        disabled: isSunlit ? 'rgba(14, 165, 233, 0.04)' : (isDark ? '#1e293b' : '#f1f5f9'),
+        hover: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9'),
+        selected: isSunlit ? 'rgba(14, 165, 233, 0.15)' : (isDark ? 'rgba(59, 130, 246, 0.28)' : '#e0e7ff'),
+        disabled: isSunlit ? 'rgba(14, 165, 233, 0.04)' : (isDark ? 'rgba(255, 255, 255, 0.05)' : '#f1f5f9'),
+        focus: isSunlit ? 'rgba(14, 165, 233, 0.12)' : (isDark ? 'rgba(255, 255, 255, 0.12)' : '#e0e7ff'),
       },
       // Dashboard colors palette - custom extension
       // @ts-ignore - custom dashboard colors
@@ -246,15 +275,16 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
             boxShadow: isSunlit
               ? '0 2px 16px rgba(14, 165, 233, 0.12), 0 1px 6px rgba(0, 0, 0, 0.04)'
               : (isDark
-                ? '0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2)'
+                ? '0 1px 2px 0 rgba(0, 0, 0, 0.6), 0 4px 12px 0 rgba(0, 0, 0, 0.3)'
                 : '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'),
             borderRadius: 12,
             border: isSunlit
               ? '1px solid rgba(14, 165, 233, 0.15)'
-              : (isDark ? '1px solid #334155' : '1px solid #e2e8f0'),
+              : (isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0'),
             backgroundColor: isSunlit
               ? 'rgba(255, 255, 255, 0.82)'
-              : (isDark ? '#1e293b' : '#ffffff'),
+              : (isDark ? darkBgPaper : '#ffffff'),
+            backgroundImage: 'none',
             backdropFilter: isSunlit ? 'blur(12px)' : 'none',
           },
         },
@@ -297,55 +327,156 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           contained: {
             background: isSunlit
               ? `linear-gradient(135deg, ${sunlitPrimary} 0%, ${sunlitPrimaryDark} 100%)`
-              : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+              : (isDark
+                ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)'),
             '&:hover': {
               background: isSunlit
                 ? `linear-gradient(135deg, ${sunlitPrimaryDark} 0%, #0369a1 100%)`
-                : 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)',
+                : (isDark
+                  ? 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)'
+                  : 'linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)'),
             },
           },
           outlined: {
-            borderColor: isSunlit ? 'rgba(14, 165, 233, 0.3)' : (isDark ? '#475569' : '#d1d5db'),
-            color: isSunlit ? '#0369a1' : (isDark ? '#cbd5e1' : '#374151'),
+            borderColor: isSunlit ? 'rgba(14, 165, 233, 0.3)' : (isDark ? 'rgba(255, 255, 255, 0.23)' : '#d1d5db'),
+            color: isSunlit ? '#0369a1' : (isDark ? '#e2e8f0' : '#374151'),
             '&:hover': {
-              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.5)' : (isDark ? '#64748b' : '#9ca3af'),
-              backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? '#334155' : '#f9fafb'),
+              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.5)' : (isDark ? 'rgba(255, 255, 255, 0.4)' : '#9ca3af'),
+              backgroundColor: isSunlit ? 'rgba(14, 165, 233, 0.08)' : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f9fafb'),
             },
           },
         },
       },
-      MuiTextField: {
+      MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 6,
-              backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.6)' : 'transparent',
-              '& fieldset': {
-                borderColor: isSunlit ? 'rgba(14, 165, 233, 0.25)' : (isDark ? '#475569' : '#d1d5db'),
+            borderRadius: 6,
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.6)'
+              : (isDark ? darkInputBg : 'transparent'),
+            transition: 'background-color 120ms ease, border-color 120ms ease',
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.25)' : (isDark ? darkInputBorder : '#d1d5db'),
+            },
+            '&:hover': {
+              backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.72)' : (isDark ? darkInputBgHover : 'transparent'),
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? darkInputBorderHover : '#9ca3af'),
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? sunlitPrimary : (isDark ? '#3b82f6' : '#2563eb'),
+              borderWidth: 1.5,
+            },
+            '&.Mui-disabled': {
+              backgroundColor: isSunlit
+                ? 'rgba(255, 255, 255, 0.4)'
+                : (isDark ? 'rgba(255, 255, 255, 0.02)' : 'transparent'),
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: isSunlit ? 'rgba(14, 165, 233, 0.12)' : (isDark ? 'rgba(148, 163, 184, 0.18)' : '#e5e7eb'),
               },
-              '&:hover fieldset': {
-                borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? '#64748b' : '#9ca3af'),
-              },
-              '&.Mui-focused fieldset': {
-                borderColor: isSunlit ? sunlitPrimary : '#2563eb',
-                borderWidth: 1.5,
-              },
+            },
+            '&.Mui-error .MuiOutlinedInput-notchedOutline': {
+              borderColor: isSunlit ? '#ef4444' : (isDark ? '#f87171' : '#dc2626'),
+            },
+          },
+          input: {
+            '&::placeholder': {
+              color: isSunlit ? '#64748b' : (isDark ? '#94a3b8' : '#94a3b8'),
+              opacity: 1,
+            },
+          },
+        },
+      },
+      MuiFilledInput: {
+        styleOverrides: {
+          root: {
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.6)'
+              : (isDark ? darkInputBg : 'rgba(0, 0, 0, 0.04)'),
+            '&:hover': {
+              backgroundColor: isSunlit
+                ? 'rgba(255, 255, 255, 0.72)'
+                : (isDark ? darkInputBgHover : 'rgba(0, 0, 0, 0.06)'),
+            },
+            '&.Mui-focused': {
+              backgroundColor: isSunlit
+                ? 'rgba(255, 255, 255, 0.82)'
+                : (isDark ? darkInputBgHover : 'rgba(0, 0, 0, 0.06)'),
+            },
+          },
+        },
+      },
+      MuiInputBase: {
+        styleOverrides: {
+          input: {
+            color: textPrimary,
+            '&::placeholder': {
+              color: isSunlit ? '#64748b' : (isDark ? '#94a3b8' : '#94a3b8'),
+              opacity: 1,
+            },
+          },
+        },
+      },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            color: isSunlit ? '#475569' : (isDark ? '#cbd5e1' : '#64748b'),
+            '&.Mui-focused': {
+              color: isSunlit ? sunlitPrimary : (isDark ? '#3b82f6' : '#2563eb'),
+            },
+          },
+        },
+      },
+      MuiFormHelperText: {
+        styleOverrides: {
+          root: {
+            color: isSunlit ? '#64748b' : (isDark ? '#94a3b8' : '#6b7280'),
+            '&.Mui-error': {
+              color: isSunlit ? '#ef4444' : (isDark ? '#f87171' : '#dc2626'),
             },
           },
         },
       },
       MuiSelect: {
         styleOverrides: {
+          icon: {
+            color: isSunlit ? '#475569' : (isDark ? '#cbd5e1' : '#64748b'),
+          },
+        },
+      },
+      MuiMenu: {
+        styleOverrides: {
+          paper: {
+            backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.96)' : (isDark ? darkBgRaised : '#ffffff'),
+            backgroundImage: 'none',
+            border: isSunlit
+              ? '1px solid rgba(14, 165, 233, 0.15)'
+              : (isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0'),
+            boxShadow: isDark
+              ? '0 10px 32px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5)'
+              : '0 10px 24px rgba(15, 23, 42, 0.08)',
+          },
+        },
+      },
+      MuiMenuItem: {
+        styleOverrides: {
           root: {
-            '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.25)' : (isDark ? '#475569' : '#d1d5db'),
+            '&:hover': {
+              backgroundColor: isSunlit
+                ? 'rgba(14, 165, 233, 0.08)'
+                : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9'),
             },
-            '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? 'rgba(14, 165, 233, 0.4)' : (isDark ? '#64748b' : '#9ca3af'),
-            },
-            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: isSunlit ? sunlitPrimary : '#2563eb',
-              borderWidth: 1.5,
+            '&.Mui-selected': {
+              backgroundColor: isSunlit
+                ? 'rgba(14, 165, 233, 0.16)'
+                : (isDark ? 'rgba(59, 130, 246, 0.24)' : '#e0e7ff'),
+              '&:hover': {
+                backgroundColor: isSunlit
+                  ? 'rgba(14, 165, 233, 0.22)'
+                  : (isDark ? 'rgba(59, 130, 246, 0.32)' : '#c7d2fe'),
+              },
             },
           },
         },
@@ -369,11 +500,74 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            borderRight: isSunlit ? '1px solid rgba(14, 165, 233, 0.15)' : (isDark ? '1px solid #334155' : '1px solid #e2e8f0'),
-            backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.72)' : undefined,
-            // Use lighter blur for better performance
+            borderRight: isSunlit
+              ? '1px solid rgba(14, 165, 233, 0.15)'
+              : (isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0'),
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.72)'
+              : (isDark ? darkBgPaper : undefined),
+            backgroundImage: 'none',
             backdropFilter: isSunlit ? 'blur(8px)' : 'none',
             willChange: 'auto',
+          },
+        },
+      },
+      MuiAppBar: {
+        styleOverrides: {
+          root: {
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.72)'
+              : (isDark ? darkBgPaper : '#ffffff'),
+            backgroundImage: 'none',
+            color: textPrimary,
+            borderBottom: isSunlit
+              ? '1px solid rgba(14, 165, 233, 0.15)'
+              : (isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0'),
+            boxShadow: 'none',
+          },
+        },
+      },
+      MuiDialog: {
+        styleOverrides: {
+          paper: {
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.92)'
+              : (isDark ? darkBgRaised : '#ffffff'),
+            backgroundImage: 'none',
+            border: isDark && !isSunlit ? '1px solid rgba(255, 255, 255, 0.08)' : undefined,
+          },
+        },
+      },
+      MuiPopover: {
+        styleOverrides: {
+          paper: {
+            backgroundColor: isSunlit
+              ? 'rgba(255, 255, 255, 0.96)'
+              : (isDark ? darkBgRaised : '#ffffff'),
+            backgroundImage: 'none',
+            border: isDark && !isSunlit ? '1px solid rgba(255, 255, 255, 0.1)' : undefined,
+          },
+        },
+      },
+      MuiTooltip: {
+        styleOverrides: {
+          tooltip: {
+            backgroundColor: isDark ? 'rgba(40, 44, 56, 0.96)' : 'rgba(15, 23, 42, 0.92)',
+            color: '#f8fafc',
+            fontSize: '0.75rem',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
+          },
+          arrow: {
+            color: isDark ? 'rgba(40, 44, 56, 0.96)' : 'rgba(15, 23, 42, 0.92)',
+          },
+        },
+      },
+      MuiDivider: {
+        styleOverrides: {
+          root: {
+            borderColor: isSunlit
+              ? 'rgba(14, 165, 233, 0.12)'
+              : (isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'),
           },
         },
       },
@@ -382,7 +576,7 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
           indicator: {
             height: 4,
             borderRadius: 2,
-            backgroundColor: isSunlit ? sunlitPrimary : '#2563eb',
+            backgroundColor: isSunlit ? sunlitPrimary : (isDark ? '#3b82f6' : '#2563eb'),
           },
         },
       },
@@ -390,7 +584,10 @@ const getThemeOptions = (mode: 'light' | 'dark' | 'sunlit'): ThemeOptions => {
         styleOverrides: {
           root: {
             backgroundColor: isSunlit ? 'rgba(255, 255, 255, 0.65)' : undefined,
-            // Use lighter blur for better performance
+            // MUI auto-lightens Paper at higher elevations via a white overlay
+            // gradient. Disable it so our explicit dark surface ladder stays
+            // consistent — elevation reads as shadow, not as a brighter fill.
+            backgroundImage: isDark ? 'none' : undefined,
             backdropFilter: isSunlit ? 'blur(8px)' : 'none',
             willChange: 'auto',
           },

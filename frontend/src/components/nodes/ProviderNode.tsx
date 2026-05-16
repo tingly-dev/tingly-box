@@ -114,9 +114,15 @@ const PriorityBadgeDisk = styled(Box, {
                   : {},
           }
         : {
+              // Slightly lifted surface + 1.5px text.disabled border so the
+              // disk stays legible against both the node card (light) and the
+              // dark Paper surface where a thin `divider` collapses into
+              // invisibility. Without this lift the no-priority badge merges
+              // into the node card in dark mode.
+              border: '1.5px solid',
               backgroundColor: theme.palette.background.paper,
               color: theme.palette.text.secondary,
-              borderColor: theme.palette.divider,
+              borderColor: theme.palette.text.disabled,
               '&:hover': active
                   ? {
                         borderColor: theme.palette.primary.main,

@@ -321,7 +321,6 @@ EOF`;
                                     variant="contained"
                                     onClick={() => setSessionAction('undo')}
                                     disabled={isSubmitting}
-                                    sx={{ color: 'common.white' }}
                                 >
                                     Undo Import
                                 </Button>
@@ -457,7 +456,6 @@ EOF`;
                         variant="contained"
                         disabled={isSubmitting || !sessionAction}
                         startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
-                        sx={{ color: 'common.white' }}
                     >
                         {isSubmitting
                             ? 'Processing...'

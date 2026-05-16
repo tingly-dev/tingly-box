@@ -1123,12 +1123,6 @@ const ProviderFormDialog = ({
                             await onForceAdd?.();
                         }}
                         title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
-                        sx={{
-                            '&.Mui-disabled': {
-                                color: 'text.disabled',
-                                borderColor: 'action.disabledBackground',
-                            },
-                        }}
                     >
                         {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
                     </Button>

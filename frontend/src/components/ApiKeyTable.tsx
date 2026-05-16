@@ -331,11 +331,9 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, pr
                                         onClick={() => handleModelListClick(provider.uuid)}
                                         disabled={!provider.enabled}
                                         sx={{
-                                            textTransform: 'none',
                                             fontSize: '0.75rem',
                                             minWidth: 'auto',
                                             px: 1,
-                                            color: 'text.primary',
                                         }}
                                     >
                                         Models
