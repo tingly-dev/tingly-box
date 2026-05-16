@@ -202,7 +202,13 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	case protocol.APIStyleOpenAI:
-		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, IncomingAPIResponses, isStreaming, &req, ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride))
+		canDowngrade, _ := CanDowngradeResponsesToChat(req)
+		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, OpenAIEndpointOptions{
+			Incoming:         IncomingAPIResponses,
+			IsStreaming:      isStreaming,
+			Override:         ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride),
+			RequireResponses: !canDowngrade,
+		})
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
