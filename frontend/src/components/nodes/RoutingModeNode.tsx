@@ -69,7 +69,7 @@ const RoutingModeNode: React.FC<RoutingModeNodeProps> = ({
                         },
                     }}
                 >
-                    <NodeTooltip title="Direct routing - send directly to agent" placement="top-start">
+                    <NodeTooltip title="Direct routing - send directly to agent" placement="bottom-start">
                         <ToggleButton
                             value="direct"
                             sx={{
@@ -89,7 +89,7 @@ const RoutingModeNode: React.FC<RoutingModeNodeProps> = ({
                             Direct
                         </ToggleButton>
                     </NodeTooltip>
-                    <NodeTooltip title="Smart guide - route through guide agent" placement="top-end">
+                    <NodeTooltip title="Smart guide - route through guide agent" placement="bottom-end">
                         <ToggleButton
                             value="smart_guide"
                             sx={{

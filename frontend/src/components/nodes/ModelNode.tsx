@@ -190,7 +190,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                         }}
                     >
                         {isWildcard ? (
-                            <NodeTooltip title="Matches any model (wildcard)" placement="bottom">
+                            <NodeTooltip title="Matches any model (wildcard)" placement="top">
                                 <Chip
                                     label={
                                         <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
@@ -223,7 +223,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                 {/* Bottom Layer - Smart Switch */}
                 {showSmartSwitch && !editMode && (
                     <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                        <NodeTooltip title="Direct routing mode" placement="top-start">
+                        <NodeTooltip title="Direct routing mode" placement="bottom-start">
                             <ToggleButton
                                 value="direct"
                                 selected={!smartEnabled}
@@ -246,7 +246,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                 Direct
                             </ToggleButton>
                         </NodeTooltip>
-                        <NodeTooltip title="Smart routing mode" placement="top-end">
+                        <NodeTooltip title="Smart routing mode" placement="bottom-end">
                             <ToggleButton
                                 value="smart"
                                 selected={smartEnabled}
