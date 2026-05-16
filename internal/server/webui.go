@@ -802,6 +802,14 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ProbeV2Response{}),
 	)
 
+	// Lightweight probe endpoint for optional key validation
+	apiV2.POST("/probe/lightweight", s.HandleLightweightProbe,
+		swagger.WithDescription("Lightweight probe for optional key validation using OPTIONS and models endpoint"),
+		swagger.WithTags("testing"),
+		swagger.WithRequestModel(LightweightProbeRequest{}),
+		swagger.WithResponseModel(LightweightProbeResponse{}),
+	)
+
 	// Token Management
 	apiV1.POST("/token", s.GenerateToken,
 		swagger.WithDescription("Generate a new API token"),

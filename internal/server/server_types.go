@@ -188,21 +188,21 @@ type ProbeProviderResponseData struct {
 
 // ProviderResponse represents a provider configuration with masked token
 type ProviderResponse struct {
-	UUID             string           `json:"uuid" example:"0123456789ABCDEF"`
-	Name             string           `json:"name" example:"openai"`
-	APIBase          string           `json:"api_base" example:"https://api.openai.com/v1"`
-	APIStyle         string           `json:"api_style" example:"openai"`
-	APIBaseOpenAI    string           `json:"api_base_openai,omitempty" example:"https://api.example.com/v1"`
-	APIBaseAnthropic string           `json:"api_base_anthropic,omitempty" example:"https://api.example.com"`
-	Token            string           `json:"token" example:"sk-***...***"` // Only populated for api_key auth type
-	NoKeyRequired    bool             `json:"no_key_required" example:"false"`
-	Enabled          bool             `json:"enabled" example:"true"`
-	ProxyURL         string           `json:"proxy_url,omitempty" example:"http://127.0.0.1:7890"`
-	UserAgent        string           `json:"user_agent,omitempty" example:"my-gateway/1.0"`
-	AuthType         string           `json:"auth_type,omitempty" example:"api_key"` // api_key, oauth, or vmodel
-	OAuthDetail      *typ.OAuthDetail `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
-	VModelDetail     *typ.VModelDetail `json:"vmodel_detail,omitempty"`              // Virtual-model config (only for vmodel auth type)
-	Source           string           `json:"source,omitempty" example:"user"`       // "user" (default) or "builtin"
+	UUID             string            `json:"uuid" example:"0123456789ABCDEF"`
+	Name             string            `json:"name" example:"openai"`
+	APIBase          string            `json:"api_base" example:"https://api.openai.com/v1"`
+	APIStyle         string            `json:"api_style" example:"openai"`
+	APIBaseOpenAI    string            `json:"api_base_openai,omitempty" example:"https://api.example.com/v1"`
+	APIBaseAnthropic string            `json:"api_base_anthropic,omitempty" example:"https://api.example.com"`
+	Token            string            `json:"token" example:"sk-***...***"` // Only populated for api_key auth type
+	NoKeyRequired    bool              `json:"no_key_required" example:"false"`
+	Enabled          bool              `json:"enabled" example:"true"`
+	ProxyURL         string            `json:"proxy_url,omitempty" example:"http://127.0.0.1:7890"`
+	UserAgent        string            `json:"user_agent,omitempty" example:"my-gateway/1.0"`
+	AuthType         string            `json:"auth_type,omitempty" example:"api_key"` // api_key, oauth, or vmodel
+	OAuthDetail      *typ.OAuthDetail  `json:"oauth_detail,omitempty"`                // OAuth credentials (only for oauth auth type)
+	VModelDetail     *typ.VModelDetail `json:"vmodel_detail,omitempty"`               // Virtual-model config (only for vmodel auth type)
+	Source           string            `json:"source,omitempty" example:"user"`       // "user" (default) or "builtin"
 }
 
 // ProvidersResponse represents the response for listing providers
@@ -342,6 +342,65 @@ type OpenAIModel struct {
 type OpenAIModelsResponse struct {
 	Object string        `json:"object"`
 	Data   []OpenAIModel `json:"data"`
+}
+
+// =============================================
+// Lightweight Probe API Models (for optional key validation)
+// =============================================
+
+// LightweightProbeRequest represents a lightweight probe request for key validation
+// This is used for optional "Test Connection" feature when adding API keys
+type LightweightProbeRequest struct {
+	Name     string `json:"name" binding:"required" description:"Provider name" example:"openai"`
+	APIBase  string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
+	APIStyle string `json:"api_style" binding:"required,oneof=openai anthropic google" description:"API style" example:"openai"`
+	Token    string `json:"token" binding:"required" description:"API token to test" example:"sk-..."`
+	AuthType string `json:"auth_type,omitempty" description:"Auth type (e.g., api_key, oauth)" example:"api_key"`
+}
+
+// LightweightProbeResponse represents the response from lightweight probing
+// Returns detailed probe results for OPTIONS and models endpoint, but does not
+// block key addition - these are informational only
+type LightweightProbeResponse struct {
+	Success bool                          `json:"success" example:"true"`
+	Error   *ErrorDetail                  `json:"error,omitempty"`
+	Data    *LightweightProbeResponseData `json:"data,omitempty"`
+}
+
+// LightweightProbeResponseData represents the data returned from lightweight probing
+type LightweightProbeResponseData struct {
+	// Overall assessment (best-effort, not definitive)
+	Valid   bool   `json:"valid" example:"true"`
+	Message string `json:"message" example:"Connection test completed"`
+
+	// OPTIONS probe result (basic connectivity test)
+	OptionsSuccess      bool   `json:"options_success" example:"true"`
+	OptionsMessage      string `json:"options_message,omitempty" example:"OPTIONS request successful"`
+	OptionsResponseTime int64  `json:"options_response_time_ms,omitempty" example:"45"`
+
+	// Models endpoint probe result (API access validation)
+	ModelsSuccess      bool   `json:"models_success" example:"true"`
+	ModelsMessage      string `json:"models_message,omitempty" example:"Models endpoint accessible"`
+	ModelsResponseTime int64  `json:"models_response_time_ms,omitempty" example:"250"`
+	ModelsCount        int    `json:"models_count,omitempty" example:"150"`
+
+	// Chat endpoint probe result (for OpenAI-style providers)
+	ChatSuccess      bool   `json:"chat_success,omitempty" example:"true"`
+	ChatMessage      string `json:"chat_message,omitempty" example:"Chat endpoint accessible"`
+	ChatResponseTime int64  `json:"chat_response_time_ms,omitempty" example:"180"`
+
+	// Responses endpoint probe result (for OpenAI Responses API)
+	ResponsesSuccess      bool   `json:"responses_success,omitempty" example:"true"`
+	ResponsesMessage      string `json:"responses_message,omitempty" example:"Responses API endpoint accessible"`
+	ResponsesResponseTime int64  `json:"responses_response_time_ms,omitempty" example:"200"`
+
+	// Provider info for reference
+	Provider string `json:"provider" example:"openai"`
+	APIBase  string `json:"api_base" example:"https://api.openai.com/v1"`
+	APIStyle string `json:"api_style" example:"openai"`
+
+	// Warning if provider doesn't support these endpoints
+	Warning string `json:"warning,omitempty" example:"Models endpoint not supported for this provider type"`
 }
 
 // =============================================
