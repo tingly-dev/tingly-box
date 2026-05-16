@@ -510,20 +510,62 @@ const ProviderFormDialog = ({
         setVerificationResult(null);
 
         try {
-            const result = await api.probeProvider(apiStyle, apiBase, data.token);
+            // Use lightweight probe for optional "Test Connection" feature
+            const result = await api.probeProviderLightweight(effectiveName, apiStyle, apiBase, data.token, data.authType);
 
             if (result.success && result.data) {
-                const isValid = result.data.valid !== false;
+                const probeData = result.data;
+                const isValid = probeData.valid !== false;
+
+                // Build detailed message from lightweight probe results
+                let message = probeData.message;
+                const details: string[] = [];
+
+                // Add OPTIONS result
+                if (probeData.options_success) {
+                    details.push(`✓ OPTIONS (${probeData.options_response_time}ms)`);
+                } else if (probeData.options_message) {
+                    details.push(`✗ OPTIONS: ${probeData.options_message}`);
+                }
+
+                // Add models endpoint result
+                if (probeData.models_success) {
+                    details.push(`✓ Models (${probeData.models_response_time}ms, ${probeData.models_count} models)`);
+                } else if (probeData.models_message) {
+                    details.push(`✗ Models: ${probeData.models_message}`);
+                }
+
+                // Add Chat endpoint result (if available)
+                if (probeData.chat_success !== undefined) {
+                    if (probeData.chat_success) {
+                        details.push(`✓ Chat (${probeData.chat_response_time}ms)`);
+                    } else if (probeData.chat_message) {
+                        details.push(`✗ Chat: ${probeData.chat_message}`);
+                    }
+                }
+
+                // Add Responses endpoint result (if available)
+                if (probeData.responses_success !== undefined) {
+                    if (probeData.responses_success) {
+                        details.push(`✓ Responses (${probeData.responses_response_time}ms)`);
+                    } else if (probeData.responses_message) {
+                        details.push(`✗ Responses: ${probeData.responses_message}`);
+                    }
+                }
+
+                // Add warning if present
+                if (probeData.warning) {
+                    details.push(`⚠ ${probeData.warning}`);
+                }
+
                 setVerificationResult({
                     success: isValid,
-                    message: result.data.message,
-                    details: isValid
-                        ? t('providerDialog.verification.testResult', {result: result.data.test_result})
-                        : undefined,
-                    responseTime: result.data.response_time_ms,
-                    modelsCount: result.data.models_count,
+                    message: message,
+                    details: details.join(' • '),
+                    responseTime: probeData.options_response_time || probeData.models_response_time,
+                    modelsCount: probeData.models_count,
                 });
-                return isValid;
+                return true;
             }
 
             setVerificationResult({
@@ -553,14 +595,8 @@ const ProviderFormDialog = ({
 
         ensureName();
 
-        const shouldVerify = mode === 'add' ? !noApiKey : data.token !== '' && !noApiKey;
-
-        if (shouldVerify) {
-            const verified = await handleVerify();
-            if (!verified) {
-                return;
-            }
-        }
+        // NO MANDATORY VERIFICATION - allow adding keys without testing
+        // Verification is optional via the "Test Connection" button
 
         onClose();
         onSubmit(e);
@@ -1109,28 +1145,44 @@ const ProviderFormDialog = ({
                     <Button
                         type="button"
                         variant="outlined"
-                        color="warning"
                         size="small"
                         disabled={!hasAnyProtocol || verifying}
-                        onClick={async () => {
-                            // Make sure any free-form text in the provider input is committed
-                            if (!selectedProvider && data.apiBase !== providerInputValue) {
-                                onChangeRef.current('apiBase', providerInputValue);
-                                onChangeRef.current('providerBaseUrls', undefined);
-                            }
-                            ensureName();
-                            onClose();
-                            await onForceAdd?.();
-                        }}
-                        title="Skip connectivity check and save anyway. The provider may not work correctly if the connection fails."
+                        onClick={handleVerify}
+                        title="Test connection using OPTIONS and models endpoint (optional check)"
                     >
-                        {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
+                        {verifying ? (
+                            <CircularProgress size={16} thickness={4}/>
+                        ) : (
+                            'Test Connection'
+                        )}
                     </Button>
+                    {onForceAdd && (
+                        <Button
+                            type="button"
+                            variant="outlined"
+                            color="warning"
+                            size="small"
+                            disabled={!hasAnyProtocol || verifying}
+                            onClick={async () => {
+                                // Make sure any free-form text in the provider input is committed
+                                if (!selectedProvider && data.apiBase !== providerInputValue) {
+                                    onChangeRef.current('apiBase', providerInputValue);
+                                    onChangeRef.current('providerBaseUrls', undefined);
+                                }
+                                ensureName();
+                                onClose();
+                                await onForceAdd?.();
+                            }}
+                            title="Save without any validation"
+                        >
+                            {mode === 'add' ? 'Add Anyway' : 'Save Anyway'}
+                        </Button>
+                    )}
                     <Button
                         type="submit"
                         variant="contained"
                         size="small"
-                        disabled={verifying || !hasAnyProtocol}
+                        disabled={!hasAnyProtocol}
                         sx={{
                             minWidth: verifying ? '80px' : 'auto',
                         }}
