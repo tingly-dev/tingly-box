@@ -795,8 +795,8 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	onboardingHandler := onboarding.NewHandler(onboarding.NewRuleExtractor())
 	onboarding.RegisterRoutes(apiV1, onboardingHandler)
 
-	// Probe V2 + lightweight endpoints (unified probe API)
-	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeV2Service, s.probeLightweight))
+	// E2E + lightweight probe endpoints
+	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeE2EService, s.probeLightweight))
 
 	// Token Management
 	apiV1.POST("/token", s.GenerateToken,

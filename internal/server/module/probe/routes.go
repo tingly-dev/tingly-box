@@ -7,11 +7,11 @@ import (
 
 // RegisterRoutes registers all probe-module endpoints on the given route group.
 func RegisterRoutes(router *swagger.RouteGroup, h *Handler) {
-	router.POST("/probe", h.HandleProbeV2,
-		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules, providers, and unsaved provider config"),
+	router.POST("/probe", h.HandleE2EProbe,
+		swagger.WithDescription("End-to-end probe - SDK-level test for rules, providers, and unsaved provider config"),
 		swagger.WithTags("testing"),
-		swagger.WithRequestModel(probe.ProbeV2Request{}),
-		swagger.WithResponseModel(V2Response{}),
+		swagger.WithRequestModel(probe.E2ERequest{}),
+		swagger.WithResponseModel(E2EResponse{}),
 	)
 
 	router.POST("/probe/lightweight", h.HandleLightweightProbe,

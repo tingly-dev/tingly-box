@@ -1,8 +1,8 @@
 // Package probe contains the decoupled, server-independent half of the probe
-// subsystem: request types, result/data types, in-memory cache, and pure
-// helpers. The strategy implementations (Adaptive/Lightweight/V2) still live
-// in internal/server because they remain coupled to *Server; they will be
-// moved in a follow-up once that coupling is broken.
+// subsystem: request types, result/data types, in-memory cache, the E2E and
+// Lightweight strategies, and pure helpers. The Adaptive strategy still
+// lives in internal/server because it remains coupled to *Server; it will
+// be moved in a follow-up once that coupling is broken.
 package probe
 
 import (
@@ -84,27 +84,27 @@ type ModelProbeRequest struct {
 	ForceRefresh bool   `json:"force_refresh" description:"Force new probe even if cached" example:"false"`
 }
 
-// ProbeTarget defines the target type for probe.
-type ProbeTarget string
+// E2ETarget defines the target type for probe.
+type E2ETarget string
 
 const (
-	ProbeV2TargetRule           ProbeTarget = "rule"
-	ProbeV2TargetProvider       ProbeTarget = "provider"
-	ProbeV2TargetProviderConfig ProbeTarget = "provider_config"
+	E2ETargetRule           E2ETarget = "rule"
+	E2ETargetProvider       E2ETarget = "provider"
+	E2ETargetProviderConfig E2ETarget = "provider_config"
 )
 
-// ProbeMode defines the test mode.
-type ProbeMode string
+// E2EMode defines the test mode.
+type E2EMode string
 
 const (
-	ProbeV2ModeSimple    ProbeMode = "simple"
-	ProbeV2ModeStreaming ProbeMode = "streaming"
-	ProbeV2ModeTool      ProbeMode = "tool"
+	E2EModeSimple    E2EMode = "simple"
+	E2EModeStreaming E2EMode = "streaming"
+	E2EModeTool      E2EMode = "tool"
 )
 
-// ProbeV2Request represents a Probe V2 request.
-type ProbeV2Request struct {
-	TargetType ProbeTarget `json:"target_type" binding:"required"`
+// E2ERequest represents a Probe V2 request.
+type E2ERequest struct {
+	TargetType E2ETarget `json:"target_type" binding:"required"`
 
 	Scenario string `json:"scenario,omitempty" example:"anthropic"`
 	RuleUUID string `json:"rule_uuid,omitempty" binding:"required_if=TargetType rule"`
@@ -117,19 +117,19 @@ type ProbeV2Request struct {
 	APIStyle string `json:"api_style,omitempty"`
 	Token    string `json:"token,omitempty"`
 
-	TestMode ProbeMode `json:"test_mode" binding:"required"`
+	TestMode E2EMode `json:"test_mode" binding:"required"`
 
 	Message string `json:"message,omitempty"`
 }
 
-// ProbeV2Data is an alias to client.ProbeResult — the canonical SDK-level
+// E2EData is an alias to client.ProbeResult — the canonical SDK-level
 // probe result. Aliased so service-layer Response wrappers and swagger
 // registrations can reference a name in this package without re-importing
 // internal/client.
-type ProbeV2Data = client.ProbeResult
+type E2EData = client.ProbeResult
 
-// ProbeV2ResponseChunk represents a streaming response chunk.
-type ProbeV2ResponseChunk struct {
+// E2EResponseChunk represents a streaming response chunk.
+type E2EResponseChunk struct {
 	Type      string `json:"type"` // content, error, done
 	Content   string `json:"content,omitempty"`
 	Error     string `json:"error,omitempty"`
@@ -150,24 +150,24 @@ func (e *ValidationError) Error() string {
 	return e.Field + ": " + e.Message
 }
 
-// ValidateProbeV2Request validates a probe v2 request payload.
-func ValidateProbeV2Request(req *ProbeV2Request) error {
+// ValidateE2ERequest validates a probe v2 request payload.
+func ValidateE2ERequest(req *E2ERequest) error {
 	switch req.TargetType {
-	case ProbeV2TargetRule:
+	case E2ETargetRule:
 		if req.Scenario == "" {
 			return &ValidationError{Field: "scenario", Message: "scenario is required for rule test"}
 		}
 		if req.RuleUUID == "" {
 			return &ValidationError{Field: "rule_uuid", Message: "rule_uuid is required for rule test"}
 		}
-	case ProbeV2TargetProvider:
+	case E2ETargetProvider:
 		if req.ProviderUUID == "" {
 			return &ValidationError{Field: "provider_uuid", Message: "provider_uuid is required for provider test"}
 		}
 		if req.Model == "" {
 			return &ValidationError{Field: "model", Message: "model is required for provider test"}
 		}
-	case ProbeV2TargetProviderConfig:
+	case E2ETargetProviderConfig:
 		if req.APIBase == "" {
 			return &ValidationError{Field: "api_base", Message: "api_base is required for provider config test"}
 		}
@@ -182,7 +182,7 @@ func ValidateProbeV2Request(req *ProbeV2Request) error {
 	}
 
 	switch req.TestMode {
-	case ProbeV2ModeSimple, ProbeV2ModeStreaming, ProbeV2ModeTool:
+	case E2EModeSimple, E2EModeStreaming, E2EModeTool:
 	default:
 		return &ValidationError{Field: "test_mode", Message: "test_mode must be 'simple', 'streaming', or 'tool'"}
 	}
@@ -190,15 +190,15 @@ func ValidateProbeV2Request(req *ProbeV2Request) error {
 	return nil
 }
 
-// ProbeMessage returns the probe message body based on test mode, with an
+// E2EMessage returns the probe message body based on test mode, with an
 // optional caller-provided override.
-func ProbeMessage(mode ProbeMode, customMsg string) string {
+func E2EMessage(mode E2EMode, customMsg string) string {
 	if customMsg != "" {
 		return customMsg
 	}
 
 	switch mode {
-	case ProbeV2ModeTool:
+	case E2EModeTool:
 		return "Please use the bash tool to list the current directory contents with 'ls -la'."
 	default:
 		return "Hello, this is a test message. Please respond with a short greeting."

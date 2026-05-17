@@ -11,17 +11,17 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// Handler exposes the probe HTTP endpoints. It carries the V2 and
+// Handler exposes the probe HTTP endpoints. It carries the E2E and
 // lightweight services; adaptive can be hung off the same struct when that
 // strategy is decoupled from *Server.
 type Handler struct {
-	v2          *probe.V2Service
+	e2e         *probe.E2EService
 	lightweight *probe.LightweightService
 }
 
 // NewHandler builds a Handler around the given probe services.
-func NewHandler(v2 *probe.V2Service, lightweight *probe.LightweightService) *Handler {
-	return &Handler{v2: v2, lightweight: lightweight}
+func NewHandler(e2e *probe.E2EService, lightweight *probe.LightweightService) *Handler {
+	return &Handler{e2e: e2e, lightweight: lightweight}
 }
 
 // errorDetail mirrors the JSON shape of the server's global ErrorDetail so
@@ -33,12 +33,13 @@ type errorDetail struct {
 	Code    string `json:"code,omitempty"`
 }
 
-// V2Response is the JSON envelope returned by POST /probe.
-type V2Response struct {
+// E2EResponse is the JSON envelope returned by POST /probe.
+type E2EResponse struct {
 	Success bool               `json:"success"`
 	Error   *errorDetail       `json:"error,omitempty"`
-	Data    *probe.ProbeV2Data `json:"data,omitempty"`
+	Data    *probe.E2EData `json:"data,omitempty"`
 }
+
 
 // LightweightResponse is the JSON envelope returned by POST /probe/lightweight.
 type LightweightResponse struct {
@@ -47,12 +48,12 @@ type LightweightResponse struct {
 	Data    *probe.LightweightProbeResponseData `json:"data,omitempty"`
 }
 
-// HandleProbeV2 handles Probe V2 requests (unified endpoint for rules,
-// saved providers, and unsaved provider configs).
-func (h *Handler) HandleProbeV2(c *gin.Context) {
-	var req probe.ProbeV2Request
+// HandleE2EProbe handles SDK-level end-to-end probes (unified endpoint for
+// rules, saved providers, and unsaved provider configs).
+func (h *Handler) HandleE2EProbe(c *gin.Context) {
+	var req probe.E2ERequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, V2Response{
+		c.JSON(http.StatusBadRequest, E2EResponse{
 			Success: false,
 			Error: &errorDetail{
 				Message: "Invalid request body: " + err.Error(),
@@ -62,8 +63,8 @@ func (h *Handler) HandleProbeV2(c *gin.Context) {
 		return
 	}
 
-	if err := probe.ValidateProbeV2Request(&req); err != nil {
-		c.JSON(http.StatusBadRequest, V2Response{
+	if err := probe.ValidateE2ERequest(&req); err != nil {
+		c.JSON(http.StatusBadRequest, E2EResponse{
 			Success: false,
 			Error: &errorDetail{
 				Message: err.Error(),
@@ -77,18 +78,18 @@ func (h *Handler) HandleProbeV2(c *gin.Context) {
 	startTime := time.Now()
 
 	var (
-		data *probe.ProbeV2Data
+		data *probe.E2EData
 		err  error
 	)
 	switch req.TestMode {
-	case probe.ProbeV2ModeSimple:
-		data, err = h.v2.Probe(ctx, &req)
-	case probe.ProbeV2ModeStreaming, probe.ProbeV2ModeTool:
-		data, err = h.v2.ProbeStream(ctx, &req)
+	case probe.E2EModeSimple:
+		data, err = h.e2e.Probe(ctx, &req)
+	case probe.E2EModeStreaming, probe.E2EModeTool:
+		data, err = h.e2e.ProbeStream(ctx, &req)
 	}
 
 	if err != nil {
-		c.JSON(http.StatusOK, V2Response{
+		c.JSON(http.StatusOK, E2EResponse{
 			Success: false,
 			Error: &errorDetail{
 				Message: err.Error(),
@@ -99,7 +100,7 @@ func (h *Handler) HandleProbeV2(c *gin.Context) {
 	}
 
 	data.LatencyMs = time.Since(startTime).Milliseconds()
-	c.JSON(http.StatusOK, V2Response{Success: true, Data: data})
+	c.JSON(http.StatusOK, E2EResponse{Success: true, Data: data})
 }
 
 // HandleLightweightProbe handles the optional "Test Connection" probe used
