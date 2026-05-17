@@ -75,20 +75,97 @@ const (
 
 ---
 
-## 3. Resolver 行为
+## 3. 关注点分层（partition）
+
+Endpoint 路由相关的状态/决策被刻意拆成三层，每层承担一个 well-defined 的责任。**不要**把任何一层的事情塞到另外两层去做——这是 Adaptive 时代失败的根因（把"结构事实"埋进了运行时缓存）。
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 3  Rule flag (extension)  —  per-rule customization   │
+│           openai_endpoint_override = auto/chat/responses    │
+│           其他 rule flag：cursor_compat、skip_usage、…       │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2  Chat guard  —  protocol safety                     │
+│           CanDowngradeResponsesToChat(req)                   │
+│           previous_response_id / reasoning / … 拒降级        │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 1  Provider mode  —  structural fact                  │
+│           Provider.OpenAIEndpointMode = chat/responses/both  │
+│           来自 template 快照 / OAuth 实例化（用户不可编辑）  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Layer 1: Provider 模式 —— 结构性事实
+
+回答的问题：**这个 provider 实际上能听懂什么 endpoint？**
+
+- 来源：template 预设（实例化时快照）或 OAuth issuer 推断（Codex）
+- **不是用户可编辑字段**——它描述的是上游 API 的客观能力，不是用户偏好
+- 单一来源、单一字段（`Provider.OpenAIEndpointMode`），无 ambiguity
+
+判定属于这一层的标志：**改变这个值需要 provider API 本身发生改变**（厂商升级 API、用户换 provider）。
+
+### Layer 2: Chat guard —— 协议安全
+
+回答的问题：**这个具体 request 能不能在 Chat 形态下表达？**
+
+- 实现：`CanDowngradeResponsesToChat(req)` 检查 Responses-only 特性（`previous_response_id`、`reasoning` 等）
+- 触发点：openai_responses handler 在 resolver 选定 Chat 之后做 **post-routing** 检查
+- 失败结果：400 + 具体哪个字段触发
+
+判定属于这一层的标志：**判断依赖 request body 的形态**，与 provider 和 rule 都无关。
+
+### Layer 3: Rule flag —— per-rule 定制（extension）
+
+回答的问题：**这条 rule 想要什么特殊行为？**
+
+- 实现：`typ.RuleFlags` 结构 + `internal/typ/flag_registry.go` 的 catalog
+- 当前关于 endpoint 的 flag：`openai_endpoint_override`（auto / chat / responses）
+- 其他 rule flag 与 endpoint 无关（`cursor_compat`、`skip_usage`、`use_max_completion_tokens` …）但**走相同的 extension 机制**
+
+判定属于这一层的标志：**只对某条 rule / 某类客户端 / 某种调试场景有意义**，做成 provider 字段会污染默认，做成 scenario flag 又过于粗粒度。详见 `.design/rule-flags.md`。
+
+### 三层冲突时的优先级
+
+不是简单的 "高层赢"：每层裁决的对象不同。
+
+| 冲突 | 谁赢 | 理由 |
+|---|---|---|
+| Rule flag 要 chat，Provider mode 是 responses-only | **Provider 赢** | structural fact 不能被 user preference 覆盖（chat 请求送 Codex 会 404）|
+| Rule flag 要 responses，Provider mode 是 chat-only | **Provider 赢** | 同上 |
+| Rule flag 要 chat，Chat guard 拒（Responses-only 特性）| **Guard 赢** | request 形态不允许，返回 error 而非静默丢字段 |
+| Provider mode 是 chat、入站 Responses，Chat guard 拒 | **Guard 赢** | 同上 |
+| Provider mode 是 both、入站 Chat | mirror（Chat）| 入站协议是默认 tie-breaker |
+| Provider mode 是 both、入站 Responses | mirror（Responses）| 同上 |
+
+具体决策表见 §4.2。
+
+### 何时应当新增一个 rule flag
+
+如果未来出现某种"针对部分 rule 的 endpoint-routing 微调"需求（例如：某条 rule 强制走 streaming-only 通道、某条 rule 启用 Responses 的特殊参数），**首选** 把它做成新 rule flag：
+
+1. 在 `typ.RuleFlags` 加字段
+2. 在 `RuleFlagRegistry()` 注册 metadata（label / description / category）
+3. 在相应的 transform / handler 消费
+
+**不应当** 把这种需求塞进 `OpenAIEndpointMode`——那是 structural layer，扩张它会复活 Adaptive 时代的混乱。
+
+---
+
+## 4. Resolver 行为
 
 `ResolveOpenAIEndpoint(provider, ruleFlags, incoming) → (EndpointSelection, error)` 定义在 `internal/server/endpoint_resolution.go`。**纯函数**：不读 Server 状态、不发 I/O。
 
-### 3.1 precedence（高 → 低）
+### 4.1 precedence（高 → 低）
 
-1. **Rule flag `OpenAIEndpointOverride`**（用户每条 rule 可设）
+1. **Rule flag `OpenAIEndpointOverride`**（Layer 3，用户每条 rule 可设）
    - `""` / `"auto"` / 未知值 → 当作未设置
    - `"chat"` 或 `"responses"` → 显式 override
-2. **Provider 声明 `OpenAIEndpointMode`**（来自 template 快照 / OAuth 实例化）
+2. **Provider 声明 `OpenAIEndpointMode`**（Layer 1，来自 template 快照 / OAuth 实例化）
 
-Provider 声明 **trump** rule override——用户在一条 rule 上写 `=chat` 撞上 responses-only provider 时，gateway 记 warn 并按 provider 的能力走，**不会**把 chat 请求往 Codex 上扔。
+Provider 声明 **trump** rule override——见 §3 「三层冲突时的优先级」。`OpenAIEndpointOverride` 与不兼容的 provider mode 冲突时记 warn 并按 provider 走。
 
-### 3.2 决策表
+### 4.2 决策表
 
 | Override | Provider mode | 结果 | 备注 |
 |---|---|---|---|
@@ -103,7 +180,7 @@ Provider 声明 **trump** rule override——用户在一条 rule 上写 `=chat`
 | `=responses` | `"responses"` | Responses | |
 | `=responses` | `"both"` | Responses | override 生效 |
 
-### 3.3 为什么默认是 Chat
+### 4.3 为什么默认是 Chat
 
 - 生态现实：绝大多数 OpenAI-compat 厂商只实现 `/chat/completions`
 - Mirror 入站等于继续相信「上游也支持客户端发的协议」——这就是 Adaptive 时代的乐观假设
@@ -111,7 +188,7 @@ Provider 声明 **trump** rule override——用户在一条 rule 上写 `=chat`
 
 ---
 
-## 4. Responses → Chat 降级守卫
+## 5. Responses → Chat 降级守卫
 
 入站是 OpenAI Responses 但 resolver 选 Chat 时（chat-mode provider 默认 / override=chat），openai_responses handler 在路由后做一次额外检查：`CanDowngradeResponsesToChat(req)`。
 
@@ -128,7 +205,7 @@ Provider 声明 **trump** rule override——用户在一条 rule 上写 `=chat`
 
 ---
 
-## 5. Codex 的处理
+## 6. Codex 的处理
 
 Codex 是 OAuth-only 接入路径（Web `oauth/handler.go` 和 CLI `command/oauth.go`），实例化时直接：
 
@@ -146,7 +223,7 @@ if issuer == ai.IssuerCodex {
 
 ---
 
-## 6. Template 与 Provider 字段
+## 7. Template 与 Provider 字段
 
 Template 是用户实例化 provider 的预设入口。Template 里的 `openai_endpoint_mode` 在实例化时快照到 Provider 同名字段。
 
@@ -161,7 +238,7 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 
 ---
 
-## 7. 客户端协议 → 上游 endpoint 全链路
+## 8. 客户端协议 → 上游 endpoint 全链路
 
 完整端到端转换矩阵（仅 OpenAI-API-style provider；Anthropic / Google provider 走各自原生路径）：
 
@@ -180,7 +257,7 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 
 ---
 
-## 8. 关键文件
+## 9. 关键文件
 
 - `ai/provider.go` —— `OpenAIEndpointMode` 类型 + 常量 + `Provider.OpenAIEndpointMode` 字段
 - `internal/data/provider_template.go` —— `ProviderTemplate.OpenAIEndpointMode`（plain string）
@@ -193,7 +270,7 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 
 ---
 
-## 9. 升级与兼容性
+## 10. 升级与兼容性
 
 PR #976 引入此设计。涉及行为变更的两个点：
 
@@ -204,7 +281,7 @@ PR #976 引入此设计。涉及行为变更的两个点：
 
 ---
 
-## 10. 不在本文档范围
+## 11. 不在本文档范围
 
 - Anthropic / Google provider 的路由（走各自原生 endpoint，不进 OpenAI resolver）
 - Smart routing / load balance 选哪个 service（在 endpoint 选择之前）
