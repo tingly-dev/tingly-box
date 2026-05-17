@@ -212,21 +212,6 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 			})
 			return
 		}
-		// If the resolver picked Chat for an incoming Responses request, the
-		// downgrade must be safe — Responses-only features have no equivalent
-		// in Chat Completions and would be silently dropped otherwise.
-		if selection.Target == protocol.TypeOpenAIChat {
-			if ok, reason := CanDowngradeResponsesToChat(req); !ok {
-				c.JSON(http.StatusBadRequest, ErrorResponse{
-					Error: ErrorDetail{
-						Message: "Responses request cannot be downgraded to Chat Completions: " + reason,
-						Type:    "invalid_request_error",
-						Code:    "unsupported_endpoint",
-					},
-				})
-				return
-			}
-		}
 		target = selection.Target
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{

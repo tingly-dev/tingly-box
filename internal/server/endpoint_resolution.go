@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 
-	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -33,27 +32,6 @@ func mirrorIncoming(incoming IncomingAPIType, reason string) *EndpointSelection 
 	return &EndpointSelection{Target: protocol.TypeOpenAIChat, Reason: reason}
 }
 
-// CanDowngradeResponsesToChat reports whether a Responses request can be
-// safely emitted as Chat Completions instead. Called by the openai_responses
-// handler after routing to reject requests whose Responses-only features
-// would be silently dropped by the downgrade.
-func CanDowngradeResponsesToChat(req protocol.ResponseCreateRequest) (bool, string) {
-	p := req.ResponseNewParams
-	switch {
-	case p.PreviousResponseID.Valid():
-		return false, "previous_response_id cannot be represented in Chat Completions"
-	case len(p.Include) > 0:
-		return false, "include cannot be represented in Chat Completions"
-	case p.Background.Valid() && p.Background.Value:
-		return false, "background mode is not supported by Chat Completions"
-	case !param.IsOmitted(p.Truncation):
-		return false, "Responses truncation cannot be safely represented in Chat Completions"
-	case !param.IsOmitted(p.Reasoning):
-		return false, "Responses reasoning configuration cannot be safely represented in Chat Completions"
-	}
-	return true, ""
-}
-
 // ResolveOpenAIEndpoint picks an OpenAI endpoint using only the provider's
 // declared OpenAIEndpointMode and the optional per-rule override.
 //
@@ -72,10 +50,11 @@ func CanDowngradeResponsesToChat(req protocol.ResponseCreateRequest) (bool, stri
 // trying /responses against them fails. Providers that genuinely support
 // Responses must declare it via the template or OAuth instantiation.
 //
-// Callers receiving an OpenAI Responses request that ends up routed to Chat
-// must run CanDowngradeResponsesToChat against the request body and reject
-// if it returns false. The resolver doesn't inspect request bodies — that
-// concern belongs to the protocol handler that knows the request shape.
+// When an incoming Responses request routes to Chat, Responses-only fields
+// (previous_response_id, include, background, truncation, reasoning) that
+// have no Chat equivalent are silently dropped by ConvertOpenAIResponsesToChat
+// — the same way Anthropic→Chat downgrades drop Anthropic-specific features.
+// The user has accepted that trade-off by declaring the provider's mode.
 //
 // The function is pure: no Server state, no probe lookups, no I/O.
 func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType) (*EndpointSelection, error) {
