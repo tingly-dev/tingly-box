@@ -361,6 +361,19 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			}
 		}
 
+		// Codex CLI's ResponseCompleted decoder rejects events whose
+		// output_tokens_details lacks reasoning_tokens. Backfill 0 when the
+		// upstream provider (e.g. DeepSeek) omits it.
+		if gjson.Get(eventRaw, "response.usage").Exists() {
+			if !gjson.Get(eventRaw, "response.usage.output_tokens_details.reasoning_tokens").Exists() {
+				if modified, err := sjson.SetRaw(eventRaw, "response.usage.output_tokens_details.reasoning_tokens", "0"); err == nil {
+					eventRaw = modified
+				} else {
+					logrus.WithError(err).Error("Failed to set reasoning tokens")
+				}
+			}
+		}
+
 		if len(eventRaw) > 0 {
 			if model := gjson.Get(eventRaw, "response.model"); model.Exists() && model.String() != "" {
 				if modified, err := sjson.Set(eventRaw, "response.model", responseModel); err == nil {
