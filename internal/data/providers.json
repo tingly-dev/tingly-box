@@ -151,7 +151,8 @@
       ],
       "supports_models_endpoint": false,
       "oauth_provider": "codex",
-      "icon": "opencode"
+      "icon": "opencode",
+      "responses_only": true
     },
     "googleapis-com": {
       "id": "googleapis-com",

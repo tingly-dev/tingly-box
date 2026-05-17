@@ -1005,6 +1005,9 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		Enabled:  true,
 		ProxyURL: proxyURL,
 		AuthType: typ.AuthTypeOAuth,
+		// Codex's API only exposes Responses; declare here so the endpoint
+		// resolver routes correctly without runtime probing.
+		ResponsesOnly: issuer == ai.IssuerCodex,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  token.AccessToken,
 			ProviderType: string(issuer),

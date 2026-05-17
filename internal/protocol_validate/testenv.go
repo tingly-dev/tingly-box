@@ -212,9 +212,9 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 	providerUUID := fmt.Sprintf("virtual-%s-%s-%s", source, target, s.Name)
 	providerName := providerUUID // Use UUID as name for uniqueness
 
-	// Build model name that reflects the target type
-	// For Responses API target, use "-codex" suffix (for both codex and general cases)
-	// This allows GetPreferredEndpointForModel to identify Responses API preference
+	// Build model name that reflects the target type. The "-codex" / "-chat"
+	// suffix is just a debug marker so the test fixture's logs distinguish
+	// virtual providers wired for each endpoint family.
 	modelSuffix := s.Name
 	if target == protocol.TypeOpenAIResponses {
 		modelSuffix = s.Name + "-codex"

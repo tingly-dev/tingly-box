@@ -184,7 +184,6 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	// fusion URL configured, route there natively to avoid a transform.
 	provider = s.resolveProviderForClient(provider, protocol.APIStyleOpenAI)
 
-	actualModel := req.Model
 	isStreaming := req.Stream
 
 	// Determine target API type based on provider API style
@@ -203,10 +202,8 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	case protocol.APIStyleOpenAI:
 		canDowngrade, _ := CanDowngradeResponsesToChat(req)
-		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, OpenAIEndpointOptions{
+		selection, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(rule), OpenAIEndpointOptions{
 			Incoming:         IncomingAPIResponses,
-			IsStreaming:      isStreaming,
-			Override:         ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride),
 			RequireResponses: !canDowngrade,
 		})
 		if routeErr != nil {

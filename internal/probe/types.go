@@ -77,13 +77,6 @@ type LightweightProbeResponseData struct {
 	Warning string `json:"warning,omitempty" example:"Models endpoint not supported for this provider type"`
 }
 
-// ModelProbeRequest represents the request to probe a specific model.
-type ModelProbeRequest struct {
-	ProviderUUID string `json:"provider_uuid" binding:"required" description:"Provider UUID to probe" example:"uuid-123"`
-	ModelID      string `json:"model_id" binding:"required" description:"Model ID to probe" example:"gpt-4"`
-	ForceRefresh bool   `json:"force_refresh" description:"Force new probe even if cached" example:"false"`
-}
-
 // E2ETarget defines the target type for probe.
 type E2ETarget string
 

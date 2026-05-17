@@ -51,9 +51,3 @@ func (s *Server) getDefaultModelForAPIStyle(apiStyle protocol.APIStyle) string {
 	}
 }
 
-// InvalidateProviderCache invalidates cached capabilities for a provider
-func (s *Server) InvalidateProviderCache(providerUUID string) {
-	if s.probeCache != nil {
-		s.probeCache.InvalidateProvider(providerUUID)
-	}
-}

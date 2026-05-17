@@ -154,6 +154,12 @@ type Provider struct {
 	OAuthDetail  *OAuthDetail   `json:"oauth_detail,omitempty"`  // OAuth credentials (only for oauth auth type)
 	VModelDetail *VModelDetail  `json:"vmodel_detail,omitempty"` // Virtual-model config (only for vmodel auth type)
 	Source       ProviderSource `json:"source,omitempty"`        // "user" (default) or "builtin"
+
+	// ResponsesOnly declares that this provider only supports the OpenAI
+	// Responses API (no /chat/completions). Snapshotted from the provider's
+	// template at instantiation, or set on Codex OAuth completion. Routing
+	// reads this; users do not edit it directly.
+	ResponsesOnly bool `json:"responses_only,omitempty"`
 }
 
 // IsVirtual reports whether this provider routes to the in-process vmodel

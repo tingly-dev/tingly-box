@@ -114,6 +114,11 @@ type ProviderTemplate struct {
 	DefaultModelCapacity *int `json:"default_model_capacity,omitempty"`
 	// ModelCapacities allows per-model capacity overrides
 	ModelCapacities map[string]int `json:"model_capacities,omitempty"` // model name -> capacity
+
+	// ResponsesOnly declares that providers instantiated from this template
+	// only support the OpenAI Responses API (no /chat/completions). Copied to
+	// Provider.ResponsesOnly at instantiation. Used by endpoint resolution.
+	ResponsesOnly bool `json:"responses_only,omitempty"`
 }
 
 // ProviderTemplateRegistry represents the provider template registry structure from GitHub
