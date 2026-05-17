@@ -139,13 +139,16 @@ func (c *ClaudeClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
 	}
 }
 
-func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) *AnthropicClient {
+func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) (*AnthropicClient, map[string]string) {
 	// Apply thinking transformation for Claude Code OAuth
 	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
 		// Clear thinking field
 		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 	}
 
+	// Remap tool names to Claude Code TitleCase equivalents to avoid Anthropic fingerprinting
+	reverseMap := remapToolNames(req.Tools)
+
 	// Inject session ID from metadata
 	meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
 	if meta == nil {
@@ -164,17 +167,19 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 		provider: c.AnthropicClient.provider,
 	}
 
-	return base
+	return base, reverseMap
 }
 
-func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) *AnthropicClient {
+func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) (*AnthropicClient, map[string]string) {
 	// Apply thinking transformation for Claude Code OAuth
-	// This removes the thinking field and sets output_config.effort to "medium"
 	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
 		// Clear thinking field
 		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 	}
 
+	// Remap tool names to Claude Code TitleCase equivalents to avoid Anthropic fingerprinting
+	reverseMap := remapBetaToolNames(req.Tools)
+
 	// Inject session ID from metadata
 	meta := ops.ParseMetadataUserID(req.Metadata.UserID.String())
 	if meta == nil {
@@ -192,30 +197,40 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 		client:   anthropicClient,
 		provider: c.AnthropicClient.provider,
 	}
-	return base
+	return base, reverseMap
 }
 
 // MessagesNew creates a new message request.
 func (c *ClaudeClient) MessagesNew(ctx context.Context, req *anthropic.MessageNewParams) (*anthropic.Message, error) {
-	guard := c.Guard(ctx, req)
-	return guard.MessagesNew(ctx, req)
+	guard, reverseMap := c.Guard(ctx, req)
+	msg, err := guard.MessagesNew(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	restoreToolNamesInMessage(msg, reverseMap)
+	return msg, nil
 }
 
 // MessagesNewStreaming creates a new streaming message request.
 func (c *ClaudeClient) MessagesNewStreaming(ctx context.Context, req *anthropic.MessageNewParams) *anthropicstream.Stream[anthropic.MessageStreamEventUnion] {
-	guard := c.Guard(ctx, req)
+	guard, _ := c.Guard(ctx, req)
 	return guard.MessagesNewStreaming(ctx, req)
 }
 
 // BetaMessagesNew creates a new beta message request.
 func (c *ClaudeClient) BetaMessagesNew(ctx context.Context, req *anthropic.BetaMessageNewParams) (*anthropic.BetaMessage, error) {
-	guard := c.GuardBeta(ctx, req)
-	return guard.BetaMessagesNew(ctx, req)
+	guard, reverseMap := c.GuardBeta(ctx, req)
+	msg, err := guard.BetaMessagesNew(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	restoreBetaToolNamesInMessage(msg, reverseMap)
+	return msg, nil
 }
 
 // BetaMessagesNewStreaming creates a new beta streaming message request.
 func (c *ClaudeClient) BetaMessagesNewStreaming(ctx context.Context, req *anthropic.BetaMessageNewParams) *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
-	guard := c.GuardBeta(ctx, req)
+	guard, _ := c.GuardBeta(ctx, req)
 	return guard.BetaMessagesNewStreaming(ctx, req)
 }
 
@@ -322,4 +337,65 @@ func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, t
 
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages", true), nil
+}
+
+// remapToolNames renames OfTool tools in-place using oauthToolRenameMap.
+// Returns a reverse map (TitleCase → original) for restoring names in the response.
+func remapToolNames(tools []anthropic.ToolUnionParam) map[string]string {
+	reverseMap := make(map[string]string)
+	for i := range tools {
+		t := tools[i].OfTool
+		if t == nil {
+			continue
+		}
+		if newName, ok := oauthToolRenameMap[t.Name]; ok && newName != t.Name {
+			reverseMap[newName] = t.Name
+			tools[i].OfTool.Name = newName
+		}
+	}
+	return reverseMap
+}
+
+// remapBetaToolNames is the BetaToolUnionParam equivalent of remapToolNames.
+func remapBetaToolNames(tools []anthropic.BetaToolUnionParam) map[string]string {
+	reverseMap := make(map[string]string)
+	for i := range tools {
+		t := tools[i].OfTool
+		if t == nil {
+			continue
+		}
+		if newName, ok := oauthToolRenameMap[t.Name]; ok && newName != t.Name {
+			reverseMap[newName] = t.Name
+			tools[i].OfTool.Name = newName
+		}
+	}
+	return reverseMap
+}
+
+// restoreToolNamesInMessage reverses tool name remapping in a Message response.
+func restoreToolNamesInMessage(msg *anthropic.Message, reverseMap map[string]string) {
+	if msg == nil || len(reverseMap) == 0 {
+		return
+	}
+	for i := range msg.Content {
+		if msg.Content[i].Type == "tool_use" {
+			if orig, ok := reverseMap[msg.Content[i].Name]; ok {
+				msg.Content[i].Name = orig
+			}
+		}
+	}
+}
+
+// restoreBetaToolNamesInMessage reverses tool name remapping in a BetaMessage response.
+func restoreBetaToolNamesInMessage(msg *anthropic.BetaMessage, reverseMap map[string]string) {
+	if msg == nil || len(reverseMap) == 0 {
+		return
+	}
+	for i := range msg.Content {
+		if msg.Content[i].Type == "tool_use" {
+			if orig, ok := reverseMap[msg.Content[i].Name]; ok {
+				msg.Content[i].Name = orig
+			}
+		}
+	}
 }
