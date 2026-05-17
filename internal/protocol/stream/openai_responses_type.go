@@ -70,12 +70,16 @@ type responsesUsageWire struct {
 	OutputTokensDetails responsesOutputTokensDetailsWire `json:"output_tokens_details,omitempty"`
 }
 
+// Codex CLI's ResponseCompleted decoder requires cached_tokens and
+// reasoning_tokens to be present; omitempty would drop them when zero and
+// cause "missing field 'reasoning_tokens'" parse errors for chat-only
+// providers (e.g. DeepSeek) routed through chat-to-responses.
 type responsesInputTokensDetailsWire struct {
-	CachedTokens int64 `json:"cached_tokens,omitempty"`
+	CachedTokens int64 `json:"cached_tokens"`
 }
 
 type responsesOutputTokensDetailsWire struct {
-	ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
+	ReasoningTokens int64 `json:"reasoning_tokens"`
 }
 
 type responsesOutputItemAddedEvent struct {
