@@ -17,7 +17,7 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
         const palette = theme.palette as any;
 
         // For sunlit theme, use sky blue tones
-        if (palette.isSunlit || palette.mode === 'light' && palette.primary.main === '#0ea5e9') {
+        if (palette.isSunlit) {
             return {
                 primary: { bg: 'rgba(14, 165, 233, 0.1)', text: '#0ea5e9', hover: 'rgba(14, 165, 233, 0.15)' },
                 success: { bg: 'rgba(34, 197, 94, 0.1)', text: '#22c55e', hover: 'rgba(34, 197, 94, 0.15)' },

@@ -1,123 +1,139 @@
 import { useTheme } from '@mui/material/styles';
 import { useThemeMode } from '../contexts/ThemeContext';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { Z_INDEX } from '../constants/zIndex';
 
+const LEAVES_IMAGE_PATH = '/assets/leaves.png';
+
 /**
- * Sunlit theme background component - Simple leaf shadows in corner
- * Minimal overhead, just leaves with subtle shadows
+ * Sunlit theme background component
+ * Uses CSS for gradient (GPU-accelerated) and canvas only for leaves overlay
  */
 export const SunlitBackground: React.FC = () => {
     const theme = useTheme();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const { mode } = useThemeMode();
     const isDark = mode === 'dark';
-    const animationFrameRef = useRef<number>(undefined);
+    const animationFrameRef = useRef<number | undefined>(undefined);
+    const [leavesImage, setLeavesImage] = useState<HTMLImageElement | null>(null);
 
-    const renderCanvas = () => {
+    // Preload leaves image once
+    useEffect(() => {
+        const img = new Image();
+        img.onload = () => setLeavesImage(img);
+        img.src = LEAVES_IMAGE_PATH;
+    }, []);
+
+    // Get gradient colors from theme
+    const gradientColors = (theme.palette.background as any).gradient;
+
+    const renderLeaves = useCallback(() => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (!canvas || !leavesImage) return;
 
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: true });
         if (!ctx) return;
 
-        const w = canvas.width = window.innerWidth;
-        const h = canvas.height = window.innerHeight;
+        const dpr = window.devicePixelRatio || 1;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        // Set canvas size with device pixel ratio for crisp rendering
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.scale(dpr, dpr);
 
         // Clear canvas
         ctx.clearRect(0, 0, w, h);
 
-        // Draw warm base background
-        const bgGradient = ctx.createLinearGradient(0, 0, w, h);
-        if (isDark) {
-            bgGradient.addColorStop(0, theme.palette.background.default);
-            bgGradient.addColorStop(1, theme.palette.background.paper);
-        } else {
-            // Read gradient colors from theme palette
-            const gradientColors = (theme.palette.background as any).gradient;
-            bgGradient.addColorStop(0, gradientColors.start);
-            bgGradient.addColorStop(0.5, gradientColors.middle);
-            bgGradient.addColorStop(1, gradientColors.end);
-        }
-        ctx.fillStyle = bgGradient;
-        ctx.fillRect(0, 0, w, h);
+        // Position leaves in bottom-right corner
+        const leafSize = Math.min(w, h) * 0.75;
+        const leafX = w - leafSize;
+        const leafY = h - leafSize * 0.65;
 
-        // Draw leaves in corner with shadow effect
-        const img = new Image();
-        img.onload = () => {
-            ctx.save();
+        ctx.save();
 
-            // Position leaves in bottom-right corner
-            const leafSize = Math.min(w, h) * 0.8;
-            const leafX = w - leafSize;
-            const leafY = h - leafSize * 0.7;
+        // Draw soft shadow behind leaves
+        ctx.globalAlpha = isDark ? 0.25 : 0.15;
+        ctx.filter = 'blur(32px)';
+        ctx.drawImage(
+            leavesImage,
+            leafX + 16,
+            leafY + 16,
+            leafSize,
+            leafSize * 0.7
+        );
 
-            // Draw shadow/blur effect behind leaves
-            ctx.globalAlpha = isDark ? 0.3 : 0.2;
-            ctx.filter = 'blur(40px)';
+        // Draw leaves with subtle transparency
+        ctx.filter = 'none';
+        ctx.globalAlpha = isDark ? 0.35 : 0.22;
+        ctx.drawImage(
+            leavesImage,
+            leafX,
+            leafY,
+            leafSize,
+            leafSize * 0.7
+        );
 
-            // Shadow offset
-            ctx.drawImage(
-                img,
-                leafX + 20,
-                leafY + 20,
-                leafSize,
-                leafSize * 0.7
-            );
-
-            ctx.filter = 'none';
-            ctx.globalAlpha = isDark ? 0.4 : 0.25;
-
-            // Draw actual leaves
-            ctx.drawImage(
-                img,
-                leafX,
-                leafY,
-                leafSize,
-                leafSize * 0.7
-            );
-
-            ctx.restore();
-        };
-        img.onerror = () => {
-            // If leaves fail to load, just draw background gradient
-        };
-        img.src = '/assets/leaves.png';
-    };
+        ctx.restore();
+    }, [leavesImage, isDark]);
 
     // Handle resize with debouncing
     useEffect(() => {
+        if (!leavesImage) return;
+
         const handleResize = () => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
-            animationFrameRef.current = requestAnimationFrame(renderCanvas);
+            animationFrameRef.current = requestAnimationFrame(renderLeaves);
         };
 
-        const timer = setTimeout(renderCanvas, 50);
+        // Initial render
+        renderLeaves();
         window.addEventListener('resize', handleResize);
 
         return () => {
-            clearTimeout(timer);
             window.removeEventListener('resize', handleResize);
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [isDark, theme]);
+    }, [leavesImage, renderLeaves]);
+
+    // CSS gradient background - GPU accelerated, no canvas needed
+    const gradientStyle = isDark
+        ? `linear-gradient(135deg, ${theme.palette.background.default} 0%, ${theme.palette.background.paper} 100%)`
+        : `linear-gradient(135deg, ${gradientColors?.start || '#e0f2fe'} 0%, ${gradientColors?.middle || '#bae6fd'} 50%, ${gradientColors?.end || '#7dd3fc'} 100%)`;
 
     return (
-        <canvas
-            ref={canvasRef}
-            style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                pointerEvents: 'none',
-                zIndex: Z_INDEX.sunlitBackground,
-            }}
-        />
+        <>
+            {/* CSS gradient layer - GPU accelerated */}
+            <div
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    background: gradientStyle,
+                    pointerEvents: 'none',
+                    zIndex: Z_INDEX.sunlitBackground,
+                }}
+            />
+            {/* Canvas layer for leaves only */}
+            <canvas
+                ref={canvasRef}
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100vw',
+                    height: '100vh',
+                    pointerEvents: 'none',
+                    zIndex: Z_INDEX.sunlitBackground,
+                }}
+            />
+        </>
     );
 };
