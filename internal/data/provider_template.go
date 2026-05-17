@@ -114,6 +114,12 @@ type ProviderTemplate struct {
 	DefaultModelCapacity *int `json:"default_model_capacity,omitempty"`
 	// ModelCapacities allows per-model capacity overrides
 	ModelCapacities map[string]int `json:"model_capacities,omitempty"` // model name -> capacity
+
+	// OpenAIEndpointMode declares which OpenAI endpoints providers instantiated
+	// from this template expose. Plain string at this layer; cast to the typed
+	// ai.OpenAIEndpointMode when assigned to a Provider. Values: "" (Chat,
+	// default), "responses" (Codex-style), "both" (OpenAI proper).
+	OpenAIEndpointMode string `json:"openai_endpoint_mode,omitempty"`
 }
 
 // ProviderTemplateRegistry represents the provider template registry structure from GitHub

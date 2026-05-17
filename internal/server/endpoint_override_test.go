@@ -28,17 +28,15 @@ func TestParseEndpointOverride(t *testing.T) {
 }
 
 func TestIsCodexProvider(t *testing.T) {
-	if isCodexProvider(nil) {
-		t.Error("nil provider should not be Codex")
-	}
-	if isCodexProvider(&typ.Provider{UUID: "p-1"}) {
+	if (&typ.Provider{UUID: "p-1"}).IsCodexProvider() {
 		t.Error("provider without OAuthDetail should not be Codex")
 	}
 	codex := &typ.Provider{
 		UUID:        "codex-1",
+		AuthType:    typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerCodex},
 	}
-	if !isCodexProvider(codex) {
+	if !codex.IsCodexProvider() {
 		t.Error("Codex-issuer OAuth provider should be Codex")
 	}
 }

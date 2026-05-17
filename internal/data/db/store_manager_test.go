@@ -114,7 +114,6 @@ func TestStoreManager_Accessors(t *testing.T) {
 		{"Provider", func() interface{} { return sm.Provider() }},
 		{"ToolConfig", func() interface{} { return sm.ToolConfig() }},
 		{"ImBotSettings", func() interface{} { return sm.ImBotSettings() }},
-		{"ModelCapability", func() interface{} { return sm.ModelCapability() }},
 		{"Model", func() interface{} { return sm.Model() }},
 		{"APIToken", func() interface{} { return sm.APIToken() }},
 	}
@@ -162,9 +161,6 @@ func TestStoreManager_Close(t *testing.T) {
 	if sm.ImBotSettings() != nil {
 		t.Error("ImBotSettings() should return nil after Close()")
 	}
-	if sm.ModelCapability() != nil {
-		t.Error("ModelCapability() should return nil after Close()")
-	}
 	if sm.Model() != nil {
 		t.Error("Model() should return nil after Close()")
 	}
@@ -197,12 +193,12 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 		t.Errorf("HealthCheck() returned unhealthy: %+v", status)
 	}
 
-	if status.TotalStores != 10 {
-		t.Errorf("TotalStores = %d, want 10", status.TotalStores)
+	if status.TotalStores != 9 {
+		t.Errorf("TotalStores = %d, want 9", status.TotalStores)
 	}
 
-	if status.HealthyStores != 10 {
-		t.Errorf("HealthyStores = %d, want 10", status.HealthyStores)
+	if status.HealthyStores != 9 {
+		t.Errorf("HealthyStores = %d, want 9", status.HealthyStores)
 	}
 
 	if status.UnhealthyStores != 0 {
@@ -211,7 +207,7 @@ func TestStoreManager_HealthCheck(t *testing.T) {
 
 	expectedStores := []string{
 		"stats", "usage", "ruleState", "provider",
-		"toolConfig", "imbotSettings", "modelCapability", "model", "apiToken",
+		"toolConfig", "imbotSettings", "model", "apiToken",
 		"tasks",
 	}
 	for _, name := range expectedStores {
@@ -241,8 +237,8 @@ func TestStoreManager_HealthCheckAfterClose(t *testing.T) {
 		t.Error("HealthCheck() should return unhealthy after Close()")
 	}
 
-	if status.UnhealthyStores != 10 {
-		t.Errorf("UnhealthyStores = %d, want 10", status.UnhealthyStores)
+	if status.UnhealthyStores != 9 {
+		t.Errorf("UnhealthyStores = %d, want 9", status.UnhealthyStores)
 	}
 }
 
@@ -333,7 +329,6 @@ func TestStoreManager_ConcurrentAccess(t *testing.T) {
 				_ = sm.RuleState()
 				_ = sm.ToolConfig()
 				_ = sm.ImBotSettings()
-				_ = sm.ModelCapability()
 				_ = sm.Model()
 			}
 		}()

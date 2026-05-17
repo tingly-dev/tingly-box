@@ -427,33 +427,3 @@ type ProbeResponse struct {
 	Data    *ProbeResponseData `json:"data,omitempty"`
 }
 
-// =============================================
-// Probe API Models
-// =============================================
-
-// ModelProbeRequest lives in internal/probe.
-
-// EndpointProbeStatus represents the status of an endpoint probe
-type EndpointProbeStatus struct {
-	Available    bool   `json:"available" example:"true"`
-	LatencyMs    int    `json:"latency_ms" example:"234"`
-	ErrorMessage string `json:"error_message,omitempty" example:""`
-	LastChecked  string `json:"last_checked" example:"2026-01-23T10:30:00Z"`
-}
-
-// ModelProbeResponse represents the response from model endpoint probing
-type ModelProbeResponse struct {
-	Success bool            `json:"success" example:"true"`
-	Error   *ErrorDetail    `json:"error,omitempty"`
-	Data    *ModelProbeData `json:"data,omitempty"`
-}
-
-// ModelProbeData represents the probe result data
-type ModelProbeData struct {
-	ProviderUUID      string              `json:"provider_uuid" example:"uuid-123"`
-	ModelID           string              `json:"model_id" example:"gpt-4"`
-	ChatEndpoint      EndpointProbeStatus `json:"chat_endpoint"`
-	ResponsesEndpoint EndpointProbeStatus `json:"responses_endpoint"`
-	PreferredEndpoint string              `json:"preferred_endpoint" example:"responses"`
-	LastUpdated       string              `json:"last_updated" example:"2026-01-23T10:30:00Z"`
-}

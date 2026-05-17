@@ -108,12 +108,6 @@ type Server struct {
 	// template manager for provider templates
 	templateManager *data.TemplateManager
 
-	// probe cache for model endpoint capabilities
-	probeCache *probe.ProbeCache
-
-	// capability store for persistent model capabilities
-	capabilityStore *db.ModelCapabilityStore
-
 	// probeE2EService runs SDK-level end-to-end probes for the /api/v2/probe endpoint.
 	probeE2EService *probe.E2EService
 
@@ -741,22 +735,6 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Register adviser as virtual tool if configured
 	server.registerAdviserFromConfig()
 
-	// Initialize probe cache with 24-hour TTL
-	server.probeCache = probe.NewProbeCache(24 * time.Hour)
-	// Start background cleanup task for expired cache entries
-	server.probeCache.StartCleanupTask(1 * time.Hour)
-	logrus.Debugf("Probe cache initialized with TTL: 24h")
-
-	// Initialize model capability store
-	capabilityStore, err := db.NewModelCapabilityStore(cfg.ConfigDir)
-	if err != nil {
-		logrus.Debugf("Failed to initialize model capability store: %v", err)
-		// Continue without capability store - will use in-memory cache only
-	} else {
-		server.capabilityStore = capabilityStore
-		logrus.Debugf("Model capability store initialized")
-	}
-
 	// E2E probe service handles /api/v2/probe end-to-end without touching *Server.
 	// The smart-routing callback closes over the server so probe doesn't import server.
 	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool, server.SelectServiceFromSmartRouting)
@@ -824,38 +802,28 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Initialize dynamic callback servers map
 	server.callbackServers = make(map[string]*oauth.CallbackServer)
 
-	// Set up health monitor probe function using existing probe infrastructure
+	// Set up health monitor probe function. The lightweight probe (OPTIONS +
+	// /models) is cheaper than a full chat request and adequate for liveness:
+	// reachability + auth validity is what the health monitor cares about, not
+	// per-endpoint capability (which is now declared, not probed).
 	if server.healthMonitor != nil {
 		server.healthMonitor.SetProbeFunc(func(serviceID string) bool {
 			// serviceID format: "<providerUUID>:<model>" (from Service.ServiceID())
 			parts := strings.Split(serviceID, ":")
-			if len(parts) < 2 {
+			if len(parts) < 1 {
 				return false
 			}
 			providerUUID := parts[0]
-			modelID := parts[1]
 
-			// Get provider from config
 			provider, err := cfg.GetProviderByUUID(providerUUID)
 			if err != nil || provider == nil {
 				return false
 			}
 
-			// Use adaptive probe to check health
-			adaptiveProbe := NewAdaptiveProbe(server)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			result, err := adaptiveProbe.ProbeModelEndpoints(ctx, probe.ModelProbeRequest{
-				ProviderUUID: providerUUID,
-				ModelID:      modelID,
-			})
-			if err != nil {
-				return false
-			}
-
-			// Service is healthy if chat endpoint is available
-			return result.ChatEndpoint.Available
+			return server.probeLightweight.Probe(ctx, provider).Valid
 		})
 	}
 
@@ -1477,21 +1445,6 @@ func (s *Server) GetRouter() *gin.Engine {
 // GetLoadBalancer returns the load balancer instance
 func (s *Server) GetLoadBalancer() *LoadBalancer {
 	return s.loadBalancer
-}
-
-// GetPreferredEndpointForModel returns the preferred endpoint (chat or responses) for a model.
-// This is the canonical entry point for endpoint selection.
-//
-// The decision is based on:
-// 1. Live probe results (cached in memory with TTL)
-// 2. Fallback to database-stored capability status
-// 3. Default to "chat" if no information is available
-//
-// NOTE: Database stores only raw state (availability, latency, errors),
-// not the PreferredEndpoint conclusion. This ensures behavior changes
-// take effect immediately upon restart.
-func (s *Server) GetPreferredEndpointForModel(provider *typ.Provider, modelID string) string {
-	return NewAdaptiveProbe(s).GetPreferredEndpoint(provider, modelID)
 }
 
 // HealthMonitor returns the server's health monitor

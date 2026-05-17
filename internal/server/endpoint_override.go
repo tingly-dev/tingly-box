@@ -6,8 +6,9 @@ import (
 )
 
 // EndpointOverride is the typed value of the openai_endpoint_override rule
-// flag. It forces an OpenAI request onto a specific endpoint, bypassing the
-// adaptive router's capability probe.
+// flag. It forces an OpenAI request onto a specific endpoint, overriding the
+// provider's declared OpenAIEndpointMode default (provider declarations
+// trump conflicting overrides — see ResolveOpenAIEndpoint).
 type EndpointOverride string
 
 const (
@@ -30,12 +31,14 @@ func ParseEndpointOverride(s string) EndpointOverride {
 	}
 }
 
-// logCodexChatOverrideIgnored emits the warning that a "chat" override against
-// a Codex provider was discarded because Codex has no Chat endpoint.
-func logCodexChatOverrideIgnored(provider *typ.Provider) {
-	uuid := ""
-	if provider != nil {
-		uuid = provider.UUID
+// logModeOverrideIgnored warns that a rule's openai_endpoint_override was
+// discarded because the provider's declared OpenAIEndpointMode doesn't
+// permit that target. Caller (ResolveOpenAIEndpoint) guarantees non-nil
+// provider.
+func logModeOverrideIgnored(provider *typ.Provider, requestedOverride string) {
+	mode := string(provider.OpenAIEndpointMode)
+	if mode == "" {
+		mode = "chat"
 	}
-	logrus.Warnf("rule openai_endpoint_override=chat ignored: provider %s is Codex (Chat unsupported)", uuid)
+	logrus.Warnf("rule openai_endpoint_override=%s ignored: provider %s declares mode=%s", requestedOverride, provider.UUID, mode)
 }

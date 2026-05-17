@@ -95,11 +95,11 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "openai_endpoint_override",
 			Label:       "OpenAI endpoint override",
-			Description: "Force OpenAI Chat Completions or Responses regardless of the adaptive router's probe-based decision. OpenAI providers only; Anthropic/Google providers ignore this. On Codex OAuth providers, \"chat\" is ignored (Codex has no Chat endpoint).",
+			Description: "Force OpenAI Chat Completions or Responses for this rule, overriding the provider's declared OpenAIEndpointMode default. OpenAI providers only; Anthropic/Google providers ignore this. If the provider declares mode=responses (e.g. Codex), \"chat\" is ignored; if mode=chat, \"responses\" is ignored.",
 			Type:        FlagTypeEnum,
 			Category:    FlagCategoryOpenAI,
 			Options: []FlagOption{
-				{Value: "auto", Label: "Auto (adaptive)"},
+				{Value: "auto", Label: "Auto (use provider default)"},
 				{Value: "chat", Label: "Force Chat Completions"},
 				{Value: "responses", Label: "Force Responses API"},
 			},

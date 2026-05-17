@@ -1005,6 +1005,8 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		Enabled:  true,
 		ProxyURL: proxyURL,
 		AuthType: typ.AuthTypeOAuth,
+		// Issuer-specific endpoint mode (e.g. Codex → responses).
+		OpenAIEndpointMode: ai.OpenAIEndpointModeForIssuer(issuer),
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  token.AccessToken,
 			ProviderType: string(issuer),

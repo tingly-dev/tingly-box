@@ -124,7 +124,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b）|
 | `use_max_tokens` | bool | request | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b）|
 | `custom_user_agent` | string | request | 覆盖出站 User-Agent header | `customUserAgentTransport` + `WithCustomUserAgent(ctx, ...)`（Type 2）|
-| `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制 OpenAI 出口走 Chat 或 Responses，绕过自适应路由探针 | `ParseEndpointOverride` → `OpenAIEndpointOptions.Override` 透传给 `SelectOpenAIEndpoint`（Type 4：路由层决策）|
+| `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
 
 ---
 
@@ -151,9 +151,11 @@ Type 3   Response post-processing
          例：skip_usage。
 
 Type 4   Routing-decision input
-         handler 把 flag 解析后作为 SelectOpenAIEndpoint 的 opts 字段
-         传入；路由层在 Transform chain 构造**之前**就决定走哪条出口。
-         不进 ExtraFields、不进 ctx。例：openai_endpoint_override。
+         handler 把 flag 解析后传给 ResolveOpenAIEndpoint；路由层在
+         Transform chain 构造**之前**就决定走哪条出口。Provider 声明
+         的 OpenAIEndpointMode 优先于 rule flag 冲突时（详见
+         .design/openai-endpoint-routing.md）。不进 ExtraFields、不进
+         ctx。例：openai_endpoint_override。
 ```
 
 任何新 flag 都应归入这五类之一。

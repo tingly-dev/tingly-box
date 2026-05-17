@@ -23,16 +23,15 @@ type StoreManager struct {
 	db      *gorm.DB // Shared DB instance for all stores
 
 	// Individual stores
-	statsStore           *StatsStore
-	usageStore           *UsageStore
-	ruleStateStore       *RuleStateStore
-	providerStore        *ProviderStore
-	toolConfigStore      *ToolConfigStore
-	imbotSettingsStore   *ImBotSettingsStore
-	modelCapabilityStore *ModelCapabilityStore
-	modelStore           *ModelStore
-	apiTokenStore        *APITokenStore
-	taskStore            *TaskStore
+	statsStore         *StatsStore
+	usageStore         *UsageStore
+	ruleStateStore     *RuleStateStore
+	providerStore      *ProviderStore
+	toolConfigStore    *ToolConfigStore
+	imbotSettingsStore *ImBotSettingsStore
+	modelStore         *ModelStore
+	apiTokenStore      *APITokenStore
+	taskStore          *TaskStore
 }
 
 // StoreManagerConfig holds configuration for StoreManager initialization.
@@ -152,8 +151,8 @@ func (sm *StoreManager) initStores() error {
 	if err := sm.initImBotSettingsStore(); err != nil {
 		errs = append(errs, fmt.Errorf("imbot settings store: %w", err))
 	}
-	if err := sm.initModelCapabilityStore(); err != nil {
-		errs = append(errs, fmt.Errorf("model capability store: %w", err))
+	if err := sm.dropDeprecatedModelCapabilities(); err != nil {
+		errs = append(errs, fmt.Errorf("drop deprecated model_capabilities: %w", err))
 	}
 	if err := sm.initModelStore(); err != nil {
 		errs = append(errs, fmt.Errorf("model store: %w", err))
@@ -244,16 +243,11 @@ func (sm *StoreManager) initImBotSettingsStore() error {
 	return nil
 }
 
-// initModelCapabilityStore initializes the ModelCapabilityStore.
-func (sm *StoreManager) initModelCapabilityStore() error {
-	if err := sm.db.AutoMigrate(&ModelCapability{}); err != nil {
-		return err
-	}
-	sm.modelCapabilityStore = &ModelCapabilityStore{
-		db:     sm.db,
-		dbPath: constant.GetDBFile(sm.baseDir),
-	}
-	return nil
+// dropDeprecatedModelCapabilities removes the model_capabilities table that
+// belonged to the now-removed AdaptiveProbe subsystem. Idempotent: harmless
+// when the table is already absent (new installs or post-migration restarts).
+func (sm *StoreManager) dropDeprecatedModelCapabilities() error {
+	return sm.db.Exec("DROP TABLE IF EXISTS model_capabilities").Error
 }
 
 // initModelStore initializes the ModelStore.
@@ -344,13 +338,6 @@ func (sm *StoreManager) ImBotSettings() *ImBotSettingsStore {
 	return sm.imbotSettingsStore
 }
 
-// ModelCapability returns the ModelCapabilityStore (thread-safe).
-// Returns nil if the store is not initialized or after Close() has been called.
-func (sm *StoreManager) ModelCapability() *ModelCapabilityStore {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.modelCapabilityStore
-}
 
 // Model returns the ModelStore (thread-safe).
 // Returns nil if the store is not initialized or after Close() has been called.
@@ -410,7 +397,6 @@ func (sm *StoreManager) Close() error {
 	sm.providerStore = nil
 	sm.toolConfigStore = nil
 	sm.imbotSettingsStore = nil
-	sm.modelCapabilityStore = nil
 	sm.modelStore = nil
 	sm.apiTokenStore = nil
 	sm.taskStore = nil
@@ -427,22 +413,21 @@ func (sm *StoreManager) HealthCheck() (*HealthStatus, error) {
 	defer sm.mu.RUnlock()
 
 	status := &HealthStatus{
-		TotalStores: 10,
+		TotalStores: 9,
 		StoreStatus: make(map[string]string),
 	}
 
 	// Check each store
 	stores := map[string]interface{}{
-		"stats":           sm.statsStore,
-		"usage":           sm.usageStore,
-		"ruleState":       sm.ruleStateStore,
-		"provider":        sm.providerStore,
-		"toolConfig":      sm.toolConfigStore,
-		"imbotSettings":   sm.imbotSettingsStore,
-		"modelCapability": sm.modelCapabilityStore,
-		"model":           sm.modelStore,
-		"apiToken":        sm.apiTokenStore,
-		"tasks":           sm.taskStore,
+		"stats":         sm.statsStore,
+		"usage":         sm.usageStore,
+		"ruleState":     sm.ruleStateStore,
+		"provider":      sm.providerStore,
+		"toolConfig":    sm.toolConfigStore,
+		"imbotSettings": sm.imbotSettingsStore,
+		"model":         sm.modelStore,
+		"apiToken":      sm.apiTokenStore,
+		"tasks":         sm.taskStore,
 	}
 
 	for name, store := range stores {

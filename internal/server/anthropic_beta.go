@@ -69,11 +69,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		selection, routeErr := s.SelectOpenAIEndpoint(c.Request.Context(), provider, actualModel, OpenAIEndpointOptions{
-			Incoming:    IncomingAPIResponses,
-			IsStreaming: isStreaming,
-			Override:    ParseEndpointOverride(resolveRuleFlags(rule).OpenAIEndpointOverride),
-		})
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(rule), IncomingAPIResponses)
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -84,7 +80,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 			})
 			return
 		}
-		target = selection.Target
+		target = resolvedTarget
 	}
 
 	// Get or create the recorder for dual-stage recording
