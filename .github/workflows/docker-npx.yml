@@ -33,5 +33,6 @@ jobs:
         with:
           image_name: tingly-box
           version: ${{ steps.validate.outputs.tag }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           build_args: |
             TINGLY_VERSION=${{ steps.validate.outputs.npm_version }}
