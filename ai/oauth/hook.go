@@ -69,7 +69,41 @@ func (h *AnthropicHook) BeforeToken(body map[string]string, header http.Header) 
 }
 
 func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, httpClient *http.Client) (map[string]any, error) {
-	return nil, nil
+	type accountResponse struct {
+		UUID         string `json:"uuid"`
+		EmailAddress string `json:"email_address"`
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/v1/account", nil)
+	if err != nil {
+		return nil, nil
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, nil
+	}
+
+	var account accountResponse
+	if err := json.NewDecoder(resp.Body).Decode(&account); err != nil {
+		return nil, nil
+	}
+
+	metadata := make(map[string]any)
+	if account.EmailAddress != "" {
+		metadata["email"] = account.EmailAddress
+	}
+	if account.UUID != "" {
+		metadata["account_id"] = account.UUID
+	}
+	return metadata, nil
 }
 
 // GeminiHook implements Gemini CLI OAuth specific behavior.

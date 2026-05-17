@@ -20,7 +20,7 @@ func DefaultRegistry() *Registry {
 		AuthURL:            "https://claude.ai/oauth/authorize",
 		TokenURL:           "https://api.anthropic.com/v1/oauth/token", // API endpoint (verified working)
 		RedirectURL:        "",                                         // Dynamic: set to server.BaseURL + "/callback"
-		Scopes:             []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code"},
+		Scopes:             []string{"user:profile", "user:inference", "user:sessions:claude_code", "user:mcp_servers", "user:file_upload"},
 		AuthStyle:          AuthStyleInNone,        // Public client, no auth in token request
 		OAuthMethod:        OAuthMethodPKCE,        // Uses PKCE for security (REQUIRED)
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
