@@ -114,6 +114,9 @@ type Server struct {
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
 
+	// probeV2Service runs SDK-level end-to-end probes for the /api/v2/probe endpoint.
+	probeV2Service *probe.V2Service
+
 	// mcp runtime for external MCP tools
 	mcpRuntime *mcpruntime.Runtime
 
@@ -750,6 +753,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 		server.capabilityStore = capabilityStore
 		logrus.Debugf("Model capability store initialized")
 	}
+
+	// V2 probe service handles /api/v2/probe end-to-end without touching *Server.
+	// The smart-routing callback closes over the server so probe doesn't import server.
+	server.probeV2Service = probe.NewV2Service(cfg, server.clientPool, server.SelectServiceFromSmartRouting)
 
 	// Initialize OTel meter setup for token tracking
 	sm := cfg.StoreManager()

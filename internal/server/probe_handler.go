@@ -27,8 +27,7 @@ func (s *Server) testProviderConnectivity(req *probe.ProbeProviderRequest) (bool
 	model := s.getDefaultModelForAPIStyle(provider.APIStyle)
 	message := "Hello, this is a test message. Please respond with a short greeting."
 
-	// Use SDK-based probe from probe_v2_sdk.go
-	data, err := s.probeProviderWithSDK(ctx, provider, model, message, probe.ProbeV2ModeSimple)
+	data, err := s.probeV2Service.ProbeProviderWithSDK(ctx, provider, model, message, probe.ProbeV2ModeSimple)
 	if err != nil {
 		return false, err.Error(), 0, nil
 	}

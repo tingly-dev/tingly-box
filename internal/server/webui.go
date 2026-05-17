@@ -25,6 +25,7 @@ import (
 	mcpmodule "github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
+	probemodule "github.com/tingly-dev/tingly-box/internal/server/module/probe"
 	"github.com/tingly-dev/tingly-box/internal/server/module/onboarding"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
 	"github.com/tingly-dev/tingly-box/internal/server/module/providertemplate"
@@ -796,12 +797,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	onboarding.RegisterRoutes(apiV1, onboardingHandler)
 
 	// Probe V2 endpoint (unified probe API for rules, providers, and unsaved provider config)
-	apiV2.POST("/probe", s.HandleProbeV2,
-		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules, providers, and unsaved provider config"),
-		swagger.WithTags("testing"),
-		swagger.WithRequestModel(probe.ProbeV2Request{}),
-		swagger.WithResponseModel(ProbeV2Response{}),
-	)
+	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeV2Service))
 
 	// Lightweight probe endpoint for optional key validation
 	apiV2.POST("/probe/lightweight", s.HandleLightweightProbe,
