@@ -6,6 +6,7 @@ import (
 
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -64,7 +65,7 @@ func (s *Server) SelectOpenAIEndpoint(ctx context.Context, provider *typ.Provide
 		go func() {
 			probeCtx, cancel := context.WithTimeout(context.Background(), DefaultProbeTimeout)
 			defer cancel()
-			_, _ = NewAdaptiveProbe(s).ProbeModelEndpoints(probeCtx, ModelProbeRequest{ProviderUUID: provider.UUID, ModelID: modelID})
+			_, _ = NewAdaptiveProbe(s).ProbeModelEndpoints(probeCtx, probe.ModelProbeRequest{ProviderUUID: provider.UUID, ModelID: modelID})
 		}()
 		return defaultEndpointSelection(opts.Incoming, "no cached capability; respecting incoming API"), nil
 	}

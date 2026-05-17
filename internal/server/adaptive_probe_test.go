@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 )
 
 // TestDeterminePreferredEndpoint tests the logic for choosing between
@@ -16,18 +17,18 @@ func TestDeterminePreferredEndpoint(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		chat      *EndpointStatus
-		responses *EndpointStatus
+		chat      *probe.EndpointStatus
+		responses *probe.EndpointStatus
 		want      string
 	}{
 		{
 			name: "Chat with streaming - highest priority",
-			chat: &EndpointStatus{
+			chat: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: true,
 				LatencyMs:      100,
 			},
-			responses: &EndpointStatus{
+			responses: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: true,
 				LatencyMs:      50,
@@ -36,12 +37,12 @@ func TestDeterminePreferredEndpoint(t *testing.T) {
 		},
 		{
 			name: "Responses with streaming (Chat no streaming)",
-			chat: &EndpointStatus{
+			chat: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: false,
 				LatencyMs:      100,
 			},
-			responses: &EndpointStatus{
+			responses: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: true,
 				LatencyMs:      50,
@@ -50,12 +51,12 @@ func TestDeterminePreferredEndpoint(t *testing.T) {
 		},
 		{
 			name: "Chat without streaming",
-			chat: &EndpointStatus{
+			chat: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: false,
 				LatencyMs:      100,
 			},
-			responses: &EndpointStatus{
+			responses: &probe.EndpointStatus{
 				Available:      false,
 				SupportsStream: false,
 			},
@@ -63,10 +64,10 @@ func TestDeterminePreferredEndpoint(t *testing.T) {
 		},
 		{
 			name: "Responses without streaming (last resort)",
-			chat: &EndpointStatus{
+			chat: &probe.EndpointStatus{
 				Available: false,
 			},
-			responses: &EndpointStatus{
+			responses: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: false,
 				LatencyMs:      200,
@@ -75,27 +76,27 @@ func TestDeterminePreferredEndpoint(t *testing.T) {
 		},
 		{
 			name:      "Neither available - default to chat",
-			chat:      &EndpointStatus{Available: false},
-			responses: &EndpointStatus{Available: false},
+			chat:      &probe.EndpointStatus{Available: false},
+			responses: &probe.EndpointStatus{Available: false},
 			want:      string(db.EndpointTypeChat),
 		},
 		{
 			name:  "Chat streaming, Responses not available",
-			chat: &EndpointStatus{
+			chat: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: true,
 			},
-			responses: &EndpointStatus{
+			responses: &probe.EndpointStatus{
 				Available: false,
 			},
 			want: string(db.EndpointTypeChat),
 		},
 		{
 			name: "Responses streaming, Chat not available",
-			chat: &EndpointStatus{
+			chat: &probe.EndpointStatus{
 				Available: false,
 			},
-			responses: &EndpointStatus{
+			responses: &probe.EndpointStatus{
 				Available:      true,
 				SupportsStream: true,
 			},
@@ -118,36 +119,36 @@ func TestDeterminePreferredEndpoint_PriorityOrder(t *testing.T) {
 
 	// Priority 1: Chat with streaming (most stable)
 	t.Run("Priority1_ChatWithStreaming", func(t *testing.T) {
-		chat := &EndpointStatus{Available: true, SupportsStream: true}
-		responses := &EndpointStatus{Available: true, SupportsStream: true}
+		chat := &probe.EndpointStatus{Available: true, SupportsStream: true}
+		responses := &probe.EndpointStatus{Available: true, SupportsStream: true}
 		assert.Equal(t, "chat", ap.determinePreferredEndpoint(chat, responses))
 	})
 
 	// Priority 2: Responses with streaming
 	t.Run("Priority2_ResponsesWithStreaming", func(t *testing.T) {
-		chat := &EndpointStatus{Available: true, SupportsStream: false}
-		responses := &EndpointStatus{Available: true, SupportsStream: true}
+		chat := &probe.EndpointStatus{Available: true, SupportsStream: false}
+		responses := &probe.EndpointStatus{Available: true, SupportsStream: true}
 		assert.Equal(t, "responses", ap.determinePreferredEndpoint(chat, responses))
 	})
 
 	// Priority 3: Chat without streaming
 	t.Run("Priority3_ChatWithoutStreaming", func(t *testing.T) {
-		chat := &EndpointStatus{Available: true, SupportsStream: false}
-		responses := &EndpointStatus{Available: true, SupportsStream: false}
+		chat := &probe.EndpointStatus{Available: true, SupportsStream: false}
+		responses := &probe.EndpointStatus{Available: true, SupportsStream: false}
 		assert.Equal(t, "chat", ap.determinePreferredEndpoint(chat, responses))
 	})
 
 	// Priority 4: Responses without streaming
 	t.Run("Priority4_ResponsesWithoutStreaming", func(t *testing.T) {
-		chat := &EndpointStatus{Available: false}
-		responses := &EndpointStatus{Available: true, SupportsStream: false}
+		chat := &probe.EndpointStatus{Available: false}
+		responses := &probe.EndpointStatus{Available: true, SupportsStream: false}
 		assert.Equal(t, "responses", ap.determinePreferredEndpoint(chat, responses))
 	})
 
 	// Priority 5: Default to chat
 	t.Run("Priority5_DefaultToChat", func(t *testing.T) {
-		chat := &EndpointStatus{Available: false}
-		responses := &EndpointStatus{Available: false}
+		chat := &probe.EndpointStatus{Available: false}
+		responses := &probe.EndpointStatus{Available: false}
 		assert.Equal(t, "chat", ap.determinePreferredEndpoint(chat, responses))
 	})
 }
@@ -155,7 +156,7 @@ func TestDeterminePreferredEndpoint_PriorityOrder(t *testing.T) {
 // TestEndpointStatus_IsAvailable tests the helper methods
 func TestEndpointStatus_IsAvailable(t *testing.T) {
 	t.Run("Available endpoint", func(t *testing.T) {
-		status := EndpointStatus{
+		status := probe.EndpointStatus{
 			Available:      true,
 			SupportsStream: true,
 			LatencyMs:      100,
@@ -166,7 +167,7 @@ func TestEndpointStatus_IsAvailable(t *testing.T) {
 	})
 
 	t.Run("Unavailable endpoint", func(t *testing.T) {
-		status := EndpointStatus{
+		status := probe.EndpointStatus{
 			Available:      false,
 			SupportsStream: false,
 			ErrorMessage:   "Connection refused",

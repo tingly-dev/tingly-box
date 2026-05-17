@@ -27,6 +27,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -108,7 +109,7 @@ type Server struct {
 	templateManager *data.TemplateManager
 
 	// probe cache for model endpoint capabilities
-	probeCache *ProbeCache
+	probeCache *probe.ProbeCache
 
 	// capability store for persistent model capabilities
 	capabilityStore *db.ModelCapabilityStore
@@ -735,7 +736,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.registerAdviserFromConfig()
 
 	// Initialize probe cache with 24-hour TTL
-	server.probeCache = NewProbeCache(24 * time.Hour)
+	server.probeCache = probe.NewProbeCache(24 * time.Hour)
 	// Start background cleanup task for expired cache entries
 	server.probeCache.StartCleanupTask(1 * time.Hour)
 	logrus.Debugf("Probe cache initialized with TTL: 24h")
@@ -834,7 +835,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			result, err := adaptiveProbe.ProbeModelEndpoints(ctx, ModelProbeRequest{
+			result, err := adaptiveProbe.ProbeModelEndpoints(ctx, probe.ModelProbeRequest{
 				ProviderUUID: providerUUID,
 				ModelID:      modelID,
 			})

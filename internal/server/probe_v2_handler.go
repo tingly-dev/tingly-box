@@ -13,6 +13,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -20,7 +21,7 @@ import (
 
 // HandleProbeV2 handles Probe V2 requests (unified endpoint for all test types)
 func (s *Server) HandleProbeV2(c *gin.Context) {
-	var req ProbeV2Request
+	var req probe.ProbeV2Request
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ProbeV2Response{
 			Success: false,
@@ -33,7 +34,7 @@ func (s *Server) HandleProbeV2(c *gin.Context) {
 	}
 
 	// Validate request
-	if err := validateProbeV2Request(&req); err != nil {
+	if err := probe.ValidateProbeV2Request(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ProbeV2Response{
 			Success: false,
 			Error: &ErrorDetail{
@@ -46,15 +47,15 @@ func (s *Server) HandleProbeV2(c *gin.Context) {
 
 	// Route to appropriate handler based on test mode
 	switch req.TestMode {
-	case ProbeV2ModeSimple:
+	case probe.ProbeV2ModeSimple:
 		s.handleProbe(c, &req)
-	case ProbeV2ModeStreaming, ProbeV2ModeTool:
+	case probe.ProbeV2ModeStreaming, probe.ProbeV2ModeTool:
 		s.handleProbeStream(c, &req)
 	}
 }
 
 // handleProbe handles simple (non-streaming) probe requests
-func (s *Server) handleProbe(c *gin.Context, req *ProbeV2Request) {
+func (s *Server) handleProbe(c *gin.Context, req *probe.ProbeV2Request) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
@@ -81,7 +82,7 @@ func (s *Server) handleProbe(c *gin.Context, req *ProbeV2Request) {
 }
 
 // handleProbeStream handles streaming probe requests
-func (s *Server) handleProbeStream(c *gin.Context, req *ProbeV2Request) {
+func (s *Server) handleProbeStream(c *gin.Context, req *probe.ProbeV2Request) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
@@ -108,40 +109,40 @@ func (s *Server) handleProbeStream(c *gin.Context, req *ProbeV2Request) {
 }
 
 // probe performs a probe using SDK for both rule and provider targets
-func (s *Server) probe(ctx context.Context, req *ProbeV2Request) (*client.ProbeResult, error) {
+func (s *Server) probe(ctx context.Context, req *probe.ProbeV2Request) (*client.ProbeResult, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	message := getProbeMessage(req.TestMode, req.Message)
+	message := probe.ProbeMessage(req.TestMode, req.Message)
 	return s.probeProviderWithSDK(ctx, provider, model, message, req.TestMode)
 }
 
 // probeStream performs a streaming probe using SDK for both rule and provider targets
-func (s *Server) probeStream(ctx context.Context, req *ProbeV2Request) (*client.ProbeResult, error) {
+func (s *Server) probeStream(ctx context.Context, req *probe.ProbeV2Request) (*client.ProbeResult, error) {
 	provider, model, err := s.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	message := getProbeMessage(req.TestMode, req.Message)
+	message := probe.ProbeMessage(req.TestMode, req.Message)
 	return s.probeProviderStream(ctx, provider, model, message, req.TestMode)
 }
 
 // resolveTargetToProviderModel resolves a probe request (rule or provider) to a provider and model
-func (s *Server) resolveTargetToProviderModel(ctx context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
+func (s *Server) resolveTargetToProviderModel(ctx context.Context, req *probe.ProbeV2Request) (*typ.Provider, string, error) {
 	var (
 		provider *typ.Provider
 		model    string
 		err      error
 	)
 	switch req.TargetType {
-	case ProbeV2TargetProvider:
+	case probe.ProbeV2TargetProvider:
 		provider, model, err = s.resolveProviderTarget(ctx, req)
-	case ProbeV2TargetProviderConfig:
+	case probe.ProbeV2TargetProviderConfig:
 		provider, model, err = s.resolveProviderConfigTarget(ctx, req)
-	case ProbeV2TargetRule:
+	case probe.ProbeV2TargetRule:
 		provider, model, err = s.resolveRuleTarget(ctx, req)
 	default:
 		return nil, "", fmt.Errorf("invalid target type: %s", req.TargetType)
@@ -180,7 +181,7 @@ func (s *Server) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.
 		return nil, "", fmt.Errorf("vmodel probe unsupported for APIStyle %q", provider.APIStyle)
 	}
 
-	return s.resolveProviderConfigTarget(ctx, &ProbeV2Request{
+	return s.resolveProviderConfigTarget(ctx, &probe.ProbeV2Request{
 		Name:     provider.Name,
 		APIBase:  fmt.Sprintf("http://localhost:%d%s", port, path),
 		APIStyle: string(provider.APIStyle),
@@ -190,7 +191,7 @@ func (s *Server) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.
 }
 
 // resolveProviderTarget resolves a provider target to provider and model
-func (s *Server) resolveProviderTarget(_ context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
+func (s *Server) resolveProviderTarget(_ context.Context, req *probe.ProbeV2Request) (*typ.Provider, string, error) {
 	provider, err := s.config.GetProviderByUUID(req.ProviderUUID)
 	if err != nil || provider == nil {
 		return nil, "", fmt.Errorf("provider not found: %s", req.ProviderUUID)
@@ -220,7 +221,7 @@ func (s *Server) resolveProviderTarget(_ context.Context, req *ProbeV2Request) (
 }
 
 // resolveProviderConfigTarget builds a temporary provider from inline config
-func (s *Server) resolveProviderConfigTarget(_ context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
+func (s *Server) resolveProviderConfigTarget(_ context.Context, req *probe.ProbeV2Request) (*typ.Provider, string, error) {
 	if req.APIBase == "" || req.APIStyle == "" || req.Token == "" {
 		return nil, "", fmt.Errorf("provider_config target requires api_base, api_style, and token")
 	}
@@ -252,7 +253,7 @@ func (s *Server) resolveProviderConfigTarget(_ context.Context, req *ProbeV2Requ
 // resolveRuleTarget resolves a rule target to provider and model.
 // When smart routing is enabled, it evaluates smart routing rules first
 // instead of falling back to the base service list.
-func (s *Server) resolveRuleTarget(_ context.Context, req *ProbeV2Request) (*typ.Provider, string, error) {
+func (s *Server) resolveRuleTarget(_ context.Context, req *probe.ProbeV2Request) (*typ.Provider, string, error) {
 	rule := s.config.GetRuleByUUID(req.RuleUUID)
 	if rule == nil {
 		return nil, "", fmt.Errorf("rule not found: %s", req.RuleUUID)
@@ -316,7 +317,7 @@ func (s *Server) resolveRuleTarget(_ context.Context, req *ProbeV2Request) (*typ
 // It builds a minimal request based on the rule's scenario to extract context
 // and then runs the smart routing evaluator.
 func (s *Server) resolveSmartRoutingForProbe(rule *typ.Rule) (*loadbalance.Service, error) {
-	_, apiStyle := getScenarioEndpoint(string(rule.Scenario))
+	_, apiStyle := probe.ScenarioEndpoint(string(rule.Scenario))
 
 	var reqCtx *smartrouting.RequestContext
 	switch apiStyle {

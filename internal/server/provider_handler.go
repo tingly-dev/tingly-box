@@ -11,6 +11,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -105,7 +106,7 @@ func (s *Server) CreateProvider(c *gin.Context) {
 	// Backend verification: Verify provider connection before saving (skip if no key required)
 	// This is a safety measure in addition to frontend verification
 	if !req.NoKeyRequired && req.Token != "" {
-		probeReq := &ProbeProviderRequest{
+		probeReq := &probe.ProbeProviderRequest{
 			Name:     req.Name,
 			APIBase:  req.APIBase,
 			APIStyle: req.APIStyle,

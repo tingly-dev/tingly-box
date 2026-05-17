@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/ai/quota"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -150,40 +151,16 @@ type RuleSummaryResponse struct {
 }
 
 // =============================================
-// Web UI API Models
+// Web UI API Models — probe request/data types live in internal/probe
 // =============================================
 
-// ProbeRequest represents the request to probe/test a provider and model
-type ProbeRequest struct {
-	Provider string `json:"provider" binding:"required" description:"Provider UUID to test against" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Model    string `json:"model" binding:"required" description:"Model name to test against" example:"gpt-4-latest"`
-}
-
-// ProbeProviderRequest represents the request to probe/test a provider's API key and connectivity
-type ProbeProviderRequest struct {
-	Name     string `json:"name" binding:"required" description:"Provider name" example:"openai"`
-	APIBase  string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
-	APIStyle string `json:"api_style" binding:"required,oneof=openai anthropic" description:"API style" example:"openai"`
-	Token    string `json:"token" binding:"required" description:"API token to test" example:"sk-..."`
-}
-
-// ProbeProviderResponse represents the response from provider probing
+// ProbeProviderResponse represents the response from provider probing.
+// The wrapper stays here because it embeds *ErrorDetail (server's global
+// error model). The Data shape lives in internal/probe.
 type ProbeProviderResponse struct {
-	Success bool                       `json:"success" example:"true"`
-	Error   *ErrorDetail               `json:"error,omitempty"`
-	Data    *ProbeProviderResponseData `json:"data,omitempty"`
-}
-
-// ProbeProviderResponseData represents the data returned from provider probing
-type ProbeProviderResponseData struct {
-	Provider     string `json:"provider" example:"openai"`
-	APIBase      string `json:"api_base" example:"https://api.openai.com/v1"`
-	APIStyle     string `json:"api_style" example:"openai"`
-	Valid        bool   `json:"valid" example:"true"`
-	Message      string `json:"message" example:"API key is valid and accessible"`
-	TestResult   string `json:"test_result" example:"models_endpoint_success"`
-	ResponseTime int64  `json:"response_time_ms" example:"250"`
-	ModelsCount  int    `json:"models_count,omitempty" example:"150"`
+	Success bool                             `json:"success" example:"true"`
+	Error   *ErrorDetail                     `json:"error,omitempty"`
+	Data    *probe.ProbeProviderResponseData `json:"data,omitempty"`
 }
 
 // ProviderResponse represents a provider configuration with masked token
@@ -348,59 +325,13 @@ type OpenAIModelsResponse struct {
 // Lightweight Probe API Models (for optional key validation)
 // =============================================
 
-// LightweightProbeRequest represents a lightweight probe request for key validation
-// This is used for optional "Test Connection" feature when adding API keys
-type LightweightProbeRequest struct {
-	Name     string `json:"name" binding:"required" description:"Provider name" example:"openai"`
-	APIBase  string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
-	APIStyle string `json:"api_style" binding:"required,oneof=openai anthropic google" description:"API style" example:"openai"`
-	Token    string `json:"token" binding:"required" description:"API token to test" example:"sk-..."`
-	AuthType string `json:"auth_type,omitempty" description:"Auth type (e.g., api_key, oauth)" example:"api_key"`
-}
-
-// LightweightProbeResponse represents the response from lightweight probing
-// Returns detailed probe results for OPTIONS and models endpoint, but does not
-// block key addition - these are informational only
+// LightweightProbeResponse represents the response from lightweight probing.
+// Returns detailed probe results for OPTIONS and models endpoint, but does
+// not block key addition — these are informational only.
 type LightweightProbeResponse struct {
-	Success bool                          `json:"success" example:"true"`
-	Error   *ErrorDetail                  `json:"error,omitempty"`
-	Data    *LightweightProbeResponseData `json:"data,omitempty"`
-}
-
-// LightweightProbeResponseData represents the data returned from lightweight probing
-type LightweightProbeResponseData struct {
-	// Overall assessment (best-effort, not definitive)
-	Valid   bool   `json:"valid" example:"true"`
-	Message string `json:"message" example:"Connection test completed"`
-
-	// OPTIONS probe result (basic connectivity test)
-	OptionsSuccess      bool   `json:"options_success" example:"true"`
-	OptionsMessage      string `json:"options_message,omitempty" example:"OPTIONS request successful"`
-	OptionsResponseTime int64  `json:"options_response_time_ms,omitempty" example:"45"`
-
-	// Models endpoint probe result (API access validation)
-	ModelsSuccess      bool   `json:"models_success" example:"true"`
-	ModelsMessage      string `json:"models_message,omitempty" example:"Models endpoint accessible"`
-	ModelsResponseTime int64  `json:"models_response_time_ms,omitempty" example:"250"`
-	ModelsCount        int    `json:"models_count,omitempty" example:"150"`
-
-	// Chat endpoint probe result (for OpenAI-style providers)
-	ChatSuccess      bool   `json:"chat_success,omitempty" example:"true"`
-	ChatMessage      string `json:"chat_message,omitempty" example:"Chat endpoint accessible"`
-	ChatResponseTime int64  `json:"chat_response_time_ms,omitempty" example:"180"`
-
-	// Responses endpoint probe result (for OpenAI Responses API)
-	ResponsesSuccess      bool   `json:"responses_success,omitempty" example:"true"`
-	ResponsesMessage      string `json:"responses_message,omitempty" example:"Responses API endpoint accessible"`
-	ResponsesResponseTime int64  `json:"responses_response_time_ms,omitempty" example:"200"`
-
-	// Provider info for reference
-	Provider string `json:"provider" example:"openai"`
-	APIBase  string `json:"api_base" example:"https://api.openai.com/v1"`
-	APIStyle string `json:"api_style" example:"openai"`
-
-	// Warning if provider doesn't support these endpoints
-	Warning string `json:"warning,omitempty" example:"Models endpoint not supported for this provider type"`
+	Success bool                                `json:"success" example:"true"`
+	Error   *ErrorDetail                        `json:"error,omitempty"`
+	Data    *probe.LightweightProbeResponseData `json:"data,omitempty"`
 }
 
 // =============================================
@@ -512,12 +443,7 @@ type ProbeResponse struct {
 // Probe API Models
 // =============================================
 
-// ModelProbeRequest represents the request to probe a specific model
-type ModelProbeRequest struct {
-	ProviderUUID string `json:"provider_uuid" binding:"required" description:"Provider UUID to probe" example:"uuid-123"`
-	ModelID      string `json:"model_id" binding:"required" description:"Model ID to probe" example:"gpt-4"`
-	ForceRefresh bool   `json:"force_refresh" description:"Force new probe even if cached" example:"false"`
-}
+// ModelProbeRequest lives in internal/probe.
 
 // EndpointProbeStatus represents the status of an endpoint probe
 type EndpointProbeStatus struct {

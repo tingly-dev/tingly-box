@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -16,7 +17,7 @@ import (
 // This endpoint is used by the "Test Connection" button when adding API keys.
 // It tests OPTIONS and models endpoints, but results are informational only - not blocking.
 func (s *Server) HandleLightweightProbe(c *gin.Context) {
-	var req LightweightProbeRequest
+	var req probe.LightweightProbeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, LightweightProbeResponse{
 			Success: false,
@@ -71,8 +72,8 @@ func (s *Server) HandleLightweightProbe(c *gin.Context) {
 }
 
 // lightweightProbe performs a lightweight probe using all available endpoints
-func (s *Server) lightweightProbe(ctx context.Context, provider *typ.Provider) (*LightweightProbeResponseData, error) {
-	data := &LightweightProbeResponseData{
+func (s *Server) lightweightProbe(ctx context.Context, provider *typ.Provider) (*probe.LightweightProbeResponseData, error) {
+	data := &probe.LightweightProbeResponseData{
 		Provider: provider.Name,
 		APIBase:  provider.APIBase,
 		APIStyle: string(provider.APIStyle),

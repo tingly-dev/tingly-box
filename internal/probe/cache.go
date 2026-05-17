@@ -1,24 +1,24 @@
-package server
+package probe
 
 import (
 	"sync"
 	"time"
 )
 
-// ProbeCache provides in-memory caching for model endpoint capability probe results
+// ProbeCache provides in-memory caching for model endpoint capability probe results.
 type ProbeCache struct {
 	mu    sync.RWMutex
 	cache map[string]*CachedModelCapability
 	ttl   time.Duration
 }
 
-// CachedModelCapability represents a cached model endpoint capability with expiration
+// CachedModelCapability represents a cached model endpoint capability with expiration.
 type CachedModelCapability struct {
 	Capability ModelEndpointCapability
 	ExpiresAt  time.Time
 }
 
-// ModelEndpointCapability represents the endpoint capability information for a model
+// ModelEndpointCapability represents the endpoint capability information for a model.
 type ModelEndpointCapability struct {
 	ProviderUUID            string
 	ModelID                 string
@@ -34,16 +34,16 @@ type ModelEndpointCapability struct {
 	LastVerified            time.Time
 }
 
-// EndpointStatus represents the status of a single endpoint
+// EndpointStatus represents the status of a single endpoint.
 type EndpointStatus struct {
 	Available      bool
 	LatencyMs      int
 	ErrorMessage   string
 	LastChecked    time.Time
-	SupportsStream bool // True if streaming works for this endpoint
+	SupportsStream bool
 }
 
-// ProbeResult represents the complete probe result for a model
+// ProbeResult represents the complete probe result for a model.
 type ProbeResult struct {
 	ProviderUUID      string
 	ModelID           string
@@ -53,14 +53,14 @@ type ProbeResult struct {
 	LastUpdated       time.Time
 }
 
-// ProbeCacheRequest represents a request to probe a model
+// ProbeCacheRequest represents a request to probe a model.
 type ProbeCacheRequest struct {
 	ProviderUUID string
 	ModelID      string
-	ForceRefresh bool // Force new probe even if cached
+	ForceRefresh bool
 }
 
-// NewProbeCache creates a new probe cache with the specified TTL
+// NewProbeCache creates a new probe cache with the specified TTL.
 func NewProbeCache(ttl time.Duration) *ProbeCache {
 	return &ProbeCache{
 		cache: make(map[string]*CachedModelCapability),
@@ -68,7 +68,10 @@ func NewProbeCache(ttl time.Duration) *ProbeCache {
 	}
 }
 
-// Get retrieves cached capability for a model
+// TTL returns the configured cache TTL.
+func (pc *ProbeCache) TTL() time.Duration { return pc.ttl }
+
+// Get retrieves cached capability for a model. Returns nil for miss or expired.
 func (pc *ProbeCache) Get(providerUUID, modelID string) *ModelEndpointCapability {
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
@@ -78,17 +81,13 @@ func (pc *ProbeCache) Get(providerUUID, modelID string) *ModelEndpointCapability
 	if !found {
 		return nil
 	}
-
-	// Check if expired
 	if time.Now().After(cached.ExpiresAt) {
-		// Expired - return nil (caller should trigger refresh)
 		return nil
 	}
-
 	return &cached.Capability
 }
 
-// Set stores capability in cache
+// Set stores capability in cache.
 func (pc *ProbeCache) Set(providerUUID, modelID string, capability *ModelEndpointCapability) {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
@@ -100,7 +99,7 @@ func (pc *ProbeCache) Set(providerUUID, modelID string, capability *ModelEndpoin
 	}
 }
 
-// SetFromProbeResult stores probe result in cache
+// SetFromProbeResult stores probe result in cache.
 func (pc *ProbeCache) SetFromProbeResult(result *ProbeResult) {
 	capability := &ModelEndpointCapability{
 		ProviderUUID:            result.ProviderUUID,
@@ -119,7 +118,7 @@ func (pc *ProbeCache) SetFromProbeResult(result *ProbeResult) {
 	pc.Set(result.ProviderUUID, result.ModelID, capability)
 }
 
-// Invalidate removes cached capability for a specific model
+// Invalidate removes cached capability for a specific model.
 func (pc *ProbeCache) Invalidate(providerUUID, modelID string) {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
@@ -128,12 +127,11 @@ func (pc *ProbeCache) Invalidate(providerUUID, modelID string) {
 	delete(pc.cache, key)
 }
 
-// InvalidateProvider removes all cached capabilities for a provider
+// InvalidateProvider removes all cached capabilities for a provider.
 func (pc *ProbeCache) InvalidateProvider(providerUUID string) {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
-	// Remove all entries for this provider
 	prefix := providerUUID + "/"
 	for key := range pc.cache {
 		if len(key) > len(prefix) && key[:len(prefix)] == prefix {
@@ -142,7 +140,7 @@ func (pc *ProbeCache) InvalidateProvider(providerUUID string) {
 	}
 }
 
-// Clear removes all cached entries
+// Clear removes all cached entries.
 func (pc *ProbeCache) Clear() {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
@@ -150,7 +148,7 @@ func (pc *ProbeCache) Clear() {
 	pc.cache = make(map[string]*CachedModelCapability)
 }
 
-// CleanupExpired removes expired entries from cache
+// CleanupExpired removes expired entries from cache.
 func (pc *ProbeCache) CleanupExpired() {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
@@ -163,12 +161,11 @@ func (pc *ProbeCache) CleanupExpired() {
 	}
 }
 
-// makeKey creates a cache key from provider UUID and model ID
 func (pc *ProbeCache) makeKey(providerUUID, modelID string) string {
 	return providerUUID + "/" + modelID
 }
 
-// StartCleanupTask starts a background task to periodically clean up expired entries
+// StartCleanupTask starts a background task to periodically clean up expired entries.
 func (pc *ProbeCache) StartCleanupTask(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	go func() {

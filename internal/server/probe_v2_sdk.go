@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -36,7 +37,7 @@ func (s *Server) getClientForProvider(provider *typ.Provider, model string) (cli
 }
 
 // probeProviderWithSDK performs a non-streaming probe for a provider using Prober interface
-func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*client.ProbeResult, error) {
+func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode probe.ProbeMode) (*client.ProbeResult, error) {
 	prober, err := s.getClientForProvider(provider, model)
 	if err != nil {
 		return nil, err
@@ -49,7 +50,7 @@ func (s *Server) probeProviderWithSDK(ctx context.Context, provider *typ.Provide
 }
 
 // probeProviderStream performs a streaming probe for a provider using Prober interface
-func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode ProbeMode) (*client.ProbeResult, error) {
+func (s *Server) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode probe.ProbeMode) (*client.ProbeResult, error) {
 	prober, err := s.getClientForProvider(provider, model)
 	if err != nil {
 		return nil, err

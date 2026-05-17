@@ -17,6 +17,7 @@ import (
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
@@ -798,7 +799,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV2.POST("/probe", s.HandleProbeV2,
 		swagger.WithDescription("Probe V2 - Unified probe endpoint for testing rules, providers, and unsaved provider config"),
 		swagger.WithTags("testing"),
-		swagger.WithRequestModel(ProbeV2Request{}),
+		swagger.WithRequestModel(probe.ProbeV2Request{}),
 		swagger.WithResponseModel(ProbeV2Response{}),
 	)
 
@@ -806,7 +807,7 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	apiV2.POST("/probe/lightweight", s.HandleLightweightProbe,
 		swagger.WithDescription("Lightweight probe for optional key validation using OPTIONS and models endpoint"),
 		swagger.WithTags("testing"),
-		swagger.WithRequestModel(LightweightProbeRequest{}),
+		swagger.WithRequestModel(probe.LightweightProbeRequest{}),
 		swagger.WithResponseModel(LightweightProbeResponse{}),
 	)
 
