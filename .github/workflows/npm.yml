@@ -5,15 +5,10 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'GitHub Release tag to download assets from (e.g., v1.0.0)'
+      tag:
+        description: 'Release tag to publish from (e.g., v1.0.0)'
         required: true
         type: string
-      npx_version:
-        description: 'NPX Package version to publish (defaults to release tag version without v prefix)'
-        required: false
-        type: string
-        default: ''
       publish_cli:
         description: 'Publish CLI package (tingly-box)'
         required: false
@@ -86,6 +81,7 @@ jobs:
               echo "npm_tag=latest" >> $GITHUB_OUTPUT
             fi
           else
+            # workflow_dispatch: tag must be provided explicitly
             echo "publish_cli=${{ github.event.inputs.publish_cli }}" >> $GITHUB_OUTPUT
             echo "publish_gui=${{ github.event.inputs.publish_gui }}" >> $GITHUB_OUTPUT
             echo "publish_bundle=${{ github.event.inputs.publish_bundle }}" >> $GITHUB_OUTPUT
@@ -98,10 +94,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             RELEASE_TAG="${{ github.event.release.tag_name }}"
-            NPX_VERSION_INPUT=""
           else
-            RELEASE_TAG="${{ github.event.inputs.release_tag }}"
-            NPX_VERSION_INPUT="${{ github.event.inputs.npx_version }}"
+            RELEASE_TAG="${{ github.event.inputs.tag }}"
           fi
 
           # Validate tag format
@@ -110,20 +104,12 @@ jobs:
             exit 1
           fi
 
-          # Use provided version or extract from tag
-          if [ -n "$NPX_VERSION_INPUT" ]; then
-            NPX_VERSION="$NPX_VERSION_INPUT"
-            echo "📝 Using custom NPX version: $NPX_VERSION"
-          else
-            NPX_VERSION="${RELEASE_TAG#v}"
-            echo "📝 Using version from release tag: $NPX_VERSION"
-          fi
+          NPX_VERSION="${RELEASE_TAG#v}"
 
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "npx_version=$NPX_VERSION" >> $GITHUB_OUTPUT
           echo ""
           echo "Summary:"
-          echo "  - Branch: ${{ github.ref_name }}"
           echo "  - Release tag (assets source): $RELEASE_TAG"
           echo "  - NPX version to publish: $NPX_VERSION"
 
