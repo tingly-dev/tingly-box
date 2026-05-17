@@ -44,6 +44,7 @@ func Migrate(c *Config) error {
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
 	migrate20260502(c) // Remove wildcard (*) rules for smart_guide scenario
 	migrate20260513(c) // Add Claude Desktop built-in rules
+	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	return nil
 }
 
