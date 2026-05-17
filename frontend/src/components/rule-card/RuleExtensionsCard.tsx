@@ -1,5 +1,5 @@
 import { Add as AddIcon, Extension as ExtensionIcon } from '@mui/icons-material';
-import { Box, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import { PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
@@ -27,8 +27,13 @@ const StyledExtensionsCard = styled(Box, {
     height: CARD_STYLES.height,
     boxShadow: theme.shadows[1],
     opacity: active ? 1 : 0.6,
+    cursor: 'pointer',
     transition: 'all 0.2s ease-in-out',
     overflow: 'hidden',
+    '&:hover': {
+        borderColor: theme.palette.primary.main,
+        boxShadow: theme.shadows[2],
+    },
 }));
 
 export interface RuleExtensionsCardProps {
@@ -92,23 +97,21 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
     });
 
     return (
-        <StyledExtensionsCard active={active}>
+        <StyledExtensionsCard active={active} onClick={onOpenCatalog}>
             {/* Fixed-height header so the body has a stable scroll region */}
             <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0, mb: 0.25 }}>
                 <ExtensionIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
                 <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem', color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
                     Extensions{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
+                {/* Visual affordance only — the whole card is clickable. */}
                 <Tooltip title="Configure rule extensions">
-                    <IconButton size="small" onClick={onOpenCatalog} sx={{ p: 0.125 }}>
-                        <AddIcon sx={{ fontSize: 12 }} />
-                    </IconButton>
+                    <AddIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
                 </Tooltip>
             </Stack>
 
             {enabled.length === 0 ? (
                 <Box
-                    onClick={onOpenCatalog}
                     sx={{
                         flexGrow: 1,
                         display: 'flex',
@@ -116,7 +119,6 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                         justifyContent: 'center',
                         color: 'text.disabled',
                         fontSize: '0.65rem',
-                        cursor: 'pointer',
                         textAlign: 'center',
                         px: 0.25,
                     }}
@@ -158,10 +160,14 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                                         label={label}
                                         color="primary"
                                         variant="outlined"
-                                        onClick={onOpenCatalog}
                                         onDelete={
                                             spec.type === 'bool' && onToggleFlag
-                                                ? () => onToggleFlag(spec.key)
+                                                ? (e: React.MouseEvent) => {
+                                                    // Don't let the X bubble into the
+                                                    // card-level "open catalog" handler.
+                                                    e.stopPropagation();
+                                                    onToggleFlag(spec.key);
+                                                }
                                                 : undefined
                                         }
                                         sx={{ maxWidth: '100%', fontSize: '0.6rem', height: 18 }}
