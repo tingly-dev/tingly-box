@@ -138,7 +138,7 @@ Endpoint 路由相关的状态/决策被刻意拆成两层，每层承担一个 
 
 ## 4. Resolver 行为
 
-`ResolveOpenAIEndpoint(provider, ruleFlags, incoming) → (EndpointSelection, error)` 定义在 `internal/server/endpoint_resolution.go`。**纯函数**：不读 Server 状态、不发 I/O。
+`ResolveOpenAIEndpoint(provider, ruleFlags, incoming) → (protocol.APIType, error)` 定义在 `internal/server/endpoint_resolution.go`。**纯函数**：不读 Server 状态、不发 I/O。
 
 ### 4.1 precedence（高 → 低）
 
@@ -174,13 +174,7 @@ Provider 声明 **trump** rule override——见 §3 「两层冲突时的优先
 
 ## 5. Codex 的处理
 
-Codex 是 OAuth-only 接入路径（Web `oauth/handler.go` 和 CLI `command/oauth.go`），实例化时直接：
-
-```go
-if issuer == ai.IssuerCodex {
-    provider.OpenAIEndpointMode = ai.EndpointModeResponses
-}
-```
+Codex 是 OAuth-only 接入路径（Web `oauth/handler.go` 和 CLI `command/oauth.go`），实例化时通过 `ai.OpenAIEndpointModeForIssuer(issuer)` 直接填入 Provider 结构体——目前该 helper 只对 `IssuerCodex` 返回 `EndpointModeResponses`，其他 issuer 走默认 `EndpointModeChat`。两条 OAuth 路径共用同一 mapping。
 
 无需用户配置。OAuth 完成即正确。
 

@@ -284,7 +284,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		selection, routeErr := ResolveOpenAIEndpoint(provider, ruleFlags, IncomingAPIChat)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ruleFlags, IncomingAPIChat)
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -295,7 +295,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 			})
 			return
 		}
-		target = selection.Target
+		target = resolvedTarget
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

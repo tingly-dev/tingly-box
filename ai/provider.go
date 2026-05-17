@@ -186,6 +186,18 @@ const (
 	EndpointModeBoth OpenAIEndpointMode = "both"
 )
 
+// OpenAIEndpointModeForIssuer returns the OpenAIEndpointMode that an OAuth
+// provider should carry given its issuer. Currently only Codex needs a
+// non-default mode; other issuers fall through to EndpointModeChat (zero
+// value). Centralized so the OAuth web handler and the CLI flow agree on
+// the same mapping and future issuer-specific defaults land in one place.
+func OpenAIEndpointModeForIssuer(issuer Issuer) OpenAIEndpointMode {
+	if issuer == IssuerCodex {
+		return EndpointModeResponses
+	}
+	return EndpointModeChat
+}
+
 // IsVirtual reports whether this provider routes to the in-process vmodel
 // service instead of an outbound HTTP upstream.
 func (p *Provider) IsVirtual() bool {

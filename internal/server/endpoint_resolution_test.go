@@ -115,8 +115,8 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if got.Target != tt.want {
-				t.Errorf("Target = %v, want %v (reason: %s)", got.Target, tt.want, got.Reason)
+			if got != tt.want {
+				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -142,7 +142,7 @@ func TestResolveOpenAIEndpointCodexOAuthSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.Target != protocol.TypeOpenAIResponses {
-		t.Errorf("Codex with EndpointModeResponses should route to Responses, got %v", got.Target)
+	if got != protocol.TypeOpenAIResponses {
+		t.Errorf("Codex with EndpointModeResponses should route to Responses, got %v", got)
 	}
 }

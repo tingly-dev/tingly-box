@@ -387,11 +387,8 @@ func createProviderFromToken(appConfig *config.AppConfig, config *ProviderOAuthC
 		OAuthDetail: oauthDetail,
 		Token:       "", // No token for OAuth
 		Enabled:     true,
-	}
-	// Codex's API only exposes /responses; declare here so the endpoint
-	// resolver routes correctly without runtime probing.
-	if ai.Issuer(config.Type) == ai.IssuerCodex {
-		provider.OpenAIEndpointMode = ai.EndpointModeResponses
+		// Issuer-specific endpoint mode (e.g. Codex → responses).
+		OpenAIEndpointMode: ai.OpenAIEndpointModeForIssuer(ai.Issuer(config.Type)),
 	}
 
 	// Add to global config
