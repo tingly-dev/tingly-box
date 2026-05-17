@@ -46,7 +46,8 @@
         { "id": "o3-mini",         "context": 200000, "max_output": 100000 }
       ],
       "supports_models_endpoint": true,
-      "icon": "openai"
+      "icon": "openai",
+      "openai_endpoint_mode": "both"
     },
     "anthropic-com": {
       "id": "anthropic-com",
@@ -152,7 +153,7 @@
       "supports_models_endpoint": false,
       "oauth_provider": "codex",
       "icon": "opencode",
-      "responses_only": true
+      "openai_endpoint_mode": "responses"
     },
     "googleapis-com": {
       "id": "googleapis-com",

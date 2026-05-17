@@ -9,94 +9,109 @@ import (
 )
 
 func TestResolveOpenAIEndpoint(t *testing.T) {
-	plain := &typ.Provider{UUID: "p-plain"}
-	responsesOnly := &typ.Provider{UUID: "p-ronly", ResponsesOnly: true}
+	chatOnly := &typ.Provider{UUID: "p-chat"} // default mode = chat
+	responsesOnly := &typ.Provider{UUID: "p-resp", OpenAIEndpointMode: ai.EndpointModeResponses}
+	both := &typ.Provider{UUID: "p-both", OpenAIEndpointMode: ai.EndpointModeBoth}
 
 	tests := []struct {
 		name     string
 		provider *typ.Provider
 		flags    typ.RuleFlags
-		opts     OpenAIEndpointOptions
+		incoming IncomingAPIType
 		want     protocol.APIType
-		wantErr  bool
 	}{
+		// Default mode (chat) — provider ignores client's incoming API
 		{
-			name:     "default mirrors chat",
-			provider: plain,
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIChat},
+			name:     "default mode forces chat (chat incoming)",
+			provider: chatOnly,
+			incoming: IncomingAPIChat,
 			want:     protocol.TypeOpenAIChat,
 		},
 		{
-			name:     "default mirrors responses",
-			provider: plain,
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIResponses},
-			want:     protocol.TypeOpenAIResponses,
+			name:     "default mode forces chat (responses incoming, downgrade)",
+			provider: chatOnly,
+			incoming: IncomingAPIResponses,
+			want:     protocol.TypeOpenAIChat,
 		},
+
+		// Responses-only (Codex)
 		{
-			name:     "provider responses_only forces responses (chat in)",
+			name:     "responses mode forces responses (chat incoming)",
 			provider: responsesOnly,
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIChat},
+			incoming: IncomingAPIChat,
 			want:     protocol.TypeOpenAIResponses,
 		},
 		{
-			name:     "provider responses_only forces responses (responses in)",
+			name:     "responses mode forces responses (responses incoming)",
 			provider: responsesOnly,
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIResponses},
+			incoming: IncomingAPIResponses,
 			want:     protocol.TypeOpenAIResponses,
 		},
+
+		// Both (OpenAI proper) — mirror
 		{
-			name:     "rule override=chat on plain provider",
-			provider: plain,
-			flags:    typ.RuleFlags{OpenAIEndpointOverride: "chat"},
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIResponses},
+			name:     "both mode mirrors chat",
+			provider: both,
+			incoming: IncomingAPIChat,
 			want:     protocol.TypeOpenAIChat,
 		},
 		{
-			name:     "rule override=chat on responses_only ignored, stays responses",
-			provider: responsesOnly,
-			flags:    typ.RuleFlags{OpenAIEndpointOverride: "chat"},
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIChat},
+			name:     "both mode mirrors responses",
+			provider: both,
+			incoming: IncomingAPIResponses,
 			want:     protocol.TypeOpenAIResponses,
 		},
+
+		// Rule overrides
 		{
-			name:     "rule override=responses",
-			provider: plain,
+			name:     "override=responses on default chat-mode provider is ignored",
+			provider: chatOnly,
 			flags:    typ.RuleFlags{OpenAIEndpointOverride: "responses"},
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIChat},
+			incoming: IncomingAPIChat,
+			want:     protocol.TypeOpenAIChat,
+		},
+		{
+			name:     "override=chat on responses-only provider is ignored",
+			provider: responsesOnly,
+			flags:    typ.RuleFlags{OpenAIEndpointOverride: "chat"},
+			incoming: IncomingAPIChat,
 			want:     protocol.TypeOpenAIResponses,
 		},
 		{
-			name:     "rule override=chat with RequireResponses errors",
-			provider: plain,
+			name:     "override=chat on both-mode provider forces chat",
+			provider: both,
 			flags:    typ.RuleFlags{OpenAIEndpointOverride: "chat"},
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIResponses, RequireResponses: true},
-			wantErr:  true,
+			incoming: IncomingAPIResponses,
+			want:     protocol.TypeOpenAIChat,
 		},
 		{
-			name:     "auto flag treated as default",
-			provider: plain,
+			name:     "override=responses on both-mode provider forces responses",
+			provider: both,
+			flags:    typ.RuleFlags{OpenAIEndpointOverride: "responses"},
+			incoming: IncomingAPIChat,
+			want:     protocol.TypeOpenAIResponses,
+		},
+
+		// Auto / unknown override values
+		{
+			name:     "auto flag treated as no override",
+			provider: chatOnly,
 			flags:    typ.RuleFlags{OpenAIEndpointOverride: "auto"},
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIChat},
+			incoming: IncomingAPIResponses,
 			want:     protocol.TypeOpenAIChat,
 		},
 		{
-			name:     "unknown flag value treated as default",
-			provider: plain,
+			name:     "unknown flag value treated as no override",
+			provider: both,
 			flags:    typ.RuleFlags{OpenAIEndpointOverride: "bogus"},
-			opts:     OpenAIEndpointOptions{Incoming: IncomingAPIChat},
-			want:     protocol.TypeOpenAIChat,
+			incoming: IncomingAPIResponses,
+			want:     protocol.TypeOpenAIResponses,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ResolveOpenAIEndpoint(tt.provider, tt.flags, tt.opts)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got selection %+v", got)
-				}
-				return
-			}
+			got, err := ResolveOpenAIEndpoint(tt.provider, tt.flags, tt.incoming)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -108,26 +123,26 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 }
 
 func TestResolveOpenAIEndpointNilProviderErrors(t *testing.T) {
-	if _, err := ResolveOpenAIEndpoint(nil, typ.RuleFlags{}, OpenAIEndpointOptions{Incoming: IncomingAPIChat}); err == nil {
+	if _, err := ResolveOpenAIEndpoint(nil, typ.RuleFlags{}, IncomingAPIChat); err == nil {
 		t.Error("expected error for nil provider")
 	}
 }
 
 // TestResolveOpenAIEndpointCodexOAuthSnapshot documents the design assumption
-// that Codex providers carry ResponsesOnly=true by the time they reach
-// routing. The OAuth handler is responsible for setting this on
+// that Codex providers carry OpenAIEndpointMode=responses by the time they
+// reach routing. The OAuth handler is responsible for setting this on
 // instantiation; this test pins the resolver behavior against such providers.
 func TestResolveOpenAIEndpointCodexOAuthSnapshot(t *testing.T) {
 	codex := &typ.Provider{
-		UUID:          "codex-1",
-		OAuthDetail:   &typ.OAuthDetail{Issuer: ai.IssuerCodex},
-		ResponsesOnly: true,
+		UUID:               "codex-1",
+		OAuthDetail:        &typ.OAuthDetail{Issuer: ai.IssuerCodex},
+		OpenAIEndpointMode: ai.EndpointModeResponses,
 	}
-	got, err := ResolveOpenAIEndpoint(codex, typ.RuleFlags{}, OpenAIEndpointOptions{Incoming: IncomingAPIChat})
+	got, err := ResolveOpenAIEndpoint(codex, typ.RuleFlags{}, IncomingAPIChat)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got.Target != protocol.TypeOpenAIResponses {
-		t.Errorf("Codex with ResponsesOnly should route to Responses, got %v", got.Target)
+		t.Errorf("Codex with EndpointModeResponses should route to Responses, got %v", got.Target)
 	}
 }

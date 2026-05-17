@@ -30,12 +30,18 @@ func ParseEndpointOverride(s string) EndpointOverride {
 	}
 }
 
-// logResponsesOnlyOverrideIgnored emits the warning that a "chat" override
-// against a provider declared responses_only (e.g. Codex) was discarded.
-func logResponsesOnlyOverrideIgnored(provider *typ.Provider) {
+// logModeOverrideIgnored warns that a rule's openai_endpoint_override was
+// discarded because the provider's declared OpenAIEndpointMode doesn't
+// permit that target.
+func logModeOverrideIgnored(provider *typ.Provider, requestedOverride string) {
 	uuid := ""
+	mode := ""
 	if provider != nil {
 		uuid = provider.UUID
+		mode = string(provider.OpenAIEndpointMode)
+		if mode == "" {
+			mode = "chat"
+		}
 	}
-	logrus.Warnf("rule openai_endpoint_override=chat ignored: provider %s is responses_only", uuid)
+	logrus.Warnf("rule openai_endpoint_override=%s ignored: provider %s declares mode=%s", requestedOverride, uuid, mode)
 }

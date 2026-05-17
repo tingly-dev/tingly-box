@@ -1005,9 +1005,6 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		Enabled:  true,
 		ProxyURL: proxyURL,
 		AuthType: typ.AuthTypeOAuth,
-		// Codex's API only exposes Responses; declare here so the endpoint
-		// resolver routes correctly without runtime probing.
-		ResponsesOnly: issuer == ai.IssuerCodex,
 		OAuthDetail: &typ.OAuthDetail{
 			AccessToken:  token.AccessToken,
 			ProviderType: string(issuer),
@@ -1017,6 +1014,13 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			ExpiresAt:    expiresAt,
 			ExtraFields:  make(map[string]interface{}),
 		},
+	}
+
+	// Codex's API only exposes /responses; declare here so the endpoint
+	// resolver routes correctly without runtime probing. Other issuers
+	// default to EndpointModeChat (zero value).
+	if issuer == ai.IssuerCodex {
+		provider.OpenAIEndpointMode = ai.EndpointModeResponses
 	}
 
 	// Store account_id from token metadata for ChatGPT API

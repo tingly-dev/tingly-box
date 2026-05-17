@@ -155,12 +155,36 @@ type Provider struct {
 	VModelDetail *VModelDetail  `json:"vmodel_detail,omitempty"` // Virtual-model config (only for vmodel auth type)
 	Source       ProviderSource `json:"source,omitempty"`        // "user" (default) or "builtin"
 
-	// ResponsesOnly declares that this provider only supports the OpenAI
-	// Responses API (no /chat/completions). Snapshotted from the provider's
-	// template at instantiation, or set on Codex OAuth completion. Routing
-	// reads this; users do not edit it directly.
-	ResponsesOnly bool `json:"responses_only,omitempty"`
+	// OpenAIEndpointMode declares which OpenAI endpoints this provider exposes.
+	// Snapshotted from the provider's template at instantiation, or set on
+	// Codex OAuth completion. Routing reads this; users do not edit it
+	// directly. See the OpenAIEndpointMode constants for semantics.
+	OpenAIEndpointMode OpenAIEndpointMode `json:"openai_endpoint_mode,omitempty"`
 }
+
+// OpenAIEndpointMode declares this provider's support for the OpenAI Chat
+// Completions and Responses APIs. The zero value defaults to Chat-only,
+// which is the conservative assumption for the typical OpenAI-compatible
+// vendor (most do not implement /responses).
+type OpenAIEndpointMode string
+
+const (
+	// EndpointModeChat (the default) means the provider only exposes
+	// /chat/completions. An incoming Responses request will be downgraded
+	// to Chat if its features allow; otherwise the request is rejected.
+	EndpointModeChat OpenAIEndpointMode = ""
+
+	// EndpointModeResponses means the provider only exposes /responses
+	// (e.g. Codex). All requests, including incoming Chat, route to
+	// /responses; the response is converted back to the client's protocol.
+	EndpointModeResponses OpenAIEndpointMode = "responses"
+
+	// EndpointModeBoth means the provider implements both endpoints
+	// (e.g. OpenAI proper for gpt-5 / o-series). The gateway mirrors the
+	// client's incoming API so native semantics (reasoning blocks,
+	// previous_response_id continuity, etc.) survive the round trip.
+	EndpointModeBoth OpenAIEndpointMode = "both"
+)
 
 // IsVirtual reports whether this provider routes to the in-process vmodel
 // service instead of an outbound HTTP upstream.

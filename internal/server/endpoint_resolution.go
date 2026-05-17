@@ -4,13 +4,15 @@ import (
 	"fmt"
 
 	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // IncomingAPIType describes which OpenAI-style endpoint the client originally
-// hit on this gateway. Used by the endpoint resolver to mirror the incoming
-// API when no override or provider declaration forces otherwise.
+// hit on this gateway. The resolver only mirrors when the provider declares
+// EndpointModeBoth; otherwise the provider's declared mode dictates the
+// upstream endpoint regardless of what the client sent.
 type IncomingAPIType string
 
 const (
@@ -24,18 +26,7 @@ type EndpointSelection struct {
 	Reason string
 }
 
-// OpenAIEndpointOptions bundles the per-call inputs to ResolveOpenAIEndpoint
-// that aren't already on Provider or RuleFlags.
-type OpenAIEndpointOptions struct {
-	Incoming IncomingAPIType
-	// RequireResponses indicates the incoming Responses request uses features
-	// (previous_response_id / include / background / truncation / reasoning)
-	// that cannot be represented in Chat Completions. When set, the resolver
-	// refuses to honor a "chat" override and returns an error.
-	RequireResponses bool
-}
-
-func defaultEndpointSelection(incoming IncomingAPIType, reason string) *EndpointSelection {
+func mirrorIncoming(incoming IncomingAPIType, reason string) *EndpointSelection {
 	if incoming == IncomingAPIResponses {
 		return &EndpointSelection{Target: protocol.TypeOpenAIResponses, Reason: reason}
 	}
@@ -43,8 +34,9 @@ func defaultEndpointSelection(incoming IncomingAPIType, reason string) *Endpoint
 }
 
 // CanDowngradeResponsesToChat reports whether a Responses request can be
-// safely emitted as Chat Completions instead. Used by the openai_responses
-// handler to compute OpenAIEndpointOptions.RequireResponses.
+// safely emitted as Chat Completions instead. Called by the openai_responses
+// handler after routing to reject requests whose Responses-only features
+// would be silently dropped by the downgrade.
 func CanDowngradeResponsesToChat(req protocol.ResponseCreateRequest) (bool, string) {
 	p := req.ResponseNewParams
 	switch {
@@ -62,34 +54,45 @@ func CanDowngradeResponsesToChat(req protocol.ResponseCreateRequest) (bool, stri
 	return true, ""
 }
 
-// ResolveOpenAIEndpoint picks an OpenAI endpoint (Chat vs Responses) using
-// only declared configuration, in this precedence order:
+// ResolveOpenAIEndpoint picks an OpenAI endpoint using only the provider's
+// declared OpenAIEndpointMode and the optional per-rule override.
 //
-//  1. Rule flag (flags.OpenAIEndpointOverride):
-//     - "chat" forces Chat. Refused with error when opts.RequireResponses=true.
-//     If the provider is ResponsesOnly, the override is logged and ignored
-//     (the provider's declaration wins).
-//     - "responses" forces Responses.
-//  2. provider.ResponsesOnly=true → Responses.
-//  3. Default → mirror opts.Incoming (chat → Chat, responses → Responses).
+// Precedence:
+//
+//  1. Rule flag (flags.OpenAIEndpointOverride). Provider declarations trump
+//     overrides — asking for Chat on a Responses-only provider (or vice versa)
+//     logs a warning and uses the provider's endpoint instead.
+//  2. provider.OpenAIEndpointMode:
+//       EndpointModeChat (default) → Chat
+//       EndpointModeResponses      → Responses
+//       EndpointModeBoth           → mirror incoming
+//
+// Defaulting to Chat (not "mirror incoming") is intentional: most
+// OpenAI-compatible vendors implement only /chat/completions, and silently
+// trying /responses against them fails. Providers that genuinely support
+// Responses must declare it via the template or OAuth instantiation.
+//
+// Callers receiving an OpenAI Responses request that ends up routed to Chat
+// must run CanDowngradeResponsesToChat against the request body and reject
+// if it returns false. The resolver doesn't inspect request bodies — that
+// concern belongs to the protocol handler that knows the request shape.
 //
 // The function is pure: no Server state, no probe lookups, no I/O.
-func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, opts OpenAIEndpointOptions) (*EndpointSelection, error) {
+func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming IncomingAPIType) (*EndpointSelection, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("provider is required for endpoint selection")
 	}
 
+	mode := provider.OpenAIEndpointMode
+
 	switch ParseEndpointOverride(flags.OpenAIEndpointOverride) {
 	case OverrideChat:
-		if provider.ResponsesOnly {
-			logResponsesOnlyOverrideIgnored(provider)
+		if mode == ai.EndpointModeResponses {
+			logModeOverrideIgnored(provider, "chat")
 			return &EndpointSelection{
 				Target: protocol.TypeOpenAIResponses,
-				Reason: "provider declared responses_only; rule override=chat ignored",
+				Reason: "provider mode=responses; rule override=chat ignored",
 			}, nil
-		}
-		if opts.RequireResponses {
-			return nil, fmt.Errorf("rule override requests Chat Completions but the incoming Responses request uses features that cannot be downgraded")
 		}
 		return &EndpointSelection{
 			Target: protocol.TypeOpenAIChat,
@@ -97,18 +100,31 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, opts Ope
 		}, nil
 
 	case OverrideResponses:
+		if mode == ai.EndpointModeChat {
+			logModeOverrideIgnored(provider, "responses")
+			return &EndpointSelection{
+				Target: protocol.TypeOpenAIChat,
+				Reason: "provider mode=chat; rule override=responses ignored",
+			}, nil
+		}
 		return &EndpointSelection{
 			Target: protocol.TypeOpenAIResponses,
 			Reason: "rule override: openai_endpoint_override=responses",
 		}, nil
 	}
 
-	if provider.ResponsesOnly {
+	switch mode {
+	case ai.EndpointModeResponses:
 		return &EndpointSelection{
 			Target: protocol.TypeOpenAIResponses,
-			Reason: "provider declared responses_only",
+			Reason: "provider mode=responses",
+		}, nil
+	case ai.EndpointModeBoth:
+		return mirrorIncoming(incoming, "provider mode=both; mirroring incoming API"), nil
+	default: // EndpointModeChat / zero value
+		return &EndpointSelection{
+			Target: protocol.TypeOpenAIChat,
+			Reason: "provider mode=chat (default)",
 		}, nil
 	}
-
-	return defaultEndpointSelection(opts.Incoming, "mirroring incoming API"), nil
 }
