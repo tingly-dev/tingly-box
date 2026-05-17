@@ -17,6 +17,26 @@ import (
 // claudeToolPrefix is empty to match real Claude Code behavior (no tool name prefix).
 const claudeToolPrefix = ""
 
+// oauthToolRenameMap maps lowercase tool names to Claude Code TitleCase equivalents.
+// Anthropic uses tool name fingerprinting to detect third-party clients on OAuth traffic.
+// Renaming to official names avoids extra-usage billing.
+var oauthToolRenameMap = map[string]string{
+	"bash":         "Bash",
+	"read":         "Read",
+	"write":        "Write",
+	"edit":         "Edit",
+	"glob":         "Glob",
+	"grep":         "Grep",
+	"task":         "Task",
+	"webfetch":     "WebFetch",
+	"todowrite":    "TodoWrite",
+	"question":     "Question",
+	"skill":        "Skill",
+	"ls":           "LS",
+	"todoread":     "TodoRead",
+	"notebookedit": "NotebookEdit",
+}
+
 const (
 	// Claude Code client identification
 	claudeCLIUserAgent      = "claude-cli/2.1.86 (external, cli)"
@@ -27,10 +47,10 @@ const (
 	stainlessPackageVersion = "0.74.0"
 	stainlessRuntime        = "node"
 	stainlessLang           = "js"
-	stainlessTimeout        = "3000"
+	stainlessTimeout        = "600"
 
 	// Anthropic API headers
-	anthropicBeta                         = "claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24"
+	anthropicBeta                         = "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,structured-outputs-2025-12-15,fast-mode-2026-02-01,redact-thinking-2026-02-12,token-efficient-tools-2026-03-28"
 	anthropicOAuthBeta                    = "oauth-2025-04-20"
 	anthropicDangerousDirectBrowserAccess = "true"
 	anthropicVersion                      = "2023-06-01"
@@ -102,8 +122,126 @@ func extractModelFromBody(body []byte) string {
 	return gjson.GetBytes(body, "model").String()
 }
 
+// remapOAuthToolNames renames lowercase tool names to Claude Code TitleCase equivalents
+// in the request body. Returns the modified body and a reverse map for restoring names
+// in the response (keyed on TitleCase → original name, only for names actually renamed).
+func remapOAuthToolNames(body []byte) ([]byte, map[string]string) {
+	reverseMap := make(map[string]string)
+	record := func(original, renamed string) {
+		if _, exists := reverseMap[renamed]; !exists {
+			reverseMap[renamed] = original
+		}
+	}
+
+	// Rewrite tools array
+	tools := gjson.GetBytes(body, "tools")
+	if tools.Exists() && tools.IsArray() {
+		var sb strings.Builder
+		sb.WriteByte('[')
+		count := 0
+		tools.ForEach(func(_, tool gjson.Result) bool {
+			// Leave built-in tools (have a "type" field) unchanged
+			if tool.Get("type").Exists() && tool.Get("type").String() != "" {
+				if count > 0 {
+					sb.WriteByte(',')
+				}
+				sb.WriteString(tool.Raw)
+				count++
+				return true
+			}
+			name := tool.Get("name").String()
+			toolJSON := tool.Raw
+			if newName, ok := oauthToolRenameMap[name]; ok && newName != name {
+				if updated, err := sjson.Set(toolJSON, "name", newName); err == nil {
+					toolJSON = updated
+					record(name, newName)
+				}
+			}
+			if count > 0 {
+				sb.WriteByte(',')
+			}
+			sb.WriteString(toolJSON)
+			count++
+			return true
+		})
+		sb.WriteByte(']')
+		body, _ = sjson.SetRawBytes(body, "tools", []byte(sb.String()))
+	}
+
+	// Rewrite tool_choice if it names a specific tool
+	if gjson.GetBytes(body, "tool_choice.type").String() == "tool" {
+		name := gjson.GetBytes(body, "tool_choice.name").String()
+		if newName, ok := oauthToolRenameMap[name]; ok && newName != name {
+			body, _ = sjson.SetBytes(body, "tool_choice.name", newName)
+			record(name, newName)
+		}
+	}
+
+	// Rewrite tool references in messages
+	messages := gjson.GetBytes(body, "messages")
+	if messages.Exists() && messages.IsArray() {
+		messages.ForEach(func(msgIdx, msg gjson.Result) bool {
+			content := msg.Get("content")
+			if !content.Exists() || !content.IsArray() {
+				return true
+			}
+			content.ForEach(func(cIdx, part gjson.Result) bool {
+				switch part.Get("type").String() {
+				case "tool_use":
+					name := part.Get("name").String()
+					if newName, ok := oauthToolRenameMap[name]; ok && newName != name {
+						path := fmt.Sprintf("messages.%d.content.%d.name", msgIdx.Int(), cIdx.Int())
+						body, _ = sjson.SetBytes(body, path, newName)
+						record(name, newName)
+					}
+				case "tool_reference":
+					name := part.Get("tool_name").String()
+					if newName, ok := oauthToolRenameMap[name]; ok && newName != name {
+						path := fmt.Sprintf("messages.%d.content.%d.tool_name", msgIdx.Int(), cIdx.Int())
+						body, _ = sjson.SetBytes(body, path, newName)
+						record(name, newName)
+					}
+				}
+				return true
+			})
+			return true
+		})
+	}
+
+	return body, reverseMap
+}
+
+// reverseRemapOAuthToolNames restores tool names in non-stream responses using
+// the per-request reverseMap produced by remapOAuthToolNames.
+func reverseRemapOAuthToolNames(body []byte, reverseMap map[string]string) []byte {
+	if len(reverseMap) == 0 {
+		return body
+	}
+	content := gjson.GetBytes(body, "content")
+	if !content.Exists() || !content.IsArray() {
+		return body
+	}
+	content.ForEach(func(idx, part gjson.Result) bool {
+		switch part.Get("type").String() {
+		case "tool_use":
+			name := part.Get("name").String()
+			if orig, ok := reverseMap[name]; ok {
+				path := fmt.Sprintf("content.%d.name", idx.Int())
+				body, _ = sjson.SetBytes(body, path, orig)
+			}
+		case "tool_reference":
+			name := part.Get("tool_name").String()
+			if orig, ok := reverseMap[name]; ok {
+				path := fmt.Sprintf("content.%d.tool_name", idx.Int())
+				body, _ = sjson.SetBytes(body, path, orig)
+			}
+		}
+		return true
+	})
+	return body
+}
+
 // claudeRoundTripper wraps an http.RoundTripper to handle Claude Code OAuth
-// specific request/response transformations:
 // - Applies tool prefix to request body for OAuth tokens
 // - Strips tool prefix from response (streaming and non-streaming)
 // - Sets Claude Code specific headers
@@ -133,6 +271,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	var originalBody []byte
 	var modifiedBody []byte
 	var isOAuthToken bool
+	var oauthToolReverseMap map[string]string
 
 	if req.Body != nil {
 		var err error
@@ -152,6 +291,11 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		}
 
 		modifiedBody = applyThinking(modifiedBody)
+
+		// Remap tool names for OAuth tokens to avoid Anthropic fingerprinting
+		if isOAuthToken {
+			modifiedBody, oauthToolReverseMap = remapOAuthToolNames(modifiedBody)
+		}
 
 		// Trim capacity to length to avoid excessive memory usage
 		modifiedBody = append([]byte(nil), modifiedBody...)
@@ -182,6 +326,20 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	if err != nil {
 		logrus.WithError(err).Errorf("failed to round trip request: %v", err)
 		return nil, err
+	}
+
+	// Restore OAuth tool names in non-streaming responses
+	if len(oauthToolReverseMap) > 0 && resp != nil && resp.Body != nil {
+		ct := resp.Header.Get("Content-Type")
+		if !strings.Contains(ct, "text/event-stream") {
+			respBody, readErr := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if readErr == nil {
+				respBody = reverseRemapOAuthToolNames(respBody, oauthToolReverseMap)
+				resp.Body = io.NopCloser(bytes.NewReader(respBody))
+				resp.ContentLength = int64(len(respBody))
+			}
+		}
 	}
 
 	return resp, nil
