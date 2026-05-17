@@ -177,10 +177,12 @@ func (t *BaseTransform) convertToAnthropicV1(ctx *TransformContext) error {
 
 	case *openai.ChatCompletionNewParams:
 		// OpenAI Chat to Anthropic v1 conversion
-		ctx.Request = request.ConvertOpenAIToAnthropicRequest(
+		// The OpenAI->Anthropic helper returns Beta shape; project it to v1.
+		beta := request.ConvertOpenAIToAnthropicRequest(
 			req,
 			4096, // defaultMaxTokens - this could be made configurable
 		)
+		ctx.Request = request.ConvertAnthropicBetaToV1Request(beta)
 		return nil
 
 	case *responses.ResponseNewParams:

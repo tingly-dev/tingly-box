@@ -131,9 +131,9 @@ func oldApplyClaudeCodeHeaders(req *http.Request, isOAuthToken bool, sessionID s
 		req.Header.Del("X-Api-Key")
 	}
 
-	// Build beta header - add oauth-2025-04-20 for OAuth tokens
+	// Build beta header - add oauth-2025-04-20 for OAuth tokens (only if not already present)
 	betaHeader := anthropicBeta
-	if isOAuthToken {
+	if isOAuthToken && !strings.Contains(betaHeader, "oauth") {
 		betaHeader = betaHeader + ",oauth-2025-04-20"
 	}
 
@@ -330,7 +330,7 @@ func TestClaudeRealE2E_BothImplementations(t *testing.T) {
 	newReq.Header.Set("Authorization", "Bearer sk-ant-oat-test-token-12345")
 	newReq.Header.Set("Content-Type", "application/json")
 	newReq.Header.Set("accept", "application/json")
-	newReq.Header.Set("anthropic-beta", "claude-code-20250219,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,effort-2025-11-24,oauth-2025-04-20")
+	newReq.Header.Set("anthropic-beta", anthropicBeta)
 	newReq.Header.Set("anthropic-version", "2023-06-01")
 	newReq.Header.Set("user-agent", "claude-cli/2.1.86 (external, cli)")
 	newReq.Header.Set("x-app", "cli")
