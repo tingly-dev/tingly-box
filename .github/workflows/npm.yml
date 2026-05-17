@@ -9,26 +9,6 @@ on:
         description: 'Release tag to publish from (e.g., v1.0.0)'
         required: true
         type: string
-      publish_cli:
-        description: 'Publish CLI package (tingly-box)'
-        required: false
-        type: boolean
-        default: true
-      publish_gui:
-        description: 'Publish GUI package (tingly-box-gui)'
-        required: false
-        type: boolean
-        default: false
-      publish_bundle:
-        description: 'Publish bundle package (tingly-box-bundle with pre-built binaries)'
-        required: false
-        type: boolean
-        default: true
-      build_docker:
-        description: 'Build Docker NPX image after CLI publish'
-        required: false
-        type: boolean
-        default: true
       npm_tag:
         description: 'npm dist-tag for publish (latest/rc). Auto-trigger infers from version: stable→latest, pre-release→rc'
         required: false
@@ -37,6 +17,26 @@ on:
           - latest
           - rc
         default: 'rc'
+      publish_cli:
+        description: '[pkg: tingly-box] download-on-demand binary, minimal size'
+        required: false
+        type: boolean
+        default: true
+      publish_gui:
+        description: '[pkg: tingly-box-gui] desktop UI with bundled frontend'
+        required: false
+        type: boolean
+        default: false
+      publish_bundle:
+        description: '[pkg: tingly-box-bundle] pre-built binaries included (~70MB)'
+        required: false
+        type: boolean
+        default: true
+      build_docker:
+        description: '[docker] build and push Docker NPX image after CLI publish'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
