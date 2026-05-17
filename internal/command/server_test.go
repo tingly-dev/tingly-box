@@ -459,7 +459,7 @@ func TestMultipleServers(t *testing.T) {
 func getAvailablePort(t *testing.T) int {
 	// Try ports in the test range
 	for port := 12000; port < 13000; port++ {
-		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("localhost:%d", port))
+		listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err == nil {
 			listener.Close()
 			return port

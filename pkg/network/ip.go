@@ -8,7 +8,7 @@ import (
 func getLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return "localhost" // fallback to localhost
+		return "127.0.0.1" // fallback to loopback
 	}
 
 	for _, addr := range addrs {
