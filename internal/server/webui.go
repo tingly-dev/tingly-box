@@ -17,7 +17,6 @@ import (
 	assets "github.com/tingly-dev/tingly-box/internal"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server/module/codeximport"
 	"github.com/tingly-dev/tingly-box/internal/server/module/configapply"
@@ -796,16 +795,8 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 	onboardingHandler := onboarding.NewHandler(onboarding.NewRuleExtractor())
 	onboarding.RegisterRoutes(apiV1, onboardingHandler)
 
-	// Probe V2 endpoint (unified probe API for rules, providers, and unsaved provider config)
-	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeV2Service))
-
-	// Lightweight probe endpoint for optional key validation
-	apiV2.POST("/probe/lightweight", s.HandleLightweightProbe,
-		swagger.WithDescription("Lightweight probe for optional key validation using OPTIONS and models endpoint"),
-		swagger.WithTags("testing"),
-		swagger.WithRequestModel(probe.LightweightProbeRequest{}),
-		swagger.WithResponseModel(LightweightProbeResponse{}),
-	)
+	// Probe V2 + lightweight endpoints (unified probe API)
+	probemodule.RegisterRoutes(apiV2, probemodule.NewHandler(s.probeV2Service, s.probeLightweight))
 
 	// Token Management
 	apiV1.POST("/token", s.GenerateToken,

@@ -321,18 +321,6 @@ type OpenAIModelsResponse struct {
 	Data   []OpenAIModel `json:"data"`
 }
 
-// =============================================
-// Lightweight Probe API Models (for optional key validation)
-// =============================================
-
-// LightweightProbeResponse represents the response from lightweight probing.
-// Returns detailed probe results for OPTIONS and models endpoint, but does
-// not block key addition — these are informational only.
-type LightweightProbeResponse struct {
-	Success bool                                `json:"success" example:"true"`
-	Error   *ErrorDetail                        `json:"error,omitempty"`
-	Data    *probe.LightweightProbeResponseData `json:"data,omitempty"`
-}
 
 // =============================================
 // Probe API Models
