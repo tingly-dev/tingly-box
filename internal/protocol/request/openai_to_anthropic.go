@@ -166,24 +166,6 @@ func openAIImageURLToAnthropicBetaBlock(url string) (anthropic.BetaContentBlockP
 	return anthropic.BetaContentBlockParamUnion{}, false
 }
 
-// openAIImageURLToAnthropicV1Block is the v1 counterpart of
-// openAIImageURLToAnthropicBetaBlock.
-func openAIImageURLToAnthropicV1Block(url string) (anthropic.ContentBlockParamUnion, bool) {
-	mediaType, data, remoteURL := ParseImageURLToAnthropicSource(url)
-	switch {
-	case mediaType != "" && data != "":
-		return anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
-			Data:      data,
-			MediaType: anthropic.Base64ImageSourceMediaType(mediaType),
-		}), true
-	case remoteURL != "":
-		return anthropic.NewImageBlock(anthropic.URLImageSourceParam{
-			URL: remoteURL,
-		}), true
-	}
-	return anthropic.ContentBlockParamUnion{}, false
-}
-
 func ConvertOpenAIToAnthropicTools(tools []openai.ChatCompletionToolUnionParam) []anthropic.BetaToolUnionParam {
 
 	if len(tools) == 0 {

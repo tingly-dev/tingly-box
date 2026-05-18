@@ -85,20 +85,17 @@ func (s *Server) dispatchChainResult(
 	case protocol.TypeOpenAIChat:
 		s.dispatchOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeAnthropicV1:
-		switch reqCtx.SourceAPI {
-		case protocol.TypeOpenAIResponses:
-			if isStreaming {
-				s.streamAnthropicV1ToResponses(c, reqCtx, rule, provider, recorder)
-			} else {
-				s.nonstreamAnthropicV1ToResponses(c, reqCtx, rule, provider, recorder)
-			}
-		default:
-			s.passthroughAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
-		}
+		s.passthroughAnthropicV1(c, reqCtx, rule, provider, isStreaming, recorder)
 	case protocol.TypeAnthropicBeta:
 		switch reqCtx.SourceAPI {
 		case protocol.TypeOpenAIChat:
 			s.dispatchAnthropicBetaToOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
+		case protocol.TypeOpenAIResponses:
+			if isStreaming {
+				s.streamAnthropicBetaFromResponses(c, reqCtx, rule, provider, recorder)
+			} else {
+				s.nonstreamAnthropicBetaFromResponses(c, reqCtx, rule, provider, recorder)
+			}
 		default:
 			s.passthroughAnthropicBeta(c, reqCtx, rule, provider, isStreaming, recorder)
 		}
@@ -966,17 +963,18 @@ func (s *Server) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.T
 	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
-// nonstreamAnthropicV1ToResponses handles Anthropic v1 → Responses (non-streaming)
-// Extracted from openai_responses.go:265-280
-func (s *Server) nonstreamAnthropicV1ToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+// nonstreamAnthropicBetaFromResponses handles a Responses-shaped client
+// request that has been normalized to Anthropic Beta and forwarded to an
+// Anthropic provider (non-streaming).
+func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
-	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
+	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
 	fc := forwarding.NewForwardContext(nil, provider)
-	anthropicResp, cancel, err := forwarding.ForwardAnthropicV1(fc, wrapper, anthropicReq)
+	anthropicResp, cancel, err := forwarding.ForwardAnthropicV1Beta(fc, wrapper, anthropicReq)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -991,20 +989,21 @@ func (s *Server) nonstreamAnthropicV1ToResponses(c *gin.Context, reqCtx *transfo
 
 	cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
 	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), cacheTokens), nil)
-	c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropic(anthropicResp, responseModel, reqCtx.RequestModel))
+	c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropicBeta(anthropicResp, responseModel, reqCtx.RequestModel))
 }
 
-// streamAnthropicV1ToResponses handles Anthropic v1 → Responses (streaming)
-// Extracted from openai_responses.go:238-262
-func (s *Server) streamAnthropicV1ToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
+// streamAnthropicBetaFromResponses handles a Responses-shaped client
+// request that has been normalized to Anthropic Beta and forwarded to an
+// Anthropic provider (streaming).
+func (s *Server) streamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
 	responseModel := reqCtx.ResponseModel
-	anthropicReq := reqCtx.Request.(*anthropic.MessageNewParams)
+	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
 
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
 	fc := forwarding.NewForwardContext(ctx, provider)
-	anthropicStream, cancel, err := forwarding.ForwardAnthropicV1Stream(fc, wrapper, anthropicReq)
+	anthropicStream, cancel, err := forwarding.ForwardAnthropicV1BetaStream(fc, wrapper, anthropicReq)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -1026,7 +1025,7 @@ func (s *Server) streamAnthropicV1ToResponses(c *gin.Context, reqCtx *transform.
 		}
 		return nil
 	})
-	usage, err := stream.HandleAnthropicToOpenAIResponsesStream(hc, anthropicStream, responseModel)
+	usage, err := stream.HandleAnthropicBetaToOpenAIResponsesStream(hc, anthropicStream, responseModel)
 	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
