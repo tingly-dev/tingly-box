@@ -26,6 +26,24 @@ interface ClaudeCodeConfigModalProps {
 type MainTab = 'quick' | 'manual';
 type ScriptTab = 'json' | 'windows' | 'unix';
 
+// Modal-local copy that doesn't fit either `claudeCode.*` (English-only
+// today) or QuickConfig's bundled text. Two flat maps picked at render
+// time keeps this file self-contained and easy to tune.
+const MODAL_TEXT = {
+    zh: {
+        tabQuick: '快速配置',
+        tabManual: '手动配置',
+        previewButton: '预览生成的 env',
+        previewTitle: '预览 — 将写入 ~/.claude/settings.json 的 env 段',
+    },
+    en: {
+        tabQuick: 'Quick config',
+        tabManual: 'Manual config',
+        previewButton: 'Preview generated env',
+        previewTitle: 'Preview — env block written to ~/.claude/settings.json',
+    },
+} as const;
+
 // Helper to generate common Node.js script for writing config files
 const generateNodeScript = (settingsPath: string, envConfig: Record<string, any>) => {
     return `const fs = require("fs");
@@ -68,7 +86,8 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     isApplyLoading = false,
 }) => {
     const { token } = useScenarioPageModal();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const modalText = MODAL_TEXT[i18n.language === 'zh' ? 'zh' : 'en'];
     const [mainTab, setMainTab] = React.useState<MainTab>('quick');
     const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
     const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
@@ -235,8 +254,8 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         onChange={(_, v) => setMainTab(v)}
                         sx={{ mt: 1.5, minHeight: 36, '& .MuiTab-root': { minHeight: 36, py: 0.5, textTransform: 'none' } }}
                     >
-                        <Tab label="快速配置" value="quick" />
-                        <Tab label="手动配置" value="manual" />
+                        <Tab label={modalText.tabQuick} value="quick" />
+                        <Tab label={modalText.tabManual} value="manual" />
                     </Tabs>
                 </DialogTitle>
 
@@ -460,7 +479,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                         startIcon={<VisibilityOutlinedIcon />}
                         sx={{ textTransform: 'none', color: 'text.secondary' }}
                     >
-                        预览生成的 env
+                        {modalText.previewButton}
                     </Button>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button onClick={onClose} color="inherit">
@@ -499,7 +518,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 PaperProps={{ sx: { borderRadius: 3 } }}
             >
                 <DialogTitle>
-                    <Typography variant="subtitle1" fontWeight={600}>预览 — 将写入 ~/.claude/settings.json 的 env 段</Typography>
+                    <Typography variant="subtitle1" fontWeight={600}>{modalText.previewTitle}</Typography>
                 </DialogTitle>
                 <DialogContent>
                     <CodeBlock
