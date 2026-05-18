@@ -298,8 +298,6 @@ const UseClaudeCodePageContent: React.FC = () => {
                     baseUrl={baseUrl}
                     rules={rules}
                     copyToClipboard={copyToClipboard}
-                    onApply={async () => { await handleApply(); }}
-                    onApplyWithStatusLine={async () => { await handleApplyWithStatusLine(); }}
                     onApplyWithPrefs={async (prefs, installStatusLine) => {
                         try {
                             setIsApplyLoading(true);

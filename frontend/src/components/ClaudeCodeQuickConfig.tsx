@@ -1,8 +1,5 @@
 import {
     Box,
-    Button,
-    Chip,
-    CircularProgress,
     Divider,
     IconButton,
     InputAdornment,
@@ -87,7 +84,7 @@ export const FIELDS: FieldDescriptor[] = [
         group: 'model', kind: 'model',
         label: 'Sonnet 槽位',
         purpose: '主力槽位 — 大部分对话和代码生成走这里',
-        tooltip: 'Claude Code 的默认主力。除非你显式选其他模型，正常会话都用 sonnet 槽位。',
+        tooltip: 'Claude Code 的默认主力。除非显式选其他模型，正常会话都用 sonnet 槽位。',
         placeholder: 'tingly/cc-sonnet',
         supportsOneM: true,
     },
@@ -218,9 +215,7 @@ export const FIELDS: FieldDescriptor[] = [
 // not as a separate prefs field. The UI just toggles the trailing [1m].
 
 const ONE_M_SUFFIX = '[1m]';
-
 const has1M = (v: string | undefined) => !!v && v.endsWith(ONE_M_SUFFIX);
-
 const with1M = (v: string | undefined, on: boolean): string => {
     const base = (v || '').replace(/\[1m\]$/, '');
     return on ? base + ONE_M_SUFFIX : base;
@@ -262,7 +257,28 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     };
 };
 
-// ── Field row ──────────────────────────────────────────────────────────
+// ── Materialize prefs to the env map the backend will write ────────────
+// Mirrors internal/agent/prefs.go ToEnv(): strip empties, inject the
+// server-resolved base URL + auth token.
+export const prefsToEnvPreview = (
+    prefs: ClaudeCodePrefs,
+    baseURL: string,
+    token: string,
+): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(prefs)) {
+        if (v === undefined || v === '') continue;
+        out[k] = v;
+    }
+    out.ANTHROPIC_BASE_URL = baseURL.replace(/\/$/, '') + '/tingly/claude_code';
+    out.ANTHROPIC_AUTH_TOKEN = token;
+    return out;
+};
+
+// ── Field row (3-column, single line) ──────────────────────────────────
+// Layout:  [ Label + (i) ]   [ ENV_NAME code badge ]   [ control · right ]
+// Switches and inputs are right-aligned in column 3 — Android-style "row
+// with trailing control" so the page reads as a compact list, not a form.
 
 interface FieldRowProps {
     field: FieldDescriptor;
@@ -274,52 +290,69 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, prefs, setPrefs }) => {
     const value = prefs[field.envName] ?? '';
     const setValue = (next: string) => setPrefs({ ...prefs, [field.envName]: next });
 
+    const richTooltip = (
+        <Box sx={{ maxWidth: 280 }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>{field.purpose}</Typography>
+            <Typography variant="caption" sx={{ display: 'block', opacity: 0.85 }}>{field.tooltip}</Typography>
+        </Box>
+    );
+
     return (
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', py: 1 }}>
-            {/* Label column */}
-            <Box sx={{ flex: '0 0 200px', pt: field.kind === 'bool' ? 0.5 : 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="body2" fontWeight={500}>{field.label}</Typography>
-                    <Tooltip title={field.tooltip} arrow placement="top">
-                        <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
-                    </Tooltip>
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>
-                    {field.purpose}
-                </Typography>
-                <Chip
-                    label={field.envName}
-                    size="small"
-                    variant="outlined"
-                    sx={{
-                        mt: 0.5,
-                        height: 18,
-                        fontSize: '0.65rem',
-                        fontFamily: 'monospace',
-                        '& .MuiChip-label': { px: 0.75 },
-                    }}
-                />
+        <Box
+            sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                py: 1,
+                minHeight: 44,
+            }}
+        >
+            {/* Col 1 — Label + info icon */}
+            <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                <Typography variant="body2" fontWeight={500} noWrap>{field.label}</Typography>
+                <Tooltip placement="top" arrow title={richTooltip}>
+                    <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
+                </Tooltip>
             </Box>
 
-            {/* Input column */}
-            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1, pt: field.kind === 'bool' ? 0 : 0.5 }}>
+            {/* Col 2 — env name as a subtle code badge */}
+            <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
+                <Box
+                    component="span"
+                    sx={{
+                        px: 0.75,
+                        py: 0.25,
+                        borderRadius: 0.75,
+                        bgcolor: 'action.hover',
+                        fontFamily: 'monospace',
+                        fontSize: '0.72rem',
+                        color: 'text.secondary',
+                        whiteSpace: 'nowrap',
+                    }}
+                >
+                    {field.envName}
+                </Box>
+            </Box>
+
+            {/* Col 3 — control, right-aligned */}
+            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
                 {field.kind === 'bool' && (
                     <Switch
                         size="small"
                         checked={value === '1'}
-                        onChange={(_, checked) => setValue(checked ? '1' : '')}
+                        onChange={(_, c) => setValue(c ? '1' : '')}
                     />
                 )}
                 {(field.kind === 'int' || field.kind === 'model') && (
                     <TextField
                         size="small"
-                        fullWidth
                         value={field.kind === 'model' ? value.replace(/\[1m\]$/, '') : value}
                         onChange={(e) => {
                             const next = e.target.value;
                             setValue(field.kind === 'model' && has1M(value) ? next + ONE_M_SUFFIX : next);
                         }}
                         placeholder={field.placeholder}
+                        sx={{ width: field.kind === 'model' ? 280 : 180 }}
                         InputProps={{
                             endAdornment: field.unit
                                 ? <InputAdornment position="end"><Typography variant="caption" color="text.disabled">{field.unit}</Typography></InputAdornment>
@@ -330,15 +363,16 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, prefs, setPrefs }) => {
                 )}
                 {field.kind === 'model' && field.supportsOneM && (
                     <Tooltip
-                        title="启用 1M 上下文窗口。会在模型 ID 末尾追加 [1m]。仅对支持 1M 的模型（Sonnet 4.5+ / Opus 4+）有效。"
+                        title="启用 1M 上下文窗口（追加 [1m] 后缀，仅 Sonnet 4.5+ / Opus 4+ 支持）"
                         arrow
+                        placement="top"
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>1M</Typography>
+                            <Typography variant="caption" sx={{ mr: 0.25, color: 'text.secondary', letterSpacing: 0.5 }}>1M</Typography>
                             <Switch
                                 size="small"
                                 checked={has1M(value)}
-                                onChange={(_, checked) => setValue(with1M(value, checked))}
+                                onChange={(_, c) => setValue(with1M(value, c))}
                             />
                         </Box>
                     </Tooltip>
@@ -348,12 +382,12 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, prefs, setPrefs }) => {
     );
 };
 
-// ── Section helper ─────────────────────────────────────────────────────
+// ── Section ────────────────────────────────────────────────────────────
 
 const SECTION_META: Record<Group, { title: string; hint: string }> = {
     model: {
         title: '模型路由',
-        hint: '每个 env 对应 Claude Code 内部一个"用途槽位"。如果你只用一个模型，把 5 个槽位填成同一个值即可。',
+        hint: '每个槽位对应 Claude Code 内部一个用途。只用一个模型时把 5 个槽位填成同一个值即可。',
     },
     limits: {
         title: '性能与限制',
@@ -361,7 +395,7 @@ const SECTION_META: Record<Group, { title: string; hint: string }> = {
     },
     switches: {
         title: '隐私与行为',
-        hint: '开关位置 = "1"（设置 env），关闭 = 不写。',
+        hint: '开启 = 设置为 "1"；关闭 = 不写入。',
     },
 };
 
@@ -370,9 +404,11 @@ const Section: React.FC<{ group: Group; prefs: ClaudeCodePrefs; setPrefs: (p: Cl
     const fields = FIELDS.filter(f => f.group === group);
     return (
         <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{meta.hint}</Typography>
-            <Divider sx={{ mb: 1 }} />
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
+                <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+            </Box>
+            <Divider />
             <Stack divider={<Divider flexItem />}>
                 {fields.map(f => <FieldRow key={f.envName} field={f} prefs={prefs} setPrefs={setPrefs} />)}
             </Stack>
@@ -385,27 +421,21 @@ const Section: React.FC<{ group: Group; prefs: ClaudeCodePrefs; setPrefs: (p: Cl
 interface QuickConfigPanelProps {
     prefs: ClaudeCodePrefs;
     setPrefs: (p: ClaudeCodePrefs) => void;
-    onApply: (installStatusLine: boolean) => Promise<void>;
     onResetDefaults: () => void;
-    isApplyLoading: boolean;
-    showApply: boolean;
 }
 
 const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
     prefs,
     setPrefs,
-    onApply,
     onResetDefaults,
-    isApplyLoading,
-    showApply,
 }) => {
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
-                    每一项对应 Claude Code 的一个环境变量，hover <InfoOutlinedIcon sx={{ fontSize: 13, verticalAlign: 'middle' }} /> 查看详细说明。留空 / 关闭 = 不写入 settings.json。
+                    每行对应一个 Claude Code 环境变量。hover 信息图标查看含义；留空 / 关闭 = 不写入。
                 </Typography>
-                <Tooltip title="重置为 tb 推荐默认值">
+                <Tooltip title="重置为 tb 推荐默认值" arrow>
                     <IconButton size="small" onClick={onResetDefaults}>
                         <RestartAltIcon fontSize="small" />
                     </IconButton>
@@ -415,27 +445,6 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
             <Section group="model" prefs={prefs} setPrefs={setPrefs} />
             <Section group="limits" prefs={prefs} setPrefs={setPrefs} />
             <Section group="switches" prefs={prefs} setPrefs={setPrefs} />
-
-            {showApply && (
-                <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', pt: 1, borderTop: 1, borderColor: 'divider' }}>
-                    <Button
-                        onClick={() => onApply(false)}
-                        variant="outlined"
-                        disabled={isApplyLoading}
-                        startIcon={isApplyLoading ? <CircularProgress size={14} /> : null}
-                    >
-                        应用配置
-                    </Button>
-                    <Button
-                        onClick={() => onApply(true)}
-                        variant="contained"
-                        disabled={isApplyLoading}
-                        startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : null}
-                    >
-                        应用配置 + Status Line
-                    </Button>
-                </Box>
-            )}
         </Box>
     );
 };
