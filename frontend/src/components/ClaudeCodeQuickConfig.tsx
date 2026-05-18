@@ -53,10 +53,6 @@ interface FieldDescriptor {
     tooltip: string;
     placeholder?: string;
     unit?: string;
-    // supportsOneM=true renders a [1m] toggle next to the model input. Only
-    // sonnet/opus families currently support the 1M context window per
-    // Anthropic docs; haiku does not.
-    supportsOneM?: boolean;
 }
 
 // Single source of truth for the form. Adding an env = adding a row here.
@@ -69,7 +65,6 @@ export const FIELDS: FieldDescriptor[] = [
         purpose: '未指定具体场景时使用的兜底模型',
         tooltip: 'Claude Code 在没有专门路由时回退到这个模型。tb 通常映射到 tingly/cc 或 tingly/cc-default。',
         placeholder: 'tingly/cc',
-        supportsOneM: true,
     },
     {
         envName: 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
@@ -86,7 +81,6 @@ export const FIELDS: FieldDescriptor[] = [
         purpose: '主力槽位 — 大部分对话和代码生成走这里',
         tooltip: 'Claude Code 的默认主力。除非显式选其他模型，正常会话都用 sonnet 槽位。',
         placeholder: 'tingly/cc-sonnet',
-        supportsOneM: true,
     },
     {
         envName: 'ANTHROPIC_DEFAULT_OPUS_MODEL',
@@ -95,7 +89,6 @@ export const FIELDS: FieldDescriptor[] = [
         purpose: '复杂推理（如 plan 模式、深度分析）使用的模型',
         tooltip: '相对昂贵但更强的推理模型。Claude Code 在显式调用 opus 时使用。',
         placeholder: 'tingly/cc-opus',
-        supportsOneM: true,
     },
     {
         envName: 'CLAUDE_CODE_SUBAGENT_MODEL',
@@ -361,9 +354,9 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, prefs, setPrefs }) => {
                         }}
                     />
                 )}
-                {field.kind === 'model' && field.supportsOneM && (
+                {field.kind === 'model' && (
                     <Tooltip
-                        title="启用 1M 上下文窗口（追加 [1m] 后缀，仅 Sonnet 4.5+ / Opus 4+ 支持）"
+                        title="启用 1M 上下文窗口（在模型 ID 末尾追加 [1m]，需路由的目标模型支持）"
                         arrow
                         placement="top"
                     >
