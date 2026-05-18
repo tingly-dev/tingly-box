@@ -46,8 +46,13 @@ type Config struct {
 	ClaudeCodeDeviceID string               `json:"claude_code_device_id"`                        // Calc from random claude code device id with sha256
 
 	// Merged fields from Config struct
+	// ProvidersV1 and Providers are legacy JSON-config storage for providers.
+	// Providers now live in SQLite (db.ProviderStore); these fields are only
+	// populated on load for one-time migration to the database and are cleared
+	// by migrateProvidersToDB. The non-omitempty tags ensure that clearing them
+	// results in a JSON null that overrides any stale value in the existing file.
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
-	Providers   []*typ.Provider          `json:"providers_v2,omitempty"`
+	Providers   []*typ.Provider          `json:"providers_v2"`
 	ServerPort  int                      `json:"-"`
 	JWTSecret   string                   `json:"jwt_secret"`
 
