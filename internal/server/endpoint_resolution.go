@@ -19,22 +19,21 @@ const (
 	IncomingAPIResponses IncomingAPIType = "responses"
 )
 
-// ResolveOpenAIEndpoint picks an OpenAI endpoint using only the provider's
-// declared OpenAIEndpointMode and the optional per-rule override.
+// ResolveOpenAIEndpoint picks an OpenAI endpoint using the optional per-rule
+// override first, then the provider's declared OpenAIEndpointMode.
 //
 // Precedence:
 //
-//  1. Rule flag (flags.OpenAIEndpointOverride). Provider declarations trump
-//     overrides — asking for Chat on a Responses-only provider (or vice versa)
-//     logs a warning and uses the provider's endpoint instead.
+//  1. Rule flag (flags.OpenAIEndpointOverride). Overrides provider settings.
 //  2. provider.OpenAIEndpointMode:
-//       EndpointModeChat (default) → Chat
-//       EndpointModeResponses      → Responses
-//       EndpointModeBoth           → mirror incoming
+//     EndpointModeUnknown / zero value → Chat
+//     EndpointModeChat                 → Chat
+//     EndpointModeResponses            → Responses
+//     EndpointModeBoth                 → mirror incoming
 //
-// Defaulting to Chat (not "mirror incoming") is intentional: most
-// OpenAI-compatible vendors implement only /chat/completions. Providers that
-// genuinely support Responses must declare it via template or OAuth.
+// Defaulting unknown providers to Chat (not "mirror incoming") is intentional:
+// most OpenAI-compatible vendors implement only /chat/completions. Providers
+// that genuinely support Responses must declare it via template or OAuth.
 //
 // When an incoming Responses request routes to Chat, Responses-only fields
 // (previous_response_id, include, background, truncation, reasoning) are
@@ -51,17 +50,9 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 
 	switch ParseEndpointOverride(flags.OpenAIEndpointOverride) {
 	case OverrideChat:
-		if mode == ai.EndpointModeResponses {
-			logModeOverrideIgnored(provider, "chat")
-			return protocol.TypeOpenAIResponses, nil
-		}
 		return protocol.TypeOpenAIChat, nil
 
 	case OverrideResponses:
-		if mode == ai.EndpointModeChat {
-			logModeOverrideIgnored(provider, "responses")
-			return protocol.TypeOpenAIChat, nil
-		}
 		return protocol.TypeOpenAIResponses, nil
 	}
 

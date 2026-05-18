@@ -169,10 +169,12 @@ type Provider struct {
 type OpenAIEndpointMode string
 
 const (
+	EndpointModeUnknown OpenAIEndpointMode = ""
+
 	// EndpointModeChat (the default) means the provider only exposes
 	// /chat/completions. An incoming Responses request will be downgraded
 	// to Chat if its features allow; otherwise the request is rejected.
-	EndpointModeChat OpenAIEndpointMode = ""
+	EndpointModeChat OpenAIEndpointMode = "chat"
 
 	// EndpointModeResponses means the provider only exposes /responses
 	// (e.g. Codex). All requests, including incoming Chat, route to
