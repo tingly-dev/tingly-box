@@ -15,7 +15,6 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -23,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -657,7 +657,7 @@ func (s *Server) dispatchOpenAIChat(
 				return
 			}
 
-			s.handleOpenAIChatStreamingRequest(c, provider, req, responseModel, disableStreamUsage)
+			s.streamOpenAIChat(c, provider, req, responseModel, disableStreamUsage)
 		case protocol.TypeOpenAIResponses:
 			s.streamOpenAIChatToResponses(c, reqCtx, rule, provider, recorder)
 		}
@@ -672,7 +672,7 @@ func (s *Server) dispatchOpenAIChat(
 				return
 			}
 
-			s.handleNonStreamingRequest(c, provider, req, responseModel, stripUsage)
+			s.nonstreamOpenAIChat(c, provider, req, responseModel, stripUsage)
 			return
 		case protocol.TypeOpenAIResponses:
 			s.nonstreamOpenAIChatToResponses(c, reqCtx, rule, provider, recorder)

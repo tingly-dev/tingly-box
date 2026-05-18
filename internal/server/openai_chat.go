@@ -16,8 +16,6 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
@@ -25,18 +23,8 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
-	if len(messages) == 0 {
-		return nil
-	}
-	b, _ := json.Marshal(messages)
-	var out []map[string]any
-	_ = json.Unmarshal(b, &out)
-	return out
-}
-
-// handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
+// nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.
+func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
 	req := originalReq
 
 	// Forward request to provider
@@ -116,20 +104,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	c.JSON(http.StatusOK, responseMap)
 }
 
-func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) bool {
-	if len(toolCalls) == 0 {
-		return false
-	}
-	for _, tc := range toolCalls {
-		if !runtime.IsMCPToolName(tc.Function.Name) {
-			return false
-		}
-	}
-	return true
-}
-
-// handleOpenAIChatStreamingRequest handles streaming chat completion requests.
-func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
+// streamOpenAIChat handles streaming chat completion requests.
+func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	req := originalReq
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
@@ -169,81 +145,6 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)
-}
-
-func hasDeclaredMCPTools(req *openai.ChatCompletionNewParams) bool {
-	if req == nil || len(req.Tools) == 0 {
-		return false
-	}
-	for _, t := range req.Tools {
-		fn := t.GetFunction()
-		if fn == nil {
-			continue
-		}
-		if runtime.IsMCPToolName(fn.Name) {
-			return true
-		}
-	}
-	return false
-}
-
-func streamSingleOpenAICompletion(c *gin.Context, resp *openai.ChatCompletion, responseModel string, disableStreamUsage bool) {
-	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Cache-Control")
-	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Content-Type", "text/event-stream; charset=utf-8")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
-		return
-	}
-
-	chunk := map[string]interface{}{
-		"id":      resp.ID,
-		"object":  "chat.completion.chunk",
-		"created": resp.Created,
-		"model":   responseModel,
-		"choices": []map[string]interface{}{},
-	}
-
-	for _, choice := range resp.Choices {
-		delta := map[string]interface{}{
-			"role":    "assistant",
-			"content": choice.Message.Content,
-		}
-		if len(choice.Message.ToolCalls) > 0 {
-			delta["tool_calls"] = choice.Message.ToolCalls
-		}
-		chunk["choices"] = append(chunk["choices"].([]map[string]interface{}), map[string]interface{}{
-			"index":         choice.Index,
-			"delta":         delta,
-			"finish_reason": choice.FinishReason,
-			"logprobs":      nil,
-		})
-	}
-
-	if !disableStreamUsage {
-		chunk["usage"] = map[string]interface{}{
-			"prompt_tokens":     resp.Usage.PromptTokens,
-			"completion_tokens": resp.Usage.CompletionTokens,
-			"total_tokens":      resp.Usage.TotalTokens,
-		}
-	}
-
-	chunkJSON, _ := json.Marshal(chunk)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-	flusher.Flush()
-	c.Writer.WriteString("data: [DONE]\n\n")
-	flusher.Flush()
 }
 
 func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
@@ -538,32 +439,6 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 	flusher.Flush()
 }
 
-// ListModelsByScenario handles the /v1/models endpoint for scenario-based routing
-func (s *Server) ListModelsByScenario(c *gin.Context) {
-	scenario := c.Param("scenario")
-
-	// Convert string to RuleScenario and validate
-	scenarioType := typ.RuleScenario(scenario)
-	if !isValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"message": fmt.Sprintf("invalid scenario: %s", scenario),
-				"type":    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Route to appropriate handler based on scenario
-	switch scenarioType {
-	case typ.ScenarioAnthropic, typ.ScenarioClaudeCode:
-		s.AnthropicListModelsForScenario(c, scenarioType)
-	default:
-		// OpenAI is the default
-		s.OpenAIListModelsForScenario(c, scenarioType)
-	}
-}
-
 // convertChatCompletionToResponsesParams converts a chat completion request to responses API params
 func (s *Server) convertChatCompletionToResponsesParams(req *protocol.OpenAIChatCompletionRequest, actualModel string) responses.ResponseNewParams {
 	// Build input items from chat messages
@@ -645,7 +520,12 @@ func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompl
 	return inputItems
 }
 
-// isValidRuleScenario checks if the given scenario is a valid RuleScenario
-func isValidRuleScenario(scenario typ.RuleScenario) bool {
-	return typ.CanUseScenarioInPath(scenario)
+func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
 }
