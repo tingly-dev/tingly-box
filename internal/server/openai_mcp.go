@@ -5,9 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	typ "github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func (s *Server) streamOpenAIChatToAnthropicV1WithMCP(
@@ -113,4 +114,32 @@ func (s *Server) streamOpenAIChatToAnthropicBetaWithMCP(
 	if streamRec != nil {
 		streamRec.RecordError(stream.ErrMCPStreamContinue)
 	}
+}
+
+func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) bool {
+	if len(toolCalls) == 0 {
+		return false
+	}
+	for _, tc := range toolCalls {
+		if !runtime.IsMCPToolName(tc.Function.Name) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasDeclaredMCPTools(req *openai.ChatCompletionNewParams) bool {
+	if req == nil || len(req.Tools) == 0 {
+		return false
+	}
+	for _, t := range req.Tools {
+		fn := t.GetFunction()
+		if fn == nil {
+			continue
+		}
+		if runtime.IsMCPToolName(fn.Name) {
+			return true
+		}
+	}
+	return false
 }

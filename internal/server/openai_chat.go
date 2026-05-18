@@ -16,27 +16,240 @@ import (
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
-
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
-	if len(messages) == 0 {
-		return nil
+// HandleOpenAIChatCompletions handles OpenAI v1 chat completion requests
+func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
+
+	scenario := c.Param("scenario")
+
+	// Read raw body
+	bodyBytes, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Failed to read request body: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
 	}
-	b, _ := json.Marshal(messages)
-	var out []map[string]any
-	_ = json.Unmarshal(b, &out)
-	return out
+
+	// Parse OpenAI-style request
+	var req protocol.OpenAIChatCompletionRequest
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Invalid request body: " + err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Validate
+	responseModel := req.Model
+	if req.Model == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Model is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	if len(req.Messages) == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "At least one message is required",
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Determine provider & model
+	var (
+		provider        *typ.Provider
+		selectedService *loadbalance.Service
+		rule            *typ.Rule
+	)
+
+	// Convert string to RuleScenario and validate
+	scenarioType := typ.RuleScenario(scenario)
+	if !isValidRuleScenario(scenarioType) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("invalid scenario: %s", scenario),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	//if !typ.ScenarioSupportsTransport(scenarioType, typ.TransportOpenAI) {
+	//	c.JSON(http.StatusBadRequest, ErrorResponse{
+	//		Error: ErrorDetail{
+	//			Message: fmt.Sprintf("scenario %s does not support OpenAI chat completions", scenario),
+	//			Type:    "invalid_request_error",
+	//		},
+	//	})
+	//	return
+	//}
+
+	// Check if this is the request model name first
+	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// Select service using routing pipeline
+	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: err.Error(),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	actualModel := selectedService.Model
+	req.Model = actualModel
+
+	// Virtual-model providers are served by the in-process vmodel handler.
+	// Resolution went through the normal routing pipeline so rules/scenarios
+	// still apply, but no outbound HTTP is performed. req.Model has already
+	// been rewritten to actualModel above, so re-marshaling the request body
+	// ensures the vmodel registry lookup uses the rule's resolved ID rather
+	// than the client-facing requestModel.
+	//
+	// NOTE: this path intentionally skips outbound dispatch helpers (pre-chain,
+	// guardrails, post-recording). Usage/quota tracking for vmodel is tracked
+	// separately.
+	if provider.IsVirtual() && s.virtualModelService != nil {
+		rewritten, err := json.Marshal(req)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Failed to prepare virtual-model request: " + err.Error(),
+					Type:    "internal_error",
+				},
+			})
+			return
+		}
+		c.Request.Body = io.NopCloser(strings.NewReader(string(rewritten)))
+		c.Request.ContentLength = int64(len(rewritten))
+		s.virtualModelService.GetHandler().ChatCompletions(c)
+		return
+	}
+
+	s.OpenAIChatCompletion(c, req, responseModel, provider, scenarioType, rule)
 }
 
-// handleNonStreamingRequest handles non-streaming chat completion requests with MCP runtime support.
-func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
+func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCompletionRequest, responseModel string, provider *typ.Provider, scenarioType typ.RuleScenario, rule *typ.Rule) {
+	// Resolve fusion endpoint: when the provider has an OpenAI-compatible
+	// fusion URL configured, route there natively to avoid a transform.
+	provider = s.resolveProviderForClient(provider, protocol.APIStyleOpenAI)
+
+	isStreaming := req.Stream
+	actualModel := req.Model
+	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
+	cursorCompat := resolveCursorCompat(c, rule)
+	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
+	ruleFlags := resolveRuleFlags(rule)
+	if ruleFlags.CustomUserAgent != "" {
+		c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), ruleFlags.CustomUserAgent))
+	}
+
+	// Inject session ID into request context so all downstream code can access it
+	sessionID := resolveSessionID(c, &req.ChatCompletionNewParams)
+	c.Request = c.Request.WithContext(typ.WithSessionID(c.Request.Context(), sessionID))
+
+	// Set tracking context with all metadata (eliminates need for explicit parameter passing)
+	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
+
+	apiStyle := provider.APIStyle
+	// === Cursor compat content normalization (before transform) ===
+	if cursorCompat {
+		ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
+	}
+	transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
+
+	// === Cap max_tokens at model's maximum ===
+	if req.MaxTokens.Valid() && req.MaxTokens.Value > int64(maxAllowed) {
+		req.MaxTokens.Value = int64(maxAllowed)
+	}
+
+	// === Determine target API type ===
+	apiStyle = provider.APIStyle
+	target := protocol.TypeOpenAIChat
+	switch apiStyle {
+	case protocol.APIStyleAnthropic:
+		target = protocol.TypeAnthropicBeta
+	case protocol.APIStyleGoogle:
+		target = protocol.TypeGoogle
+	case protocol.APIStyleOpenAI:
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, ruleFlags, IncomingAPIChat)
+		if routeErr != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: routeErr.Error(),
+					Type:    "invalid_request_error",
+					Code:    "unsupported_endpoint",
+				},
+			})
+			return
+		}
+		target = resolvedTarget
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error: ErrorDetail{
+				Message: fmt.Sprintf("Unsupported API style: %s %s", provider.Name, apiStyle),
+				Type:    "invalid_request_error",
+			},
+		})
+		return
+	}
+
+	// === Transform via pipeline ===
+	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, ruleExtraTransforms(ruleFlags)...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error: ErrorDetail{
+				Message: "Transform failed: " + err.Error(),
+				Type:    "api_error",
+			},
+		})
+		return
+	}
+	reqCtx.Extra["cursor_compat"] = cursorCompat
+	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
+
+	// === Dispatch via transform chain ===
+	reqCtx.RequestModel = actualModel
+	reqCtx.ResponseModel = responseModel
+	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
+}
+
+// nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.
+func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, stripUsage bool) {
 	req := originalReq
 
 	// Forward request to provider
@@ -116,20 +329,8 @@ func (s *Server) handleNonStreamingRequest(c *gin.Context, provider *typ.Provide
 	c.JSON(http.StatusOK, responseMap)
 }
 
-func hasOnlyMCPToolCalls(toolCalls []openai.ChatCompletionMessageToolCallUnion) bool {
-	if len(toolCalls) == 0 {
-		return false
-	}
-	for _, tc := range toolCalls {
-		if !runtime.IsMCPToolName(tc.Function.Name) {
-			return false
-		}
-	}
-	return true
-}
-
-// handleOpenAIChatStreamingRequest handles streaming chat completion requests.
-func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
+// streamOpenAIChat handles streaming chat completion requests.
+func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, originalReq *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
 	req := originalReq
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, req.Model)
@@ -169,81 +370,6 @@ func (s *Server) handleOpenAIChatStreamingRequest(c *gin.Context, provider *typ.
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)
-}
-
-func hasDeclaredMCPTools(req *openai.ChatCompletionNewParams) bool {
-	if req == nil || len(req.Tools) == 0 {
-		return false
-	}
-	for _, t := range req.Tools {
-		fn := t.GetFunction()
-		if fn == nil {
-			continue
-		}
-		if runtime.IsMCPToolName(fn.Name) {
-			return true
-		}
-	}
-	return false
-}
-
-func streamSingleOpenAICompletion(c *gin.Context, resp *openai.ChatCompletion, responseModel string, disableStreamUsage bool) {
-	c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Cache-Control")
-	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Content-Type", "text/event-stream; charset=utf-8")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
-		return
-	}
-
-	chunk := map[string]interface{}{
-		"id":      resp.ID,
-		"object":  "chat.completion.chunk",
-		"created": resp.Created,
-		"model":   responseModel,
-		"choices": []map[string]interface{}{},
-	}
-
-	for _, choice := range resp.Choices {
-		delta := map[string]interface{}{
-			"role":    "assistant",
-			"content": choice.Message.Content,
-		}
-		if len(choice.Message.ToolCalls) > 0 {
-			delta["tool_calls"] = choice.Message.ToolCalls
-		}
-		chunk["choices"] = append(chunk["choices"].([]map[string]interface{}), map[string]interface{}{
-			"index":         choice.Index,
-			"delta":         delta,
-			"finish_reason": choice.FinishReason,
-			"logprobs":      nil,
-		})
-	}
-
-	if !disableStreamUsage {
-		chunk["usage"] = map[string]interface{}{
-			"prompt_tokens":     resp.Usage.PromptTokens,
-			"completion_tokens": resp.Usage.CompletionTokens,
-			"total_tokens":      resp.Usage.TotalTokens,
-		}
-	}
-
-	chunkJSON, _ := json.Marshal(chunk)
-	c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", chunkJSON))
-	flusher.Flush()
-	c.Writer.WriteString("data: [DONE]\n\n")
-	flusher.Flush()
 }
 
 func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestream.Stream[openai.ChatCompletionChunk], req *openai.ChatCompletionNewParams, responseModel string, disableStreamUsage bool) {
@@ -538,32 +664,6 @@ func (s *Server) handleOpenAIStreamResponse(c *gin.Context, streamResp *ssestrea
 	flusher.Flush()
 }
 
-// ListModelsByScenario handles the /v1/models endpoint for scenario-based routing
-func (s *Server) ListModelsByScenario(c *gin.Context) {
-	scenario := c.Param("scenario")
-
-	// Convert string to RuleScenario and validate
-	scenarioType := typ.RuleScenario(scenario)
-	if !isValidRuleScenario(scenarioType) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"message": fmt.Sprintf("invalid scenario: %s", scenario),
-				"type":    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Route to appropriate handler based on scenario
-	switch scenarioType {
-	case typ.ScenarioAnthropic, typ.ScenarioClaudeCode:
-		s.AnthropicListModelsForScenario(c, scenarioType)
-	default:
-		// OpenAI is the default
-		s.OpenAIListModelsForScenario(c, scenarioType)
-	}
-}
-
 // convertChatCompletionToResponsesParams converts a chat completion request to responses API params
 func (s *Server) convertChatCompletionToResponsesParams(req *protocol.OpenAIChatCompletionRequest, actualModel string) responses.ResponseNewParams {
 	// Build input items from chat messages
@@ -645,7 +745,12 @@ func (s *Server) convertMessagesToResponseInputItems(messages []openai.ChatCompl
 	return inputItems
 }
 
-// isValidRuleScenario checks if the given scenario is a valid RuleScenario
-func isValidRuleScenario(scenario typ.RuleScenario) bool {
-	return typ.CanUseScenarioInPath(scenario)
+func extractOpenAIMessages(messages []openai.ChatCompletionMessageParamUnion) []map[string]any {
+	if len(messages) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(messages)
+	var out []map[string]any
+	_ = json.Unmarshal(b, &out)
+	return out
 }

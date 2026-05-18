@@ -89,7 +89,7 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 		return
 	}
 
-	requestModel := string(req.Model)
+	requestModel := req.Model
 	responseModel := requestModel
 
 	rule, err := s.determineRuleWithScenario(c, scenarioType, requestModel)
