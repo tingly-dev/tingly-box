@@ -160,6 +160,12 @@ type Provider struct {
 	// Codex OAuth completion. Routing reads this; users do not edit it
 	// directly. See the OpenAIEndpointMode constants for semantics.
 	OpenAIEndpointMode OpenAIEndpointMode `json:"openai_endpoint_mode,omitempty"`
+
+	// ExtraHeaders are per-request HTTP headers injected by the SDK client.
+	// In-memory only (never persisted). Set on ephemeral providers built by
+	// the probe loopback to carry override hints (e.g. X-Tingly-Probe-Provider)
+	// to the standard /tingly/:scenario endpoint.
+	ExtraHeaders map[string]string `json:"-"`
 }
 
 // OpenAIEndpointMode declares this provider's support for the OpenAI Chat

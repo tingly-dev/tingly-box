@@ -77,6 +77,16 @@ type LightweightProbeResponseData struct {
 	Warning string `json:"warning,omitempty" example:"Models endpoint not supported for this provider type"`
 }
 
+// Probe-direct override headers. Sent by the probe loopback so the standard
+// /tingly/:scenario handlers can bypass rule matching and routing and target
+// one specific provider/model directly. Kept in this neutral package so both
+// the probe service (sender) and the server handlers (receiver) can
+// reference the same string without an import cycle.
+const (
+	HeaderProbeProvider = "X-Tingly-Probe-Provider"
+	HeaderProbeModel    = "X-Tingly-Probe-Model"
+)
+
 // E2ETarget defines the target type for probe.
 type E2ETarget string
 

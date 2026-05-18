@@ -89,6 +89,12 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 
 	options = append(options, option.WithHTTPClient(httpClient))
 
+	// Provider-scoped extra headers (e.g. probe loopback overrides).
+	// Applied before extraOptions so callers can still override per-call.
+	for k, v := range provider.ExtraHeaders {
+		options = append(options, option.WithHeader(k, v))
+	}
+
 	// MENTION: extra will be applied at last to confirm override
 	options = append(options, extraOptions...)
 

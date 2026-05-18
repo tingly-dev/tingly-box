@@ -143,33 +143,53 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		reqParams = &messages.MessageNewParams
 	}
 
-	// Check if this is the request requestModel name first
-	rule, err = s.determineRuleWithScenario(c, scenarioType, requestModel)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
-
-	// Select service using routing pipeline
-	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
-	if err != nil {
-		// Record error if recording is enabled
-		if recorder != nil {
-			recorder.RecordError(nil)
+	// Probe-direct override: when the loopback sets X-Tingly-Probe-Provider
+	// (+ X-Tingly-Probe-Model), skip rule matching and routing entirely so
+	// the request hits one specific provider/model. The rest of the
+	// dispatch pipeline (transforms, recording, usage) runs as normal.
+	if probeProvider, probeRule, probeService, isProbe, probeErr := s.tryResolveProbeOverride(c, scenarioType, requestModel); isProbe {
+		if probeErr != nil {
+			if recorder != nil {
+				recorder.RecordError(probeErr)
+			}
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: probeErr.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
 		}
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		logrus.WithError(err).Errorf("Select service error")
-		return
+		provider, rule, selectedService = probeProvider, probeRule, probeService
+	} else {
+		// Check if this is the request requestModel name first
+		rule, err = s.determineRuleWithScenario(c, scenarioType, requestModel)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+
+		// Select service using routing pipeline
+		provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
+		if err != nil {
+			// Record error if recording is enabled
+			if recorder != nil {
+				recorder.RecordError(nil)
+			}
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			logrus.WithError(err).Errorf("Select service error")
+			return
+		}
 	}
 
 	if provider.Timeout <= 0 {

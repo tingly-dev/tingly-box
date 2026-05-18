@@ -96,6 +96,12 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 	}
 	options = append(options, anthropicOption.WithHTTPClient(httpClient))
 
+	// Provider-scoped extra headers (e.g. probe loopback overrides).
+	// Applied before extraOptions so callers can still override per-call.
+	for k, v := range provider.ExtraHeaders {
+		options = append(options, anthropicOption.WithHeader(k, v))
+	}
+
 	// MENTION: extra will be applied at last to confirm override
 	options = append(options, extraOptions...)
 

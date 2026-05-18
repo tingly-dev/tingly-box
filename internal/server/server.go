@@ -427,9 +427,10 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Register adviser as virtual tool if configured
 	server.registerAdviserFromConfig()
 
-	// E2E probe service handles /api/v2/probe end-to-end without touching *Server.
-	// The smart-routing callback closes over the server so probe doesn't import server.
-	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool, server.SelectServiceFromSmartRouting)
+	// E2E probe service handles /api/v2/probe end-to-end. Rule / saved-provider
+	// probes loop back through the standard /tingly/:scenario pipeline so smart
+	// routing and load balancing live in one place on the server side.
+	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool)
 	server.probeLightweight = probe.NewLightweightService(server.clientPool)
 
 	// Initialize OTel meter setup for token tracking

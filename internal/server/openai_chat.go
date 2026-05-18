@@ -105,28 +105,45 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 	//	return
 	//}
 
-	// Check if this is the request model name first
-	rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
-	}
+	// Probe-direct override: when the loopback sets X-Tingly-Probe-Provider
+	// (+ X-Tingly-Probe-Model), skip rule matching and routing entirely so
+	// the request hits one specific provider/model. The rest of the
+	// dispatch pipeline (transforms, recording, usage) runs as normal.
+	if probeProvider, probeRule, probeService, isProbe, probeErr := s.tryResolveProbeOverride(c, scenarioType, req.Model); isProbe {
+		if probeErr != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: probeErr.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
+		provider, rule, selectedService = probeProvider, probeRule, probeService
+	} else {
+		// Check if this is the request model name first
+		rule, err = s.determineRuleWithScenario(c, scenarioType, req.Model)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
 
-	// Select service using routing pipeline
-	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
-		return
+		// Select service using routing pipeline
+		provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return
+		}
 	}
 
 	actualModel := selectedService.Model
