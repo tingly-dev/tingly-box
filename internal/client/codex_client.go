@@ -15,9 +15,9 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
-
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -90,6 +90,21 @@ func (c *CodexClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCom
 func (c *CodexClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
 	logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
 	return nil
+}
+
+// ResponsesNew creates a new Responses API request.
+// For Codex, this internally uses streaming mode and assembles the result
+// into a non-streaming Response, as required by the ChatGPT backend API.
+func (c *CodexClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
+	// Apply Codex-specific defaults to the request
+	applyCodexDefaultsToParams(&req)
+
+	// Call streaming API
+	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, req)
+	defer stream.Close()
+
+	// Parse streaming response and assemble into non-streaming Response
+	return c.parseResponsesStream(ctx, stream)
 }
 
 // ResponsesNewStreaming creates a new streaming Responses API request with Codex-specific defaults.
@@ -490,6 +505,39 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 			},
 		},
 	}, nil
+}
+
+// parseResponsesStream parses the streaming Responses API response
+// and assembles it into a complete non-streaming Response object using
+// the ResponsesAssembler.
+func (c *CodexClient) parseResponsesStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*responses.Response, error) {
+	defer stream.Close()
+
+	// Use assembler to accumulate streaming events
+	asm := assembler.NewResponsesAssembler()
+
+	for stream.Next() {
+		event := stream.Current()
+		asm.Accumulate(event)
+
+		// Early exit on terminal states
+		if asm.IsFinished() {
+			break
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Get the final response from assembler
+	resp := asm.Finish()
+	if resp == nil {
+		return nil, fmt.Errorf("response assembly failed: status=%s", asm.Status())
+	}
+
+	logrus.Debugf("[Codex] Response assembled via assembler, id: %s, status: %s", resp.ID, asm.Status())
+	return resp, nil
 }
 
 // SetRecordSink sets the record sink for the client.
