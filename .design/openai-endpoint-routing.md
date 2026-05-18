@@ -65,7 +65,8 @@ type Provider struct {
 type OpenAIEndpointMode string
 
 const (
-    EndpointModeChat      OpenAIEndpointMode = ""           // 默认，绝大多数厂商
+    EndpointModeUnknown   OpenAIEndpointMode = ""           // 未声明，按 Chat 处理
+    EndpointModeChat      OpenAIEndpointMode = "chat"       // 绝大多数厂商
     EndpointModeResponses OpenAIEndpointMode = "responses"  // Codex
     EndpointModeBoth      OpenAIEndpointMode = "both"       // OpenAI 官方
 )
@@ -115,12 +116,12 @@ Endpoint 路由相关的状态/决策被刻意拆成两层，每层承担一个 
 
 ### 两层冲突时的优先级
 
-| 冲突 | 谁赢 | 理由 |
+| 场景 | 谁赢 | 理由 |
 |---|---|---|
-| Rule flag 要 chat，Provider mode 是 responses-only | **Provider 赢** | structural fact 不能被 user preference 覆盖（chat 请求送 Codex 会 404）|
-| Rule flag 要 responses，Provider mode 是 chat-only | **Provider 赢** | 同上 |
-| Provider mode 是 both、入站 Chat | mirror（Chat）| 入站协议是默认 tie-breaker |
-| Provider mode 是 both、入站 Responses | mirror（Responses）| 同上 |
+| Rule flag 指定 `chat`，Provider mode 是 `responses` | **Rule flag 赢** | override 是 per-rule 显式选择，用于调试或特殊客户端适配 |
+| Rule flag 指定 `responses`，Provider mode 是 `chat` / 未声明 | **Rule flag 赢** | 同上；调用方显式接受上游不支持时可能产生的错误 |
+| Provider mode 是 `both`、入站 Chat | mirror（Chat） | 入站协议是默认 tie-breaker |
+| Provider mode 是 `both`、入站 Responses | mirror（Responses） | 同上 |
 
 具体决策表见 §4.2。
 
@@ -147,22 +148,19 @@ Endpoint 路由相关的状态/决策被刻意拆成两层，每层承担一个 
    - `"chat"` 或 `"responses"` → 显式 override
 2. **Provider 声明 `OpenAIEndpointMode`**（Layer 1，来自 template 快照 / OAuth 实例化）
 
-Provider 声明 **trump** rule override——见 §3 「两层冲突时的优先级」。`OpenAIEndpointOverride` 与不兼容的 provider mode 冲突时记 warn 并按 provider 走。
+Provider 未声明或显式声明 `EndpointModeUnknown` 时按 Chat 处理。Rule override 优先于 provider mode；`OpenAIEndpointOverride` 与 provider mode 冲突时不再降级为 provider mode，也不记录 ignored warn。
 
 ### 4.2 决策表
 
 | Override | Provider mode | 结果 | 备注 |
 |---|---|---|---|
-| 无 | `""` (chat 默认) | **Chat** | 入站是 Responses 也降级 |
+| 无 | `""` / unknown | **Chat** | 入站是 Responses 也降级 |
+| 无 | `"chat"` | Chat | 入站是 Responses 也降级 |
 | 无 | `"responses"` | Responses | Codex |
 | 无 | `"both"` (chat 入站) | Chat | mirror |
 | 无 | `"both"` (responses 入站) | Responses | mirror |
-| `=chat` | `""` | Chat | |
-| `=chat` | `"responses"` | Responses + warn | provider 赢 |
-| `=chat` | `"both"` | Chat | override 生效 |
-| `=responses` | `""` | Chat + warn | provider 赢（不支持） |
-| `=responses` | `"responses"` | Responses | |
-| `=responses` | `"both"` | Responses | override 生效 |
+| `=chat` | 任意 | Chat | override 生效 |
+| `=responses` | 任意 | Responses | override 生效 |
 
 ### 4.3 为什么默认是 Chat
 
@@ -174,7 +172,7 @@ Provider 声明 **trump** rule override——见 §3 「两层冲突时的优先
 
 ## 5. Codex 的处理
 
-Codex 是 OAuth-only 接入路径（Web `oauth/handler.go` 和 CLI `command/oauth.go`），实例化时通过 `ai.OpenAIEndpointModeForIssuer(issuer)` 直接填入 Provider 结构体——目前该 helper 只对 `IssuerCodex` 返回 `EndpointModeResponses`，其他 issuer 走默认 `EndpointModeChat`。两条 OAuth 路径共用同一 mapping。
+Codex 是 OAuth-only 接入路径（Web `oauth/handler.go` 和 CLI `command/oauth.go`），实例化时通过 `ai.OpenAIEndpointModeForIssuer(issuer)` 直接填入 Provider 结构体——目前该 helper 只对 `IssuerCodex` 返回 `EndpointModeResponses`，其他 issuer 返回 `EndpointModeUnknown`，由 resolver 按 Chat 处理。两条 OAuth 路径共用同一 mapping。
 
 无需用户配置。OAuth 完成即正确。
 
@@ -193,7 +191,7 @@ Template 是用户实例化 provider 的预设入口。Template 里的 `openai_e
 |---|---|
 | `openai-com` | `"both"` |
 | `codex` | `"responses"` |
-| 其他（Qwen / Deepseek / GLM / ...）| 未设（= `""` = chat 默认）|
+| 其他（Qwen / Deepseek / GLM / ...）| 未设（= `""` / unknown，resolver 按 Chat 处理）|
 
 用户**不在 provider 编辑 UI 里改 mode**——它从 template 来。后续若发现某个 Chat-only template 应该是 `"both"`，在 `providers.json` 修，新装机生效；存量 provider 需手动 edit config.json 或重建 provider。
 
