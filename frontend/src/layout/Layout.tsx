@@ -252,7 +252,7 @@ const Layout = ({ children }: LayoutProps) => {
                     size="small"
                     onClick={() => navigate('/agent')}
                     sx={{
-                        color: location.pathname === '/agent' ? 'primary.main' : 'text.secondary',
+                        color: 'text.secondary',
                         '&:hover': { color: 'primary.main' },
                     }}
                 >
