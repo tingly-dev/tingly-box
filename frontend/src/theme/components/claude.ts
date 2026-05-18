@@ -1,12 +1,13 @@
 import type { ThemeOptions } from '@mui/material/styles';
 
+// Anthropic brand tokens: Dark #141413 · Light #FAF9F5 · Light Gray #E8E6DC · Orange #D97757
 export const claudeComponents: ThemeOptions['components'] = {
   MuiCard: {
     styleOverrides: {
       root: {
-        boxShadow: '0 1px 3px 0 rgba(31, 30, 29, 0.08), 0 1px 2px 0 rgba(31, 30, 29, 0.04)',
+        boxShadow: '0 1px 3px 0 rgba(20, 20, 19, 0.08), 0 1px 2px 0 rgba(20, 20, 19, 0.04)',
         borderRadius: 12,
-        border: '1px solid #E8E4DA',
+        border: '1px solid #E8E6DC',
         backgroundColor: '#FFFFFF',
         backgroundImage: 'none',
       },
@@ -16,9 +17,9 @@ export const claudeComponents: ThemeOptions['components'] = {
     styleOverrides: {
       root: {
         '&.nav-item-active': {
-          backgroundColor: '#C96442',
+          backgroundColor: '#D97757',
           color: '#ffffff',
-          '&:hover': { backgroundColor: '#B8552F' },
+          '&:hover': { backgroundColor: '#C26146' },
           '& .MuiListItemIcon-root': { color: '#ffffff' },
           '& .MuiListItemText-primary': {
             color: '#ffffff',
@@ -36,21 +37,21 @@ export const claudeComponents: ThemeOptions['components'] = {
         borderRadius: 6,
         boxShadow: 'none',
         '&:hover': {
-          boxShadow: '0 1px 2px 0 rgba(31, 30, 29, 0.06)',
+          boxShadow: '0 1px 2px 0 rgba(20, 20, 19, 0.06)',
         },
       },
       contained: {
-        background: 'linear-gradient(135deg, #C96442 0%, #B8552F 100%)',
+        background: 'linear-gradient(135deg, #D97757 0%, #C26146 100%)',
         '&:hover': {
-          background: 'linear-gradient(135deg, #B8552F 0%, #9A4622 100%)',
+          background: 'linear-gradient(135deg, #C26146 0%, #A85138 100%)',
         },
       },
       outlined: {
-        borderColor: '#D6CFC1',
-        color: '#3A3733',
+        borderColor: '#D6D3C7',
+        color: '#141413',
         '&:hover': {
-          borderColor: '#B8AE9B',
-          backgroundColor: '#F5F1E6',
+          borderColor: '#B0AEA5',
+          backgroundColor: '#F2EFE3',
         },
       },
     },
@@ -61,38 +62,38 @@ export const claudeComponents: ThemeOptions['components'] = {
         borderRadius: 6,
         backgroundColor: 'transparent',
         transition: 'background-color 120ms ease, border-color 120ms ease',
-        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D6CFC1' },
-        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8AE9B' },
+        '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D6D3C7' },
+        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B0AEA5' },
         '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: '#C96442',
+          borderColor: '#D97757',
           borderWidth: 1.5,
         },
         '&.Mui-disabled .MuiOutlinedInput-notchedOutline': {
-          borderColor: '#E8E4DA',
+          borderColor: '#E8E6DC',
         },
         '&.Mui-error .MuiOutlinedInput-notchedOutline': {
           borderColor: '#BF4434',
         },
       },
       input: {
-        '&::placeholder': { color: '#A8A39B', opacity: 1 },
+        '&::placeholder': { color: '#B0AEA5', opacity: 1 },
       },
     },
   },
   MuiFilledInput: {
     styleOverrides: {
       root: {
-        backgroundColor: 'rgba(31, 30, 29, 0.04)',
-        '&:hover': { backgroundColor: 'rgba(31, 30, 29, 0.06)' },
-        '&.Mui-focused': { backgroundColor: 'rgba(31, 30, 29, 0.06)' },
+        backgroundColor: 'rgba(20, 20, 19, 0.04)',
+        '&:hover': { backgroundColor: 'rgba(20, 20, 19, 0.06)' },
+        '&.Mui-focused': { backgroundColor: 'rgba(20, 20, 19, 0.06)' },
       },
     },
   },
   MuiInputBase: {
     styleOverrides: {
       input: {
-        color: '#1F1E1D',
-        '&::placeholder': { color: '#A8A39B', opacity: 1 },
+        color: '#141413',
+        '&::placeholder': { color: '#B0AEA5', opacity: 1 },
       },
     },
   },
@@ -100,14 +101,14 @@ export const claudeComponents: ThemeOptions['components'] = {
     styleOverrides: {
       root: {
         color: '#6B6863',
-        '&.Mui-focused': { color: '#C96442' },
+        '&.Mui-focused': { color: '#D97757' },
       },
     },
   },
   MuiFormHelperText: {
     styleOverrides: {
       root: {
-        color: '#7A766F',
+        color: '#6B6863',
         '&.Mui-error': { color: '#BF4434' },
       },
     },
@@ -122,18 +123,18 @@ export const claudeComponents: ThemeOptions['components'] = {
       paper: {
         backgroundColor: '#FFFFFF',
         backgroundImage: 'none',
-        border: '1px solid #E8E4DA',
-        boxShadow: '0 10px 24px rgba(31, 30, 29, 0.08)',
+        border: '1px solid #E8E6DC',
+        boxShadow: '0 10px 24px rgba(20, 20, 19, 0.08)',
       },
     },
   },
   MuiMenuItem: {
     styleOverrides: {
       root: {
-        '&:hover': { backgroundColor: '#F2EEE3' },
+        '&:hover': { backgroundColor: '#F2EFE3' },
         '&.Mui-selected': {
-          backgroundColor: '#EAE0CF',
-          '&:hover': { backgroundColor: '#DFD2BC' },
+          backgroundColor: '#E8E6DC',
+          '&:hover': { backgroundColor: '#DCD9CB' },
         },
       },
     },
@@ -141,7 +142,7 @@ export const claudeComponents: ThemeOptions['components'] = {
   MuiDrawer: {
     styleOverrides: {
       paper: {
-        borderRight: '1px solid #E8E4DA',
+        borderRight: '1px solid #E8E6DC',
         backgroundImage: 'none',
         willChange: 'auto',
       },
@@ -152,8 +153,8 @@ export const claudeComponents: ThemeOptions['components'] = {
       root: {
         backgroundColor: '#FAF9F5',
         backgroundImage: 'none',
-        color: '#1F1E1D',
-        borderBottom: '1px solid #E8E4DA',
+        color: '#141413',
+        borderBottom: '1px solid #E8E6DC',
         boxShadow: 'none',
       },
     },
@@ -177,17 +178,17 @@ export const claudeComponents: ThemeOptions['components'] = {
   MuiTooltip: {
     styleOverrides: {
       tooltip: {
-        backgroundColor: 'rgba(31, 30, 29, 0.92)',
+        backgroundColor: 'rgba(20, 20, 19, 0.92)',
         color: '#FAF9F5',
         fontSize: '0.75rem',
         border: 'none',
       },
-      arrow: { color: 'rgba(31, 30, 29, 0.92)' },
+      arrow: { color: 'rgba(20, 20, 19, 0.92)' },
     },
   },
   MuiDivider: {
     styleOverrides: {
-      root: { borderColor: '#E8E4DA' },
+      root: { borderColor: '#E8E6DC' },
     },
   },
   MuiTabs: {
@@ -195,7 +196,7 @@ export const claudeComponents: ThemeOptions['components'] = {
       indicator: {
         height: 4,
         borderRadius: 2,
-        backgroundColor: '#C96442',
+        backgroundColor: '#D97757',
       },
     },
   },
