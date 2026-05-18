@@ -31,6 +31,14 @@ const (
 
 // DefaultMatrix returns the full validation matrix covering all supported
 // protocol combinations, all built-in scenarios, and both streaming modes.
+//
+// Note on targets: `TypeAnthropicV1` is intentionally omitted from the
+// target list. The harness selects providers by APIStyle, and both
+// `TypeAnthropicV1` and `TypeAnthropicBeta` map to `APIStyleAnthropic`,
+// so they end up testing the same dispatch path. Since the design rule
+// is that non-Anthropic sources normalize to Beta and Anthropic sources
+// passthrough to their own version, the `anthropic_beta` target column
+// covers every observable case. See internal/protocol/README.md.
 func DefaultMatrix() *Matrix {
 	return &Matrix{
 		Sources: []protocol.APIType{
@@ -40,7 +48,6 @@ func DefaultMatrix() *Matrix {
 			protocol.TypeOpenAIResponses,
 		},
 		Targets: []protocol.APIType{
-			protocol.TypeAnthropicV1,
 			protocol.TypeAnthropicBeta,
 			protocol.TypeOpenAIChat,
 			protocol.TypeOpenAIResponses,
@@ -207,6 +214,8 @@ var skipPairs = map[string]string{
 	"anthropic_v1|google":   "Anthropic→Google target not yet implemented",
 	"anthropic_beta|google": "Anthropic→Google target not yet implemented",
 	"openai_chat|google":    "OpenAI Chat→Google target not yet implemented",
+	// anthropic_v1 is intentionally absent from DefaultMatrix.Targets (see
+	// the doc on DefaultMatrix); nothing to skip there.
 }
 
 // testEnvOpts returns the TestEnvOptions to apply when creating a TestEnv for this matrix.

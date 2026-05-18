@@ -11,9 +11,14 @@ import (
 //
 // Tests all combinations of:
 //   - Source protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses)
-//   - Target protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses, google)
+//   - Target protocols (anthropic_beta, openai_chat, openai_responses, google)
 //   - Scenarios (text, tool_use, tool_result, thinking, multi_turn, streaming_*)
 //   - Streaming modes (streaming, non-streaming)
+//
+// Note: `anthropic_v1` is intentionally not a target because the harness
+// picks providers by APIStyle and both Anthropic types map to the same
+// style — `anthropic_beta` already covers every observable dispatch
+// path. See internal/protocol/README.md.
 //
 // Use flags to filter specific combinations.
 type MatrixCmd struct {
