@@ -7,7 +7,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
@@ -264,19 +263,4 @@ func (s *Server) assembleResponsesToAnthropic(c *gin.Context, proxyModel string,
 
 	// Success - usage tracking is handled inside the stream handler
 	// Note: The handler tracks usage when response.completed event is received
-}
-
-// updateAffinityMessageID updates the affinity entry with the latest message ID
-func (s *Server) updateAffinityMessageID(c *gin.Context, rule *typ.Rule, messageID string) {
-	if !rule.SmartAffinity || messageID == "" {
-		return
-	}
-
-	sessionID, exists := c.Get(ContextKeySessionID)
-	if !exists {
-		return
-	}
-
-	s.affinityStore.UpdateMessageID(rule.UUID, sessionID.(string), messageID)
-	logrus.Debugf("[affinity] updated message ID %s for session %s, rule %s", messageID, sessionID.(string), rule.UUID)
 }

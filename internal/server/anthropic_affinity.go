@@ -1,0 +1,22 @@
+package server
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/typ"
+)
+
+// updateAffinityMessageID updates the affinity entry with the latest message ID
+func (s *Server) updateAffinityMessageID(c *gin.Context, rule *typ.Rule, messageID string) {
+	if !rule.SmartAffinity || messageID == "" {
+		return
+	}
+
+	sessionID, exists := c.Get(ContextKeySessionID)
+	if !exists {
+		return
+	}
+
+	s.affinityStore.UpdateMessageID(rule.UUID, sessionID.(string), messageID)
+	logrus.Debugf("[affinity] updated message ID %s for session %s, rule %s", messageID, sessionID.(string), rule.UUID)
+}
