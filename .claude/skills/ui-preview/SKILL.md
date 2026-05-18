@@ -1,0 +1,112 @@
+---
+name: ui-preview
+description: Capture headless-Chrome screenshots of the tingly-box frontend (running locally in mock mode) so frontend changes can be visually verified in environments without a real browser. Use when the user asks to "preview", "screenshot", "see the page", "show me the UI", "verify visually", or when frontend layout / component / styling changes need a sanity-check before review. Works in restricted/cloud sandboxes where Playwright's normal Chromium install is blocked.
+---
+
+# Headless UI preview (Playwright + Chrome for Testing)
+
+Use this when you need a screenshot of the running frontend. Designed for the
+remote-execution container where:
+- MCP servers cannot be registered mid-session (so `playwright-mcp` / `chrome-mcp` won't work — use Playwright directly).
+- `cdn.playwright.dev` and `dl.google.com` are blocked by network policy.
+- `storage.googleapis.com` (Chrome for Testing) is reachable.
+- Ubuntu's `chromium-browser` is a snap stub and won't run in the container.
+
+## Setup (run once per fresh container)
+
+Run these from `frontend/`:
+
+```bash
+# 1. Install Playwright (no browsers yet)
+npm i -D playwright
+
+# 2. Download Chrome for Testing directly — bypasses playwright.dev CDN
+#    Match the version Playwright wants if possible (run `npx playwright install chromium`
+#    once first to see the version in the error message), otherwise any recent
+#    chrome-for-testing build works fine.
+mkdir -p /tmp/chrome && cd /tmp/chrome
+curl -fsSL -o chrome.zip \
+  "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.96/linux64/chrome-linux64.zip"
+unzip -q chrome.zip
+# Resulting binary: /tmp/chrome/chrome-linux64/chrome
+
+# 3. Install MUI's emotion peer deps if missing (they're not in package.json
+#    but vite/MUI need them at runtime)
+cd <repo>/frontend
+npm i @emotion/react @emotion/styled
+```
+
+These packages are **tooling-only** — do NOT commit `package.json`,
+`package-lock.json`, or the screenshot script. Revert them with
+`git checkout -- frontend/package.json && rm -f frontend/package-lock.json
+frontend/screenshot.mjs` before ending the session.
+
+## Run the dev server
+
+```bash
+cd frontend
+USE_MOCK=true npm run dev:mock   # vite picks .env.mock; runs on :3000
+```
+
+Two gotchas:
+- `npm run dev` listens on `:9245`, but `dev:mock` defaults to `:3000`.
+- `USE_MOCK=true` must be set as a **shell env var** (vite.config.ts reads
+  `process.env.USE_MOCK` before `.env.mock` is applied). Without it you'll
+  get 502s and `use mock false` in the dev-server logs.
+
+Wait until the page is reachable:
+
+```bash
+until curl -fs http://localhost:3000 >/dev/null; do sleep 1; done
+```
+
+## Take the screenshot
+
+Drop `screenshot.mjs` (template provided alongside this SKILL.md) into
+`frontend/` and run from `frontend/` so node resolves `playwright` from
+`node_modules`:
+
+```bash
+node screenshot.mjs
+```
+
+The template:
+- Launches the downloaded Chrome with `--no-sandbox --disable-dev-shm-usage`.
+- Seeds `localStorage.user_auth_token` via `addInitScript` so the app
+  skips the login screen (without this, every route lands on the login page).
+- Logs page errors / warnings to stdout for debugging blank-page issues.
+- Waits for `<nav>` + a 2.5s settle to let MUI finish painting.
+- Captures `/tmp/agent-full.png` (full viewport) and `/tmp/agent-sidebar.png`
+  (cropped to the activity-bar + secondary-sidebar region).
+- Tries to open any "Zen Mode" tooltip button and captures the open menu.
+
+Adjust the `BASE` URL path, the crop rects, and the post-action interactions
+for the specific change you're verifying.
+
+## After capturing
+
+1. `SendUserFile` the PNGs so the user sees them.
+2. Clean up local-only tooling (see "Setup" above) — the stop hook will
+   complain otherwise.
+3. Optionally `pkill -f "vite --mode mock"` to free the port.
+
+## Why not Playwright MCP / Chrome MCP?
+
+MCP servers are configured at the harness level (`settings.json`) and cannot
+be installed or registered from inside an active session. We use Playwright's
+Node API directly, which gives the same screenshot capability with no MCP
+registration step.
+
+## Why not `npx playwright install chromium`?
+
+`cdn.playwright.dev` is not in the allowlist for this container. The
+Chrome-for-Testing zip at `storage.googleapis.com/chrome-for-testing-public/...`
+is reachable, so we download it directly and point Playwright at it via
+`executablePath`.
+
+## Why seed the auth token?
+
+`src/contexts/AuthContext` and `ProtectedRoute` redirect every route to
+the login screen when `localStorage.user_auth_token` is missing. MSW mocks
+don't auto-populate it. Seeding it via `addInitScript` makes
+`isAuthenticated` true on first paint.

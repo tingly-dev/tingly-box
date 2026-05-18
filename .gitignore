@@ -81,7 +81,8 @@ go.work.sum
 /openspec/
 /AGENTS.md
 /CLAUDE.md
-/.claude/
+/.claude/*
+!/.claude/skills/
 /frontend/openapitools.json
 openapitools.json
 /.codex/
