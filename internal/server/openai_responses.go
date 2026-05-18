@@ -190,7 +190,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	target := protocol.TypeOpenAIResponses
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
-		target = protocol.TypeAnthropicV1
+		target = protocol.TypeAnthropicBeta
 	case protocol.APIStyleGoogle:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -274,8 +274,8 @@ func buildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 	}
 }
 
-// buildResponsesPayloadFromAnthropic converts an Anthropic message response to Responses API format
-func buildResponsesPayloadFromAnthropic(resp *anthropic.Message, responseModel, actualModel string) map[string]any {
+// buildResponsesPayloadFromAnthropicBeta converts an Anthropic Beta message response to Responses API format
+func buildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, responseModel, actualModel string) map[string]any {
 	model := responseModel
 	if model == "" {
 		model = actualModel

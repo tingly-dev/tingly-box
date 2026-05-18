@@ -224,8 +224,8 @@ func TestSpecialCharacters(t *testing.T) {
 }
 
 // Helper to parse event from JSON string
-func parseTestEvent(eventStr string) anthropic.MessageStreamEventUnion {
-	var event anthropic.MessageStreamEventUnion
+func parseTestEvent(eventStr string) anthropic.BetaRawMessageStreamEventUnion {
+	var event anthropic.BetaRawMessageStreamEventUnion
 	err := (&event).UnmarshalJSON([]byte(eventStr))
 	if err != nil {
 		panic(err)

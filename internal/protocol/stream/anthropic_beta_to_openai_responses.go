@@ -16,13 +16,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// HandleAnthropicToOpenAIResponsesStream converts Anthropic streaming events
+// HandleAnthropicBetaToOpenAIResponsesStream converts Anthropic streaming events
 // to OpenAI Responses API format.
 //
 // Returns (UsageStat, error) for usage tracking and error handling.
-func HandleAnthropicToOpenAIResponsesStream(
+func HandleAnthropicBetaToOpenAIResponsesStream(
 	hc *protocol.HandleContext,
-	stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion],
+	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
 	responseModel string,
 ) (*protocol.TokenUsage, error) {
 	logrus.Info("Starting Anthropic to OpenAI Responses streaming converter")
@@ -246,7 +246,7 @@ func handleMessageStart(c *gin.Context, state *responsesConverterState, model st
 func handleContentBlockStart(
 	c *gin.Context,
 	state *responsesConverterState,
-	event anthropic.MessageStreamEventUnion,
+	event anthropic.BetaRawMessageStreamEventUnion,
 	flusher http.Flusher,
 ) {
 	index := event.Index
@@ -318,7 +318,7 @@ func handleContentBlockStart(
 func handleContentBlockDelta(
 	c *gin.Context,
 	state *responsesConverterState,
-	event anthropic.MessageStreamEventUnion,
+	event anthropic.BetaRawMessageStreamEventUnion,
 	flusher http.Flusher,
 ) {
 	deltaType := event.Delta.Type
@@ -360,7 +360,7 @@ func handleContentBlockDelta(
 func handleContentBlockStop(
 	c *gin.Context,
 	state *responsesConverterState,
-	event anthropic.MessageStreamEventUnion,
+	event anthropic.BetaRawMessageStreamEventUnion,
 	flusher http.Flusher,
 ) {
 	index := event.Index
@@ -447,7 +447,7 @@ func handleContentBlockStop(
 // handleMessageDelta updates usage information
 func handleMessageDelta(
 	state *responsesConverterState,
-	event anthropic.MessageStreamEventUnion,
+	event anthropic.BetaRawMessageStreamEventUnion,
 	inputTokens, outputTokens int,
 ) (int, int, int, bool) {
 	if event.Usage.InputTokens != 0 || event.Usage.OutputTokens != 0 || event.Usage.CacheReadInputTokens != 0 {

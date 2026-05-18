@@ -229,7 +229,7 @@ func TestNewMeterSetup_WithMockStores(t *testing.T) {
 	}
 
 	// Create mock sink
-	sink := obs.NewSink(t.TempDir(), obs.RecordModeResponse)
+	sink := obs.NewSink(t.TempDir(), obs.RecordModeRequestResponse)
 
 	stores := &StoreRefs{
 		StatsStore: nil,

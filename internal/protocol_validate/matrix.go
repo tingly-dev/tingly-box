@@ -9,11 +9,28 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// Matrix defines the cross-product of source protocols, target protocols,
-// scenarios, and streaming modes to validate.
+// ProtocolPair is one (source → target) conversion path to validate.
+// The matrix is built from an explicit list of pairs rather than the
+// Cartesian product of all sources × all targets: many cells of that
+// product map to the same dispatch path (e.g. target=anthropic_v1 and
+// target=anthropic_beta both pick APIStyleAnthropic; OpenAI Chat vs.
+// Responses targets are picked by ResolveOpenAIEndpoint, not the matrix)
+// and listing pairs keeps the matrix in lock-step with the actual
+// dispatch graph documented in internal/protocol/README.md.
+type ProtocolPair struct {
+	Source protocol.APIType
+	Target protocol.APIType
+}
+
+// String returns "source|target" for use as a map key or label.
+func (p ProtocolPair) String() string {
+	return fmt.Sprintf("%s|%s", p.Source, p.Target)
+}
+
+// Matrix defines the set of (source, target) pairs, scenarios, and
+// streaming modes to validate.
 type Matrix struct {
-	Sources    []protocol.APIType
-	Targets    []protocol.APIType
+	Pairs      []ProtocolPair
 	Scenarios  []Scenario
 	Streaming  []bool
 	RecordDir  string // Optional directory for recording requests/responses
@@ -29,26 +46,60 @@ const (
 	ServerModePair = "pair" // Per source-target pair
 )
 
-// DefaultMatrix returns the full validation matrix covering all supported
-// protocol combinations, all built-in scenarios, and both streaming modes.
+// DefaultPairs is the canonical list of (source → target) conversion
+// paths the matrix exercises. Adding a new dispatch path means appending
+// to this list.
+//
+// Notes:
+//   - target=anthropic_v1 is intentionally absent. The harness picks
+//     providers by APIStyle and both Anthropic types map to the same
+//     style, so anthropic_beta as the target already exercises both
+//     Anthropic V1 passthrough (when source is V1) and the Beta
+//     conversions (when source is non-Anthropic). See
+//     internal/protocol/README.md.
+//   - Anthropic↔Anthropic cross-version (v1↔beta) is rejected by the
+//     transform layer and not represented here.
+//   - Google targets and the google→google passthrough are not yet
+//     supported by the harness's virtual provider plumbing.
+func DefaultPairs() []ProtocolPair {
+	return []ProtocolPair{
+		// Anthropic V1 source
+		{protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta},   // V1 passthrough (provider APIStyle=Anthropic)
+		{protocol.TypeAnthropicV1, protocol.TypeOpenAIChat},      // V1 → OpenAI Chat
+		{protocol.TypeAnthropicV1, protocol.TypeOpenAIResponses}, // V1 → OpenAI Responses
+
+		// Anthropic Beta source
+		{protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta},   // Beta passthrough
+		{protocol.TypeAnthropicBeta, protocol.TypeOpenAIChat},      // Beta → OpenAI Chat
+		{protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses}, // Beta → OpenAI Responses
+
+		// OpenAI Chat source
+		{protocol.TypeOpenAIChat, protocol.TypeAnthropicBeta},   // Chat → Anthropic Beta
+		{protocol.TypeOpenAIChat, protocol.TypeOpenAIChat},      // Chat passthrough
+		{protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses}, // Chat → Responses
+
+		// OpenAI Responses source
+		{protocol.TypeOpenAIResponses, protocol.TypeAnthropicBeta},   // Responses → Anthropic Beta
+		{protocol.TypeOpenAIResponses, protocol.TypeOpenAIChat},      // Responses → Chat
+		{protocol.TypeOpenAIResponses, protocol.TypeOpenAIResponses}, // Responses passthrough
+	}
+}
+
+// DefaultMatrix returns the full validation matrix covering every
+// supported (source, target) pair, all built-in scenarios, and both
+// streaming modes.
 func DefaultMatrix() *Matrix {
 	return &Matrix{
-		Sources: []protocol.APIType{
-			protocol.TypeAnthropicV1,
-			protocol.TypeAnthropicBeta,
-			protocol.TypeOpenAIChat,
-			protocol.TypeOpenAIResponses,
-		},
-		Targets: []protocol.APIType{
-			protocol.TypeAnthropicV1,
-			protocol.TypeAnthropicBeta,
-			protocol.TypeOpenAIChat,
-			protocol.TypeOpenAIResponses,
-			protocol.TypeGoogle,
-		},
+		Pairs:     DefaultPairs(),
 		Scenarios: AllScenarios(),
 		Streaming: []bool{false, true},
 	}
+}
+
+// clone returns a shallow copy of the matrix.
+func (m *Matrix) clone() *Matrix {
+	cp := *m
+	return &cp
 }
 
 // OnlyScenarios returns a copy of the Matrix filtered to only the named scenarios.
@@ -65,148 +116,86 @@ func (m *Matrix) OnlyScenarios(names ...string) *Matrix {
 		}
 	}
 
-	return &Matrix{
-		Sources:    m.Sources,
-		Targets:    m.Targets,
-		Scenarios:  filtered,
-		Streaming:  m.Streaming,
-		RecordDir:  m.RecordDir,
-		ServerMode: m.ServerMode,
-		BatchCount: m.BatchCount,
-	}
+	out := m.clone()
+	out.Scenarios = filtered
+	return out
 }
 
-// OnlySources returns a copy of the Matrix filtered to only the specified source protocols.
+// OnlySources returns a copy of the Matrix filtered to pairs whose source
+// matches one of the given protocols.
 func (m *Matrix) OnlySources(sources ...string) *Matrix {
 	sourceSet := make(map[protocol.APIType]bool, len(sources))
 	for _, s := range sources {
 		sourceSet[protocol.APIType(s)] = true
 	}
 
-	filtered := make([]protocol.APIType, 0, len(sources))
-	for _, s := range m.Sources {
-		if sourceSet[s] {
-			filtered = append(filtered, s)
+	filtered := make([]ProtocolPair, 0, len(m.Pairs))
+	for _, p := range m.Pairs {
+		if sourceSet[p.Source] {
+			filtered = append(filtered, p)
 		}
 	}
 
-	return &Matrix{
-		Sources:    filtered,
-		Targets:    m.Targets,
-		Scenarios:  m.Scenarios,
-		Streaming:  m.Streaming,
-		RecordDir:  m.RecordDir,
-		ServerMode: m.ServerMode,
-		BatchCount: m.BatchCount,
-	}
+	out := m.clone()
+	out.Pairs = filtered
+	return out
 }
 
-// OnlyTargets returns a copy of the Matrix filtered to only the specified target protocols.
+// OnlyTargets returns a copy of the Matrix filtered to pairs whose target
+// matches one of the given protocols.
 func (m *Matrix) OnlyTargets(targets ...string) *Matrix {
 	targetSet := make(map[protocol.APIType]bool, len(targets))
 	for _, t := range targets {
 		targetSet[protocol.APIType(t)] = true
 	}
 
-	filtered := make([]protocol.APIType, 0, len(targets))
-	for _, t := range m.Targets {
-		if targetSet[t] {
-			filtered = append(filtered, t)
+	filtered := make([]ProtocolPair, 0, len(m.Pairs))
+	for _, p := range m.Pairs {
+		if targetSet[p.Target] {
+			filtered = append(filtered, p)
 		}
 	}
 
-	return &Matrix{
-		Sources:    m.Sources,
-		Targets:    filtered,
-		Scenarios:  m.Scenarios,
-		Streaming:  m.Streaming,
-		RecordDir:  m.RecordDir,
-		ServerMode: m.ServerMode,
-		BatchCount: m.BatchCount,
-	}
+	out := m.clone()
+	out.Pairs = filtered
+	return out
 }
 
 // OnlyStreaming returns a copy of the Matrix filtered to only streaming or non-streaming tests.
 // If streaming is true, only streaming tests are included. If false, only non-streaming tests.
 func (m *Matrix) OnlyStreaming(streaming bool) *Matrix {
-	filtered := []bool{streaming}
-	return &Matrix{
-		Sources:    m.Sources,
-		Targets:    m.Targets,
-		Scenarios:  m.Scenarios,
-		Streaming:  filtered,
-		RecordDir:  m.RecordDir,
-		ServerMode: m.ServerMode,
-		BatchCount: m.BatchCount,
-	}
+	out := m.clone()
+	out.Streaming = []bool{streaming}
+	return out
 }
 
 // WithRecordDir returns a copy of the Matrix with the record directory set.
 // If recordDir is empty, recording is disabled.
 func (m *Matrix) WithRecordDir(recordDir string) *Matrix {
-	return &Matrix{
-		Sources:    m.Sources,
-		Targets:    m.Targets,
-		Scenarios:  m.Scenarios,
-		Streaming:  m.Streaming,
-		RecordDir:  recordDir,
-		ServerMode: m.ServerMode,
-		BatchCount: m.BatchCount,
-		MCPEnabled: m.MCPEnabled,
-	}
+	out := m.clone()
+	out.RecordDir = recordDir
+	return out
 }
 
 // WithServerMode returns a copy of the Matrix with the server reuse mode set.
 func (m *Matrix) WithServerMode(mode string) *Matrix {
-	return &Matrix{
-		Sources:    m.Sources,
-		Targets:    m.Targets,
-		Scenarios:  m.Scenarios,
-		Streaming:  m.Streaming,
-		RecordDir:  m.RecordDir,
-		ServerMode: mode,
-		BatchCount: m.BatchCount,
-		MCPEnabled: m.MCPEnabled,
-	}
+	out := m.clone()
+	out.ServerMode = mode
+	return out
 }
 
 // WithBatchCount returns a copy of the Matrix with the batch count set.
 func (m *Matrix) WithBatchCount(count int) *Matrix {
-	return &Matrix{
-		Sources:    m.Sources,
-		Targets:    m.Targets,
-		Scenarios:  m.Scenarios,
-		Streaming:  m.Streaming,
-		RecordDir:  m.RecordDir,
-		ServerMode: m.ServerMode,
-		BatchCount: count,
-		MCPEnabled: m.MCPEnabled,
-	}
+	out := m.clone()
+	out.BatchCount = count
+	return out
 }
 
 // WithMCPEnabled returns a copy of the Matrix with the MCP feature flag enabled.
 func (m *Matrix) WithMCPEnabled() *Matrix {
-	return &Matrix{
-		Sources:    m.Sources,
-		Targets:    m.Targets,
-		Scenarios:  m.Scenarios,
-		Streaming:  m.Streaming,
-		RecordDir:  m.RecordDir,
-		ServerMode: m.ServerMode,
-		BatchCount: m.BatchCount,
-		MCPEnabled: true,
-	}
-}
-
-// skipPairs lists source→target combinations that are known to be unsupported.
-// Tests for these pairs are skipped, not failed.
-var skipPairs = map[string]string{
-	// OpenAI Responses → Google: not yet implemented
-	"openai_responses|google": "Responses API to Google not yet implemented",
-	// Google target: vendor_adjust transform does not support OpenAI/Anthropic→Google yet
-	"anthropic_v1|google":   "Anthropic→Google target not yet implemented",
-	"anthropic_beta|google": "Anthropic→Google target not yet implemented",
-	"openai_chat|google":    "OpenAI Chat→Google target not yet implemented",
+	out := m.clone()
+	out.MCPEnabled = true
+	return out
 }
 
 // testEnvOpts returns the TestEnvOptions to apply when creating a TestEnv for this matrix.
@@ -234,58 +223,50 @@ func (m *Matrix) Run(t *testing.T) {
 	for _, scenario := range m.Scenarios {
 		scenario := scenario
 		t.Run(scenario.Name, func(t *testing.T) {
-			for _, source := range m.Sources {
-				source := source
-				t.Run(string(source), func(t *testing.T) {
-					for _, target := range m.Targets {
-						target := target
-						t.Run(string(target), func(t *testing.T) {
-							for _, streaming := range m.Streaming {
-								streaming := streaming
-								modeSuffix := "nonstream"
-								if streaming {
-									modeSuffix = "stream"
-								}
-								t.Run(modeSuffix, func(t *testing.T) {
-									t.Parallel()
-
-									pairKey := fmt.Sprintf("%s|%s", source, target)
-									if reason, skip := skipPairs[pairKey]; skip {
-										t.Skipf("skipped: %s", reason)
-										return
-									}
-									srcScenarioKey := fmt.Sprintf("%s|%s", source, scenario.Name)
-									if reason, skip := skipSourceScenarios[srcScenarioKey]; skip {
-										t.Skipf("skipped: %s", reason)
-										return
-									}
-
-									if streaming && !scenarioSupportsStreaming(scenario) {
-										t.Skip("scenario does not support streaming")
-										return
-									}
-									if !streaming && scenarioRequiresStreaming(scenario) {
-										t.Skip("scenario requires streaming mode")
-										return
-									}
-
-									env := NewTestEnv(t)
-									defer env.Close()
-
-									env.SetupRoute(source, target, scenario)
-
-									result := env.SendAs(t, source, target, scenario, streaming)
-
-									for _, a := range scenario.Assertions {
-										if err := a.Check(result); err != nil {
-											t.Errorf("assertion %q failed: %v\n  body: %s",
-												a.Name, err, truncate(string(result.RawBody), 300))
-										}
-									}
-								})
+			for _, pair := range m.Pairs {
+				pair := pair
+				t.Run(string(pair.Source), func(t *testing.T) {
+					t.Run(string(pair.Target), func(t *testing.T) {
+						for _, streaming := range m.Streaming {
+							streaming := streaming
+							modeSuffix := "nonstream"
+							if streaming {
+								modeSuffix = "stream"
 							}
-						})
-					}
+							t.Run(modeSuffix, func(t *testing.T) {
+								t.Parallel()
+
+								srcScenarioKey := fmt.Sprintf("%s|%s", pair.Source, scenario.Name)
+								if reason, skip := skipSourceScenarios[srcScenarioKey]; skip {
+									t.Skipf("skipped: %s", reason)
+									return
+								}
+
+								if streaming && !scenarioSupportsStreaming(scenario) {
+									t.Skip("scenario does not support streaming")
+									return
+								}
+								if !streaming && scenarioRequiresStreaming(scenario) {
+									t.Skip("scenario requires streaming mode")
+									return
+								}
+
+								env := NewTestEnv(t)
+								defer env.Close()
+
+								env.SetupRoute(pair.Source, pair.Target, scenario)
+
+								result := env.SendAs(t, pair.Source, pair.Target, scenario, streaming)
+
+								for _, a := range scenario.Assertions {
+									if err := a.Check(result); err != nil {
+										t.Errorf("assertion %q failed: %v\n  body: %s",
+											a.Name, err, truncate(string(result.RawBody), 300))
+									}
+								}
+							})
+						}
+					})
 				})
 			}
 		})
@@ -354,22 +335,20 @@ func (m *Matrix) executeAllWithScenarioServer() []TestResult {
 		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
 		if err != nil {
 			// All tests for this scenario fail with setup error
-			for _, source := range m.Sources {
-				for _, target := range m.Targets {
-					for _, streaming := range m.Streaming {
-						results = append(results, TestResult{
-							Name:      m.buildTestName(scenario.Name, source, target, streaming),
-							Scenario:  scenario.Name,
-							Source:    source,
-							Target:    target,
-							Streaming: streaming,
-							Passed:    false,
-							Errors: []AssertionError{{
-								Assertion: "setup",
-								Error:     fmt.Sprintf("failed to create test env: %v", err),
-							}},
-						})
-					}
+			for _, pair := range m.Pairs {
+				for _, streaming := range m.Streaming {
+					results = append(results, TestResult{
+						Name:      m.buildTestName(scenario.Name, pair.Source, pair.Target, streaming),
+						Scenario:  scenario.Name,
+						Source:    pair.Source,
+						Target:    pair.Target,
+						Streaming: streaming,
+						Passed:    false,
+						Errors: []AssertionError{{
+							Assertion: "setup",
+							Error:     fmt.Sprintf("failed to create test env: %v", err),
+						}},
+					})
 				}
 			}
 			continue
@@ -377,12 +356,10 @@ func (m *Matrix) executeAllWithScenarioServer() []TestResult {
 		defer env.Close()
 
 		// Run all combinations for this scenario
-		for _, source := range m.Sources {
-			for _, target := range m.Targets {
-				for _, streaming := range m.Streaming {
-					if result := m.executeTest(env, scenario, source, target, streaming); result != nil {
-						results = append(results, *result)
-					}
+		for _, pair := range m.Pairs {
+			for _, streaming := range m.Streaming {
+				if result := m.executeTest(env, scenario, pair.Source, pair.Target, streaming); result != nil {
+					results = append(results, *result)
 				}
 			}
 		}
@@ -408,12 +385,10 @@ func (m *Matrix) executeAllWithSingleServer() []TestResult {
 
 	// Run all combinations
 	for _, scenario := range m.Scenarios {
-		for _, source := range m.Sources {
-			for _, target := range m.Targets {
-				for _, streaming := range m.Streaming {
-					if result := m.executeTest(env, scenario, source, target, streaming); result != nil {
-						results = append(results, *result)
-					}
+		for _, pair := range m.Pairs {
+			for _, streaming := range m.Streaming {
+				if result := m.executeTest(env, scenario, pair.Source, pair.Target, streaming); result != nil {
+					results = append(results, *result)
 				}
 			}
 		}
@@ -427,64 +402,41 @@ func (m *Matrix) executeAllWithPairServer() []TestResult {
 	var results []TestResult
 
 	// For each source-target pair, create one TestEnv
-	for _, source := range m.Sources {
-		for _, target := range m.Targets {
-			pairKey := fmt.Sprintf("%s|%s", source, target)
-
-			// Check if this pair is skipped
-			if reason, skip := skipPairs[pairKey]; skip {
-				// All scenarios for this pair are skipped
-				for _, scenario := range m.Scenarios {
-					for _, streaming := range m.Streaming {
-						results = append(results, TestResult{
-							Name:       m.buildTestName(scenario.Name, source, target, streaming),
-							Scenario:   scenario.Name,
-							Source:     source,
-							Target:     target,
-							Streaming:  streaming,
-							Skipped:    true,
-							SkipReason: reason,
-						})
-					}
-				}
-				continue
-			}
-
-			// Create TestEnv for this pair
-			env, err := NewTestEnvForCLI(m.testEnvOpts()...)
-			if err != nil {
-				// All tests for this pair fail with setup error
-				for _, scenario := range m.Scenarios {
-					for _, streaming := range m.Streaming {
-						results = append(results, TestResult{
-							Name:      m.buildTestName(scenario.Name, source, target, streaming),
-							Scenario:  scenario.Name,
-							Source:    source,
-							Target:    target,
-							Streaming: streaming,
-							Passed:    false,
-							Errors: []AssertionError{{
-								Assertion: "setup",
-								Error:     fmt.Sprintf("failed to create test env: %v", err),
-							}},
-						})
-					}
-				}
-				continue
-			}
-			defer env.Close()
-
-			// Run all scenarios for this pair
+	for _, pair := range m.Pairs {
+		// Create TestEnv for this pair
+		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
+		if err != nil {
+			// All tests for this pair fail with setup error
 			for _, scenario := range m.Scenarios {
 				for _, streaming := range m.Streaming {
-					if result := m.executeTest(env, scenario, source, target, streaming); result != nil {
-						results = append(results, *result)
-					}
+					results = append(results, TestResult{
+						Name:      m.buildTestName(scenario.Name, pair.Source, pair.Target, streaming),
+						Scenario:  scenario.Name,
+						Source:    pair.Source,
+						Target:    pair.Target,
+						Streaming: streaming,
+						Passed:    false,
+						Errors: []AssertionError{{
+							Assertion: "setup",
+							Error:     fmt.Sprintf("failed to create test env: %v", err),
+						}},
+					})
 				}
 			}
-
-			env.Close()
+			continue
 		}
+		defer env.Close()
+
+		// Run all scenarios for this pair
+		for _, scenario := range m.Scenarios {
+			for _, streaming := range m.Streaming {
+				if result := m.executeTest(env, scenario, pair.Source, pair.Target, streaming); result != nil {
+					results = append(results, *result)
+				}
+			}
+		}
+
+		env.Close()
 	}
 
 	return results
@@ -493,20 +445,6 @@ func (m *Matrix) executeAllWithPairServer() []TestResult {
 // executeTest executes a single test with the given environment.
 // Returns nil if the test should be skipped.
 func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target protocol.APIType, streaming bool) *TestResult {
-	// Check skip conditions first
-	pairKey := fmt.Sprintf("%s|%s", source, target)
-	if reason, skip := skipPairs[pairKey]; skip {
-		return &TestResult{
-			Name:       m.buildTestName(scenario.Name, source, target, streaming),
-			Scenario:   scenario.Name,
-			Source:     source,
-			Target:     target,
-			Streaming:  streaming,
-			Skipped:    true,
-			SkipReason: reason,
-		}
-	}
-
 	srcScenarioKey := fmt.Sprintf("%s|%s", source, scenario.Name)
 	if reason, skip := skipSourceScenarios[srcScenarioKey]; skip {
 		return &TestResult{
@@ -558,22 +496,20 @@ func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target pro
 func (m *Matrix) allSetupError(err error) []TestResult {
 	var results []TestResult
 	for _, scenario := range m.Scenarios {
-		for _, source := range m.Sources {
-			for _, target := range m.Targets {
-				for _, streaming := range m.Streaming {
-					results = append(results, TestResult{
-						Name:      m.buildTestName(scenario.Name, source, target, streaming),
-						Scenario:  scenario.Name,
-						Source:    source,
-						Target:    target,
-						Streaming: streaming,
-						Passed:    false,
-						Errors: []AssertionError{{
-							Assertion: "setup",
-							Error:     fmt.Sprintf("failed to create test env: %v", err),
-						}},
-					})
-				}
+		for _, pair := range m.Pairs {
+			for _, streaming := range m.Streaming {
+				results = append(results, TestResult{
+					Name:      m.buildTestName(scenario.Name, pair.Source, pair.Target, streaming),
+					Scenario:  scenario.Name,
+					Source:    pair.Source,
+					Target:    pair.Target,
+					Streaming: streaming,
+					Passed:    false,
+					Errors: []AssertionError{{
+						Assertion: "setup",
+						Error:     fmt.Sprintf("failed to create test env: %v", err),
+					}},
+				})
 			}
 		}
 	}

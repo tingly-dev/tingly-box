@@ -190,19 +190,6 @@ func TestConvertResponsesToAnthropic_Image(t *testing.T) {
 		}
 	}
 
-	t.Run("v1", func(t *testing.T) {
-		out := ConvertOpenAIResponsesToAnthropicRequest(makeReq(), 1024)
-		require.Len(t, out.Messages, 1)
-		require.Len(t, out.Messages[0].Content, 2)
-
-		assert.NotNil(t, out.Messages[0].Content[0].OfText)
-		assert.Equal(t, "describe", out.Messages[0].Content[0].OfText.Text)
-
-		require.NotNil(t, out.Messages[0].Content[1].OfImage)
-		require.NotNil(t, out.Messages[0].Content[1].OfImage.Source.OfBase64)
-		assert.Equal(t, "image/png", string(out.Messages[0].Content[1].OfImage.Source.OfBase64.MediaType))
-	})
-
 	t.Run("beta", func(t *testing.T) {
 		out := ConvertOpenAIResponsesToAnthropicBetaRequest(makeReq(), 1024)
 		require.Len(t, out.Messages, 1)

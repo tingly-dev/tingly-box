@@ -9,13 +9,13 @@ import (
 
 // MatrixCmd runs the protocol validation matrix tests.
 //
-// Tests all combinations of:
-//   - Source protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses)
-//   - Target protocols (anthropic_v1, anthropic_beta, openai_chat, openai_responses, google)
-//   - Scenarios (text, tool_use, tool_result, thinking, multi_turn, streaming_*)
-//   - Streaming modes (streaming, non-streaming)
+// The set of (source → target) pairs is defined explicitly in
+// internal/protocol_validate.DefaultPairs() rather than as a Cartesian
+// product, so what's exercised matches the dispatch graph documented
+// in internal/protocol/README.md. Each pair runs against every
+// scenario and both streaming modes.
 //
-// Use flags to filter specific combinations.
+// --source and --target filter pairs by their source/target component.
 type MatrixCmd struct {
 	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
 	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`

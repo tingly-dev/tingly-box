@@ -15,10 +15,18 @@ import (
 func TestDefaultMatrix(t *testing.T) {
 	m := pt.DefaultMatrix()
 	require.NotNil(t, m)
-	assert.Len(t, m.Sources, 4)
-	assert.Len(t, m.Targets, 5)
+	assert.GreaterOrEqual(t, len(m.Pairs), 12, "expect every source to have at least one pair")
 	assert.GreaterOrEqual(t, len(m.Scenarios), 6)
 	assert.Len(t, m.Streaming, 2)
+
+	// Every pair should be distinct and source/target non-empty.
+	seen := make(map[pt.ProtocolPair]bool, len(m.Pairs))
+	for _, p := range m.Pairs {
+		assert.NotEmpty(t, p.Source, "pair source must be set")
+		assert.NotEmpty(t, p.Target, "pair target must be set")
+		assert.False(t, seen[p], "duplicate pair: %s", p)
+		seen[p] = true
+	}
 }
 
 func TestMatrix_Run_NonStreaming(t *testing.T) {
