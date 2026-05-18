@@ -42,6 +42,10 @@ type ProviderRecord struct {
 	APIBaseOpenAI    string `gorm:"column:api_base_openai"`
 	APIBaseAnthropic string `gorm:"column:api_base_anthropic"`
 
+	// OpenAIEndpointMode declares which OpenAI endpoints this provider exposes
+	// ("", "chat", "responses", "both"). See ai.OpenAIEndpointMode.
+	OpenAIEndpointMode string `gorm:"column:openai_endpoint_mode"`
+
 	// Credential fields - stored with provider as a unit
 	// For api_key auth: stores the API key
 	// For oauth auth: stores OAuth access token
@@ -67,19 +71,20 @@ func (ProviderRecord) TableName() string {
 // toProvider converts a ProviderRecord to typ.Provider
 func (r *ProviderRecord) toProvider() *typ.Provider {
 	provider := &typ.Provider{
-		UUID:             r.UUID,
-		Name:             r.Name,
-		APIBase:          r.APIBase,
-		APIStyle:         protocol.APIStyle(r.APIStyle),
-		APIBaseOpenAI:    r.APIBaseOpenAI,
-		APIBaseAnthropic: r.APIBaseAnthropic,
-		AuthType:         typ.AuthType(r.AuthType),
-		Source:           typ.ProviderSource(r.Source),
-		NoKeyRequired:    r.NoKeyRequired,
-		Enabled:          r.Enabled,
-		ProxyURL:         r.ProxyURL,
-		Timeout:          r.Timeout,
-		LastUpdated:      r.LastUpdated,
+		UUID:               r.UUID,
+		Name:               r.Name,
+		APIBase:            r.APIBase,
+		APIStyle:           protocol.APIStyle(r.APIStyle),
+		APIBaseOpenAI:      r.APIBaseOpenAI,
+		APIBaseAnthropic:   r.APIBaseAnthropic,
+		AuthType:           typ.AuthType(r.AuthType),
+		Source:             typ.ProviderSource(r.Source),
+		NoKeyRequired:      r.NoKeyRequired,
+		Enabled:            r.Enabled,
+		ProxyURL:           r.ProxyURL,
+		Timeout:            r.Timeout,
+		LastUpdated:        r.LastUpdated,
+		OpenAIEndpointMode: ai.OpenAIEndpointMode(r.OpenAIEndpointMode),
 	}
 
 	// Parse tags JSON
@@ -120,21 +125,22 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 	now := time.Now()
 
 	record := &ProviderRecord{
-		UUID:             p.UUID,
-		Name:             p.Name,
-		APIBase:          p.APIBase,
-		APIStyle:         string(p.APIStyle),
-		APIBaseOpenAI:    p.APIBaseOpenAI,
-		APIBaseAnthropic: p.APIBaseAnthropic,
-		AuthType:         string(p.AuthType),
-		Source:           string(p.Source),
-		NoKeyRequired:    p.NoKeyRequired,
-		Enabled:          p.Enabled,
-		ProxyURL:         p.ProxyURL,
-		Timeout:          p.Timeout,
-		LastUpdated:      p.LastUpdated,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		UUID:               p.UUID,
+		Name:               p.Name,
+		APIBase:            p.APIBase,
+		APIStyle:           string(p.APIStyle),
+		APIBaseOpenAI:      p.APIBaseOpenAI,
+		APIBaseAnthropic:   p.APIBaseAnthropic,
+		AuthType:           string(p.AuthType),
+		Source:             string(p.Source),
+		NoKeyRequired:      p.NoKeyRequired,
+		Enabled:            p.Enabled,
+		ProxyURL:           p.ProxyURL,
+		Timeout:            p.Timeout,
+		LastUpdated:        p.LastUpdated,
+		OpenAIEndpointMode: string(p.OpenAIEndpointMode),
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	// Initialize OAuth fields if OAuthDetail exists
@@ -187,6 +193,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 	record.ProxyURL = p.ProxyURL
 	record.Timeout = p.Timeout
 	record.LastUpdated = p.LastUpdated
+	record.OpenAIEndpointMode = string(p.OpenAIEndpointMode)
 	record.UpdatedAt = time.Now()
 
 	// Marshal tags to JSON

@@ -35,6 +35,29 @@ func migrate20260518(c *Config) {
 		logrus.WithField("provider_uuid", p.UUID).Info("Backfilled openai_endpoint_mode=responses on Codex provider")
 	}
 
+	// Providers live in SQLite (the JSON c.Providers slice is legacy backup).
+	// Backfill the DB-stored ones directly so the resolver sees the right mode.
+	if c.providerStore != nil {
+		if oauthProviders, err := c.providerStore.ListOAuth(); err == nil {
+			for _, p := range oauthProviders {
+				if p.OAuthDetail == nil || p.OAuthDetail.GetIssuer() != ai.IssuerCodex {
+					continue
+				}
+				if p.OpenAIEndpointMode == ai.EndpointModeResponses {
+					continue
+				}
+				p.OpenAIEndpointMode = ai.EndpointModeResponses
+				if err := c.providerStore.Save(p); err != nil {
+					logrus.WithError(err).WithField("provider_uuid", p.UUID).Warn("Failed to backfill openai_endpoint_mode on Codex provider")
+					continue
+				}
+				logrus.WithField("provider_uuid", p.UUID).Info("Backfilled openai_endpoint_mode=responses on Codex provider (db)")
+			}
+		} else {
+			logrus.WithError(err).Warn("Failed to list OAuth providers for openai_endpoint_mode backfill")
+		}
+	}
+
 	c.markMigrationCompleted("20260518")
 	if needsSave {
 		_ = c.Save()

@@ -595,3 +595,48 @@ func TestProviderCount(t *testing.T) {
 		t.Errorf("Expected 5 providers, got %d", count)
 	}
 }
+
+func TestProviderOpenAIEndpointModeRoundTrip(t *testing.T) {
+	store, _ := setupTestProviderStore(t)
+	defer store.Close()
+
+	provider := &typ.Provider{
+		UUID:               "test-endpoint-mode-uuid",
+		Name:               "codex-oauth",
+		APIBase:            "https://chatgpt.com/backend-api/codex",
+		APIStyle:           protocol.APIStyleOpenAI,
+		AuthType:           typ.AuthTypeOAuth,
+		OpenAIEndpointMode: ai.EndpointModeResponses,
+		OAuthDetail: &typ.OAuthDetail{
+			AccessToken: "tok",
+			Issuer:      ai.IssuerCodex,
+			UserID:      "u1",
+		},
+		Enabled: true,
+	}
+
+	if err := store.Save(provider); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := store.GetByUUID("test-endpoint-mode-uuid")
+	if err != nil {
+		t.Fatalf("GetByUUID: %v", err)
+	}
+	if got.OpenAIEndpointMode != ai.EndpointModeResponses {
+		t.Errorf("OpenAIEndpointMode after create: got %q, want %q", got.OpenAIEndpointMode, ai.EndpointModeResponses)
+	}
+
+	// Update path must also persist the field.
+	got.OpenAIEndpointMode = ai.EndpointModeBoth
+	if err := store.Save(got); err != nil {
+		t.Fatalf("Save update: %v", err)
+	}
+	got2, err := store.GetByUUID("test-endpoint-mode-uuid")
+	if err != nil {
+		t.Fatalf("GetByUUID after update: %v", err)
+	}
+	if got2.OpenAIEndpointMode != ai.EndpointModeBoth {
+		t.Errorf("OpenAIEndpointMode after update: got %q, want %q", got2.OpenAIEndpointMode, ai.EndpointModeBoth)
+	}
+}
