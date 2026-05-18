@@ -4,29 +4,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-const cursorCompatExtraField = "__tb_cursor_compat"
-
-// resolveCursorCompat determines whether Cursor compatibility handling should be enabled.
-// Primary mechanism is rule flags; optional auto-detection is enabled via rule flags.
-func resolveCursorCompat(c *gin.Context, rule *typ.Rule) bool {
-	if rule == nil {
-		return false
-	}
-
-	flags := rule.Flags
-	if flags.CursorCompat {
-		return true
-	}
-	if flags.CursorCompatAuto && isCursorRequest(c) {
-		return true
-	}
-	return false
-}
-
+// isCursorRequest reports whether the inbound request looks like it came from
+// the Cursor IDE, based on common request headers. Used by resolveRuleFlags to
+// fold the cursor_compat_auto flag into an effective cursor_compat decision.
 func isCursorRequest(c *gin.Context) bool {
 	if c == nil {
 		return false
@@ -44,18 +26,4 @@ func isCursorRequest(c *gin.Context) bool {
 		return true
 	}
 	return false
-}
-
-// applyCursorCompatFlag embeds a transient flag in request extra fields for downstream transforms.
-// The flag is stripped before sending to the provider.
-func applyCursorCompatFlag(req *openai.ChatCompletionNewParams, enabled bool) {
-	if req == nil || !enabled {
-		return
-	}
-	extra := req.ExtraFields()
-	if extra == nil {
-		extra = map[string]interface{}{}
-	}
-	extra[cursorCompatExtraField] = true
-	req.SetExtraFields(extra)
 }

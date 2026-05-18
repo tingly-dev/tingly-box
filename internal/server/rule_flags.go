@@ -1,14 +1,34 @@
 package server
 
 import (
+	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// ruleExtraTransforms builds the per-rule list of post-base transforms to
-// append to the protocol chain. Returns nil when no rule-level flag requires
-// a chain stage so callers can pass the result straight to a variadic
-// `extraTransforms ...transform.Transform` parameter.
+// rulePreBaseTransforms builds the per-rule list of pre-Base transforms to
+// prepend onto the protocol chain. Pre-Base transforms act on the *inbound*
+// request shape — they run before BaseTransform's protocol conversion, so the
+// type-switch inside each transform sees what the client actually sent.
+//
+// Returns nil when no rule-level flag requires a pre-Base stage so callers
+// can pass the result straight to prependPreBaseTransforms.
+func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
+	var pre []transform.Transform
+	if flags.CursorCompat {
+		pre = append(pre, transform.NewOpenAICursorCompatTransform())
+	}
+	return pre
+}
+
+// ruleExtraTransforms builds the per-rule list of post-Base transforms to
+// append to the protocol chain. Post-Base transforms act on the *target*
+// request shape — they run after BaseTransform's protocol conversion, so the
+// type-switch inside each transform matches the upstream-bound form.
+//
+// Returns nil when no rule-level flag requires a chain stage so callers can
+// pass the result straight to a variadic `extraTransforms ...transform.Transform`
+// parameter.
 //
 // Takes already-resolved flags so callers that need other fields off
 // RuleFlags (CustomUserAgent, SkipUsage) can resolve once and share.
@@ -23,13 +43,23 @@ func ruleExtraTransforms(flags typ.RuleFlags) []transform.Transform {
 	return extras
 }
 
-// resolveRuleFlags returns a copy of the rule's flags, or the zero value when
-// no rule is bound. Callers may always read fields without nil-checking.
-func resolveRuleFlags(rule *typ.Rule) typ.RuleFlags {
+// resolveRuleFlags returns the effective flags for this request: a copy of
+// the rule's persisted flags, with cursor_compat_auto folded into
+// cursor_compat when the inbound request carries Cursor headers. Returns the
+// zero value when no rule is bound.
+//
+// Folding happens here (not at each handler call site) so that
+// rulePreBaseTransforms and downstream consumers like reqCtx.Extra both read
+// the same merged value with no duplication.
+func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 	if rule == nil {
 		return typ.RuleFlags{}
 	}
-	return rule.Flags
+	flags := rule.Flags
+	if flags.CursorCompatAuto && isCursorRequest(c) {
+		flags.CursorCompat = true
+	}
+	return flags
 }
 
 // shouldStripUsage merges the cursor_compat and skip_usage hints carried in

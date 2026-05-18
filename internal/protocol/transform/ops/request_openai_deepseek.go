@@ -9,9 +9,6 @@ import (
 // This is required by DeepSeek's and Moonshot's reasoning models
 // The base conversion preserves thinking content in "x_thinking" field
 func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
-	if config.CursorCompat {
-		normalizeCursorContent(req)
-	}
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
 			// Read/write extra fields on OfAssistant (variant level), not on union level.

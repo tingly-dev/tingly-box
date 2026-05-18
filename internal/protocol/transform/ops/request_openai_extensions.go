@@ -205,11 +205,6 @@ func applyDefaultTransform(req *openai.ChatCompletionNewParams, config *protocol
 // ApplyProviderTransforms applies provider-specific transformations
 // Falls back to default handling if no specific transform found
 func ApplyProviderTransforms(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
-	// When cursor_compat is enabled, ALWAYS flatten content regardless of provider
-	// This ensures Cursor compatibility for all providers
-	if config.CursorCompat {
-		normalizeCursorContent(req)
-	}
 	if transform := GetProviderTransform(providerURL, model); transform != nil {
 		return transform(req, providerURL, model, config)
 	}

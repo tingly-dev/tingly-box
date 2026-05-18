@@ -69,7 +69,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(rule), IncomingAPIResponses)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -89,7 +89,8 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
 	}
 
-	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, ruleExtraTransforms(resolveRuleFlags(rule))...)
+	ruleFlags := resolveRuleFlags(c, rule)
+	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

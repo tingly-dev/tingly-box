@@ -301,12 +301,5 @@ func buildOpenAIConfigFromRequest(req *openai.ChatCompletionNewParams) *protocol
 		}
 	}
 
-	// Check for cursor_compat field
-	if cursorCompatRaw, ok := extraFields["cursor_compat"]; ok {
-		if enabled, ok := cursorCompatRaw.(bool); ok && enabled {
-			config.CursorCompat = true
-		}
-	}
-
 	return config
 }
