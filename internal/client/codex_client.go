@@ -197,7 +197,10 @@ func sanitizeResponseInputIDs(req *responses.ResponseNewParams) {
 
 // sanitizeInputItemID sanitizes the ID field in a ResponseInputItemUnionParam
 // by clearing invalid IDs directly on the inner SDK struct fields.
+// Returns false if the item must be dropped entirely (because its required
+// id field is invalid and cannot be omitted).
 func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
+	// Optional Opt[string] ids: clear when invalid so the SDK omits the field.
 	if item.OfFunctionCall != nil {
 		sanitizeOptID(&item.OfFunctionCall.ID)
 	}
@@ -213,6 +216,26 @@ func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
 	if item.OfCustomToolCallOutput != nil {
 		sanitizeOptID(&item.OfCustomToolCallOutput.ID)
 	}
+	if item.OfShellCall != nil {
+		sanitizeOptID(&item.OfShellCall.ID)
+	}
+	if item.OfShellCallOutput != nil {
+		sanitizeOptID(&item.OfShellCallOutput.ID)
+	}
+	if item.OfApplyPatchCall != nil {
+		sanitizeOptID(&item.OfApplyPatchCall.ID)
+	}
+	if item.OfApplyPatchCallOutput != nil {
+		sanitizeOptID(&item.OfApplyPatchCallOutput.ID)
+	}
+	if item.OfMcpApprovalResponse != nil {
+		sanitizeOptID(&item.OfMcpApprovalResponse.ID)
+	}
+	if item.OfCompaction != nil {
+		sanitizeOptID(&item.OfCompaction.ID)
+	}
+
+	// Required plain-string ids: cannot be omitted, drop the item if invalid.
 	if item.OfReasoning != nil {
 		item.OfReasoning.ID = strings.TrimSpace(item.OfReasoning.ID)
 		if item.OfReasoning.ID == "" || !isValidCodexID(item.OfReasoning.ID) {
@@ -220,7 +243,58 @@ func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
 			return false
 		}
 	}
+	if item.OfFileSearchCall != nil && !isValidCodexIDStrict(item.OfFileSearchCall.ID) {
+		logrus.Warnf("[Codex] Dropping file_search_call input item with invalid id: %q", item.OfFileSearchCall.ID)
+		return false
+	}
+	if item.OfComputerCall != nil && !isValidCodexIDStrict(item.OfComputerCall.ID) {
+		logrus.Warnf("[Codex] Dropping computer_call input item with invalid id: %q", item.OfComputerCall.ID)
+		return false
+	}
+	if item.OfWebSearchCall != nil && !isValidCodexIDStrict(item.OfWebSearchCall.ID) {
+		logrus.Warnf("[Codex] Dropping web_search_call input item with invalid id: %q", item.OfWebSearchCall.ID)
+		return false
+	}
+	if item.OfImageGenerationCall != nil && !isValidCodexIDStrict(item.OfImageGenerationCall.ID) {
+		logrus.Warnf("[Codex] Dropping image_generation_call input item with invalid id: %q", item.OfImageGenerationCall.ID)
+		return false
+	}
+	if item.OfCodeInterpreterCall != nil && !isValidCodexIDStrict(item.OfCodeInterpreterCall.ID) {
+		logrus.Warnf("[Codex] Dropping code_interpreter_call input item with invalid id: %q", item.OfCodeInterpreterCall.ID)
+		return false
+	}
+	if item.OfLocalShellCall != nil && !isValidCodexIDStrict(item.OfLocalShellCall.ID) {
+		logrus.Warnf("[Codex] Dropping local_shell_call input item with invalid id: %q", item.OfLocalShellCall.ID)
+		return false
+	}
+	if item.OfLocalShellCallOutput != nil && !isValidCodexIDStrict(item.OfLocalShellCallOutput.ID) {
+		logrus.Warnf("[Codex] Dropping local_shell_call_output input item with invalid id: %q", item.OfLocalShellCallOutput.ID)
+		return false
+	}
+	if item.OfMcpListTools != nil && !isValidCodexIDStrict(item.OfMcpListTools.ID) {
+		logrus.Warnf("[Codex] Dropping mcp_list_tools input item with invalid id: %q", item.OfMcpListTools.ID)
+		return false
+	}
+	if item.OfMcpApprovalRequest != nil && !isValidCodexIDStrict(item.OfMcpApprovalRequest.ID) {
+		logrus.Warnf("[Codex] Dropping mcp_approval_request input item with invalid id: %q", item.OfMcpApprovalRequest.ID)
+		return false
+	}
+	if item.OfMcpCall != nil && !isValidCodexIDStrict(item.OfMcpCall.ID) {
+		logrus.Warnf("[Codex] Dropping mcp_call input item with invalid id: %q", item.OfMcpCall.ID)
+		return false
+	}
+	if item.OfItemReference != nil && !isValidCodexIDStrict(item.OfItemReference.ID) {
+		logrus.Warnf("[Codex] Dropping item_reference input item with invalid id: %q", item.OfItemReference.ID)
+		return false
+	}
 	return true
+}
+
+// isValidCodexIDStrict returns true when id is non-empty (after trimming) and
+// contains only characters accepted by the ChatGPT backend.
+func isValidCodexIDStrict(id string) bool {
+	trimmed := strings.TrimSpace(id)
+	return trimmed != "" && isValidCodexID(trimmed)
 }
 
 func sanitizeOptID(id *param.Opt[string]) {

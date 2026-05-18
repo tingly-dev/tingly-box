@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
@@ -102,7 +103,75 @@ func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
 	bodyStr, _ = sjson.Delete(bodyStr, "temperature")
 	bodyStr, _ = sjson.Delete(bodyStr, "top_p")
 
+	// Final gate: ChatGPT backend rejects items with empty or non-conforming id.
+	// The SDK-level sanitizer only covers a subset of input item variants, so
+	// scrub the marshaled JSON to catch every variant the SDK may emit.
+	bodyStr = sanitizeCodexInputIDsJSON(bodyStr)
+
 	return []byte(bodyStr), nil
+}
+
+// sanitizeCodexInputIDsJSON walks the input array and removes invalid ids.
+// For types whose id is required, the entire item is dropped (the backend
+// would reject the request anyway). For types whose id is optional, only
+// the id field is removed.
+func sanitizeCodexInputIDsJSON(bodyStr string) string {
+	input := gjson.Get(bodyStr, "input")
+	if !input.IsArray() {
+		return bodyStr
+	}
+
+	items := input.Array()
+	// Iterate in reverse so deletions don't shift earlier indices.
+	for i := len(items) - 1; i >= 0; i-- {
+		item := items[i]
+		idVal := item.Get("id")
+		if !idVal.Exists() {
+			continue
+		}
+		idStr := strings.TrimSpace(idVal.String())
+		if idStr != "" && isValidCodexID(idStr) {
+			continue
+		}
+
+		itemType := item.Get("type").String()
+		path := fmt.Sprintf("input.%d", i)
+		if codexInputItemIDRequired(itemType) {
+			logrus.Warnf("[Codex] Dropping input[%d] of type %q with invalid id %q", i, itemType, idStr)
+			if updated, err := sjson.Delete(bodyStr, path); err == nil {
+				bodyStr = updated
+			}
+		} else {
+			logrus.Debugf("[Codex] Clearing invalid id on input[%d] type %q", i, itemType)
+			if updated, err := sjson.Delete(bodyStr, path+".id"); err == nil {
+				bodyStr = updated
+			}
+		}
+	}
+	return bodyStr
+}
+
+// codexInputItemIDRequired reports whether the given input item type requires
+// the `id` field per the OpenAI Responses API schema. For these types, the
+// SDK marshals an empty id as "" rather than omitting it, and the ChatGPT
+// backend rejects it.
+func codexInputItemIDRequired(itemType string) bool {
+	switch itemType {
+	case "reasoning",
+		"code_interpreter_call",
+		"computer_call",
+		"file_search_call",
+		"web_search_call",
+		"image_generation_call",
+		"local_shell_call",
+		"local_shell_call_output",
+		"mcp_list_tools",
+		"mcp_approval_request",
+		"mcp_call",
+		"item_reference":
+		return true
+	}
+	return false
 }
 
 func rewriteCodexPath(path string) string {
