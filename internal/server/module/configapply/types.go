@@ -1,8 +1,27 @@
 package configapply
 
 import (
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
+
+// ApplyClaudeConfigRequest is the request body for ApplyClaudeConfig.
+//
+// Two modes coexist for backwards compatibility:
+//
+//   - Legacy: only `mode` ("unified" | "separate") is set. The handler
+//     picks the canonical default env map for that mode.
+//   - Quick config: `preferences` is set. The handler treats the prefs
+//     as the source of truth and ignores `mode`. Each field's JSON tag
+//     is the Claude Code env var it controls.
+//
+// `installStatusLine` is orthogonal — it just toggles the statusLine
+// stanza in settings.json.
+type ApplyClaudeConfigRequest struct {
+	Mode              string                  `json:"mode"`
+	InstallStatusLine bool                    `json:"installStatusLine"`
+	Preferences       *agent.ClaudeCodePrefs  `json:"preferences,omitempty"`
+}
 
 // ApplyConfigResponse is the response for ApplyClaudeConfig
 type ApplyConfigResponse struct {

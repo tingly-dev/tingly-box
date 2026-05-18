@@ -21,6 +21,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	router.POST("/config/apply/claude", handler.ApplyClaudeConfig,
 		swagger.WithDescription("Generate and apply Claude Code configuration from system state"),
 		swagger.WithTags("config"),
+		swagger.WithRequestModel(ApplyClaudeConfigRequest{}),
 		swagger.WithResponseModel(ApplyConfigResponse{}),
 	)
 

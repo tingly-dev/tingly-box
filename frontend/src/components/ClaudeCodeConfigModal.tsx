@@ -1,9 +1,13 @@
-import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Link, Tab, Tabs, Typography } from '@mui/material';
-import React, { useMemo } from 'react';
+import { Box, Button, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Link, Tab, Tabs, Typography } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from './CodeBlock';
 import { isFullEdition } from '@/utils/edition';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import ClaudeCodeQuickConfig, { derivePrefsFromRules } from './ClaudeCodeQuickConfig';
+import type { ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -14,12 +18,15 @@ interface ClaudeCodeConfigModalProps {
     baseUrl: string;
     rules: any[];
     copyToClipboard: (text: string, label: string) => Promise<void>;
-    // Apply handlers
+    // Legacy auto-apply (uses configMode to derive defaults server-side)
     onApply?: () => Promise<void>;
     onApplyWithStatusLine?: () => Promise<void>;
+    // Quick-config apply (sends user-edited prefs)
+    onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean) => Promise<void>;
     isApplyLoading?: boolean;
 }
 
+type MainTab = 'quick' | 'manual' | 'auto';
 type ScriptTab = 'json' | 'windows' | 'unix';
 
 // Helper to generate common Node.js script for writing config files
@@ -53,6 +60,18 @@ fs.writeFileSync(targetPath, JSON.stringify(merged, null, 2));
 console.log("Config written to", targetPath);`;
 };
 
+// Strip the keys that are server-injected (base URL, auth token) — they
+// shouldn't be exposed in the quick-config form but ARE part of the env
+// map shown in the manual tab.
+const stripServerKeys = (env: Record<string, string | undefined>): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(env)) {
+        if (v === undefined || v === '') continue;
+        out[k] = v;
+    }
+    return out;
+};
+
 const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     open,
     onClose,
@@ -62,77 +81,89 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     copyToClipboard,
     onApply,
     onApplyWithStatusLine,
+    onApplyWithPrefs,
     isApplyLoading = false,
 }) => {
-    // Get token from context
     const { token } = useScenarioPageModal();
     const { t } = useTranslation();
+    const [mainTab, setMainTab] = React.useState<MainTab>('quick');
     const [settingsTab, setSettingsTab] = React.useState<ScriptTab>('json');
     const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
     const [statusLineTab, setStatusLineTab] = React.useState<ScriptTab>('json');
+    const [showPreview, setShowPreview] = React.useState(false);
 
-    // Memoized configuration generators
-    const {
-        claudeCodeBaseUrl,
-        modelForVariant,
-        subagentModel,
-        settingsEnvConfig,
-        claudeJsonConfig,
-    } = React.useMemo(() => {
-        const claudeCodeBaseUrl = `${baseUrl}/tingly/claude_code`;
+    // Quick-config form state. Re-seed when the underlying rules/mode change
+    // (e.g. user picks a different mode in the parent) — but only if the
+    // modal isn't currently open, so we don't clobber unsaved edits.
+    const [prefs, setPrefs] = React.useState<ClaudeCodePrefs>(() =>
+        derivePrefsFromRules({ rules, mode: configMode })
+    );
+    React.useEffect(() => {
+        if (!open) {
+            setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
+        }
+    }, [open, configMode, rules]);
 
+    const claudeCodeBaseUrl = `${baseUrl}/tingly/claude_code`;
+
+    // Legacy mode-based env map — drives the manual tab so users see the
+    // exact bytes the auto-apply would write. Manual tab content does NOT
+    // reflect quick-config edits; that's a deliberate split so manual is
+    // a clean, reproducible reference.
+    const settingsEnvConfig = React.useMemo(() => {
         const getModelForVariant = (variant: string): string => {
-            if (configMode === 'unified') {
-                return rules[0]?.request_model || '';
-            }
+            if (configMode === 'unified') return rules[0]?.request_model || '';
             const rule = rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
             return rule?.request_model || '';
         };
-
         const subagentModel = configMode === 'unified'
             ? (rules[0]?.request_model || '')
             : (getModelForVariant('subagent') || 'tingly/cc-subagent');
-
-        // Generate env config for settings.json
-        const settingsEnvConfig = configMode === 'unified'
-            ? {
-                ANTHROPIC_MODEL: rules[0]?.request_model,
-                ANTHROPIC_DEFAULT_HAIKU_MODEL: rules[0]?.request_model,
-                ANTHROPIC_DEFAULT_OPUS_MODEL: rules[0]?.request_model,
-                ANTHROPIC_DEFAULT_SONNET_MODEL: rules[0]?.request_model,
-                CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
-                DISABLE_TELEMETRY: "1",
-                DISABLE_ERROR_REPORTING: "1",
-                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-                API_TIMEOUT_MS: "3000000",
-                ANTHROPIC_AUTH_TOKEN: token,
-                ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
-            }
-            : {
-                ANTHROPIC_MODEL: getModelForVariant('default'),
-                ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
-                ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
-                ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
-                CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
-                DISABLE_TELEMETRY: "1",
-                DISABLE_ERROR_REPORTING: "1",
-                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-                API_TIMEOUT_MS: "3000000",
-                ANTHROPIC_AUTH_TOKEN: token,
-                ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
+        const base = {
+            DISABLE_TELEMETRY: "1",
+            DISABLE_ERROR_REPORTING: "1",
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+            API_TIMEOUT_MS: "3000000",
+            ANTHROPIC_AUTH_TOKEN: token,
+            ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
+            CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
+        };
+        if (configMode === 'unified') {
+            const m = rules[0]?.request_model;
+            return {
+                ANTHROPIC_MODEL: m,
+                ANTHROPIC_DEFAULT_HAIKU_MODEL: m,
+                ANTHROPIC_DEFAULT_OPUS_MODEL: m,
+                ANTHROPIC_DEFAULT_SONNET_MODEL: m,
+                ...base,
             };
+        }
+        return {
+            ANTHROPIC_MODEL: getModelForVariant('default'),
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: getModelForVariant('haiku'),
+            ANTHROPIC_DEFAULT_OPUS_MODEL: getModelForVariant('opus'),
+            ANTHROPIC_DEFAULT_SONNET_MODEL: getModelForVariant('sonnet'),
+            ...base,
+        };
+    }, [configMode, claudeCodeBaseUrl, token, rules]);
 
-        const claudeJsonConfig = { hasCompletedOnboarding: true };
+    const claudeJsonConfig = { hasCompletedOnboarding: true };
 
-        return { claudeCodeBaseUrl, modelForVariant: getModelForVariant, subagentModel, settingsEnvConfig, claudeJsonConfig };
-    }, [configMode, baseUrl, token, rules]);
+    // ── Preview env map for quick-config tab ──────────────────────────
+    // Mirrors what the backend will write: merge user prefs with the
+    // server-injected base URL + auth token so the preview is honest.
+    const quickPreviewEnv = React.useMemo(() => {
+        return stripServerKeys({
+            ...prefs,
+            ANTHROPIC_BASE_URL: claudeCodeBaseUrl,
+            ANTHROPIC_AUTH_TOKEN: token,
+        });
+    }, [prefs, claudeCodeBaseUrl, token]);
 
-    // Generate settings.json content
     const generateSettingsConfig = React.useCallback(() => {
         return JSON.stringify({ env: settingsEnvConfig }, null, 2);
     }, [settingsEnvConfig]);
 
-    // Generate settings.json scripts
     const generateSettingsScriptWindows = React.useCallback(() => {
         const nodeCode = generateNodeScript('.claude/settings.json', settingsEnvConfig);
         return `# PowerShell - Run in PowerShell
@@ -147,12 +178,10 @@ ${nodeCode}
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, [settingsEnvConfig]);
 
-    // Generate .claude.json content
     const generateClaudeJsonConfig = React.useCallback(() => {
         return JSON.stringify(claudeJsonConfig, null, 2);
     }, [claudeJsonConfig]);
 
-    // Generate .claude.json scripts
     const generateScriptWindows = React.useCallback(() => {
         const nodeCode = generateNodeScript('.claude.json', claudeJsonConfig);
         return `# PowerShell - Run in PowerShell
@@ -167,7 +196,6 @@ ${nodeCode}
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, [claudeJsonConfig]);
 
-    // Status line config (TODO: implement when script is ready)
     const generateStatusLineConfig = React.useCallback(() => {
         const scriptPath = '~/.claude/tingly-statusline.sh';
         return JSON.stringify({
@@ -178,7 +206,6 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
         }, null, 2);
     }, []);
 
-    // Status line scripts (WIP - placeholder download URLs)
     const generateStatusLineScriptWindows = React.useCallback(() => {
         const downloadUrl = "https://github.com/your-repo/tingly-statusline/raw/main/tingly-statusline.ps1";
         const nodeCode = `const fs = require("fs");
@@ -244,15 +271,9 @@ https.get("${downloadUrl}", (response) => {
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, []);
 
-    const handleApplyClick = () => {
-        if (onApply) {
-            onApply();
-        }
-    };
-
-    const handleApplyWithStatusLineClick = () => {
-        if (onApplyWithStatusLine) {
-            onApplyWithStatusLine();
+    const handleQuickApply = async (installStatusLine: boolean) => {
+        if (onApplyWithPrefs) {
+            await onApplyWithPrefs(prefs, installStatusLine);
         }
     };
 
@@ -260,151 +281,184 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
         <Dialog
             open={open}
             onClose={(event, reason) => {
-                // Only allow closing via the confirm button, not backdrop click or ESC
-                if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
-                    return;
-                }
+                if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
                 onClose();
             }}
             maxWidth="lg"
             fullWidth
             disableEscapeKeyDown
-            PaperProps={{
-                sx: {
-                    borderRadius: 3,
-                    maxHeight: '90vh',
-                }
-            }}
+            PaperProps={{ sx: { borderRadius: 3, maxHeight: '90vh' } }}
         >
-            <DialogTitle sx={{
-                pb: 1,
-                borderBottom: 1,
-                borderColor: 'divider',
-            }}>
+            <DialogTitle sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
                 <Typography variant="h6" fontWeight={600}>
                     {t('claudeCode.modal.title')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     {t('claudeCode.modal.subtitle')}
                 </Typography>
+                <Tabs
+                    value={mainTab}
+                    onChange={(_, v) => setMainTab(v)}
+                    sx={{ mt: 1.5, minHeight: 36, '& .MuiTab-root': { minHeight: 36, py: 0.5, textTransform: 'none' } }}
+                >
+                    <Tab label="快速配置" value="quick" />
+                    <Tab label="手动配置" value="manual" />
+                    {isFullEdition && (onApply || onApplyWithStatusLine) && (
+                        <Tab label="自动配置" value="auto" />
+                    )}
+                </Tabs>
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {/* Settings.json section */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                {t('claudeCode.step1')}
-                            </Typography>
-                            <Tabs
-                                value={settingsTab}
-                                onChange={(_, value) => setSettingsTab(value)}
-                                variant="standard"
-                                sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                            >
-                                <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                            </Tabs>
-                        </Box>
+                {mainTab === 'quick' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <ClaudeCodeQuickConfig
+                            prefs={prefs}
+                            setPrefs={setPrefs}
+                            onApply={handleQuickApply}
+                            onResetDefaults={() => setPrefs(derivePrefsFromRules({ rules, mode: configMode }))}
+                            isApplyLoading={isApplyLoading}
+                            showApply={isFullEdition && !!onApplyWithPrefs}
+                        />
+
                         <Box>
-                            {settingsTab === 'json' && (
-                                <CodeBlock
-                                    code={generateSettingsConfig()}
-                                    language="json"
-                                    filename="Add the env section into ~/.claude/settings.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'settings.json')}
-                                    maxHeight={280}
-                                    minHeight={280}
-                                />
-                            )}
-                            {settingsTab === 'windows' && (
-                                <CodeBlock
-                                    code={generateSettingsScriptWindows()}
-                                    // bash, but use js for highlight
-                                    language="js"
-                                    filename="PowerShell script to setup ~/.claude/settings.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Windows script')}
-                                    maxHeight={280}
-                                    minHeight={280}
-                                />
-                            )}
-                            {settingsTab === 'unix' && (
-                                <CodeBlock
-                                    code={generateSettingsScriptUnix()}
-                                    // bash, but use js for highlight
-                                    language="js"
-                                    filename="Bash script to setup ~/.claude/settings.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Unix script')}
-                                    maxHeight={280}
-                                    minHeight={280}
-                                />
-                            )}
+                            <Button
+                                size="small"
+                                onClick={() => setShowPreview(s => !s)}
+                                endIcon={showPreview ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                sx={{ textTransform: 'none', color: 'text.secondary' }}
+                            >
+                                {showPreview ? '收起' : '查看'}最终写入 settings.json 的 env
+                            </Button>
+                            <Collapse in={showPreview}>
+                                <Box sx={{ mt: 1 }}>
+                                    <CodeBlock
+                                        code={JSON.stringify({ env: quickPreviewEnv }, null, 2)}
+                                        language="json"
+                                        filename="预览 ~/.claude/settings.json 中的 env 段"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'settings.json env preview')}
+                                        maxHeight={320}
+                                        minHeight={120}
+                                    />
+                                </Box>
+                            </Collapse>
                         </Box>
                     </Box>
+                )}
 
-                    {/* .claude.json section */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                {t('claudeCode.step2')}
-                            </Typography>
-                            <Tabs
-                                value={claudeJsonTab}
-                                onChange={(_, value) => setClaudeJsonTab(value)}
-                                variant="standard"
-                                sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                            >
-                                <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                            </Tabs>
+                {mainTab === 'manual' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {/* settings.json section */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    {t('claudeCode.step1')}
+                                </Typography>
+                                <Tabs
+                                    value={settingsTab}
+                                    onChange={(_, value) => setSettingsTab(value)}
+                                    variant="standard"
+                                    sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                                >
+                                    <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                </Tabs>
+                            </Box>
+                            <Box>
+                                {settingsTab === 'json' && (
+                                    <CodeBlock
+                                        code={generateSettingsConfig()}
+                                        language="json"
+                                        filename="Add the env section into ~/.claude/settings.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'settings.json')}
+                                        maxHeight={280}
+                                        minHeight={280}
+                                    />
+                                )}
+                                {settingsTab === 'windows' && (
+                                    <CodeBlock
+                                        code={generateSettingsScriptWindows()}
+                                        language="js"
+                                        filename="PowerShell script to setup ~/.claude/settings.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Windows script')}
+                                        maxHeight={280}
+                                        minHeight={280}
+                                    />
+                                )}
+                                {settingsTab === 'unix' && (
+                                    <CodeBlock
+                                        code={generateSettingsScriptUnix()}
+                                        language="js"
+                                        filename="Bash script to setup ~/.claude/settings.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Unix script')}
+                                        maxHeight={280}
+                                        minHeight={280}
+                                    />
+                                )}
+                            </Box>
                         </Box>
-                        <Box>
-                            {claudeJsonTab === 'json' && (
-                                <CodeBlock
-                                    code={generateClaudeJsonConfig()}
-                                    language="json"
-                                    filename="Set hasCompletedOnboarding as true into ~/.claude.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, '.claude.json')}
-                                    maxHeight={120}
-                                    minHeight={80}
-                                />
-                            )}
-                            {claudeJsonTab === 'windows' && (
-                                <CodeBlock
-                                    code={generateScriptWindows()}
-                                    // bash, but use js for highlight
-                                    language="js"
-                                    filename="PowerShell script to setup ~/.claude.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Windows script')}
-                                    maxHeight={120}
-                                    minHeight={80}
-                                />
-                            )}
-                            {claudeJsonTab === 'unix' && (
-                                <CodeBlock
-                                    code={generateScriptUnix()}
-                                    // bash, but use js for highlight
-                                    language="js"
-                                    filename="Bash script to setup ~/.claude.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Unix script')}
-                                    maxHeight={120}
-                                    minHeight={80}
-                                />
-                            )}
-                        </Box>
-                    </Box>
 
-                    {/* Status Line section */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        {/* .claude.json section */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    {t('claudeCode.step2')}
+                                </Typography>
+                                <Tabs
+                                    value={claudeJsonTab}
+                                    onChange={(_, value) => setClaudeJsonTab(value)}
+                                    variant="standard"
+                                    sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                                >
+                                    <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                </Tabs>
+                            </Box>
+                            <Box>
+                                {claudeJsonTab === 'json' && (
+                                    <CodeBlock
+                                        code={generateClaudeJsonConfig()}
+                                        language="json"
+                                        filename="Set hasCompletedOnboarding as true into ~/.claude.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, '.claude.json')}
+                                        maxHeight={120}
+                                        minHeight={80}
+                                    />
+                                )}
+                                {claudeJsonTab === 'windows' && (
+                                    <CodeBlock
+                                        code={generateScriptWindows()}
+                                        language="js"
+                                        filename="PowerShell script to setup ~/.claude.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Windows script')}
+                                        maxHeight={120}
+                                        minHeight={80}
+                                    />
+                                )}
+                                {claudeJsonTab === 'unix' && (
+                                    <CodeBlock
+                                        code={generateScriptUnix()}
+                                        language="js"
+                                        filename="Bash script to setup ~/.claude.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Unix script')}
+                                        maxHeight={120}
+                                        minHeight={80}
+                                    />
+                                )}
+                            </Box>
+                        </Box>
+
+                        {/* Status Line section */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Typography variant="subtitle2" color="text.secondary">
                                     {t('claudeCode.step3')}
@@ -421,7 +475,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                 </Tabs>
                             </Box>
                             <Box>
-                                {statusLineTab === 'json' && generateStatusLineConfig && (
+                                {statusLineTab === 'json' && (
                                     <>
                                         <Box sx={{ mb: 2 }}>
                                             <Typography variant="body2" sx={{ mb: 1 }}>
@@ -469,7 +523,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                         </Typography>
                                     </Box>
                                 )}
-                                {statusLineTab === 'windows' && generateStatusLineScriptWindows && (
+                                {statusLineTab === 'windows' && (
                                     <CodeBlock
                                         code={generateStatusLineScriptWindows()}
                                         language="js"
@@ -480,7 +534,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                         minHeight={280}
                                     />
                                 )}
-                                {statusLineTab === 'unix' && generateStatusLineScriptUnix && (
+                                {statusLineTab === 'unix' && (
                                     <CodeBlock
                                         code={generateStatusLineScriptUnix()}
                                         language="js"
@@ -492,35 +546,47 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                                     />
                                 )}
                             </Box>
+                        </Box>
                     </Box>
-                </Box>
+                )}
+
+                {mainTab === 'auto' && isFullEdition && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 2 }}>
+                        <Typography variant="body2">
+                            一键应用 tb 推荐的默认配置到 <code>~/.claude/settings.json</code> 和 <code>~/.claude.json</code>。
+                            模型槽位根据当前 <strong>{configMode}</strong> 模式自动选择，其他 env 使用 tb 推荐默认值。
+                            如需自定义，请切换到「快速配置」tab。
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                            {onApply && (
+                                <Button
+                                    onClick={onApply}
+                                    variant="outlined"
+                                    disabled={isApplyLoading}
+                                    startIcon={isApplyLoading ? <CircularProgress size={14} /> : null}
+                                >
+                                    {t('claudeCode.quickApply')}
+                                </Button>
+                            )}
+                            {onApplyWithStatusLine && (
+                                <Button
+                                    onClick={onApplyWithStatusLine}
+                                    variant="contained"
+                                    disabled={isApplyLoading}
+                                    startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : null}
+                                >
+                                    {t('claudeCode.quickApplyWithStatusLine')}
+                                </Button>
+                            )}
+                        </Box>
+                    </Box>
+                )}
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <DialogActions sx={{ px: 3, pb: 2, pt: 1, justifyContent: 'flex-end' }}>
                 <Button onClick={onClose} color="inherit">
                     {t('common.cancel')}
                 </Button>
-                {/* Hide Apply buttons in lite edition */}
-                {isFullEdition && onApply && (
-                    <Button
-                        onClick={handleApplyClick}
-                        variant="contained"
-                        disabled={isApplyLoading}
-                        startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
-                    >
-                        {t('claudeCode.quickApply')}
-                    </Button>
-                )}
-                {isFullEdition && onApplyWithStatusLine && (
-                    <Button
-                        onClick={handleApplyWithStatusLineClick}
-                        variant="contained"
-                        disabled={isApplyLoading}
-                        startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
-                    >
-                        {t('claudeCode.quickApplyWithStatusLine')}
-                    </Button>
-                )}
             </DialogActions>
         </Dialog>
     );

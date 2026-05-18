@@ -142,10 +142,7 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 
 // ApplyClaudeConfig generates and applies Claude Code configuration from system state
 func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
-	var req struct {
-		Mode              string `json:"mode"`              // "unified" or "separate"
-		InstallStatusLine bool   `json:"installStatusLine"` // install status line integration
-	}
+	var req ApplyClaudeConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		req.Mode = "unified" // default to unified
 		req.InstallStatusLine = false
@@ -207,9 +204,24 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	// Use the model token from config (tingly-box- prefixed JWT)
 	apiKey := h.config.GetModelToken()
 
-	// Generate env vars based on mode
-	unified := req.Mode != "separate"
-	env := agent.BuildClaudeCodeEnv(baseURL, apiKey, unified)
+	// Generate env vars. If preferences are provided, treat them as the
+	// source of truth (quick-config path). Otherwise fall back to the
+	// legacy mode-based defaults so existing callers keep working.
+	var env map[string]string
+	if req.Preferences != nil {
+		envFromPrefs, prefsErr := req.Preferences.ToEnv(baseURL, apiKey)
+		if prefsErr != nil {
+			c.JSON(http.StatusBadRequest, config.ApplyResult{
+				Success: false,
+				Message: "Invalid preferences: " + prefsErr.Error(),
+			})
+			return
+		}
+		env = envFromPrefs
+	} else {
+		unified := req.Mode != "separate"
+		env = agent.BuildClaudeCodeEnv(baseURL, apiKey, unified)
+	}
 
 	// Always inject TINGLY_API_URL so the statusline script (if installed)
 	// targets the correct tingly-box port.  The env section is replaced on

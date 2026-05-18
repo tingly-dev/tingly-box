@@ -1006,11 +1006,14 @@ export const api = {
         }
     },
 
-    // Config Apply API - Safe endpoints that generate config from system state
-    applyClaudeConfig: async (mode: string, installStatusLine?: boolean): Promise<any> => {
+    // Config Apply API - Safe endpoints that generate config from system state.
+    // When `preferences` is provided, the backend treats it as the source of
+    // truth and ignores `mode`. Without it, the backend falls back to mode-
+    // based defaults (legacy path used by the auto-apply button on the page).
+    applyClaudeConfig: async (mode: string, installStatusLine?: boolean, preferences?: Record<string, string>): Promise<any> => {
         return uiAPI('/config/apply/claude', {
             method: 'POST',
-            body: JSON.stringify({mode, installStatusLine}),
+            body: JSON.stringify({mode, installStatusLine, preferences}),
         });
     },
 

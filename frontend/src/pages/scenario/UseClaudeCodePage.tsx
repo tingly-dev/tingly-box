@@ -300,6 +300,14 @@ const UseClaudeCodePageContent: React.FC = () => {
                     copyToClipboard={copyToClipboard}
                     onApply={async () => { await handleApply(); }}
                     onApplyWithStatusLine={async () => { await handleApplyWithStatusLine(); }}
+                    onApplyWithPrefs={async (prefs, installStatusLine) => {
+                        try {
+                            setIsApplyLoading(true);
+                            await api.applyClaudeConfig(configMode, installStatusLine, prefs as Record<string, string>);
+                        } finally {
+                            setIsApplyLoading(false);
+                        }
+                    }}
                     isApplyLoading={isApplyLoading}
                 />
 
