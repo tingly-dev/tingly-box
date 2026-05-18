@@ -79,6 +79,9 @@ Anything not listed is intentionally unsupported and returns an
   and the request is forwarded as-is.
 - The `—` cells in the `anthropic_v1` target column are the subject of
   the design concern below.
+- The harness validation matrix (`internal/protocol_validate.DefaultPairs`)
+  lists every supported pair explicitly. New rows here should be added
+  there too so they get end-to-end coverage.
 
 ## Design concern: Anthropic Beta is the *single* normalization target for non-Anthropic sources
 
