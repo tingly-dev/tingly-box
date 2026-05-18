@@ -5,6 +5,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// shouldIncludeRuleInModelList reports whether a rule should appear in the
+// model list for the requested scenario. Each scenario — base or profiled —
+// is an isolated scope: it only lists rules bound to that exact scenario.
+// Transport compatibility does not grant cross-scenario visibility.
+func shouldIncludeRuleInModelList(requestedScenario typ.RuleScenario, ruleScenario typ.RuleScenario) bool {
+	return requestedScenario == ruleScenario
+}
+
 // primaryAuthTypeForRule returns the AuthType of the first active service's
 // provider in a rule. It is used by /v1/models endpoints so the frontend can
 // order picker entries oauth -> api_key -> vmodel.
