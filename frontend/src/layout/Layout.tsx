@@ -1,5 +1,5 @@
 import { Box, Drawer, IconButton, Popover, Tooltip, Typography, Menu, MenuItem, Stack } from '@mui/material';
-import { IconMenu, IconDots, IconYinYang, IconSun, IconMoon, IconSunHigh, IconPencil } from '@tabler/icons-react';
+import { IconMenu, IconDots, IconYinYang, IconSun, IconMoon, IconSunHigh, IconSparkles, IconPencil } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -449,6 +449,10 @@ const Layout = ({ children }: LayoutProps) => {
                                 <MenuItem onClick={() => setTheme('sunlit')} sx={{ gap: 1.5 }}>
                                     <IconSunHigh size={18} />
                                     <Typography>{t('layout.activityBar.sunlit')}</Typography>
+                                </MenuItem>
+                                <MenuItem onClick={() => setTheme('claude')} sx={{ gap: 1.5 }}>
+                                    <IconSparkles size={18} />
+                                    <Typography>{t('layout.activityBar.claude')}</Typography>
                                 </MenuItem>
                             </>
                         )}

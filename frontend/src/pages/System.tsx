@@ -3,7 +3,7 @@ import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { Logout } from '@mui/icons-material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
-import { IconCircleCheck, IconCircleX, IconInfoCircle, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage, IconBrush, IconSun, IconMoon, IconSunHigh, IconWorld, IconCheck } from '@tabler/icons-react';
+import { IconCircleCheck, IconCircleX, IconInfoCircle, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage, IconBrush, IconSun, IconMoon, IconSunHigh, IconSparkles, IconWorld, IconCheck } from '@tabler/icons-react';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -272,6 +272,7 @@ const System = () => {
                                         { value: 'light', label: t('layout.activityBar.light'), Icon: IconSun },
                                         { value: 'dark', label: t('layout.activityBar.dark'), Icon: IconMoon },
                                         { value: 'sunlit', label: t('layout.activityBar.sunlit'), Icon: IconSunHigh },
+                                        { value: 'claude', label: t('layout.activityBar.claude'), Icon: IconSparkles },
                                     ] as const).map(({ value, label, Icon }) => {
                                         const selected = themeMode === value;
                                         return (

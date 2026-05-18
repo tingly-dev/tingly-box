@@ -73,6 +73,7 @@ export default {
       "light": "Light",
       "dark": "Dark",
       "sunlit": "Sunlit",
+      "claude": "Claude",
       "zenMode": "Zen Mode",
       "enterZenMode": "Enter Zen Mode:",
       "more": "More",

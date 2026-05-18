@@ -74,6 +74,7 @@ export default {
       "light": "浅色",
       "dark": "深色",
       "sunlit": "日光",
+      "claude": "Claude",
       "zenMode": "禅模式",
       "enterZenMode": "进入禅模式：",
       "more": "更多",
