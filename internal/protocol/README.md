@@ -67,16 +67,13 @@ recording is enabled.
 Anything not listed is intentionally unsupported and returns an
 `unsupported request type` error from `BaseTransform`.
 
-```
-                       ┌──────────────────── target ─────────────────────┐
-                       │ openai_chat   responses   anthropic_v1   anthropic_beta   google │
-source ──────────────────────────────────────────────────────────────────────────────────
-openai_chat            │    ✓            ✓             —              ✓             ✓
-openai_responses       │    ✓            ✓             —              ✓             —
-anthropic_v1           │    ✓            ✓             ✓ (pass)       —             ✓
-anthropic_beta         │    ✓            ✓             —              ✓ (pass)      ✓
-google                 │    —            —             —              —             ✓ (pass)
-```
+| source ↓  /  target → | `openai_chat` | `openai_responses` | `anthropic_v1` | `anthropic_beta` | `google`  |
+| --------------------- | :-----------: | :----------------: | :------------: | :--------------: | :-------: |
+| `openai_chat`         |   ✓ (pass)    |         ✓          |       —        |        ✓         |     ✓     |
+| `openai_responses`    |       ✓       |      ✓ (pass)      |       —        |        ✓         |     —     |
+| `anthropic_v1`        |       ✓       |         ✓          |    ✓ (pass)    |        —         |     ✓     |
+| `anthropic_beta`      |       ✓       |         ✓          |       —        |     ✓ (pass)     |     ✓     |
+| `google`              |       —       |         —          |       —        |        —         | ✓ (pass)  |
 
 - `✓ (pass)` means same-type passthrough — `BaseTransform` is a no-op
   and the request is forwarded as-is.
