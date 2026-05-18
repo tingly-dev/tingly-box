@@ -21,7 +21,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -171,9 +170,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	isStreaming := req.Stream
 	actualModel := req.Model
 	maxAllowed := s.templateManager.GetMaxTokensForModelByProvider(provider, actualModel)
-	cursorCompat := resolveCursorCompat(c, rule)
-	applyCursorCompatFlag(&req.ChatCompletionNewParams, cursorCompat)
-	ruleFlags := resolveRuleFlags(rule)
+	ruleFlags := resolveRuleFlags(c, rule)
 	if ruleFlags.CustomUserAgent != "" {
 		c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), ruleFlags.CustomUserAgent))
 	}
@@ -186,10 +183,6 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	SetTrackingContext(c, rule, provider, actualModel, responseModel, isStreaming)
 
 	apiStyle := provider.APIStyle
-	// === Cursor compat content normalization (before transform) ===
-	if cursorCompat {
-		ops.ApplyCursorCompatContentNormalization(&req.ChatCompletionNewParams)
-	}
 	transform.AlignToolMessagesForOpenAI(&req.ChatCompletionNewParams)
 
 	// === Cap max_tokens at model's maximum ===
@@ -229,7 +222,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	}
 
 	// === Transform via pipeline ===
-	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, ruleExtraTransforms(ruleFlags)...)
+	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
@@ -239,7 +232,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		})
 		return
 	}
-	reqCtx.Extra["cursor_compat"] = cursorCompat
+	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
 	// === Dispatch via transform chain ===

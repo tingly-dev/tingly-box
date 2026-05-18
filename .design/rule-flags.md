@@ -57,23 +57,25 @@
    │  inbound handler (openai.go / openai_responses.go /            │
    │                   anthropic_v1.go / anthropic_beta.go)         │
    │                                                                │
-   │   flags := resolveRuleFlags(rule)                              │
+   │   flags := resolveRuleFlags(c, rule)                           │
    │   ├─ WithCustomUserAgent(ctx, flags.CustomUserAgent)           │  Type 2
    │   ├─ reqCtx.Extra["skip_usage"] = flags.SkipUsage              │  Type 3
-   │   ├─ applyCursorCompatFlag(req, cursorCompat)                  │  Type 1a
-   │   └─ extras := ruleExtraTransforms(flags)                      │  Type 1b
+   │   ├─ preBase := rulePreBaseTransforms(flags)                   │  Type 1b-pre
+   │   │   → [transform.OpenAICursorCompatTransform{}]              │
+   │   └─ extras := ruleExtraTransforms(flags)                      │  Type 1b-post
    │       → [transform.OpenAIMaxTokensRewriteTransform{...}]       │
    └───────────────────────────┬───────────────────────────────────┘
                                │
                                ▼
    ┌───────────────────────────────────────────────────────────────┐
-   │   transformXxxx(..., extras...) :                              │
+   │   transformXxxx(..., preBase, extras...) :                     │
    │     chain := BuildTransformChain(...)                          │
+   │     prependPreBaseTransforms(chain, preBase)                   │
    │     appendExtraTransforms(chain, extras)                       │
    │     chain.Execute(ctx)                                         │
    │                                                                │
-   │     Base  →  MCP  →  Consistency  →  Vendor  →  extras         │
-   │                                              (post-base stages)│
+   │     preBase → Base → MCP → Consistency → Vendor → extras       │
+   │   (pre-base stages)                       (post-base stages)   │
    └───────────────────────────┬───────────────────────────────────┘
                                ▼
                        upstream provider
@@ -118,8 +120,8 @@ func RuleFlagRegistry() []FlagSpec { … }
 
 | Key | Type | 类别 | 作用 | 注入点 |
 |-----|------|------|------|--------|
-| `cursor_compat` | bool | compatibility | Cursor IDE 内容归一化 + 工具门控 + stream usage 抑制 | `cursor_compat.go`（Type 1a，pre-chain mutation）|
-| `cursor_compat_auto` | bool | compatibility | 通过请求头识别 Cursor，自动启用 cursor_compat | `cursor_compat.go::resolveCursorCompat` |
+| `cursor_compat` | bool | compatibility | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre：pre-Base chain stage）|
+| `cursor_compat_auto` | bool | compatibility | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
 | `skip_usage` | bool | response | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
 | `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b）|
 | `use_max_tokens` | bool | request | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b）|
@@ -131,15 +133,18 @@ func RuleFlagRegistry() []FlagSpec { … }
 ## 5. 五种 flag 注入手法
 
 ```
-Type 1a  Request body, pre-chain mutation
-         在 handler 入口直接 mutate inbound 请求或往 ExtraFields 写
-         hint。例：cursor_compat 在 openai.go 入口写
-         __tb_cursor_compat=true。
+Type 1b-pre  Request body, pre-Base Transform
+         作为 Transform 接口的实现 prepend 到 chain 最前（BaseTransform
+         之前）运行；type-switch 决定是否对 inbound request 形态生效。
+         例：OpenAICursorCompatTransform —— 在 Base 把 OpenAI Chat 转
+         成其他形态之前 flatten 富文本内容。聚合点：
+         `internal/server/rule_flags.go::rulePreBaseTransforms`。
 
-Type 1b  Request body, post-base Transform（推荐）
-         作为 Transform 接口的实现挂在 chain 中，在 BaseTransform 完
-         成协议转换之后运行；type-switch 决定是否对当前 request 形态
-         生效。例：OpenAIMaxTokensRewriteTransform。
+Type 1b-post Request body, post-Base Transform（推荐用于跨协议 rewrite）
+         作为 Transform 接口的实现 append 到 chain 末尾，在 BaseTransform
+         完成协议转换之后运行；type-switch 决定是否对目标 request 形态
+         生效。例：OpenAIMaxTokensRewriteTransform。聚合点：
+         `internal/server/rule_flags.go::ruleExtraTransforms`。
 
 Type 2   Per-request context hint
          handler 把 c.Request 的 ctx 替换成带 hint 的；transport /
@@ -158,18 +163,21 @@ Type 4   Routing-decision input
          ctx。例：openai_endpoint_override。
 ```
 
-任何新 flag 都应归入这五类之一。
+任何新 flag 都应归入这几类之一。pre-Base 和 post-Base Transform 都是同一
+个 `Transform` 接口的实现，区别只在 chain 中的位置：pre 在 BaseTransform
+之前（看见 inbound 形态），post 在之后（看见目标形态）。聚合点
+`rulePreBaseTransforms` / `ruleExtraTransforms` 决定 flag 装哪边。
 
 ---
 
 ## 6. op vs Transform —— Type 1b 内部的分层
 
-Type 1b（post-base Transform）涉及两层抽象，**职责必须分开**：
+Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分开**：
 
 | 层 | 位置 | 职责 | 例子 |
 |----|------|------|------|
-| **op（操作原语）** | `internal/protocol/transform/ops/` | 纯函数。对某个具体 request 类型做无副作用的字段改写。**不感知链路、不感知 rule、不感知 ctx**。 | `ops.ApplyMaxCompletionTokensRewrite(*openai.ChatCompletionNewParams)` |
-| **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。 | `transform.OpenAIMaxTokensRewriteTransform`（接受 `UseMaxCompletionTokens`、`UseMaxTokens` 两个 bool）|
+| **op（操作原语）** | `internal/protocol/transform/ops/` | 纯函数。对某个具体 request 类型做无副作用的字段改写。**不感知链路、不感知 rule、不感知 ctx**。 | `ops.ApplyMaxCompletionTokensRewrite(*openai.ChatCompletionNewParams)`、`ops.ApplyCursorCompatContentNormalization(*openai.ChatCompletionNewParams)` |
+| **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。pre/post 之分由聚合点（`rulePreBaseTransforms` / `ruleExtraTransforms`）决定，与 Transform 实现本身无关。 | `transform.OpenAIMaxTokensRewriteTransform`、`transform.OpenAICursorCompatTransform` |
 | **Transform（链路阶段，server-domain）** | `internal/server/transform_*.go` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）。 | `ThinkingModeTransform`、`MaxTokensTransform`（Anthropic 上限）、`CleanHeaderTransform` |
 
 **为什么必须分两层？**
@@ -178,9 +186,13 @@ Type 1b（post-base Transform）涉及两层抽象，**职责必须分开**：
   Google）。如果在链外直接改 inbound 请求，遇到 "Anthropic inbound →
   OpenAI Chat target" 的路径，改的还是 Anthropic 形态，rewrite 在
   Base 转换之后就丢失。
-- 把 rewrite 包成一个 Transform 并加在 Base **之后**，它看见的是已经
-  转换好的 `*openai.ChatCompletionNewParams`——无论 inbound 是什么形
-  态，目标是 OpenAI Chat 时就能命中。
+- 把 rewrite 包成一个 Transform 并加在 Base **之后**（post-Base），它
+  看见的是已经转换好的 `*openai.ChatCompletionNewParams`——无论 inbound
+  是什么形态，目标是 OpenAI Chat 时就能命中。`max_tokens` 走这条。
+- 反过来，如果 mutation 的语义就是"在 inbound 形态上做归一化"，则放
+  Base **之前**（pre-Base）。`cursor_compat` 走这条：cursor IDE 只发
+  OpenAI Chat，归一化只在 inbound=Chat 时有意义；放 post-Base 反而要
+  对每个目标形态各写一遍 op。
 - op 是纯函数：可以独立单测（含 wire 序列化）、可以被多个 Transform
   复用、可以被多端调用而不被 chain 绑死。
 
@@ -196,34 +208,42 @@ Type 1b（post-base Transform）涉及两层抽象，**职责必须分开**：
 ## 7. 链路 wiring
 
 ```
-handler                         transformXxxx                       chain
-  │                                  │                                │
-  │ flags := resolveRuleFlags(rule)  │                                │
-  │ extras := ruleExtraTransforms(   │                                │
-  │             flags)               │                                │
-  │  (e.g. [OpenAIMaxTokensRewrite]) │                                │
-  ├──────── extras... ──────────────►│                                │
-  │                                  │  chain := BuildTransformChain  │
-  │                                  │           (...)                │
-  │                                  ├──────────────────────────────►│
-  │                                  │  appendExtraTransforms(        │
-  │                                  │      chain, extraTransforms)   │
-  │                                  │  chain.Execute(ctx)            │
-  │                                  ├──────────────────────────────►│
+handler                            transformXxxx                       chain
+  │                                     │                                │
+  │ flags  := resolveRuleFlags(c, rule) │                                │
+  │ preBase:= rulePreBaseTransforms(    │                                │
+  │             flags)                  │                                │
+  │  (e.g. [OpenAICursorCompat])        │                                │
+  │ extras := ruleExtraTransforms(      │                                │
+  │             flags)                  │                                │
+  │  (e.g. [OpenAIMaxTokensRewrite])    │                                │
+  ├──────── preBase, extras... ────────►│                                │
+  │                                     │  chain := BuildTransformChain  │
+  │                                     │           (...)                │
+  │                                     ├──────────────────────────────►│
+  │                                     │  prependPreBaseTransforms(     │
+  │                                     │      chain, preBase)           │
+  │                                     │  appendExtraTransforms(        │
+  │                                     │      chain, extraTransforms)   │
+  │                                     │  chain.Execute(ctx)            │
+  │                                     ├──────────────────────────────►│
 ```
 
 关键约束：
 
 - `BuildTransformChain` 不感知 rule flag。它的输入是 scenario / provider
-  / recording——把哪些 rule-extra Transform 要追加的决策留给 handler。
+  / recording——把哪些 rule Transform 要 prepend / append 的决策留给
+  handler。
 - 所有 4 个 `transformXxxx`（`transformAnthropicV1`、
   `transformAnthropicBeta`、`transformOpenAIChat`、
-  `transformOpenAIResponses`）都接受 variadic
-  `extraTransforms ...transform.Transform`，并用
-  `appendExtraTransforms(chain, extras)` 把它们追加到 chain 末尾。
-- `ruleExtraTransforms(flags typ.RuleFlags) []transform.Transform`
-  （`internal/server/rule_flags.go`）是 rule→Transform 的唯一聚合点。新
-  增 rule-driven Transform 都在这里追加返回值，handler 端不需要再加调用。
+  `transformOpenAIResponses`）都接受一个 `preBaseTransforms []transform.Transform`
+  位置参数 + variadic `extraTransforms ...transform.Transform`，分别用
+  `prependPreBaseTransforms(chain, preBase)` 和
+  `appendExtraTransforms(chain, extras)` 装到 chain 两端。
+- `rulePreBaseTransforms(flags)` 和 `ruleExtraTransforms(flags)`
+  （`internal/server/rule_flags.go`）是 rule→Transform 的两个聚合点。
+  新增 rule-driven Transform 时，按"作用于 inbound 形态" / "作用于目标
+  形态"二选一，往对应聚合点追加 case；handler 端不需要改动。
 
 ---
 
@@ -335,10 +355,7 @@ Extensions Card 操作。
 3. 选定 §5 的注入类型，落地行为：
 
    ┌─────────────────────────────────────────────────────────────┐
-   │ Type 1a (pre-chain 请求 mutation)                            │
-   │   handler 入口直接调 helper，例：cursor_compat              │
-   │                                                              │
-   │ Type 1b (post-base Transform — 推荐)                         │
+   │ Type 1b (Transform — 推荐)                                   │
    │   ① internal/protocol/transform/ops/<xxx>.go：写 op 原语，    │
    │      签名形如 ApplyXxx(*openai.ChatCompletionNewParams) 或    │
    │      其他具体 request 类型。op 必须纯函数、无 rule 感知。     │
@@ -346,10 +363,13 @@ Extensions Card 操作。
    │      构造期接受配置，Apply() 里 type-switch ctx.Request，     │
    │      匹配目标类型时调 op。如需 server-domain 类型才放到       │
    │      internal/server/ 下。                                    │
-   │   ③ internal/server/rule_flags.go::ruleExtraTransforms：     │
-   │      根据 flag 决定是否 append 新 Transform。                 │
+   │   ③ pre-Base / post-Base 二选一：                             │
+   │      • 作用于 inbound 形态（cursor_compat 类）→               │
+   │        internal/server/rule_flags.go::rulePreBaseTransforms   │
+   │      • 作用于目标形态（max_tokens 类）→                       │
+   │        internal/server/rule_flags.go::ruleExtraTransforms     │
    │   ④ handler 端无需改动——4 个 handler 都已调                  │
-   │      ruleExtraTransforms(resolveRuleFlags(rule))...           │
+   │      rulePreBaseTransforms(flags) / ruleExtraTransforms(flags)│
    │                                                              │
    │ Type 2 (context-passed hint)                                 │
    │   ① 在 internal/typ/id.go 加 contextKey + 一对                │
@@ -367,8 +387,11 @@ Extensions Card 操作。
    ├─ op 单元测试 → 与 op 同包 (`internal/protocol/transform/ops/`)
    ├─ Transform 行为测试 → 与 Transform 同包
    │     必备 case：在目标 request 类型上启用 / 在其他类型上 no-op /
-   │              chain 中跟一个 stub BaseTransform，验证 post-base
-   │              形态生效（这是 max_tokens 的回归测试模式）。
+   │              chain 中配合 stub BaseTransform 验证位置正确：
+   │              • post-Base：跟在 stub Base 之后，验证目标形态生效
+   │                （max_tokens 模式）。
+   │              • pre-Base：跟在 stub Base 之前，验证 inbound 形态
+   │                生效（cursor_compat 模式）。
    └─ wire 序列化测试（仅对改字段名的 op 有意义）：marshal 前后断言
        JSON 顶层 key 出现/消失，挡 SDK omitzero tag 失效。
 
@@ -420,11 +443,12 @@ Extensions Card 操作。
 - **UI**：string flag 加独立 enable Switch，让"空"与"未启用"可区分。
 - **UI**：Catalog 加搜索框 / category collapse（flag 数量超过 ~8 个时
   会拥挤）。
-- **后端**：`cursor_compat` 内容归一化目前是 Type 1a（pre-chain，在
-  `openai.go` 入口直接调 `ops.ApplyCursorCompatContentNormalization`）。
-  长期看可以包成 post-base Transform，让 inbound 是 Anthropic 时也能
-  在 Base 转换后正确生效——但与 `max_tokens` 不同，cursor 归一化只对
-  OpenAI 入站才有意义，优先级不高。
+- ~~**后端**：`cursor_compat` 内容归一化目前是 Type 1a（pre-chain）~~。
+  **已完成**：cursor_compat 现在是 Type 1b-pre（pre-Base Transform，
+  `transform.OpenAICursorCompatTransform`），通过
+  `rulePreBaseTransforms` prepend 到 chain 最前；handler 入口的 pre-chain
+  mutation 已移除。Inbound 形态非 OpenAI Chat 时 type-switch 自然 no-op，
+  与 "cursor 归一化只对 OpenAI 入站才有意义" 的设计意图一致。
 - **后端**：`internal/client/openai.go` 通用 OpenAI client 用
   `http.DefaultTransport` 而非 `createSessionBoundTransport`，没有走
   transport pool / session 隔离——独立问题，不在 rule flag 范畴，但

@@ -201,7 +201,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(rule), IncomingAPIResponses)
+		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
 		if routeErr != nil {
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error: ErrorDetail{
@@ -224,7 +224,8 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	}
 
 	// Execute transform chain
-	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, ruleExtraTransforms(resolveRuleFlags(rule))...)
+	ruleFlags := resolveRuleFlags(c, rule)
+	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{

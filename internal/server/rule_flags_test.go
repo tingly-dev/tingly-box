@@ -1,14 +1,27 @@
 package server
 
 import (
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// newGinContext builds a minimal *gin.Context for tests that only need to
+// read request headers (auto-detect path). Header values can be set on the
+// returned request before passing the context into the unit under test.
+func newGinContext(t *testing.T) *gin.Context {
+	t.Helper()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/", nil)
+	return c
+}
+
 func TestResolveRuleFlags_NilRule(t *testing.T) {
-	got := resolveRuleFlags(nil)
+	got := resolveRuleFlags(newGinContext(t), nil)
 	want := typ.RuleFlags{}
 	if got != want {
 		t.Errorf("resolveRuleFlags(nil) = %#v, want zero value %#v", got, want)
@@ -25,12 +38,41 @@ func TestResolveRuleFlags_CopiesFlags(t *testing.T) {
 			UseMaxTokens:           true,
 		},
 	}
-	got := resolveRuleFlags(rule)
+	got := resolveRuleFlags(newGinContext(t), rule)
 	if !got.CursorCompat || !got.SkipUsage || !got.UseMaxCompletionTokens || !got.UseMaxTokens {
 		t.Errorf("bool flags lost: %#v", got)
 	}
 	if got.CustomUserAgent != "MyApp/1.0" {
 		t.Errorf("CustomUserAgent = %q, want %q", got.CustomUserAgent, "MyApp/1.0")
+	}
+}
+
+func TestResolveRuleFlags_AutoDetectFoldedIn(t *testing.T) {
+	rule := &typ.Rule{
+		Flags: typ.RuleFlags{
+			CursorCompat:     false,
+			CursorCompatAuto: true,
+		},
+	}
+	c := newGinContext(t)
+	c.Request.Header.Set("User-Agent", "Cursor/0.42")
+
+	got := resolveRuleFlags(c, rule)
+	if !got.CursorCompat {
+		t.Errorf("expected CursorCompat folded to true via auto-detect, got %#v", got)
+	}
+}
+
+func TestResolveRuleFlags_AutoDetectInactiveWithoutHeader(t *testing.T) {
+	rule := &typ.Rule{
+		Flags: typ.RuleFlags{
+			CursorCompat:     false,
+			CursorCompatAuto: true,
+		},
+	}
+	got := resolveRuleFlags(newGinContext(t), rule)
+	if got.CursorCompat {
+		t.Errorf("expected CursorCompat to stay false without Cursor headers, got %#v", got)
 	}
 }
 
@@ -86,6 +128,36 @@ func TestShouldStripUsage_NonBoolValueIgnored(t *testing.T) {
 	}
 }
 
+func TestRulePreBaseTransforms_NoFlags(t *testing.T) {
+	got := rulePreBaseTransforms(typ.RuleFlags{})
+	if got != nil {
+		t.Errorf("expected nil for zero-value flags, got %d transforms", len(got))
+	}
+}
+
+func TestRulePreBaseTransforms_CursorCompat(t *testing.T) {
+	got := rulePreBaseTransforms(typ.RuleFlags{CursorCompat: true})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 transform, got %d", len(got))
+	}
+	if _, ok := got[0].(*transform.OpenAICursorCompatTransform); !ok {
+		t.Errorf("expected *transform.OpenAICursorCompatTransform, got %T", got[0])
+	}
+}
+
+func TestRulePreBaseTransforms_OtherFlagsAlone_NoTransform(t *testing.T) {
+	// Post-base flags must not surface in the pre-base list.
+	got := rulePreBaseTransforms(typ.RuleFlags{
+		UseMaxCompletionTokens: true,
+		UseMaxTokens:           true,
+		SkipUsage:              true,
+		CustomUserAgent:        "Foo/1.0",
+	})
+	if got != nil {
+		t.Errorf("expected nil, got %d transforms", len(got))
+	}
+}
+
 func TestRuleExtraTransforms_NoFlags(t *testing.T) {
 	got := ruleExtraTransforms(typ.RuleFlags{})
 	if got != nil {
@@ -118,9 +190,11 @@ func TestRuleExtraTransforms_UseMaxTokens(t *testing.T) {
 	}
 }
 
-func TestRuleExtraTransforms_OtherFlagsAlone_NoTransform(t *testing.T) {
-	// Flags that have their own injection paths (UA via context, skip_usage
-	// via Extra) shouldn't surface here.
+func TestRuleExtraTransforms_CursorCompatAlone_NoTransform(t *testing.T) {
+	// CursorCompat is a pre-Base flag — it must not surface in the post-Base
+	// extras list. This is the safety net for the rule-flag-to-transform
+	// migration: if anyone wires cursor_compat into ruleExtraTransforms by
+	// mistake, this test goes red.
 	got := ruleExtraTransforms(typ.RuleFlags{
 		CursorCompat:    true,
 		SkipUsage:       true,
