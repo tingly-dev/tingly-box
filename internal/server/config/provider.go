@@ -22,9 +22,11 @@ type ProviderDeleteHook interface {
 	OnProviderDelete(uuid string)
 }
 
-// migrateProvidersToDB migrates providers from JSON config to database
-// This is a one-time migration that runs on startup if the database is empty
-// Note: Providers are kept in JSON config as backup for now, will be cleared in a future version
+// migrateProvidersToDB migrates providers from JSON config to database.
+// This is a one-time migration that runs on startup if the database is empty.
+// After migration (or if the database is already authoritative), the JSON
+// provider fields are cleared and the config is persisted so subsequent
+// startups load empty JSON provider data.
 func (c *Config) migrateProvidersToDB() error {
 	if c.providerStore == nil {
 		return nil // Provider store not initialized, skip migration
@@ -37,7 +39,12 @@ func (c *Config) migrateProvidersToDB() error {
 	}
 
 	if count > 0 {
-		// Database already has providers, skip migration
+		// Database is authoritative. Clear any stale JSON backup left over
+		// from earlier versions that kept providers in JSON post-migration.
+		if len(c.Providers) > 0 || len(c.ProvidersV1) > 0 {
+			logrus.Infof("Clearing stale provider JSON data (%d v2 / %d v1); database is authoritative", len(c.Providers), len(c.ProvidersV1))
+			return c.clearProviderJSON()
+		}
 		logrus.Debugf("Database already has %d providers, skipping migration", count)
 		return nil
 	}
@@ -47,7 +54,7 @@ func (c *Config) migrateProvidersToDB() error {
 		return nil // No providers to migrate
 	}
 
-	logrus.Infof("Migrating %d providers from JSON config to database (keeping JSON as backup)...", len(c.Providers))
+	logrus.Infof("Migrating %d providers from JSON config to database...", len(c.Providers))
 
 	// Migrate each provider to database
 	for _, provider := range c.Providers {
@@ -57,9 +64,18 @@ func (c *Config) migrateProvidersToDB() error {
 	}
 
 	logrus.Infof("Successfully migrated %d providers to database", len(c.Providers))
-	// Note: We keep c.Providers in JSON config as backup for now
-	// In a future version, we will clear: c.Providers = nil; c.ProvidersV1 = nil; c.Save()
 
+	return c.clearProviderJSON()
+}
+
+// clearProviderJSON drops the legacy JSON-config provider fields and persists
+// the change so the on-disk config no longer carries duplicate provider data.
+func (c *Config) clearProviderJSON() error {
+	c.Providers = nil
+	c.ProvidersV1 = nil
+	if err := c.Save(); err != nil {
+		return fmt.Errorf("failed to save config after clearing provider JSON: %w", err)
+	}
 	return nil
 }
 
