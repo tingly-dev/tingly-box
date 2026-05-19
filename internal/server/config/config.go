@@ -344,23 +344,23 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		updated = true
 	}
 	if cfg.UserToken == "" {
-		// Generate secure random token instead of using default
+		// Always generate a cryptographically secure random token for new installs.
+		// Falling back to a well-known default would defeat the purpose, so fail loudly instead.
 		userToken, err := GenerateUserToken()
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to generate secure user token, using default")
-			cfg.UserToken = constant.DefaultUserToken
-		} else {
-			cfg.UserToken = userToken
-			logrus.Info("=============================================")
-			logrus.Info("Generated new UserToken for control panel:")
-			logrus.Infof("  %s", cfg.UserToken)
-			logrus.Info("Use this token to log in to the web UI at:")
-			logrus.Infof("  http://localhost:%d/login/%s", cfg.ServerPort, cfg.UserToken)
-			logrus.Info("=============================================")
+			return nil, fmt.Errorf("failed to generate secure user token: %w", err)
 		}
+		cfg.UserToken = userToken
+		logrus.Info("=============================================")
+		logrus.Info("Generated new UserToken for control panel:")
+		logrus.Infof("  %s", cfg.UserToken)
+		logrus.Info("Use this token to log in to the web UI at:")
+		logrus.Infof("  http://localhost:%d/login/%s", cfg.ServerPort, cfg.UserToken)
+		logrus.Info("=============================================")
 		updated = true
 	} else if IsDefaultToken(cfg.UserToken) {
-		// Warn if using default token
+		// Legacy config detected: pre-existing install with the well-known default token.
+		// Warn but do not silently rotate, so the operator can re-distribute the new token.
 		logrus.Warn("=============================================")
 		logrus.Warn("SECURITY WARNING: Using default UserToken!")
 		logrus.Warn("Please reset to a secure token via:")
@@ -371,7 +371,7 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	if cfg.ModelToken == "" {
 		modelToken, err := auth.NewJWTManager(cfg.JWTSecret).GenerateToken("tingly-box")
 		if err != nil {
-			cfg.ModelToken = constant.DefaultModelToken
+			return nil, fmt.Errorf("failed to generate secure model token: %w", err)
 		}
 		cfg.ModelToken = modelToken
 		updated = true
@@ -1955,14 +1955,19 @@ func (c *Config) CreateDefaultConfig() error {
 	// Create a default Rule
 	c.Rules = []typ.Rule{}
 	c.DefaultRequestID = 0
-	// Set default auth tokens if not already set
+	// Set default auth tokens if not already set. Always generate secure random
+	// values for new installs — never assign the well-known legacy defaults.
 	if c.UserToken == "" {
-		c.UserToken = constant.DefaultUserToken
+		userToken, err := GenerateUserToken()
+		if err != nil {
+			return fmt.Errorf("failed to generate secure user token: %w", err)
+		}
+		c.UserToken = userToken
 	}
 	if c.ModelToken == "" {
 		modelToken, err := auth.NewJWTManager(c.JWTSecret).GenerateToken("tingly-box")
 		if err != nil {
-			c.ModelToken = constant.DefaultModelToken
+			return fmt.Errorf("failed to generate secure model token: %w", err)
 		}
 		c.ModelToken = "tingly-box-" + modelToken
 	}
