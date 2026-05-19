@@ -2,40 +2,6 @@ package agent
 
 import aiagent "github.com/tingly-dev/tingly-box/ai/agent"
 
-// BuildClaudeCodeEnv constructs environment variables for Claude Code.
-// This function contains the business logic for unified vs separate mode.
-func BuildClaudeCodeEnv(baseURL, apiKey string, unified bool) map[string]string {
-	basePath := baseURL + "/tingly/claude_code"
-
-	env := map[string]string{
-		"DISABLE_TELEMETRY":                        "1",
-		"DISABLE_ERROR_REPORTING":                  "1",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
-		"API_TIMEOUT_MS":                           "3000000",
-		"ANTHROPIC_BASE_URL":                       basePath,
-		"ANTHROPIC_AUTH_TOKEN":                     apiKey,
-	}
-
-	if unified {
-		// Unified mode - all point to same model
-		env["ANTHROPIC_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
-	} else {
-		// Separate mode - different models for different purposes
-		env["ANTHROPIC_MODEL"] = "tingly/cc-default"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc-opus"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc-sonnet"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc-subagent"
-	}
-
-	return env
-}
-
 // BuildClaudeCodeModelConfig constructs the model configuration for Claude Code.
 // This contains the business logic for unified vs separate mode.
 // Exported for use by HTTP handlers.

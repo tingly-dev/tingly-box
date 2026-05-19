@@ -1,6 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
 import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
+import { derivePrefsFromRules } from '@/components/ClaudeCodeQuickConfig';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import TemplatePage from './components/TemplatePage.tsx';
@@ -152,11 +153,15 @@ const UseClaudeCodePageContent: React.FC = () => {
         loadScenarioConfig();
     }, []);
 
-    // Apply handlers returning AgentApplyResult for AgentSetupCard
-    const handleApply = async (): Promise<AgentApplyResult> => {
+    // AgentSetupCard's one-click apply uses the same prefs the modal would
+    // seed: derived from current rules + configMode. Users who want to
+    // customize go through the modal; users who just want the defaults
+    // click here and skip the form entirely.
+    const applyWithDefaultPrefs = async (installStatusLine: boolean): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
-            const result = await api.applyClaudeConfig(configMode, false);
+            const prefs = derivePrefsFromRules({ rules, mode: configMode });
+            const result = await api.applyClaudeConfig(prefs as Record<string, string>, installStatusLine);
             if (result.success) {
                 const files = [...(result.createdFiles || []), ...(result.updatedFiles || [])];
                 return { success: true, files };
@@ -169,21 +174,8 @@ const UseClaudeCodePageContent: React.FC = () => {
         }
     };
 
-    const handleApplyWithStatusLine = async (): Promise<AgentApplyResult> => {
-        try {
-            setIsApplyLoading(true);
-            const result = await api.applyClaudeConfig(configMode, true);
-            if (result.success) {
-                const files = [...(result.createdFiles || []), ...(result.updatedFiles || [])];
-                return { success: true, files };
-            }
-            return { success: false, error: result.message || 'Unknown error' };
-        } catch {
-            return { success: false, error: 'Failed to apply configurations' };
-        } finally {
-            setIsApplyLoading(false);
-        }
-    };
+    const handleApply = () => applyWithDefaultPrefs(false);
+    const handleApplyWithStatusLine = () => applyWithDefaultPrefs(true);
 
     return (
         <PageLayout loading={loadingRule} notification={notification}>
@@ -301,7 +293,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                     onApplyWithPrefs={async (prefs, installStatusLine) => {
                         try {
                             setIsApplyLoading(true);
-                            await api.applyClaudeConfig(configMode, installStatusLine, prefs as Record<string, string>);
+                            await api.applyClaudeConfig(prefs as Record<string, string>, installStatusLine);
                         } finally {
                             setIsApplyLoading(false);
                         }

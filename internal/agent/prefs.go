@@ -68,8 +68,9 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	return env, nil
 }
 
-// DefaultClaudeCodePrefs returns the prefs object that reproduces tb's
-// historical defaults — the same env map BuildClaudeCodeEnv emits.
+// DefaultClaudeCodePrefs returns tb's canonical defaults for the given
+// mode. Used by the CLI harness directly and as the seed value for the
+// GUI quick-config form when no user customization exists yet.
 func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 	p := ClaudeCodePrefs{
 		APITimeoutMs:                         "3000000",

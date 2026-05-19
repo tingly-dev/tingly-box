@@ -444,10 +444,10 @@ func executeClaudeTest(prompt string) (*AgentTestResult, error) {
 
 // executeClaudeWithEnv writes settings.json and runs claude CLI against a pre-configured env.
 //
-// The settings env is built via internalagent.BuildClaudeCodeEnv — the same
-// logic the production `agent apply` flow uses — so the harness exercises the
-// real Claude Code configuration shape (telemetry flags, model routing vars)
-// rather than a hand-rolled minimal subset.
+// The settings env is built via internalagent.DefaultClaudeCodePrefs — the
+// same canonical defaults the GUI quick-config seeds from — so the harness
+// exercises the real Claude Code configuration shape (telemetry flags,
+// model routing vars) rather than a hand-rolled minimal subset.
 func executeClaudeWithEnv(env *protocol_validate.AgentTestEnv, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
@@ -464,8 +464,12 @@ func executeClaudeWithEnv(env *protocol_validate.AgentTestEnv, prompt string) (*
 	settingsPath := filepath.Join(settingsDir, "settings.json")
 	result.SettingsPath = settingsPath
 
+	claudeEnv, err := internalagent.DefaultClaudeCodePrefs(true).ToEnv(env.BaseURL(), env.ModelToken())
+	if err != nil {
+		return nil, fmt.Errorf("build claude env: %w", err)
+	}
 	settings := map[string]interface{}{
-		"env": internalagent.BuildClaudeCodeEnv(env.BaseURL(), env.ModelToken(), true),
+		"env": claudeEnv,
 	}
 	settingsJSON, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {

@@ -252,19 +252,49 @@ func TestClaudeCodePrefs_AllTypedFieldsUseOmitempty(t *testing.T) {
 	}
 }
 
-func TestDefaultClaudeCodePrefs_Unified_MatchesLegacyEnv(t *testing.T) {
-	prefsEnv, err := DefaultClaudeCodePrefs(true).ToEnv("http://localhost:12580", "test-token")
+// Unified default: every model slot points at the same canonical model,
+// plus tb's privacy/timeout opinions.
+func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
+	env, err := DefaultClaudeCodePrefs(true).ToEnv("http://localhost:12580", "test-token")
 	if err != nil {
 		t.Fatalf("ToEnv: %v", err)
 	}
-	legacy := BuildClaudeCodeEnv("http://localhost:12580", "test-token", true)
-	assertEnvMapsEqual(t, legacy, prefsEnv)
+	want := map[string]string{
+		"ANTHROPIC_MODEL":                          "tingly/cc",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "tingly/cc",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "tingly/cc",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "tingly/cc",
+		"CLAUDE_CODE_SUBAGENT_MODEL":               "tingly/cc",
+		"API_TIMEOUT_MS":                           "3000000",
+		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
+		"DISABLE_TELEMETRY":                        "1",
+		"DISABLE_ERROR_REPORTING":                  "1",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
+		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
+	}
+	assertEnvMapsEqual(t, want, env)
 }
 
-func TestDefaultClaudeCodePrefs_Separate_MatchesLegacyEnv(t *testing.T) {
-	prefsEnv, _ := DefaultClaudeCodePrefs(false).ToEnv("http://localhost:12580", "test-token")
-	legacy := BuildClaudeCodeEnv("http://localhost:12580", "test-token", false)
-	assertEnvMapsEqual(t, legacy, prefsEnv)
+// Separate default: each slot gets its own dedicated tingly/cc-* model so
+// users can route different Claude Code workloads to distinct rules.
+func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
+	env, _ := DefaultClaudeCodePrefs(false).ToEnv("http://localhost:12580", "test-token")
+	want := map[string]string{
+		"ANTHROPIC_MODEL":                          "tingly/cc-default",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "tingly/cc-haiku",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL":           "tingly/cc-sonnet",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":             "tingly/cc-opus",
+		"CLAUDE_CODE_SUBAGENT_MODEL":               "tingly/cc-subagent",
+		"API_TIMEOUT_MS":                           "3000000",
+		"CLAUDE_CODE_MAX_OUTPUT_TOKENS":            "32000",
+		"DISABLE_TELEMETRY":                        "1",
+		"DISABLE_ERROR_REPORTING":                  "1",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
+		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
+	}
+	assertEnvMapsEqual(t, want, env)
 }
 
 func TestClaudeCodePrefs_JSONShapeUsesEnvNames(t *testing.T) {
