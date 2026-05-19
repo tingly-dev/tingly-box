@@ -72,6 +72,10 @@ type TokenUsage struct {
 	// (includes both cache creation and cache read operations)
 	CacheInputTokens int `json:"cache_input_tokens,omitempty"`
 
+	// ReasoningTokens is the number of tokens used for internal reasoning
+	// (e.g. o1/o3 reasoning models). These are a subset of OutputTokens.
+	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
+
 	// SystemTokens represents tokens consumed by system-level operations
 	// such as prompt templates, system instructions, or framework overhead
 	SystemTokens int `json:"system_tokens,omitempty"`
@@ -108,6 +112,16 @@ func NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens int) *TokenUs
 		InputTokens:      inputTokens,
 		OutputTokens:     outputTokens,
 		CacheInputTokens: cacheTokens,
+	}
+}
+
+// NewTokenUsageFull creates a TokenUsage with cache and reasoning token counts.
+func NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens int) *TokenUsage {
+	return &TokenUsage{
+		InputTokens:      inputTokens,
+		OutputTokens:     outputTokens,
+		CacheInputTokens: cacheTokens,
+		ReasoningTokens:  reasoningTokens,
 	}
 }
 
