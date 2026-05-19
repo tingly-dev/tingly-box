@@ -2,9 +2,12 @@ package client
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,11 +18,14 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
-	"github.com/tingly-dev/tingly-box/internal/protocol"
-
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// Image generation persistence directory
+const imagePersistDir = ".tingly-image"
 
 // CodexClient wraps OpenAIClient with Codex-specific behaviors.
 // It embeds OpenAIClient to inherit standard OpenAI API functionality,
@@ -92,6 +98,21 @@ func (c *CodexClient) ChatCompletionsNewStreaming(ctx context.Context, req opena
 	return nil
 }
 
+// ResponsesNew creates a new Responses API request.
+// For Codex, this internally uses streaming mode and assembles the result
+// into a non-streaming Response, as required by the ChatGPT backend API.
+func (c *CodexClient) ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error) {
+	// Apply Codex-specific defaults to the request
+	applyCodexDefaultsToParams(&req)
+
+	// Call streaming API
+	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, req)
+	defer stream.Close()
+
+	// Parse streaming response and assemble into non-streaming Response
+	return c.parseResponsesStream(ctx, stream)
+}
+
 // ResponsesNewStreaming creates a new streaming Responses API request with Codex-specific defaults.
 func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion] {
 	// Apply Codex-specific defaults to the request
@@ -103,6 +124,7 @@ func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.R
 // ImagesGenerate creates a new image generation request.
 // For Codex, this transforms the request to use the Responses API with the image_generation tool,
 // as ChatGPT backend API does not support the standard /images/generations endpoint.
+// Generated images and prompts are persisted to .tingly-image/ directory for debugging.
 func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
 	logrus.Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
 
@@ -113,7 +135,15 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
 
 	// Parse streaming response
-	return c.parseImageGenerationStream(ctx, stream)
+	resp, err := c.parseImageGenerationStream(ctx, stream)
+	if err != nil {
+		return nil, err
+	}
+
+	// Persist images and prompts
+	c.persistImageGeneration(req, resp)
+
+	return resp, nil
 }
 
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
@@ -492,6 +522,98 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 	}, nil
 }
 
+// parseImageGenerationStreamNext parses the streaming Responses API response
+// and extracts the generated image data using the ResponsesAssembler.
+//
+// The image data comes through two event types:
+// 1. response.image_generation_call.partial_image - streaming partial image chunks
+// 2. response.output_item.done - final status of the image generation call
+//
+// Supports multiple images via different output indices.
+func (c *CodexClient) parseImageGenerationStreamNext(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
+	defer stream.Close()
+
+	// Use assembler to accumulate streaming events
+	asm := assembler.NewResponsesAssembler()
+
+	for stream.Next() {
+		event := stream.Current()
+		asm.Accumulate(event)
+
+		// Early exit on terminal states
+		if asm.IsFinished() {
+			break
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Get all images from assembler
+	imagesMap := asm.Images()
+	if len(imagesMap) == 0 {
+		return nil, fmt.Errorf("no image data in response")
+	}
+
+	// Build ImagesResponse with all images
+	// Sort by output index to maintain order
+	imageCount := asm.ImageCount()
+	data := make([]openai.Image, 0, imageCount)
+	for idx := 0; idx < imageCount; idx++ {
+		b64JSON := asm.ImageDataAt(idx)
+		if b64JSON == "" {
+			logrus.Warnf("[Codex] Missing image data at index %d", idx)
+			continue
+		}
+		data = append(data, openai.Image{
+			B64JSON: b64JSON,
+		})
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("no valid image data in response")
+	}
+
+	logrus.Infof("[Codex] Successfully extracted %d image(s) via assembler", len(data))
+	return &openai.ImagesResponse{
+		Data: data,
+	}, nil
+}
+
+// parseResponsesStream parses the streaming Responses API response
+// and assembles it into a complete non-streaming Response object using
+// the ResponsesAssembler.
+func (c *CodexClient) parseResponsesStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*responses.Response, error) {
+	defer stream.Close()
+
+	// Use assembler to accumulate streaming events
+	asm := assembler.NewResponsesAssembler()
+
+	for stream.Next() {
+		event := stream.Current()
+		asm.Accumulate(event)
+
+		// Early exit on terminal states
+		if asm.IsFinished() {
+			break
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Get the final response from assembler
+	resp := asm.Finish()
+	if resp == nil {
+		return nil, fmt.Errorf("response assembly failed: status=%s", asm.Status())
+	}
+
+	logrus.Debugf("[Codex] Response assembled via assembler, id: %s, status: %s", resp.ID, asm.Status())
+	return resp, nil
+}
+
 // SetRecordSink sets the record sink for the client.
 // For CodexClient, we delegate to the embedded OpenAIClient.
 func (c *CodexClient) SetRecordSink(sink *obs.Sink) {
@@ -586,4 +708,76 @@ func (c *CodexClient) ProbeResponsesStream(ctx context.Context, model, message s
 
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/responses", true), nil
+}
+
+// persistImageGeneration saves generated images and their prompts to disk.
+// Images are saved as PNG files with base64 data decoded.
+// Prompts are saved as .txt files alongside the images.
+// Files are organized in .tingly-image/ directory by timestamp.
+func (c *CodexClient) persistImageGeneration(req openai.ImageGenerateParams, resp *openai.ImagesResponse) {
+	if resp == nil || len(resp.Data) == 0 {
+		logrus.Warn("[Codex] No image data to persist")
+		return
+	}
+
+	// Create timestamp for this generation
+	timestamp := time.Now().Format("20060102-150405")
+
+	// Create directory: .tingly-image/YYYYMMDD/
+	dateDir := filepath.Join(imagePersistDir, time.Now().Format("20060102"))
+	if err := os.MkdirAll(dateDir, 0755); err != nil {
+		logrus.Errorf("[Codex] Failed to create image directory: %v", err)
+		return
+	}
+
+	// Save each image with its prompt
+	for i, img := range resp.Data {
+		// Generate filename: timestamp-index.png
+		var filename string
+		if i == 0 {
+			filename = fmt.Sprintf("%s.png", timestamp)
+		} else {
+			filename = fmt.Sprintf("%s-%d.png", timestamp, i)
+		}
+		imagePath := filepath.Join(dateDir, filename)
+
+		// Decode base64 and save as PNG
+		imageData, err := base64.StdEncoding.DecodeString(img.B64JSON)
+		if err != nil {
+			logrus.Errorf("[Codex] Failed to decode base64 image data: %v", err)
+			continue
+		}
+
+		if err := os.WriteFile(imagePath, imageData, 0644); err != nil {
+			logrus.Errorf("[Codex] Failed to write image file: %v", err)
+			continue
+		}
+
+		logrus.Infof("[Codex] Saved image to: %s", imagePath)
+
+		// Save prompt as .txt file
+		promptFilename := strings.Replace(filename, ".png", ".txt", 1)
+		promptPath := filepath.Join(dateDir, promptFilename)
+
+		// Build prompt metadata
+		promptContent := fmt.Sprintf("Prompt: %s\n\nModel: %s\nSize: %s\nQuality: %s\nFormat: %s\nTimestamp: %s\n",
+			req.Prompt,
+			req.Model,
+			req.Size,
+			req.Quality,
+			req.ResponseFormat,
+			time.Now().Format(time.RFC3339),
+		)
+
+		if req.Style != "" {
+			promptContent += fmt.Sprintf("Style: %s\n", req.Style)
+		}
+
+		if err := os.WriteFile(promptPath, []byte(promptContent), 0644); err != nil {
+			logrus.Errorf("[Codex] Failed to write prompt file: %v", err)
+			continue
+		}
+
+		logrus.Infof("[Codex] Saved prompt to: %s", promptPath)
+	}
 }

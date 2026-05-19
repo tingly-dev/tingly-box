@@ -96,6 +96,10 @@ func (t *codexRoundTripper) filterField(body []byte) ([]byte, error) {
 
 	bodyStr := string(body)
 
+	// codex require false here
+	bodyStr, _ = sjson.SetRaw(bodyStr, "store", "false")
+	bodyStr, _ = sjson.SetRaw(bodyStr, "stream", "true")
+
 	// Remove unsupported parameters (ignore errors if key doesn't exist)
 	bodyStr, _ = sjson.Delete(bodyStr, "max_tokens")
 	bodyStr, _ = sjson.Delete(bodyStr, "max_completion_tokens")
