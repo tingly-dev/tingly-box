@@ -387,7 +387,7 @@ func TestResponsesAssembler_UnsupportedEvents(t *testing.T) {
 		"response.file_search_call.searching",
 		"response.web_search_call.in_progress",
 		"response.reasoning_text.delta",
-		"response.image_generation_call.in_progress",
+		"response.image_generation_call.generating",
 		"response.mcp_call.in_progress",
 	}
 
@@ -565,5 +565,149 @@ func TestResponsesAssembler_ToolCalls(t *testing.T) {
 
 	if len(toolCalls) != 0 {
 		t.Errorf("expected 0 tool calls, got %d", len(toolCalls))
+	}
+}
+
+// TestResponsesAssembler_ImageGenerationInProgress tests image generation in_progress event
+func TestResponsesAssembler_ImageGenerationInProgress(t *testing.T) {
+	assembler := NewResponsesAssembler()
+
+	event := responses.ResponseStreamEventUnion{
+		Type:   "response.image_generation_call.in_progress",
+		ItemID: "img-123",
+	}
+
+	if !assembler.Accumulate(event) {
+		t.Error("Accumulate returned false for image_generation_call.in_progress")
+	}
+
+	if assembler.ImageCallID() != "img-123" {
+		t.Errorf("expected image call ID 'img-123', got '%s'", assembler.ImageCallID())
+	}
+
+	if !assembler.imageInProgress {
+		t.Error("imageInProgress should be true")
+	}
+}
+
+// TestResponsesAssembler_ImageGenerationPartialImage tests partial image accumulation
+func TestResponsesAssembler_ImageGenerationPartialImage(t *testing.T) {
+	assembler := NewResponsesAssembler()
+
+	// Simulate partial image chunks
+	events := []responses.ResponseStreamEventUnion{
+		{
+			Type:              "response.image_generation_call.partial_image",
+			ItemID:            "img-123",
+			OutputIndex:       0,
+			PartialImageB64:   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
+			PartialImageIndex: 0,
+		},
+		{
+			Type:              "response.image_generation_call.partial_image",
+			ItemID:            "img-123",
+			OutputIndex:       0,
+			PartialImageB64:   "CAYAAAADRsF0YAAAAZElEQVQoz2NgQAUc",
+			PartialImageIndex: 1,
+		},
+	}
+
+	for _, event := range events {
+		if !assembler.Accumulate(event) {
+			t.Error("Accumulate returned false for partial_image event")
+		}
+	}
+
+	expected := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAADRsF0YAAAAZElEQVQoz2NgQAUc"
+	if assembler.ImageData() != expected {
+		t.Errorf("expected image data '%s', got '%s'", expected, assembler.ImageData())
+	}
+
+	if !assembler.HasImage() {
+		t.Error("HasImage should return true")
+	}
+}
+
+// TestResponsesAssembler_ImageGenerationCompleted tests completion event
+func TestResponsesAssembler_ImageGenerationCompleted(t *testing.T) {
+	assembler := NewResponsesAssembler()
+
+	event := responses.ResponseStreamEventUnion{
+		Type: "response.image_generation_call.completed",
+	}
+
+	if !assembler.Accumulate(event) {
+		t.Error("Accumulate returned false for image_generation_call.completed")
+	}
+
+	if assembler.imageInProgress {
+		t.Error("imageInProgress should be false after completed")
+	}
+}
+
+// TestResponsesAssembler_ImageGenerationFullFlow tests complete image generation flow
+func TestResponsesAssembler_ImageGenerationFullFlow(t *testing.T) {
+	assembler := NewResponsesAssembler()
+
+	// Simulate a complete image generation flow
+	events := []responses.ResponseStreamEventUnion{
+		{Type: "response.created", Response: responses.Response{ID: "resp-img-123"}},
+		{Type: "response.in_progress"},
+		{Type: "response.output_item.added", ItemID: "img-123", OutputIndex: 0},
+		{Type: "response.image_generation_call.in_progress", ItemID: "img-123", OutputIndex: 0},
+		{
+			Type:              "response.image_generation_call.partial_image",
+			ItemID:            "img-123",
+			OutputIndex:       0,
+			PartialImageB64:   "base64data1",
+			PartialImageIndex: 0,
+		},
+		{
+			Type:              "response.image_generation_call.partial_image",
+			ItemID:            "img-123",
+			OutputIndex:       0,
+			PartialImageB64:   "base64data2",
+			PartialImageIndex: 1,
+		},
+		{Type: "response.image_generation_call.completed"},
+		{Type: "response.output_item.done"},
+		{Type: "response.completed", Response: responses.Response{
+			ID:     "resp-img-123",
+			Status: "completed",
+			Output: []responses.ResponseOutputItemUnion{},
+		}},
+	}
+
+	for _, event := range events {
+		assembler.Accumulate(event)
+	}
+
+	if assembler.ImageData() != "base64data1base64data2" {
+		t.Errorf("expected concatenated image data, got '%s'", assembler.ImageData())
+	}
+
+	if assembler.ImageCallID() != "img-123" {
+		t.Errorf("expected image call ID 'img-123', got '%s'", assembler.ImageCallID())
+	}
+
+	if !assembler.HasImage() {
+		t.Error("HasImage should return true")
+	}
+}
+
+// TestResponsesAssembler_ImageDataNilSafety tests image data methods with nil assembler
+func TestResponsesAssembler_ImageDataNilSafety(t *testing.T) {
+	var assembler *ResponsesAssembler
+
+	if assembler.ImageData() != "" {
+		t.Error("ImageData should return empty string for nil assembler")
+	}
+
+	if assembler.ImageCallID() != "" {
+		t.Error("ImageCallID should return empty string for nil assembler")
+	}
+
+	if assembler.HasImage() {
+		t.Error("HasImage should return false for nil assembler")
 	}
 }

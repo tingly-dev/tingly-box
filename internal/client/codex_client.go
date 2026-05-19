@@ -437,7 +437,7 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 }
 
 // parseImageGenerationStream parses the streaming Responses API response
-// and extracts the generated image data from the output array.
+// and extracts the generated image data using the ResponsesAssembler.
 //
 // The image data comes through two event types:
 // 1. response.image_generation_call.partial_image - streaming partial image chunks
@@ -445,45 +445,16 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
 	defer stream.Close()
 
-	var b64JSON string
-	var imageCallID string
+	// Use assembler to accumulate streaming events
+	asm := assembler.NewResponsesAssembler()
 
-	// Collect image data from stream events
 	for stream.Next() {
 		event := stream.Current()
+		asm.Accumulate(event)
 
-		switch event.Type {
-		case "response.image_generation_call.partial_image":
-			// Partial image chunks during generation
-			partialEvent := event.AsResponseImageGenerationCallPartialImage()
-			if partialEvent.PartialImageB64 != "" {
-				b64JSON += partialEvent.PartialImageB64
-				imageCallID = partialEvent.ItemID
-				logrus.Debugf("[Codex] Received partial image chunk, item_id: %s, total_size: %d",
-					partialEvent.ItemID, len(b64JSON))
-			}
-
-		case "response.output_item.done":
-			// Final status of output items
-			doneEvent := event.AsResponseOutputItemDone()
-			item := doneEvent.Item
-
-			if item.Type == "image_generation_call" {
-				imageCall := item.AsImageGenerationCall()
-				// Check for image result in the done event
-				// The status can be "generating", "completed", or other values
-				// If we haven't received partial images, use the Result field
-				if b64JSON == "" && imageCall.Result != "" {
-					b64JSON = imageCall.Result
-					imageCallID = imageCall.ID
-					logrus.Debugf("[Codex] Received image result in done event, id: %s, status: %s",
-						imageCall.ID, imageCall.Status)
-				}
-				// Update imageCallID even if we already have data from partial events
-				if imageCallID == "" {
-					imageCallID = imageCall.ID
-				}
-			}
+		// Early exit on terminal states
+		if asm.IsFinished() {
+			break
 		}
 	}
 
@@ -491,11 +462,15 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 		return nil, fmt.Errorf("stream error: %w", err)
 	}
 
+	// Get image data from assembler
+	b64JSON := asm.ImageData()
+	imageCallID := asm.ImageCallID()
+
 	if b64JSON == "" {
 		return nil, fmt.Errorf("no image data in response (image_call_id: %s)", imageCallID)
 	}
 
-	logrus.Infof("[Codex] Successfully extracted image data, id: %s, size: %d bytes", imageCallID, len(b64JSON))
+	logrus.Infof("[Codex] Successfully extracted image data via assembler, id: %s, size: %d bytes", imageCallID, len(b64JSON))
 
 	// Build standard ImagesResponse from extracted data
 	return &openai.ImagesResponse{

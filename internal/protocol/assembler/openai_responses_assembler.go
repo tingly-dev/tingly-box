@@ -9,7 +9,7 @@ import (
 )
 
 // ResponsesAssembler accumulates OpenAI Responses API streaming events.
-// It focuses on core functionality: text accumulation, tool calls, and final response construction.
+// It focuses on core functionality: text accumulation, tool calls, image generation, and final response construction.
 // Inspired by internal/protocol/stream/anthropic_to_openai_responses.go
 type ResponsesAssembler struct {
 	// Final response when completed
@@ -30,6 +30,11 @@ type ResponsesAssembler struct {
 
 	// Tool call tracking
 	pendingToolCalls map[int]*pendingResponseToolCall
+
+	// Image generation tracking
+	imageData       strings.Builder // Accumulated base64 image data
+	imageCallID     string          // ID of the image generation call
+	imageInProgress bool            // True when image generation is in progress
 }
 
 // pendingResponseToolCall tracks a tool call being assembled from stream chunks
@@ -118,7 +123,19 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 		return true
 
 	case "response.output_item.done":
-		// Item is complete
+		// Item is complete - check for image_generation_call result
+		doneItem := event.Item
+		if doneItem.Type == "image_generation_call" {
+			// Extract result from the done event if we haven't received partial images
+			imgCall := doneItem.AsImageGenerationCall()
+			if a.imageData.Len() == 0 && imgCall.Result != "" {
+				a.imageData.WriteString(imgCall.Result)
+			}
+			if a.imageCallID == "" {
+				a.imageCallID = imgCall.ID
+			}
+			a.imageInProgress = false
+		}
 		return true
 
 	// Content part events
@@ -138,6 +155,26 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 
 	case "response.refusal.done":
 		// delta events already accumulated the refusal; nothing extra to append.
+		return true
+
+	// Image generation events
+	case "response.image_generation_call.in_progress":
+		a.imageInProgress = true
+		a.imageCallID = event.ItemID
+		return true
+
+	case "response.image_generation_call.partial_image":
+		// Accumulate base64 image chunks
+		// Note: Access fields directly from the union, not via AsResponseImageGenerationCallPartialImage()
+		// because the event may not have been unmarshaled from JSON
+		a.imageData.WriteString(event.PartialImageB64)
+		if a.imageCallID == "" {
+			a.imageCallID = event.ItemID
+		}
+		return true
+
+	case "response.image_generation_call.completed":
+		a.imageInProgress = false
 		return true
 
 	// Completion events
@@ -169,11 +206,11 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 	// - response.code_interpreter_call.*
 	// - response.file_search_call.*
 	// - response.web_search_call.*
-	// - response.image_generation_call.*
 	// - response.mcp_call.*
 	// - response.reasoning.*
 	// - response.output_text.annotation.added
 	// - response.custom_tool_call_input.delta/done
+	// - response.image_generation_call.generating
 
 	default:
 		// Silently ignore unsupported events
@@ -320,4 +357,27 @@ func (a *ResponsesAssembler) SetResponseID(id string) {
 // SetItemID sets a custom item ID.
 func (a *ResponsesAssembler) SetItemID(id string) {
 	a.itemID = id
+}
+
+// ImageData returns the accumulated base64 image data.
+// Returns empty string if no image data was accumulated.
+func (a *ResponsesAssembler) ImageData() string {
+	if a == nil {
+		return ""
+	}
+	return a.imageData.String()
+}
+
+// ImageCallID returns the image generation call ID.
+// Returns empty string if no image generation was tracked.
+func (a *ResponsesAssembler) ImageCallID() string {
+	if a == nil {
+		return ""
+	}
+	return a.imageCallID
+}
+
+// HasImage returns true if image data was accumulated.
+func (a *ResponsesAssembler) HasImage() bool {
+	return a != nil && a.imageData.Len() > 0
 }
