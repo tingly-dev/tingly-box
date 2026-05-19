@@ -1,4 +1,4 @@
-import { Box, Drawer, IconButton, Popover, Tooltip, Typography, Menu, MenuItem } from '@mui/material';
+import { Box, Drawer, IconButton, Popover, Tooltip, Typography, Menu, MenuItem, Stack } from '@mui/material';
 import { IconMenu, IconDots, IconYinYang, IconSun, IconMoon, IconSunHigh, IconPencil } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,8 +26,15 @@ const Layout = ({ children }: LayoutProps) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
     const [moreMenuAnchorEl, setMoreMenuAnchorEl] = useState<HTMLElement | null>(null);
+    const [zenMenuAnchorEl, setZenMenuAnchorEl] = useState<HTMLElement | null>(null);
     // When a "More" menu item is selected in zen mode, track which activity's sidebar to show
     const [zenMoreActivity, setZenMoreActivity] = useState<string | null>(null);
+
+    const handleZenAgentSelect = (zenPath: string) => {
+        const agent = zenPath.replace('/zen/', '').replace('-', '_');
+        localStorage.setItem('mock-flag-_global-zen', agent);
+        window.location.href = zenPath;
+    };
 
     // Zen mode state
     const { enabled: zenEnabled, agent: zenAgentFromHook, loading: zenLoading, setZenMode } = useZenMode();
@@ -227,18 +234,32 @@ const Layout = ({ children }: LayoutProps) => {
     const zenActivityItems = getZenActivityItems();
 
     const sidebarHeaderAction = activeActivity === 'scenario' ? (
-        <Tooltip title={t('scenarioOverview.editTooltip', { defaultValue: 'Manage visible agents' })} arrow placement="right">
-            <IconButton
-                size="small"
-                onClick={() => navigate('/agent')}
-                sx={{
-                    color: location.pathname === '/agent' ? 'primary.main' : 'text.secondary',
-                    '&:hover': { color: 'primary.main' },
-                }}
-            >
-                <IconPencil size={16} />
-            </IconButton>
-        </Tooltip>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+            <Tooltip title={t('layout.activityBar.zenMode')} arrow placement="bottom">
+                <IconButton
+                    size="small"
+                    onClick={(e) => setZenMenuAnchorEl(e.currentTarget)}
+                    sx={{
+                        color: 'text.secondary',
+                        '&:hover': { color: 'primary.main' },
+                    }}
+                >
+                    <IconYinYang size={16} />
+                </IconButton>
+            </Tooltip>
+            <Tooltip title={t('scenarioOverview.editTooltip', { defaultValue: 'Manage visible agents' })} arrow placement="right">
+                <IconButton
+                    size="small"
+                    onClick={() => navigate('/agent')}
+                    sx={{
+                        color: 'text.secondary',
+                        '&:hover': { color: 'primary.main' },
+                    }}
+                >
+                    <IconPencil size={16} />
+                </IconButton>
+            </Tooltip>
+        </Stack>
     ) : undefined;
 
     const navigationContent = (
@@ -527,6 +548,34 @@ const Layout = ({ children }: LayoutProps) => {
                     >
                         {t('layout.easterEgg')} · {currentVersion}
                     </Popover>
+
+                    {/* Zen Agent Selection Menu */}
+                    <Menu
+                        anchorEl={zenMenuAnchorEl}
+                        open={Boolean(zenMenuAnchorEl)}
+                        onClose={() => setZenMenuAnchorEl(null)}
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                        slotProps={{ paper: { sx: { minWidth: 180, mt: 0.5 } } }}
+                    >
+                        <MenuItem disabled sx={{ opacity: 0.6 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                {t('layout.activityBar.enterZenMode')}
+                            </Typography>
+                        </MenuItem>
+                        <MenuItem onClick={() => handleZenAgentSelect('/zen/claude_code')} sx={{ gap: 1.5 }}>
+                            <Claude size={18} />
+                            <Typography>Claude Code</Typography>
+                        </MenuItem>
+                        <MenuItem onClick={() => handleZenAgentSelect('/zen/codex')} sx={{ gap: 1.5 }}>
+                            <Codex size={18} />
+                            <Typography>Codex</Typography>
+                        </MenuItem>
+                        <MenuItem onClick={() => handleZenAgentSelect('/zen/opencode')} sx={{ gap: 1.5 }}>
+                            <OpenCode size={18} />
+                            <Typography>OpenCode</Typography>
+                        </MenuItem>
+                    </Menu>
                 </>
             )}
         </Box>

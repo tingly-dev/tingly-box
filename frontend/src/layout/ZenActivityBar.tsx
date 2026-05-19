@@ -11,7 +11,6 @@ import React, { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
-import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw, ClaudeDesktop } from '@/components/BrandIcons';
 import {
     activityBarWidth,
     activityContainerPaddingY,
@@ -44,7 +43,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
 }) => {
     const { t, i18n } = useTranslation();
     const { currentVersion } = useAppVersion();
-    const [zenMenuAnchorEl, setZenMenuAnchorEl] = useState<HTMLElement | null>(null);
     const [languageMenuAnchorEl, setLanguageMenuAnchorEl] = useState<HTMLElement | null>(null);
 
     const handleLanguageMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -59,22 +57,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
         i18n.changeLanguage(lng);
         localStorage.setItem('i18nextLng', lng);
         handleLanguageMenuClose();
-    };
-
-    const handleZenMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-        setZenMenuAnchorEl(event.currentTarget);
-    };
-
-    const handleZenMenuClose = () => {
-        setZenMenuAnchorEl(null);
-    };
-
-    const handleZenAgentSelect = (zenPath: string) => {
-        // Set zen mode flag with the selected agent
-        const agent = zenPath.replace('/zen/', '').replace('-', '_');
-        localStorage.setItem('mock-flag-_global-zen', agent);
-        // Reload page to activate zen mode
-        window.location.href = zenPath;
     };
 
     return (
@@ -240,82 +222,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
-                )}
-
-                {/* Zen mode toggle button - only show in normal mode */}
-                {!zenEnabled && (
-                    <>
-                        <Tooltip title={t('layout.activityBar.zenMode')} placement="right" arrow>
-                            <ListItemButton
-                                onClick={handleZenMenuClick}
-                                sx={activityItemSx({
-                                    '&:hover': { bgcolor: 'action.hover' },
-                                })}
-                            >
-                                <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                    <IconYinYang size={22} />
-                                </ListItemIcon>
-                                <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                    {t('common.zen')}
-                                </Typography>
-                            </ListItemButton>
-                        </Tooltip>
-
-                        {/* Zen Agent Selection Menu */}
-                        <Menu
-                            anchorEl={zenMenuAnchorEl}
-                            open={Boolean(zenMenuAnchorEl)}
-                            onClose={handleZenMenuClose}
-                            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-                            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                            slotProps={{
-                                paper: {
-                                    sx: {
-                                        minWidth: 180,
-                                        mt: 1,
-                                    },
-                                },
-                            }}
-                        >
-                            <MenuItem disabled sx={{ opacity: 0.6 }}>
-                                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                    {t('layout.activityBar.enterZenMode')}
-                                </Typography>
-                            </MenuItem>
-                            <MenuItem onClick={() => handleZenAgentSelect('/zen/claude_code')} sx={{ gap: 1.5 }}>
-                                <Claude size={18} />
-                                <Typography>Claude Code</Typography>
-                            </MenuItem>
-                            <MenuItem onClick={() => handleZenAgentSelect('/zen/codex')} sx={{ gap: 1.5 }}>
-                                <Codex size={18} />
-                                <Typography>Codex</Typography>
-                            </MenuItem>
-                            <MenuItem onClick={() => handleZenAgentSelect('/zen/opencode')} sx={{ gap: 1.5 }}>
-                                <OpenCode size={18} />
-                                <Typography>OpenCode</Typography>
-                            </MenuItem>
-                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/xcode')} sx={{ gap: 1.5 }}>*/}
-                            {/*    <Xcode size={18} />*/}
-                            {/*    <Typography>Xcode</Typography>*/}
-                            {/*</MenuItem>*/}
-                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/vscode')} sx={{ gap: 1.5 }}>*/}
-                            {/*    <VSCode size={18} />*/}
-                            {/*    <Typography>VS Code</Typography>*/}
-                            {/*</MenuItem>*/}
-                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/openai')} sx={{ gap: 1.5 }}>*/}
-                            {/*    <OpenAI size={18} />*/}
-                            {/*    <Typography>OpenAI</Typography>*/}
-                            {/*</MenuItem>*/}
-                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/anthropic')} sx={{ gap: 1.5 }}>*/}
-                            {/*    <Anthropic size={18} />*/}
-                            {/*    <Typography>Anthropic</Typography>*/}
-                            {/*</MenuItem>*/}
-                            {/*<MenuItem onClick={() => handleZenAgentSelect('/zen/agent')} sx={{ gap: 1.5 }}>*/}
-                            {/*    <OpenClaw size={18} />*/}
-                            {/*    <Typography>OpenClaw</Typography>*/}
-                            {/*</MenuItem>*/}
-                        </Menu>
-                    </>
                 )}
 
                 {/* More button - only show in zen mode */}
