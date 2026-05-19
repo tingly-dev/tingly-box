@@ -199,6 +199,21 @@ func (am *AppManager) UpdateRule(uuid string, rule typ.Rule) error {
 	return nil
 }
 
+// DeleteRule removes a rule by UUID.
+func (am *AppManager) DeleteRule(uuid string) error {
+	globalConfig := am.appConfig.GetGlobalConfig()
+	if err := globalConfig.DeleteRule(uuid); err != nil {
+		return fmt.Errorf("failed to delete rule: %w", err)
+	}
+	return nil
+}
+
+// GetRuleByUUID returns the rule for the given UUID, or nil if not found.
+func (am *AppManager) GetRuleByUUID(uuid string) *typ.Rule {
+	globalConfig := am.appConfig.GetGlobalConfig()
+	return globalConfig.GetRuleByUUID(uuid)
+}
+
 // ============
 // Configuration Accessors
 // ============

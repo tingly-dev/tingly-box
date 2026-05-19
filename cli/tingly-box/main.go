@@ -36,8 +36,8 @@ type CLI struct {
 	Restart command.RestartCmdKong `kong:"cmd,help='Restart the server'"`
 	Open    command.OpenCmdKong    `kong:"cmd,help='Open web UI'"`
 
-	// Configuration management (unified)
-	Config command.ConfigCmdKong `kong:"cmd,help='Manage configuration (providers, import/export)'"`
+	// Configuration management (unified). Subcommands: provider, rule.
+	Config command.ConfigCmdKong `kong:"cmd,help='Manage configuration (providers, rules)'"`
 
 	// Agent commands
 	Agent command.AgentCmdKong `kong:"cmd,help='Agent configuration'"`
@@ -77,14 +77,21 @@ func main() {
 
 	var cli CLI
 
-	// Parse CLI
-	ctx := kong.Parse(&cli, kong.Vars{
-		"version":   version,
-		"gitCommit": gitCommit,
-		"buildTime": buildTime,
-		"goVersion": goVersion,
-		"platform":  platform,
-	})
+	// Parse CLI. NoExpandSubcommands keeps `--help` showing only the next
+	// level of subcommands rather than walking every leaf — so
+	// `tingly-box --help` lists `config` (not `config provider add` etc.),
+	// and `tingly-box config --help` lists `provider` / `rule` rather than
+	// every finer-grained operation.
+	ctx := kong.Parse(&cli,
+		kong.Vars{
+			"version":   version,
+			"gitCommit": gitCommit,
+			"buildTime": buildTime,
+			"goVersion": goVersion,
+			"platform":  platform,
+		},
+		kong.ConfigureHelp(kong.HelpOptions{NoExpandSubcommands: true}),
+	)
 
 	// Setup verbose logging
 	if cli.Verbose {

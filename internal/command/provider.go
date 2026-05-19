@@ -9,156 +9,15 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// ============== Kong Command Structures ==============
-
-// ProviderCmdKong is the Kong version of provider command with subcommands.
-// The default behavior (no subcommand) is to list providers.
-type ProviderCmdKong struct {
-	List    ProviderListCmdKong    `kong:"cmd,name='list',default='1',hidden,help='List all providers (default)'"`
-	Add     ProviderAddCmdKong     `kong:"cmd,help='Add a new provider'"`
-	Delete  ProviderDeleteCmdKong  `kong:"cmd,help='Delete a provider (interactive)'"`
-	Update  ProviderUpdateCmdKong  `kong:"cmd,help='Update a provider (interactive)'"`
-	Details ProviderDetailsCmdKong `kong:"cmd,help='View provider details'"`
-}
-
-// ProviderListCmdKong lists all providers
-type ProviderListCmdKong struct{}
-
-func (p *ProviderListCmdKong) Run(appManager *AppManager) error {
-	return runProviderList(appManager)
-}
-
-// ProviderAddCmdKong adds a new provider with optional positional args
-type ProviderAddCmdKong struct {
-	Name     string `kong:"arg,optional,help='Provider name'"`
-	BaseURL  string `kong:"arg,optional,help='API base URL'"`
-	Token    string `kong:"arg,optional,help='API token'"`
-	APIStyle string `kong:"arg,optional,help='API style (openai, anthropic)'"`
-}
-
-func (p *ProviderAddCmdKong) Run(appManager *AppManager) error {
-	args := []string{}
-	if p.Name != "" {
-		args = append(args, p.Name)
-	}
-	if p.BaseURL != "" {
-		args = append(args, p.BaseURL)
-	}
-	if p.Token != "" {
-		args = append(args, p.Token)
-	}
-	if p.APIStyle != "" {
-		args = append(args, p.APIStyle)
-	}
-	return runAdd(appManager, args)
-}
-
-// ProviderDeleteCmdKong deletes a provider in interactive mode
-type ProviderDeleteCmdKong struct{}
-
-func (p *ProviderDeleteCmdKong) Run(appManager *AppManager) error {
-	return runProviderDeleteInteractive(appManager, bufio.NewReader(os.Stdin))
-}
-
-// ProviderUpdateCmdKong updates a provider in interactive mode
-type ProviderUpdateCmdKong struct{}
-
-func (p *ProviderUpdateCmdKong) Run(appManager *AppManager) error {
-	return runProviderUpdateInteractive(appManager, bufio.NewReader(os.Stdin))
-}
-
-// ProviderDetailsCmdKong displays provider details. Without a UUID it drops
-// to interactive selection. Names are not unique (UUID is the PK), so the
-// positional argument is the UUID.
-type ProviderDetailsCmdKong struct {
-	UUID string `kong:"arg,optional,help='Provider UUID'"`
-}
-
-func (p *ProviderDetailsCmdKong) Run(appManager *AppManager) error {
-	if p.UUID == "" {
-		return runProviderGetInteractive(appManager, bufio.NewReader(os.Stdin))
-	}
-	return runProviderGet(appManager, p.UUID)
-}
-
-// ============== Business Logic Functions ==============
-
+// APIStyle is re-exported from internal/protocol for the CLI prompts.
 type APIStyle = protocol.APIStyle
-
-// runProviderInteractiveMode runs the interactive provider management interface
-func runProviderInteractiveMode(appManager *AppManager) error {
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		showProviderMenu()
-		fmt.Print("Select an option (1-5, 0 to exit): ")
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				fmt.Println("\n👋 Exiting provider management...")
-				return nil
-			}
-			fmt.Printf("Error reading input: %v\n", err)
-			continue
-		}
-
-		choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
-
-		switch choice {
-		case "1":
-			if err := runProviderAddInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "2":
-			if err := runProviderList(appManager); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "3":
-			if err := runProviderUpdateInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "4":
-			if err := runProviderDeleteInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "5":
-			if err := runProviderGetInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "0":
-			fmt.Println("Exiting provider management...")
-			return nil
-		default:
-			fmt.Println("Invalid choice. Please select 1-5 or 0 to exit.")
-		}
-
-		fmt.Println("\nPress Enter to continue...")
-		_, _ = reader.ReadString('\n')
-	}
-}
-
-// showProviderMenu displays the provider management menu
-func showProviderMenu() {
-	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("Provider Management")
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("1. Add a new provider")
-	fmt.Println("2. List all providers")
-	fmt.Println("3. Update a provider")
-	fmt.Println("4. Delete a provider")
-	fmt.Println("5. View provider details")
-	fmt.Println()
-	fmt.Println("0. Exit")
-	fmt.Println(strings.Repeat("=", 60))
-}
 
 // runProviderList lists all providers
 func runProviderList(appManager *AppManager) error {
 	providers := appManager.ListProviders()
 
 	if len(providers) == 0 {
-		fmt.Println("No providers configured. Use 'config add' to add a provider.")
+		fmt.Println("No providers configured. Use 'config provider add' to add a provider.")
 		return nil
 	}
 
@@ -181,19 +40,12 @@ func runProviderList(appManager *AppManager) error {
 	return nil
 }
 
-// runProviderAddInteractive runs interactive add mode
-func runProviderAddInteractive(appManager *AppManager, reader *bufio.Reader) error {
-	fmt.Println("\nAdd New Provider")
-
-	return runAdd(appManager, []string{})
-}
-
 // runProviderUpdateInteractive runs interactive update mode
 func runProviderUpdateInteractive(appManager *AppManager, reader *bufio.Reader) error {
 	providers := appManager.ListProviders()
 
 	if len(providers) == 0 {
-		fmt.Println("No providers configured. Use 'config add' to add a provider first.")
+		fmt.Println("No providers configured. Use 'config provider add' to add a provider first.")
 		return nil
 	}
 

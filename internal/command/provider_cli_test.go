@@ -91,8 +91,8 @@ func TestRunProviderGetByUUID(t *testing.T) {
 }
 
 // TestRunProviderListDisplaysUUID verifies the list output includes each
-// provider's UUID. Operators need the UUID to pass to `config get` /
-// `provider details`, so hiding it would defeat the lookup-by-UUID design.
+// provider's UUID. Operators need the UUID to pass to `config provider get`,
+// so hiding it would defeat the lookup-by-UUID design.
 func TestRunProviderListDisplaysUUID(t *testing.T) {
 	am := newTestAppManager(t)
 
@@ -193,28 +193,21 @@ func TestRunAddRejectsInvalidAPIStyle(t *testing.T) {
 	}
 }
 
-// TestProviderDetailsCmdKongUsesUUID is a structural assertion: the field
+// TestConfigProviderGetCmdKongUsesUUID is a structural assertion: the field
 // the user supplies on the command line must be named UUID (not Name), so
-// the help text and behavior are consistent with "providers are keyed by
+// the help text and behavior stay consistent with "providers are keyed by
 // UUID". A regression here would silently rename the positional arg back
 // to a name.
-func TestProviderDetailsCmdKongUsesUUID(t *testing.T) {
-	cmd := ProviderDetailsCmdKong{UUID: "abc"}
-	if cmd.UUID != "abc" {
-		t.Errorf("ProviderDetailsCmdKong.UUID round-trip failed: got %q", cmd.UUID)
-	}
-
-	cfg := ConfigGetCmdKong{UUID: "abc"}
+func TestConfigProviderGetCmdKongUsesUUID(t *testing.T) {
+	cfg := ConfigProviderGetCmdKong{UUID: "abc"}
 	if cfg.UUID != "abc" {
-		t.Errorf("ConfigGetCmdKong.UUID round-trip failed: got %q", cfg.UUID)
+		t.Errorf("ConfigProviderGetCmdKong.UUID round-trip failed: got %q", cfg.UUID)
 	}
 }
 
-// TestProviderDetailsCmdKongRunWithUUID verifies the Run method forwards a
-// supplied UUID to runProviderGet (rather than going through interactive
-// mode). We test the happy path; the error path is covered by the helper
-// tests above.
-func TestProviderDetailsCmdKongRunWithUUID(t *testing.T) {
+// TestConfigProviderGetCmdKongRunWithUUID verifies Run forwards a supplied
+// UUID to runProviderGet (rather than dropping into interactive mode).
+func TestConfigProviderGetCmdKongRunWithUUID(t *testing.T) {
 	am := newTestAppManager(t)
 
 	uuid, err := am.AddProvider("p", "https://api.example.com", "tok", protocol.APIStyleOpenAI)
@@ -222,17 +215,10 @@ func TestProviderDetailsCmdKongRunWithUUID(t *testing.T) {
 		t.Fatalf("AddProvider failed: %v", err)
 	}
 
-	cmd := ProviderDetailsCmdKong{UUID: uuid}
-	withSilencedStdout(t, func() {
-		if err := cmd.Run(am); err != nil {
-			t.Errorf("ProviderDetailsCmdKong.Run with valid UUID returned error: %v", err)
-		}
-	})
-
-	cfg := ConfigGetCmdKong{UUID: uuid}
+	cfg := ConfigProviderGetCmdKong{UUID: uuid}
 	withSilencedStdout(t, func() {
 		if err := cfg.Run(am); err != nil {
-			t.Errorf("ConfigGetCmdKong.Run with valid UUID returned error: %v", err)
+			t.Errorf("ConfigProviderGetCmdKong.Run with valid UUID returned error: %v", err)
 		}
 	})
 }
