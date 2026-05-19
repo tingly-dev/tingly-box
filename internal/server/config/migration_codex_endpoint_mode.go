@@ -15,26 +15,6 @@ import (
 //
 // Idempotent: only flips the mode when issuer is Codex and the mode is unset.
 func migrate20260518(c *Config) {
-	if c.hasMigrationCompleted("20260518") {
-		return
-	}
-
-	needsSave := false
-	for _, p := range c.Providers {
-		if p.OAuthDetail == nil {
-			continue
-		}
-		if p.OAuthDetail.GetIssuer() != ai.IssuerCodex {
-			continue
-		}
-		if p.OpenAIEndpointMode == ai.EndpointModeResponses {
-			continue
-		}
-		p.OpenAIEndpointMode = ai.EndpointModeResponses
-		needsSave = true
-		logrus.WithField("provider_uuid", p.UUID).Info("Backfilled openai_endpoint_mode=responses on Codex provider")
-	}
-
 	// Providers live in SQLite (the JSON c.Providers slice is legacy backup).
 	// Backfill the DB-stored ones directly so the resolver sees the right mode.
 	if c.providerStore != nil {
@@ -56,10 +36,5 @@ func migrate20260518(c *Config) {
 		} else {
 			logrus.WithError(err).Warn("Failed to list OAuth providers for openai_endpoint_mode backfill")
 		}
-	}
-
-	c.markMigrationCompleted("20260518")
-	if needsSave {
-		_ = c.Save()
 	}
 }
