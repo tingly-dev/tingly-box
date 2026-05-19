@@ -1,6 +1,8 @@
 package configapply
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 )
 
@@ -82,6 +85,131 @@ func TestApplyClaudeConfig_NoActiveRules(t *testing.T) {
 		strings.Contains(body, "No active Claude Code rules found") ||
 			strings.Contains(body, "No services configured"),
 		"Expected error about no rules or no services")
+}
+
+// Verify the request body shape exposed to the frontend round-trips
+// losslessly. The frontend sends env names as JSON keys under
+// "preferences"; the handler binds them into agent.ClaudeCodePrefs.
+func TestApplyClaudeConfigRequest_JSONShape(t *testing.T) {
+	wire := []byte(`{
+		"mode": "separate",
+		"installStatusLine": true,
+		"preferences": {
+			"ANTHROPIC_MODEL": "tingly/cc-default",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL": "tingly/cc-sonnet[1m]",
+			"API_TIMEOUT_MS": "3000000",
+			"DISABLE_TELEMETRY": "1"
+		}
+	}`)
+
+	var req ApplyClaudeConfigRequest
+	if err := json.Unmarshal(wire, &req); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if req.Mode != "separate" {
+		t.Errorf("Mode = %q, want %q", req.Mode, "separate")
+	}
+	if !req.InstallStatusLine {
+		t.Error("InstallStatusLine = false, want true")
+	}
+	if req.Preferences == nil {
+		t.Fatal("Preferences = nil, want populated")
+	}
+	if req.Preferences.AnthropicModel != "tingly/cc-default" {
+		t.Errorf("AnthropicModel = %q", req.Preferences.AnthropicModel)
+	}
+	if req.Preferences.AnthropicDefaultSonnetModel != "tingly/cc-sonnet[1m]" {
+		t.Errorf("AnthropicDefaultSonnetModel = %q", req.Preferences.AnthropicDefaultSonnetModel)
+	}
+	if req.Preferences.APITimeoutMs != "3000000" {
+		t.Errorf("APITimeoutMs = %q", req.Preferences.APITimeoutMs)
+	}
+	if req.Preferences.DisableTelemetry != "1" {
+		t.Errorf("DisableTelemetry = %q", req.Preferences.DisableTelemetry)
+	}
+}
+
+// A request without preferences is the legacy shape — it must still parse
+// and behave as before (mode/installStatusLine only). This guards against
+// accidentally making preferences required.
+func TestApplyClaudeConfigRequest_LegacyShapeStillParses(t *testing.T) {
+	wire := []byte(`{"mode":"unified","installStatusLine":false}`)
+	var req ApplyClaudeConfigRequest
+	if err := json.Unmarshal(wire, &req); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if req.Mode != "unified" {
+		t.Errorf("Mode = %q", req.Mode)
+	}
+	if req.InstallStatusLine {
+		t.Error("InstallStatusLine should be false")
+	}
+	if req.Preferences != nil {
+		t.Errorf("Preferences = %+v, want nil", req.Preferences)
+	}
+}
+
+// The handler must reach the rule-lookup stage even when the new
+// preferences payload is supplied — i.e. the new request shape doesn't
+// short-circuit binding. With no rules configured, the response is the
+// same NoActiveRules error as the legacy path.
+func TestApplyClaudeConfig_AcceptsPreferencesPayload(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg, err := config.NewConfig(config.WithConfigDir(tmpDir))
+	require.NoError(t, err)
+	handler := NewHandler(cfg, "localhost")
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/apply/claude", handler.ApplyClaudeConfig)
+
+	body, _ := json.Marshal(ApplyClaudeConfigRequest{
+		Mode: "unified",
+		Preferences: &agent.ClaudeCodePrefs{
+			AnthropicModel:   "tingly/cc",
+			APITimeoutMs:     "3000000",
+			DisableTelemetry: "1",
+		},
+	})
+	req, _ := http.NewRequest("POST", "/apply/claude", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d (NoActiveRules), got %d. body: %s",
+			http.StatusBadRequest, w.Code, w.Body.String())
+	}
+	resp := w.Body.String()
+	assert.Contains(t, resp, `"success":false`)
+	assert.True(t,
+		strings.Contains(resp, "No active Claude Code rules found") ||
+			strings.Contains(resp, "No services configured"),
+		"expected NoActiveRules-style error after binding succeeded")
+}
+
+// Malformed JSON should not crash the handler. ShouldBindJSON's error is
+// swallowed in favor of legacy defaults — verify the request still reaches
+// the rule-lookup stage rather than returning a 500.
+func TestApplyClaudeConfig_MalformedBodyDoesNotCrash(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg, err := config.NewConfig(config.WithConfigDir(tmpDir))
+	require.NoError(t, err)
+	handler := NewHandler(cfg, "localhost")
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/apply/claude", handler.ApplyClaudeConfig)
+
+	req, _ := http.NewRequest("POST", "/apply/claude", strings.NewReader("not-json{"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d. body: %s",
+			http.StatusBadRequest, w.Code, w.Body.String())
+	}
 }
 
 func TestApplyOpenCodeConfig_NilConfig(t *testing.T) {
