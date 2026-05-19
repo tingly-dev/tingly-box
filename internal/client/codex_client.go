@@ -442,6 +442,8 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 // The image data comes through two event types:
 // 1. response.image_generation_call.partial_image - streaming partial image chunks
 // 2. response.output_item.done - final status of the image generation call
+//
+// Supports multiple images via different output indices.
 func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
 	defer stream.Close()
 
@@ -462,23 +464,34 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 		return nil, fmt.Errorf("stream error: %w", err)
 	}
 
-	// Get image data from assembler
-	b64JSON := asm.ImageData()
-	imageCallID := asm.ImageCallID()
-
-	if b64JSON == "" {
-		return nil, fmt.Errorf("no image data in response (image_call_id: %s)", imageCallID)
+	// Get all images from assembler
+	imagesMap := asm.Images()
+	if len(imagesMap) == 0 {
+		return nil, fmt.Errorf("no image data in response")
 	}
 
-	logrus.Infof("[Codex] Successfully extracted image data via assembler, id: %s, size: %d bytes", imageCallID, len(b64JSON))
+	// Build ImagesResponse with all images
+	// Sort by output index to maintain order
+	imageCount := asm.ImageCount()
+	data := make([]openai.Image, 0, imageCount)
+	for idx := 0; idx < imageCount; idx++ {
+		b64JSON := asm.ImageDataAt(idx)
+		if b64JSON == "" {
+			logrus.Warnf("[Codex] Missing image data at index %d", idx)
+			continue
+		}
+		data = append(data, openai.Image{
+			B64JSON: b64JSON,
+		})
+	}
 
-	// Build standard ImagesResponse from extracted data
+	if len(data) == 0 {
+		return nil, fmt.Errorf("no valid image data in response")
+	}
+
+	logrus.Infof("[Codex] Successfully extracted %d image(s) via assembler", len(data))
 	return &openai.ImagesResponse{
-		Data: []openai.Image{
-			{
-				B64JSON: b64JSON,
-			},
-		},
+		Data: data,
 	}, nil
 }
 

@@ -573,20 +573,21 @@ func TestResponsesAssembler_ImageGenerationInProgress(t *testing.T) {
 	assembler := NewResponsesAssembler()
 
 	event := responses.ResponseStreamEventUnion{
-		Type:   "response.image_generation_call.in_progress",
-		ItemID: "img-123",
+		Type:        "response.image_generation_call.in_progress",
+		ItemID:      "img-123",
+		OutputIndex: 0,
 	}
 
 	if !assembler.Accumulate(event) {
 		t.Error("Accumulate returned false for image_generation_call.in_progress")
 	}
 
-	if assembler.ImageCallID() != "img-123" {
-		t.Errorf("expected image call ID 'img-123', got '%s'", assembler.ImageCallID())
+	if assembler.ImageCallIDAt(0) != "img-123" {
+		t.Errorf("expected image call ID 'img-123', got '%s'", assembler.ImageCallIDAt(0))
 	}
 
-	if !assembler.imageInProgress {
-		t.Error("imageInProgress should be true")
+	if assembler.ImageCount() != 1 {
+		t.Errorf("expected ImageCount 1, got %d", assembler.ImageCount())
 	}
 }
 
@@ -619,12 +620,16 @@ func TestResponsesAssembler_ImageGenerationPartialImage(t *testing.T) {
 	}
 
 	expected := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAADRsF0YAAAAZElEQVQoz2NgQAUc"
-	if assembler.ImageData() != expected {
-		t.Errorf("expected image data '%s', got '%s'", expected, assembler.ImageData())
+	if assembler.ImageDataAt(0) != expected {
+		t.Errorf("expected image data '%s', got '%s'", expected, assembler.ImageDataAt(0))
 	}
 
 	if !assembler.HasImage() {
 		t.Error("HasImage should return true")
+	}
+
+	if !assembler.HasImageAt(0) {
+		t.Error("HasImageAt(0) should return true")
 	}
 }
 
@@ -633,15 +638,17 @@ func TestResponsesAssembler_ImageGenerationCompleted(t *testing.T) {
 	assembler := NewResponsesAssembler()
 
 	event := responses.ResponseStreamEventUnion{
-		Type: "response.image_generation_call.completed",
+		Type:        "response.image_generation_call.completed",
+		OutputIndex: 0,
 	}
 
 	if !assembler.Accumulate(event) {
 		t.Error("Accumulate returned false for image_generation_call.completed")
 	}
 
-	if assembler.imageInProgress {
-		t.Error("imageInProgress should be false after completed")
+	// After completed, image should still be tracked (if it was added before)
+	if assembler.ImageCount() != 0 {
+		t.Error("ImageCount should be 0 since no image was added")
 	}
 }
 
@@ -682,16 +689,20 @@ func TestResponsesAssembler_ImageGenerationFullFlow(t *testing.T) {
 		assembler.Accumulate(event)
 	}
 
-	if assembler.ImageData() != "base64data1base64data2" {
-		t.Errorf("expected concatenated image data, got '%s'", assembler.ImageData())
+	if assembler.ImageDataAt(0) != "base64data1base64data2" {
+		t.Errorf("expected concatenated image data, got '%s'", assembler.ImageDataAt(0))
 	}
 
-	if assembler.ImageCallID() != "img-123" {
-		t.Errorf("expected image call ID 'img-123', got '%s'", assembler.ImageCallID())
+	if assembler.ImageCallIDAt(0) != "img-123" {
+		t.Errorf("expected image call ID 'img-123', got '%s'", assembler.ImageCallIDAt(0))
 	}
 
 	if !assembler.HasImage() {
 		t.Error("HasImage should return true")
+	}
+
+	if !assembler.HasImageAt(0) {
+		t.Error("HasImageAt(0) should return true")
 	}
 }
 
@@ -699,15 +710,110 @@ func TestResponsesAssembler_ImageGenerationFullFlow(t *testing.T) {
 func TestResponsesAssembler_ImageDataNilSafety(t *testing.T) {
 	var assembler *ResponsesAssembler
 
-	if assembler.ImageData() != "" {
-		t.Error("ImageData should return empty string for nil assembler")
+	if assembler.ImageDataAt(0) != "" {
+		t.Error("ImageDataAt should return empty string for nil assembler")
 	}
 
-	if assembler.ImageCallID() != "" {
-		t.Error("ImageCallID should return empty string for nil assembler")
+	if assembler.ImageCallIDAt(0) != "" {
+		t.Error("ImageCallIDAt should return empty string for nil assembler")
+	}
+
+	if assembler.Images() != nil {
+		t.Error("Images should return nil for nil assembler")
+	}
+
+	if assembler.ImageCallIDs() != nil {
+		t.Error("ImageCallIDs should return nil for nil assembler")
 	}
 
 	if assembler.HasImage() {
 		t.Error("HasImage should return false for nil assembler")
+	}
+
+	if assembler.HasImageAt(0) {
+		t.Error("HasImageAt should return false for nil assembler")
+	}
+
+	if assembler.ImageCount() != 0 {
+		t.Error("ImageCount should return 0 for nil assembler")
+	}
+}
+
+// TestResponsesAssembler_MultipleImages tests multiple image generation
+func TestResponsesAssembler_MultipleImages(t *testing.T) {
+	assembler := NewResponsesAssembler()
+
+	// Simulate multiple images being generated
+	events := []responses.ResponseStreamEventUnion{
+		{Type: "response.created", Response: responses.Response{ID: "resp-multi-123"}},
+		{Type: "response.in_progress"},
+
+		// First image (index 0)
+		{Type: "response.output_item.added", ItemID: "img-0", OutputIndex: 0},
+		{Type: "response.image_generation_call.in_progress", ItemID: "img-0", OutputIndex: 0},
+		{Type: "response.image_generation_call.partial_image", ItemID: "img-0", OutputIndex: 0, PartialImageB64: "image0_part1", PartialImageIndex: 0},
+		{Type: "response.image_generation_call.partial_image", ItemID: "img-0", OutputIndex: 0, PartialImageB64: "image0_part2", PartialImageIndex: 1},
+		{Type: "response.image_generation_call.completed", OutputIndex: 0},
+		{Type: "response.output_item.done", OutputIndex: 0},
+
+		// Second image (index 1)
+		{Type: "response.output_item.added", ItemID: "img-1", OutputIndex: 1},
+		{Type: "response.image_generation_call.in_progress", ItemID: "img-1", OutputIndex: 1},
+		{Type: "response.image_generation_call.partial_image", ItemID: "img-1", OutputIndex: 1, PartialImageB64: "image1_part1", PartialImageIndex: 0},
+		{Type: "response.image_generation_call.partial_image", ItemID: "img-1", OutputIndex: 1, PartialImageB64: "image1_part2", PartialImageIndex: 1},
+		{Type: "response.image_generation_call.completed", OutputIndex: 1},
+		{Type: "response.output_item.done", OutputIndex: 1},
+
+		{Type: "response.completed", Response: responses.Response{
+			ID:     "resp-multi-123",
+			Status: "completed",
+			Output: []responses.ResponseOutputItemUnion{},
+		}},
+	}
+
+	for _, event := range events {
+		assembler.Accumulate(event)
+	}
+
+	if assembler.ImageCount() != 2 {
+		t.Errorf("expected 2 images, got %d", assembler.ImageCount())
+	}
+
+	// Check first image
+	if assembler.ImageDataAt(0) != "image0_part1image0_part2" {
+		t.Errorf("expected 'image0_part1image0_part2' at index 0, got '%s'", assembler.ImageDataAt(0))
+	}
+	if assembler.ImageCallIDAt(0) != "img-0" {
+		t.Errorf("expected call ID 'img-0' at index 0, got '%s'", assembler.ImageCallIDAt(0))
+	}
+
+	// Check second image
+	if assembler.ImageDataAt(1) != "image1_part1image1_part2" {
+		t.Errorf("expected 'image1_part1image1_part2' at index 1, got '%s'", assembler.ImageDataAt(1))
+	}
+	if assembler.ImageCallIDAt(1) != "img-1" {
+		t.Errorf("expected call ID 'img-1' at index 1, got '%s'", assembler.ImageCallIDAt(1))
+	}
+
+	// Check Images() map
+	imagesMap := assembler.Images()
+	if len(imagesMap) != 2 {
+		t.Errorf("expected 2 images in map, got %d", len(imagesMap))
+	}
+
+	// Check ImageCallIDs() map
+	idsMap := assembler.ImageCallIDs()
+	if len(idsMap) != 2 {
+		t.Errorf("expected 2 call IDs in map, got %d", len(idsMap))
+	}
+
+	// Verify first image data at index 0
+	if assembler.ImageDataAt(0) != "image0_part1image0_part2" {
+		t.Errorf("expected 'image0_part1image0_part2' at index 0, got '%s'", assembler.ImageDataAt(0))
+	}
+
+	// Verify first call ID at index 0
+	if assembler.ImageCallIDAt(0) != "img-0" {
+		t.Errorf("expected 'img-0' at index 0, got '%s'", assembler.ImageCallIDAt(0))
 	}
 }
