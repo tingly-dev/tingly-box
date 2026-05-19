@@ -1348,10 +1348,11 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 // newCCProfileRules builds fresh rules for a claude_code profile.
 // unified=true → one rule "cc"; unified=false → five rules (default/haiku/sonnet/opus/subagent).
 // Rules are empty (no services, no smart routing) for users to configure.
-func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Rule {
+// Rule UUIDs follow the deterministic builtin: format so they can be referenced and migrated.
+func newCCProfileRules(profiledScenario typ.RuleScenario, profileID string, unified bool) []typ.Rule {
 	newRule := func(requestModel, description string) typ.Rule {
 		return typ.Rule{
-			UUID:         uuid.New().String(),
+			UUID:         fmt.Sprintf("builtin:claude_code:%s:%s", profileID, requestModel),
 			Scenario:     profiledScenario,
 			RequestModel: requestModel,
 			Description:  description,
@@ -1420,7 +1421,7 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 	// All profile rules start with empty Services/SmartRouting for users to configure.
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, meta.ID)
 	if baseScenario == typ.ScenarioClaudeCode {
-		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario, unified)...)
+		c.Rules = append(c.Rules, newCCProfileRules(profiledScenario, meta.ID, unified)...)
 	}
 
 	return meta, c.Save()

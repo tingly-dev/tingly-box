@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,6 +47,7 @@ func Migrate(c *Config) error {
 	migrate20260513(c) // Add Claude Desktop built-in rules
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
+	migrate20260519(c) // Rewrite claude_code profile rule UUIDs to deterministic builtin: format
 	return nil
 }
 
@@ -528,4 +530,200 @@ func migrate20260513(c *Config) {
 		_ = c.Save()
 		logrus.Info("Migration 2026-05-13 completed: added Claude Desktop built-in rules")
 	}
+}
+
+// migrate20260519 rewrites claude_code profile rule UUIDs to the deterministic
+// builtin: format. For each profile (including orphans whose ProfileMeta is gone):
+//   - 1 rule  → UUID becomes builtin:claude_code:{profileID}:cc (unified)
+//   - ≥2 rules → normalized to exactly 5 rules in fixed order
+//     (default/haiku/sonnet/opus/subagent); extras deleted, missing slots filled.
+func migrate20260519(c *Config) {
+	const baseScenario = string(typ.ScenarioClaudeCode)
+	separateModels := []string{"default", "haiku", "sonnet", "opus", "subagent"}
+
+	// Group rules by profileID, preserving config order.
+	type ruleRef struct {
+		idx int // index into c.Rules
+	}
+	profileOrder := []string{}
+	profileRules := map[string][]ruleRef{}
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		base, profileID := typ.ParseScenarioProfile(rule.Scenario)
+		if string(base) != baseScenario || profileID == "" {
+			continue
+		}
+		if _, seen := profileRules[profileID]; !seen {
+			profileOrder = append(profileOrder, profileID)
+		}
+		profileRules[profileID] = append(profileRules[profileID], ruleRef{idx: i})
+	}
+
+	if len(profileOrder) == 0 {
+		return
+	}
+
+	deleteIdx := map[int]bool{}
+	needsSave := false
+
+	uuidTaken := map[string]int{}
+	for i := range c.Rules {
+		uuidTaken[c.Rules[i].UUID] = i
+	}
+
+	setUUID := func(ruleIdx int, newUUID string) bool {
+		rule := &c.Rules[ruleIdx]
+		if rule.UUID == newUUID {
+			return false
+		}
+		if owner, ok := uuidTaken[newUUID]; ok && owner != ruleIdx {
+			logrus.WithFields(logrus.Fields{
+				"target_uuid":  newUUID,
+				"current_uuid": rule.UUID,
+				"scenario":     rule.Scenario,
+			}).Warn("Migration 2026-05-19: target UUID already taken, skipping rule rename")
+			return false
+		}
+		delete(uuidTaken, rule.UUID)
+		rule.UUID = newUUID
+		uuidTaken[newUUID] = ruleIdx
+		return true
+	}
+
+	rulesAdded := []typ.Rule{}
+
+	for _, profileID := range profileOrder {
+		refs := profileRules[profileID]
+		profiledScenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profileID)
+
+		if len(refs) == 1 {
+			// Unified: 1 rule → cc
+			newUUID := fmt.Sprintf("builtin:claude_code:%s:cc", profileID)
+			rule := &c.Rules[refs[0].idx]
+			if setUUID(refs[0].idx, newUUID) {
+				needsSave = true
+			}
+			if rule.RequestModel != "cc" {
+				rule.RequestModel = "cc"
+				needsSave = true
+			}
+			continue
+		}
+
+		// Separate: normalize to exactly 5 rules in fixed order.
+		// Map existing rules to slots: prefer match by RequestModel, else by position.
+		slot := make([]int, len(separateModels)) // c.Rules index, -1 = empty
+		for i := range slot {
+			slot[i] = -1
+		}
+		used := map[int]bool{}
+
+		// Pass 1: match by RequestModel.
+		for _, ref := range refs {
+			rm := c.Rules[ref.idx].RequestModel
+			for j, model := range separateModels {
+				if slot[j] == -1 && rm == model {
+					slot[j] = ref.idx
+					used[ref.idx] = true
+					break
+				}
+			}
+		}
+		// Pass 2: fill remaining slots with leftover rules in config order.
+		for _, ref := range refs {
+			if used[ref.idx] {
+				continue
+			}
+			placed := false
+			for j := range separateModels {
+				if slot[j] == -1 {
+					slot[j] = ref.idx
+					used[ref.idx] = true
+					placed = true
+					break
+				}
+			}
+			if !placed {
+				// Overflow: delete + warn.
+				deleteIdx[ref.idx] = true
+				logrus.WithFields(logrus.Fields{
+					"profile_id": profileID,
+					"rule_uuid":  c.Rules[ref.idx].UUID,
+					"scenario":   c.Rules[ref.idx].Scenario,
+				}).Warn("Migration 2026-05-19: dropping excess claude_code profile rule")
+				needsSave = true
+			}
+		}
+
+		// Find a service-bearing rule in this profile to seed any newly filled slots.
+		var seedServices []*loadbalance.Service
+		for _, ref := range refs {
+			if len(c.Rules[ref.idx].Services) > 0 {
+				seedServices = c.Rules[ref.idx].Services
+				break
+			}
+		}
+
+		// Apply UUID + RequestModel to filled slots; create new rule for empty slots.
+		for j, model := range separateModels {
+			newUUID := fmt.Sprintf("builtin:claude_code:%s:%s", profileID, model)
+			if slot[j] >= 0 {
+				rule := &c.Rules[slot[j]]
+				if setUUID(slot[j], newUUID) {
+					needsSave = true
+				}
+				if rule.RequestModel != model {
+					rule.RequestModel = model
+					needsSave = true
+				}
+				continue
+			}
+			// Slot empty: synthesize a fresh rule for this model.
+			newRule := typ.Rule{
+				UUID:         newUUID,
+				Scenario:     profiledScenario,
+				RequestModel: model,
+				Description:  fmt.Sprintf("Claude Code profile - %s model", model),
+				LBTactic: typ.Tactic{
+					Type:   loadbalance.TacticAdaptive,
+					Params: typ.DefaultAdaptiveParams(),
+				},
+				Active: true,
+			}
+			if len(seedServices) > 0 {
+				newRule.Services = make([]*loadbalance.Service, len(seedServices))
+				copy(newRule.Services, seedServices)
+			}
+			rulesAdded = append(rulesAdded, newRule)
+			uuidTaken[newUUID] = -1 // reserve; index will be assigned after append
+			logrus.WithFields(logrus.Fields{
+				"profile_id": profileID,
+				"rule_uuid":  newUUID,
+				"model":      model,
+			}).Info("Migration 2026-05-19: filled missing claude_code profile rule slot")
+			needsSave = true
+		}
+	}
+
+	if !needsSave {
+		return
+	}
+
+	// Apply deletions (descending order) and appends.
+	if len(deleteIdx) > 0 {
+		filtered := c.Rules[:0]
+		for i := range c.Rules {
+			if deleteIdx[i] {
+				continue
+			}
+			filtered = append(filtered, c.Rules[i])
+		}
+		c.Rules = filtered
+	}
+	if len(rulesAdded) > 0 {
+		c.Rules = append(c.Rules, rulesAdded...)
+	}
+
+	_ = c.Save()
+	logrus.Info("Migration 2026-05-19 completed: rewrote claude_code profile rule UUIDs to builtin: format")
 }
