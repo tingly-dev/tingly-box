@@ -1,4 +1,5 @@
-import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Link, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, AlertTitle, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Link, Tab, Tabs, Typography } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,7 @@ import { isFullEdition } from '@/utils/edition';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
+import type { AgentApplyResult } from './AgentSetupCard';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -18,8 +20,10 @@ interface ClaudeCodeConfigModalProps {
     rules: any[];
     copyToClipboard: (text: string, label: string) => Promise<void>;
     // Apply the current quick-config prefs. The modal owns prefs state;
-    // this callback is what writes them to ~/.claude/settings.json.
-    onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean) => Promise<void>;
+    // this callback is what writes them to ~/.claude/settings.json. The
+    // returned AgentApplyResult is rendered in-modal so the user sees
+    // which files were touched and where the backup landed.
+    onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean) => Promise<AgentApplyResult>;
     isApplyLoading?: boolean;
 }
 
@@ -35,12 +39,22 @@ const MODAL_TEXT = {
         tabManual: '手动配置',
         previewButton: '预览生成的 env',
         previewTitle: '预览 — 将写入 ~/.claude/settings.json 的 env 段',
+        applySuccess: '配置已写入',
+        applyFailure: '应用失败',
+        createdLabel: '创建',
+        updatedLabel: '更新',
+        backupLabel: '已备份至',
     },
     en: {
         tabQuick: 'Quick config',
         tabManual: 'Manual config',
         previewButton: 'Preview generated env',
         previewTitle: 'Preview — env block written to ~/.claude/settings.json',
+        applySuccess: 'Configuration applied',
+        applyFailure: 'Apply failed',
+        createdLabel: 'Created',
+        updatedLabel: 'Updated',
+        backupLabel: 'Backup saved to',
     },
 } as const;
 
@@ -93,6 +107,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const [claudeJsonTab, setClaudeJsonTab] = React.useState<ScriptTab>('json');
     const [statusLineTab, setStatusLineTab] = React.useState<ScriptTab>('json');
     const [previewOpen, setPreviewOpen] = React.useState(false);
+    const [applyResult, setApplyResult] = React.useState<AgentApplyResult | null>(null);
 
     // Prefs is the single source of truth for both tabs. Re-seed when the
     // modal isn't open so we never clobber the user's unsaved edits.
@@ -102,8 +117,16 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     React.useEffect(() => {
         if (!open) {
             setPrefs(derivePrefsFromRules({ rules, mode: configMode }));
+            setApplyResult(null);
         }
     }, [open, configMode, rules]);
+
+    // Editing prefs after a previous Apply invalidates the success state —
+    // hide the old alert so the user can tell their next Apply hasn't run yet.
+    const setPrefsAndClearResult = React.useCallback((next: ClaudeCodePrefs) => {
+        setPrefs(next);
+        setApplyResult(null);
+    }, []);
 
     const claudeJsonConfig = { hasCompletedOnboarding: true };
 
@@ -222,9 +245,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, []);
 
     const handleApply = async (installStatusLine: boolean) => {
-        if (onApplyWithPrefs) {
-            await onApplyWithPrefs(prefs, installStatusLine);
-        }
+        if (!onApplyWithPrefs) return;
+        const result = await onApplyWithPrefs(prefs, installStatusLine);
+        setApplyResult(result);
     };
 
     const canApply = isFullEdition && !!onApplyWithPrefs;
@@ -260,11 +283,57 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 </DialogTitle>
 
                 <DialogContent sx={{ p: 3 }}>
+                    {applyResult && (
+                        <Alert
+                            severity={applyResult.success ? 'success' : 'error'}
+                            sx={{ mb: 2 }}
+                            action={
+                                <IconButton size="small" onClick={() => setApplyResult(null)} aria-label="dismiss">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            }
+                        >
+                            <AlertTitle sx={{ mb: applyResult.success ? 0.5 : 0 }}>
+                                {applyResult.success ? modalText.applySuccess : modalText.applyFailure}
+                            </AlertTitle>
+                            {applyResult.success ? (
+                                <Box sx={{ fontSize: '0.8rem' }}>
+                                    {(applyResult.createdFiles?.length ?? 0) > 0 && (
+                                        <Box sx={{ mt: 0.5 }}>
+                                            <Typography variant="caption" sx={{ fontWeight: 600 }}>{modalText.createdLabel}:</Typography>
+                                            {applyResult.createdFiles!.map(f => (
+                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', pl: 1 }}>{f}</Typography>
+                                            ))}
+                                        </Box>
+                                    )}
+                                    {(applyResult.updatedFiles?.length ?? 0) > 0 && (
+                                        <Box sx={{ mt: 0.5 }}>
+                                            <Typography variant="caption" sx={{ fontWeight: 600 }}>{modalText.updatedLabel}:</Typography>
+                                            {applyResult.updatedFiles!.map(f => (
+                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', pl: 1 }}>{f}</Typography>
+                                            ))}
+                                        </Box>
+                                    )}
+                                    {(applyResult.backupPaths?.length ?? 0) > 0 && (
+                                        <Box sx={{ mt: 0.5 }}>
+                                            <Typography variant="caption" sx={{ fontWeight: 600 }}>{modalText.backupLabel}:</Typography>
+                                            {applyResult.backupPaths!.map(f => (
+                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', pl: 1, color: 'text.secondary' }}>{f}</Typography>
+                                            ))}
+                                        </Box>
+                                    )}
+                                </Box>
+                            ) : (
+                                <Typography variant="body2">{applyResult.error}</Typography>
+                            )}
+                        </Alert>
+                    )}
+
                     {mainTab === 'quick' && (
                         <ClaudeCodeQuickConfig
                             prefs={prefs}
-                            setPrefs={setPrefs}
-                            onResetDefaults={() => setPrefs(derivePrefsFromRules({ rules, mode: configMode }))}
+                            setPrefs={setPrefsAndClearResult}
+                            onResetDefaults={() => setPrefsAndClearResult(derivePrefsFromRules({ rules, mode: configMode }))}
                         />
                     )}
 

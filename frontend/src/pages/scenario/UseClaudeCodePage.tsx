@@ -153,29 +153,42 @@ const UseClaudeCodePageContent: React.FC = () => {
         loadScenarioConfig();
     }, []);
 
-    // AgentSetupCard's one-click apply uses the same prefs the modal would
-    // seed: derived from current rules + configMode. Users who want to
-    // customize go through the modal; users who just want the defaults
-    // click here and skip the form entirely.
-    const applyWithDefaultPrefs = async (installStatusLine: boolean): Promise<AgentApplyResult> => {
+    // Normalize the backend's ApplyConfigResponse into the AgentApplyResult
+    // shape consumed by both the AgentSetupCard and the modal. The richer
+    // fields (created/updated/backup) let the modal show a detailed alert
+    // while AgentSetupCard keeps using the flat `files` list.
+    const applyPrefs = async (
+        prefs: Record<string, string>,
+        installStatusLine: boolean,
+    ): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
-            const prefs = derivePrefsFromRules({ rules, mode: configMode });
-            const result = await api.applyClaudeConfig(prefs as Record<string, string>, installStatusLine);
-            if (result.success) {
-                const files = [...(result.createdFiles || []), ...(result.updatedFiles || [])];
-                return { success: true, files };
+            const result = await api.applyClaudeConfig(prefs, installStatusLine);
+            if (result?.success) {
+                const created = result.createdFiles || [];
+                const updated = result.updatedFiles || [];
+                return {
+                    success: true,
+                    files: [...created, ...updated],
+                    createdFiles: created,
+                    updatedFiles: updated,
+                    backupPaths: result.backupPaths || [],
+                };
             }
-            return { success: false, error: result.message || 'Unknown error' };
-        } catch {
-            return { success: false, error: 'Failed to apply configurations' };
+            return { success: false, error: result?.message || 'Apply failed' };
+        } catch (e: any) {
+            return { success: false, error: e?.message || 'Failed to apply configurations' };
         } finally {
             setIsApplyLoading(false);
         }
     };
 
-    const handleApply = () => applyWithDefaultPrefs(false);
-    const handleApplyWithStatusLine = () => applyWithDefaultPrefs(true);
+    // AgentSetupCard's one-click apply uses prefs derived from the current
+    // rules + configMode — same defaults the modal would seed with.
+    const handleApply = () =>
+        applyPrefs(derivePrefsFromRules({ rules, mode: configMode }) as Record<string, string>, false);
+    const handleApplyWithStatusLine = () =>
+        applyPrefs(derivePrefsFromRules({ rules, mode: configMode }) as Record<string, string>, true);
 
     return (
         <PageLayout loading={loadingRule} notification={notification}>
@@ -290,14 +303,9 @@ const UseClaudeCodePageContent: React.FC = () => {
                     baseUrl={baseUrl}
                     rules={rules}
                     copyToClipboard={copyToClipboard}
-                    onApplyWithPrefs={async (prefs, installStatusLine) => {
-                        try {
-                            setIsApplyLoading(true);
-                            await api.applyClaudeConfig(prefs as Record<string, string>, installStatusLine);
-                        } finally {
-                            setIsApplyLoading(false);
-                        }
-                    }}
+                    onApplyWithPrefs={(prefs, installStatusLine) =>
+                        applyPrefs(prefs as Record<string, string>, installStatusLine)
+                    }
                     isApplyLoading={isApplyLoading}
                 />
 

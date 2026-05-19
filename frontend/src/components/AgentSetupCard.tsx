@@ -24,6 +24,12 @@ import { api } from '@/services/api';
 export interface AgentApplyResult {
     success: boolean;
     files?: string[];
+    // Optional structured breakdown for callers that want richer feedback
+    // (e.g. the Claude Code modal). Existing consumers can keep using
+    // `files` alone — these are additive and may be undefined.
+    createdFiles?: string[];
+    updatedFiles?: string[];
+    backupPaths?: string[];
     error?: string;
 }
 
