@@ -26,15 +26,22 @@ import (
 // any rule, so there's nothing meaningful for the standard endpoint to
 // resolve against.
 type E2EService struct {
-	config     *config.Config
-	clientPool *client.ClientPool
+	config           *config.Config
+	clientPool       *client.ClientPool
+	loopbackBaseURL  func() string
 }
 
-// NewE2EService constructs a E2EService.
-func NewE2EService(cfg *config.Config, pool *client.ClientPool) *E2EService {
+// NewE2EService constructs a E2EService. loopbackBaseURL is evaluated lazily
+// at each probe (scheme + host + port; e.g. "http://localhost:8080") and
+// must NOT include a trailing slash or any path prefix — the probe service
+// appends "/tingly/{scenario}" or "/virtual/..." itself. Server owns this
+// decision so probe stays agnostic to TLS, bind address, and future
+// transports (unix sockets, etc.).
+func NewE2EService(cfg *config.Config, pool *client.ClientPool, loopbackBaseURL func() string) *E2EService {
 	return &E2EService{
-		config:     cfg,
-		clientPool: pool,
+		config:          cfg,
+		clientPool:      pool,
+		loopbackBaseURL: loopbackBaseURL,
 	}
 }
 
@@ -79,9 +86,9 @@ func (e *E2EService) resolveTargetToProviderModel(ctx context.Context, req *E2ER
 // from this provider will hit the standard pipeline rather than the upstream
 // provider directly.
 func (e *E2EService) resolveLoopbackTarget(scenario, model string, extraHeaders map[string]string, name string) (*typ.Provider, string, error) {
-	port := e.config.GetServerPort()
-	if port == 0 {
-		return nil, "", fmt.Errorf("server port unknown; cannot loopback probe")
+	base, err := e.getLoopbackBaseURL()
+	if err != nil {
+		return nil, "", err
 	}
 
 	endpoint, apiStyle := ScenarioEndpoint(scenario)
@@ -92,9 +99,9 @@ func (e *E2EService) resolveLoopbackTarget(scenario, model string, extraHeaders 
 	var apiBase string
 	switch apiStyle {
 	case protocol.APIStyleAnthropic:
-		apiBase = fmt.Sprintf("http://localhost:%d%s", port, endpoint)
+		apiBase = base + endpoint
 	case protocol.APIStyleOpenAI:
-		apiBase = fmt.Sprintf("http://localhost:%d%s/v1", port, endpoint)
+		apiBase = base + endpoint + "/v1"
 	default:
 		return nil, "", fmt.Errorf("loopback probe unsupported for APIStyle %q", apiStyle)
 	}
@@ -196,9 +203,9 @@ func (e *E2EService) resolveRuleTarget(_ context.Context, req *E2ERequest) (*typ
 // in-process /virtual/ handler. vmodel can't be dialed externally so the
 // probe never goes through /tingly/:scenario.
 func (e *E2EService) resolveVModelLoopbackTarget(provider *typ.Provider, model string) (*typ.Provider, string, error) {
-	port := e.config.GetServerPort()
-	if port == 0 {
-		return nil, "", fmt.Errorf("server port unknown; cannot probe vmodel provider %q", provider.Name)
+	base, err := e.getLoopbackBaseURL()
+	if err != nil {
+		return nil, "", fmt.Errorf("cannot probe vmodel provider %q: %w", provider.Name, err)
 	}
 
 	var path string
@@ -213,11 +220,24 @@ func (e *E2EService) resolveVModelLoopbackTarget(provider *typ.Provider, model s
 
 	return e.resolveProviderConfigTarget(context.Background(), &E2ERequest{
 		Name:     provider.Name,
-		APIBase:  fmt.Sprintf("http://localhost:%d%s", port, path),
+		APIBase:  base + path,
 		APIStyle: string(provider.APIStyle),
 		Token:    e.config.GetModelToken(),
 		Model:    model,
 	})
+}
+
+// getLoopbackBaseURL evaluates the injected getter and validates the result
+// non-empty. Centralized so both loopback paths fail with the same message.
+func (e *E2EService) getLoopbackBaseURL() (string, error) {
+	if e.loopbackBaseURL == nil {
+		return "", fmt.Errorf("loopback base URL not configured")
+	}
+	base := e.loopbackBaseURL()
+	if base == "" {
+		return "", fmt.Errorf("loopback base URL not yet available")
+	}
+	return base, nil
 }
 
 // getClientForProvider returns a Prober for the given provider via the client pool.

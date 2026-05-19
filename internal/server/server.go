@@ -429,8 +429,18 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// E2E probe service handles /api/v2/probe end-to-end. Rule / saved-provider
 	// probes loop back through the standard /tingly/:scenario pipeline so smart
-	// routing and load balancing live in one place on the server side.
-	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool)
+	// routing and load balancing live in one place on the server side. The
+	// loopback base URL is evaluated lazily because the port isn't bound until
+	// lifecycle start, and centralized here so probe stays agnostic to scheme
+	// / bind address.
+	loopbackBaseURL := func() string {
+		port := cfg.GetServerPort()
+		if port == 0 {
+			return ""
+		}
+		return fmt.Sprintf("http://localhost:%d", port)
+	}
+	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool, loopbackBaseURL)
 	server.probeLightweight = probe.NewLightweightService(server.clientPool)
 
 	// Initialize OTel meter setup for token tracking
