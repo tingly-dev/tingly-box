@@ -35,7 +35,7 @@ tasks:
         | jq -r '.data[0].b64_json' \
         | base64 -d > output.png
   
-  codex-image-reponses:
+  codex-image-responses:
     cmds:
       - |
         curl -v http://localhost:12580/tingly/imagegen/responses \
@@ -57,6 +57,18 @@ tasks:
               "output_format": "png"
             }
           ]
+        }'
+        
+  codex-responses-nonstream:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/codex/v1/responses \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "model": "gpt-5.5",
+          "input": [{"role": "user", "content": "what can you do?"}],
+          "store": true
         }'
   
   request-o2a:
