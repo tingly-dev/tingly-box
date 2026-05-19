@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -99,4 +100,64 @@ func collectStopEventIndexes(body string) []int {
 		}
 	}
 	return indexes
+}
+
+// TestSendMessageDelta_NoCacheTokens verifies that cache_read_input_tokens is
+// absent from the usage block when cacheTokens is zero.
+func TestSendMessageDelta_NoCacheTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	state := newStreamState()
+	state.outputTokens = 42
+
+	sendMessageDelta(c, state, "end_turn", recorderFlusher{w})
+
+	body := w.Body.String()
+	require.Contains(t, body, `"output_tokens":42`)
+	require.NotContains(t, body, "cache_read_input_tokens")
+}
+
+// TestSendMessageDelta_WithCacheTokens verifies that cache_read_input_tokens is
+// emitted in the usage block when cacheTokens is non-zero.
+func TestSendMessageDelta_WithCacheTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	state := newStreamState()
+	state.outputTokens = 30
+	state.cacheTokens = 15
+
+	sendMessageDelta(c, state, "end_turn", recorderFlusher{w})
+
+	// Extract the data line from SSE output
+	var usageMap map[string]interface{}
+	for _, line := range strings.Split(w.Body.String(), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		raw := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		var ev map[string]interface{}
+		if err := json.Unmarshal([]byte(raw), &ev); err != nil {
+			continue
+		}
+		if u, ok := ev["usage"].(map[string]interface{}); ok {
+			usageMap = u
+			break
+		}
+	}
+	require.NotNil(t, usageMap, "should have usage in message_delta")
+	assert.Equal(t, float64(30), usageMap["output_tokens"])
+	assert.Equal(t, float64(15), usageMap["cache_read_input_tokens"])
+}
+
+// TestStreamState_ReasoningTokensField verifies the new field exists and is zero by default.
+func TestStreamState_ReasoningTokensField(t *testing.T) {
+	state := newStreamState()
+	assert.Equal(t, int64(0), state.reasoningTokens)
+	state.reasoningTokens = 99
+	assert.Equal(t, int64(99), state.reasoningTokens)
 }

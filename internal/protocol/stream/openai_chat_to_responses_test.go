@@ -256,6 +256,109 @@ func TestSendResponsesCompletedEvent(t *testing.T) {
 	assert.Contains(t, body, `"output_tokens":20`)
 }
 
+// TestSendResponsesCompletedEvent_WithReasoningTokens verifies reasoning_tokens
+// are propagated into the wire response's output_tokens_details.
+func TestSendResponsesCompletedEvent_WithReasoningTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	state := &chatToResponsesState{
+		responseID:       "resp_reasoning",
+		createdAt:        1,
+		textItemID:       "msg_1",
+		accumulatedText:  strings.Builder{},
+		pendingToolCalls: map[int]*pendingToolCallResponse{},
+		inputTokens:      50,
+		outputTokens:     30,
+		cacheTokens:      5,
+		reasoningTokens:  12,
+	}
+
+	sendResponsesCompletedEvent(c, state, "o3-mini", "stop", w)
+
+	body := w.Body.String()
+
+	// Find the response.completed event
+	var completedData map[string]interface{}
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		raw := strings.TrimPrefix(line, "data: ")
+		var ev map[string]interface{}
+		if err := json.Unmarshal([]byte(raw), &ev); err != nil {
+			continue
+		}
+		if ev["type"] == "response.completed" {
+			completedData = ev
+			break
+		}
+	}
+	require.NotNil(t, completedData, "should have response.completed event")
+
+	resp := completedData["response"].(map[string]interface{})
+	usage := resp["usage"].(map[string]interface{})
+	assert.Equal(t, float64(50), usage["input_tokens"])
+	assert.Equal(t, float64(30), usage["output_tokens"])
+	assert.Equal(t, float64(80), usage["total_tokens"])
+
+	inputDetails := usage["input_tokens_details"].(map[string]interface{})
+	assert.Equal(t, float64(5), inputDetails["cached_tokens"])
+
+	outputDetails := usage["output_tokens_details"].(map[string]interface{})
+	assert.Equal(t, float64(12), outputDetails["reasoning_tokens"])
+}
+
+// TestChatStreamUsage_DetailFields verifies that chatCompletionStreamUsage
+// serialises prompt_tokens_details and completion_tokens_details when non-nil.
+func TestChatStreamUsage_DetailFields(t *testing.T) {
+	usage := chatCompletionStreamUsage{
+		PromptTokens:     100,
+		CompletionTokens: 40,
+		TotalTokens:      140,
+		PromptTokensDetails: &chatCompletionStreamPromptTokenDetails{
+			CachedTokens: 20,
+		},
+		CompletionTokensDetails: &chatCompletionStreamOutputTokenDetails{
+			ReasoningTokens: 15,
+		},
+	}
+
+	data, err := json.Marshal(usage)
+	require.NoError(t, err)
+
+	var out map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &out))
+
+	assert.Equal(t, float64(100), out["prompt_tokens"])
+	assert.Equal(t, float64(40), out["completion_tokens"])
+	assert.Equal(t, float64(140), out["total_tokens"])
+
+	pt := out["prompt_tokens_details"].(map[string]interface{})
+	assert.Equal(t, float64(20), pt["cached_tokens"])
+
+	ct := out["completion_tokens_details"].(map[string]interface{})
+	assert.Equal(t, float64(15), ct["reasoning_tokens"])
+}
+
+// TestChatStreamUsage_NilDetails verifies that nil detail fields are omitted from JSON.
+func TestChatStreamUsage_NilDetails(t *testing.T) {
+	usage := chatCompletionStreamUsage{
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		TotalTokens:      15,
+	}
+	data, err := json.Marshal(usage)
+	require.NoError(t, err)
+
+	var out map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &out))
+	assert.NotContains(t, out, "prompt_tokens_details")
+	assert.NotContains(t, out, "completion_tokens_details")
+}
+
 // parseResponsesSSEEvents parses SSE response body into a map of events
 func parseResponsesSSEEvents(t *testing.T, body string) map[string]map[string]interface{} {
 	events := make(map[string]map[string]interface{})

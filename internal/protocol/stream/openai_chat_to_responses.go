@@ -31,6 +31,7 @@ type chatToResponsesState struct {
 	inputTokens      int64
 	outputTokens     int64
 	cacheTokens      int64 // Cached tokens from prompt
+	reasoningTokens  int64 // Reasoning tokens from output
 	hasSentCreated   bool
 }
 
@@ -134,6 +135,11 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			state.cacheTokens = int64(chunk.Usage.PromptTokensDetails.CachedTokens)
 			hasUsage = true
 		}
+		// Track reasoning tokens from completion tokens details if available
+		if chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
+			state.reasoningTokens = int64(chunk.Usage.CompletionTokensDetails.ReasoningTokens)
+			hasUsage = true
+		}
 
 		// Skip empty chunks
 		if len(chunk.Choices) == 0 {
@@ -226,7 +232,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Chat to Responses stream canceled by client")
-			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
 		logrus.Errorf("Chat to Responses stream error: %v", err)
 
@@ -240,7 +246,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 		OpenAIResponsesEvent(c, errorEvent.EventType(), errorEvent)
 
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 	}
 
 	// Some providers end the stream without emitting a final chunk with finish_reason.
@@ -259,7 +265,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		OpenAISSEDone(c)
 	}
 
-	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 }
 
 // sendResponsesCreatedEvent sends the response.created event
@@ -422,7 +428,7 @@ func newResponsesWireResponse(state *chatToResponsesState, status string, output
 				CachedTokens: state.cacheTokens,
 			},
 			OutputTokensDetails: responsesOutputTokensDetailsWire{
-				ReasoningTokens: 0,
+				ReasoningTokens: state.reasoningTokens,
 			},
 		},
 		Model: model,

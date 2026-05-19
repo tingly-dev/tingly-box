@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaiOption "github.com/openai/openai-go/v3/option"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -286,6 +287,150 @@ func TestHandleOpenAIToAnthropicStreamResponse_ClientCanceled(t *testing.T) {
 	assert.Equal(t, 0, usage.OutputTokens)
 }
 
+// fakeResponsesDecoder replays a fixed sequence of JSON events as a Responses API stream.
+type fakeResponsesDecoder struct {
+	events  []string // raw JSON payloads to emit
+	current int      // index of the event returned by Event()
+	next    int      // index of the next event to advance to
+}
+
+func newFakeResponsesDecoder(events []string) *fakeResponsesDecoder {
+	return &fakeResponsesDecoder{events: events, current: -1}
+}
+
+func (f *fakeResponsesDecoder) Next() bool {
+	if f.next >= len(f.events) {
+		return false
+	}
+	f.current = f.next
+	f.next++
+	return true
+}
+
+func (f *fakeResponsesDecoder) Event() openaistream.Event {
+	return openaistream.Event{Data: []byte(f.events[f.current])}
+}
+
+func (f *fakeResponsesDecoder) Close() error { return nil }
+func (f *fakeResponsesDecoder) Err() error   { return nil }
+
+// buildResponsesCompletedJSON builds a minimal response.completed SSE payload
+// with the given token counts.
+func buildResponsesCompletedJSON(t *testing.T, inputTokens, outputTokens, cacheTokens, reasoningTokens int64) string {
+	t.Helper()
+	payload := map[string]interface{}{
+		"type":            "response.completed",
+		"sequence_number": 1,
+		"response": map[string]interface{}{
+			"id":         "resp_test",
+			"object":     "response",
+			"created_at": 1000,
+			"status":     "completed",
+			"output": []interface{}{
+				map[string]interface{}{
+					"id":     "msg_1",
+					"type":   "message",
+					"role":   "assistant",
+					"status": "completed",
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "output_text",
+							"text": "Hello",
+						},
+					},
+				},
+			},
+			"usage": map[string]interface{}{
+				"input_tokens":  inputTokens,
+				"output_tokens": outputTokens,
+				"total_tokens":  inputTokens + outputTokens,
+				"input_tokens_details": map[string]interface{}{
+					"cached_tokens": cacheTokens,
+				},
+				"output_tokens_details": map[string]interface{}{
+					"reasoning_tokens": reasoningTokens,
+				},
+			},
+			"model": "gpt-4o",
+		},
+	}
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+	return string(data)
+}
+
+// TestHandleResponsesToAnthropicV1Stream_UsageTokens verifies that input, output,
+// cache, and reasoning tokens from response.completed are captured and returned.
+func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	decoder := newFakeResponsesDecoder([]string{
+		buildResponsesCompletedJSON(t, 50, 30, 8, 12),
+	})
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+
+	usage, err := HandleResponsesToAnthropicV1Stream(c, stream, "gpt-4o")
+	require.NoError(t, err)
+
+	assert.Equal(t, 50, usage.InputTokens)
+	assert.Equal(t, 30, usage.OutputTokens)
+	assert.Equal(t, 8, usage.CacheInputTokens)
+	assert.Equal(t, 12, usage.ReasoningTokens)
+}
+
+// TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens verifies that
+// cache_read_input_tokens is emitted in the message_delta SSE event.
+func TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	decoder := newFakeResponsesDecoder([]string{
+		buildResponsesCompletedJSON(t, 40, 20, 10, 0),
+	})
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+
+	_, err := HandleResponsesToAnthropicV1Stream(c, stream, "gpt-4o")
+	require.NoError(t, err)
+
+	// Find the message_delta event and verify its usage block
+	events := parseSSEEvents(w.Body.String())
+	msgDelta, ok := events[eventTypeMessageDelta]
+	require.True(t, ok, "should have message_delta event")
+
+	usage := msgDelta["usage"].(map[string]interface{})
+	assert.Equal(t, float64(20), usage["output_tokens"])
+	assert.Equal(t, float64(10), usage["cache_read_input_tokens"])
+}
+
+// TestHandleResponsesToAnthropicV1Stream_ZeroCacheTokens verifies that
+// cache_read_input_tokens is absent from message_delta when cache tokens are zero.
+func TestHandleResponsesToAnthropicV1Stream_ZeroCacheTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	decoder := newFakeResponsesDecoder([]string{
+		buildResponsesCompletedJSON(t, 20, 10, 0, 0),
+	})
+	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
+
+	_, err := HandleResponsesToAnthropicV1Stream(c, stream, "gpt-4o")
+	require.NoError(t, err)
+
+	events := parseSSEEvents(w.Body.String())
+	msgDelta, ok := events[eventTypeMessageDelta]
+	require.True(t, ok, "should have message_delta event")
+
+	usage := msgDelta["usage"].(map[string]interface{})
+	assert.NotContains(t, usage, "cache_read_input_tokens")
+}
+
 // parseSSEEvents parses SSE response body into a map of events
 func parseSSEEvents(body string) map[string]map[string]interface{} {
 	events := make(map[string]map[string]interface{})
@@ -296,10 +441,10 @@ func parseSSEEvents(body string) map[string]map[string]interface{} {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		if strings.HasPrefix(line, "event: ") {
-			currentEventType = strings.TrimSpace(strings.TrimPrefix(line, "event: "))
-		} else if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+		if strings.HasPrefix(line, "event:") {
+			currentEventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		} else if strings.HasPrefix(line, "data:") {
+			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 			if data != "" {
 				// Parse the JSON data
 				var eventData map[string]interface{}

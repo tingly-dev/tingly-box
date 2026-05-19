@@ -26,6 +26,8 @@ type responsesToChatState struct {
 	inputTokens     int64
 	outputTokens    int64
 	cacheTokens     int64
+	reasoningTokens int64
+	totalTokens     int64
 	hasSentCreated  bool
 	hasToolCalls    bool
 	completed       bool
@@ -193,6 +195,12 @@ func HandleResponsesToOpenAIChatStream(
 			state.inputTokens = evt.Response.Usage.InputTokens
 			state.outputTokens = evt.Response.Usage.OutputTokens
 			state.cacheTokens = evt.Response.Usage.InputTokensDetails.CachedTokens
+			state.reasoningTokens = evt.Response.Usage.OutputTokensDetails.ReasoningTokens
+			if evt.Response.Usage.TotalTokens != 0 {
+				state.totalTokens = evt.Response.Usage.TotalTokens
+			} else {
+				state.totalTokens = state.inputTokens + state.outputTokens
+			}
 			flushResponsesToChatCompletedOutput(c, flusher, state, responseModel, evt.Response.Output)
 			finishReason := "stop"
 			if state.hasToolCalls {
@@ -219,10 +227,10 @@ func HandleResponsesToOpenAIChatStream(
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("Responses to Chat stream canceled by client")
-			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 		}
 		logrus.Errorf("Responses to Chat stream error: %v", err)
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 	}
 
 	if !state.completed {
@@ -240,7 +248,7 @@ func HandleResponsesToOpenAIChatStream(
 	c.Writer.Write([]byte("data: [DONE]\n\n"))
 	flusher.Flush()
 
-	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 }
 
 func writeResponsesToChatRoleChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string) {
@@ -327,11 +335,26 @@ func flushResponsesToChatCompletedOutput(c *gin.Context, flusher http.Flusher, s
 func writeResponsesToChatFinalChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, finishReason string, includeUsage bool) {
 	finalChunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{}, &finishReason)
 	if includeUsage {
-		finalChunk.Usage = &chatCompletionStreamUsage{
+		total := state.totalTokens
+		if total == 0 {
+			total = state.inputTokens + state.outputTokens
+		}
+		usage := &chatCompletionStreamUsage{
 			PromptTokens:     state.inputTokens,
 			CompletionTokens: state.outputTokens,
-			TotalTokens:      state.inputTokens + state.outputTokens,
+			TotalTokens:      total,
 		}
+		if state.cacheTokens != 0 {
+			usage.PromptTokensDetails = &chatCompletionStreamPromptTokenDetails{
+				CachedTokens: state.cacheTokens,
+			}
+		}
+		if state.reasoningTokens != 0 {
+			usage.CompletionTokensDetails = &chatCompletionStreamOutputTokenDetails{
+				ReasoningTokens: state.reasoningTokens,
+			}
+		}
+		finalChunk.Usage = usage
 	}
 	writeSSEChunk(c, flusher, finalChunk)
 }

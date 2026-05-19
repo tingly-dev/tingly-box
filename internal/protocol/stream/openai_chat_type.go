@@ -36,9 +36,19 @@ type chatCompletionStreamToolFunction struct {
 }
 
 type chatCompletionStreamUsage struct {
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
-	TotalTokens      int64 `json:"total_tokens"`
+	PromptTokens            int64                                   `json:"prompt_tokens"`
+	CompletionTokens        int64                                   `json:"completion_tokens"`
+	TotalTokens             int64                                   `json:"total_tokens"`
+	PromptTokensDetails     *chatCompletionStreamPromptTokenDetails `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *chatCompletionStreamOutputTokenDetails `json:"completion_tokens_details,omitempty"`
+}
+
+type chatCompletionStreamPromptTokenDetails struct {
+	CachedTokens int64 `json:"cached_tokens"`
+}
+
+type chatCompletionStreamOutputTokenDetails struct {
+	ReasoningTokens int64 `json:"reasoning_tokens"`
 }
 
 type chatCompletionStreamErrorChunk struct {

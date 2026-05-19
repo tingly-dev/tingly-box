@@ -371,7 +371,7 @@ func handleOpenAIToAnthropicBetaStream(
 		return true
 	})
 	if hookErr != nil {
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), hookErr
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), hookErr
 	}
 
 	// Check for stream errors
@@ -379,7 +379,7 @@ func handleOpenAIToAnthropicBetaStream(
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI to Anthropic beta stream canceled by client")
-			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
@@ -391,9 +391,9 @@ func handleOpenAIToAnthropicBetaStream(
 			},
 		}
 		sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 	}
-	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 }
 
 // HandleResponsesToAnthropicBetaStream processes OpenAI Responses API streaming events and converts them to Anthropic beta format.

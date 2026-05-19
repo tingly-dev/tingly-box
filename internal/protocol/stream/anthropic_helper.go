@@ -260,12 +260,17 @@ func sendMessageDelta(c *gin.Context, state *streamState, stopReason string, flu
 		deltaMap[k] = v
 	}
 
+	usageMap := map[string]interface{}{
+		"output_tokens": state.outputTokens,
+	}
+	if state.cacheTokens > 0 {
+		usageMap["cache_read_input_tokens"] = state.cacheTokens
+	}
+
 	event := map[string]interface{}{
 		"type":  eventTypeMessageDelta,
 		"delta": deltaMap,
-		"usage": map[string]interface{}{
-			"output_tokens": state.outputTokens,
-		},
+		"usage": usageMap,
 	}
 	sendAnthropicStreamEvent(c, eventTypeMessageDelta, event, flusher)
 }

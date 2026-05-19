@@ -390,7 +390,7 @@ func handleOpenAIToAnthropicStreamResponse(
 		return true
 	})
 	if hookErr != nil {
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), hookErr
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), hookErr
 	}
 
 	// Check for stream errors
@@ -398,7 +398,7 @@ func handleOpenAIToAnthropicStreamResponse(
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
 			logrus.Debug("OpenAI to Anthropic stream canceled by client")
-			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
 		logrus.Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
@@ -410,12 +410,12 @@ func handleOpenAIToAnthropicStreamResponse(
 			},
 		}
 		sendAnthropicStreamEvent(c, "error", errorEvent, flusher)
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 	}
 	if errors.Is(c.Request.Context().Err(), context.Canceled) {
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), context.Canceled
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), context.Canceled
 	}
-	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 }
 
 // HandleResponsesToAnthropicV1Stream processes OpenAI Responses API streaming events and converts them to Anthropic v1 format.
@@ -770,6 +770,8 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			completed := currentEvent.AsResponseCompleted()
 			state.inputTokens = completed.Response.Usage.InputTokens
 			state.outputTokens = completed.Response.Usage.OutputTokens
+			state.cacheTokens = completed.Response.Usage.InputTokensDetails.CachedTokens
+			state.reasoningTokens = completed.Response.Usage.OutputTokensDetails.ReasoningTokens
 
 			logrus.Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
 
@@ -843,7 +845,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
 
 			logrus.Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
-			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 
 		case "response.output_text.annotation.added":
 			annotationAdded := currentEvent.AsResponseOutputTextAnnotationAdded()
@@ -978,7 +980,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				},
 			}
 			senders.SendErrorEvent(errorEvent, flusher)
-			return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), fmt.Errorf("Responses API error: %v", currentEvent)
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), fmt.Errorf("Responses API error: %v", currentEvent)
 
 		default:
 			logrus.Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
@@ -996,10 +998,10 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			},
 		}
 		senders.SendErrorEvent(errorEvent, flusher)
-		return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), err
+		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 	}
 
-	return protocol.NewTokenUsageWithCache(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens)), nil
+	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 }
 
 func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {

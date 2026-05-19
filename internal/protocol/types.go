@@ -32,5 +32,6 @@ const (
 var (
 	NewTokenUsage          = publicprotocol.NewTokenUsage
 	NewTokenUsageWithCache = publicprotocol.NewTokenUsageWithCache
+	NewTokenUsageFull      = publicprotocol.NewTokenUsageFull
 	ZeroTokenUsage         = publicprotocol.ZeroTokenUsage
 )
