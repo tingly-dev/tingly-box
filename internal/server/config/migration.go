@@ -655,15 +655,6 @@ func migrate20260519(c *Config) {
 			}
 		}
 
-		// Find a service-bearing rule in this profile to seed any newly filled slots.
-		var seedServices []*loadbalance.Service
-		for _, ref := range refs {
-			if len(c.Rules[ref.idx].Services) > 0 {
-				seedServices = c.Rules[ref.idx].Services
-				break
-			}
-		}
-
 		// Apply UUID + RequestModel to filled slots; create new rule for empty slots.
 		for j, model := range separateModels {
 			newUUID := fmt.Sprintf("builtin:claude_code:%s:%s", profileID, model)
@@ -678,7 +669,8 @@ func migrate20260519(c *Config) {
 				}
 				continue
 			}
-			// Slot empty: synthesize a fresh rule for this model.
+			// Slot empty: synthesize a fresh empty rule for this model
+			// (services intentionally left nil — user configures them).
 			newRule := typ.Rule{
 				UUID:         newUUID,
 				Scenario:     profiledScenario,
@@ -690,12 +682,8 @@ func migrate20260519(c *Config) {
 				},
 				Active: true,
 			}
-			if len(seedServices) > 0 {
-				newRule.Services = make([]*loadbalance.Service, len(seedServices))
-				copy(newRule.Services, seedServices)
-			}
 			rulesAdded = append(rulesAdded, newRule)
-			uuidTaken[newUUID] = -1 // reserve; index will be assigned after append
+			uuidTaken[newUUID] = -1 // reserve; index assigned after append
 			logrus.WithFields(logrus.Fields{
 				"profile_id": profileID,
 				"rule_uuid":  newUUID,
