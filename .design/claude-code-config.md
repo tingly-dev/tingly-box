@@ -165,7 +165,131 @@ real auth token. Reused by the Manual tab.
 
 ---
 
-## 5. i18n strategy
+## 5. Rule ↔ model slot mapping
+
+The form has 5 model slots; the backend has 6 well-known built-in rules.
+The mapping between them is a **UUID convention** baked into both sides,
+not runtime discovery.
+
+### 5.1 The well-known UUIDs
+
+`internal/server/config/init.go` seeds these rules on first boot.
+`migration.go` keeps them as exported constants (`RuleUUIDBuiltinCC*`):
+
+| Rule UUID | Initial `request_model` | Maps to env slot |
+|---|---|---|
+| `built-in-cc` | `tingly/cc` | (unified mode — all 5 slots) |
+| `built-in-cc-default` | `tingly/cc-default` | `ANTHROPIC_MODEL` |
+| `built-in-cc-haiku` | `tingly/cc-haiku` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
+| `built-in-cc-sonnet` | `tingly/cc-sonnet` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
+| `built-in-cc-opus` | `tingly/cc-opus` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
+| `built-in-cc-subagent` | `tingly/cc-subagent` | `CLAUDE_CODE_SUBAGENT_MODEL` |
+
+Users can edit each rule's `request_model` from the rules table on the
+page. The Quick Config seeds its form values from whatever is currently
+in those rules, not from a hardcoded list — so the form always reflects
+the actual route topology.
+
+### 5.2 Mode-aware rule loading (page side)
+
+`UseClaudeCodePage.tsx` fetches a different slice of rules depending on
+`configMode`:
+
+```ts
+if (configMode === 'unified') {
+    // Just the one rule
+    const result = await api.getRule("built-in-cc");
+    setRules([result.data]);
+} else {
+    // All Claude Code rules except the unified-only one
+    const result = await api.getRules(SCENARIO);
+    setRules(result.data.filter(r => r.uuid !== 'built-in-cc'));
+}
+```
+
+The `rules` array handed to the modal is therefore pre-filtered. The
+modal does not re-filter by mode — it just sees "the rules for this
+mode".
+
+### 5.3 UUID-suffix lookup (modal side)
+
+`derivePrefsFromRules` in `ClaudeCodeQuickConfig.tsx` uses the UUIDs as
+keys:
+
+```ts
+const modelForVariant = (variant, fallback) => {
+    if (mode === 'unified') return rules[0]?.request_model || fallback;
+    const rule = rules.find(r => r.uuid === `built-in-cc-${variant}`);
+    return rule?.request_model || fallback;
+};
+```
+
+- **unified**: `rules[0]` is the single `built-in-cc` rule; its
+  `request_model` populates all 5 slots.
+- **separate**: each of the 5 variants (`default` / `haiku` / `sonnet` /
+  `opus` / `subagent`) does a UUID-exact `find` against
+  `built-in-cc-<variant>`.
+
+If a rule is missing (e.g. user deleted it manually), the slot falls back
+to the tb-canonical default string. Form remains usable.
+
+### 5.4 The closing loop: `request_model` is the routing key
+
+The same string that lives on the rule **is also the value Claude Code
+sends in API requests**:
+
+```
+backend rule:                          frontend env:
+  built-in-cc-haiku                      ANTHROPIC_DEFAULT_HAIKU_MODEL=tingly/cc-haiku
+    request_model = "tingly/cc-haiku"  →
+    services      = [haiku-3-5]
+                                       Claude Code sends:
+                                         { model: "tingly/cc-haiku", ... }
+
+                                       tb receives, looks up by
+                                       (scenario, request_model) →
+                                       finds built-in-cc-haiku →
+                                       routes to its services
+```
+
+The env string is the rule's primary key for routing. That's why the
+form's "model slot" input is, semantically, the routing key — not a
+display label.
+
+### 5.5 Intentional decoupling: Quick Config edits env, not rules
+
+Typing a different model in a Quick Config slot only changes the env
+written to `settings.json`. It does **not** mutate the corresponding
+rule. The consequence:
+
+- If the user types `claude-3-5-sonnet-20241022` into the Sonnet slot,
+  Claude Code will send that string as the model. tb has no rule with
+  `request_model = "claude-3-5-sonnet-20241022"` under the `claude_code`
+  scenario, so the request 404s (or falls through to a configured
+  default, depending on the routing logic).
+- To make it actually route, the user must also edit the rule's
+  `request_model` from the rules table on the page.
+
+We kept this decoupling on purpose. It lets advanced users bypass tb's
+own routing layer entirely — for example, configuring Claude Code to
+target a model name routed by a different gateway on the same proxy
+URL — without forcing the form to surface concepts ("rule", "service",
+"provider") that are normally hidden one level below.
+
+### 5.6 Profiles (out of scope for the form)
+
+The profile system at `/agent/claude_code/profile/:profileId` uses
+scenario string `claude_code:<profileId>` and its **own** set of rules
+(short names like `default`/`haiku` instead of `tingly/cc-*`). Profile
+launches go through `tingly-box cc --profile <id>`, which has a separate
+env-generation path in `internal/command/cc_command.go:generateCCEnv`.
+The Quick Config modal is intentionally only mounted on the default
+(non-profile) page; profile env is materialized by the CLI subcommand at
+launch time, not written to global `~/.claude/settings.json`.
+
+---
+
+## 6. i18n strategy
 
 Field labels, purposes, tooltips, section headers, and modal copy are
 **dense developer-facing text that will keep churning** as we tune the
@@ -184,7 +308,7 @@ explanations, etc.).
 
 ---
 
-## 6. Adding a new tunable env — recipe
+## 7. Adding a new tunable env — recipe
 
 1. **Backend** — add a field to `ClaudeCodePrefs` (`internal/agent/prefs.go`)
    with a JSON tag set to the exact env var name, plus `,omitempty`. If
@@ -212,7 +336,7 @@ tb.
 
 ---
 
-## 7. What got dropped
+## 8. What got dropped
 
 The original API supported two request shapes:
 
@@ -233,7 +357,7 @@ defaults.
 
 ---
 
-## 8. Test coverage
+## 9. Test coverage
 
 | File | Covers |
 |---|---|
