@@ -30,9 +30,7 @@ type closeNotifyRecorder struct {
 }
 
 func (r *closeNotifyRecorder) CloseNotify() <-chan bool {
-	ch := make(chan bool)
-	close(ch)
-	return ch
+	return make(chan bool) // never closed — client stays connected for the duration of the test
 }
 
 // TestHandleOpenAIToAnthropicStreamResponse tests the OpenAI to Anthropic stream conversion

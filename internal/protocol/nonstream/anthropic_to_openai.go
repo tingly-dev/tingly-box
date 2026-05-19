@@ -73,6 +73,17 @@ func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, resp
 		finishReason = "length"
 	}
 
+	usage := map[string]interface{}{
+		"prompt_tokens":     anthropicResp.Usage.InputTokens,
+		"completion_tokens": anthropicResp.Usage.OutputTokens,
+		"total_tokens":      anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens,
+	}
+	if anthropicResp.Usage.CacheReadInputTokens > 0 {
+		usage["prompt_tokens_details"] = map[string]interface{}{
+			"cached_tokens": anthropicResp.Usage.CacheReadInputTokens,
+		}
+	}
+
 	response := map[string]interface{}{
 		"id":      anthropicResp.ID,
 		"object":  "chat.completion",
@@ -85,11 +96,7 @@ func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, resp
 				"finish_reason": finishReason,
 			},
 		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     anthropicResp.Usage.InputTokens,
-			"completion_tokens": anthropicResp.Usage.OutputTokens,
-			"total_tokens":      anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens,
-		},
+		"usage": usage,
 	}
 
 	return response

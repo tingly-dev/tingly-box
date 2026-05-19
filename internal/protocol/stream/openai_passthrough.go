@@ -39,7 +39,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 
-	var inputTokens, outputTokens, cacheTokens int
+	var inputTokens, outputTokens, cacheTokens, reasoningTokens int
 	var hasUsage bool
 	var contentBuilder strings.Builder
 	var firstChunkID string
@@ -87,6 +87,11 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 			// Track cache tokens from prompt tokens details if available
 			if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
 				cacheTokens = int(chunk.Usage.PromptTokensDetails.CachedTokens)
+				hasUsage = true
+			}
+			// Track reasoning tokens from completion tokens details if available
+			if chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
+				reasoningTokens = int(chunk.Usage.CompletionTokensDetails.ReasoningTokens)
 				hasUsage = true
 			}
 
@@ -252,7 +257,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 		errorJSON, _ := json.Marshal(errorChunk)
 		c.SSEvent("", string(errorJSON))
 		flusher.Flush()
-		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+		return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), err
 	}
 
 	if !hasUsage {
@@ -299,7 +304,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 	c.SSEvent("", " [DONE]")
 	flusher.Flush()
 
-	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+	return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), nil
 }
 
 // HandleOpenAIResponsesStream handles OpenAI Responses API streaming response.
@@ -315,7 +320,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
-	var inputTokens, outputTokens, cacheTokens int64
+	var inputTokens, outputTokens, cacheTokens, reasoningTokens int64
 	var hasUsage bool
 
 	StreamLoop(c, func(w io.Writer) bool {
@@ -332,21 +337,22 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 
 		evt := stream.Current()
 
-		// Accumulate usage from completed events
-		if evt.Response.Usage.InputTokens > 0 {
-			inputTokens = evt.Response.Usage.InputTokens
-			hasUsage = true
-		}
-		if evt.Response.Usage.OutputTokens > 0 {
-			outputTokens = evt.Response.Usage.OutputTokens
-		}
-
-		// Note: Responses API may include cache tokens in usage details
-		// Check if available in the raw JSON
 		// Marshal event using RawJSON() to avoid serializing empty union fields
 		eventRaw := evt.RawJSON()
 		eventType := evt.Type
 
+		// Accumulate usage from the raw JSON (SDK struct fields may be zero for
+		// providers that use custom serialisation or in unit-test fake decoders).
+		if it := gjson.Get(eventRaw, "response.usage.input_tokens"); it.Exists() && it.Int() > 0 {
+			inputTokens = it.Int()
+			hasUsage = true
+		}
+		if ot := gjson.Get(eventRaw, "response.usage.output_tokens"); ot.Exists() && ot.Int() > 0 {
+			outputTokens = ot.Int()
+		}
+
+		// Note: Responses API may include cache tokens in usage details
+		// Check if available in the raw JSON
 		if gjson.Get(eventRaw, "response.usage.input_tokens_details").Exists() {
 			if cachedTokens := gjson.Get(eventRaw, "response.usage.input_tokens_details.cached_tokens"); cachedTokens.Exists() {
 				cacheTokens = cachedTokens.Int()
@@ -365,7 +371,9 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		// output_tokens_details lacks reasoning_tokens. Backfill 0 when the
 		// upstream provider (e.g. DeepSeek) omits it.
 		if gjson.Get(eventRaw, "response.usage").Exists() {
-			if !gjson.Get(eventRaw, "response.usage.output_tokens_details.reasoning_tokens").Exists() {
+			if rt := gjson.Get(eventRaw, "response.usage.output_tokens_details.reasoning_tokens"); rt.Exists() {
+				reasoningTokens = rt.Int()
+			} else {
 				if modified, err := sjson.SetRaw(eventRaw, "response.usage.output_tokens_details.reasoning_tokens", "0"); err == nil {
 					eventRaw = modified
 				} else {
@@ -389,7 +397,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("Responses stream canceled by client")
-			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
+			return protocol.NewTokenUsageFull(int(inputTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens)), nil
 		}
 
 		logrus.Errorf("Responses stream error: %v", err)
@@ -401,11 +409,11 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 			},
 		}
 		OpenAIResponsesEvent(c, "error", errorChunk)
-		return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), err
+		return protocol.NewTokenUsageFull(int(inputTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens)), err
 	}
 
 	_ = hasUsage
-	return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
+	return protocol.NewTokenUsageFull(int(inputTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens)), nil
 }
 
 // ===================================================================
@@ -456,7 +464,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported by this connection")
 	}
 
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheTokens, reasoningTokens int
 
 	// Generate message ID for Anthropic format
 	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
@@ -474,7 +482,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 		select {
 		case <-c.Request.Context().Done():
 			logrus.Debug("[ChatGPT] Client disconnected, stopping stream")
-			return protocol.NewTokenUsage(inputTokens, outputTokens), c.Request.Context().Err()
+			return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), c.Request.Context().Err()
 		default:
 		}
 
@@ -509,15 +517,21 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 		if evt.Response.Usage.OutputTokens > 0 {
 			outputTokens = int(evt.Response.Usage.OutputTokens)
 		}
+		if evt.Response.Usage.InputTokensDetails.CachedTokens > 0 {
+			cacheTokens = int(evt.Response.Usage.InputTokensDetails.CachedTokens)
+		}
+		if evt.Response.Usage.OutputTokensDetails.ReasoningTokens > 0 {
+			reasoningTokens = int(evt.Response.Usage.OutputTokensDetails.ReasoningTokens)
+		}
 	}
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.Debug("[ChatGPT] Stream canceled by client")
-			return protocol.NewTokenUsage(inputTokens, outputTokens), nil
+			return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), nil
 		}
-		return protocol.NewTokenUsage(inputTokens, outputTokens), fmt.Errorf("stream error: %w", err)
+		return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), fmt.Errorf("stream error: %w", err)
 	}
 
 	logrus.Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
@@ -528,5 +542,5 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 	// Send message_stop event with usage
 	sendAnthropicV1MessageStop(c, inputTokens, outputTokens, flusher)
 
-	return protocol.NewTokenUsage(inputTokens, outputTokens), nil
+	return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), nil
 }
