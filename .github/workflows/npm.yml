@@ -1,4 +1,7 @@
 name: NPX Package Publish from GitHub Release
+run-name: >-
+  NPX publish ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.tag }}
+
 
 on:
   release:
@@ -58,6 +61,7 @@ jobs:
       npm_tag: ${{ steps.set_vars.outputs.npm_tag }}
       npx_version: ${{ steps.version.outputs.npx_version }}
       release_tag: ${{ steps.version.outputs.release_tag }}
+      release_url: ${{ steps.release_info.outputs.release_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -114,6 +118,7 @@ jobs:
           echo "  - NPX version to publish: $NPX_VERSION"
 
       - name: Check if GitHub Release exists
+        id: release_info
         run: |
           RELEASE_TAG="${{ steps.version.outputs.release_tag }}"
           echo "Checking if release $RELEASE_TAG exists..."
@@ -123,16 +128,34 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Release $RELEASE_TAG found"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}"
+          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+          echo "✅ Release $RELEASE_TAG found: $RELEASE_URL"
+
+          echo "## NPX publish parameters" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Source release | [${RELEASE_TAG}](${RELEASE_URL}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| npm version | \`${{ steps.version.outputs.npx_version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| npm dist-tag | \`${{ steps.set_vars.outputs.npm_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| publish CLI | \`${{ steps.set_vars.outputs.publish_cli }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| publish bundle | \`${{ steps.set_vars.outputs.publish_bundle }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| publish GUI | \`${{ steps.set_vars.outputs.publish_gui }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| build Docker | \`${{ steps.set_vars.outputs.build_docker }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No \`npx-*\` git tag or GitHub Release will be created." >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
   # Publish CLI and Bundle NPX packages (merged)
   publish-cli-bundle:
     needs: setup
-    name: Publish ${{ matrix.type == 'cli' && 'CLI' || 'Bundle' }} Package
+    name: Publish ${{ matrix.pkg_name }} ${{ needs.setup.outputs.npx_version }} @${{ needs.setup.outputs.npm_tag }}
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
+      url: ${{ needs.setup.outputs.release_url }}
     permissions:
       contents: write
       id-token: write
@@ -336,9 +359,11 @@ jobs:
   # Publish GUI NPX package
   publish-gui:
     needs: setup
-    name: Publish GUI Package
+    name: Publish tingly-box-gui ${{ needs.setup.outputs.npx_version }} @${{ needs.setup.outputs.npm_tag }}
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
+      url: ${{ needs.setup.outputs.release_url }}
     permissions:
       contents: write
       id-token: write
