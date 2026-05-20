@@ -1,4 +1,4 @@
-import {Add, Close, Search} from '@mui/icons-material';
+import {Add, Close, Key, Login, Search} from '@mui/icons-material';
 import {
     Box,
     Chip,
@@ -10,6 +10,7 @@ import {
     Stack,
     TextField,
     Typography,
+    alpha,
 } from '@mui/material';
 import React, {useMemo, useState} from 'react';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
@@ -30,6 +31,43 @@ interface ConnectProviderDialogProps {
     onSelect: (selection: ConnectSelection) => void;
 }
 
+type Accent = 'custom' | 'oauth' | 'key';
+
+const ACCENT: Record<Accent, string> = {
+    custom: 'secondary.main',
+    oauth: 'success.main',
+    key: 'primary.main',
+};
+
+const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: number; accent: Accent}> = ({
+    icon, title, count, accent,
+}) => {
+    const color = ACCENT[accent];
+    return (
+        <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1.25}
+            sx={{mt: 2, mb: 1.25, pb: 0.75, borderBottom: 1, borderColor: 'divider'}}
+        >
+            <Box
+                sx={{
+                    width: 26, height: 26, borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color,
+                    bgcolor: (theme) => alpha(theme.palette[accent === 'key' ? 'primary' : accent === 'oauth' ? 'success' : 'secondary'].main, 0.12),
+                }}
+            >
+                {icon}
+            </Box>
+            <Typography variant="subtitle2" fontWeight={700}>{title}</Typography>
+            {typeof count === 'number' && (
+                <Chip label={count} size="small" sx={{height: 18, fontSize: '0.65rem', fontWeight: 600}}/>
+            )}
+        </Stack>
+    );
+};
+
 const ProviderCard: React.FC<{
     icon: React.ReactNode;
     name: string;
@@ -41,15 +79,9 @@ const ProviderCard: React.FC<{
         onClick={onClick}
         sx={{
             position: 'relative',
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 2,
-            p: 1.25,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.25,
-            cursor: 'pointer',
-            transition: 'border-color 0.15s, box-shadow 0.15s',
+            border: 1, borderColor: 'divider', borderRadius: 2,
+            p: 1.25, display: 'flex', alignItems: 'center', gap: 1.25,
+            cursor: 'pointer', transition: 'border-color 0.15s, box-shadow 0.15s',
             '&:hover': {borderColor: 'primary.main', boxShadow: 1},
         }}
     >
@@ -64,17 +96,15 @@ const ProviderCard: React.FC<{
             label={badge.label}
             size="small"
             sx={{
-                position: 'absolute',
-                top: 6,
-                right: 6,
-                height: 18,
-                fontSize: '0.62rem',
-                fontWeight: 700,
-                color: badge.color,
-                bgcolor: badge.bg,
+                position: 'absolute', top: 6, right: 6, height: 18,
+                fontSize: '0.62rem', fontWeight: 700, color: badge.color, bgcolor: badge.bg,
             }}
         />
     </Box>
+);
+
+const CardGrid: React.FC<{children: React.ReactNode}> = ({children}) => (
+    <Box sx={{display: 'grid', gridTemplateColumns: {xs: '1fr', sm: '1fr 1fr'}, gap: 1}}>{children}</Box>
 );
 
 const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onClose, onSelect}) => {
@@ -89,11 +119,12 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
     );
 
     const needle = query.trim().toLowerCase();
-    const matchesKey = (p: UniqueProvider) => (p.alias || p.name).toLowerCase().includes(needle);
-    const matchesOAuth = (p: OAuthProvider) => `${p.name} ${p.displayName}`.toLowerCase().includes(needle);
-
-    const filteredKey = needle ? keyProviders.filter(matchesKey) : keyProviders;
-    const filteredOAuth = needle ? oauthProviders.filter(matchesOAuth) : oauthProviders;
+    const filteredKey = needle
+        ? keyProviders.filter((p) => (p.alias || p.name).toLowerCase().includes(needle))
+        : keyProviders;
+    const filteredOAuth = needle
+        ? oauthProviders.filter((p) => `${p.name} ${p.displayName}`.toLowerCase().includes(needle))
+        : oauthProviders;
     const showCustom = !needle || 'custom endpoint'.includes(needle);
 
     const keyBadge = {label: 'Key', color: '#1967d2', bg: '#e8f0fe'};
@@ -102,63 +133,95 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
     const protocolMeta = (p: UniqueProvider) =>
         [p.supportsOpenAI && 'OpenAI', p.supportsAnthropic && 'Anthropic'].filter(Boolean).join(' · ') || 'Custom API';
 
+    const nothing = filteredKey.length === 0 && filteredOAuth.length === 0 && !showCustom;
+
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="sm"
+            fullWidth
+            scroll="paper"
+            PaperProps={{sx: {maxHeight: '82vh'}}}
+        >
+            <DialogTitle sx={{pb: 1}}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Typography variant="h6">Connect a Provider</Typography>
                     <IconButton onClick={onClose} size="small"><Close/></IconButton>
                 </Stack>
             </DialogTitle>
-            <DialogContent>
-                <Typography variant="body2" color="text.secondary" sx={{mb: 2}}>
-                    Pick a provider. We&apos;ll ask only for what that provider needs.
-                </Typography>
-                <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Search providers…"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    sx={{mb: 2}}
-                    InputProps={{
-                        startAdornment: (
-                            <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
-                        ),
-                    }}
-                />
-                <Box sx={{display: 'grid', gridTemplateColumns: {xs: '1fr', sm: '1fr 1fr'}, gap: 1}}>
-                    {filteredKey.map((p) => (
-                        <ProviderCard
-                            key={`key-${p.id}`}
-                            icon={<ProviderIcon identifier={p.icon || p.id} size={26}/>}
-                            name={p.alias || p.name}
-                            meta={protocolMeta(p)}
-                            badge={keyBadge}
-                            onClick={() => onSelect({kind: 'key', provider: p})}
-                        />
-                    ))}
-                    {filteredOAuth.map((p) => (
-                        <ProviderCard
-                            key={`oauth-${p.id}`}
-                            icon={p.icon}
-                            name={p.name}
-                            meta="OAuth sign-in"
-                            badge={oauthBadge}
-                            onClick={() => onSelect({kind: 'oauth', providerId: p.id})}
-                        />
-                    ))}
-                    {showCustom && (
-                        <ProviderCard
-                            icon={<Add/>}
-                            name="Custom endpoint"
-                            meta="Any compatible API"
-                            badge={keyBadge}
-                            onClick={() => onSelect({kind: 'custom'})}
-                        />
-                    )}
+            <DialogContent dividers sx={{pt: 0}}>
+                {/* Search stays pinned while the grouped list scrolls. */}
+                <Box sx={{position: 'sticky', top: 0, zIndex: 1, bgcolor: 'background.paper', pt: 2, pb: 1}}>
+                    <Typography variant="body2" color="text.secondary" sx={{mb: 1.5}}>
+                        Pick a provider. We&apos;ll ask only for what that provider needs.
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        placeholder="Search providers…"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
+                            ),
+                        }}
+                    />
                 </Box>
-                {filteredKey.length === 0 && filteredOAuth.length === 0 && !showCustom && (
+
+                {showCustom && (
+                    <>
+                        <SectionHeader icon={<Add fontSize="small"/>} title="Custom" accent="custom"/>
+                        <CardGrid>
+                            <ProviderCard
+                                icon={<Add/>}
+                                name="Custom endpoint"
+                                meta="Any compatible API"
+                                badge={keyBadge}
+                                onClick={() => onSelect({kind: 'custom'})}
+                            />
+                        </CardGrid>
+                    </>
+                )}
+
+                {filteredOAuth.length > 0 && (
+                    <>
+                        <SectionHeader icon={<Login fontSize="small"/>} title="OAuth sign-in" count={filteredOAuth.length} accent="oauth"/>
+                        <CardGrid>
+                            {filteredOAuth.map((p) => (
+                                <ProviderCard
+                                    key={`oauth-${p.id}`}
+                                    icon={p.icon}
+                                    name={p.name}
+                                    meta="OAuth sign-in"
+                                    badge={oauthBadge}
+                                    onClick={() => onSelect({kind: 'oauth', providerId: p.id})}
+                                />
+                            ))}
+                        </CardGrid>
+                    </>
+                )}
+
+                {filteredKey.length > 0 && (
+                    <>
+                        <SectionHeader icon={<Key fontSize="small"/>} title="API key providers" count={filteredKey.length} accent="key"/>
+                        <CardGrid>
+                            {filteredKey.map((p) => (
+                                <ProviderCard
+                                    key={`key-${p.id}`}
+                                    icon={<ProviderIcon identifier={p.icon || p.id} size={26}/>}
+                                    name={p.alias || p.name}
+                                    meta={protocolMeta(p)}
+                                    badge={keyBadge}
+                                    onClick={() => onSelect({kind: 'key', provider: p})}
+                                />
+                            ))}
+                        </CardGrid>
+                    </>
+                )}
+
+                {nothing && (
                     <Typography variant="body2" color="text.secondary" sx={{textAlign: 'center', py: 3}}>
                         No providers match &ldquo;{query}&rdquo;.
                     </Typography>
