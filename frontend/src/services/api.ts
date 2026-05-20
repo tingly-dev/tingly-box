@@ -456,6 +456,10 @@ export const api = {
                 headers,
                 body: data
             });
+            if (response.error) {
+                const errBody = response.error as any;
+                return {success: false, error: errBody?.error || 'Request failed'};
+            }
             return response.data;
         } catch (error: any) {
             return {success: false, error: error.message};

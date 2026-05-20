@@ -110,11 +110,17 @@ export const useTemplatePageRules = ({
             };
 
             // Create rule via API (empty string for UUID signals backend to generate new UUID)
-            const result = await api.createRule('', newRuleData);
+            let result = await api.createRule('', newRuleData);
+
+            // If backend reports name conflict, retry once with a random suffix
+            if (!result?.success && result?.error?.includes('already exists')) {
+                newRuleData.request_model = `${requestModel}-${uuidv4().slice(0, 6)}`;
+                result = await api.createRule('', newRuleData);
+            }
 
             // Validate response has required data
-            if (!result.success) {
-                showNotification(`Failed to create rule: ${result.error || 'Unknown error'}`, 'error');
+            if (!result?.success) {
+                showNotification(`Failed to create rule: ${result?.error || 'Unknown error'}`, 'error');
                 return null;
             }
 
