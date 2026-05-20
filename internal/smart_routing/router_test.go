@@ -696,3 +696,148 @@ func TestValidateSmartOp_AgentClaudeCode(t *testing.T) {
 	require.NoError(t, ValidateSmartOp(&op))
 }
 
+// TestLatestUser_ToolResultDoesNotFalseMatch verifies that when the most recent
+// user-role message is a tool_result (no text content), a latest_user contains
+// rule does NOT match against the stale previous user text — the request must
+// fall through to the default provider instead of incorrectly routing to the
+// smart-routing branch.
+func TestLatestUser_ToolResultDoesNotFalseMatch(t *testing.T) {
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "route when user says keyword",
+			Ops: []SmartOp{
+				{Position: PositionLatestUser, Operation: OpLatestUserContains, Value: "keyword"},
+			},
+			Services: []*loadbalance.Service{
+				{Provider: "special", Model: "m", Weight: 1, Active: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Simulate: user text containing "keyword", then assistant tool_use,
+	// then user tool_result (no text). The smart routing must NOT match
+	// because the latest user turn carries no text content.
+	req := &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "please search for keyword"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "I will search now"}},
+				},
+			},
+			{
+				// tool_result user message — no text, only tool result block
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfToolResult: &anthropic.BetaToolResultBlockParam{
+						ToolUseID: "toolu_01",
+						Content: []anthropic.BetaToolResultBlockParamContentUnion{
+							{OfText: &anthropic.BetaTextBlockParam{Text: "search results here"}},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	ctx := ExtractContextFromBetaRequest(req)
+	require.Equal(t, "user", ctx.LatestRole)
+	require.False(t, ctx.LatestUserHasText, "tool_result user message should not set LatestUserHasText")
+
+	_, matched := router.EvaluateRequest(ctx)
+	require.False(t, matched, "should NOT match: latest user turn is tool_result, not a text message containing keyword")
+}
+
+// TestLatestUser_TextAfterToolResult verifies that after a tool_result exchange,
+// a subsequent real user text message is matched correctly.
+func TestLatestUser_TextAfterToolResult(t *testing.T) {
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "route when user says keyword",
+			Ops: []SmartOp{
+				{Position: PositionLatestUser, Operation: OpLatestUserContains, Value: "keyword"},
+			},
+			Services: []*loadbalance.Service{
+				{Provider: "special", Model: "m", Weight: 1, Active: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	req := &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "first message without keyword"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "response"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "now use keyword here"}},
+				},
+			},
+		},
+	}
+
+	ctx := ExtractContextFromBetaRequest(req)
+	require.True(t, ctx.LatestUserHasText)
+
+	_, matched := router.EvaluateRequest(ctx)
+	require.True(t, matched, "should match: latest user text contains keyword")
+}
+
+// TestLatestContentType_NotBleededFromPreviousImage verifies that LatestContentType
+// is set based on the current user message only, not the cumulative HasImage flag.
+func TestLatestContentType_NotBleededFromPreviousImage(t *testing.T) {
+	// First user message has an image, second is text-only.
+	// LatestContentType should be "" (not "image") for the second message.
+	req := &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+						Data:      "/9j/4AAQ...",
+						MediaType: anthropic.BetaBase64ImageSourceMediaTypeImageJPEG,
+					}),
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "I see an image"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "now a text-only follow-up"}},
+				},
+			},
+		},
+	}
+
+	ctx := ExtractContextFromBetaRequest(req)
+	require.True(t, ctx.HasImage, "HasImage should still be true (cumulative)")
+	require.Equal(t, "", ctx.LatestContentType, "LatestContentType should be empty for the latest text-only user message")
+	require.True(t, ctx.LatestUserHasText)
+}
+

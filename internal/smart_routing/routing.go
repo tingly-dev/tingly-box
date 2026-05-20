@@ -334,10 +334,23 @@ func (r *Router) evaluateLatestUserOp(ctx *RequestContext, op *SmartOp) OpEvalRe
 			res.Reason = fmt.Sprintf("latest role is %q, not user", ctx.LatestRole)
 			return res
 		}
+		if !ctx.LatestUserHasText {
+			// Latest user-role message was a tool_result (no text). Matching
+			// against GetLatestUserMessage() would return a stale previous text
+			// and could produce a false positive — return no-match instead so
+			// the request falls through to the default.
+			res.Reason = "latest user message has no text content (tool_result)"
+			return res
+		}
 		res.Matched = strings.Contains(latest, value)
 		res.Actual = snippetAround(latest, value)
 		res.Reason = fmt.Sprintf("latest user contains %q", value)
 	case OpLatestUserRequestType:
+		if ctx.LatestRole != "user" || !ctx.LatestUserHasText {
+			res.Actual = ctx.LatestContentType
+			res.Reason = fmt.Sprintf("latest role is %q, not user text", ctx.LatestRole)
+			return res
+		}
 		res.Actual = ctx.LatestContentType
 		res.Matched = ctx.LatestContentType == value
 		res.Reason = fmt.Sprintf("latest content_type %q == %q", ctx.LatestContentType, value)

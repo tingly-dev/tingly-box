@@ -29,6 +29,11 @@ type RequestContext struct {
 	ToolUses          []string
 	LatestRole        string // Latest message role (user, assistant, tool, function, etc.)
 	LatestContentType string
+	// LatestUserHasText is true when the most recent user-role message contained
+	// extractable text content. It is false when the last user message was a
+	// tool_result (no text), which means GetLatestUserMessage() would return a
+	// stale previous message — not suitable for latest_user matching.
+	LatestUserHasText bool
 	// HasImage is true when ANY message in the conversation (any role,
 	// any position — not just the latest) contains an image content block.
 	// proxy_vision uses this because its responsibilities include cleaning
@@ -117,9 +122,22 @@ func ExtractContextFromBetaRequest(req *anthropic.BetaMessageNewParams) *Request
 
 			if contentStr != "" {
 				ctx.UserMessages = append(ctx.UserMessages, contentStr)
+				ctx.LatestUserHasText = true
+			} else {
+				// User message with no extractable text (e.g. tool_result blocks).
+				// Mark that the latest user turn is not a text message so that
+				// latest_user contains/type ops do not match against a stale
+				// previous user text.
+				ctx.LatestUserHasText = false
 			}
-			if ctx.HasImage {
+
+			// LatestContentType reflects the CURRENT user message's content type,
+			// not the cumulative HasImage flag — an earlier image in the
+			// conversation (any role) must not bleed into a later text-only turn.
+			if hasImageInBetaContent(msg.Content) {
 				ctx.LatestContentType = "image"
+			} else {
+				ctx.LatestContentType = ""
 			}
 
 			ctx.ToolUses = append(ctx.ToolUses, toolUses...)
