@@ -18,6 +18,8 @@ const UseClaudeDesktopPageContent: React.FC = () => {
         notification,
         copyToClipboard,
         baseUrl,
+        rules,
+        loadRules,
     } = useScenarioPageInternal(scenario);
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -66,7 +68,7 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                     scenario={scenario}
                     title="Models and Forwarding Rules"
                     collapsible={true}
-                    allowDeleteRule={false}
+                    allowDeleteRule={true}
                 />
 
                 <ClaudeDesktopConfigModal
@@ -74,6 +76,8 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                     onClose={() => setConfigModalOpen(false)}
                     baseUrl={baseUrl}
                     copyToClipboard={copyToClipboard}
+                    rules={rules}
+                    onRulesRefresh={loadRules}
                 />
             </CardGrid>
         </PageLayout>

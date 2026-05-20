@@ -1,22 +1,105 @@
-import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack, Link } from '@mui/material';
-import React from 'react';
+import {
+    Box,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Button,
+    Typography,
+    Stack,
+    Link,
+    TextField,
+    IconButton,
+    CircularProgress,
+    List,
+    ListItem,
+    ListItemText,
+} from '@mui/material';
+import React, { useState } from 'react';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import api from '@/services/api';
 
 interface ClaudeDesktopConfigModalProps {
     open: boolean;
     onClose: () => void;
     baseUrl: string;
     copyToClipboard: (text: string, label: string) => Promise<void>;
+    rules?: any[];
+    onRulesRefresh?: () => void;
 }
+
+const MODEL_PREFIX = 'claude-';
 
 const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
     open,
     onClose,
     baseUrl,
     copyToClipboard,
+    rules = [],
+    onRulesRefresh,
 }) => {
-    // Get token from context
     const { token } = useScenarioPageModal();
+    const [newModelName, setNewModelName] = useState('');
+    const [adding, setAdding] = useState(false);
+    const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
+    const [error, setError] = useState('');
+
+    const modelRules = rules.filter(r => r.request_model && r.request_model !== '*');
+
+    const validateModelName = (name: string): string => {
+        if (!name.trim()) return 'Model name is required';
+        if (!name.startsWith(MODEL_PREFIX)) return `Model name must start with "${MODEL_PREFIX}"`;
+        if (modelRules.some(r => r.request_model === name.trim())) return 'Model already exists';
+        return '';
+    };
+
+    const handleAdd = async () => {
+        const trimmed = newModelName.trim();
+        const validationError = validateModelName(trimmed);
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
+        setAdding(true);
+        setError('');
+        try {
+            const result = await api.createRule('', {
+                scenario: 'claude_desktop',
+                request_model: trimmed,
+                active: true,
+                services: [],
+            });
+            if (result?.success) {
+                setNewModelName('');
+                onRulesRefresh?.();
+            } else {
+                setError(result?.error || 'Failed to add model');
+            }
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleDelete = async (uuid: string) => {
+        setDeletingUuid(uuid);
+        try {
+            await api.deleteRule(uuid);
+            onRulesRefresh?.();
+        } finally {
+            setDeletingUuid(null);
+        }
+    };
+
+    const handleNewModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setNewModelName(e.target.value);
+        if (error) setError('');
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') void handleAdd();
+    };
 
     return (
         <Dialog
@@ -25,9 +108,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
             maxWidth="sm"
             fullWidth
             PaperProps={{
-                sx: {
-                    borderRadius: 3,
-                }
+                sx: { borderRadius: 3 }
             }}
         >
             <DialogTitle sx={{ pb: 1 }}>
@@ -108,20 +189,76 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                         </Button>
                     </Stack>
 
-                    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: 1, borderColor: 'divider', mt: 1 }}>
+                    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                             Step 3: Configure Models
                         </Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                            Add the following models to display them in the interface:
+                        <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
+                            Add these models in Claude Desktop's model picker. Model names must start with <code>claude-</code>.
                         </Typography>
-                        <Box sx={{ bgcolor: 'background.default', p: 1.5, borderRadius: 1 }}>
-                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                                claude-sonnet-4-6<br />
-                                claude-opus-4-6<br />
-                                claude-opus-4-7
+
+                        {modelRules.length > 0 ? (
+                            <List dense disablePadding sx={{ mb: 1 }}>
+                                {modelRules.map((rule) => (
+                                    <ListItem
+                                        key={rule.uuid}
+                                        disableGutters
+                                        sx={{
+                                            bgcolor: 'background.default',
+                                            borderRadius: 1,
+                                            mb: 0.5,
+                                            px: 1.5,
+                                        }}
+                                        secondaryAction={
+                                            <IconButton
+                                                edge="end"
+                                                size="small"
+                                                onClick={() => handleDelete(rule.uuid)}
+                                                disabled={deletingUuid === rule.uuid}
+                                            >
+                                                {deletingUuid === rule.uuid
+                                                    ? <CircularProgress size={14} />
+                                                    : <DeleteIcon fontSize="small" />
+                                                }
+                                            </IconButton>
+                                        }
+                                    >
+                                        <ListItemText
+                                            primary={rule.request_model}
+                                            primaryTypographyProps={{ sx: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+                                        />
+                                    </ListItem>
+                                ))}
+                            </List>
+                        ) : (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontStyle: 'italic' }}>
+                                No models configured yet.
                             </Typography>
-                        </Box>
+                        )}
+
+                        <Stack direction="row" spacing={1} alignItems="flex-start">
+                            <TextField
+                                size="small"
+                                placeholder="claude-sonnet-4-6"
+                                value={newModelName}
+                                onChange={handleNewModelChange}
+                                onKeyDown={handleKeyDown}
+                                error={Boolean(error)}
+                                helperText={error}
+                                disabled={adding}
+                                sx={{ flex: 1 }}
+                                inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+                            />
+                            <IconButton
+                                color="primary"
+                                onClick={() => void handleAdd()}
+                                disabled={adding || !newModelName.trim()}
+                                sx={{ mt: 0.5 }}
+                            >
+                                {adding ? <CircularProgress size={20} /> : <AddIcon />}
+                            </IconButton>
+                        </Stack>
+
                         <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
                             You can create multiple configurations and switch between them as needed.
                         </Typography>
