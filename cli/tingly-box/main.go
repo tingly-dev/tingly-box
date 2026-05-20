@@ -36,6 +36,9 @@ type CLI struct {
 	Restart command.RestartCmdKong `kong:"cmd,help='Restart the server'"`
 	Open    command.OpenCmdKong    `kong:"cmd,help='Open web UI'"`
 
+	// Create a double-click shortcut (desktop / start menu) to launch Tingly Box
+	Shortcut command.ShortcutCmdKong `kong:"cmd,help='Create a desktop/start-menu shortcut to launch Tingly Box'"`
+
 	// Configuration management (unified). Subcommands: provider, rule.
 	Config command.ConfigCmdKong `kong:"cmd,help='Manage configuration (providers, rules)'"`
 
