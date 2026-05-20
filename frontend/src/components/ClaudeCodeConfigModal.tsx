@@ -36,7 +36,7 @@ type ScriptTab = 'json' | 'windows' | 'unix';
 const MODAL_TEXT = {
     zh: {
         tabQuick: '自动配置',
-        tabManual: '配置',
+        tabManual: '手动',
         previewButton: '预览生成的 env',
         previewTitle: '预览 — 将写入 ~/.claude/settings.json 的 env 段',
         applySuccess: '配置已写入',
@@ -47,7 +47,7 @@ const MODAL_TEXT = {
     },
     en: {
         tabQuick: 'Auto Config',
-        tabManual: 'Config',
+        tabManual: 'Manual',
         previewButton: 'Preview generated env',
         previewTitle: 'Preview — env block written to ~/.claude/settings.json',
         applySuccess: 'Configuration applied',
