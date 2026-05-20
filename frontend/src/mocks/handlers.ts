@@ -778,6 +778,10 @@ export const handlers = [
 
     // --- Playground (imagegen) mocks ---
 
+    http.get('/api/v1/auth/validate', () => {
+        return HttpResponse.json({ valid: true, user: { username: 'admin', role: 'admin' } })
+    }),
+
     http.get('/api/v1/token', () => {
         return HttpResponse.json({ token: 'mock-model-token', type: 'Bearer' })
     }),
