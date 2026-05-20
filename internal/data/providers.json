@@ -15,7 +15,7 @@
     "models_schema": "每条模型 { id, context?, max_output? }，仅填写已验证的数值，不确定的省略字段或整个数组留空"
   },
   "version": "2.0.0",
-  "last_updated": "2026-04-24T00:00:00Z",
+  "last_updated": "2026-05-20T00:00:00Z",
   "providers": {
     "openai-com": {
       "id": "openai-com",
@@ -648,7 +648,7 @@
       "model_doc": "https://platform.moonshot.ai/docs/pricing/chat#generation-model-kimi-k2",
       "pricing_doc": "https://platform.moonshot.ai/docs/pricing/chat#generation-model-kimi-k2",
       "base_url_openai": "https://api.moonshot.ai/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api.moonshot.ai/anthropic",
       "models": [
         { "id": "moonshot-v1-8k",   "context": 8192 },
         { "id": "moonshot-v1-32k",  "context": 32768 },
@@ -674,7 +674,7 @@
       "model_doc": "https://platform.moonshot.cn/docs/pricing/chat#generation-model-kimi-k2",
       "pricing_doc": "https://platform.moonshot.cn/docs/pricing/chat#generation-model-kimi-k2",
       "base_url_openai": "https://api.moonshot.cn/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api.moonshot.cn/anthropic",
       "models": [
         { "id": "moonshot-v1-8k",   "context": 8192 },
         { "id": "moonshot-v1-32k",  "context": 32768 },
@@ -772,13 +772,13 @@
       "region": "cn",
       "plan": "standard",
       "website": "https://qianfan.cloud.baidu.com",
-      "description": "Baidu Qianfan ModelBuilder: ERNIE and third-party models (OpenAI compatible)",
+      "description": "Baidu Qianfan ModelBuilder: ERNIE and third-party models (OpenAI + Anthropic compatible)",
       "type": "official",
       "api_doc": "https://cloud.baidu.com/doc/qianfan/s/Hmh4suq26",
       "model_doc": "https://cloud.baidu.com/doc/qianfan/s/7m95lyy43",
       "pricing_doc": "https://cloud.baidu.com/doc/qianfan/s/hlrk4akp7",
       "base_url_openai": "https://qianfan.baidubce.com/v2",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://qianfan.baidubce.com/anthropic",
       "models": [],
       "supports_models_endpoint": true,
       "icon": "baidu"
@@ -949,13 +949,13 @@
       "region": "cn",
       "plan": "standard",
       "website": "https://siliconflow.cn",
-      "description": "SiliconFlow aggregator for open models (China site, OpenAI compatible)",
+      "description": "SiliconFlow aggregator for open models (China site, OpenAI + Anthropic compatible)",
       "type": "reseller",
       "api_doc": "https://docs.siliconflow.cn/cn/userguide/quickstart",
       "model_doc": "https://docs.siliconflow.cn/cn/userguide/capabilities/text-generation",
       "pricing_doc": "https://siliconflow.cn/pricing",
       "base_url_openai": "https://api.siliconflow.cn/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api.siliconflow.cn",
       "models": [],
       "supports_models_endpoint": true,
       "icon": "siliconflow"
@@ -970,13 +970,13 @@
       "region": "intl",
       "plan": "standard",
       "website": "https://siliconflow.com",
-      "description": "SiliconFlow aggregator for open models (International, OpenAI compatible)",
+      "description": "SiliconFlow aggregator for open models (International, OpenAI + Anthropic compatible)",
       "type": "reseller",
       "api_doc": "https://docs.siliconflow.com/en/userguide/quickstart",
       "model_doc": "https://docs.siliconflow.com/en/userguide/capabilities/text-generation",
       "pricing_doc": "https://siliconflow.com/pricing",
       "base_url_openai": "https://api.siliconflow.com/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api.siliconflow.com",
       "models": [],
       "supports_models_endpoint": true,
       "icon": "siliconflow"
@@ -1235,7 +1235,7 @@
       "model_doc": "",
       "pricing_doc": "",
       "base_url_openai": "https://openrouter.ai/api/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://openrouter.ai/api",
       "models": [],
       "supports_models_endpoint": true,
       "icon": "openrouter"
