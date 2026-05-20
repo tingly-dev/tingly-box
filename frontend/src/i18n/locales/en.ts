@@ -238,7 +238,7 @@ export default {
       "modeLabel": "Fusion mode",
       "tooltipTitle": "How both protocols are saved",
       "normalModeDesc": "Normal mode (unchecked): creates two separate base URLs, one for OpenAI and one for Anthropic.",
-      "fusionModeDesc": "Fusion mode (checked): merges into one base URL entry serving both OpenAI and Anthropic.",
+      "fusionModeDesc": "Fusion mode (checked): merges into one provider, switching between OpenAI and Anthropic on demand.",
       "outcomeSplit": "Will create 2 separate base URLs (sharing this key).",
       "outcomeMerged": "Will keep 1 base URL serving both OpenAI and Anthropic."
     },
