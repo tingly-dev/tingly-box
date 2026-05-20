@@ -90,6 +90,32 @@ for the specific change you're verifying.
    complain otherwise.
 3. Optionally `pkill -f "vite --mode mock"` to free the port.
 
+## Regression tests (committed)
+
+`regression-credentials.mjs` (next to this file) is a committed, assertion-based
+regression for the provider "Add API Key" flow on `/credentials`. It guards the
+fixes from PR #996:
+
+- a free-typed provider produces a well-formed POST payload (name + api_base +
+  token) **without** clicking "Test Connection" first;
+- notifications render via the unified top-right stack (not a bottom-right
+  page-local Snackbar);
+- the submit button shows a spinner while the request is in flight.
+
+Run it after the Setup + dev-server steps above (it resolves `playwright` from
+the cwd, so run from `frontend/`):
+
+```bash
+node ../.claude/skills/ui-preview/regression-credentials.mjs   # exits 0 / 1
+```
+
+It drives a real headless browser and asserts on the captured outgoing request
+and DOM. In mock mode there is no `POST /api/v2/providers` handler, so the
+request 404s and you'll see a `[pageerror] ... reading 'success'` line — that's
+expected; the test asserts on the payload + the resulting top-right error toast,
+not on a successful save. Unlike `screenshot.mjs`, this file IS committed — it's
+the regression asset, not throwaway tooling.
+
 ## Why not Playwright MCP / Chrome MCP?
 
 MCP servers are configured at the harness level (`settings.json`) and cannot
