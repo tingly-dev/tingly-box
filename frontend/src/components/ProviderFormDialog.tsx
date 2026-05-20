@@ -102,6 +102,7 @@ const ProviderFormDialog = ({
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
     const [createFusionProvider, setCreateFusionProvider] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
+    const [baseUrlError, setBaseUrlError] = useState(false);
 
     const {enableFusion} = useFeatureFlags();
 
@@ -166,6 +167,7 @@ const ProviderFormDialog = ({
         if (!open) return;
 
         setVerificationResult(null);
+        setBaseUrlError(false);
         // Edit mode opens the advanced panel so users can see/change existing settings.
         setAdvancedOpen(mode === 'edit');
         // Hide the optional name field on each add-mode open; edit-mode keeps
@@ -325,6 +327,7 @@ const ProviderFormDialog = ({
 
     const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
         setVerificationResult(null);
+        setBaseUrlError(false);
         const cb = onChangeRef.current;
 
         if (typeof newValue === 'string') {
@@ -385,6 +388,7 @@ const ProviderFormDialog = ({
         newValue: string
     ) => {
         setProviderInputValue(newValue);
+        if (newValue.trim()) setBaseUrlError(false);
         // If the user is editing away from the selected provider's display name,
         // detach the selection so the protocol checkboxes become editable again.
         if (
@@ -473,6 +477,12 @@ const ProviderFormDialog = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        const effectiveBase = data.apiBase || providerInputValue;
+        if (!effectiveBase.trim()) {
+            setBaseUrlError(true);
+            return;
+        }
+
         // Collect the values we finalise here so the parent can use them
         // directly. onChange writes to parent state asynchronously, so the
         // parent's submit closure would otherwise read stale values — that's
@@ -550,6 +560,9 @@ const ProviderFormDialog = ({
                             onChange={handleProviderSelect}
                             onInputChange={handleProviderInputChange}
                             onBlur={handleProviderInputBlur}
+                            required
+                            error={baseUrlError}
+                            helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
                         />
 
                         <ApiKeyField

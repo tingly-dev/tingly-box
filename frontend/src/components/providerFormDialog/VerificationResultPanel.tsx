@@ -9,7 +9,7 @@ interface VerificationResultPanelProps {
 }
 
 const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result, onClose}) => {
-    const details = result.details ?? '';
+    const details = (result.details ?? '').split(' • ').filter(d => d.trim());
 
     return (
         <Box
@@ -37,7 +37,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
             </Box>
 
             <Stack spacing={0.75}>
-                {details.split(' • ').map((detail, index) => {
+                {details.map((detail, index) => {
                     const isSuccess = detail.includes('✓');
                     const label = detail.replace(/^[✓✗]\s*/, '');
 

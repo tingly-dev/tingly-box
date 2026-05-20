@@ -11,6 +11,9 @@ interface ProviderAutocompleteProps {
     onChange: (newValue: string | UniqueProvider | null) => void;
     onInputChange: (event: React.SyntheticEvent, newValue: string) => void;
     onBlur: () => void;
+    required?: boolean;
+    error?: boolean;
+    helperText?: string;
 }
 
 const ProviderAutocomplete: React.FC<ProviderAutocompleteProps> = ({
@@ -20,6 +23,9 @@ const ProviderAutocomplete: React.FC<ProviderAutocompleteProps> = ({
     onChange,
     onInputChange,
     onBlur,
+    required,
+    error,
+    helperText,
 }) => {
     const {t} = useTranslation();
     return (
@@ -62,6 +68,9 @@ const ProviderAutocomplete: React.FC<ProviderAutocompleteProps> = ({
                     {...params}
                     label={t('providerDialog.provider.label')}
                     placeholder={t('providerDialog.provider.placeholder')}
+                    required={required}
+                    error={error}
+                    helperText={helperText}
                 />
             )}
             renderOption={(props, option) => {
