@@ -482,6 +482,9 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		// Continue anyway - provider store may already have data
 	}
 
+	// Log proxy environment at startup so operators can diagnose unexpected proxy usage.
+	cfg.logProxyEnvironment()
+
 	return cfg, nil
 }
 
@@ -2056,10 +2059,26 @@ func (c *Config) EnsureDefaultScenarioConfigs() {
 	}
 }
 
+// logProxyEnvironment logs proxy-related environment variables and the
+// RespectEnvProxy config value so operators can diagnose unexpected proxy usage
+// (e.g. when the process inherits HTTP_PROXY / HTTPS_PROXY from a shell or npx).
+func (c *Config) logProxyEnvironment() {
+	respectEnvProxy := false
+	if c.HTTPTransport.RespectEnvProxy != nil {
+		respectEnvProxy = *c.HTTPTransport.RespectEnvProxy
+	}
+	logrus.Infof("proxy env: HTTP_PROXY=%q HTTPS_PROXY=%q NO_PROXY=%q http_proxy=%q https_proxy=%q no_proxy=%q respect_env_proxy=%v",
+		os.Getenv("HTTP_PROXY"), os.Getenv("HTTPS_PROXY"), os.Getenv("NO_PROXY"),
+		os.Getenv("http_proxy"), os.Getenv("https_proxy"), os.Getenv("no_proxy"),
+		respectEnvProxy)
+}
+
 // ApplyHTTPTransportConfig applies the HTTP transport configuration to the global transport pool
 // This is called by TBE during initialization to configure connection pooling
 // For TB (tingly-box), this applies the proxy settings (default: respect_env_proxy=true)
 func (c *Config) ApplyHTTPTransportConfig() {
+	c.logProxyEnvironment()
+
 	if c.HTTPTransport.MaxIdleConns == nil &&
 		c.HTTPTransport.MaxIdleConnsPerHost == nil &&
 		c.HTTPTransport.MaxConnsPerHost == nil &&
