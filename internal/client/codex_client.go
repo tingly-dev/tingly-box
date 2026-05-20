@@ -508,6 +508,65 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 	}, nil
 }
 
+// parseImageGenerationStreamNext parses the streaming Responses API response
+// and extracts the generated image data using the ResponsesAssembler.
+//
+// The image data comes through two event types:
+// 1. response.image_generation_call.partial_image - streaming partial image chunks
+// 2. response.output_item.done - final status of the image generation call
+//
+// Supports multiple images via different output indices.
+func (c *CodexClient) parseImageGenerationStreamNext(ctx context.Context, stream *ssestream.Stream[responses.ResponseStreamEventUnion]) (*openai.ImagesResponse, error) {
+	defer stream.Close()
+
+	// Use assembler to accumulate streaming events
+	asm := assembler.NewResponsesAssembler()
+
+	for stream.Next() {
+		event := stream.Current()
+		asm.Accumulate(event)
+
+		// Early exit on terminal states
+		if asm.IsFinished() {
+			break
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return nil, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Get all images from assembler
+	imagesMap := asm.Images()
+	if len(imagesMap) == 0 {
+		return nil, fmt.Errorf("no image data in response")
+	}
+
+	// Build ImagesResponse with all images
+	// Sort by output index to maintain order
+	imageCount := asm.ImageCount()
+	data := make([]openai.Image, 0, imageCount)
+	for idx := 0; idx < imageCount; idx++ {
+		b64JSON := asm.ImageDataAt(idx)
+		if b64JSON == "" {
+			logrus.Warnf("[Codex] Missing image data at index %d", idx)
+			continue
+		}
+		data = append(data, openai.Image{
+			B64JSON: b64JSON,
+		})
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("no valid image data in response")
+	}
+
+	logrus.Infof("[Codex] Successfully extracted %d image(s) via assembler", len(data))
+	return &openai.ImagesResponse{
+		Data: data,
+	}, nil
+}
+
 // parseResponsesStream parses the streaming Responses API response
 // and assembles it into a complete non-streaming Response object using
 // the ResponsesAssembler.
