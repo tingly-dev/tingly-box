@@ -103,7 +103,7 @@ const UseOpenCodePageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Config
+                            Auto Config
                         </Button>
                     }
                 >

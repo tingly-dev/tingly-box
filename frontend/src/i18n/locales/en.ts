@@ -571,7 +571,7 @@ export default {
     "separateConfig": "Separate Configuration",
     "switchToSeparate": "Switch to Separate",
     "switchToUnified": "Switch to Unified",
-    "configButton": "Config",
+    "configButton": "Auto Config",
     "quickApply": "Auto Config",
     "quickApplyWithStatusLine": "Auto Config & Status Line",
     "statusLine": {

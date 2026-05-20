@@ -572,7 +572,7 @@ export default {
     "separateConfig": "分离配置",
     "switchToSeparate": "切换到分离",
     "switchToUnified": "切换到统一",
-    "configButton": "配置",
+    "configButton": "自动配置",
     "quickApply": "自动配置",
     "quickApplyWithStatusLine": "自动配置和状态行",
     "statusLine": {
