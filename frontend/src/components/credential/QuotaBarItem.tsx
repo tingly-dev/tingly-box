@@ -167,17 +167,6 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
           </Box>
         </Box>
 
-        {/* Reset time */}
-        {resetTime && (
-          <Typography
-            variant="caption"
-            color="text.disabled"
-            sx={{ minWidth: 40, whiteSpace: 'nowrap' }}
-          >
-            {resetTime}
-          </Typography>
-        )}
-
         {/* Percent */}
         <Typography
           variant="body2"
