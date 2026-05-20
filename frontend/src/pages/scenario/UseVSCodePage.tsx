@@ -67,7 +67,7 @@ const UseVSCodePageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Config Guide
+                            Config
                         </Button>
                     }
                 >

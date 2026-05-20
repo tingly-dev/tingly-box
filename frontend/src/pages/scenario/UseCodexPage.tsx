@@ -74,7 +74,7 @@ const UseCodexPageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Config Codex
+                            Auto Config
                         </Button>
                     }
                 >

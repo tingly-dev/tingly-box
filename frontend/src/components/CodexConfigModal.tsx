@@ -389,7 +389,7 @@ EOF`;
                         disabled={isApplying}
                         startIcon={isApplying ? <CircularProgress size={16} color="inherit" /> : null}
                     >
-                        {isApplying ? 'Applying...' : 'Apply Configuration'}
+                        {isApplying ? 'Applying...' : 'Auto Config'}
                     </Button>
                 </Box>
             </DialogActions>

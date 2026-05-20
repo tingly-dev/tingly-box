@@ -47,7 +47,7 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                             variant="contained"
                             size="small"
                         >
-                            Config Guide
+                            Config
                         </Button>
                     }
                 >

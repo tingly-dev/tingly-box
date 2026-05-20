@@ -94,11 +94,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     onApplyWithStatusLine,
     isApplyLoading = false,
     onViewConfig,
-    applyStepLabel = 'Apply Config',
+    applyStepLabel = 'Auto Config',
     applyStepDescription,
-    applyButtonLabel = 'Apply',
+    applyButtonLabel = 'Auto Config',
     applySuccessLabel = 'Config applied!',
-    viewConfigButtonLabel = 'Manual Setup',
+    viewConfigButtonLabel = 'Config',
     hasModelSelected = false,
     onSelectModel,
 }) => {
@@ -271,7 +271,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
             title={
                 <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1 }}>
                     <Typography variant="subtitle1" fontWeight={600}>
-                        Guiding
+                        Quick Start
                     </Typography>
                     <Chip
                         label={progressLabel}
@@ -395,7 +395,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         )}
 
                         {stepCursor === 3 && (
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>Step 4 — {applyStepLabel}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{applyStepDescription ?? `Write the proxy configuration to ${agentName}'s settings file.`}</Typography><Collapse in={!applyDone}><Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>{onApply && <Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>{applyButtonLabel}</Button>}{onApplyWithStatusLine && <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>Apply + Status Line</Button>}{onViewConfig && <Button variant={onApply ? "outlined" : "contained"} size="small" disabled={!installDone} onClick={onViewConfig}>{viewConfigButtonLabel}</Button>}</Stack></Collapse>{applyResult && (<Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>{applyResult.success ? (<Box><Typography variant="caption" fontWeight={600}>{applySuccessLabel}</Typography>{applyResult.files?.map(f => (<Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>))}</Box>) : (<Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>)}</Alert>)}</Box></Stack>
+                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>Step 4 — {applyStepLabel}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{applyStepDescription ?? `Write the proxy configuration to ${agentName}'s settings file.`}</Typography><Collapse in={!applyDone}><Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>{onApply && <Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>{applyButtonLabel}</Button>}{onApplyWithStatusLine && <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>Auto Config + Status Line</Button>}{onViewConfig && <Button variant={onApply ? "outlined" : "contained"} size="small" disabled={!installDone} onClick={onViewConfig}>{viewConfigButtonLabel}</Button>}</Stack></Collapse>{applyResult && (<Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>{applyResult.success ? (<Box><Typography variant="caption" fontWeight={600}>{applySuccessLabel}</Typography>{applyResult.files?.map(f => (<Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>))}</Box>) : (<Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>)}</Alert>)}</Box></Stack>
                         )}
 
                         </Box>
