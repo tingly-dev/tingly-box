@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { ResolvedThemeMode, ThemeMode } from '@/theme';
+import { isThemeMode, SYSTEM_THEME_MODE_VALUES, THEME_MODE_VALUES } from '@/theme/options';
 
 interface ThemeContextType {
   mode: ThemeMode;
@@ -33,8 +34,8 @@ const getSystemMode = (): ResolvedThemeMode => {
 
 export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }) => {
   const [mode, setMode] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (isThemeMode(stored)) {
       return stored;
     }
     return 'system';
@@ -43,9 +44,8 @@ export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }
 
   const toggleTheme = () => {
     setMode((prev) => {
-      if (prev === 'light') return 'dark';
-      if (prev === 'dark') return 'system';
-      return 'light';
+      const currentIndex = THEME_MODE_VALUES.indexOf(prev);
+      return THEME_MODE_VALUES[(currentIndex + 1) % THEME_MODE_VALUES.length];
     });
   };
 
@@ -57,10 +57,10 @@ export const ThemeModeProvider: React.FC<ThemeModeProviderProps> = ({ children }
     if (!window.matchMedia) return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleSystemModeChange = (event: MediaQueryListEvent) => {
-      setSystemMode(event.matches ? 'dark' : 'light');
+      setSystemMode(event.matches ? SYSTEM_THEME_MODE_VALUES[1] : SYSTEM_THEME_MODE_VALUES[0]);
     };
 
-    setSystemMode(mediaQuery.matches ? 'dark' : 'light');
+    setSystemMode(mediaQuery.matches ? SYSTEM_THEME_MODE_VALUES[1] : SYSTEM_THEME_MODE_VALUES[0]);
     mediaQuery.addEventListener('change', handleSystemModeChange);
     return () => mediaQuery.removeEventListener('change', handleSystemModeChange);
   }, []);

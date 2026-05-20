@@ -3,12 +3,18 @@ import type { ResolvedThemeMode } from './types';
 import { baseTypography, baseShape, baseComponents } from './base';
 import { lightPalette } from './palettes/light';
 import { darkPalette } from './palettes/dark';
+import { sunlitPalette } from './palettes/sunlit';
+import { claudePalette } from './palettes/claude';
 import { lightComponents } from './components/light';
 import { darkComponents } from './components/dark';
+import { sunlitComponents } from './components/sunlit';
+import { claudeComponents } from './components/claude';
 
 const THEME_REGISTRY = {
   light: { palette: lightPalette, components: lightComponents },
   dark: { palette: darkPalette, components: darkComponents },
+  sunlit: { palette: sunlitPalette, components: sunlitComponents },
+  claude: { palette: claudePalette, components: claudeComponents },
 } as const;
 
 const createAppTheme = (mode: ResolvedThemeMode) => {
