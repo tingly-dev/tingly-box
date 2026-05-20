@@ -9,6 +9,8 @@ interface ApiKeyFieldProps {
     onTokenChange: (value: string) => void;
     noApiKey: boolean;
     onNoApiKeyChange: (checked: boolean) => void;
+    /** When true, hides the "No API Key Required" checkbox (caller owns that toggle). */
+    hideCheckbox?: boolean;
 }
 
 const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
@@ -17,6 +19,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
     onTokenChange,
     noApiKey,
     onNoApiKeyChange,
+    hideCheckbox = false,
 }) => {
     const {t} = useTranslation();
     const [showApiKey, setShowApiKey] = useState(false);
@@ -64,19 +67,21 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                     },
                 }}
             />
-            <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
-                <FormControlLabel
-                    control={
-                        <Checkbox
-                            size="small"
-                            checked={noApiKey}
-                            onChange={(e) => onNoApiKeyChange(e.target.checked)}
-                        />
-                    }
-                    label="No API Key Required"
-                    labelPlacement="start"
-                />
-            </Box>
+            {!hideCheckbox && (
+                <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                size="small"
+                                checked={noApiKey}
+                                onChange={(e) => onNoApiKeyChange(e.target.checked)}
+                            />
+                        }
+                        label="No API Key Required"
+                        labelPlacement="start"
+                    />
+                </Box>
+            )}
         </Box>
     );
 };
