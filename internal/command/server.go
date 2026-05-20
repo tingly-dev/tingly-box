@@ -41,11 +41,9 @@ type StartCmdKong struct {
 	PromptRestart        bool   `kong:"flag,name='prompt-restart',help='Prompt to restart if running'"`
 	RecordMode string `kong:"flag,name='record-mode',help='Record mode'"`
 	RecordDir  string `kong:"flag,name='record-dir',help='Record directory'"`
-	Source     string `kong:"flag,name='source',help='How tingly-box was launched (binary, npx, npx-bundle); recorded so shortcuts can match the install method'"`
 }
 
 func (s *StartCmdKong) Run(appManager *AppManager) error {
-	persistLaunchSource(appManager, s.Source)
 	flags := options.StartFlags{
 		Port:                 s.Port,
 		Host:                 s.Host,
@@ -83,7 +81,6 @@ type RestartCmdKong struct {
 }
 
 func (r *RestartCmdKong) Run(appManager *AppManager) error {
-	persistLaunchSource(appManager, r.Source)
 	appConfig := appManager.AppConfig()
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())
 	wasRunning := fileLock.IsLocked()
@@ -141,7 +138,6 @@ type OpenCmdKong struct {
 }
 
 func (o *OpenCmdKong) Run(appManager *AppManager) error {
-	persistLaunchSource(appManager, o.Source)
 	opts := resolveStartCmdKongOptions(&o.StartCmdKong, appManager.AppConfig())
 	appConfig := appManager.AppConfig()
 	fileLock := lock.NewFileLock(appConfig.ConfigDir())

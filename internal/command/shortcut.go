@@ -35,9 +35,10 @@ func isKnownSource(source string) bool {
 	}
 }
 
-// persistLaunchSource records how tingly-box was launched (best-effort) so that
-// `shortcut --source=auto` can generate a matching shortcut later.
-func persistLaunchSource(appManager *AppManager, source string) {
+// PersistLaunchSource records how tingly-box was launched (best-effort) so that
+// `shortcut --source=auto` can generate a matching shortcut later. It is a no-op
+// for empty/unknown/"auto" values and only writes when the value changes.
+func PersistLaunchSource(appManager *AppManager, source string) {
 	source = strings.TrimSpace(source)
 	if source == "" || source == "auto" || !isKnownSource(source) {
 		return
@@ -55,7 +56,7 @@ func persistLaunchSource(appManager *AppManager, source string) {
 // Windows.
 type ShortcutCmdKong struct {
 	Name      string `kong:"flag,name='name',default='Tingly Box',help='Shortcut name'"`
-	Source    string `kong:"flag,name='source',enum='auto,binary,npx,npx-bundle',default='auto',help='What the shortcut runs: binary (this executable), npx, npx-bundle, or auto-detect from the recorded launch source'"`
+	Target    string `kong:"flag,name='target',enum='auto,binary,npx,npx-bundle',default='auto',help='What the shortcut runs: binary (this executable), npx, npx-bundle, or auto-detect from the recorded launch source'"`
 	NoDesktop bool   `kong:"flag,name='no-desktop',help='Do not create a desktop shortcut'"`
 	NoMenu    bool   `kong:"flag,name='no-menu',help='Do not create a Start Menu / application menu entry'"`
 }
@@ -115,7 +116,7 @@ func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
 // is "auto" it prefers the recorded launch source, then falls back to detecting
 // the npx cache, and finally to the binary.
 func (s *ShortcutCmdKong) resolveLaunch(exePath, persistedSource string) launchSpec {
-	source := s.Source
+	source := s.Target
 	if source == "" || source == "auto" {
 		switch {
 		case isKnownSource(persistedSource):

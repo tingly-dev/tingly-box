@@ -78,8 +78,11 @@ const DEFAULT_ARGS = [
 	// Add your default parameters here, e.g.:
 	"restart",
 	"--daemon",
-	"--source=npx",
 ];
+
+// Global flag prepended to every invocation so the binary records that it was
+// launched via npx. As a global flag it must come before the subcommand.
+const SOURCE_ARGS = ["--source=npx"];
 
 async function getPlatformArchAndBinary() {
 	const platform = process.platform;
@@ -381,8 +384,10 @@ function formatBytes(bytes) {
     console.log(`🔍 Executing binary: ${binaryPath}`);
 
     try {
-        // Use default args if no arguments provided
-        const argsToUse = remainingArgs.length > 0 ? remainingArgs : DEFAULT_ARGS;
+        // Use default args if no arguments provided; always prepend the source
+        // flag so any npx invocation records its launch source.
+        const baseArgs = remainingArgs.length > 0 ? remainingArgs : DEFAULT_ARGS;
+        const argsToUse = [...SOURCE_ARGS, ...baseArgs];
 
         execFileSync(binaryPath, argsToUse, {
             stdio: "inherit",
