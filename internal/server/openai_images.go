@@ -149,6 +149,9 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 	usage := protocol.NewTokenUsageWithCache(int(resp.Usage.InputTokens), int(resp.Usage.OutputTokens), 0)
 	s.trackUsageWithTokenUsage(c, usage, nil)
 
+	// Persist generated images under the config image directory (best-effort).
+	s.persistImageGeneration(&req, resp)
+
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{

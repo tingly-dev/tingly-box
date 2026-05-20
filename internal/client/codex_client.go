@@ -2,12 +2,9 @@ package client
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,9 +20,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// Image generation persistence directory
-const imagePersistDir = ".tingly-image"
 
 // CodexClient wraps OpenAIClient with Codex-specific behaviors.
 // It embeds OpenAIClient to inherit standard OpenAI API functionality,
@@ -124,7 +118,7 @@ func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.R
 // ImagesGenerate creates a new image generation request.
 // For Codex, this transforms the request to use the Responses API with the image_generation tool,
 // as ChatGPT backend API does not support the standard /images/generations endpoint.
-// Generated images and prompts are persisted to .tingly-image/ directory for debugging.
+// Persistence of generated images is handled by the server layer, not the client.
 func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
 	logrus.Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
 
@@ -135,15 +129,7 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
 
 	// Parse streaming response
-	resp, err := c.parseImageGenerationStream(ctx, stream)
-	if err != nil {
-		return nil, err
-	}
-
-	// Persist images and prompts
-	c.persistImageGeneration(req, resp)
-
-	return resp, nil
+	return c.parseImageGenerationStream(ctx, stream)
 }
 
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
@@ -708,76 +694,4 @@ func (c *CodexClient) ProbeResponsesStream(ctx context.Context, model, message s
 
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/responses", true), nil
-}
-
-// persistImageGeneration saves generated images and their prompts to disk.
-// Images are saved as PNG files with base64 data decoded.
-// Prompts are saved as .txt files alongside the images.
-// Files are organized in .tingly-image/ directory by timestamp.
-func (c *CodexClient) persistImageGeneration(req openai.ImageGenerateParams, resp *openai.ImagesResponse) {
-	if resp == nil || len(resp.Data) == 0 {
-		logrus.Warn("[Codex] No image data to persist")
-		return
-	}
-
-	// Create timestamp for this generation
-	timestamp := time.Now().Format("20060102-150405")
-
-	// Create directory: .tingly-image/YYYYMMDD/
-	dateDir := filepath.Join(imagePersistDir, time.Now().Format("20060102"))
-	if err := os.MkdirAll(dateDir, 0755); err != nil {
-		logrus.Errorf("[Codex] Failed to create image directory: %v", err)
-		return
-	}
-
-	// Save each image with its prompt
-	for i, img := range resp.Data {
-		// Generate filename: timestamp-index.png
-		var filename string
-		if i == 0 {
-			filename = fmt.Sprintf("%s.png", timestamp)
-		} else {
-			filename = fmt.Sprintf("%s-%d.png", timestamp, i)
-		}
-		imagePath := filepath.Join(dateDir, filename)
-
-		// Decode base64 and save as PNG
-		imageData, err := base64.StdEncoding.DecodeString(img.B64JSON)
-		if err != nil {
-			logrus.Errorf("[Codex] Failed to decode base64 image data: %v", err)
-			continue
-		}
-
-		if err := os.WriteFile(imagePath, imageData, 0644); err != nil {
-			logrus.Errorf("[Codex] Failed to write image file: %v", err)
-			continue
-		}
-
-		logrus.Infof("[Codex] Saved image to: %s", imagePath)
-
-		// Save prompt as .txt file
-		promptFilename := strings.Replace(filename, ".png", ".txt", 1)
-		promptPath := filepath.Join(dateDir, promptFilename)
-
-		// Build prompt metadata
-		promptContent := fmt.Sprintf("Prompt: %s\n\nModel: %s\nSize: %s\nQuality: %s\nFormat: %s\nTimestamp: %s\n",
-			req.Prompt,
-			req.Model,
-			req.Size,
-			req.Quality,
-			req.ResponseFormat,
-			time.Now().Format(time.RFC3339),
-		)
-
-		if req.Style != "" {
-			promptContent += fmt.Sprintf("Style: %s\n", req.Style)
-		}
-
-		if err := os.WriteFile(promptPath, []byte(promptContent), 0644); err != nil {
-			logrus.Errorf("[Codex] Failed to write prompt file: %v", err)
-			continue
-		}
-
-		logrus.Infof("[Codex] Saved prompt to: %s", promptPath)
-	}
 }

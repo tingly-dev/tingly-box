@@ -96,6 +96,8 @@ const DBDirName = "db"
 
 const MemoryDirName = "memory"
 
+const ImageDirName = "image"
+
 // GetTinglyConfDir returns the config directory path (default: ~/.tingly-box)
 func GetTinglyConfDir() string {
 	homeDir, err := fs.GetUserPath()
@@ -122,4 +124,9 @@ func GetDBDir(baseDir string) string {
 
 func GetDBFile(baseDir string) string {
 	return filepath.Join(baseDir, DBDirName, DBFileName)
+}
+
+// GetImageDir returns the generated-image persistence directory path
+func GetImageDir(baseDir string) string {
+	return filepath.Join(baseDir, ImageDirName)
 }
