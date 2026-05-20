@@ -114,12 +114,28 @@ func GetGlobalTransportPool() *TransportPool {
 
 // SetTransportConfig updates the transport pool configuration
 // Pass nil to reset to Go defaults (backward compatible)
-// This affects newly created transports only, existing transports are not modified
+// When RespectEnvProxy changes, cached transports are cleared immediately so
+// that the new proxy policy takes effect on the next request.
 func SetTransportConfig(config *TransportConfig) {
 	globalTransportPool.mutex.Lock()
 	defer globalTransportPool.mutex.Unlock()
 
+	oldRespectEnvProxy := boolPtrVal(nil)
+	if globalTransportPool.config != nil {
+		oldRespectEnvProxy = boolPtrVal(globalTransportPool.config.RespectEnvProxy)
+	}
+
 	globalTransportPool.config = config
+
+	newRespectEnvProxy := boolPtrVal(nil)
+	if config != nil {
+		newRespectEnvProxy = boolPtrVal(config.RespectEnvProxy)
+	}
+
+	if oldRespectEnvProxy != newRespectEnvProxy {
+		globalTransportPool.clearLocked()
+		logrus.Infof("Transport pool cleared: respect_env_proxy changed %v → %v", oldRespectEnvProxy, newRespectEnvProxy)
+	}
 
 	if config == nil {
 		logrus.Info("Transport pool config reset to Go defaults")
@@ -135,6 +151,11 @@ func SetTransportConfig(config *TransportConfig) {
 		logrus.Infof("Transport pool config updated: MaxIdleConns=%s, MaxIdleConnsPerHost=%s",
 			maxIdle, maxIdlePerHost)
 	}
+}
+
+// boolPtrVal returns the value of a *bool, treating nil as false.
+func boolPtrVal(b *bool) bool {
+	return b != nil && *b
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration.
@@ -332,14 +353,8 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 	}
 }
 
-// Clear removes all transports from the pool and closes idle connections.
-// Transports with active in-flight requests (refCount > 0) are marked for deferred
-// removal (lastAccess set to epoch) and will be cleaned up on the next cycle after
-// their requests complete.
-func (tp *TransportPool) Clear() {
-	tp.mutex.Lock()
-	defer tp.mutex.Unlock()
-
+// clearLocked removes all transports from the pool. Caller must hold tp.mutex (write lock).
+func (tp *TransportPool) clearLocked() {
 	removedCount := 0
 	deferredCount := 0
 
@@ -356,6 +371,16 @@ func (tp *TransportPool) Clear() {
 	}
 
 	logrus.Infof("Transport pool cleared: %d removed, %d deferred (active requests)", removedCount, deferredCount)
+}
+
+// Clear removes all transports from the pool and closes idle connections.
+// Transports with active in-flight requests (refCount > 0) are marked for deferred
+// removal (lastAccess set to epoch) and will be cleaned up on the next cycle after
+// their requests complete.
+func (tp *TransportPool) Clear() {
+	tp.mutex.Lock()
+	defer tp.mutex.Unlock()
+	tp.clearLocked()
 }
 
 // InvalidateProvider removes all transports associated with a specific provider UUID.
