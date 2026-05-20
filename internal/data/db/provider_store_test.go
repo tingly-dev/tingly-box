@@ -640,3 +640,62 @@ func TestProviderOpenAIEndpointModeRoundTrip(t *testing.T) {
 		t.Errorf("OpenAIEndpointMode after update: got %q, want %q", got2.OpenAIEndpointMode, ai.EndpointModeBoth)
 	}
 }
+
+func TestProviderCredentialBundleRoundTrip(t *testing.T) {
+	store, _ := setupTestProviderStore(t)
+	defer store.Close()
+
+	provider := &typ.Provider{
+		UUID:     "test-cred-bundle-uuid",
+		Name:     "bedrock",
+		APIBase:  "https://bedrock-runtime.us-east-1.amazonaws.com",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAWSSigV4,
+		Credential: &typ.CredentialBundle{
+			Fields: map[string]string{
+				"access_key_id":     "AKIAEXAMPLE",
+				"secret_access_key": "secret",
+				"region":            "us-east-1",
+			},
+		},
+		Enabled: true,
+	}
+
+	if err := store.Save(provider); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := store.GetByUUID("test-cred-bundle-uuid")
+	if err != nil {
+		t.Fatalf("GetByUUID: %v", err)
+	}
+	if got.AuthType != typ.AuthTypeAWSSigV4 {
+		t.Errorf("AuthType: got %q, want %q", got.AuthType, typ.AuthTypeAWSSigV4)
+	}
+	if got.Credential == nil {
+		t.Fatalf("Credential nil after round-trip")
+	}
+	if got.Credential.Field("region") != "us-east-1" {
+		t.Errorf("region: got %q, want %q", got.Credential.Field("region"), "us-east-1")
+	}
+	if got.Token != "" {
+		t.Errorf("Token should be empty for multi-field auth, got %q", got.Token)
+	}
+
+	// UpdateCredentialBundle path.
+	newBundle := &typ.CredentialBundle{Fields: map[string]string{
+		"access_key_id":     "AKIANEW",
+		"secret_access_key": "secret2",
+		"region":            "eu-west-1",
+	}}
+	if err := store.UpdateCredentialBundle("test-cred-bundle-uuid", newBundle); err != nil {
+		t.Fatalf("UpdateCredentialBundle: %v", err)
+	}
+	got2, err := store.GetByUUID("test-cred-bundle-uuid")
+	if err != nil {
+		t.Fatalf("GetByUUID after update: %v", err)
+	}
+	if got2.Credential.Field("region") != "eu-west-1" {
+		t.Errorf("region after update: got %q, want %q", got2.Credential.Field("region"), "eu-west-1")
+	}
+}

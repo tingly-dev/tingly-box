@@ -14,7 +14,24 @@ const (
 	AuthTypeAPIKey  AuthType = "api_key"
 	AuthTypeOAuth   AuthType = "oauth"
 	AuthTypeVirtual AuthType = "vmodel"
+
+	// Multi-field credential auth types. These do not use a single bearer
+	// token; their credentials live in Provider.Credential (a CredentialBundle)
+	// and each carries its own request-signing mechanism.
+	AuthTypeAWSSigV4  AuthType = "aws_sigv4"
+	AuthTypeAzureKey  AuthType = "azure_key"
+	AuthTypeGCPVertex AuthType = "gcp_sa"
 )
+
+// IsMultiFieldCredential reports whether the auth type stores its credentials
+// in Provider.Credential rather than the single Token / OAuthDetail fields.
+func (a AuthType) IsMultiFieldCredential() bool {
+	switch a {
+	case AuthTypeAWSSigV4, AuthTypeAzureKey, AuthTypeGCPVertex:
+		return true
+	}
+	return false
+}
 
 // ProviderSource indicates whether a provider was created by a user or seeded
 // by the system at startup. Builtin providers cannot be deleted or have their
@@ -34,6 +51,22 @@ const (
 type VModelDetail struct {
 	Models         []string `json:"models,omitempty"`
 	LatencyProfile string   `json:"latency_profile,omitempty"`
+}
+
+// CredentialBundle holds the credential fields for multi-field auth types
+// (AWS SigV4, Azure, GCP Vertex). Fields is a generic, schema-validated
+// key/value map so new credential shapes can be added as data rather than new
+// columns; consumers should read it through typed accessors.
+type CredentialBundle struct {
+	Fields map[string]string `json:"fields,omitempty"`
+}
+
+// Field returns the value for key, or "" if absent.
+func (c *CredentialBundle) Field(key string) string {
+	if c == nil {
+		return ""
+	}
+	return c.Fields[key]
 }
 
 // OAuthDetail contains OAuth-specific authentication information
@@ -150,10 +183,11 @@ type Provider struct {
 	APIBaseAnthropic string `json:"api_base_anthropic,omitempty"`
 
 	// Auth configuration
-	AuthType     AuthType       `json:"auth_type"`               // api_key, oauth, or vmodel
-	OAuthDetail  *OAuthDetail   `json:"oauth_detail,omitempty"`  // OAuth credentials (only for oauth auth type)
-	VModelDetail *VModelDetail  `json:"vmodel_detail,omitempty"` // Virtual-model config (only for vmodel auth type)
-	Source       ProviderSource `json:"source,omitempty"`        // "user" (default) or "builtin"
+	AuthType     AuthType          `json:"auth_type"`               // api_key, oauth, vmodel, aws_sigv4, azure_key, gcp_sa
+	OAuthDetail  *OAuthDetail      `json:"oauth_detail,omitempty"`  // OAuth credentials (only for oauth auth type)
+	VModelDetail *VModelDetail     `json:"vmodel_detail,omitempty"` // Virtual-model config (only for vmodel auth type)
+	Credential   *CredentialBundle `json:"credential,omitempty"`    // Multi-field credentials (only for multi-field auth types)
+	Source       ProviderSource    `json:"source,omitempty"`        // "user" (default) or "builtin"
 
 	// OpenAIEndpointMode declares which OpenAI endpoints this provider exposes.
 	// Snapshotted from the provider's template at instantiation, or set on

@@ -26,9 +26,9 @@ type ProviderRecord struct {
 	UUID     string `gorm:"primaryKey;column:uuid"`
 	Name     string `gorm:"column:name;not null;index"`
 	APIBase  string `gorm:"column:api_base;not null"`
-	APIStyle string `gorm:"column:api_style;not null"` // "openai" or "anthropic"
-	AuthType string `gorm:"column:auth_type;not null"`       // "api_key", "oauth", or "vmodel"
-	Source   string `gorm:"column:source;default:'user'"`    // "user" (default) or "builtin"
+	APIStyle string `gorm:"column:api_style;not null"`    // "openai" or "anthropic"
+	AuthType string `gorm:"column:auth_type;not null"`    // "api_key", "oauth", or "vmodel"
+	Source   string `gorm:"column:source;default:'user'"` // "user" (default) or "builtin"
 
 	// Configuration fields
 	NoKeyRequired bool   `gorm:"column:no_key_required;default:false"`
@@ -58,6 +58,12 @@ type ProviderRecord struct {
 
 	// VModel-specific fields (only populated when AuthType == "vmodel")
 	VModelDetail string `gorm:"column:vmodel_detail;type:text"` // JSON-encoded typ.VModelDetail
+
+	// Credential holds multi-field credentials for non-bearer auth types
+	// (aws_sigv4, azure_key, gcp_sa). JSON-encoded typ.CredentialBundle.
+	// Empty for api_key/oauth/vmodel. Added additively; AutoMigrate creates
+	// the column on existing databases with no backfill required.
+	Credential string `gorm:"column:credential;type:text"`
 
 	CreatedAt time.Time `gorm:"column:created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at"`
@@ -110,6 +116,13 @@ func (r *ProviderRecord) toProvider() *typ.Provider {
 			var detail typ.VModelDetail
 			if err := json.Unmarshal([]byte(r.VModelDetail), &detail); err == nil {
 				provider.VModelDetail = &detail
+			}
+		}
+	case typ.AuthTypeAWSSigV4, typ.AuthTypeAzureKey, typ.AuthTypeGCPVertex:
+		if r.Credential != "" {
+			var bundle typ.CredentialBundle
+			if err := json.Unmarshal([]byte(r.Credential), &bundle); err == nil {
+				provider.Credential = &bundle
 			}
 		}
 	case typ.AuthTypeAPIKey, "":
@@ -172,6 +185,11 @@ func toRecord(p *typ.Provider) *ProviderRecord {
 			vmJSON, _ := json.Marshal(p.VModelDetail)
 			record.VModelDetail = string(vmJSON)
 		}
+	case typ.AuthTypeAWSSigV4, typ.AuthTypeAzureKey, typ.AuthTypeGCPVertex:
+		if p.Credential != nil {
+			credJSON, _ := json.Marshal(p.Credential)
+			record.Credential = string(credJSON)
+		}
 	case typ.AuthTypeAPIKey, "":
 		record.Token = p.Token
 	}
@@ -233,6 +251,21 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 		record.OAuthRefreshToken = ""
 		record.OAuthExpiresAt = ""
 		record.OAuthExtraFields = ""
+		record.Credential = ""
+	case typ.AuthTypeAWSSigV4, typ.AuthTypeAzureKey, typ.AuthTypeGCPVertex:
+		if p.Credential != nil {
+			credJSON, _ := json.Marshal(p.Credential)
+			record.Credential = string(credJSON)
+		} else {
+			record.Credential = ""
+		}
+		record.Token = ""
+		record.OAuthProviderType = ""
+		record.OAuthUserID = ""
+		record.OAuthRefreshToken = ""
+		record.OAuthExpiresAt = ""
+		record.OAuthExtraFields = ""
+		record.VModelDetail = ""
 	case typ.AuthTypeAPIKey, "":
 		record.Token = p.Token
 		record.OAuthProviderType = ""
@@ -241,6 +274,7 @@ func updateRecordFromProvider(record *ProviderRecord, p *typ.Provider) {
 		record.OAuthExpiresAt = ""
 		record.OAuthExtraFields = ""
 		record.VModelDetail = ""
+		record.Credential = ""
 	}
 }
 
@@ -471,6 +505,37 @@ func (ps *ProviderStore) UpdateCredential(uuid string, token string, oauthDetail
 	}
 
 	logrus.Debugf("Updated credential for provider: %s", uuid)
+	return nil
+}
+
+// UpdateCredentialBundle updates only the multi-field credential of a provider
+// (auth types aws_sigv4, azure_key, gcp_sa). Added alongside UpdateCredential
+// to avoid changing that method's signature and its existing callers.
+func (ps *ProviderStore) UpdateCredentialBundle(uuid string, bundle *typ.CredentialBundle) error {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	var record ProviderRecord
+	if err := ps.db.Where("uuid = ?", uuid).First(&record).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("provider with UUID '%s' not found", uuid)
+		}
+		return fmt.Errorf("failed to get provider: %w", err)
+	}
+
+	if bundle != nil {
+		credJSON, _ := json.Marshal(bundle)
+		record.Credential = string(credJSON)
+	} else {
+		record.Credential = ""
+	}
+	record.UpdatedAt = time.Now()
+
+	if err := ps.db.Save(&record).Error; err != nil {
+		return fmt.Errorf("failed to update provider credential bundle: %w", err)
+	}
+
+	logrus.Debugf("Updated credential bundle for provider: %s", uuid)
 	return nil
 }
 
