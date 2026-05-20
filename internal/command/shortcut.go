@@ -9,8 +9,45 @@ import (
 	"strings"
 )
 
-// npxPackage is the package the npx-based shortcut runs.
-const npxPackage = "tingly-box@latest"
+// Launch sources. They describe how Tingly Box is installed/started and which
+// command a shortcut should run.
+const (
+	sourceBinary    = "binary"
+	sourceNpx       = "npx"
+	sourceNpxBundle = "npx-bundle"
+)
+
+// npxPackageForSource returns the npm package an npx-based launch should run.
+func npxPackageForSource(source string) string {
+	if source == sourceNpxBundle {
+		return "tingly-box-bundle@latest"
+	}
+	return "tingly-box@latest"
+}
+
+// isKnownSource reports whether source is one we recognize for persistence.
+func isKnownSource(source string) bool {
+	switch source {
+	case sourceBinary, sourceNpx, sourceNpxBundle:
+		return true
+	default:
+		return false
+	}
+}
+
+// persistLaunchSource records how tingly-box was launched (best-effort) so that
+// `shortcut --source=auto` can generate a matching shortcut later.
+func persistLaunchSource(appManager *AppManager, source string) {
+	source = strings.TrimSpace(source)
+	if source == "" || source == "auto" || !isKnownSource(source) {
+		return
+	}
+	cfg := appManager.GetGlobalConfig()
+	if cfg == nil || cfg.GetLaunchSource() == source {
+		return
+	}
+	_ = cfg.SetLaunchSource(source)
+}
 
 // ShortcutCmdKong creates a desktop / start-menu shortcut that launches
 // Tingly Box (restart in daemon mode and open the web UI) with a double-click,
@@ -18,7 +55,7 @@ const npxPackage = "tingly-box@latest"
 // Windows.
 type ShortcutCmdKong struct {
 	Name      string `kong:"flag,name='name',default='Tingly Box',help='Shortcut name'"`
-	Source    string `kong:"flag,name='source',enum='auto,binary,npx',default='auto',help='What the shortcut runs: binary (this executable), npx (npx tingly-box@latest), or auto-detect'"`
+	Source    string `kong:"flag,name='source',enum='auto,binary,npx,npx-bundle',default='auto',help='What the shortcut runs: binary (this executable), npx, npx-bundle, or auto-detect from the recorded launch source'"`
 	NoDesktop bool   `kong:"flag,name='no-desktop',help='Do not create a desktop shortcut'"`
 	NoMenu    bool   `kong:"flag,name='no-menu',help='Do not create a Start Menu / application menu entry'"`
 }
@@ -48,7 +85,12 @@ func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
 		exePath = resolved
 	}
 
-	spec := s.resolveLaunch(exePath)
+	var persisted string
+	if cfg := appManager.GetGlobalConfig(); cfg != nil {
+		persisted = cfg.GetLaunchSource()
+	}
+
+	spec := s.resolveLaunch(exePath, persisted)
 
 	created, err := createShortcuts(s, spec)
 	if err != nil {
@@ -69,22 +111,27 @@ func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
 }
 
 // resolveLaunch decides whether the shortcut runs this binary directly or goes
-// through npx, then builds the platform-specific launch vectors.
-func (s *ShortcutCmdKong) resolveLaunch(exePath string) launchSpec {
+// through npx, then builds the platform-specific launch vectors. When the source
+// is "auto" it prefers the recorded launch source, then falls back to detecting
+// the npx cache, and finally to the binary.
+func (s *ShortcutCmdKong) resolveLaunch(exePath, persistedSource string) launchSpec {
 	source := s.Source
 	if source == "" || source == "auto" {
-		if isNpxCachedBinary(exePath) {
-			source = "npx"
-		} else {
-			source = "binary"
+		switch {
+		case isKnownSource(persistedSource):
+			source = persistedSource
+		case isNpxCachedBinary(exePath):
+			source = sourceNpx
+		default:
+			source = sourceBinary
 		}
 	}
 
 	args := shortcutLaunchArgs()
 
-	if source == "npx" {
+	if source == sourceNpx || source == sourceNpxBundle {
 		// e.g. "npx -y tingly-box@latest restart --daemon"
-		npxArgv := append([]string{"npx", "-y", npxPackage}, args...)
+		npxArgv := append([]string{"npx", "-y", npxPackageForSource(source)}, args...)
 		cmdStr := strings.Join(npxArgv, " ")
 		home, _ := os.UserHomeDir()
 

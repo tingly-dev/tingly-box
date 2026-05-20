@@ -78,6 +78,7 @@ const DEFAULT_ARGS = [
 	// Add your default parameters here, e.g.:
 	"restart",
 	"--daemon",
+	"--source=npx",
 ];
 
 async function getPlatformArchAndBinary() {
