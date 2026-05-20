@@ -6,7 +6,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -521,8 +520,9 @@ const ProviderFormDialog = ({
     const willMergeBaseUrls = enableFusion && createFusionProvider;
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{sx: {minHeight: 200}}}>
-            <DialogTitle>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
+            PaperProps={{sx: {maxHeight: '88vh', display: 'flex', flexDirection: 'column'}}}>
+            <DialogTitle sx={{flexShrink: 0}}>
                 <Box sx={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
                     {title || defaultTitle}
                     <IconButton aria-label="close" onClick={onClose} sx={{ml: 2}} size="small">
@@ -530,8 +530,8 @@ const ProviderFormDialog = ({
                     </IconButton>
                 </Box>
             </DialogTitle>
-            <form onSubmit={handleSubmit}>
-                <DialogContent sx={{pt: 1, pb: 1, minHeight: 280}}>
+            <form onSubmit={handleSubmit} style={{display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden'}}>
+                <DialogContent sx={{pt: 1, pb: 1, overflowY: 'auto', flex: 1}}>
                     <Stack spacing={2.5}>
                         {isFirstProvider && mode === 'add' && (
                             <Alert severity="info" sx={{mb: 1}}>
@@ -543,35 +543,6 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        {/* Auth method chips */}
-                        <Stack direction="row" spacing={1} sx={{pt: 0.5}}>
-                            <Chip
-                                label={t('providerDialog.method.apiKey', {defaultValue: 'API Key'})}
-                                size="small"
-                                color={!noApiKey ? 'primary' : 'default'}
-                                variant={!noApiKey ? 'filled' : 'outlined'}
-                                onClick={() => {
-                                    setNoApiKey(false);
-                                    onChange('noKeyRequired', false);
-                                    setVerificationResult(null);
-                                }}
-                                sx={{fontWeight: 600}}
-                            />
-                            <Chip
-                                label={t('providerDialog.method.noKey', {defaultValue: 'No key required'})}
-                                size="small"
-                                color={noApiKey ? 'primary' : 'default'}
-                                variant={noApiKey ? 'filled' : 'outlined'}
-                                onClick={() => {
-                                    setNoApiKey(true);
-                                    onChange('noKeyRequired', true);
-                                    onChange('token', '');
-                                    setVerificationResult(null);
-                                }}
-                                sx={{fontWeight: 600}}
-                            />
-                        </Stack>
-
                         <ProviderAutocomplete
                             options={allProviders}
                             value={selectedProvider}
@@ -581,26 +552,23 @@ const ProviderFormDialog = ({
                             onBlur={handleProviderInputBlur}
                         />
 
-                        {!noApiKey && (
-                            <ApiKeyField
-                                mode={mode}
-                                token={data.token}
-                                onTokenChange={(value) => {
-                                    onChange('token', value);
-                                    setVerificationResult(null);
-                                }}
-                                noApiKey={noApiKey}
-                                onNoApiKeyChange={(checked) => {
-                                    setNoApiKey(checked);
-                                    onChange('noKeyRequired', checked);
-                                    setVerificationResult(null);
-                                    if (checked) {
-                                        onChange('token', '');
-                                    }
-                                }}
-                                hideCheckbox
-                            />
-                        )}
+                        <ApiKeyField
+                            mode={mode}
+                            token={data.token}
+                            onTokenChange={(value) => {
+                                onChange('token', value);
+                                setVerificationResult(null);
+                            }}
+                            noApiKey={noApiKey}
+                            onNoApiKeyChange={(checked) => {
+                                setNoApiKey(checked);
+                                onChange('noKeyRequired', checked);
+                                setVerificationResult(null);
+                                if (checked) {
+                                    onChange('token', '');
+                                }
+                            }}
+                        />
 
                         <ProtocolSelector
                             selectedProvider={selectedProvider}
