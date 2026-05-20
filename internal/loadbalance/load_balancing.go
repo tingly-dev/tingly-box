@@ -507,7 +507,10 @@ func (tt TacticType) String() string {
 	case TacticPriority:
 		return "priority"
 	default:
-		return "token_based"
+		// Unset (type 0) / unknown: report Random, the documented default
+		// (see Rule.GetTacticType). Keeps serialization consistent with the
+		// tactic actually used for selection.
+		return "random"
 	}
 }
 

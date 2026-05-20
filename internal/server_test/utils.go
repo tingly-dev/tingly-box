@@ -291,6 +291,42 @@ func (ts *TestServer) AddTestRule(t *testing.T, requestModel, providerName, mode
 	}
 }
 
+// EnsureLoadBalancingRule creates a multi-service, randomly load-balanced rule
+// for the given request model + scenario if one does not already exist. The
+// mock test setup adds providers but no rule for the "tingly" model, so requests
+// would otherwise 404. The real-config variants already have the rule, so the
+// existence check leaves them untouched.
+func (ts *TestServer) EnsureLoadBalancingRule(t *testing.T, requestModel, model string, scenario typ.RuleScenario, providers ...string) {
+	gc := ts.appConfig.GetGlobalConfig()
+	if gc.GetRuleByRequestModelAndScenario(requestModel, scenario) != nil {
+		return
+	}
+
+	services := make([]*loadbalance.Service, 0, len(providers))
+	for _, p := range providers {
+		services = append(services, &loadbalance.Service{
+			Provider:   p,
+			Model:      model,
+			Weight:     1,
+			Active:     true,
+			TimeWindow: 300,
+		})
+	}
+
+	rule := typ.Rule{
+		Scenario:     scenario,
+		RequestModel: requestModel,
+		UUID:         fmt.Sprintf("%s-%s", requestModel, scenario),
+		Services:     services,
+		LBTactic:     typ.Tactic{Type: loadbalance.TacticRandom, Params: typ.NewRandomParams()},
+		Active:       true,
+	}
+
+	if err := gc.AddOrUpdateRequestConfigByRequestModel(rule); err != nil {
+		t.Fatalf("Failed to add load balancing rule %s: %v", requestModel, err)
+	}
+}
+
 // NewTestServerWithAdaptorFromConfig creates a new test server with adaptor flag using existing app config
 func NewTestServerWithAdaptorFromConfig(appConfig *config.AppConfig) *TestServer {
 	// Create server instance with adaptor flag
