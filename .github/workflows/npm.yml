@@ -307,130 +307,9 @@ jobs:
             npm publish --provenance --access public --tag "$NPM_TAG"
           fi
 
-  # Create a single NPX tag and release for CLI + Bundle
-  create-release:
-    needs: [setup, publish-cli-bundle]
-    name: Create NPX Release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    if: >-
-      always() &&
-      needs.setup.result == 'success' &&
-      (needs.publish-cli-bundle.result == 'success' || needs.publish-cli-bundle.result == 'skipped')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Create NPX tag and release
-        env:
-          VERSION: ${{ needs.setup.outputs.npx_version }}
-          RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          FULL_TAG="npx-$VERSION"
-
-          # Determine which packages were published
-          PUBLISHED_CLI="${{ needs.setup.outputs.publish_cli }}"
-          PUBLISHED_BUNDLE="${{ needs.setup.outputs.publish_bundle }}"
-
-          echo "Creating NPX tag and release for $FULL_TAG"
-          echo "  - CLI: $PUBLISHED_CLI"
-          echo "  - Bundle: $PUBLISHED_BUNDLE"
-
-          # Only proceed if at least one package was requested
-          if [ "$PUBLISHED_CLI" != 'true' ] && [ "$PUBLISHED_BUNDLE" != 'true' ]; then
-            echo "⏭️ No packages to release, skipping..."
-            exit 0
-          fi
-
-          # Create git tag
-          if git rev-parse "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Tag $FULL_TAG already exists"
-          else
-            git tag "$FULL_TAG"
-            git push origin "$FULL_TAG"
-          fi
-
-          # Build release notes
-          cat > npx_release_notes.md << NOTES_EOF
-          ## 📦 NPX Package Release - $VERSION
-
-          Based on GitHub Release: [${RELEASE_TAG}](https://github.com/tingly-dev/tingly-box/releases/tag/${RELEASE_TAG})
-
-          ### 🚀 Installation
-
-          \`\`\`bash
-          # Use with npx (recommended)
-          npx tingly-box@$VERSION
-
-          # Or install globally
-          npm install -g tingly-box@$VERSION
-          \`\`\`
-          NOTES_EOF
-
-          if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
-            cat >> npx_release_notes.md << BUNDLE_EOF
-
-          ### ✨ Bundle Package Features
-
-          - **Offline-ready**: Binaries bundled, no download required
-          - **Fast startup**: No network latency
-          - **Self-contained**: Works without GitHub access
-          - **Multi-platform**: Supports macOS (ARM64/AMD64), Linux (x64/ARM64), Windows (x64)
-
-          \`\`\`bash
-          npx tingly-box-bundle@$VERSION
-          \`\`\`
-
-          > For a smaller package with download-on-demand, use \`tingly-box\` instead.
-          > the bundle package includes pre-built binaries, ~70MB
-          BUNDLE_EOF
-          fi
-
-          cat >> npx_release_notes.md << FOOTER_EOF
-
-          ### 🔗 Links
-
-          - 📦 [CLI on npm](https://www.npmjs.com/package/tingly-box/v/$VERSION)
-          FOOTER_EOF
-
-          if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
-            echo "- 📦 [Bundle on npm](https://www.npmjs.com/package/tingly-box-bundle/v/$VERSION)" >> npx_release_notes.md
-          fi
-
-          cat >> npx_release_notes.md << FOOTER2_EOF
-          - 🏷️ [Source Release](https://github.com/tingly-dev/tingly-box/releases/tag/$RELEASE_TAG)
-
-          ---
-          _NPX package automatically published based on release $RELEASE_TAG_
-          FOOTER2_EOF
-
-          # Create or update GitHub release
-          if gh release view "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Release $FULL_TAG already exists, updating..."
-            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION"
-          else
-            PRERELEASE_FLAG=""
-            if [[ "$VERSION" == *-* ]]; then
-              PRERELEASE_FLAG="--prerelease"
-            fi
-            gh release create "$FULL_TAG" \
-              --title "NPX Package $VERSION" \
-              --notes-file npx_release_notes.md \
-              ${PRERELEASE_FLAG}
-          fi
-
   # Build Docker NPX image after npm release is created
   build-docker-npx:
-    needs: [setup, publish-cli-bundle, create-release]
+    needs: [setup, publish-cli-bundle]
     name: Build Docker NPX Image
     runs-on: ubuntu-latest
     permissions:
@@ -439,7 +318,6 @@ jobs:
     if: >-
       needs.setup.result == 'success' &&
       needs.publish-cli-bundle.result == 'success' &&
-      needs.create-release.result == 'success' &&
       needs.setup.outputs.publish_cli == 'true' &&
       needs.setup.outputs.build_docker == 'true'
     steps:
@@ -539,57 +417,84 @@ jobs:
             npm publish --provenance --access public --tag "$NPM_TAG"
           fi
 
-      - name: Create NPX tag and release
+  # Update the v* GitHub Release with npm package information
+  update-release:
+    needs: [setup, publish-cli-bundle, publish-gui]
+    name: Update Release with npm Info
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: >-
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.publish-cli-bundle.result == 'success' || needs.publish-gui.result == 'success')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update v* release with npm links
         env:
           VERSION: ${{ needs.setup.outputs.npx_version }}
           RELEASE_TAG: ${{ needs.setup.outputs.release_tag }}
-          PKG_TYPE: ${{ env.PKG_TYPE }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          FULL_TAG="npx-${PKG_TYPE}-$VERSION"
+          echo "Updating release $RELEASE_TAG with npm package info..."
 
-          echo "Creating NPX tag and release for $FULL_TAG"
+          # Read existing body and remove any previous npm section
+          gh release view "$RELEASE_TAG" --json body --jq '.body' > existing_body.md
+          sed -i.bak '/<!-- NPX_INFO_START -->/,/<!-- NPX_INFO_END -->/d' existing_body.md
+          rm -f existing_body.md.bak
 
-          if git rev-parse "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Tag $FULL_TAG already exists"
-          else
-            git tag "$FULL_TAG"
-            git push origin "$FULL_TAG"
+          # Append npm package info header (using echo to avoid heredoc issues)
+          echo "" >> existing_body.md
+          echo "<!-- NPX_INFO_START -->" >> existing_body.md
+          echo "### 📦 NPX / npm Packages" >> existing_body.md
+          echo "" >> existing_body.md
+          echo "| Package | Installation |" >> existing_body.md
+          echo "|---------|-------------|" >> existing_body.md
+
+          # Only add rows/examples for packages that were actually published
+          PUBLISHED_CLI="${{ needs.setup.outputs.publish_cli == 'true' && needs.publish-cli-bundle.result == 'success' }}"
+          PUBLISHED_BUNDLE="${{ needs.setup.outputs.publish_bundle == 'true' && needs.publish-cli-bundle.result == 'success' }}"
+          PUBLISHED_GUI="${{ needs.setup.outputs.publish_gui == 'true' && needs.publish-gui.result == 'success' }}"
+          HAS_EXAMPLE=false
+
+          if [ "$PUBLISHED_CLI" = 'true' ]; then
+            echo "| **tingly-box** (CLI) | \`npx tingly-box@$VERSION\` |" >> existing_body.md
+          fi
+          if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
+            echo "| **tingly-box-bundle** (offline) | \`npx tingly-box-bundle@$VERSION\` |" >> existing_body.md
+          fi
+          if [ "$PUBLISHED_GUI" = 'true' ]; then
+            echo "| **tingly-box-gui** (desktop UI) | \`npx tingly-box-gui@$VERSION start\` |" >> existing_body.md
           fi
 
-          cat > npx_release_notes.md << EOF
-          ## 📦 NPX Package Release - $VERSION ($PKG_TYPE)
-
-          Based on GitHub Release: [${RELEASE_TAG}](https://github.com/tingly-dev/tingly-box/releases/tag/${RELEASE_TAG})
-
-          ### 🚀 Installation
-
-          \`\`\`bash
-          # Use with npx (recommended)
-          npx $PKG_NAME@$VERSION start
-
-          # Or install globally
-          npm install -g $PKG_NAME@$VERSION
-          \`\`\`
-
-          ### 🔗 Links
-          - 📦 [View on npm](https://www.npmjs.com/package/$PKG_NAME/v/$VERSION)
-          - 🏷️ [Source Release](https://github.com/tingly-dev/tingly-box/releases/tag/$RELEASE_TAG)
-
-          ---
-          _This NPX package was automatically published based on release $RELEASE_TAG_
-          EOF
-
-          if gh release view "$FULL_TAG" >/dev/null 2>&1; then
-            echo "Release $FULL_TAG already exists, updating..."
-            gh release edit "$FULL_TAG" --notes-file npx_release_notes.md --title "NPX Package $VERSION ($PKG_TYPE)"
-          else
-            PRERELEASE_FLAG=""
-            if [[ "$VERSION" == *-* ]]; then
-              PRERELEASE_FLAG="--prerelease"
-            fi
-            gh release create "$FULL_TAG" \
-              --title "NPX Package $VERSION ($PKG_TYPE)" \
-              --notes-file npx_release_notes.md \
-              ${PRERELEASE_FLAG}
+          echo "" >> existing_body.md
+          echo '```bash' >> existing_body.md
+          if [ "$PUBLISHED_CLI" = 'true' ]; then
+            echo "# CLI quick start" >> existing_body.md
+            echo "npx tingly-box@$VERSION" >> existing_body.md
+            echo "" >> existing_body.md
+            echo "# Or install CLI globally" >> existing_body.md
+            echo "npm install -g tingly-box@$VERSION" >> existing_body.md
+            HAS_EXAMPLE=true
           fi
+          if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
+            if [ "$HAS_EXAMPLE" = 'true' ]; then echo "" >> existing_body.md; fi
+            echo "# Offline bundle package" >> existing_body.md
+            echo "npx tingly-box-bundle@$VERSION" >> existing_body.md
+            HAS_EXAMPLE=true
+          fi
+          if [ "$PUBLISHED_GUI" = 'true' ]; then
+            if [ "$HAS_EXAMPLE" = 'true' ]; then echo "" >> existing_body.md; fi
+            echo "# Desktop GUI package" >> existing_body.md
+            echo "npx tingly-box-gui@$VERSION start" >> existing_body.md
+          fi
+          echo '```' >> existing_body.md
+          echo "<!-- NPX_INFO_END -->" >> existing_body.md
+
+          gh release edit "$RELEASE_TAG" --notes-file existing_body.md
+
+          echo "✅ Release $RELEASE_TAG updated with npm package info"
