@@ -1000,7 +1000,11 @@
       "base_url_openai": "https://api.xiaomimimo.com/v1",
       "base_url_anthropic": "https://api.xiaomimimo.com/anthropic",
       "models": [
-        { "id": "mimo-v2-flash", "context": 262144, "max_output": 65536 }
+        { "id": "mimo-v2-flash",   "context": 262144,   "max_output": 65536  },
+        { "id": "mimo-v2-omni",    "context": 262144,   "max_output": 65536  },
+        { "id": "mimo-v2-pro",     "context": 1048576,  "max_output": 131072 },
+        { "id": "mimo-v2.5",       "context": 1048576,  "max_output": 131072 },
+        { "id": "mimo-v2.5-pro",   "context": 1048576,  "max_output": 16384  }
       ],
       "supports_models_endpoint": true,
       "icon": "xiaomi"
