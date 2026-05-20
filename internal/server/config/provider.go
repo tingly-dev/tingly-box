@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -286,8 +287,87 @@ func (c *Config) DeleteProvider(uuid string) error {
 		_ = c.modelManager.RemoveProvider(uuid)
 	}
 
+	// Remove services referencing this provider from all rules before notifying hooks
+	// This ensures data consistency between providers and rules
+	c.removeProviderServicesFromRules(uuid)
+
 	// Notify hooks after successful deletion
 	c.notifyProviderDelete(uuid)
 
 	return nil
+}
+
+// removeProviderServicesFromRules removes all services that reference the deleted provider
+// from all rules (both regular services and smart routing services). This maintains
+// data consistency when a provider is deleted. Rules with no services will be handled
+// by the server during request processing (returning "no service available" error).
+func (c *Config) removeProviderServicesFromRules(providerUUID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	needsSave := false
+	var updatedRuleUUIDs []string
+
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		ruleModified := false
+		originalServiceCount := len(rule.Services)
+
+		// Filter out regular services that reference the deleted provider
+		var filteredServices []*loadbalance.Service
+		for _, svc := range rule.Services {
+			if svc.Provider != providerUUID {
+				filteredServices = append(filteredServices, svc)
+			}
+		}
+
+		if len(filteredServices) != originalServiceCount {
+			needsSave = true
+			rule.Services = filteredServices
+			ruleModified = true
+			logrus.WithFields(logrus.Fields{
+				"provider":      providerUUID,
+				"rule":          rule.UUID,
+				"services_left": len(filteredServices),
+			}).Info("Removed services from rule after provider deletion")
+		}
+
+		// Filter out smart routing services that reference the deleted provider
+		for srIdx := range rule.SmartRouting {
+			sr := &rule.SmartRouting[srIdx]
+			originalSRServiceCount := len(sr.Services)
+
+			var filteredSRServices []*loadbalance.Service
+			for _, svc := range sr.Services {
+				if svc.Provider != providerUUID {
+					filteredSRServices = append(filteredSRServices, svc)
+				}
+			}
+
+			if len(filteredSRServices) != originalSRServiceCount {
+				needsSave = true
+				ruleModified = true
+				sr.Services = filteredSRServices
+				logrus.WithFields(logrus.Fields{
+					"provider":      providerUUID,
+					"rule":          rule.UUID,
+					"smart_routing": srIdx,
+					"services_left": len(filteredSRServices),
+				}).Info("Removed smart routing services after provider deletion")
+			}
+		}
+
+		if ruleModified {
+			updatedRuleUUIDs = append(updatedRuleUUIDs, rule.UUID)
+		}
+	}
+
+	// Save if any rules were modified
+	if needsSave {
+		if err := c.Save(); err != nil {
+			logrus.WithError(err).Error("Failed to save config after removing provider services from rules")
+		} else {
+			logrus.WithField("rules_updated", len(updatedRuleUUIDs)).Info("Successfully cleaned up rules after provider deletion")
+		}
+	}
 }
