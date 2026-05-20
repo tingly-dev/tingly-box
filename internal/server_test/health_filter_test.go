@@ -116,10 +116,13 @@ func TestHealthFilter_AllUnhealthy(t *testing.T) {
 	healthMonitor.ReportRateLimit(rule.Services[0].ServiceID())
 	healthMonitor.ReportRateLimit(rule.Services[1].ServiceID())
 
-	// SelectService should return error when no healthy services
-	_, err = lb.SelectService(rule)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no healthy services")
+	// When every active service is unhealthy, SelectService falls back to the
+	// active set instead of failing the whole rule, so the caller still gets a
+	// service to try (which may have recovered, or will surface the real
+	// upstream error).
+	svc, err := lb.SelectService(rule)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
 }
 
 // TestHealthFilter_Recovery tests that services recover after time-based timeout
@@ -162,15 +165,17 @@ func TestHealthFilter_Recovery(t *testing.T) {
 	serviceID := rule.Services[0].ServiceID()
 	healthMonitor.ReportRateLimit(serviceID)
 
-	// Should get error immediately
-	_, err = lb.SelectService(rule)
-	assert.Error(t, err)
+	// Even while marked unhealthy, a single-service rule falls back to the only
+	// service rather than failing outright.
+	service, err := lb.SelectService(rule)
+	assert.NoError(t, err)
+	assert.NotNil(t, service)
 
 	// Wait for recovery timeout
 	time.Sleep(1100 * time.Millisecond)
 
 	// Service should be healthy again
-	service, err := lb.SelectService(rule)
+	service, err = lb.SelectService(rule)
 	assert.NoError(t, err)
 	assert.NotNil(t, service)
 	assert.Equal(t, "provider1", service.Provider)
@@ -277,9 +282,11 @@ func TestHealthFilter_ConsecutiveErrors(t *testing.T) {
 	healthMonitor.ReportError(serviceID, assert.AnError)
 	assert.False(t, healthMonitor.IsHealthy(serviceID))
 
-	// Should get error
-	_, err = lb.SelectService(rule)
-	assert.Error(t, err)
+	// The only service is unhealthy, but SelectService falls back to it rather
+	// than failing the whole rule.
+	svc, err := lb.SelectService(rule)
+	assert.NoError(t, err)
+	assert.NotNil(t, svc)
 }
 
 // TestHealthFilter_InactiveServices tests that inactive services are not selected
