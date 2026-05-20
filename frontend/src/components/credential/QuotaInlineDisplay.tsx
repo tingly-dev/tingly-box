@@ -1,4 +1,5 @@
 import { Box, Stack, IconButton, Typography, CircularProgress, Tooltip } from '@mui/material';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import InfoIcon from '@mui/icons-material/Info';
 import { QuotaBarItem } from './QuotaBarItem';
@@ -152,6 +153,26 @@ export function QuotaInlineDisplay({
             )}
           </IconButton>
         </Tooltip>
+
+        {/* Fetched time */}
+        {quota?.fetched_at && !isRefreshing && (
+          <Tooltip title={`Fetched at ${new Date(quota.fetched_at).toLocaleString()}`} arrow>
+            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ cursor: 'default' }}>
+              <AccessTimeIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+              <Typography variant="caption" color="text.disabled" sx={{ whiteSpace: 'nowrap' }}>
+                {(() => {
+                  const diffMs = Date.now() - new Date(quota.fetched_at!).getTime();
+                  const mins = Math.floor(diffMs / 60000);
+                  if (mins < 1) return 'just now';
+                  if (mins < 60) return `${mins}m ago`;
+                  const hrs = Math.floor(mins / 60);
+                  if (hrs < 24) return `${hrs}h ago`;
+                  return `${Math.floor(hrs / 24)}d ago`;
+                })()}
+              </Typography>
+            </Stack>
+          </Tooltip>
+        )}
       </Stack>
 
       {/* Quota items */}

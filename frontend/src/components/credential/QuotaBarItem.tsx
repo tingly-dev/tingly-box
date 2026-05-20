@@ -180,16 +180,9 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
 
         {/* Optional details inline */}
         {showDetails && (
-          <>
-            <Typography variant="caption" color="text.secondary">
-              {detailedInfo}
-            </Typography>
-            {resetTime && (
-              <Typography variant="caption" color="text.secondary">
-                ({resetTime})
-              </Typography>
-            )}
-          </>
+          <Typography variant="caption" color="text.secondary">
+            {detailedInfo}
+          </Typography>
         )}
       </Stack>
     </Tooltip>

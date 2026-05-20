@@ -1,5 +1,160 @@
 import { http, HttpResponse } from 'msw'
 
+// ============================================
+// Mock Providers (v2 API with uuid)
+// ============================================
+const mockV2Providers = [
+    {
+        uuid: 'mock-provider-anthropic',
+        name: 'Anthropic',
+        api_base: 'https://api.anthropic.com',
+        api_style: 'anthropic',
+        auth_type: 'api_key',
+        token: 'sk-ant-****abcd',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+    },
+    {
+        uuid: 'mock-provider-openai',
+        name: 'OpenAI',
+        api_base: 'https://api.openai.com/v1',
+        api_style: 'openai',
+        auth_type: 'api_key',
+        token: 'sk-****efgh',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+    },
+    {
+        uuid: 'mock-provider-openrouter',
+        name: 'OpenRouter',
+        api_base: 'https://openrouter.ai/api/v1',
+        api_style: 'openai',
+        auth_type: 'api_key',
+        token: 'sk-or-****ijkl',
+        enabled: false,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+    },
+]
+
+// ============================================
+// Mock Quota Data
+// ============================================
+const now = new Date()
+const inOneHour = new Date(now.getTime() + 60 * 60 * 1000).toISOString()
+const inTwoDays = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString()
+const inSixDays = new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000).toISOString()
+const inThirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
+const mockQuotas: Record<string, any> = {
+    'mock-provider-anthropic': {
+        provider_uuid: 'mock-provider-anthropic',
+        provider_name: 'Anthropic',
+        provider_type: 'anthropic',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        primary: {
+            type: 'session',
+            used: 42350,
+            limit: 80000,
+            used_percent: 52.9,
+            resets_at: inOneHour,
+            unit: 'tokens',
+            label: 'Session',
+            description: 'Current session token usage',
+        },
+        secondary: {
+            type: 'weekly',
+            used: 1230000,
+            limit: 3000000,
+            used_percent: 41.0,
+            resets_at: inSixDays,
+            unit: 'tokens',
+            label: 'Weekly',
+            description: 'Weekly token usage',
+        },
+        tertiary: {
+            type: 'monthly',
+            used: 4200000,
+            limit: 10000000,
+            used_percent: 42.0,
+            resets_at: inThirtyDays,
+            unit: 'tokens',
+            label: 'Monthly',
+            description: 'Monthly token usage',
+        },
+        cost: {
+            used: 12.50,
+            limit: 50.00,
+            currency_code: '$',
+            resets_at: inThirtyDays,
+            label: 'Monthly Cost',
+        },
+        account: {
+            id: 'acc-mock-001',
+            name: 'Mock Account',
+            email: 'mock@example.com',
+            tier: 'pro',
+        },
+    },
+    'mock-provider-openai': {
+        provider_uuid: 'mock-provider-openai',
+        provider_name: 'OpenAI',
+        provider_type: 'openai',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        primary: {
+            type: 'daily',
+            used: 850,
+            limit: 1000,
+            used_percent: 85.0,
+            resets_at: inTwoDays,
+            unit: 'requests',
+            label: 'Daily',
+            description: 'Daily request limit',
+        },
+        secondary: {
+            type: 'monthly',
+            used: 18500,
+            limit: 30000,
+            used_percent: 61.7,
+            resets_at: inThirtyDays,
+            unit: 'requests',
+            label: 'Monthly',
+            description: 'Monthly request limit',
+        },
+        cost: {
+            used: 38.20,
+            limit: 100.00,
+            currency_code: '$',
+            resets_at: inThirtyDays,
+            label: 'Monthly Cost',
+        },
+    },
+    'mock-provider-openrouter': {
+        provider_uuid: 'mock-provider-openrouter',
+        provider_name: 'OpenRouter',
+        provider_type: 'openrouter',
+        fetched_at: now.toISOString(),
+        expires_at: inOneHour,
+        primary: {
+            type: 'balance',
+            used: 7.30,
+            limit: 20.00,
+            used_percent: 36.5,
+            resets_at: null,
+            unit: 'currency',
+            label: 'Balance',
+            description: 'Remaining credit balance',
+        },
+    },
+}
+
 // Mock remote graphs data
 const mockRemoteGraphs: any[] = [
     {
@@ -549,6 +704,76 @@ export const handlers = [
                 message: "Running with mock data"
             }
         })
+    }),
+
+    // ============================================
+    // v2 Providers API
+    // ============================================
+    http.get('/api/v2/providers', () => {
+        return HttpResponse.json({
+            success: true,
+            data: mockV2Providers,
+        })
+    }),
+
+    http.get('/api/v2/providers/:uuid', ({ params }) => {
+        const { uuid } = params
+        const provider = mockV2Providers.find(p => p.uuid === uuid)
+        if (provider) {
+            return HttpResponse.json({ success: true, data: provider })
+        }
+        return HttpResponse.json({ success: false, error: 'Not found' }, { status: 404 })
+    }),
+
+    http.post('/api/v2/providers', async ({ request }) => {
+        const body = await request.json() as any
+        const newProvider = {
+            uuid: `mock-provider-${Date.now()}`,
+            ...body,
+            token: body.token || '',
+            enabled: true,
+        }
+        mockV2Providers.push(newProvider)
+        return HttpResponse.json({ success: true, data: newProvider })
+    }),
+
+    // ============================================
+    // Provider Quota API (v1)
+    // ============================================
+    http.post('/api/v1/provider-quota/batch', async ({ request }) => {
+        const body = await request.json() as any
+        const uuids: string[] = body?.provider_uuids || []
+        const result: Record<string, any> = {}
+        for (const uuid of uuids) {
+            if (mockQuotas[uuid]) {
+                result[uuid] = { ...mockQuotas[uuid], fetched_at: new Date().toISOString() }
+            }
+        }
+        return HttpResponse.json({ success: true, data: result })
+    }),
+
+    http.get('/api/v1/provider-quota/:uuid', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        if (mockQuotas[uuid]) {
+            return HttpResponse.json({ success: true, data: { ...mockQuotas[uuid], fetched_at: new Date().toISOString() } })
+        }
+        return HttpResponse.json({ success: false, error: 'No quota data' }, { status: 404 })
+    }),
+
+    http.post('/api/v1/provider-quota/:uuid/refresh', async ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        // Simulate a short delay
+        await new Promise(r => setTimeout(r, 800))
+        if (mockQuotas[uuid]) {
+            const refreshed = { ...mockQuotas[uuid], fetched_at: new Date().toISOString() }
+            return HttpResponse.json({ success: true, data: refreshed })
+        }
+        return HttpResponse.json({ success: false, error: 'No quota data' }, { status: 404 })
+    }),
+
+    http.post('/api/v1/provider-quota/refresh', async () => {
+        await new Promise(r => setTimeout(r, 1000))
+        return HttpResponse.json({ success: true })
     }),
 
     // --- Playground (imagegen) mocks ---

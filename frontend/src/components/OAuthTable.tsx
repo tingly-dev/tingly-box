@@ -1,9 +1,8 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
-import ProviderExportMenu from '@/components/ProviderExportMenu';
 import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { ProviderQuotaDetailRow } from '@/components/credential/ProviderQuotaDetailRow';
-import { Delete, Edit, ListAlt, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
+import { ContentCopy, DataUsage, Delete, Download, Edit, ListAlt, MoreVert, Refresh as RefreshIcon, Route, Schedule, VpnKey } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -11,6 +10,8 @@ import {
     CircularProgress,
     Divider,
     IconButton,
+    Menu,
+    MenuItem,
     Modal,
     Paper,
     Stack,
@@ -78,6 +79,16 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
         open: false,
         provider: null,
     });
+    const [moreMenu, setMoreMenu] = useState<{ anchorEl: HTMLElement | null; providerUuid: string }>({
+        anchorEl: null,
+        providerUuid: '',
+    });
+
+    const handleMoreOpen = (e: React.MouseEvent<HTMLElement>, providerUuid: string) => {
+        e.stopPropagation();
+        setMoreMenu({ anchorEl: e.currentTarget, providerUuid });
+    };
+    const handleMoreClose = () => setMoreMenu({ anchorEl: null, providerUuid: '' });
 
     const handleDeleteClick = (providerUuid: string) => {
         const provider = providers.find((p) => p.uuid === providerUuid);
@@ -286,16 +297,10 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                             borderColor: 'divider',
                                             borderRadius: 1.5,
                                             p: 0.5,
-                                            pr: 1,
-                                            width: 240,
+                                            width: 'fit-content',
                                         }}
                                     >
-                                        <ProviderExportMenu
-                                            provider={provider}
-                                            onExport={handleExportProvider}
-                                            onCopyJsonl={handleCopyProviderJsonl}
-                                            onCopyBase64={handleCopyProviderBase64}
-                                        />
+                                        {/* Edit — primary action */}
                                         {onEdit && (
                                             <Tooltip title="View Details">
                                                 <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
@@ -303,55 +308,39 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                                                 </IconButton>
                                             </Tooltip>
                                         )}
-                                        {onRefreshToken && provider.oauth_detail?.refresh_token && (
-                                            <Tooltip title="Refresh Token">
-                                                <IconButton
-                                                    size="small"
-                                                    color="info"
-                                                    onClick={() => handleRefreshClick(provider.uuid)}
-                                                    disabled={refreshing === provider.uuid}
-                                                >
-                                                    {refreshing === provider.uuid ? (
-                                                        <CircularProgress size={16} />
-                                                    ) : (
-                                                        <RefreshIcon fontSize="small" />
-                                                    )}
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                        {onReauthorize && (
-                                            <Tooltip title="Reauthorize">
-                                                <IconButton
-                                                    size="small"
-                                                    color={isExpired ? 'warning' : 'default'}
-                                                    onClick={() => onReauthorize(provider.uuid)}
-                                                >
-                                                    <VpnKey fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                        {onDelete && (
-                                            <Tooltip title="Delete">
-                                                <IconButton size="small" color="error" onClick={() => handleDeleteClick(provider.uuid)}>
-                                                    <Delete fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
                                         <Divider orientation="vertical" flexItem />
+                                        {/* Quota text button */}
+                                        {onQuotaRefresh && (
+                                            <Button
+                                                variant="text"
+                                                size="small"
+                                                startIcon={refreshingQuotas?.has(provider.uuid)
+                                                    ? <CircularProgress size={12} />
+                                                    : <DataUsage fontSize="small" />}
+                                                onClick={() => onQuotaRefresh(provider.uuid)}
+                                                disabled={refreshingQuotas?.has(provider.uuid)}
+                                                color={providerQuotas?.[provider.uuid] ? 'primary' : 'inherit'}
+                                                sx={{ fontSize: '0.75rem', minWidth: 'auto', px: 1 }}
+                                            >
+                                                Quota
+                                            </Button>
+                                        )}
+                                        {/* Models text button */}
                                         <Button
                                             variant="text"
                                             size="small"
                                             startIcon={<ListAlt />}
                                             onClick={() => handleModelListClick(provider.uuid)}
                                             disabled={!provider.enabled}
-                                            sx={{
-                                                fontSize: '0.75rem',
-                                                minWidth: 'auto',
-                                                px: 1,
-                                            }}
+                                            sx={{ fontSize: '0.75rem', minWidth: 'auto', px: 1 }}
                                         >
                                             Models
                                         </Button>
+                                        <Divider orientation="vertical" flexItem />
+                                        {/* Overflow menu */}
+                                        <IconButton size="small" onClick={(e) => handleMoreOpen(e, provider.uuid)}>
+                                            <MoreVert fontSize="small" />
+                                        </IconButton>
                                     </Box>
                                 </TableCell>
                             </TableRow>
@@ -370,6 +359,61 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                     })}
                 </TableBody>
             </Table>
+
+            {/* Overflow menu (shared) */}
+            <Menu
+                anchorEl={moreMenu.anchorEl}
+                open={Boolean(moreMenu.anchorEl)}
+                onClose={handleMoreClose}
+                onClick={(e) => e.stopPropagation()}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+                {(() => {
+                    const p = providers.find(p => p.uuid === moreMenu.providerUuid);
+                    if (!p) return null;
+                    const hasRefreshToken = onRefreshToken && p.oauth_detail?.refresh_token;
+                    const expired = p.oauth_detail?.expires_at
+                        ? new Date(p.oauth_detail.expires_at) < new Date()
+                        : false;
+                    return [
+                        hasRefreshToken && (
+                            <MenuItem key="refresh-token" onClick={() => { handleMoreClose(); handleRefreshClick(p.uuid); }}
+                                disabled={refreshing === p.uuid}>
+                                {refreshing === p.uuid
+                                    ? <CircularProgress size={14} sx={{ mr: 1 }} />
+                                    : <RefreshIcon fontSize="small" sx={{ mr: 1 }} />}
+                                Refresh Token
+                            </MenuItem>
+                        ),
+                        onReauthorize && (
+                            <MenuItem key="reauthorize" onClick={() => { handleMoreClose(); onReauthorize(p.uuid); }}
+                                sx={{ color: expired ? 'warning.main' : undefined }}>
+                                <VpnKey fontSize="small" sx={{ mr: 1 }} /> Reauthorize
+                            </MenuItem>
+                        ),
+                        <Divider key="div1" />,
+                        <MenuItem key="export-jsonl" onClick={() => { handleMoreClose(); handleExportProvider(p, 'jsonl'); }}>
+                            <Download fontSize="small" sx={{ mr: 1 }} /> Download JSONL
+                        </MenuItem>,
+                        <MenuItem key="export-base64" onClick={() => { handleMoreClose(); handleExportProvider(p, 'base64'); }}>
+                            <Download fontSize="small" sx={{ mr: 1 }} /> Download Base64
+                        </MenuItem>,
+                        <MenuItem key="copy-jsonl" onClick={() => { handleMoreClose(); handleCopyProviderJsonl(p); }}>
+                            <ContentCopy fontSize="small" sx={{ mr: 1 }} /> Copy JSONL
+                        </MenuItem>,
+                        <MenuItem key="copy-base64" onClick={() => { handleMoreClose(); handleCopyProviderBase64(p); }}>
+                            <ContentCopy fontSize="small" sx={{ mr: 1 }} /> Copy Base64
+                        </MenuItem>,
+                        onDelete && <Divider key="div2" />,
+                        onDelete && (
+                            <MenuItem key="delete" onClick={() => { handleMoreClose(); handleDeleteClick(p.uuid); }} sx={{ color: 'error.main' }}>
+                                <Delete fontSize="small" sx={{ mr: 1 }} /> Delete
+                            </MenuItem>
+                        ),
+                    ].filter(Boolean);
+                })()}
+            </Menu>
 
             {/* Delete Confirmation Modal */}
             <Modal open={deleteModal.open} onClose={handleCloseDeleteModal}>
