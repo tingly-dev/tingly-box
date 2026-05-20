@@ -9,12 +9,16 @@ import (
 	"strings"
 )
 
+// npxPackage is the package the npx-based shortcut runs.
+const npxPackage = "tingly-box@latest"
+
 // ShortcutCmdKong creates a desktop / start-menu shortcut that launches
 // Tingly Box (restart in daemon mode and open the web UI) with a double-click,
 // so users don't have to remember and type the startup command — especially on
 // Windows.
 type ShortcutCmdKong struct {
 	Name      string `kong:"flag,name='name',default='Tingly Box',help='Shortcut name'"`
+	Source    string `kong:"flag,name='source',enum='auto,binary,npx',default='auto',help='What the shortcut runs: binary (this executable), npx (npx tingly-box@latest), or auto-detect'"`
 	NoDesktop bool   `kong:"flag,name='no-desktop',help='Do not create a desktop shortcut'"`
 	NoMenu    bool   `kong:"flag,name='no-menu',help='Do not create a Start Menu / application menu entry'"`
 }
@@ -23,6 +27,16 @@ type ShortcutCmdKong struct {
 // (since --browser defaults to true) open the web UI.
 func shortcutLaunchArgs() []string {
 	return []string{"restart", "--daemon"}
+}
+
+// launchSpec describes how the shortcut should invoke Tingly Box on each
+// platform. argv is the POSIX-style command vector used for macOS .command and
+// Linux .desktop entries; winTarget/winArgs are the .lnk TargetPath/Arguments.
+type launchSpec struct {
+	argv      []string
+	winTarget string
+	winArgs   string
+	workDir   string
 }
 
 func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
@@ -34,7 +48,9 @@ func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
 		exePath = resolved
 	}
 
-	created, err := createShortcuts(s, exePath, shortcutLaunchArgs())
+	spec := s.resolveLaunch(exePath)
+
+	created, err := createShortcuts(s, spec)
 	if err != nil {
 		return err
 	}
@@ -52,24 +68,65 @@ func (s *ShortcutCmdKong) Run(appManager *AppManager) error {
 	return nil
 }
 
+// resolveLaunch decides whether the shortcut runs this binary directly or goes
+// through npx, then builds the platform-specific launch vectors.
+func (s *ShortcutCmdKong) resolveLaunch(exePath string) launchSpec {
+	source := s.Source
+	if source == "" || source == "auto" {
+		if isNpxCachedBinary(exePath) {
+			source = "npx"
+		} else {
+			source = "binary"
+		}
+	}
+
+	args := shortcutLaunchArgs()
+
+	if source == "npx" {
+		// e.g. "npx -y tingly-box@latest restart --daemon"
+		npxArgv := append([]string{"npx", "-y", npxPackage}, args...)
+		cmdStr := strings.Join(npxArgv, " ")
+		home, _ := os.UserHomeDir()
+
+		comspec := os.Getenv("ComSpec")
+		if comspec == "" {
+			comspec = "cmd.exe"
+		}
+
+		return launchSpec{
+			// Wrap in a login shell so GUI launches pick up node/npx on PATH.
+			argv:      []string{"sh", "-lc", cmdStr},
+			winTarget: comspec,
+			winArgs:   "/c " + cmdStr,
+			workDir:   home,
+		}
+	}
+
+	return launchSpec{
+		argv:      append([]string{exePath}, args...),
+		winTarget: exePath,
+		winArgs:   strings.Join(args, " "),
+		workDir:   filepath.Dir(exePath),
+	}
+}
+
 // createShortcuts dispatches to the platform-specific implementation and
 // returns the paths of the shortcuts it created.
-func createShortcuts(s *ShortcutCmdKong, exePath string, args []string) ([]string, error) {
+func createShortcuts(s *ShortcutCmdKong, spec launchSpec) ([]string, error) {
 	switch runtime.GOOS {
 	case "windows":
-		return createWindowsShortcuts(s, exePath, args)
+		return createWindowsShortcuts(s, spec)
 	case "darwin":
-		return createMacShortcuts(s, exePath, args)
+		return createMacShortcuts(s, spec)
 	default:
-		return createLinuxShortcuts(s, exePath, args)
+		return createLinuxShortcuts(s, spec)
 	}
 }
 
 // ---------------- Windows ----------------
 
-func createWindowsShortcuts(s *ShortcutCmdKong, exePath string, args []string) ([]string, error) {
-	workDir := filepath.Dir(exePath)
-	script := windowsShortcutScript(s, exePath, args, workDir)
+func createWindowsShortcuts(s *ShortcutCmdKong, spec launchSpec) ([]string, error) {
+	script := windowsShortcutScript(s, spec)
 
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
 	out, err := cmd.CombinedOutput()
@@ -91,13 +148,13 @@ func createWindowsShortcuts(s *ShortcutCmdKong, exePath string, args []string) (
 // Start Menu Programs folders at runtime (handling OneDrive redirection) and
 // writes a .lnk via the WScript.Shell COM object. It prints each created path on
 // its own line.
-func windowsShortcutScript(s *ShortcutCmdKong, exePath string, args []string, workDir string) string {
+func windowsShortcutScript(s *ShortcutCmdKong, spec launchSpec) string {
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
 	b.WriteString("$ws = New-Object -ComObject WScript.Shell\n")
-	b.WriteString(fmt.Sprintf("$target = %s\n", psQuote(exePath)))
-	b.WriteString(fmt.Sprintf("$arguments = %s\n", psQuote(strings.Join(args, " "))))
-	b.WriteString(fmt.Sprintf("$workdir = %s\n", psQuote(workDir)))
+	b.WriteString(fmt.Sprintf("$target = %s\n", psQuote(spec.winTarget)))
+	b.WriteString(fmt.Sprintf("$arguments = %s\n", psQuote(spec.winArgs)))
+	b.WriteString(fmt.Sprintf("$workdir = %s\n", psQuote(spec.workDir)))
 	b.WriteString(fmt.Sprintf("$name = %s\n", psQuote(s.Name)))
 	b.WriteString("$dests = @()\n")
 	if !s.NoDesktop {
@@ -128,8 +185,8 @@ func psQuote(s string) string {
 
 // ---------------- macOS ----------------
 
-func createMacShortcuts(s *ShortcutCmdKong, exePath string, args []string) ([]string, error) {
-	content := commandScriptContent(exePath, args)
+func createMacShortcuts(s *ShortcutCmdKong, spec launchSpec) ([]string, error) {
+	content := commandScriptContent(spec.argv)
 
 	var targets []string
 	if !s.NoDesktop {
@@ -157,14 +214,14 @@ func createMacShortcuts(s *ShortcutCmdKong, exePath string, args []string) ([]st
 
 // commandScriptContent builds a macOS .command shell script that launches the
 // binary. Double-clicking a .command file runs it in Terminal.
-func commandScriptContent(exePath string, args []string) string {
-	return fmt.Sprintf("#!/bin/sh\nexec %s %s\n", shQuote(exePath), shJoin(args))
+func commandScriptContent(argv []string) string {
+	return fmt.Sprintf("#!/bin/sh\nexec %s\n", shJoin(argv))
 }
 
 // ---------------- Linux ----------------
 
-func createLinuxShortcuts(s *ShortcutCmdKong, exePath string, args []string) ([]string, error) {
-	content := desktopEntryContent(s.Name, exePath, args)
+func createLinuxShortcuts(s *ShortcutCmdKong, spec launchSpec) ([]string, error) {
+	content := desktopEntryContent(s.Name, spec.argv)
 	fileName := desktopFileName(s.Name)
 
 	var targets []string
@@ -194,11 +251,7 @@ func createLinuxShortcuts(s *ShortcutCmdKong, exePath string, args []string) ([]
 }
 
 // desktopEntryContent builds a freedesktop .desktop entry.
-func desktopEntryContent(name, exePath string, args []string) string {
-	exec := shQuote(exePath)
-	if joined := shJoin(args); joined != "" {
-		exec += " " + joined
-	}
+func desktopEntryContent(name string, argv []string) string {
 	return fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=%s
@@ -206,12 +259,62 @@ Comment=Start Tingly Box and open the web UI
 Exec=%s
 Terminal=false
 Categories=Utility;Network;
-`, name, exec)
+`, name, shJoin(argv))
 }
 
 func desktopFileName(name string) string {
 	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 	return slug + ".desktop"
+}
+
+// ---------------- npx detection ----------------
+
+// npxCacheRoot mirrors the directory the npx wrapper (build/npx/tingly-box/bin.js)
+// extracts the binary into: <os-cache-dir>/tingly-box. Returns "" if it cannot
+// be determined.
+func npxCacheRoot() string {
+	switch runtime.GOOS {
+	case "windows":
+		base := os.Getenv("LOCALAPPDATA")
+		if base == "" {
+			if up := os.Getenv("USERPROFILE"); up != "" {
+				base = filepath.Join(up, "AppData", "Local")
+			}
+		}
+		if base == "" {
+			return ""
+		}
+		return filepath.Join(base, "tingly-box")
+	case "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		return filepath.Join(home, "Library", "Caches", "tingly-box")
+	default:
+		if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
+			return filepath.Join(xdg, "tingly-box")
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		return filepath.Join(home, ".cache", "tingly-box")
+	}
+}
+
+// isNpxCachedBinary reports whether exePath lives inside the npx cache directory,
+// i.e. the binary was launched via `npx tingly-box`.
+func isNpxCachedBinary(exePath string) bool {
+	root := npxCacheRoot()
+	if root == "" {
+		return false
+	}
+	rel, err := filepath.Rel(root, exePath)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // ---------------- shared helpers ----------------
