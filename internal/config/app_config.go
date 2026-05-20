@@ -142,6 +142,17 @@ func (ac *AppConfig) DeleteProvider(name string) error {
 	return ac.config.DeleteProvider(name)
 }
 
+// GetLaunchSource returns the recorded launch source (binary, npx, npx-bundle)
+func (ac *AppConfig) GetLaunchSource() string {
+	return ac.config.GetLaunchSource()
+}
+
+// SetLaunchSource records how tingly-box was launched
+func (ac *AppConfig) SetLaunchSource(source string) error {
+	return ac.config.SetLaunchSource(source)
+}
+
+// FetchAndSaveProviderModels fetches models from a provider and saves them
 func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 	return ac.config.FetchAndSaveProviderModels(providerName)
 }

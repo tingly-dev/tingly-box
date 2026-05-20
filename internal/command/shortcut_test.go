@@ -42,7 +42,7 @@ func TestCommandScriptContent(t *testing.T) {
 
 func TestResolveLaunchBinary(t *testing.T) {
 	s := &ShortcutCmdKong{Source: "binary"}
-	spec := s.resolveLaunch("/usr/local/bin/tingly-box")
+	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
 
 	if want := []string{"/usr/local/bin/tingly-box", "restart", "--daemon"}; strings.Join(spec.argv, " ") != strings.Join(want, " ") {
 		t.Fatalf("unexpected argv: %v", spec.argv)
@@ -57,7 +57,7 @@ func TestResolveLaunchBinary(t *testing.T) {
 
 func TestResolveLaunchNpx(t *testing.T) {
 	s := &ShortcutCmdKong{Source: "npx"}
-	spec := s.resolveLaunch("/usr/local/bin/tingly-box")
+	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
 
 	wantArgv := []string{"sh", "-lc", "npx -y tingly-box@latest restart --daemon"}
 	if strings.Join(spec.argv, "\x00") != strings.Join(wantArgv, "\x00") {
@@ -65,6 +65,34 @@ func TestResolveLaunchNpx(t *testing.T) {
 	}
 	if spec.winArgs != "/c npx -y tingly-box@latest restart --daemon" {
 		t.Errorf("unexpected winArgs: %q", spec.winArgs)
+	}
+}
+
+func TestResolveLaunchNpxBundle(t *testing.T) {
+	s := &ShortcutCmdKong{Source: "npx-bundle"}
+	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
+
+	if spec.winArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
+		t.Errorf("unexpected winArgs: %q", spec.winArgs)
+	}
+}
+
+func TestResolveLaunchAutoUsesPersistedSource(t *testing.T) {
+	s := &ShortcutCmdKong{Source: "auto"}
+	// A binary not in the npx cache, but the recorded launch source was npx-bundle.
+	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "npx-bundle")
+
+	if spec.winArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
+		t.Errorf("auto did not honor persisted source: %q", spec.winArgs)
+	}
+}
+
+func TestResolveLaunchAutoFallsBackToBinary(t *testing.T) {
+	s := &ShortcutCmdKong{Source: "auto"}
+	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
+
+	if spec.winTarget != "/usr/local/bin/tingly-box" {
+		t.Errorf("expected binary fallback, got winTarget=%q", spec.winTarget)
 	}
 }
 

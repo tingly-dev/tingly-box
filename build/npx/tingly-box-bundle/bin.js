@@ -116,6 +116,7 @@ async function extractBinary(platformDir) {
 const DEFAULT_ARGS = [
 	"restart",
 	"--daemon",
+	"--source=npx-bundle",
 ];
 
 const args = process.argv.slice(2);
