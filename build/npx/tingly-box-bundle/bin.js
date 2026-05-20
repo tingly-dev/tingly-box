@@ -116,11 +116,15 @@ async function extractBinary(platformDir) {
 const DEFAULT_ARGS = [
 	"restart",
 	"--daemon",
-	"--source=npx-bundle",
 ];
 
+// Global flag prepended to every invocation so the binary records that it was
+// launched via npx-bundle. As a global flag it must come before the subcommand.
+const SOURCE_ARGS = ["--source=npx-bundle"];
+
 const args = process.argv.slice(2);
-const argsToUse = args.length > 0 ? args : DEFAULT_ARGS;
+const baseArgs = args.length > 0 ? args : DEFAULT_ARGS;
+const argsToUse = [...SOURCE_ARGS, ...baseArgs];
 
 const platformDir = getPlatformInfo();
 
