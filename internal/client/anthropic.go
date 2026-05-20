@@ -79,6 +79,11 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 			}
 			logrus.Infof("Using session-bound transport for OAuth issuer: %s, session: %s",
 				provider.OAuthDetail.GetIssuer(), sessionID.Value)
+		} else {
+			// OAuth provider with an issuer other than ClaudeCode (or missing OAuthDetail).
+			// Use a session-bound transport so proxy_url is respected and env proxy is
+			// not inherited — same guarantee as the non-OAuth path below.
+			transport = createSessionBoundTransport(provider, sessionID)
 		}
 	} else {
 		// Generic non-OAuth Anthropic provider. Apply the same User-Agent
