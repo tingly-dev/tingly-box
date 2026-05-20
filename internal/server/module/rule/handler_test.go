@@ -231,6 +231,75 @@ func TestCreateRule_Success(t *testing.T) {
 	assert.Contains(t, bodyResp, `"uuid"`)
 }
 
+func TestCreateRule_DuplicateNameSameScenario(t *testing.T) {
+	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
+
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg)
+	router.POST("/rules", handler.CreateRule)
+
+	rule := typ.Rule{
+		RequestModel: "gpt-4",
+		Scenario:     "test-scenario",
+		Active:       true,
+	}
+	body, _ := json.Marshal(rule)
+
+	// First creation must succeed
+	req, _ := http.NewRequest("POST", "/rules", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("first create failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// Second creation with same name and scenario must fail
+	req2, _ := http.NewRequest("POST", "/rules", bytes.NewBuffer(body))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	if w2.Code == http.StatusOK {
+		t.Errorf("expected failure for duplicate name in same scenario, got 200")
+	}
+	assert.Contains(t, w2.Body.String(), `"success":false`)
+}
+
+func TestCreateRule_DuplicateNameDifferentScenario(t *testing.T) {
+	registerTestRuleScenario(t, typ.RuleScenario("scenario-a"))
+	registerTestRuleScenario(t, typ.RuleScenario("scenario-b"))
+
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg)
+	router.POST("/rules", handler.CreateRule)
+
+	ruleA := typ.Rule{RequestModel: "gpt-4", Scenario: "scenario-a", Active: true}
+	bodyA, _ := json.Marshal(ruleA)
+	req, _ := http.NewRequest("POST", "/rules", bytes.NewBuffer(bodyA))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("create in scenario-a failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// Same model name in a different scenario must succeed
+	ruleB := typ.Rule{RequestModel: "gpt-4", Scenario: "scenario-b", Active: true}
+	bodyB, _ := json.Marshal(ruleB)
+	req2, _ := http.NewRequest("POST", "/rules", bytes.NewBuffer(bodyB))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("create with same name in different scenario should succeed: %d %s", w2.Code, w2.Body.String())
+	}
+	assert.Contains(t, w2.Body.String(), `"success":true`)
+}
+
 func TestCreateRule_NoScenario(t *testing.T) {
 	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
