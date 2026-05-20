@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -49,7 +50,10 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 			logrus.Infof("Using proxy for Google client: %s", provider.ProxyURL)
 		}
 	} else {
-		transport = http.DefaultTransport
+		// Use the transport pool instead of http.DefaultTransport so that env
+		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
+		// proxy is explicitly configured for the provider.
+		transport = GetGlobalTransportPool().GetTransport(provider.UUID, model, "", ai.Issuer(""), sessionID)
 	}
 
 	httpClient := &http.Client{Transport: transport}

@@ -86,8 +86,12 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		// wraps innermost so it overwrites the header last, provider-UA sits
 		// outside. OAuth issuers above keep their dedicated transport chain
 		// unchanged because vendor-specific round-trippers manage UA themselves.
-		transport = http.DefaultTransport
-		transport = &customUserAgentTransport{base: transport}
+		//
+		// Use the transport pool instead of http.DefaultTransport so that env
+		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
+		// proxy is explicitly configured for the provider.
+		base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
+		transport = &customUserAgentTransport{base: base}
 		transport = wrapWithUserAgent(transport, provider)
 	}
 
