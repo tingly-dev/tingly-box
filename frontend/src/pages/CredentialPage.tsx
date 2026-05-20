@@ -1,4 +1,5 @@
 import ApiKeyTable from '@/components/ApiKeyTable.tsx';
+import ConnectProviderDialog, { type ConnectSelection } from '@/components/ConnectProviderDialog';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import ImportModal from '@/components/ImportModal';
 import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
@@ -8,7 +9,7 @@ import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
-import { Add, ListAlt, Upload, VpnKey } from '@mui/icons-material';
+import { Add, ListAlt, Upload } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -52,8 +53,12 @@ const CredentialPage = () => {
         enabled: true,
     });
 
+    // Unified "Connect Provider" picker state
+    const [connectOpen, setConnectOpen] = useState(false);
+
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
+    const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
 
@@ -128,7 +133,41 @@ const CredentialPage = () => {
     };
 
     const handleAddOAuth = () => {
+        setOAuthAutoStartId(null);
         setOAuthDialogOpen(true);
+    };
+
+    // Route a pick from the unified "Connect Provider" picker to the matching
+    // existing dialog. Key/custom reuse the API-key form (the key form already
+    // derives protocols from a prefilled base URL); OAuth jumps straight into
+    // the OAuth flow via autoStart.
+    const handleConnectSelect = (selection: ConnectSelection) => {
+        setConnectOpen(false);
+        if (selection.kind === 'oauth') {
+            setOAuthAutoStartId(selection.providerId);
+            setOAuthDialogOpen(true);
+            return;
+        }
+        if (selection.kind === 'custom') {
+            handleAddApiKey();
+            return;
+        }
+        const p = selection.provider;
+        setApiKeyDialogMode('add');
+        setProviderFormData({
+            uuid: undefined,
+            name: p.alias || p.name,
+            apiBase: p.baseUrlOpenAI || p.baseUrlAnthropic || '',
+            apiStyle: undefined,
+            token: '',
+            enabled: true,
+            noKeyRequired: false,
+            proxyUrl: '',
+            userAgent: '',
+            createFusionProvider: false,
+            providerBaseUrls: {openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic},
+        } as any);
+        setApiKeyDialogOpen(true);
     };
 
     const loadProviders = async () => {
@@ -479,21 +518,12 @@ const CredentialPage = () => {
                         </Button>
                         <Button
                             variant="contained"
-                            startIcon={<VpnKey />}
-                            onClick={handleAddOAuth}
-                            size="small"
-                            sx={{ minWidth: 110 }}
-                        >
-                            Add OAuth
-                        </Button>
-                        <Button
-                            variant="contained"
                             startIcon={<Add />}
-                            onClick={handleAddApiKey}
+                            onClick={() => setConnectOpen(true)}
                             size="small"
-                            sx={{ minWidth: 110 }}
+                            sx={{ minWidth: 150 }}
                         >
-                            Add API Key
+                            Connect Provider
                         </Button>
                     </Stack>
                 }
@@ -588,10 +618,21 @@ const CredentialPage = () => {
                 mode={apiKeyDialogMode}
             />
 
+            {/* Unified provider picker */}
+            <ConnectProviderDialog
+                open={connectOpen}
+                onClose={() => setConnectOpen(false)}
+                onSelect={handleConnectSelect}
+            />
+
             {/* OAuth Add Dialog */}
             <OAuthDialog
                 open={oauthDialogOpen}
-                onClose={() => setOAuthDialogOpen(false)}
+                autoStartProviderId={oauthAutoStartId}
+                onClose={() => {
+                    setOAuthDialogOpen(false);
+                    setOAuthAutoStartId(null);
+                }}
                 onSuccess={handleOAuthSuccess}
             />
 
