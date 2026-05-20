@@ -1,9 +1,8 @@
 import { ApiStyleBadge } from '@/components/ApiStyleBadge.tsx';
 import ModelListDialog from '@/components/ModelListDialog';
-import ProviderExportMenu from '@/components/ProviderExportMenu';
 import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { ProviderQuotaDetailRow } from '@/components/credential/ProviderQuotaDetailRow';
-import { Cancel, ContentCopy, DataUsage, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
+import { Cancel, ContentCopy, DataUsage, Delete, Download, Edit, ListAlt, MoreVert, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -11,6 +10,8 @@ import {
     CircularProgress,
     Divider,
     IconButton,
+    Menu,
+    MenuItem,
     Modal,
     Paper,
     Stack,
@@ -75,6 +76,16 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, pr
         open: false,
         provider: null,
     });
+    const [moreMenu, setMoreMenu] = useState<{ anchorEl: HTMLElement | null; providerUuid: string }>({
+        anchorEl: null,
+        providerUuid: '',
+    });
+
+    const handleMoreOpen = (e: React.MouseEvent<HTMLElement>, providerUuid: string) => {
+        e.stopPropagation();
+        setMoreMenu({ anchorEl: e.currentTarget, providerUuid });
+    };
+    const handleMoreClose = () => setMoreMenu({ anchorEl: null, providerUuid: '' });
 
     const fetchFullToken = async (providerUuid: string): Promise<string> => {
         try {
@@ -300,16 +311,10 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, pr
                                         borderColor: 'divider',
                                         borderRadius: 1.5,
                                         p: 0.5,
-                                        pr: 1,
-                                        width: 200,
+                                        width: 'fit-content',
                                     }}
                                 >
-                                    <ProviderExportMenu
-                                        provider={provider}
-                                        onExport={handleExportProvider}
-                                        onCopyJsonl={handleCopyProviderJsonl}
-                                        onCopyBase64={handleCopyProviderBase64}
-                                    />
+                                    {/* Edit — primary action, always visible */}
                                     {onEdit && (
                                         <Tooltip title="Edit">
                                             <IconButton size="small" color="primary" onClick={() => onEdit(provider.uuid)}>
@@ -317,52 +322,39 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, pr
                                             </IconButton>
                                         </Tooltip>
                                     )}
-                                    {onDelete && (
-                                        <Tooltip title="Delete">
-                                            <IconButton size="small" color="error" onClick={() => handleDeleteClick(provider.uuid)}>
-                                                <Delete fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
-                                    )}
-                                    {onQuotaRefresh && (
-                                        <Tooltip title={
-                                            refreshingQuotas?.has(provider.uuid)
-                                                ? 'Fetching quota...'
-                                                : providerQuotas?.[provider.uuid]
-                                                    ? `Refresh Quota\nFetched: ${new Date(providerQuotas[provider.uuid].fetched_at!).toLocaleString()}`
-                                                    : 'Fetch Quota'
-                                        }>
-                                            <span>
-                                                <IconButton
-                                                    size="small"
-                                                    color={providerQuotas?.[provider.uuid] ? 'primary' : 'default'}
-                                                    onClick={() => onQuotaRefresh(provider.uuid)}
-                                                    disabled={refreshingQuotas?.has(provider.uuid)}
-                                                >
-                                                    {refreshingQuotas?.has(provider.uuid) ? (
-                                                        <CircularProgress size={16} />
-                                                    ) : (
-                                                        <DataUsage fontSize="small" />
-                                                    )}
-                                                </IconButton>
-                                            </span>
-                                        </Tooltip>
-                                    )}
                                     <Divider orientation="vertical" flexItem />
+                                    {/* Quota text button */}
+                                    {onQuotaRefresh && (
+                                        <Button
+                                            variant="text"
+                                            size="small"
+                                            startIcon={refreshingQuotas?.has(provider.uuid)
+                                                ? <CircularProgress size={12} />
+                                                : <DataUsage fontSize="small" />}
+                                            onClick={() => onQuotaRefresh(provider.uuid)}
+                                            disabled={refreshingQuotas?.has(provider.uuid)}
+                                            color={providerQuotas?.[provider.uuid] ? 'primary' : 'inherit'}
+                                            sx={{ fontSize: '0.75rem', minWidth: 'auto', px: 1 }}
+                                        >
+                                            Quota
+                                        </Button>
+                                    )}
+                                    {/* Models text button */}
                                     <Button
                                         variant="text"
                                         size="small"
                                         startIcon={<ListAlt />}
                                         onClick={() => handleModelListClick(provider.uuid)}
                                         disabled={!provider.enabled}
-                                        sx={{
-                                            fontSize: '0.75rem',
-                                            minWidth: 'auto',
-                                            px: 1,
-                                        }}
+                                        sx={{ fontSize: '0.75rem', minWidth: 'auto', px: 1 }}
                                     >
                                         Models
                                     </Button>
+                                    <Divider orientation="vertical" flexItem />
+                                    {/* Overflow menu for less common actions */}
+                                    <IconButton size="small" onClick={(e) => handleMoreOpen(e, provider.uuid)}>
+                                        <MoreVert fontSize="small" />
+                                    </IconButton>
                                 </Box>
                             </TableCell>
                         </TableRow>
@@ -380,6 +372,46 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, pr
                 ))}
                 </TableBody>
             </Table>
+
+            {/* Overflow menu (shared, driven by moreMenu state) */}
+            <Menu
+                anchorEl={moreMenu.anchorEl}
+                open={Boolean(moreMenu.anchorEl)}
+                onClose={handleMoreClose}
+                onClick={(e) => e.stopPropagation()}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+                {(() => {
+                    const p = providers.find(p => p.uuid === moreMenu.providerUuid);
+                    if (!p) return null;
+                    return [
+                        p.token && (
+                            <MenuItem key="view-token" onClick={() => { handleMoreClose(); handleViewToken(p.uuid); }}>
+                                <Visibility fontSize="small" sx={{ mr: 1 }} /> View Token
+                            </MenuItem>
+                        ),
+                        <MenuItem key="export-jsonl" onClick={() => { handleMoreClose(); handleExportProvider(p, 'jsonl'); }}>
+                            <Download fontSize="small" sx={{ mr: 1 }} /> Download JSONL
+                        </MenuItem>,
+                        <MenuItem key="export-base64" onClick={() => { handleMoreClose(); handleExportProvider(p, 'base64'); }}>
+                            <Download fontSize="small" sx={{ mr: 1 }} /> Download Base64
+                        </MenuItem>,
+                        <MenuItem key="copy-jsonl" onClick={() => { handleMoreClose(); handleCopyProviderJsonl(p); }}>
+                            <ContentCopy fontSize="small" sx={{ mr: 1 }} /> Copy JSONL
+                        </MenuItem>,
+                        <MenuItem key="copy-base64" onClick={() => { handleMoreClose(); handleCopyProviderBase64(p); }}>
+                            <ContentCopy fontSize="small" sx={{ mr: 1 }} /> Copy Base64
+                        </MenuItem>,
+                        onDelete && <Divider key="divider" />,
+                        onDelete && (
+                            <MenuItem key="delete" onClick={() => { handleMoreClose(); handleDeleteClick(p.uuid); }} sx={{ color: 'error.main' }}>
+                                <Delete fontSize="small" sx={{ mr: 1 }} /> Delete
+                            </MenuItem>
+                        ),
+                    ].filter(Boolean);
+                })()}
+            </Menu>
 
             {/* Token View Modal */}
             <Modal open={tokenModal.open} onClose={handleCloseTokenModal}>
