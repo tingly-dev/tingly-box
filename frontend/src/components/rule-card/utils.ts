@@ -73,6 +73,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             useMaxCompletionTokens: rule.flags?.use_max_completion_tokens || false,
             useMaxTokens: rule.flags?.use_max_tokens || false,
             openaiEndpointOverride: rule.flags?.openai_endpoint_override || '',
+            blockTools: rule.flags?.block_tools || '',
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -193,6 +194,7 @@ interface ExportRule {
         use_max_completion_tokens?: boolean;
         use_max_tokens?: boolean;
         openai_endpoint_override?: string;
+        block_tools?: string;
     };
     smart_enabled?: boolean;
     smart_routing: any[];
@@ -242,10 +244,11 @@ export function formatRuleFlags(flags?: RuleFlags): string {
     if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) {
         entries.push(`openai_endpoint_override=${flags.openaiEndpointOverride}`);
     }
+    if (flags.blockTools) entries.push(`block_tools=${flags.blockTools}`);
     return entries.join(',');
 }
 
-const STRING_FLAG_KEYS = new Set(['custom_user_agent']);
+const STRING_FLAG_KEYS = new Set(['custom_user_agent', 'block_tools']);
 const ENUM_FLAG_KEYS = new Set(Object.keys(ENUM_FLAG_VALUES));
 
 export function parseRuleFlags(input: string): { flags: RuleFlags; error?: string } {
@@ -257,6 +260,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         useMaxCompletionTokens: false,
         useMaxTokens: false,
         openaiEndpointOverride: '',
+        blockTools: '',
     };
 
     const trimmed = input.trim();
@@ -280,6 +284,9 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             switch (rawKey) {
                 case 'custom_user_agent':
                     flags.customUserAgent = rawValue;
+                    break;
+                case 'block_tools':
+                    flags.blockTools = rawValue;
                     break;
             }
             continue;
@@ -344,6 +351,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.useMaxTokens) n++;
     if (flags.customUserAgent && flags.customUserAgent.trim() !== '') n++;
     if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) n++;
+    if (flags.blockTools && flags.blockTools.trim() !== '') n++;
     return n;
 }
 

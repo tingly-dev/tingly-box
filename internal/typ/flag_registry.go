@@ -22,6 +22,9 @@ const (
 	FlagCategoryHTTP FlagCategory = "http"
 	// FlagCategoryResponse — flags that modify the response body/stream.
 	FlagCategoryResponse FlagCategory = "response"
+	// FlagCategoryRequest — protocol-agnostic request-body guard rails
+	// (tool blocking, etc).
+	FlagCategoryRequest FlagCategory = "request"
 )
 
 // FlagOption is one selectable value for a FlagTypeEnum spec.
@@ -103,6 +106,14 @@ func RuleFlagRegistry() []FlagSpec {
 				{Value: "chat", Label: "Force Chat Completions"},
 				{Value: "responses", Label: "Force Responses API"},
 			},
+		},
+		{
+			Key:         "block_tools",
+			Label:       "Block tools",
+			Description: "Comma-separated list of tool names to remove from the request before it is forwarded upstream. Matches the tool name as the client sent it; works across OpenAI Chat, OpenAI Responses, Anthropic, and Google requests.",
+			Type:        FlagTypeString,
+			Category:    FlagCategoryRequest,
+			Placeholder: "e.g. web_search,run_terminal_cmd",
 		},
 	}
 }

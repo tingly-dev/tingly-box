@@ -1,6 +1,8 @@
 package server
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -18,7 +20,26 @@ func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
 	if flags.CursorCompat {
 		pre = append(pre, transform.NewOpenAICursorCompatTransform())
 	}
+	if names := parseBlockTools(flags.BlockTools); len(names) > 0 {
+		pre = append(pre, transform.NewToolBlockTransform(names))
+	}
 	return pre
+}
+
+// parseBlockTools splits the comma-separated block_tools flag into a list of
+// trimmed, non-empty tool names. Returns nil when the flag is empty so callers
+// can skip adding the transform entirely.
+func parseBlockTools(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var names []string
+	for _, part := range strings.Split(raw, ",") {
+		if name := strings.TrimSpace(part); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // ruleExtraTransforms builds the per-rule list of post-Base transforms to

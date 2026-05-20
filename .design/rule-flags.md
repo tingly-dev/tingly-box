@@ -127,6 +127,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `use_max_tokens` | bool | request | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b）|
 | `custom_user_agent` | string | request | 覆盖出站 User-Agent header | `customUserAgentTransport` + `WithCustomUserAgent(ctx, ...)`（Type 2）|
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
+| `block_tools` | string (逗号分隔) | request | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre：pre-Base chain stage）|
 
 ---
 

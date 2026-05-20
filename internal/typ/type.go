@@ -186,6 +186,11 @@ type RuleFlags struct {
 	// and Google providers ignore this. On Codex OAuth providers, "chat"
 	// is silently ignored (Codex has no Chat endpoint) and a warning is logged.
 	OpenAIEndpointOverride string `json:"openai_endpoint_override,omitempty" yaml:"openai_endpoint_override,omitempty"`
+
+	// BlockTools is a comma-separated list of tool names to strip from the
+	// inbound request's tool list before it is forwarded upstream. Matching is
+	// exact on the tool name as the client sent it. Empty means no blocking.
+	BlockTools string `json:"block_tools,omitempty" yaml:"block_tools,omitempty"`
 }
 
 // ProfileMeta stores metadata for a scenario profile.

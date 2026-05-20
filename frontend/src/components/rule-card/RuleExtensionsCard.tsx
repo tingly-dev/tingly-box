@@ -67,6 +67,8 @@ const flagStringValue = (flags: RuleFlags | undefined, key: string): string => {
             return flags.customUserAgent || '';
         case 'openai_endpoint_override':
             return flags.openaiEndpointOverride || '';
+        case 'block_tools':
+            return flags.blockTools || '';
         default:
             return '';
     }

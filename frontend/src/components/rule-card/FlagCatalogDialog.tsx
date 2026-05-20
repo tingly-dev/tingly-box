@@ -20,6 +20,7 @@ import CableIcon from '@mui/icons-material/Cable';
 import OutboundIcon from '@mui/icons-material/Outbound';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import ExtensionIcon from '@mui/icons-material/Extension';
+import InputIcon from '@mui/icons-material/Input';
 import CloseIcon from '@mui/icons-material/Close';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
@@ -61,6 +62,8 @@ const flagToString = (flags: RuleFlags | undefined, key: string): string => {
             return flags.customUserAgent || '';
         case 'openai_endpoint_override':
             return flags.openaiEndpointOverride || '';
+        case 'block_tools':
+            return flags.blockTools || '';
         default:
             return '';
     }
@@ -90,6 +93,8 @@ const setString = (flags: RuleFlags, key: string, value: string): RuleFlags => {
         case 'openai_endpoint_override':
             // Persist "auto" as empty string so omitempty hides it on the wire.
             return { ...flags, openaiEndpointOverride: value === ENUM_DEFAULT_VALUE ? '' : value };
+        case 'block_tools':
+            return { ...flags, blockTools: value };
         default:
             return flags;
     }
@@ -118,6 +123,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     openai: { label: 'OpenAI', icon: <AutoAwesomeIcon fontSize="small" /> },
     http: { label: 'HTTP', icon: <CableIcon fontSize="small" /> },
     response: { label: 'Response', icon: <OutboundIcon fontSize="small" /> },
+    request: { label: 'Request', icon: <InputIcon fontSize="small" /> },
 };
 
 const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] || {

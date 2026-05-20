@@ -59,6 +59,7 @@ export interface RuleFlags {
     useMaxCompletionTokens?: boolean;
     useMaxTokens?: boolean;
     openaiEndpointOverride?: string;
+    blockTools?: string;
 }
 
 export interface RuleFlagsApi {
@@ -69,6 +70,7 @@ export interface RuleFlagsApi {
     use_max_completion_tokens?: boolean;
     use_max_tokens?: boolean;
     openai_endpoint_override?: string;
+    block_tools?: string;
 }
 
 export type FlagValueType = 'bool' | 'string' | 'enum';
