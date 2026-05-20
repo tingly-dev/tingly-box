@@ -583,6 +583,11 @@ func (c *Config) AddRule(rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Validate that all service provider UUIDs exist
+	if err := c.validateRuleServices(rule); err != nil {
+		return err
+	}
+
 	// Guard name unique within same scenario
 	for _, rc := range c.Rules {
 		if rc.RequestModel == rule.RequestModel && rc.Scenario == rule.Scenario {
@@ -607,6 +612,11 @@ func (c *Config) AddRule(rule typ.Rule) error {
 func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Validate that all service provider UUIDs exist
+	if err := c.validateRuleServices(rule); err != nil {
+		return err
+	}
 
 	// Guard name unique
 	for _, rc := range c.Rules {
@@ -2112,7 +2122,54 @@ func (c *Config) hasMigrationCompleted(name string) bool {
 
 // markMigrationCompleted records a one-time migration as done so it is skipped on future startups.
 func (c *Config) markMigrationCompleted(name string) {
-	if !c.hasMigrationCompleted(name) {
-		c.MigrationsCompleted = append(c.MigrationsCompleted, name)
+	c.MigrationsCompleted = append(c.MigrationsCompleted, name)
+}
+
+// validateRuleServices checks that all provider UUIDs referenced by services exist
+// and are enabled. This includes both regular services and smart routing services.
+// Returns an error if any service references a non-existent or disabled provider.
+func (c *Config) validateRuleServices(rule typ.Rule) error {
+	if c.providerStore == nil {
+		return nil // Skip validation if provider store is not initialized
 	}
+
+	// Validate regular services
+	for _, svc := range rule.Services {
+		if svc == nil {
+			continue
+		}
+
+		provider, err := c.providerStore.GetByUUID(svc.Provider)
+		if err != nil {
+			return fmt.Errorf("service references non-existent provider '%s': %w", svc.Provider, err)
+		}
+		if provider == nil {
+			return fmt.Errorf("service references non-existent provider '%s'", svc.Provider)
+		}
+		if !provider.Enabled {
+			return fmt.Errorf("service references disabled provider '%s'", svc.Provider)
+		}
+	}
+
+	// Validate smart routing services
+	for _, sr := range rule.SmartRouting {
+		for _, svc := range sr.Services {
+			if svc == nil {
+				continue
+			}
+
+			provider, err := c.providerStore.GetByUUID(svc.Provider)
+			if err != nil {
+				return fmt.Errorf("smart routing service references non-existent provider '%s': %w", svc.Provider, err)
+			}
+			if provider == nil {
+				return fmt.Errorf("smart routing service references non-existent provider '%s'", svc.Provider)
+			}
+			if !provider.Enabled {
+				return fmt.Errorf("smart routing service references disabled provider '%s'", svc.Provider)
+			}
+		}
+	}
+
+	return nil
 }
