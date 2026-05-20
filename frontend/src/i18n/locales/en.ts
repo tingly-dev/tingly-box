@@ -571,9 +571,9 @@ export default {
     "separateConfig": "Separate Configuration",
     "switchToSeparate": "Switch to Separate",
     "switchToUnified": "Switch to Unified",
-    "configButton": "Quick Config",
-    "quickApply": "Quick Apply",
-    "quickApplyWithStatusLine": "Quick Apply & Status Line",
+    "configButton": "Config",
+    "quickApply": "Auto Config",
+    "quickApplyWithStatusLine": "Auto Config & Status Line",
     "statusLine": {
       "description": "Install status line integration to show real-time request information in your terminal.",
       "jsonDescription": "Configure the status line integration to display real-time request information in your terminal prompt.",

@@ -35,8 +35,8 @@ type ScriptTab = 'json' | 'windows' | 'unix';
 // time keeps this file self-contained and easy to tune.
 const MODAL_TEXT = {
     zh: {
-        tabQuick: '快速配置',
-        tabManual: '手动配置',
+        tabQuick: '自动配置',
+        tabManual: '配置',
         previewButton: '预览生成的 env',
         previewTitle: '预览 — 将写入 ~/.claude/settings.json 的 env 段',
         applySuccess: '配置已写入',
@@ -46,8 +46,8 @@ const MODAL_TEXT = {
         backupLabel: '已备份至',
     },
     en: {
-        tabQuick: 'Quick config',
-        tabManual: 'Manual config',
+        tabQuick: 'Auto Config',
+        tabManual: 'Config',
         previewButton: 'Preview generated env',
         previewTitle: 'Preview — env block written to ~/.claude/settings.json',
         applySuccess: 'Configuration applied',

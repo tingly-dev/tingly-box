@@ -154,7 +154,7 @@ const OpenCodeConfigModal: React.FC<OpenCodeConfigModalProps> = ({
                         disabled={isApplyLoading}
                         startIcon={isApplyLoading ? <CircularProgress size={16} color="inherit" /> : null}
                     >
-                        {isApplyLoading ? 'Applying...' : 'Apply Configuration'}
+                        {isApplyLoading ? 'Applying...' : 'Auto Config'}
                     </Button>
                 )}
             </DialogActions>
