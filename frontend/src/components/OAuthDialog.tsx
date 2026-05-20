@@ -739,6 +739,46 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, autoStartProviderId, oauthProviders]);
 
+    // Direct mode: launched from the unified picker for a single provider.
+    // Skip the in-dialog provider grid entirely — show a compact connecting/
+    // error panel until the authorization dialog takes over, and route every
+    // close straight to a full close (there is no grid to fall back to).
+    if (autoStartProviderId) {
+        const provider = oauthProviders.find((p) => p.id === autoStartProviderId);
+        const name = provider?.displayName || provider?.name || 'provider';
+        return (
+            <>
+                <Dialog open={open && !authDialogOpen} onClose={handleClose} maxWidth="xs" fullWidth>
+                    <DialogTitle>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                            <Typography variant="h6">Connect {provider?.name || 'Provider'}</Typography>
+                            <IconButton onClick={handleClose} size="small"><Close/></IconButton>
+                        </Stack>
+                    </DialogTitle>
+                    <DialogContent>
+                        {initError ? (
+                            <Alert severity="error" sx={{my: 1}}>{initError}</Alert>
+                        ) : (
+                            <Stack alignItems="center" spacing={2} sx={{py: 3}}>
+                                <CircularProgress size={28}/>
+                                <Typography variant="body2" color="text.secondary">
+                                    Connecting to {name}…
+                                </Typography>
+                            </Stack>
+                        )}
+                    </DialogContent>
+                </Dialog>
+                <OAuthAuthorizationDialog
+                    open={authDialogOpen}
+                    onClose={handleClose}
+                    authData={authData}
+                    onSuccess={handleAuthorizationCompleted}
+                    onError={handleAuthorizationError}
+                />
+            </>
+        );
+    }
+
     return (
         <>
             <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
