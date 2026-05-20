@@ -25,6 +25,7 @@ const buildSnippet = (lang: Lang, baseUrl: string, model: string): string => {
     switch (lang) {
         case 'python':
             return `# pip install openai
+import base64
 from openai import OpenAI
 
 client = OpenAI(
@@ -40,10 +41,15 @@ resp = client.images.generate(
     n=1,
 )
 
-print(resp.data[0].url or resp.data[0].b64_json[:64])
+# Decode the base64 payload and write it to a file
+image_b64 = resp.data[0].b64_json
+with open("output.png", "wb") as f:
+    f.write(base64.b64decode(image_b64))
+print("Saved output.png")
 `;
         case 'typescript':
             return `// npm i openai
+import { writeFileSync } from "node:fs";
 import OpenAI from "openai";
 
 const client = new OpenAI({
@@ -59,10 +65,14 @@ const resp = await client.images.generate({
   n: 1,
 });
 
-console.log(resp.data[0].url ?? resp.data[0].b64_json?.slice(0, 64));
+// Decode the base64 payload and write it to a file
+const imageB64 = resp.data[0].b64_json!;
+writeFileSync("output.png", Buffer.from(imageB64, "base64"));
+console.log("Saved output.png");
 `;
         case 'curl':
-            return `curl ${endpoint}/images/generations \\
+            return `# requires jq; decodes the base64 payload into output.png
+curl ${endpoint}/images/generations \\
   -H "Authorization: Bearer <TINGLY_MODEL_TOKEN>" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -71,7 +81,8 @@ console.log(resp.data[0].url ?? resp.data[0].b64_json?.slice(0, 64));
     "size": "1024x1024",
     "quality": "auto",
     "n": 1
-  }'
+  }' \\
+  | jq -r '.data[0].b64_json' | base64 --decode > output.png
 `;
     }
 };
@@ -90,7 +101,7 @@ const ImageGenQuickStartCard: React.FC<ImageGenQuickStartCardProps> = ({
         <UnifiedCard
             size="full"
             title="Quick Start"
-            subtitle="Call the image generation endpoint via the OpenAI SDK or curl. Token comes from GET /api/v1/token."
+            subtitle="Call the image generation endpoint, then decode the base64 response into an image file. Token comes from GET /api/v1/token."
             rightAction={
                 <IconButton size="small" onClick={() => setExpanded((v) => !v)}>
                     {expanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
@@ -118,7 +129,7 @@ const ImageGenQuickStartCard: React.FC<ImageGenQuickStartCardProps> = ({
                         language={tab === 'curl' ? 'bash' : tab}
                         filename={active.filename}
                         onCopy={onCopy ? (c) => onCopy(c, active.filename) : undefined}
-                        maxHeight={200}
+                        maxHeight={320}
                         wrap={false}
                     />
                 </Box>
