@@ -37,9 +37,18 @@ func (s *Server) persistImageGeneration(req *openai.ImageGenerateParams, resp *o
 	now := time.Now()
 	timestamp := now.Format("20060102-150405")
 	dateDir := filepath.Join(constant.GetImageDir(baseDir), now.Format("20060102"))
-	if err := os.MkdirAll(dateDir, 0700); err != nil {
-		logrus.Errorf("[ImageGen] Failed to create image directory: %v", err)
-		return
+
+	dirReady := false
+	ensureDir := func() bool {
+		if dirReady {
+			return true
+		}
+		if err := os.MkdirAll(dateDir, 0700); err != nil {
+			logrus.Errorf("[ImageGen] Failed to create image directory: %v", err)
+			return false
+		}
+		dirReady = true
+		return true
 	}
 
 	for i, img := range resp.Data {
@@ -47,6 +56,9 @@ func (s *Server) persistImageGeneration(req *openai.ImageGenerateParams, resp *o
 		// responses (e.g. some DashScope/MiniMax modes) are skipped.
 		if img.B64JSON == "" {
 			continue
+		}
+		if !ensureDir() {
+			return
 		}
 
 		var filename string
