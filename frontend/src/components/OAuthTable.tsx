@@ -210,11 +210,11 @@ const OAuthTable = ({ providers, onEdit, onToggle, onDelete, onReauthorize, onRe
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, width: 90 }}>Status</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 140 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 120 }}>API Style</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 120 }}>Provider</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 130 }}>Expires At</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>API Style</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 200 }}>Provider</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>Expires At</TableCell>
                         <TableCell sx={{ fontWeight: 600, width: 60 }}>Proxy</TableCell>
-                        <TableCell sx={{ fontWeight: 600, width: 240 }}>Actions</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 200 }}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
