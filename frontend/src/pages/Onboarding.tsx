@@ -70,14 +70,17 @@ const Onboarding: React.FC = () => {
         setFormData(prev => ({...prev, [field]: value}));
     };
 
-    const submitProvider = async (force: boolean) => {
+    const submitProvider = async (force: boolean, resolved?: Partial<EnhancedProviderFormData>) => {
+        // Merge dialog-resolved fields over form state; they arrive via async
+        // onChange and may not be in state yet at submit time.
+        const fd = { ...formData, ...(resolved || {}) };
         const payload = {
-            name: formData.name,
-            api_base: formData.apiBase,
-            api_style: formData.apiStyle,
-            token: formData.token,
-            no_key_required: formData.noKeyRequired,
-            proxy_url: formData.proxyUrl,
+            name: fd.name,
+            api_base: fd.apiBase,
+            api_style: fd.apiStyle,
+            token: fd.token,
+            no_key_required: fd.noKeyRequired,
+            proxy_url: fd.proxyUrl,
         };
         const result = await api.addProvider(payload, force);
         if (result?.success) {
@@ -88,9 +91,9 @@ const Onboarding: React.FC = () => {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();
-        await submitProvider(false);
+        await submitProvider(false, resolved);
     };
 
     const handleForceAdd = async () => {

@@ -11,7 +11,7 @@ interface UseProviderDialogReturn {
     providerDialogOpen: boolean;
     providerFormData: EnhancedProviderFormData;
     handleAddProviderClick: () => void;
-    handleProviderSubmit: (e: React.FormEvent) => Promise<void>;
+    handleProviderSubmit: (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => Promise<void>;
     handleProviderForceAdd: () => Promise<void>;
     handleCloseDialog: () => void;
     handleFieldChange: (field: keyof EnhancedProviderFormData, value: any) => void;
@@ -47,18 +47,21 @@ export const useProviderDialog = (
         setProviderDialogOpen(true);
     };
 
-    const handleProviderSubmit = async (e: React.FormEvent) => {
+    const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();
 
+        // Merge dialog-resolved fields over form state; they arrive via async
+        // onChange and may not be in state yet at submit time.
+        const fd = { ...providerFormData, ...(resolved || {}) };
         const providerData = {
-            name: providerFormData.name,
-            api_base: providerFormData.apiBase,
-            api_style: providerFormData.apiStyle,
-            api_base_openai: providerFormData.apiBaseOpenAI || undefined,
-            api_base_anthropic: providerFormData.apiBaseAnthropic || undefined,
-            token: providerFormData.token,
-            no_key_required: providerFormData.noKeyRequired,
-            proxy_url: providerFormData.proxyUrl,
+            name: fd.name,
+            api_base: fd.apiBase,
+            api_style: fd.apiStyle,
+            api_base_openai: fd.apiBaseOpenAI || undefined,
+            api_base_anthropic: fd.apiBaseAnthropic || undefined,
+            token: fd.token,
+            no_key_required: fd.noKeyRequired,
+            proxy_url: fd.proxyUrl,
         };
 
         const result = await api.addProvider(providerData);
