@@ -6,10 +6,9 @@ import {
     IconWand,
     IconMessageReport,
 } from '@tabler/icons-react';
-import { BrightnessAuto, DarkMode, LightMode } from '@mui/icons-material';
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
-import React, { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
 import { useThemeMode } from '../contexts/ThemeContext';
@@ -23,6 +22,8 @@ import {
     headerHeight,
 } from './constants';
 import type { ActivityItem } from './types';
+import type { ThemeMode } from '@/theme';
+import { getThemeOptions } from '@/theme/options';
 
 interface ActivityBarProps {
     activityItems: ActivityItem[];
@@ -32,6 +33,7 @@ interface ActivityBarProps {
     onZenToggle?: () => void;
     zenEnabled?: boolean;
     onMoreClick?: (event: React.MouseEvent<HTMLElement>) => void;
+    onStandaloneNavigate?: () => void;
 }
 
 export const ZenActivityBar: React.FC<ActivityBarProps> = ({
@@ -42,14 +44,19 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
     onZenToggle,
     zenEnabled = false,
     onMoreClick,
+    onStandaloneNavigate,
 }) => {
     const { t, i18n } = useTranslation();
+    const location = useLocation();
     const { currentVersion } = useAppVersion();
-    const { mode: themeMode, effectiveMode, setTheme } = useThemeMode();
+    const { mode: themeMode, setTheme } = useThemeMode();
     const [languageMenuAnchorEl, setLanguageMenuAnchorEl] = useState<HTMLElement | null>(null);
     const [themeMenuAnchorEl, setThemeMenuAnchorEl] = useState<HTMLElement | null>(null);
 
-    const CurrentThemeIcon = themeMode === 'system' ? BrightnessAuto : effectiveMode === 'dark' ? DarkMode : LightMode;
+    const themeOptions = useMemo(() => getThemeOptions(t), [t]);
+    const currentThemeOption = themeOptions.find((option) => option.value === themeMode);
+    const renderCurrentThemeIcon = currentThemeOption?.renderIcon ?? themeOptions[0].renderIcon;
+    const isOnboardingActive = location.pathname === '/onboarding';
 
     const handleLanguageMenuClick = (event: React.MouseEvent<HTMLElement>) => {
         setLanguageMenuAnchorEl(event.currentTarget);
@@ -73,7 +80,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
         setThemeMenuAnchorEl(null);
     };
 
-    const handleThemeChange = (mode: 'light' | 'dark' | 'system') => {
+    const handleThemeChange = (mode: ThemeMode) => {
         setTheme(mode);
         handleThemeMenuClose();
     };
@@ -239,18 +246,14 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             },
                         }}
                     >
-                        {([
-                            { value: 'light', label: t('layout.activityBar.light'), Icon: LightMode },
-                            { value: 'dark', label: t('layout.activityBar.dark'), Icon: DarkMode },
-                            { value: 'system', label: t('layout.activityBar.system'), Icon: BrightnessAuto },
-                        ] as const).map(({ value, label, Icon }) => (
+                        {themeOptions.map(({ value, label, renderIcon }) => (
                             <MenuItem
                                 key={value}
                                 selected={themeMode === value}
                                 onClick={() => handleThemeChange(value)}
                                 sx={{ gap: 1.5 }}
                             >
-                                <Icon sx={{ fontSize: 18 }} />
+                                {renderIcon({ size: 18 })}
                                 <Typography>{label}</Typography>
                             </MenuItem>
                         ))}
@@ -263,14 +266,43 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         <ListItemButton
                             component={RouterLink}
                             to="/onboarding"
+                            onClick={onStandaloneNavigate}
                             sx={activityItemSx({
-                                '&:hover': { bgcolor: 'action.hover', color: 'primary.main' },
+                                '&:hover': {
+                                    bgcolor: isOnboardingActive ? 'primary.dark' : 'action.hover',
+                                    color: isOnboardingActive ? 'primary.contrastText' : 'primary.main',
+                                },
+                                ...(isOnboardingActive && {
+                                    bgcolor: 'primary.main',
+                                    color: 'primary.contrastText',
+                                    '&::before': {
+                                        content: '""',
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: 3,
+                                        height: 28,
+                                        bgcolor: 'primary.light',
+                                        borderRadius: '0 2px 2px 0',
+                                        boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
+                                    },
+                                }),
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <IconWand size={22} />
                             </ListItemIcon>
-                            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: isOnboardingActive ? 600 : 400,
+                                    color: 'inherit',
+                                    textAlign: 'center',
+                                    lineHeight: 1.2,
+                                }}
+                            >
                                 {t('layout.onboardingShort', { defaultValue: 'Onboard' })}
                             </Typography>
                         </ListItemButton>
@@ -433,10 +465,10 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             }}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <CurrentThemeIcon sx={{ fontSize: 22 }} />
+                                {renderCurrentThemeIcon({ size: 22 })}
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ fontSize: '0.5rem', color: 'inherit', textAlign: 'center', lineHeight: 1.1 }}>
-                                {themeMode === 'system' ? 'SYS' : effectiveMode === 'dark' ? 'Dark' : 'Light'}
+                                {currentThemeOption?.label ?? 'Light'}
                             </Typography>
                         </ListItemButton>
                     </Tooltip>

@@ -19,10 +19,11 @@ export const FloatingStatusIndicators = () => {
         <Box
             sx={{
                 position: 'fixed',
-                bottom: 16,
-                right: 16,
+                top: { xs: 8, md: 'auto' },
+                right: { xs: 8, md: 16 },
+                bottom: { xs: 'auto', md: 16 },
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: { xs: 'row', md: 'column' },
                 gap: 1,
                 zIndex: Z_INDEX.popover,
             }}
@@ -41,13 +42,13 @@ export const FloatingStatusIndicators = () => {
                         onClick={showDisconnectDialog}
                         size="small"
                         sx={{
-                            width: 40,
-                            height: 40,
-                            bgcolor: 'background.paper',
+                            width: { xs: 44, md: 40 },
+                            height: { xs: 44, md: 40 },
+                            bgcolor: { xs: 'transparent', md: 'background.paper' },
                             color: 'error.main',
-                            border: '1px solid',
+                            border: { xs: 'none', md: '1px solid' },
                             borderColor: 'divider',
-                            boxShadow: 2,
+                            boxShadow: { xs: 0, md: 2 },
                             '&:hover': {
                                 bgcolor: 'action.hover',
                                 color: 'error.dark',
@@ -73,13 +74,13 @@ export const FloatingStatusIndicators = () => {
                         onClick={showUpdateDialog}
                         size="small"
                         sx={{
-                            width: 40,
-                            height: 40,
-                            bgcolor: 'background.paper',
+                            width: { xs: 44, md: 40 },
+                            height: { xs: 44, md: 40 },
+                            bgcolor: { xs: 'transparent', md: 'background.paper' },
                             color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                            border: '1px solid',
+                            border: { xs: 'none', md: '1px solid' },
                             borderColor: 'divider',
-                            boxShadow: 2,
+                            boxShadow: { xs: 0, md: 2 },
                             '&:hover': {
                                 bgcolor: 'action.hover',
                             },

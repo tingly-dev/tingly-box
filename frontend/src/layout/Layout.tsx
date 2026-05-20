@@ -1,5 +1,4 @@
 import { Box, Drawer, IconButton, Popover, Tooltip, Typography, Menu, MenuItem, Stack } from '@mui/material';
-import { BrightnessAuto, DarkMode, LightMode } from '@mui/icons-material';
 import { IconMenu, IconDots, IconYinYang, IconPencil } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,9 +13,58 @@ import { useActivityItems } from './useActivityItems.tsx';
 import { useZenMode } from '../hooks/useZenMode';
 import { useProfileContext } from '../contexts/ProfileContext';
 import type { ActivityItem, LayoutProps } from './types';
+import { getThemeOptions } from '@/theme/options';
 import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '../components/BrandIcons';
 import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators';
 import { IconPlus } from '@tabler/icons-react';
+
+const mobileContentSx = {
+    flex: 1,
+    px: { xs: 2, md: 3 },
+    pt: { xs: 9, md: 3 },
+    pb: 3,
+    overflowY: 'auto',
+    scrollBehavior: 'smooth',
+    '&::-webkit-scrollbar': { width: 8 },
+    '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
+    '&::-webkit-scrollbar-thumb': {
+        backgroundColor: 'grey.300',
+        borderRadius: 1,
+        '&:hover': { backgroundColor: 'grey.400' },
+    },
+} as const;
+
+const MobileNavigationBar = ({ onMenuClick }: { onMenuClick: () => void }) => (
+    <Box
+        sx={{
+            display: { xs: 'flex', md: 'none' },
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 56,
+            zIndex: Z_INDEX.mobileToggle,
+            alignItems: 'center',
+            px: 1,
+            bgcolor: 'background.paper',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+        }}
+    >
+        <IconButton
+            color="primary"
+            aria-label="Open navigation menu"
+            onClick={onMenuClick}
+            sx={{
+                width: 44,
+                height: 44,
+                '&:hover': { bgcolor: 'action.hover' },
+            }}
+        >
+            <IconMenu size={24} />
+        </IconButton>
+    </Box>
+);
 
 const Layout = ({ children }: LayoutProps) => {
     const { t } = useTranslation();
@@ -24,6 +72,7 @@ const Layout = ({ children }: LayoutProps) => {
     const navigate = useNavigate();
     const { currentVersion } = useAppVersion();
     const { setTheme } = useThemeMode();
+    const themeMenuOptions = useMemo(() => getThemeOptions(t), [t]);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [easterEggAnchorEl, setEasterEggAnchorEl] = useState<HTMLElement | null>(null);
     const [moreMenuAnchorEl, setMoreMenuAnchorEl] = useState<HTMLElement | null>(null);
@@ -64,6 +113,7 @@ const Layout = ({ children }: LayoutProps) => {
 
     // Determine active activity from current path, falling back to localStorage
     const activeActivity = useMemo(() => {
+        if (location.pathname === '/onboarding') return 'onboarding';
         for (const item of activityItems) {
             if (item.path && isActive(item.path)) return item.key;
             if (item.children && isChildActive(item.children)) return item.key;
@@ -183,7 +233,10 @@ const Layout = ({ children }: LayoutProps) => {
     }, [effectiveZenEnabled, zenAgent, zenMoreActivity, zenActiveActivity, activityItems, activeActivity]);
 
     const handleActivityClick = (item: ActivityItem) => {
-        setMobileOpen(false);
+        const hasSidebarItems = item.children?.some(child => child.type !== 'divider') ?? false;
+        if (!hasSidebarItems) {
+            setMobileOpen(false);
+        }
         setMoreMenuAnchorEl(null); // Close more menu if open
 
         // If clicking a zen path item, clear the zenMoreActivity to restore zen sidebar
@@ -276,6 +329,7 @@ const Layout = ({ children }: LayoutProps) => {
                     window.location.reload();
                 }}
                 zenEnabled={effectiveZenEnabled}
+                onStandaloneNavigate={() => setMobileOpen(false)}
             />
             {sidebarItems.length > 0 && (
                 <Sidebar
@@ -302,6 +356,7 @@ const Layout = ({ children }: LayoutProps) => {
                 }}
                 zenEnabled={effectiveZenEnabled}
                 onMoreClick={(e) => setMoreMenuAnchorEl(e.currentTarget)}
+                onStandaloneNavigate={() => setMobileOpen(false)}
             />
             {sidebarItems.length > 0 && (
                 <Sidebar
@@ -342,26 +397,7 @@ const Layout = ({ children }: LayoutProps) => {
                         {zenNavigationContent}
                     </Drawer>
 
-                    {/* Mobile toggle */}
-                    <IconButton
-                        color="primary"
-                        aria-label="Open navigation menu"
-                        onClick={() => setMobileOpen(!mobileOpen)}
-                        sx={{
-                            display: { xs: 'flex', md: 'none' },
-                            position: 'fixed',
-                            top: 12,
-                            left: 12,
-                            zIndex: Z_INDEX.mobileToggle,
-                            boxShadow: 3,
-                            width: 44,
-                            height: 44,
-                            '&:hover': { bgcolor: 'action.hover', transform: 'scale(1.05)' },
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        <IconMenu size={24} />
-                    </IconButton>
+                    <MobileNavigationBar onMenuClick={() => setMobileOpen(!mobileOpen)} />
 
                     {/* Main content */}
                     <Box
@@ -369,19 +405,7 @@ const Layout = ({ children }: LayoutProps) => {
                         sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
                     >
                         <Box
-                            sx={{
-                                flex: 1,
-                                p: 3,
-                                overflowY: 'auto',
-                                scrollBehavior: 'smooth',
-                                '&::-webkit-scrollbar': { width: 8 },
-                                '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
-                                '&::-webkit-scrollbar-thumb': {
-                                    backgroundColor: 'grey.300',
-                                    borderRadius: 1,
-                                    '&:hover': { backgroundColor: 'grey.400' },
-                                },
-                            }}
+                            sx={mobileContentSx}
                         >
                             {children ?? <Outlet />}
                         </Box>
@@ -433,26 +457,18 @@ const Layout = ({ children }: LayoutProps) => {
 
                         {/* Theme options - only in zen mode */}
                         {effectiveZenEnabled && (
-                            <>
-                                <MenuItem disabled sx={{ opacity: 0.6 }}>
-                                    <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                                        {t('layout.themeMenu.theme')}
-                                    </Typography>
-                                </MenuItem>
-                                <MenuItem onClick={() => setTheme('light')} sx={{ gap: 1.5 }}>
-                                    <LightMode sx={{ fontSize: 18 }} />
-                                    <Typography>{t('layout.activityBar.light')}</Typography>
-                                </MenuItem>
-                                <MenuItem onClick={() => setTheme('dark')} sx={{ gap: 1.5 }}>
-                                    <DarkMode sx={{ fontSize: 18 }} />
-                                    <Typography>{t('layout.activityBar.dark')}</Typography>
-                                </MenuItem>
-                                <MenuItem onClick={() => setTheme('system')} sx={{ gap: 1.5 }}>
-                                    <BrightnessAuto sx={{ fontSize: 18 }} />
-                                    <Typography>{t('layout.activityBar.system')}</Typography>
-                                </MenuItem>
-                            </>
+                            <MenuItem disabled sx={{ opacity: 0.6 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                                    {t('layout.themeMenu.theme')}
+                                </Typography>
+                            </MenuItem>
                         )}
+                        {effectiveZenEnabled && themeMenuOptions.map(({ value, label, renderIcon }) => (
+                            <MenuItem key={value} onClick={() => setTheme(value)} sx={{ gap: 1.5 }}>
+                                {renderIcon({ size: 18 })}
+                                <Typography>{label}</Typography>
+                            </MenuItem>
+                        ))}
                     </Menu>
 
                     {/* Easter Egg Popover */}
@@ -493,26 +509,7 @@ const Layout = ({ children }: LayoutProps) => {
                         {navigationContent}
                     </Drawer>
 
-                    {/* Mobile toggle */}
-                    <IconButton
-                        color="primary"
-                        aria-label="Open navigation menu"
-                        onClick={() => setMobileOpen(!mobileOpen)}
-                        sx={{
-                            display: { xs: 'flex', md: 'none' },
-                            position: 'fixed',
-                            top: 12,
-                            left: 12,
-                            zIndex: Z_INDEX.mobileToggle,
-                            boxShadow: 3,
-                            width: 44,
-                            height: 44,
-                            '&:hover': { bgcolor: 'action.hover', transform: 'scale(1.05)' },
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        <IconMenu size={24} />
-                    </IconButton>
+                    <MobileNavigationBar onMenuClick={() => setMobileOpen(!mobileOpen)} />
 
                     {/* Main content */}
                     <Box
@@ -520,19 +517,7 @@ const Layout = ({ children }: LayoutProps) => {
                         sx={{ flexGrow: 1, height: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', position: 'relative', zIndex: 1 }}
                     >
                         <Box
-                            sx={{
-                                flex: 1,
-                                p: 3,
-                                overflowY: 'auto',
-                                scrollBehavior: 'smooth',
-                                '&::-webkit-scrollbar': { width: 8 },
-                                '&::-webkit-scrollbar-track': { backgroundColor: 'grey.100', borderRadius: 1 },
-                                '&::-webkit-scrollbar-thumb': {
-                                    backgroundColor: 'grey.300',
-                                    borderRadius: 1,
-                                    '&:hover': { backgroundColor: 'grey.400' },
-                                },
-                            }}
+                            sx={mobileContentSx}
                         >
                             {children ?? <Outlet />}
                         </Box>
