@@ -41,7 +41,7 @@ func TestCommandScriptContent(t *testing.T) {
 }
 
 func TestResolveLaunchBinary(t *testing.T) {
-	s := &ShortcutCmdKong{Source: "binary"}
+	s := &ShortcutCmdKong{Target: "binary"}
 	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
 
 	if want := []string{"/usr/local/bin/tingly-box", "restart", "--daemon"}; strings.Join(spec.argv, " ") != strings.Join(want, " ") {
@@ -56,7 +56,7 @@ func TestResolveLaunchBinary(t *testing.T) {
 }
 
 func TestResolveLaunchNpx(t *testing.T) {
-	s := &ShortcutCmdKong{Source: "npx"}
+	s := &ShortcutCmdKong{Target: "npx"}
 	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
 
 	wantArgv := []string{"sh", "-lc", "npx -y tingly-box@latest restart --daemon"}
@@ -69,7 +69,7 @@ func TestResolveLaunchNpx(t *testing.T) {
 }
 
 func TestResolveLaunchNpxBundle(t *testing.T) {
-	s := &ShortcutCmdKong{Source: "npx-bundle"}
+	s := &ShortcutCmdKong{Target: "npx-bundle"}
 	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
 
 	if spec.winArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
@@ -78,7 +78,7 @@ func TestResolveLaunchNpxBundle(t *testing.T) {
 }
 
 func TestResolveLaunchAutoUsesPersistedSource(t *testing.T) {
-	s := &ShortcutCmdKong{Source: "auto"}
+	s := &ShortcutCmdKong{Target: "auto"}
 	// A binary not in the npx cache, but the recorded launch source was npx-bundle.
 	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "npx-bundle")
 
@@ -88,7 +88,7 @@ func TestResolveLaunchAutoUsesPersistedSource(t *testing.T) {
 }
 
 func TestResolveLaunchAutoFallsBackToBinary(t *testing.T) {
-	s := &ShortcutCmdKong{Source: "auto"}
+	s := &ShortcutCmdKong{Target: "auto"}
 	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
 
 	if spec.winTarget != "/usr/local/bin/tingly-box" {
