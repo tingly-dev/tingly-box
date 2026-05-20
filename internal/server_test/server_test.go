@@ -36,7 +36,7 @@ func TestServerLifecycle(t *testing.T) {
 	if s.Cancel() == nil {
 		t.Fatal("expected cancel to be initialized")
 	}
-	s.Cancel()
+	s.Cancel()() // Cancel() returns the CancelFunc; invoke it to cancel the context
 
 	select {
 	case <-s.Context().Done():
@@ -111,7 +111,7 @@ func runChatCompletionsWithAuth(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"model": "gpt-3.5-turbo",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello, world!"},
@@ -127,7 +127,7 @@ func runChatCompletionsWithAuth(t *testing.T, ts *TestServer) {
 }
 
 func runChatCompletionsWithoutAuth(t *testing.T, ts *TestServer) {
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"model": "gpt-3.5-turbo",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello, world!"},
@@ -144,7 +144,7 @@ func runInvalidChatRequest(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello, world!"},
 		},
@@ -171,7 +171,7 @@ func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 		},
 	}
 
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+modelToken)
 
@@ -190,7 +190,7 @@ func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 }
 
 func runAnthropicMessagesWithoutAuth(t *testing.T, ts *TestServer) {
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"model": "tingly/openai",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello from Anthropic!"},
