@@ -11,6 +11,40 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// betaRequestWithToolResult builds a BetaMessageNewParams that simulates a
+// typical agentic turn: user text → assistant tool_use → user tool_result.
+// The keyword appears only in the original user text, not in the tool_result.
+func betaRequestWithToolResult(keyword string) *anthropic.BetaMessageNewParams {
+	return &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "please search for " + keyword}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "I will search now"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfToolResult: &anthropic.BetaToolResultBlockParam{
+						ToolUseID: "toolu_01",
+						Content: []anthropic.BetaToolResultBlockParamContentUnion{
+							{OfText: &anthropic.BetaTextBlockParam{Text: "search results"}},
+						},
+					}},
+				},
+			},
+		},
+	}
+}
+
 func TestSmartRouting_RuleMatch(t *testing.T) {
 	lb := &mockLoadBalancer{service: testService("provider-a", "gpt-4", true)}
 	services := []*loadbalance.Service{testService("provider-a", "gpt-4", true)}
@@ -233,6 +267,82 @@ func TestSmartRouting_AgentClaudeCode_MainDoesNotMatchSubagentRule(t *testing.T)
 	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
 	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
 	require.False(t, handled, "main-agent request should not match subagent-only rule")
+}
+
+// TestSmartRouting_LatestUser_ToolResultDoesNotLockBranch is the stage-level
+// regression test for the "lock-in" bug: after a user sends a tool_result
+// (role=user but no text), the latest_user contains rule must NOT match against
+// the stale previous user text and must fall through to the load-balancer
+// (default) instead of staying locked on the smart-routing branch.
+func TestSmartRouting_LatestUser_ToolResultDoesNotLockBranch(t *testing.T) {
+	specialSvc := testService("provider-special", "model-special", true)
+
+	rule := testSmartRule("rule-lu", "claude-3-5-sonnet-20241022",
+		[]*loadbalance.Service{specialSvc},
+		smartrouting.SmartOp{
+			Position:  smartrouting.PositionLatestUser,
+			Operation: smartrouting.OpLatestUserContains,
+			Value:     "keyword",
+		},
+	)
+
+	// Latest message is a tool_result — must fall through, not lock on branch.
+	ctx := testContext(rule, "")
+	ctx.Request = betaRequestWithToolResult("keyword")
+
+	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
+	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.False(t, handled,
+		"tool_result as last user message must not match latest_user contains rule")
+}
+
+// TestSmartRouting_LatestUser_TextMatchesAfterToolResult verifies that when a
+// real user text message follows the tool_result exchange and contains the
+// keyword, the rule correctly fires again.
+func TestSmartRouting_LatestUser_TextMatchesAfterToolResult(t *testing.T) {
+	specialSvc := testService("provider-special", "model-special", true)
+
+	rule := testSmartRule("rule-lu", "claude-3-5-sonnet-20241022",
+		[]*loadbalance.Service{specialSvc},
+		smartrouting.SmartOp{
+			Position:  smartrouting.PositionLatestUser,
+			Operation: smartrouting.OpLatestUserContains,
+			Value:     "keyword",
+		},
+	)
+
+	// Four-turn conversation ending with a real user text containing the keyword.
+	req := &anthropic.BetaMessageNewParams{
+		Model: anthropic.Model("claude-3-5-sonnet-20241022"),
+		Messages: []anthropic.BetaMessageParam{
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "initial message"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleAssistant,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "response"}},
+				},
+			},
+			{
+				Role: anthropic.BetaMessageParamRoleUser,
+				Content: []anthropic.BetaContentBlockParamUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "now search for keyword please"}},
+				},
+			},
+		},
+	}
+
+	ctx := testContext(rule, "")
+	ctx.Request = req
+
+	stage := NewSmartRoutingStage(&mockLoadBalancer{}, newMockAffinityStore())
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled, "real user text with keyword must match")
+	require.Equal(t, "provider-special", result.Service.Provider)
 }
 
 func TestSmartRouting_AgentClaudeCode_NonClaudeCodeScenarioDoesNotMatch(t *testing.T) {
