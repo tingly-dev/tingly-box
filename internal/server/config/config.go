@@ -2073,9 +2073,9 @@ func (c *Config) logProxyEnvironment() {
 		respectEnvProxy)
 }
 
-// ApplyHTTPTransportConfig applies the HTTP transport configuration to the global transport pool
-// This is called by TBE during initialization to configure connection pooling
-// For TB (tingly-box), this applies the proxy settings (default: respect_env_proxy=true)
+// ApplyHTTPTransportConfig applies the HTTP transport configuration to the global transport pool.
+// Called at runtime when the operator updates transport settings via the config API.
+// Default behavior (all fields nil): providers without proxy_url connect directly, ignoring env proxy.
 func (c *Config) ApplyHTTPTransportConfig() {
 	c.logProxyEnvironment()
 

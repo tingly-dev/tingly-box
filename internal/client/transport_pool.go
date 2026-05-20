@@ -133,8 +133,9 @@ func SetTransportConfig(config *TransportConfig) {
 	}
 
 	if oldRespectEnvProxy != newRespectEnvProxy {
-		globalTransportPool.clearLocked()
-		logrus.Infof("Transport pool cleared: respect_env_proxy changed %v → %v", oldRespectEnvProxy, newRespectEnvProxy)
+		removed, deferred := globalTransportPool.clearLocked()
+		logrus.Infof("Transport pool cleared (respect_env_proxy: %v → %v): %d removed, %d deferred",
+			oldRespectEnvProxy, newRespectEnvProxy, removed, deferred)
 	}
 
 	if config == nil {
@@ -353,24 +354,22 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 	}
 }
 
-// clearLocked removes all transports from the pool. Caller must hold tp.mutex (write lock).
-func (tp *TransportPool) clearLocked() {
-	removedCount := 0
-	deferredCount := 0
-
+// clearLocked removes all transports from the pool and returns (removed, deferred) counts.
+// Caller must hold tp.mutex (write lock). Logging is left to the caller so that context
+// (reason for clearing) can be included in a single log line.
+func (tp *TransportPool) clearLocked() (removed, deferred int) {
 	for key, pooled := range tp.transports {
 		if pooled.getRefCount() > 0 {
 			pooled.transport.CloseIdleConnections()
 			atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
-			deferredCount++
+			deferred++
 		} else {
 			pooled.transport.CloseIdleConnections()
 			delete(tp.transports, key)
-			removedCount++
+			removed++
 		}
 	}
-
-	logrus.Infof("Transport pool cleared: %d removed, %d deferred (active requests)", removedCount, deferredCount)
+	return removed, deferred
 }
 
 // Clear removes all transports from the pool and closes idle connections.
@@ -380,7 +379,8 @@ func (tp *TransportPool) clearLocked() {
 func (tp *TransportPool) Clear() {
 	tp.mutex.Lock()
 	defer tp.mutex.Unlock()
-	tp.clearLocked()
+	removed, deferred := tp.clearLocked()
+	logrus.Infof("Transport pool cleared: %d removed, %d deferred (active requests)", removed, deferred)
 }
 
 // InvalidateProvider removes all transports associated with a specific provider UUID.

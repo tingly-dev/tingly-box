@@ -53,7 +53,7 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 		// Use the transport pool instead of http.DefaultTransport so that env
 		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 		// proxy is explicitly configured for the provider.
-		transport = GetGlobalTransportPool().GetTransport(provider.UUID, model, "", ai.Issuer(""), sessionID)
+		transport = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 	}
 
 	httpClient := &http.Client{Transport: transport}
