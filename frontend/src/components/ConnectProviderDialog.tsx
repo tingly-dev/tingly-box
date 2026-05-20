@@ -151,7 +151,7 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
             {/* Locked header: title, description and search never scroll. */}
             <DialogTitle sx={{pb: 1, flexShrink: 0}}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h6">Connect a Provider</Typography>
+                    <Typography variant="h6">Connect AI</Typography>
                     <IconButton onClick={onClose} size="small"><Close/></IconButton>
                 </Stack>
             </DialogTitle>

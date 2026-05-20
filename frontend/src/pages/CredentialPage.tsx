@@ -523,7 +523,7 @@ const CredentialPage = () => {
                             size="small"
                             sx={{ minWidth: 150 }}
                         >
-                            Connect Provider
+                            Connect AI
                         </Button>
                     </Stack>
                 }
