@@ -635,7 +635,8 @@
     },
     "moonshot-ai": {
       "id": "moonshot-ai",
-      "name": "Moonshot AI",
+      "name": "Kimi (Moonshot AI)",
+      "alias": "Kimi API | Moonshot AI",
       "status": "active",
       "valid": true,
       "canonical_domain": "api.moonshot.ai",
@@ -660,8 +661,8 @@
     },
     "moonshot-cn": {
       "id": "moonshot-cn",
-      "name": "Moonshot AI (CN)",
-      "alias": "Moonshot AI (CN)",
+      "name": "Kimi (Moonshot AI) (CN)",
+      "alias": "Kimi API (CN) | Moonshot AI (CN)",
       "status": "active",
       "valid": true,
       "canonical_domain": "api.moonshot.cn",
