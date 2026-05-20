@@ -3,11 +3,12 @@ import ModelListDialog from '@/components/ModelListDialog';
 import ProviderExportMenu from '@/components/ProviderExportMenu';
 import { exportProvider, exportProviderAsBase64ToClipboard, exportProviderAsJsonlToClipboard } from '@/components/rule-card/utils';
 import { ProviderQuotaDetailRow } from '@/components/credential/ProviderQuotaDetailRow';
-import { Cancel, ContentCopy, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
+import { Cancel, ContentCopy, DataUsage, Delete, Edit, ListAlt, Route, Visibility } from '@mui/icons-material';
 import {
     Box,
     Button,
     Chip,
+    CircularProgress,
     Divider,
     IconButton,
     Modal,
@@ -321,6 +322,30 @@ const ApiKeyTable = ({ providers, onEdit, onToggle, onDelete, onNotification, pr
                                             <IconButton size="small" color="error" onClick={() => handleDeleteClick(provider.uuid)}>
                                                 <Delete fontSize="small" />
                                             </IconButton>
+                                        </Tooltip>
+                                    )}
+                                    {onQuotaRefresh && (
+                                        <Tooltip title={
+                                            refreshingQuotas?.has(provider.uuid)
+                                                ? 'Fetching quota...'
+                                                : providerQuotas?.[provider.uuid]
+                                                    ? `Refresh Quota\nFetched: ${new Date(providerQuotas[provider.uuid].fetched_at!).toLocaleString()}`
+                                                    : 'Fetch Quota'
+                                        }>
+                                            <span>
+                                                <IconButton
+                                                    size="small"
+                                                    color={providerQuotas?.[provider.uuid] ? 'primary' : 'default'}
+                                                    onClick={() => onQuotaRefresh(provider.uuid)}
+                                                    disabled={refreshingQuotas?.has(provider.uuid)}
+                                                >
+                                                    {refreshingQuotas?.has(provider.uuid) ? (
+                                                        <CircularProgress size={16} />
+                                                    ) : (
+                                                        <DataUsage fontSize="small" />
+                                                    )}
+                                                </IconButton>
+                                            </span>
                                         </Tooltip>
                                     )}
                                     <Divider orientation="vertical" flexItem />

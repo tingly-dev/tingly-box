@@ -178,18 +178,22 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
           {formatUsageDisplay()}
         </Typography>
 
+        {/* Reset time */}
+        {resetTime && (
+          <Typography
+            variant="caption"
+            color="text.disabled"
+            sx={{ minWidth: 40, whiteSpace: 'nowrap' }}
+          >
+            {resetTime}
+          </Typography>
+        )}
+
         {/* Optional details inline */}
         {showDetails && (
-          <>
-            <Typography variant="caption" color="text.secondary">
-              {detailedInfo}
-            </Typography>
-            {resetTime && (
-              <Typography variant="caption" color="text.secondary">
-                ({resetTime})
-              </Typography>
-            )}
-          </>
+          <Typography variant="caption" color="text.secondary">
+            {detailedInfo}
+          </Typography>
         )}
       </Stack>
     </Tooltip>
