@@ -167,17 +167,6 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
           </Box>
         </Box>
 
-        {/* Percent */}
-        <Typography
-          variant="body2"
-          sx={{
-            color: barColor,
-            minWidth: 35,
-          }}
-        >
-          {formatUsageDisplay()}
-        </Typography>
-
         {/* Reset time */}
         {resetTime && (
           <Typography
@@ -188,6 +177,17 @@ export function QuotaBarItem({ window, showDetails = false }: QuotaBarItemProps)
             {resetTime}
           </Typography>
         )}
+
+        {/* Percent */}
+        <Typography
+          variant="body2"
+          sx={{
+            color: barColor,
+            minWidth: 35,
+          }}
+        >
+          {formatUsageDisplay()}
+        </Typography>
 
         {/* Optional details inline */}
         {showDetails && (
