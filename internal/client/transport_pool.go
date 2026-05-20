@@ -114,12 +114,29 @@ func GetGlobalTransportPool() *TransportPool {
 
 // SetTransportConfig updates the transport pool configuration
 // Pass nil to reset to Go defaults (backward compatible)
-// This affects newly created transports only, existing transports are not modified
+// When RespectEnvProxy changes, cached transports are cleared immediately so
+// that the new proxy policy takes effect on the next request.
 func SetTransportConfig(config *TransportConfig) {
 	globalTransportPool.mutex.Lock()
 	defer globalTransportPool.mutex.Unlock()
 
+	oldRespectEnvProxy := boolPtrVal(nil)
+	if globalTransportPool.config != nil {
+		oldRespectEnvProxy = boolPtrVal(globalTransportPool.config.RespectEnvProxy)
+	}
+
 	globalTransportPool.config = config
+
+	newRespectEnvProxy := boolPtrVal(nil)
+	if config != nil {
+		newRespectEnvProxy = boolPtrVal(config.RespectEnvProxy)
+	}
+
+	if oldRespectEnvProxy != newRespectEnvProxy {
+		removed, deferred := globalTransportPool.clearLocked()
+		logrus.Infof("Transport pool cleared (respect_env_proxy: %v → %v): %d removed, %d deferred",
+			oldRespectEnvProxy, newRespectEnvProxy, removed, deferred)
+	}
 
 	if config == nil {
 		logrus.Info("Transport pool config reset to Go defaults")
@@ -135,6 +152,11 @@ func SetTransportConfig(config *TransportConfig) {
 		logrus.Infof("Transport pool config updated: MaxIdleConns=%s, MaxIdleConnsPerHost=%s",
 			maxIdle, maxIdlePerHost)
 	}
+}
+
+// boolPtrVal returns the value of a *bool, treating nil as false.
+func boolPtrVal(b *bool) bool {
+	return b != nil && *b
 }
 
 // GetTransport returns or creates a shared HTTP transport for the given configuration.
@@ -332,6 +354,24 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 	}
 }
 
+// clearLocked removes all transports from the pool and returns (removed, deferred) counts.
+// Caller must hold tp.mutex (write lock). Logging is left to the caller so that context
+// (reason for clearing) can be included in a single log line.
+func (tp *TransportPool) clearLocked() (removed, deferred int) {
+	for key, pooled := range tp.transports {
+		if pooled.getRefCount() > 0 {
+			pooled.transport.CloseIdleConnections()
+			atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
+			deferred++
+		} else {
+			pooled.transport.CloseIdleConnections()
+			delete(tp.transports, key)
+			removed++
+		}
+	}
+	return removed, deferred
+}
+
 // Clear removes all transports from the pool and closes idle connections.
 // Transports with active in-flight requests (refCount > 0) are marked for deferred
 // removal (lastAccess set to epoch) and will be cleaned up on the next cycle after
@@ -339,23 +379,8 @@ func (tp *TransportPool) Stats() map[string]interface{} {
 func (tp *TransportPool) Clear() {
 	tp.mutex.Lock()
 	defer tp.mutex.Unlock()
-
-	removedCount := 0
-	deferredCount := 0
-
-	for key, pooled := range tp.transports {
-		if pooled.getRefCount() > 0 {
-			pooled.transport.CloseIdleConnections()
-			atomic.StoreInt64(&pooled.lastAccess, 0) // mark for deferred removal
-			deferredCount++
-		} else {
-			pooled.transport.CloseIdleConnections()
-			delete(tp.transports, key)
-			removedCount++
-		}
-	}
-
-	logrus.Infof("Transport pool cleared: %d removed, %d deferred (active requests)", removedCount, deferredCount)
+	removed, deferred := tp.clearLocked()
+	logrus.Infof("Transport pool cleared: %d removed, %d deferred (active requests)", removed, deferred)
 }
 
 // InvalidateProvider removes all transports associated with a specific provider UUID.

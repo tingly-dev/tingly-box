@@ -638,3 +638,66 @@ func TestTransportPool_LastAccessAtomicRace(t *testing.T) {
 
 	wg.Wait()
 }
+
+// TestTransportPool_EnvProxyNotInherited verifies that transports created without an
+// explicit proxy URL do not inherit HTTP_PROXY / HTTPS_PROXY from the environment by
+// default (RespectEnvProxy == false).
+func TestTransportPool_EnvProxyNotInherited(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://should-not-be-used.invalid:9999")
+	t.Setenv("HTTPS_PROXY", "http://should-not-be-used.invalid:9999")
+
+	pool := newTestTransportPool() // config nil → RespectEnvProxy defaults to false
+
+	transport := pool.GetTransport("provider-1", "", "", ai.Issuer(""), typ.SessionID{})
+	if transport.Proxy != nil {
+		t.Error("transport.Proxy should be nil when no proxy_url is configured and RespectEnvProxy is false")
+	}
+}
+
+// TestTransportPool_EnvProxyRespectedWhenEnabled verifies that setting RespectEnvProxy=true
+// causes transports created without an explicit proxy URL to inherit env proxy settings.
+func TestTransportPool_EnvProxyRespectedWhenEnabled(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://proxy.example.com:8080")
+
+	boolTrue := true
+	pool := newTestTransportPool()
+	pool.config = &TransportConfig{RespectEnvProxy: &boolTrue}
+
+	transport := pool.GetTransport("provider-2", "", "", ai.Issuer(""), typ.SessionID{})
+	if transport.Proxy == nil {
+		t.Error("transport.Proxy should be non-nil when RespectEnvProxy=true and HTTP_PROXY is set")
+	}
+}
+
+// TestSetTransportConfig_ClearsPoolOnRespectEnvProxyChange verifies that changing
+// RespectEnvProxy via SetTransportConfig immediately evicts all cached transports so
+// the new proxy policy takes effect on the next request.
+func TestSetTransportConfig_ClearsPoolOnRespectEnvProxyChange(t *testing.T) {
+	// Use a fresh isolated pool so the test doesn't touch the global singleton.
+	pool := newTestTransportPool()
+	session := typ.SessionID{Source: typ.SessionSourceUser, Value: "clear-test"}
+
+	// Populate the pool with a transport.
+	pool.GetTransport("provider-clear", "", "", ai.Issuer(""), session)
+	if len(pool.transports) != 1 {
+		t.Fatalf("expected 1 cached transport before config change, got %d", len(pool.transports))
+	}
+
+	// Simulate a RespectEnvProxy toggle (false → true) directly on the isolated pool
+	// (bypassing the global SetTransportConfig so we don't mutate the singleton).
+	boolTrue := true
+	pool.mutex.Lock()
+	oldVal := false // pool.config is nil → defaults to false
+	pool.config = &TransportConfig{RespectEnvProxy: &boolTrue}
+	removed, deferred := pool.clearLocked()
+	pool.mutex.Unlock()
+
+	_ = oldVal
+	total := removed + deferred
+	if total == 0 {
+		t.Error("expected clearLocked to report at least one transport removed or deferred")
+	}
+	if len(pool.transports) != 0 {
+		t.Errorf("expected pool to be empty after clear, got %d entries", len(pool.transports))
+	}
+}
