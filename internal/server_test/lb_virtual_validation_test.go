@@ -122,21 +122,13 @@ func TestLB_VirtualValidation_EqualProviders(t *testing.T) {
 		results = append(results, result{c.name, p1, p2, maxShare})
 	}
 
-	// Regression guard for the tactics that DO spread evenly today. If a future
-	// change concentrates Random or TokenBased onto one provider, fail loudly.
-	if got := shares["Random"]; got >= 60.0 {
-		t.Errorf("Random regressed: dominant provider share %.1f%% (want <60%%)", got)
-	}
-	if got := shares["TokenBased(default 10000)"]; got >= 60.0 {
-		t.Errorf("TokenBased regressed: dominant provider share %.1f%% (want <60%%)", got)
-	}
-
-	// Known defect (intentionally NOT failed here, per diagnosis): the unset
-	// default resolves to Adaptive, a deterministic argmax that concentrates
-	// equal providers onto one. Surface it so the regression is visible.
-	if shares["DEFAULT (unset type=0)"] >= 70.0 {
-		t.Logf("KNOWN BUG: unset/default tactic concentrates %.1f%% on one provider "+
-			"(default resolves to Adaptive deterministic argmax)", shares["DEFAULT (unset type=0)"])
+	// Regression guard: with two equal providers EVERY tactic must spread load.
+	// Before the fix, the unset default (which resolved to Adaptive) and Adaptive
+	// itself concentrated ~95% on the first provider once token scores saturated.
+	for name, share := range shares {
+		if share >= 65.0 {
+			t.Errorf("%s concentrates %.1f%% on one provider (want <65%% for equal providers)", name, share)
+		}
 	}
 
 	// Print a verdict table. A healthy balancer keeps the dominant provider

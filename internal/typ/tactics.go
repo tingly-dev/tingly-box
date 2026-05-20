@@ -55,10 +55,13 @@ func (tc *Tactic) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Instantiate converts the configuration into functional logic
+// Instantiate converts the configuration into functional logic.
+// An unset tactic (nil or Type==0) resolves to Random, matching the documented
+// default in Rule.GetTacticType(); these previously disagreed (Adaptive vs
+// Random), so unconfigured rules silently ran Adaptive.
 func (tc *Tactic) Instantiate() LoadBalancingTactic {
 	if tc == nil {
-		return defaultAdaptiveTactic
+		return defaultRandomTactic
 	}
 	return CreateTacticWithTypedParams(tc.Type, tc.Params)
 }
@@ -865,18 +868,30 @@ func (at *AdaptiveTactic) SelectService(rule *Rule) *loadbalance.Service {
 		scores = append(scores, serviceScore{service: service, score: score})
 	}
 
-	// Find service with highest score
-	var selectedService *loadbalance.Service
+	// Find the highest score.
 	var highestScore float64 = -1
-
 	for _, ss := range scores {
 		if ss.score > highestScore {
 			highestScore = ss.score
-			selectedService = ss.service
 		}
 	}
 
-	return selectedService
+	// Collect every service whose score ties the best within a small epsilon and
+	// pick one at random. A strict argmax would always return the first service
+	// on a tie, which concentrates all traffic on one provider whenever the
+	// scoring signals are equal — notably once token scores saturate to 0 under
+	// sustained load. Randomizing among comparable services spreads the load.
+	const scoreEpsilon = 1e-6
+	best := make([]*loadbalance.Service, 0, len(scores))
+	for _, ss := range scores {
+		if ss.score >= highestScore-scoreEpsilon {
+			best = append(best, ss.service)
+		}
+	}
+	if len(best) == 1 {
+		return best[0]
+	}
+	return best[rand.Intn(len(best))]
 }
 
 func (at *AdaptiveTactic) GetName() string {
@@ -985,7 +1000,9 @@ func GetDefaultTactic(tType loadbalance.TacticType) LoadBalancingTactic {
 	case loadbalance.TacticPriority:
 		return defaultPriorityTactic
 	default:
-		return defaultAdaptiveTactic
+		// Unset/unknown tactic type: default to Random to match
+		// Rule.GetTacticType(), which documents Random as the default.
+		return defaultRandomTactic
 	}
 }
 
