@@ -229,17 +229,19 @@ export default {
       "switchWarning": "API 风格已更改。基础 URL 已重置。请选择兼容的提供商。"
     },
     "provider": {
-      "label": "提供商或自定义基础 URL",
-      "placeholder": "选择提供商或输入自定义基础 URL"
+      "label": "Base URL",
+      "placeholder": "选择已知服务或粘贴 Base URL"
     },
     "protocol": {
       "label": "协议"
     },
     "fusion": {
       "modeLabel": "Fusion 模式",
-      "tooltipTitle": "创建方式说明",
-      "normalModeDesc": "普通模式（未勾选）：会创建两个独立 Provider（OpenAI 与 Anthropic 各一个）。",
-      "fusionModeDesc": "Fusion 模式（已勾选）：会创建一个同时包含 OpenAI 与 Anthropic Base URL 的 Provider。"
+      "tooltipTitle": "勾选两种协议时的保存方式",
+      "normalModeDesc": "普通模式（未勾选）：创建两条独立 Base URL（OpenAI 与 Anthropic 各一条）。",
+      "fusionModeDesc": "Fusion 模式（已勾选）：合并为一条 Base URL，同时服务 OpenAI 与 Anthropic。",
+      "outcomeSplit": "将创建 2 条独立 Base URL（共用同一密钥）。",
+      "outcomeMerged": "将保留 1 条 Base URL，同时服务 OpenAI 与 Anthropic。"
     },
     "keyName": {
       "label": "名称",

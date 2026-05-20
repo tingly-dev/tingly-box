@@ -228,17 +228,19 @@ export default {
       "switchWarning": "API style changed. Base URL has been reset. Please select a compatible provider."
     },
     "provider": {
-      "label": "Provider or Custom Base URL",
-      "placeholder": "Select a provider or enter custom base URL"
+      "label": "Base URL",
+      "placeholder": "Pick a known service or paste a base URL"
     },
     "protocol": {
       "label": "Protocol"
     },
     "fusion": {
       "modeLabel": "Fusion mode",
-      "tooltipTitle": "How provider creation works",
-      "normalModeDesc": "Normal mode (unchecked): create two independent providers, one for OpenAI and one for Anthropic.",
-      "fusionModeDesc": "Fusion mode (checked): create one provider with both OpenAI and Anthropic base URLs."
+      "tooltipTitle": "How both protocols are saved",
+      "normalModeDesc": "Normal mode (unchecked): creates two separate base URLs, one for OpenAI and one for Anthropic.",
+      "fusionModeDesc": "Fusion mode (checked): merges into one base URL entry serving both OpenAI and Anthropic.",
+      "outcomeSplit": "Will create 2 separate base URLs (sharing this key).",
+      "outcomeMerged": "Will keep 1 base URL serving both OpenAI and Anthropic."
     },
     "keyName": {
       "label": "Name",
