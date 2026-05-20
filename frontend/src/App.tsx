@@ -297,12 +297,16 @@ const OnboardingGate: React.FC = () => {
                 if (providers.length === 0) {
                     setTarget('/onboarding');
                     localStorage.removeItem('layout.activeActivity');
+                    sessionStorage.removeItem('layout.activeActivity');
                     return;
                 }
             } catch {
                 // Swallow the error and fall through to the default agent —
                 // failing the gate should never lock the user out of the app.
             }
+            // Clear stale activity state and navigate to agent overview
+            localStorage.removeItem('layout.activeActivity');
+            sessionStorage.removeItem('layout.activeActivity');
             if (!cancelled) setTarget('/agent');
         })();
         return () => { cancelled = true; };
