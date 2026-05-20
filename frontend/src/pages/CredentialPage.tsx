@@ -10,12 +10,10 @@ import UnifiedCard from '@/components/UnifiedCard';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { Add, ListAlt, Upload, VpnKey } from '@mui/icons-material';
 import {
-    Alert,
     Box,
     Button,
     Chip,
     Divider,
-    Snackbar,
     Stack,
     Typography,
 } from '@mui/material';
@@ -23,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
+import { useNotify } from '@/hooks/useNotify';
 
 type ProviderFormData = EnhancedProviderFormData;
 
@@ -39,11 +38,7 @@ const CredentialPage = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [snackbar, setSnackbar] = useState<{
-        open: boolean;
-        message: string;
-        severity: 'success' | 'error';
-    }>({ open: false, message: '', severity: 'success' });
+    const notify = useNotify();
 
     // API Key Dialog state
     const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
@@ -112,7 +107,7 @@ const CredentialPage = () => {
     } = useProviderQuota(providers, { fetchOnMount: true });
 
     const showNotification = (message: string, severity: 'success' | 'error') => {
-        setSnackbar({ open: true, message, severity });
+        notify[severity](message);
     };
 
     const handleAddApiKey = () => {
@@ -524,9 +519,7 @@ const CredentialPage = () => {
                             onToggle={handleToggleProvider}
                             onDelete={handleDeleteProvider}
                             onRefreshToken={handleRefreshToken}
-                            onNotification={(message, severity) => {
-                                setSnackbar({ open: true, message, severity });
-                            }}
+                            onNotification={showNotification}
                             providerQuotas={quotaData}
                             refreshingQuotas={refreshing}
                             onQuotaRefresh={refreshQuota}
@@ -565,9 +558,7 @@ const CredentialPage = () => {
                             onEdit={handleEditProvider}
                             onToggle={handleToggleProvider}
                             onDelete={handleDeleteProvider}
-                            onNotification={(message, severity) => {
-                                setSnackbar({ open: true, message, severity });
-                            }}
+                            onNotification={showNotification}
                             providerQuotas={quotaData}
                             refreshingQuotas={refreshing}
                             onQuotaRefresh={refreshQuota}
@@ -633,23 +624,6 @@ const CredentialPage = () => {
                 onImport={handleImportData}
                 loading={importing}
             />
-
-            {/* Snackbar for notifications */}
-            <Snackbar
-                open={snackbar.open}
-                autoHideDuration={6000}
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-                <Alert
-                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
-                    severity={snackbar.severity}
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                >
-                    {snackbar.message}
-                </Alert>
-            </Snackbar>
         </PageLayout>
     );
 };
