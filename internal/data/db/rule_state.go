@@ -136,3 +136,15 @@ func (rs *RuleStateStore) ClearAll() error {
 
 	return rs.db.Exec("DELETE FROM rule_service_index").Error
 }
+
+// ClearServiceIDForProvider removes CurrentServiceID entries that reference a specific provider.
+// This is called when a provider is deleted to clean up stale service references.
+// CurrentServiceID is in "provider:model" format, so we check for entries starting with "providerUUID:"
+func (rs *RuleStateStore) ClearServiceIDForProvider(ruleUUID, providerUUID string) error {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+
+	// Delete the specific rule's service ID if it references the deleted provider
+	return rs.db.Where("rule_uuid = ? AND current_service_id LIKE ?", ruleUUID, providerUUID+":%").
+		Delete(&RuleServiceRecord{}).Error
+}
