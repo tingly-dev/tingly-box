@@ -129,7 +129,7 @@ const ImageGenQuickStartCard: React.FC<ImageGenQuickStartCardProps> = ({
                         language={tab === 'curl' ? 'bash' : tab}
                         filename={active.filename}
                         onCopy={onCopy ? (c) => onCopy(c, active.filename) : undefined}
-                        maxHeight={320}
+                        maxHeight={200}
                         wrap={false}
                     />
                 </Box>
