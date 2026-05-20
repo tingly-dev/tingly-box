@@ -471,9 +471,12 @@ const ProviderFormDialog = ({
         ensureName();
 
         // NO MANDATORY VERIFICATION - allow adding keys without testing
-        // Verification is optional via the "Test Connection" button
-
-        onClose();
+        // Verification is optional via the "Test Connection" button.
+        //
+        // Do NOT close the dialog here: the parent's submit handler is async
+        // and closes the dialog itself only after the add/update succeeds.
+        // Closing eagerly dismissed the dialog even when the request failed,
+        // making it look like the key was saved when it was not.
         onSubmit(e);
     };
 

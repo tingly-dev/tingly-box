@@ -11,7 +11,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
-	"github.com/tingly-dev/tingly-box/internal/probe"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -81,9 +80,6 @@ func (s *Server) GetProviders(c *gin.Context) {
 
 // CreateProvider adds a new provider
 func (s *Server) CreateProvider(c *gin.Context) {
-	forceParam := c.Query("force")
-	force := forceParam == "true"
-
 	var req CreateProviderRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -103,27 +99,10 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		return
 	}
 
-	// Backend verification: Verify provider connection before saving (skip if no key required)
-	// This is a safety measure in addition to frontend verification
-	if !req.NoKeyRequired && req.Token != "" {
-		probeReq := &probe.ProbeProviderRequest{
-			Name:     req.Name,
-			APIBase:  req.APIBase,
-			APIStyle: req.APIStyle,
-			Token:    req.Token,
-		}
-
-		if !force {
-			success, message, _, err := s.testProviderConnectivity(probeReq)
-			if err != nil || !success {
-				c.JSON(http.StatusBadRequest, gin.H{
-					"success": false,
-					"error":   fmt.Sprintf("Provider verification failed: %s", message),
-				})
-				return
-			}
-		}
-	}
+	// Connectivity verification is intentionally NOT enforced here: provider
+	// keys can be added regardless of probe results (some providers don't
+	// support every endpoint). Connection testing is available separately as
+	// an optional, informational check via the lightweight probe endpoint.
 
 	// Set default enabled status if not provided
 	if !req.Enabled {
