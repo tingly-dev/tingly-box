@@ -103,8 +103,12 @@ const ProviderCard: React.FC<{
     </Box>
 );
 
-const CardGrid: React.FC<{children: React.ReactNode}> = ({children}) => (
-    <Box sx={{display: 'grid', gridTemplateColumns: {xs: '1fr', sm: '1fr 1fr'}, gap: 1}}>{children}</Box>
+const CardGrid: React.FC<{children: React.ReactNode; single?: boolean}> = ({children, single}) => (
+    <Box sx={{
+        display: 'grid',
+        gridTemplateColumns: single ? '1fr' : {xs: '1fr', sm: '1fr 1fr'},
+        gap: 1,
+    }}>{children}</Box>
 );
 
 const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onClose, onSelect}) => {
@@ -142,34 +146,48 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
             maxWidth="sm"
             fullWidth
             scroll="paper"
-            PaperProps={{sx: {maxHeight: '82vh'}}}
+            PaperProps={{sx: {maxHeight: '82vh', display: 'flex', flexDirection: 'column'}}}
         >
-            <DialogTitle sx={{pb: 1}}>
+            {/* Locked header: title, description and search never scroll. */}
+            <DialogTitle sx={{pb: 1, flexShrink: 0}}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Typography variant="h6">Connect a Provider</Typography>
                     <IconButton onClick={onClose} size="small"><Close/></IconButton>
                 </Stack>
             </DialogTitle>
-            <DialogContent dividers sx={{pt: 0}}>
-                {/* Search stays pinned while the grouped list scrolls. */}
-                <Box sx={{position: 'sticky', top: 0, zIndex: 1, bgcolor: 'background.paper', pt: 2, pb: 1}}>
-                    <Typography variant="body2" color="text.secondary" sx={{mb: 1.5}}>
-                        Pick a provider. We&apos;ll ask only for what that provider needs.
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="Search providers…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
-                            ),
-                        }}
-                    />
-                </Box>
-
+            <Box sx={{px: 3, pb: 1.5, flexShrink: 0}}>
+                <Typography variant="body2" color="text.secondary" sx={{mb: 1.5}}>
+                    Pick a provider. We&apos;ll ask only for what that provider needs.
+                </Typography>
+                <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search providers…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start"><Search fontSize="small"/></InputAdornment>
+                        ),
+                    }}
+                />
+            </Box>
+            <DialogContent
+                dividers
+                sx={{
+                    pt: 1,
+                    flex: 1,
+                    overflowY: 'auto',
+                    // Keep the scrollbar visible so it's obvious the list scrolls.
+                    scrollbarWidth: 'thin',
+                    '&::-webkit-scrollbar': {width: 8},
+                    '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: 'action.disabled',
+                        borderRadius: 4,
+                    },
+                    '&::-webkit-scrollbar-track': {backgroundColor: 'transparent'},
+                }}
+            >
                 {showCustom && (
                     <>
                         <SectionHeader icon={<Add fontSize="small"/>} title="Custom" accent="custom"/>
@@ -206,7 +224,7 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
                 {filteredKey.length > 0 && (
                     <>
                         <SectionHeader icon={<Key fontSize="small"/>} title="API key providers" count={filteredKey.length} accent="key"/>
-                        <CardGrid>
+                        <CardGrid single>
                             {filteredKey.map((p) => (
                                 <ProviderCard
                                     key={`key-${p.id}`}
