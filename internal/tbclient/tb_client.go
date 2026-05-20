@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	tbagent "github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -35,6 +36,12 @@ type TBClient interface {
 	// GetConnectionConfig returns base URL and API key
 	// Base URL defaults to ClaudeCode scenario URL if not configured
 	GetConnectionConfig(ctx context.Context) (*ConnectionConfig, error)
+
+	// GetClaudeCodeEnv returns the environment variables (KEY=VALUE) that point
+	// the Claude Code CLI at the tingly-box gateway's claude_code scenario, so
+	// remote-control @cc sessions route through the configured provider
+	// (including third-party model services) instead of the Anthropic API.
+	GetClaudeCodeEnv(ctx context.Context) ([]string, error)
 
 	// GetHTTPEndpointForScenario returns HTTP endpoint configuration for a scenario
 	GetHTTPEndpointForScenario(ctx context.Context, scenario typ.RuleScenario) (*HTTPEndpointConfig, error)
@@ -124,6 +131,34 @@ func (c *TBClientImpl) GetConnectionConfig(ctx context.Context) (*ConnectionConf
 		BaseURL: c.buildBaseURL(),
 		APIKey:  apiKey,
 	}, nil
+}
+
+// GetClaudeCodeEnv builds the env vars needed to route the Claude Code CLI
+// through the local tingly-box gateway. ANTHROPIC_BASE_URL is pointed at the
+// claude_code scenario endpoint and ANTHROPIC_MODEL is set to the model name(s)
+// that scenario's rules match on, so the request is forwarded to whichever
+// provider (e.g. a third-party model service) backs that rule. The "unified"
+// scenario flag selects between the single-model and per-tier model naming,
+// mirroring the `tb cc` CLI launcher.
+func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
+	port := c.config.GetServerPort()
+	if port == 0 {
+		port = 12580
+	}
+	baseURL := fmt.Sprintf("http://localhost:%d", port)
+	apiKey := c.config.GetModelToken()
+
+	unified := c.config.GetScenarioFlag(typ.ScenarioClaudeCode, "unified")
+	envMap, err := tbagent.DefaultClaudeCodePrefs(unified).ToEnv(baseURL, apiKey)
+	if err != nil {
+		return nil, fmt.Errorf("build claude code env: %w", err)
+	}
+
+	env := make([]string, 0, len(envMap))
+	for k, v := range envMap {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+	return env, nil
 }
 
 func (c *TBClientImpl) GetDefaultRule(ctx context.Context) (*typ.Rule, error) {

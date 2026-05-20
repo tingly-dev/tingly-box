@@ -123,7 +123,11 @@ func (d *Driver) Prepare(ctx context.Context, prompt string, opts agentboot.Exec
 	}
 	env := cleanEnv
 	if len(config.CustomEnv) > 0 {
-		env = MergeEnv(cleanEnv, config.CustomEnv)
+		env = MergeEnv(env, config.CustomEnv)
+	}
+	// Per-execution env overrides (e.g. gateway routing for remote control).
+	if len(opts.Env) > 0 {
+		env = MergeEnv(env, opts.Env)
 	}
 
 	// Build the initial prompt channel (stream-json mode injects a user message into stdin)

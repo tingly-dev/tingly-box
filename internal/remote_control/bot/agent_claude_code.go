@@ -97,6 +97,20 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 
 	streamWriter := e.deps.NewStreamingMessageHandler(req.HCtx, meta)
 
+	// Route the Claude Code CLI through the tingly-box gateway so it uses the
+	// configured provider (including third-party model services) instead of
+	// talking to the Anthropic API directly. Without this, @cc fails whenever
+	// no direct Anthropic credentials are present on the host.
+	var execEnv []string
+	if e.deps.TBClient != nil {
+		ccEnv, eerr := e.deps.TBClient.GetClaudeCodeEnv(ctx)
+		if eerr != nil {
+			logrus.WithError(eerr).Warn("ClaudeCodeExecutor: failed to resolve gateway env; @cc may not reach the configured provider")
+		} else {
+			execEnv = ccEnv
+		}
+	}
+
 	startTime := time.Now()
 	handle, err := agent.Execute(ctx, req.Text, agentboot.ExecutionOptions{
 		ProjectPath:          projectPath,
@@ -107,6 +121,7 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		BotUUID:              req.HCtx.BotUUID,
 		PermissionPromptTool: "stdio",
 		PermissionMode:       permissionMode,
+		Env:                  execEnv,
 		Store:                e.deps.SessionMgr,
 	})
 	if err != nil {
