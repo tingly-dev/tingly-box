@@ -21,9 +21,9 @@ import {type UniqueProvider, useProviderTemplates} from '../services/serviceProv
 import {api} from '../services/api';
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import ApiKeyField from './providerFormDialog/ApiKeyField';
-import FusionToggle from './providerFormDialog/FusionToggle';
 import KeyNameField from './providerFormDialog/KeyNameField';
 import ProtocolSelector from './providerFormDialog/ProtocolSelector';
+import ProtocolTopologySelector, {type ProtocolTopology} from './providerFormDialog/ProtocolTopologySelector';
 import ProviderAutocomplete from './providerFormDialog/ProviderAutocomplete';
 import ProxyUrlField from './providerFormDialog/ProxyUrlField';
 import VerificationResultPanel from './providerFormDialog/VerificationResultPanel';
@@ -233,7 +233,8 @@ const ProviderFormDialog = ({
         (
             nextOpenAI: boolean,
             nextAnthropic: boolean,
-            provider: UniqueProvider | null
+            provider: UniqueProvider | null,
+            fusionPref?: boolean
         ) => {
             const protocols: ('openai' | 'anthropic')[] = [];
             if (nextOpenAI) protocols.push('openai');
@@ -242,6 +243,8 @@ const ProviderFormDialog = ({
             const cb = onChangeRef.current;
             cb('protocols', protocols);
             cb('apiStyle', protocols.length > 0 ? protocols[0] : undefined);
+
+            const fusionWanted = fusionPref ?? createFusionProvider;
 
             if (provider) {
                 cb('providerBaseUrls', {
@@ -253,7 +256,7 @@ const ProviderFormDialog = ({
                 // on. With the flag OFF, picking both protocols falls through
                 // to the legacy two-record split handled by the parent submit.
                 const fusion = enableFusionRef.current
-                    && createFusionProvider
+                    && fusionWanted
                     && nextOpenAI && nextAnthropic
                     && !!provider.baseUrlOpenAI && !!provider.baseUrlAnthropic;
 
@@ -315,6 +318,33 @@ const ProviderFormDialog = ({
         setProtocolAnthropic(next);
         setVerificationResult(null);
         syncProtocolsToParent(protocolOpenAI, next, selectedProvider);
+    };
+
+    // Protocol-topology derivation for the add-mode selector. Fusion / dual are
+    // only offered when the chosen template exposes BOTH base URLs; free-form
+    // custom and single-protocol templates collapse to a single-protocol pick.
+    const supportsOpenAI = selectedProvider ? selectedProvider.supportsOpenAI : true;
+    const supportsAnthropic = selectedProvider ? selectedProvider.supportsAnthropic : true;
+    const hasBothUrls = !!selectedProvider?.baseUrlOpenAI && !!selectedProvider?.baseUrlAnthropic;
+    const showFusionOption = enableFusion && hasBothUrls;
+    const showDualOption = hasBothUrls;
+
+    // Map a topology choice back onto the underlying protocol/fusion state and
+    // push it to the parent in one batch (passing fusion explicitly to avoid a
+    // stale-closure read of createFusionProvider).
+    const applyTopology = (next: ProtocolTopology) => {
+        let oa = false, an = false, fusion = false;
+        if (next === 'openai') oa = true;
+        else if (next === 'anthropic') an = true;
+        else if (next === 'fusion') { oa = true; an = true; fusion = true; }
+        else if (next === 'dual') { oa = true; an = true; fusion = false; }
+
+        setProtocolOpenAI(oa);
+        setProtocolAnthropic(an);
+        setCreateFusionProvider(fusion);
+        onChange('createFusionProvider', fusion);
+        setVerificationResult(null);
+        syncProtocolsToParent(oa, an, selectedProvider, fusion);
     };
 
     const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
@@ -504,7 +534,6 @@ const ProviderFormDialog = ({
     };
 
     const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
-    const showFusionToggle = enableFusion && mode === 'add' && protocolOpenAI && protocolAnthropic;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{sx: {minHeight: 200}}}>
@@ -543,25 +572,28 @@ const ProviderFormDialog = ({
                             onBlur={handleProviderInputBlur}
                         />
 
-                        <ProtocolSelector
-                            selectedProvider={selectedProvider}
-                            protocolOpenAI={protocolOpenAI}
-                            protocolAnthropic={protocolAnthropic}
-                            fusionLocked={fusionLocked}
-                            openAICapabilities={openAICapabilities}
-                            onToggleOpenAI={toggleOpenAIProtocol}
-                            onToggleAnthropic={toggleAnthropicProtocol}
-                        />
-
-                        {showFusionToggle && (
-                            <FusionToggle
-                                checked={createFusionProvider}
-                                onChange={(checked) => {
-                                    setCreateFusionProvider(checked);
-                                    onChange('createFusionProvider', checked);
-                                    syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
-                                    setVerificationResult(null);
-                                }}
+                        {mode === 'add' ? (
+                            <ProtocolTopologySelector
+                                selectedProvider={selectedProvider}
+                                protocolOpenAI={protocolOpenAI}
+                                protocolAnthropic={protocolAnthropic}
+                                isFusion={createFusionProvider}
+                                showFusion={showFusionOption}
+                                showDual={showDualOption}
+                                supportsOpenAI={supportsOpenAI}
+                                supportsAnthropic={supportsAnthropic}
+                                openAICapabilities={openAICapabilities}
+                                onSelect={applyTopology}
+                            />
+                        ) : (
+                            <ProtocolSelector
+                                selectedProvider={selectedProvider}
+                                protocolOpenAI={protocolOpenAI}
+                                protocolAnthropic={protocolAnthropic}
+                                fusionLocked={fusionLocked}
+                                openAICapabilities={openAICapabilities}
+                                onToggleOpenAI={toggleOpenAIProtocol}
+                                onToggleAnthropic={toggleAnthropicProtocol}
                             />
                         )}
 
