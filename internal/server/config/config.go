@@ -580,11 +580,11 @@ func (c *Config) AddRule(rule typ.Rule) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Guard name unique
+	// Guard name unique within same scenario
 	for _, rc := range c.Rules {
-		if rc.RequestModel == rule.RequestModel {
+		if rc.RequestModel == rule.RequestModel && rc.Scenario == rule.Scenario {
 			if rc.UUID != rule.UUID {
-				return fmt.Errorf("rule with Name %s already exists", rule.RequestModel)
+				return fmt.Errorf("rule with Name %s already exists in same scenario", rule.RequestModel)
 			}
 		}
 	}
