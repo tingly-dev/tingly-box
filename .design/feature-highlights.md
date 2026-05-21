@@ -19,7 +19,7 @@
 | 上下文优化 | 智能压缩 & 去重 | 降低 Token 成本、保持对话准确性 |
 | 多租户 & 鉴权 | 双 Token 体系 | UI 管理与 API 调用权限严格分离 |
 | OAuth 托管 | 浏览器一键授权 | 无需手动填 API Key，安全存储刷新 |
-| AgentBoot SDK | 统一 Agent 编程接口 | 用 Go 代码驱动 Claude Code 等 Agent，内嵌权限回调与会话管理 |
+| AgentBoot SDK | 统一 Agent 编程接口 | 用 Go 代码驱动 Claude Code 等 Agent，完整透传 MCP / API / Skill 能力 + 权限回调 + 会话管理 |
 
 ---
 
@@ -140,9 +140,10 @@
 | 项目 | 内容 |
 |------|------|
 | **类目** | Agent SDK |
-| **解读** | 面向开发者的 Go SDK，提供统一的编程接口来启动、驱动和管理 Claude Code 等 AI Coding Agent 进程，屏蔽各 Agent CLI 的协议差异 |
-| **亮点功能** | · **统一 `Execute` 入口**：一行代码启动任意 Agent，返回完全有序的事件流（Stream JSON）<br>· **内联权限回调**：Agent 请求工具权限（文件读写、命令执行等）时，SDK 直接回调给调用方，支持 Auto / Manual / Skip 三种模式<br>· **交互式 Ask 处理**：拦截 Agent 的 `AskUserQuestion`，由外部系统（IM Bot、Web UI）代替人工响应选项<br>· **会话管理**：列出 / 恢复 `~/.claude/projects` 下的历史会话，无缝续接上次对话<br>· **Per-Execution 精细控制**：每次调用可独立覆盖 Model、FallbackModel、MaxTurns、AllowedTools、MCP Servers、System Prompt、SettingsPath<br>· **费用追踪**：从事件流中提取 `total_cost_usd`，对接计费系统<br>· **可扩展架构**：Driver + Transport + Runner 三层分离，新增 Agent 只需实现两个接口；内置 FakeProcess 工厂，测试无需真实 CLI<br>· **计划支持**：Codex、Gemini CLI、Cursor |
-| **使用场景示例** | 将 Claude Code 嵌入内部自动化平台：用 SDK 接收用户指令 → 启动 Agent → 通过 IM Bot 向人工推送权限审批 → Agent 完成后把结果写回工单系统；或在 CI 流水线中程序化调用 Agent 完成代码审查、自动修复，全程无需交互终端 |
+| **解读** | 面向开发者的 Go SDK，提供统一的编程接口来启动、驱动和管理 Claude Code 等 AI Coding Agent 进程。**关键点：完整透传底层 Agent 的全部原生能力**——不是裁剪过的子集，而是把 MCP、模型 API、Skill 等完整能力暴露给调用方 |
+| **底层完整能力（重点）** | · **MCP 完整支持**：通过 `--mcp-config` 透传任意 MCP Server 配置（config 与 per-execution 自动合并），支持 `--strict-mcp-config` 严格模式，Agent 可调用全部 MCP 工具<br>· **模型 API 完整支持**：Model / FallbackModel 选择、System Prompt（覆盖 `--system-prompt` 与追加 `--append-system-prompt`）、MaxTurns、AllowedTools / DisallowedTools 工具白/黑名单——Anthropic Messages API 的能力面无损传递<br>· **Skill 完整支持**：通过 `--settings` 注入 settings.json 并结合 ProjectPath，Agent 自动发现并加载项目内的 Skill，与原生 Claude Code 行为一致 |
+| **亮点功能** | · **统一 `Execute` 入口**：一行代码启动任意 Agent，返回完全有序的事件流（Stream JSON）<br>· **内联权限回调**：Agent 请求工具权限（文件读写、命令执行等）时，SDK 直接回调给调用方，支持 Auto / Manual / Skip 三种模式<br>· **交互式 Ask 处理**：拦截 Agent 的 `AskUserQuestion`，由外部系统（IM Bot、Web UI）代替人工响应选项<br>· **会话管理**：列出 / 恢复 `~/.claude/projects` 下的历史会话，无缝续接上次对话<br>· **费用追踪**：从事件流中提取 `total_cost_usd`，对接计费系统<br>· **可扩展架构**：Driver + Transport + Runner 三层分离，新增 Agent 只需实现两个接口；内置 FakeProcess 工厂，测试无需真实 CLI<br>· **计划支持**：Codex、Gemini CLI、Cursor |
+| **使用场景示例** | 将 Claude Code 嵌入内部自动化平台：用 SDK 接收用户指令 → 注入企业 MCP Server（私有知识库）+ 专用 Skill（代码规范）→ 启动 Agent → 通过 IM Bot 向人工推送权限审批 → Agent 完成后把结果写回工单系统；或在 CI 流水线中程序化调用 Agent 完成代码审查、自动修复，全程保留完整 MCP / Skill 能力且无需交互终端 |
 
 ---
 
