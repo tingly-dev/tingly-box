@@ -216,8 +216,10 @@ See CONTRIBUTING.md and NOTICE for details.
 
 ---
 
-We welcome contributions!   
-Please check steps below to build from source code.
+We welcome contributions! Check the steps below to build from source code.
+
+<details>
+<summary><strong>Build from Source</strong></summary>
 
 ### Prerequisites
 
@@ -295,6 +297,8 @@ task swagger        # Regenerate openapi.json from Go source
 task codegen        # Regenerate frontend API client from openapi.json
 task go:test        # Run Go unit tests
 ```
+
+</details>
 
 ## Support
 
