@@ -1354,6 +1354,8 @@ export const handlers = [
                     auth_type: 'token',
                     default_cwd: '/home/user/projects',
                     default_agent: 'claude_code',
+                    smartguide_provider: 'mock-provider-anthropic',
+                    smartguide_model: 'claude-sonnet-4-5',
                     chat_id: '123456789',
                     created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: { token: 'mock-bot-token-****' },
@@ -1366,6 +1368,8 @@ export const handlers = [
                     auth_type: 'oauth',
                     default_cwd: '/home/user/workspace',
                     default_agent: 'claude_code',
+                    smartguide_provider: 'mock-provider-openai',
+                    smartguide_model: 'gpt-4o',
                     chat_id: 'C0123456789',
                     created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: {},
@@ -1378,6 +1382,8 @@ export const handlers = [
                     auth_type: 'token',
                     default_cwd: '/home/user/dev',
                     default_agent: 'claude_code',
+                    smartguide_provider: 'mock-provider-anthropic',
+                    smartguide_model: 'claude-opus-4-5',
                     chat_id: '',
                     created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
                     auth: { token: 'mock-discord-token-****' },
@@ -1397,6 +1403,8 @@ export const handlers = [
                 auth_type: 'token',
                 default_cwd: '/home/user/projects',
                 default_agent: 'claude_code',
+                smartguide_provider: 'mock-provider-anthropic',
+                smartguide_model: 'claude-sonnet-4-5',
                 created_at: new Date().toISOString(),
                 auth: {},
             },
@@ -1407,18 +1415,20 @@ export const handlers = [
         return HttpResponse.json({ success: true, uuid: params.uuid })
     }),
 
-    http.get('/api/v1/imbot-settings/:uuid/pairing-code', ({ params }) => {
+    http.get('/api/v1/imbot-settings/:uuid/pairing-code', () => {
         return HttpResponse.json({
             success: true,
-            pairing_code: 'TNGLY-' + String(params.uuid).slice(-4).toUpperCase() + '-8742',
-            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+            active: true,
+            code: 'TNGLY-1001-XK72',
+            expires_at: new Date(Date.now() + 9 * 60 * 1000).toISOString(),
         })
     }),
 
-    http.post('/api/v1/imbot-settings/:uuid/pairing-code/rotate', ({ params }) => {
+    http.post('/api/v1/imbot-settings/:uuid/pairing-code/rotate', () => {
         return HttpResponse.json({
             success: true,
-            pairing_code: 'TNGLY-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.floor(Math.random() * 9000 + 1000),
+            active: true,
+            code: 'TNGLY-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.floor(Math.random() * 9000 + 1000),
             expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         })
     }),
