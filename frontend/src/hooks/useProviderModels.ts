@@ -262,10 +262,10 @@ export const useProviderModels = () => {
         return cleanup;
     }, []);
 
-    // When this tab becomes visible after ≥30s, invalidate in-memory cache so the
-    // next fetchModels call re-fetches fresh data from the server.
+    // Bust in-memory cache when tab regains focus after ≥30s so the next
+    // fetchModels call re-fetches from the server instead of serving stale data.
     usePageVisibility(useCallback(() => {
-        setProviderModels({});
+        setProviderModels(prev => Object.keys(prev).length === 0 ? prev : {});
     }, []));
 
     return {

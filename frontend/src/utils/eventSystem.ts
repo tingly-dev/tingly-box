@@ -18,8 +18,11 @@ export interface EventSystem<T = any> {
  * @returns Event system with dispatch and listen methods
  */
 export function createEventSystem<T = any>(eventName: string, crossTab = false): EventSystem<T> {
-  // Unique tab ID to prevent re-processing our own broadcast messages
-  const tabId = Math.random().toString(36).slice(2);
+  // Suppress echo: BroadcastChannel delivers to all tabs including the sender;
+  // tag each message so the originating tab can skip it.
+  const tabId = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
   const channel = crossTab && typeof BroadcastChannel !== 'undefined'
     ? new BroadcastChannel(`tingly_event_${eventName}`)
     : null;
@@ -42,7 +45,6 @@ export function createEventSystem<T = any>(eventName: string, crossTab = false):
       let channelHandler: ((e: MessageEvent) => void) | undefined;
       if (channel) {
         channelHandler = (e: MessageEvent) => {
-          // Ignore messages originating from this tab (already handled locally)
           if (e.data?.tabId === tabId) return;
           callback(e.data?.data);
         };
