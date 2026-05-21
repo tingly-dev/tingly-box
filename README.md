@@ -244,6 +244,11 @@ git submodule update --init --recursive
 
 The frontend is a React + Vite app located in `frontend/`. You can work on it independently of the Go backend.
 
+> **Login token:** the frontend requires an auth token to log in. When the backend starts it prints the full login URL (e.g. `Web UI: http://localhost:12580/login/<token>`). If you need to retrieve it later, run:
+> ```bash
+> tingly-box token view auth --reveal
+> ```
+
 **Mock mode** – no running backend required, uses built-in fixture data:
 
 ```bash
@@ -252,7 +257,7 @@ task web:mock
 cd frontend && pnpm install && pnpm dev:mock
 ```
 
-Open http://localhost:9245 in your browser.
+Open http://localhost:9245 in your browser. Use the token obtained above to log in.
 
 **Dev mode** – proxies API calls to a local backend (start the backend first, see step 3):
 
