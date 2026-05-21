@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	typ "github.com/tingly-dev/tingly-box/internal/typ"
@@ -74,12 +76,18 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 		return nil, fmt.Errorf("no active services for rule %s", rule.RequestModel)
 	}
 
-	// Filter healthy services using health filter
+	// Filter healthy services using health filter. When every active service is
+	// currently marked unhealthy (e.g. a transient 429 on a single-service rule,
+	// or all services inside the recovery window at once), fall back to the full
+	// active set instead of failing the whole rule. Trying an unhealthy upstream
+	// is strictly better than a hard "no service available": the service may have
+	// already recovered, and if it really is still failing the caller gets the
+	// real upstream error (e.g. 429) rather than a confusing routing error.
 	healthyServices := lb.healthFilter.Filter(activeServices)
-
-	// If no healthy services, return error
 	if len(healthyServices) == 0 {
-		return nil, fmt.Errorf("no healthy services available for rule %s", rule.RequestModel)
+		logrus.Warnf("[load_balancer] all %d active services for rule %s are unhealthy; "+
+			"falling back to active set", len(activeServices), rule.RequestModel)
+		healthyServices = activeServices
 	}
 
 	// For single healthy service rules, return it directly
