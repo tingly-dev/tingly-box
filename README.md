@@ -219,7 +219,7 @@ See CONTRIBUTING.md and NOTICE for details.
 We welcome contributions! Check the steps below to build from source code.
 
 <details>
-<summary><strong>Build from Source</strong></summary>
+<summary><strong>Contributing Guide — Build &amp; Dev</strong></summary>
 
 ### Prerequisites
 
