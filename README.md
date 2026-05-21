@@ -289,7 +289,9 @@ task build
 
 The output binary is written to `./build/tingly-box`.
 
-### 5. GUI binary (Wails)
+### 5. GUI binary (Wails) *(optional)*
+
+> The GUI build is not yet publicly released. Skip this step unless you are specifically working on the desktop app.
 
 ```bash
 task wails:build
