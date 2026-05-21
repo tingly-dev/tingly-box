@@ -30,7 +30,6 @@ interface ClaudeDesktopConfigModalProps {
 }
 
 const MODEL_PREFIX = 'claude-';
-
 const buildInferenceModelsJson = (modelRules: any[]): string => {
     const entries = modelRules.map(r => {
         const label = r.description?.startsWith('label:') ? r.description.slice(6) : '';
@@ -56,24 +55,26 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
     const [adding, setAdding] = useState(false);
     const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
     const [error, setError] = useState('');
+    const [warning, setWarning] = useState('');
 
     const modelRules = rules.filter(r => r.request_model && r.request_model !== '*');
     const inferenceModelsJson = buildInferenceModelsJson(modelRules);
 
-    const validateModelName = (name: string): string => {
-        if (!name.trim()) return 'Model name is required';
-        if (!name.startsWith(MODEL_PREFIX)) return `Must start with "${MODEL_PREFIX}"`;
-        if (modelRules.some(r => r.request_model === name.trim())) return 'Already exists';
-        return '';
+    const validateModelName = (name: string): { error: string; warning: string } => {
+        if (!name.trim()) return { error: 'Model name is required', warning: '' };
+        if (modelRules.some(r => r.request_model === name.trim())) return { error: 'Already exists', warning: '' };
+        if (!name.startsWith(MODEL_PREFIX)) return { error: '', warning: 'Custom names may not work in Claude Desktop' };
+        return { error: '', warning: '' };
     };
 
     const handleAdd = async () => {
         const trimmed = newModelName.trim();
-        const validationError = validateModelName(trimmed);
-        if (validationError) {
-            setError(validationError);
+        const { error: ve, warning: vw } = validateModelName(trimmed);
+        if (ve) {
+            setError(ve);
             return;
         }
+        setWarning(vw);
         setAdding(true);
         setError('');
         try {
@@ -108,8 +109,11 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
     };
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setNewModelName(e.target.value);
+        const val = e.target.value;
+        setNewModelName(val);
         if (error) setError('');
+        const { warning: vw } = validateModelName(val);
+        setWarning(vw);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -221,7 +225,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                             To pin a specific list, paste the JSON below into the <em>inferenceModels</em> field.
-                            Names must start with <code>claude-</code>.
+                            Custom model names may not be recognized by Claude Desktop.
                         </Typography>
 
                         {/* JSON preview */}
@@ -301,7 +305,8 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                                 onChange={handleNameChange}
                                 onKeyDown={handleKeyDown}
                                 error={Boolean(error)}
-                                helperText={error}
+                                helperText={error || warning}
+                                FormHelperTextProps={{ sx: error ? {} : { color: 'warning.main' } }}
                                 disabled={adding}
                                 sx={{ flex: 2 }}
                                 inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.82rem' } }}
