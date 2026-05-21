@@ -219,23 +219,81 @@ See CONTRIBUTING.md and NOTICE for details.
 We welcome contributions!   
 Please check steps below to build from source code.
 
-*Requires: Go 1.25+, Node.js 20+, pnpm, task*
+### Prerequisites
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Go | 1.25+ | https://go.dev/doc/install |
+| Node.js | 20+ | https://nodejs.org/ |
+| pnpm | latest | `npm install -g pnpm` |
+| task | latest | `go install github.com/go-task/task/v3/cmd/task@latest` or https://taskfile.dev/installation/ |
+
+> Tip: you can also copy individual shell commands out of `Taskfile.yml` and run them directly if you prefer not to install `task`.
+
+### 1. Clone and init submodules
 
 ```bash
-# Install dependencies
-# - Go: https://go.dev/doc/install
-# - Node.js: https://nodejs.org/
-# - pnpm: `npm install -g pnpm`
-# - task: https://taskfile.dev/installation/, or `go install github.com/go-task/task/v3/cmd/task@latest`
-# - shell: copy and run shell command in taskfile directly
-
+git clone https://github.com/tingly-dev/tingly-box.git
+cd tingly-box
 git submodule update --init --recursive
+```
 
-# Build with frontend
+### 2. Frontend development
+
+The frontend is a React + Vite app located in `frontend/`. You can work on it independently of the Go backend.
+
+**Mock mode** – no running backend required, uses built-in fixture data:
+
+```bash
+task web:mock
+# or directly:
+cd frontend && pnpm install && pnpm dev:mock
+```
+
+Open http://localhost:9245 in your browser.
+
+**Dev mode** – proxies API calls to a local backend (start the backend first, see step 3):
+
+```bash
+task web
+# or directly:
+cd frontend && pnpm install && pnpm dev
+```
+
+### 3. Backend development
+
+Run the Go server (hot-reload via `go run`):
+
+```bash
+task start
+# or directly:
+go run ./cli/tingly-box --verbose start --debug --port 12580 --browser=false
+```
+
+Open http://localhost:12580 in your browser (serves the last built frontend bundle).
+
+### 4. Full build (frontend + backend binary)
+
+Builds the frontend, embeds it into the binary, then compiles Go:
+
+```bash
 task build
+```
 
-# Build GUI binary via wails3
+The output binary is written to `./build/tingly-box`.
+
+### 5. GUI binary (Wails)
+
+```bash
 task wails:build
+```
+
+### Other useful commands
+
+```bash
+task swagger        # Regenerate openapi.json from Go source
+task codegen        # Regenerate frontend API client from openapi.json
+task go:test        # Run Go unit tests
 ```
 
 ## Support
