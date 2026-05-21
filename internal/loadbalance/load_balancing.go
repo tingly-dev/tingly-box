@@ -464,8 +464,8 @@ const (
 	TacticLatencyBased                    // Route based on response latency
 	TacticSpeedBased                      // Route based on token generation speed
 	TacticAdaptive                        // Composite multi-dimensional routing
-	TacticCapacityBased                   // 6: capacity-based load balancing
-	TacticPriority                        // 7: priority/failover by Service.Priority (higher tried first); ties share via sub-tactic
+	TacticCapacityBased                   // 7: capacity-based load balancing
+	TacticPriority                        // 8: priority/failover by Service.Priority (higher tried first); ties share via sub-tactic
 )
 
 // MarshalJSON implements json.Marshaler for TacticType
@@ -507,7 +507,10 @@ func (tt TacticType) String() string {
 	case TacticPriority:
 		return "priority"
 	default:
-		return "token_based"
+		// Unset (type 0) / unknown: report Random, the documented default
+		// (see Rule.GetTacticType). Keeps serialization consistent with the
+		// tactic actually used for selection.
+		return "random"
 	}
 }
 

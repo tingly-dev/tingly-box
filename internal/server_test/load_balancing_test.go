@@ -341,8 +341,8 @@ func TestLoadBalancer_GetRuleSummary(t *testing.T) {
 		t.Errorf("Expected request_model = test, got %v", summary["request_model"])
 	}
 
-	if summary["tactic"] != "hybrid" {
-		t.Errorf("Expected tactic = hybrid, got %v", summary["tactic"])
+	if summary["tactic"] != "token_based" {
+		t.Errorf("Expected tactic = token_based, got %v", summary["tactic"])
 	}
 
 	if summary["active"] != true {
@@ -456,7 +456,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 		lbTactic, exists := ruleMap["lb_tactic"]
 		require.True(t, exists)
 		lbTacticMap := lbTactic.(map[string]interface{})
-		assert.Equal(t, "round_robin", lbTacticMap["type"])
+		assert.Equal(t, "random", lbTacticMap["type"])
 	})
 
 	t.Run("Get_NonExistent_Rule", func(t *testing.T) {
@@ -490,7 +490,7 @@ func TestLoadBalancerAPI_RuleManagement(t *testing.T) {
 
 		summaryMap := summary.(map[string]interface{})
 		assert.Equal(t, ruleName, summaryMap["request_model"])
-		assert.Equal(t, "round_robin", summaryMap["tactic"])
+		assert.Equal(t, "random", summaryMap["tactic"])
 		assert.Equal(t, true, summaryMap["active"])
 		assert.Equal(t, false, summaryMap["is_legacy"])
 
@@ -612,7 +612,7 @@ func TestLoadBalancerAPI_CurrentService(t *testing.T) {
 
 		assert.Equal(t, rule.UUID, response["rule_id"])
 		assert.Equal(t, ruleName, response["rule_name"])
-		assert.Equal(t, "round_robin", response["tactic"])
+		assert.Equal(t, "random", response["tactic"])
 
 		service, exists := response["service"]
 		require.True(t, exists)
@@ -784,7 +784,7 @@ func TestLoadBalancerFunctionality(t *testing.T) {
 		assert.NotNil(t, retrievedRule)
 		assert.Equal(t, "tingly", retrievedRule.RequestModel)
 		assert.Equal(t, 2, len(retrievedRule.GetServices()))
-		assert.Equal(t, "round_robin", retrievedRule.GetTacticType().String())
+		assert.Equal(t, "adaptive", retrievedRule.GetTacticType().String())
 	})
 
 	// Test service selection through the load balancer
@@ -1031,8 +1031,11 @@ func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 		Active: true,
 	}
 
-	// Test token_based selection with threshold 20
-	// Expected pattern with threshold 20: A, A, B, B, C, C (2 requests per provider before rotation)
+	// Test token_based selection with threshold 20.
+	// Each request records 20 tokens (10+10), which meets the threshold, so the
+	// tactic rotates to the least-used service on every request. With the current
+	// service tracked (as the real handlers do via UpdateServiceIndex), this
+	// yields a round-robin: A, B, C, A, B, C.
 	var selectedProviders []string
 	totalRequests := 6
 
@@ -1050,14 +1053,16 @@ func TestLoadBalancer_TokenBasedThreshold2(t *testing.T) {
 
 		selectedProviders = append(selectedProviders, service.Provider)
 
-		// Record usage directly on the service to trigger token_based logic
+		// Record usage and advance the current-service pointer, mirroring the
+		// production request handlers.
 		service.RecordUsage(10, 10)
+		lb.UpdateServiceIndex(rule, service)
 
 		t.Logf("Request %d: Selected provider %s (service_id %s)", i+1, service.Provider, rule.CurrentServiceID)
 	}
 
-	// Expected pattern with threshold 20: A, A, B, B, C, C
-	expectedPattern := []string{"provider-A", "provider-A", "provider-B", "provider-B", "provider-C", "provider-C"}
+	// Expected rotation with threshold 20 and 20 tokens/request: A, B, C, A, B, C
+	expectedPattern := []string{"provider-A", "provider-B", "provider-C", "provider-A", "provider-B", "provider-C"}
 
 	for i, expected := range expectedPattern {
 		if selectedProviders[i] != expected {

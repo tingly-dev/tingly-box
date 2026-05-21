@@ -156,7 +156,7 @@ func TestTacticType_String(t *testing.T) {
 	tests := map[TacticType]string{
 		TacticTokenBased: "token_based",
 		TacticRandom:     "random",
-		TacticType(999):  "token_based", // Invalid type → token_based
+		TacticType(999):  "random", // Unset/invalid type → random (documented default)
 	}
 
 	for tacticType, expected := range tests {

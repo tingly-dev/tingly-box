@@ -14,6 +14,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/server"
 
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	typ "github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // TestServerLifecycle verifies server context management
@@ -35,7 +36,7 @@ func TestServerLifecycle(t *testing.T) {
 	if s.Cancel() == nil {
 		t.Fatal("expected cancel to be initialized")
 	}
-	s.Cancel()
+	s.Cancel()() // Cancel() returns the CancelFunc; invoke it to cancel the context
 
 	select {
 	case <-s.Context().Done():
@@ -110,7 +111,7 @@ func runChatCompletionsWithAuth(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"model": "gpt-3.5-turbo",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello, world!"},
@@ -126,7 +127,7 @@ func runChatCompletionsWithAuth(t *testing.T, ts *TestServer) {
 }
 
 func runChatCompletionsWithoutAuth(t *testing.T, ts *TestServer) {
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"model": "gpt-3.5-turbo",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello, world!"},
@@ -143,7 +144,7 @@ func runInvalidChatRequest(t *testing.T, ts *TestServer) {
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello, world!"},
 		},
@@ -170,7 +171,7 @@ func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 		},
 	}
 
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(reqBody))
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+modelToken)
 
@@ -189,7 +190,7 @@ func runAnthropicMessagesWithAuth(t *testing.T, ts *TestServer, isRealConfig boo
 }
 
 func runAnthropicMessagesWithoutAuth(t *testing.T, ts *TestServer) {
-	req, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
+	req, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(map[string]interface{}{
 		"model": "tingly/openai",
 		"messages": []map[string]string{
 			{"role": "user", "content": "Hello from Anthropic!"},
@@ -333,6 +334,8 @@ func runRulesEndpointWithoutAuth(t *testing.T, ts *TestServer) {
 }
 
 func runLoadBalancingOpenAI(t *testing.T, ts *TestServer) {
+	ts.EnsureLoadBalancingRule(t, "tingly", "gpt-3.5-turbo", typ.ScenarioOpenAI, "openai", "alibaba")
+
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 
@@ -350,7 +353,7 @@ func runLoadBalancingOpenAI(t *testing.T, ts *TestServer) {
 	}
 
 	// Test Case 1: First request
-	req1, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody))
+	req1, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(requestBody))
 	req1.Header.Set("Authorization", "Bearer "+modelToken)
 	req1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
@@ -371,7 +374,7 @@ func runLoadBalancingOpenAI(t *testing.T, ts *TestServer) {
 		"max_tokens":  100,
 	}
 
-	req2, _ := http.NewRequest("POST", "/openai/v1/chat/completions", CreateJSONBody(requestBody2))
+	req2, _ := http.NewRequest("POST", "/tingly/openai/v1/chat/completions", CreateJSONBody(requestBody2))
 	req2.Header.Set("Authorization", "Bearer "+modelToken)
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
@@ -386,6 +389,8 @@ func runLoadBalancingOpenAI(t *testing.T, ts *TestServer) {
 }
 
 func runLoadBalancingAnthropic(t *testing.T, ts *TestServer) {
+	ts.EnsureLoadBalancingRule(t, "tingly", "claude-3-sonnet", typ.ScenarioAnthropic, "anthropic", "glm")
+
 	globalConfig := ts.appConfig.GetGlobalConfig()
 	modelToken := globalConfig.GetModelToken()
 
@@ -402,7 +407,7 @@ func runLoadBalancingAnthropic(t *testing.T, ts *TestServer) {
 	}
 
 	// Test Case 1: First request
-	req1, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody))
+	req1, _ := http.NewRequest("POST", "/tingly/anthropic/v1/messages", CreateJSONBody(requestBody))
 	req1.Header.Set("Authorization", "Bearer "+modelToken)
 	req1.Header.Set("Content-Type", "application/json")
 	req1.Header.Set("anthropic-version", "2023-06-01")
@@ -423,7 +428,7 @@ func runLoadBalancingAnthropic(t *testing.T, ts *TestServer) {
 		"max_tokens": 100,
 	}
 
-	req2, _ := http.NewRequest("POST", "/anthropic/v1/messages", CreateJSONBody(requestBody2))
+	req2, _ := http.NewRequest("POST", "/tingly/anthropic/v1/messages", CreateJSONBody(requestBody2))
 	req2.Header.Set("Authorization", "Bearer "+modelToken)
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("anthropic-version", "2023-06-01")
