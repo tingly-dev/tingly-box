@@ -764,6 +764,17 @@ export const api = {
         }
     },
 
+    probeLocalModels: async (): Promise<{ results: { id: string; name: string; url: string; detected: boolean }[] }> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v2/probe/local' as any, { headers });
+            return (response as any).data ?? { results: [] };
+        } catch {
+            return { results: [] };
+        }
+    },
+
     getVersion: async (): Promise<string> => {
         try {
             const client = await getClient();

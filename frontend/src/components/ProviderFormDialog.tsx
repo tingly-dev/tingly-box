@@ -68,6 +68,8 @@ interface PresetProviderFormDialogProps {
     title?: string;
     submitText?: string;
     isFirstProvider?: boolean;
+    /** Pass true for local providers: token field stays editable but is not required. */
+    optionalEditableToken?: boolean;
 }
 
 const ProviderFormDialog = ({
@@ -80,6 +82,7 @@ const ProviderFormDialog = ({
                                 title,
                                 submitText,
                                 isFirstProvider = false,
+                                optionalEditableToken = false,
                             }: PresetProviderFormDialogProps) => {
     const {t} = useTranslation();
     const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
@@ -573,11 +576,12 @@ const ProviderFormDialog = ({
                                 setVerificationResult(null);
                             }}
                             noApiKey={noApiKey}
+                            optionalEditable={optionalEditableToken}
                             onNoApiKeyChange={(checked) => {
                                 setNoApiKey(checked);
                                 onChange('noKeyRequired', checked);
                                 setVerificationResult(null);
-                                if (checked) {
+                                if (checked && !optionalEditableToken) {
                                     onChange('token', '');
                                 }
                             }}

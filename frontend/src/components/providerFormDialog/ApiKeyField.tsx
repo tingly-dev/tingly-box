@@ -11,6 +11,12 @@ interface ApiKeyFieldProps {
     onNoApiKeyChange: (checked: boolean) => void;
     /** When true, hides the "No API Key Required" checkbox (caller owns that toggle). */
     hideCheckbox?: boolean;
+    /**
+     * When true the field stays editable even when noApiKey is set.
+     * Use for local providers where auth is optional but the user may still
+     * want to enter a token if they configured one on their local service.
+     */
+    optionalEditable?: boolean;
 }
 
 const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
@@ -20,27 +26,34 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
     noApiKey,
     onNoApiKeyChange,
     hideCheckbox = false,
+    optionalEditable = false,
 }) => {
     const {t} = useTranslation();
     const [showApiKey, setShowApiKey] = useState(false);
+
+    const isDisabled = noApiKey && !optionalEditable;
+    const label = noApiKey
+        ? optionalEditable ? 'API Key (Optional)' : 'API Key (Not Required)'
+        : t('providerDialog.apiKey.label');
+    const placeholder = optionalEditable && noApiKey
+        ? 'Leave blank if your local service has no auth configured'
+        : mode === 'add'
+            ? t('providerDialog.apiKey.placeholderAdd')
+            : t('providerDialog.apiKey.placeholderEdit');
 
     return (
         <Box>
             <TextField
                 size="small"
                 fullWidth
-                label={noApiKey ? 'API Key (Not Required)' : t('providerDialog.apiKey.label')}
+                label={label}
                 type={showApiKey ? 'text' : 'password'}
                 value={token}
                 onChange={(e) => onTokenChange(e.target.value)}
                 required={!noApiKey}
-                placeholder={
-                    mode === 'add'
-                        ? t('providerDialog.apiKey.placeholderAdd')
-                        : t('providerDialog.apiKey.placeholderEdit')
-                }
-                helperText={mode === 'edit' && t('providerDialog.apiKey.helperEdit')}
-                disabled={noApiKey}
+                placeholder={placeholder}
+                helperText={mode === 'edit' && !optionalEditable && t('providerDialog.apiKey.helperEdit')}
+                disabled={isDisabled}
                 slotProps={{
                     input: {
                         sx: {
@@ -54,7 +67,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                                     size="small"
                                     onClick={() => setShowApiKey(!showApiKey)}
                                     edge="end"
-                                    disabled={noApiKey}
+                                    disabled={isDisabled}
                                 >
                                     {showApiKey ? (
                                         <VisibilityOff fontSize="small"/>
@@ -67,7 +80,7 @@ const ApiKeyField: React.FC<ApiKeyFieldProps> = ({
                     },
                 }}
             />
-            {!hideCheckbox && (
+            {!hideCheckbox && !optionalEditable && (
                 <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: 0.5, pr: 2}}>
                     <FormControlLabel
                         control={
