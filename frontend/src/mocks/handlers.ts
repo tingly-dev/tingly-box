@@ -1103,6 +1103,78 @@ export const handlers = [
         return HttpResponse.json({ success: true, data: rules })
     }),
 
+    // ============================================
+    // Guardrails API (v1)
+    // ============================================
+    http.get('/api/v1/guardrails/config', () => {
+        return HttpResponse.json({
+            success: true,
+            config: {
+                policies: [
+                    {
+                        id: 'policy-001',
+                        name: 'Block Sensitive Data',
+                        enabled: true,
+                        actions: ['block'],
+                        patterns: ['credit_card', 'ssn', 'password'],
+                        description: 'Prevents sensitive data from being transmitted',
+                    },
+                    {
+                        id: 'policy-002',
+                        name: 'Rate Limit Guard',
+                        enabled: true,
+                        actions: ['throttle'],
+                        patterns: [],
+                        description: 'Limits request rate per user session',
+                    },
+                    {
+                        id: 'policy-003',
+                        name: 'Prompt Injection Shield',
+                        enabled: true,
+                        actions: ['block', 'log'],
+                        patterns: ['ignore previous', 'system prompt'],
+                        description: 'Detects and blocks prompt injection attempts',
+                    },
+                    {
+                        id: 'policy-004',
+                        name: 'Content Safety',
+                        enabled: false,
+                        actions: ['warn'],
+                        patterns: [],
+                        description: 'Flags potentially unsafe content for review',
+                    },
+                ],
+            },
+            imports: [
+                { path: '/etc/tingly/guardrails/default.yml', name: 'Default Policy', policy_count: 3 },
+                { path: '/etc/tingly/guardrails/enterprise.yml', name: 'Enterprise Rules', policy_count: 8 },
+            ],
+        })
+    }),
+
+    http.get('/api/v1/guardrails/history', () => {
+        const now = Date.now()
+        return HttpResponse.json({
+            success: true,
+            data: [
+                { time: new Date(now - 2 * 60 * 1000).toISOString(), verdict: 'blocked', phase: 'request', scenario: 'claude_code', alias_hits: ['credit_card'], credential_names: [] },
+                { time: new Date(now - 8 * 60 * 1000).toISOString(), verdict: 'allowed', phase: 'response', scenario: 'openai', alias_hits: [], credential_names: [] },
+                { time: new Date(now - 15 * 60 * 1000).toISOString(), verdict: 'blocked', phase: 'request', scenario: 'openai', alias_hits: ['prompt_injection'], credential_names: ['OpenAI'] },
+                { time: new Date(now - 32 * 60 * 1000).toISOString(), verdict: 'allowed', phase: 'request', scenario: 'claude_code', alias_hits: [], credential_names: [] },
+                { time: new Date(now - 45 * 60 * 1000).toISOString(), verdict: 'blocked', phase: 'response', scenario: 'anthropic', alias_hits: ['ssn'], credential_names: [] },
+                { time: new Date(now - 60 * 60 * 1000).toISOString(), verdict: 'allowed', phase: 'request', scenario: 'agent', alias_hits: [], credential_names: [] },
+            ],
+        })
+    }),
+
+    http.get('/api/v1/guardrails/builtins', () => {
+        return HttpResponse.json({ success: true, data: [] })
+    }),
+
+    http.get('/api/v1/guardrails/credentials', () => {
+        return HttpResponse.json({ success: true, data: [] })
+    }),
+
     http.post('*/tingly/imagegen/v1/images/generations', async ({ request }) => {
         const body = (await request.json()) as any
         const n = Math.max(1, Math.min(10, Number(body?.n) || 1))
