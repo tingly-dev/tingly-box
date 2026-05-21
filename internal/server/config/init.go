@@ -204,5 +204,18 @@ func init() {
 			},
 			Active: true,
 		},
+		{
+			UUID:          "builtin:claude_desktop:claude-haiku-4-5",
+			Scenario:      typ.ScenarioClaudeDesktop,
+			RequestModel:  "claude-haiku-4-5",
+			ResponseModel: "",
+			Description:   "Claude Desktop - Haiku 4.5 model for fast responses",
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
+				Type:   loadbalance.TacticAdaptive,
+				Params: typ.DefaultAdaptiveParams(),
+			},
+			Active: true,
+		},
 	}
 }

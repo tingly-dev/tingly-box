@@ -29,6 +29,7 @@ const (
 	RuleUUIDBuiltinClaudeDesktopSonnet46 = "builtin:claude_desktop:claude-sonnet-4-6"
 	RuleUUIDBuiltinClaudeDesktopOpus46   = "builtin:claude_desktop:claude-opus-4-6"
 	RuleUUIDBuiltinClaudeDesktopOpus47   = "builtin:claude_desktop:claude-opus-4-7"
+	RuleUUIDBuiltinClaudeDesktopHaiku45  = "builtin:claude_desktop:claude-haiku-4-5"
 )
 
 func Migrate(c *Config) error {
@@ -44,6 +45,7 @@ func Migrate(c *Config) error {
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
 	migrate20260502(c) // Remove wildcard (*) rules for smart_guide scenario
 	migrate20260513(c) // Add Claude Desktop built-in rules
+	migrate20260521(c) // Add Claude Desktop haiku-4-5 built-in rule
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
 	return nil
@@ -528,4 +530,43 @@ func migrate20260513(c *Config) {
 		_ = c.Save()
 		logrus.Info("Migration 2026-05-13 completed: added Claude Desktop built-in rules")
 	}
+}
+
+// migrate20260521 adds the claude-haiku-4-5 built-in rule for Claude Desktop
+func migrate20260521(c *Config) {
+	for _, rule := range c.Rules {
+		if rule.UUID == RuleUUIDBuiltinClaudeDesktopHaiku45 {
+			return
+		}
+	}
+
+	var referenceRule *typ.Rule
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if rule.Scenario == typ.ScenarioClaudeDesktop && len(rule.Services) > 0 {
+			referenceRule = rule
+			break
+		}
+	}
+
+	newRule := typ.Rule{
+		UUID:         RuleUUIDBuiltinClaudeDesktopHaiku45,
+		Scenario:     typ.ScenarioClaudeDesktop,
+		RequestModel: "claude-haiku-4-5",
+		Description:  "Claude Desktop - Haiku 4.5 model for fast responses",
+		Services:     []*loadbalance.Service{},
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
+		},
+		Active: true,
+	}
+	if referenceRule != nil && len(referenceRule.Services) > 0 {
+		newRule.Services = make([]*loadbalance.Service, len(referenceRule.Services))
+		copy(newRule.Services, referenceRule.Services)
+	}
+
+	c.Rules = append(c.Rules, newRule)
+	_ = c.Save()
+	logrus.Info("Migration 2026-05-21 completed: added Claude Desktop haiku-4-5 rule")
 }
