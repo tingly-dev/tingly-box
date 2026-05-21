@@ -1,10 +1,13 @@
 package tbclient
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func TestNewTBClient(t *testing.T) {
@@ -107,4 +110,147 @@ func TestDefaultServiceConfig_Structure(t *testing.T) {
 func TestTBClient_Types(t *testing.T) {
 	// Test that TBClientImpl implements TBClient interface
 	var _ TBClient = (*TBClientImpl)(nil)
+}
+
+// ccRule builds an active claude_code rule with the given UUID and request model.
+func ccRule(uuid, requestModel string) typ.Rule {
+	return typ.Rule{
+		UUID:         uuid,
+		Scenario:     typ.ScenarioClaudeCode,
+		RequestModel: requestModel,
+		Active:       true,
+	}
+}
+
+// ccSeparateFlag returns a scenario config that puts claude_code in separate mode.
+func ccSeparateFlag() typ.ScenarioConfig {
+	return typ.ScenarioConfig{
+		Scenario: typ.ScenarioClaudeCode,
+		Flags:    typ.ScenarioFlags{Separate: true},
+	}
+}
+
+func TestResolveClaudeCodeModels_UnifiedDefault(t *testing.T) {
+	// No scenario config and no rules → unified mode with canonical fallback.
+	client := NewTBClient(&serverconfig.Config{}, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "tingly/cc", models.def)
+	assert.Equal(t, "tingly/cc", models.haiku)
+	assert.Equal(t, "tingly/cc", models.sonnet)
+	assert.Equal(t, "tingly/cc", models.opus)
+	assert.Equal(t, "tingly/cc", models.subagent)
+}
+
+func TestResolveClaudeCodeModels_UnifiedFromRule(t *testing.T) {
+	// Unified mode reads the built-in-cc rule's request_model for every tier.
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{ccRule("built-in-cc", "tingly/cc")},
+	}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "tingly/cc", models.def)
+	assert.Equal(t, "tingly/cc", models.opus)
+	assert.Equal(t, "tingly/cc", models.subagent)
+}
+
+func TestResolveClaudeCodeModels_UnifiedCustomRequestModel(t *testing.T) {
+	// A customized request_model on the unified rule must propagate to all tiers.
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{ccRule("built-in-cc", "team/coder[1m]")},
+	}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "team/coder[1m]", models.def)
+	assert.Equal(t, "team/coder[1m]", models.haiku)
+	assert.Equal(t, "team/coder[1m]", models.sonnet)
+	assert.Equal(t, "team/coder[1m]", models.opus)
+	assert.Equal(t, "team/coder[1m]", models.subagent)
+}
+
+func TestResolveClaudeCodeModels_Separate(t *testing.T) {
+	// Separate mode reads each tier from its own built-in rule's request_model.
+	cfg := &serverconfig.Config{
+		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
+		Rules: []typ.Rule{
+			ccRule("built-in-cc-default", "tingly/cc-default"),
+			ccRule("built-in-cc-haiku", "vendor/fast"),
+			ccRule("built-in-cc-sonnet", "tingly/cc-sonnet"),
+			ccRule("built-in-cc-opus", "vendor/smart"),
+			ccRule("built-in-cc-subagent", "tingly/cc-subagent"),
+		},
+	}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "tingly/cc-default", models.def)
+	assert.Equal(t, "vendor/fast", models.haiku)
+	assert.Equal(t, "tingly/cc-sonnet", models.sonnet)
+	assert.Equal(t, "vendor/smart", models.opus)
+	assert.Equal(t, "tingly/cc-subagent", models.subagent)
+}
+
+func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
+	// Separate mode with a missing tier rule falls back to the canonical name.
+	cfg := &serverconfig.Config{
+		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
+		Rules: []typ.Rule{
+			ccRule("built-in-cc-default", "vendor/default"),
+			// no haiku/sonnet/opus/subagent rules
+		},
+	}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "vendor/default", models.def)
+	assert.Equal(t, "tingly/cc-haiku", models.haiku)
+	assert.Equal(t, "tingly/cc-sonnet", models.sonnet)
+	assert.Equal(t, "tingly/cc-opus", models.opus)
+	assert.Equal(t, "tingly/cc-subagent", models.subagent)
+}
+
+func TestResolveClaudeCodeModels_InactiveRuleIgnored(t *testing.T) {
+	// An inactive built-in-cc rule must not override the canonical fallback.
+	inactive := ccRule("built-in-cc", "should/not/use")
+	inactive.Active = false
+	cfg := &serverconfig.Config{Rules: []typ.Rule{inactive}}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "tingly/cc", models.def)
+}
+
+func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
+	cfg := &serverconfig.Config{
+		ServerPort: 9000,
+		Rules:      []typ.Rule{ccRule("built-in-cc", "tingly/cc")},
+	}
+	client := NewTBClient(cfg, nil)
+
+	env, err := client.GetClaudeCodeEnv(context.Background())
+	require.NoError(t, err)
+
+	kv := map[string]string{}
+	for _, e := range env {
+		for i := 0; i < len(e); i++ {
+			if e[i] == '=' {
+				kv[e[:i]] = e[i+1:]
+				break
+			}
+		}
+	}
+
+	assert.Equal(t, "http://localhost:9000/tingly/claude_code", kv["ANTHROPIC_BASE_URL"])
+	assert.Equal(t, "tingly/cc", kv["ANTHROPIC_MODEL"])
+	assert.Equal(t, "tingly/cc", kv["ANTHROPIC_DEFAULT_OPUS_MODEL"])
+	_, hasToken := kv["ANTHROPIC_AUTH_TOKEN"]
+	assert.True(t, hasToken)
 }
