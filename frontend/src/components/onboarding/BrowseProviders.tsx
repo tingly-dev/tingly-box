@@ -10,6 +10,7 @@ import {
     Stack,
     TextField,
     Typography,
+    alpha,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import LanguageIcon from '@mui/icons-material/Language';
@@ -39,15 +40,15 @@ const emptyForm = (): EnhancedProviderFormData => ({
 const CARD_HEIGHT = 84;
 
 const cardSx = {
-    borderRadius: 2,
+    borderRadius: 1,
     height: CARD_HEIGHT,
     display: 'flex',
     flexDirection: 'column' as const,
-    transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+    boxShadow: 'none',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease',
     '&:hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: 4,
-        borderColor: 'primary.light',
+        borderColor: 'primary.main',
+        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
     },
 };
 
@@ -140,10 +141,8 @@ const CustomProviderCard: React.FC<{onPick: () => void}> = ({onPick}) => {
                 borderColor: 'primary.main',
                 bgcolor: 'primary.50',
                 '&:hover': {
-                    bgcolor: 'primary.100',
+                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
                     borderColor: 'primary.dark',
-                    transform: 'translateY(-2px)',
-                    boxShadow: 4,
                 },
             }}
         >
@@ -309,7 +308,7 @@ const BrowseProviders: React.FC<BrowseProvidersProps> = ({onPick}) => {
                             </InputAdornment>
                         ),
                         sx: {
-                            borderRadius: 2,
+                            borderRadius: 1,
                             bgcolor: 'background.paper',
                         },
                     }}

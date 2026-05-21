@@ -5,16 +5,15 @@ import ImportModal from '@/components/ImportModal';
 import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthTable from '@/components/OAuthTable.tsx';
+import PageHeader from '@/components/PageHeader';
 import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
-import UnifiedCard from '@/components/UnifiedCard';
+import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { Add, ListAlt, Upload } from '@mui/icons-material';
 import {
-    Box,
     Button,
     Chip,
-    Divider,
     Stack,
     Typography,
 } from '@mui/material';
@@ -491,45 +490,52 @@ const CredentialPage = () => {
 
     return (
         <PageLayout loading={loading}>
-            <UnifiedCard
-                title="Credentials"
-                subtitle={`Managing ${credentialCounts.total} credential${credentialCounts.total !== 1 ? 's' : ''}`}
-                size="full"
-                rightAction={
-                    <Stack direction="row" spacing={1}>
-                        <Button
-                            component={Link}
-                            to="/onboarding"
-                            variant="outlined"
-                            startIcon={<ListAlt />}
-                            size="small"
-                            sx={{ minWidth: 130 }}
+            <Stack spacing={2.5}>
+                <PageHeader
+                    title="Credentials"
+                    subtitle={`Managing ${credentialCounts.total} credential${credentialCounts.total !== 1 ? 's' : ''}`}
+                    actions={
+                        <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            flexWrap="wrap"
+                            sx={{ justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}
                         >
-                            Providers
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            startIcon={<Upload />}
-                            onClick={handleImportClick}
-                            size="small"
-                            sx={{ minWidth: 110 }}
-                        >
-                            Import
-                        </Button>
-                        <Button
-                            variant="contained"
-                            startIcon={<Add />}
-                            onClick={() => setConnectOpen(true)}
-                            size="small"
-                            sx={{ minWidth: 150 }}
-                        >
-                            Connect AI
-                        </Button>
-                    </Stack>
-                }
-            >
+                            <Button
+                                component={Link}
+                                to="/onboarding"
+                                variant="outlined"
+                                startIcon={<ListAlt />}
+                                size="small"
+                                sx={{ minWidth: 130 }}
+                            >
+                                Providers
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={<Upload />}
+                                onClick={handleImportClick}
+                                size="small"
+                                sx={{ minWidth: 110 }}
+                            >
+                                Import
+                            </Button>
+                            <Button
+                                variant="contained"
+                                startIcon={<Add />}
+                                onClick={() => setConnectOpen(true)}
+                                size="small"
+                                sx={{ minWidth: 150 }}
+                            >
+                                Connect AI
+                            </Button>
+                        </Stack>
+                    }
+                />
+
                 {/* OAuth Section */}
-                <Box sx={{ mb: 3 }}>
+                <Surface padding={{ xs: 2, sm: 2.5 }}>
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
                         <Typography variant="subtitle1" fontWeight={500}>
                             OAuth
@@ -564,12 +570,10 @@ const CredentialPage = () => {
                             onAddApiKeyClick={handleAddOAuth}
                         />
                     )}
-                </Box>
-
-                <Divider sx={{ my: 3 }} />
+                </Surface>
 
                 {/* API Keys Section */}
-                <Box>
+                <Surface padding={{ xs: 2, sm: 2.5 }}>
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
                         <Typography variant="subtitle1" fontWeight={500}>
                             API Keys
@@ -603,9 +607,9 @@ const CredentialPage = () => {
                             onAddApiKeyClick={handleAddApiKey}
                         />
                     )}
-                </Box>
+                </Surface>
 
-            </UnifiedCard>
+            </Stack>
 
             {/* API Key Provider Dialog */}
             <ProviderFormDialog

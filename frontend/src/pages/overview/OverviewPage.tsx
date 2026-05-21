@@ -15,6 +15,7 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import {type DailyUsage, TokenHeatmap} from '@/components/dashboard';
+import PageHeader from '@/components/PageHeader';
 import api from '@/services/api';
 import {format} from 'date-fns';
 
@@ -78,7 +79,7 @@ export default function OverviewPage() {
                 const gap = 1;
                 // Calculate cell size
                 const availableWidth = width - dayLabelWidth - heatmapPadding - gap;
-                const calculatedSize = Math.max(4, Math.floor(availableWidth / weeks));
+                const calculatedSize = Math.max(9, Math.floor(availableWidth / weeks));
                 setCellSize(calculatedSize);
             }
         });
@@ -208,102 +209,79 @@ export default function OverviewPage() {
         );
     }
 
+    const headerActions = (
+        <>
+            <FormControl size="small" sx={{minWidth: {xs: 160, sm: 120}}}>
+                <InputLabel sx={{fontWeight: 500}}>Time Range</InputLabel>
+                <Select
+                    value={timeRange}
+                    label="Time Range"
+                    onChange={(e) => handleTimeRangeChange(e.target.value as TimeRange)}
+                    sx={{
+                        borderRadius: 2,
+                        '& .MuiOutlinedInput-input': {py: 1},
+                    }}
+                >
+                    {Object.entries(TIME_RANGE_CONFIG).map(([key, config]) => (
+                        <MenuItem key={key} value={key}>
+                            {config.label}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{minWidth: {xs: 180, sm: 150}}}>
+                <InputLabel sx={{fontWeight: 500}}>Provider</InputLabel>
+                <Select
+                    value={selectedProvider}
+                    label="Provider"
+                    onChange={(e) => handleProviderChange(e.target.value)}
+                    sx={{
+                        borderRadius: 2,
+                        '& .MuiOutlinedInput-input': {py: 1},
+                    }}
+                >
+                    <MenuItem value="all">All Providers</MenuItem>
+                    {providers.map((p) => (
+                        <MenuItem key={p.uuid} value={p.uuid}>
+                            {p.name}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+
+            <Divider orientation="vertical" flexItem sx={{mx: 0.5, display: {xs: 'none', sm: 'block'}}}/>
+
+            <Tooltip title="Refresh data">
+                <IconButton
+                    size="small"
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    sx={{
+                        backgroundColor: 'action.hover',
+                        '&:hover': {backgroundColor: 'action.selected'},
+                        '&:disabled': {backgroundColor: 'transparent'},
+                    }}
+                >
+                    {refreshing ? <CircularProgress size={18}/> : <RefreshIcon/>}
+                </IconButton>
+            </Tooltip>
+        </>
+    );
+
     return (
         <Box
             sx={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 1,
+                gap: 3,
                 minHeight: '100vh',
             }}>
-            {/* Header with Filters */}
-            <Paper
-                sx={{
-                    p: {xs: 2, sm: 2.5},
-                    mb: 4,
-                    borderRadius: 2.5,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: 2,
-                }}
-            >
-                <Box>
-                    <Box sx={{display: 'flex', alignItems: 'center', gap: 1}}>
-                        <Typography variant="h4" sx={{fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em'}}>
-                            Token Heatmap
-                        </Typography>
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{mt: 0.5, ml: 0.5}}>
-                        {dateRange ? `${dateRange.start} - ${dateRange.end}` : TIME_RANGE_CONFIG[timeRange].label}
-                    </Typography>
-                </Box>
-
-                <Box sx={{display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap'}}>
-                    {/* Time Range Selector */}
-                    <FormControl size="small" sx={{minWidth: 120}}>
-                        <InputLabel sx={{fontWeight: 500}}>Time Range</InputLabel>
-                        <Select
-                            value={timeRange}
-                            label="Time Range"
-                            onChange={(e) => handleTimeRangeChange(e.target.value as TimeRange)}
-                            sx={{
-                                borderRadius: 2,
-                                '& .MuiOutlinedInput-input': {py: 1},
-                            }}
-                        >
-                            {Object.entries(TIME_RANGE_CONFIG).map(([key, config]) => (
-                                <MenuItem key={key} value={key}>
-                                    {config.label}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-
-                    {/* Provider Selector */}
-                    <FormControl size="small" sx={{minWidth: 150}}>
-                        <InputLabel sx={{fontWeight: 500}}>Provider</InputLabel>
-                        <Select
-                            value={selectedProvider}
-                            label="Provider"
-                            onChange={(e) => handleProviderChange(e.target.value)}
-                            sx={{
-                                borderRadius: 2,
-                                '& .MuiOutlinedInput-input': {py: 1},
-                            }}
-                        >
-                            <MenuItem value="all">All Providers</MenuItem>
-                            {providers.map((p) => (
-                                <MenuItem key={p.uuid} value={p.uuid}>
-                                    {p.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-
-                    <Divider orientation="vertical" flexItem sx={{mx: 0.5}}/>
-
-                    {/* Refresh Button */}
-                    <Tooltip title="Refresh data">
-                        <IconButton
-                            size="small"
-                            onClick={handleRefresh}
-                            disabled={refreshing}
-                            sx={{
-                                backgroundColor: 'action.hover',
-                                '&:hover': {backgroundColor: 'action.selected'},
-                                '&:disabled': {backgroundColor: 'transparent'},
-                            }}
-                        >
-                            {refreshing ? <CircularProgress size={18}/> : <RefreshIcon/>}
-                        </IconButton>
-                    </Tooltip>
-                </Box>
-            </Paper>
+            <PageHeader
+                title="Token Heatmap"
+                subtitle={dateRange ? `${dateRange.start} - ${dateRange.end}` : TIME_RANGE_CONFIG[timeRange].label}
+                actions={headerActions}
+            />
 
             {/* Token Heatmap */}
             <Paper
@@ -313,7 +291,7 @@ export default function OverviewPage() {
                     borderRadius: 2.5,
                     border: '1px solid',
                     borderColor: 'divider',
-                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                    boxShadow: 'none',
                     justifyContent: 'center',
                     display: 'flex',
                 }}

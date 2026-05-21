@@ -9,10 +9,7 @@ export const commonStyles = {
     borderColor: 'divider',
     borderRadius: 2,
     bgcolor: 'background.paper',
-    transition: 'all 0.2s ease-in-out',
-    '&:hover': {
-      boxShadow: 2,
-    },
+    boxShadow: 'none',
   } as SxProps<Theme>,
 
   cardElevated: {
@@ -20,11 +17,7 @@ export const commonStyles = {
     borderRadius: 2,
     boxShadow: 3,
     bgcolor: 'background.paper',
-    transition: 'all 0.2s ease-in-out',
-    '&:hover': {
-      boxShadow: 4,
-      transform: 'translateY(-2px)',
-    },
+    transition: 'box-shadow 0.18s ease-out',
   } as SxProps<Theme>,
 
   // Layout styles

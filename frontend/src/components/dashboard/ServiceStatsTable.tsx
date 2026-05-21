@@ -81,7 +81,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                 borderColor: 'divider',
                 overflow: 'hidden',
                 backgroundColor: 'background.paper',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                boxShadow: 'none',
             }}
         >
             <Box
@@ -110,8 +110,8 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.05em',
                                     color: 'text.secondary',
-                                    py: 2,
-                                    borderBottom: '2px solid',
+                                    py: 1.25,
+                                    borderBottom: '1px solid',
                                     borderColor: 'divider',
                                 },
                             }}
@@ -185,7 +185,7 @@ export default function ServiceStatsTable({ stats }: ServiceStatsTableProps) {
                                                 backgroundColor: 'action.hover',
                                             },
                                             '& .MuiTableCell-root': {
-                                                py: 2,
+                                                py: 1.25,
                                                 borderBottom: '1px solid',
                                                 borderColor: 'divider',
                                             },

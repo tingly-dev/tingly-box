@@ -9,6 +9,7 @@ import {
     Switch,
     FormControlLabel,
     CircularProgress,
+    Skeleton,
     FormControl,
     InputLabel,
     Select,
@@ -22,10 +23,10 @@ import CallMadeIcon from '@mui/icons-material/CallMade';
 import PaidIcon from '@mui/icons-material/Paid';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import StreamIcon from '@mui/icons-material/Stream';
-import SpeedIcon from '@mui/icons-material/Speed';
 import CachedIcon from '@mui/icons-material/Cached';
-import { StatCard, TokenUsageChart, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
+import PageHeader from '@/components/PageHeader';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
 
@@ -65,6 +66,31 @@ const getLocalMidnight = (date: Date): Date => {
     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     return d;
 };
+
+const DashboardSkeleton = () => (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box sx={{ pb: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Skeleton variant="text" width={220} height={34} />
+            <Skeleton variant="text" width={140} height={24} />
+        </Box>
+        <Grid container spacing={{ xs: 1.5, sm: 2 }}>
+            {Array.from({ length: 5 }).map((_, index) => (
+                <Grid key={index} size={{ xs: 6, sm: 4, md: 2.4 }}>
+                    <Skeleton variant="rounded" height={118} sx={{ borderRadius: 2 }} />
+                </Grid>
+            ))}
+        </Grid>
+        <Grid container spacing={2}>
+            <Grid size={{ xs: 12, lg: 8 }}>
+                <Skeleton variant="rounded" height={320} sx={{ borderRadius: 2 }} />
+            </Grid>
+            <Grid size={{ xs: 12, lg: 4 }}>
+                <Skeleton variant="rounded" height={320} sx={{ borderRadius: 2 }} />
+            </Grid>
+        </Grid>
+        <Skeleton variant="rounded" height={360} sx={{ borderRadius: 2 }} />
+    </Box>
+);
 
 export default function DashboardPage() {
     const theme = useTheme();
@@ -217,109 +243,84 @@ export default function DashboardPage() {
     };
 
     if (loading) {
-        return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-                <CircularProgress />
-            </Box>
-        );
+        return <DashboardSkeleton />;
     }
+
+    const headerActions = (
+        <>
+            <FormControl size="small" sx={{ minWidth: { xs: 180, sm: 150 } }}>
+                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>Provider</InputLabel>
+                <Select
+                    value={selectedProvider}
+                    label="Provider"
+                    onChange={(e) => setSelectedProvider(e.target.value)}
+                    sx={{
+                        borderRadius: 2,
+                        '& .MuiOutlinedInput-input': { py: 1 },
+                    }}
+                >
+                    <MenuItem value="all">All Providers</MenuItem>
+                    {providers.map((p) => (
+                        <MenuItem key={p.uuid} value={p.uuid}>
+                            {p.name}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, display: { xs: 'none', sm: 'block' } }} />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            size="small"
+                            checked={autoRefresh}
+                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                            color="primary"
+                        />
+                    }
+                    label={<Typography variant="body2">Auto</Typography>}
+                    sx={switchControlLabelStyle}
+                />
+                <Tooltip title="Refresh data">
+                    <IconButton
+                        size="small"
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        sx={{
+                            backgroundColor: 'action.hover',
+                            '&:hover': { backgroundColor: 'action.selected' },
+                            '&:disabled': { backgroundColor: 'transparent' },
+                        }}
+                    >
+                        {refreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
+                    </IconButton>
+                </Tooltip>
+            </Box>
+        </>
+    );
 
     return (
         <Box
             sx={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 1,
+                gap: 3,
                 minHeight: '100vh',
             }}
         >
-            {/* Header with Filters */}
-            <Paper
-                sx={{
-                    p: 2,
-                    mb: 3,
-                    borderRadius: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: 2,
-                }}
-            >
-                <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>
-                        Usage Dashboard
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, fontSize: '0.875rem' }}>
-                        {TIME_RANGE_CONFIG[timeRange].label}
-                    </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                    {/* Provider Selector */}
-                    <FormControl size="small" sx={{ minWidth: 150 }}>
-                        <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>Provider</InputLabel>
-                        <Select
-                            value={selectedProvider}
-                            label="Provider"
-                            onChange={(e) => setSelectedProvider(e.target.value)}
-                            sx={{
-                                borderRadius: 2,
-                                '& .MuiOutlinedInput-input': { py: 1 },
-                            }}
-                        >
-                            <MenuItem value="all">All Providers</MenuItem>
-                            {providers.map((p) => (
-                                <MenuItem key={p.uuid} value={p.uuid}>
-                                    {p.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-
-                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-
-                    {/* Auto Refresh & Refresh */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    size="small"
-                                    checked={autoRefresh}
-                                    onChange={(e) => setAutoRefresh(e.target.checked)}
-                                    color="primary"
-                                />
-                            }
-                            label={<Typography variant="body2" sx={{ fontSize: '0.875rem' }}>Auto</Typography>}
-                            sx={switchControlLabelStyle}
-                        />
-                        <Tooltip title="Refresh data">
-                            <IconButton
-                                size="small"
-                                onClick={handleRefresh}
-                                disabled={refreshing}
-                                sx={{
-                                    backgroundColor: 'action.hover',
-                                    '&:hover': { backgroundColor: 'action.selected' },
-                                    '&:disabled': { backgroundColor: 'transparent' },
-                                }}
-                            >
-                                {refreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                </Box>
-            </Paper>
+            <PageHeader
+                title="Usage Dashboard"
+                subtitle={TIME_RANGE_CONFIG[timeRange].label}
+                actions={headerActions}
+            />
 
             {/* Main Content: Three Column Layout */}
             <Box
                 sx={{
                     display: 'flex',
                     gap: 2,
-                    mb: 3,
                     flexDirection: { xs: 'column', md: 'row' },
                 }}
             >
@@ -334,7 +335,7 @@ export default function DashboardPage() {
                     <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                         <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
                             <StatCard
-                                title={'Total\nRequests'}
+                                title="Total Requests"
                                 value={totalRequests.toLocaleString()}
                                 subtitle={TIME_RANGE_CONFIG[timeRange].label}
                                 icon={<CallMadeIcon />}
@@ -343,7 +344,7 @@ export default function DashboardPage() {
                         </Grid>
                         <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
                             <StatCard
-                                title={'Total\nTokens'}
+                                title="Total Tokens"
                                 value={formatNumber(totalTokens)}
                                 subtitle={`Input: ${formatNumber(totalInputTokens)}\nOutput: ${formatNumber(totalOutputTokens)}`}
                                 icon={<PaidIcon />}
@@ -352,7 +353,7 @@ export default function DashboardPage() {
                         </Grid>
                         <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
                             <StatCard
-                                title={'Cache Hit\nRate'}
+                                title="Cache Hit Rate"
                                 value={`${cacheHitRate.toFixed(1)}%`}
                                 subtitle={`${formatNumber(totalCacheTokens)} cached`}
                                 icon={<CachedIcon />}
@@ -361,7 +362,7 @@ export default function DashboardPage() {
                         </Grid>
                         <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
                             <StatCard
-                                title={'Error\nRate'}
+                                title="Error Rate"
                                 value={`${errorRate.toFixed(2)}%`}
                                 subtitle={`${totalErrors} errors`}
                                 icon={<ErrorOutlineIcon />}
@@ -370,7 +371,7 @@ export default function DashboardPage() {
                         </Grid>
                         <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
                             <StatCard
-                                title={'Streamed\nRate'}
+                                title="Streamed Rate"
                                 value={`${streamedRate.toFixed(1)}%`}
                                 subtitle={`${totalStreamed} streamed`}
                                 icon={<StreamIcon />}
@@ -399,7 +400,7 @@ export default function DashboardPage() {
                             border: '1px solid',
                             borderColor: 'divider',
                             backgroundColor: 'background.paper',
-                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                            boxShadow: 'none',
                             height: '100%',
                             display: 'flex',
                             flexDirection: 'column',
@@ -453,7 +454,7 @@ export default function DashboardPage() {
                                                 py: 1,
                                                 px: 1,
                                                 borderRadius: 1,
-                                                transition: 'all 0.15s ease',
+                                                transition: 'background-color 0.15s ease',
                                                 cursor: 'pointer',
                                                 '&:hover': {
                                                     backgroundColor: 'action.hover',

@@ -250,22 +250,28 @@ const OAuthTable = ({
         <TableContainer
             component={Paper}
             elevation={0}
-            sx={{border: 1, borderColor: "divider"}}
+            sx={{
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 2,
+                boxShadow: "none",
+                overflowX: "auto",
+            }}
         >
-            <Table sx={{tableLayout: "fixed"}}>
+            <Table sx={{tableLayout: "fixed", minWidth: 1120}}>
                 <TableHead>
-                    <TableRow>
-                        <TableCell sx={{fontWeight: 600, width: 90}}>Status</TableCell>
-                        <TableCell sx={{fontWeight: 600, width: 140}}>Name</TableCell>
-                        <TableCell sx={{fontWeight: 600, width: 140}}>
+                    <TableRow sx={{bgcolor: "action.hover"}}>
+                        <TableCell sx={{fontWeight: 600, width: 90, py: 1.25}}>Status</TableCell>
+                        <TableCell sx={{fontWeight: 600, width: 140, py: 1.25}}>Name</TableCell>
+                        <TableCell sx={{fontWeight: 600, width: 140, py: 1.25}}>
                             API Style
                         </TableCell>
-                        <TableCell sx={{fontWeight: 600, width: 200}}>Provider</TableCell>
-                        <TableCell sx={{fontWeight: 600, width: 140}}>
+                        <TableCell sx={{fontWeight: 600, width: 200, py: 1.25}}>Provider</TableCell>
+                        <TableCell sx={{fontWeight: 600, width: 140, py: 1.25}}>
                             Expires At
                         </TableCell>
-                        <TableCell sx={{fontWeight: 600, width: 60}}>Proxy</TableCell>
-                        <TableCell sx={{fontWeight: 600, width: 250}}>Actions</TableCell>
+                        <TableCell sx={{fontWeight: 600, width: 60, py: 1.25}}>Proxy</TableCell>
+                        <TableCell sx={{fontWeight: 600, width: 250, py: 1.25}}>Actions</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -278,7 +284,13 @@ const OAuthTable = ({
                         return (
                             <React.Fragment key={provider.uuid}>
                                 {/* Main provider row */}
-                                <TableRow>
+                                <TableRow
+                                    sx={{
+                                        "& > .MuiTableCell-root": {
+                                            py: 1.25,
+                                        },
+                                    }}
+                                >
                                     {/* Status */}
                                     <TableCell>
                                         <Stack direction="row" alignItems="center" spacing={1}>

@@ -122,8 +122,8 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             justifyContent: 'center',
                             textDecoration: 'none',
                             cursor: 'pointer',
-                            transition: 'transform 0.2s',
-                            '&:hover': { transform: 'scale(1.08)' },
+                            transition: 'opacity 0.18s ease-out',
+                            '&:hover': { opacity: 0.82 },
                         }}
                     >
                         <Box
@@ -150,24 +150,12 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             onClick={() => onActivityClick(item)}
                             sx={activityItemSx({
                                 '&:hover': {
-                                    bgcolor: isActiveItem ? 'primary.dark' : 'action.hover',
+                                    bgcolor: isActiveItem ? 'primary.main' : 'action.hover',
                                     color: isActiveItem ? 'primary.contrastText' : 'primary.main',
                                 },
                                 ...(isActiveItem && {
                                     bgcolor: 'primary.main',
                                     color: 'primary.contrastText',
-                                    '&::before': {
-                                        content: '""',
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        width: 3,
-                                        height: 28,
-                                        bgcolor: 'primary.light',
-                                        borderRadius: '0 2px 2px 0',
-                                        boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
-                                    },
                                 }),
                             })}
                         >
@@ -269,24 +257,12 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             onClick={onStandaloneNavigate}
                             sx={activityItemSx({
                                 '&:hover': {
-                                    bgcolor: isOnboardingActive ? 'primary.dark' : 'action.hover',
+                                    bgcolor: isOnboardingActive ? 'primary.main' : 'action.hover',
                                     color: isOnboardingActive ? 'primary.contrastText' : 'primary.main',
                                 },
                                 ...(isOnboardingActive && {
                                     bgcolor: 'primary.main',
                                     color: 'primary.contrastText',
-                                    '&::before': {
-                                        content: '""',
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        width: 3,
-                                        height: 28,
-                                        bgcolor: 'primary.light',
-                                        borderRadius: '0 2px 2px 0',
-                                        boxShadow: '0 0 8px rgba(37, 99, 235, 0.5)',
-                                    },
                                 }),
                             })}
                         >

@@ -15,6 +15,7 @@ import {
     Stack,
     TextField,
     Typography,
+    alpha,
 } from '@mui/material';
 import {Claude, Gemini, Google, Kimi, OpenAI, Qwen} from './BrandIcons';
 import {useEffect, useRef, useState} from 'react';
@@ -959,12 +960,17 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
                                             display: 'flex',
                                             flexDirection: 'column',
                                             cursor: 'pointer',
-                                            transition: 'all 0.2s',
+                                            boxShadow: 'none',
+                                            transition: 'border-color 0.16s ease, background-color 0.16s ease',
                                             border: '1px solid',
                                             borderColor: 'divider',
                                             '&:hover': {
                                                 borderColor: provider.color,
-                                                boxShadow: 2,
+                                                bgcolor: `${provider.color}0A`,
+                                            },
+                                            '&:hover .oauth-provider-action': {
+                                                borderColor: provider.color,
+                                                bgcolor: (theme) => alpha(provider.color || theme.palette.primary.main, 0.08),
                                             },
                                         }}
                                         onClick={() => handleProviderClick(provider)}
@@ -1001,6 +1007,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
 
                                             <Box sx={{mt: 'auto'}}>
                                                 <Button
+                                                    className="oauth-provider-action"
                                                     variant="outlined"
                                                     size="small"
                                                     startIcon={<Launch/>}

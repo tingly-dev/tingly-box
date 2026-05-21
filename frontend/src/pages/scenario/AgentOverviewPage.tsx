@@ -7,6 +7,7 @@ import {
     Stack,
     Switch,
     Typography,
+    alpha,
 } from '@mui/material';
 import {
     IconAiAgents,
@@ -212,10 +213,11 @@ const AgentOverviewPage: React.FC = () => {
                                     variant="outlined"
                                     sx={{
                                         opacity: hidden ? 0.55 : 1,
-                                        transition: 'opacity 0.15s, box-shadow 0.15s, transform 0.15s',
+                                        boxShadow: 'none',
+                                        transition: 'opacity 0.15s, border-color 0.15s, background-color 0.15s',
                                         '&:hover': {
-                                            boxShadow: 3,
-                                            transform: 'translateY(-1px)',
+                                            borderColor: 'primary.main',
+                                            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
                                         },
                                     }}
                                 >

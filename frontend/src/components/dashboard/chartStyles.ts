@@ -45,7 +45,7 @@ export const getThemeChartStyles = (theme: Theme) => {
             tooltipBorder: '#e2e8f0',
         },
         statCard: dashboardColors.statCard || {
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+            boxShadow: 'none',
             emptyIconBg: 'rgba(100, 116, 139, 0.1)',
         },
     };
@@ -61,7 +61,7 @@ const LIGHT_DASHBOARD_COLORS = {
         tooltipBorder: '#e2e8f0',
     },
     statCard: {
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+        boxShadow: 'none',
         emptyIconBg: 'rgba(100, 116, 139, 0.1)',
     },
 };
@@ -92,7 +92,7 @@ export const axisStyle = {
 export const tooltipStyle = {
     borderRadius: 2,
     border: '1px solid #e2e8f0',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+    boxShadow: 'none',
     backgroundColor: 'white',
     padding: '12px',
     minWidth: 200,

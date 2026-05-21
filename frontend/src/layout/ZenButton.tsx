@@ -54,13 +54,9 @@ export const ZenButton: React.FC<ZenButtonProps> = ({
           color: active ? 'primary.contrastText' : 'text.secondary',
           bgcolor: active ? 'primary.main' : 'transparent',
           borderRadius: 2,
-          transition: 'all 0.2s ease-in-out',
+          transition: 'background-color 0.18s ease-out, color 0.18s ease-out',
           '&:hover': {
-            bgcolor: active ? 'primary.dark' : 'action.hover',
-            transform: 'scale(1.05)',
-          },
-          '&:active': {
-            transform: 'scale(0.95)',
+            bgcolor: active ? 'primary.main' : 'action.hover',
           },
           ...sx,
         }}

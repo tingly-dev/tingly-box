@@ -1,7 +1,6 @@
 // Shared components for TokenHistoryChart
 
 import { Box, Typography, useTheme } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import { getThemeChartStyles } from '../chartStyles';
 import type { LegendItemProps, ChartDataPoint } from './types';
 
@@ -16,7 +15,7 @@ export function LegendItem({ label, color, visible, onToggle }: LegendItemProps)
                 cursor: 'pointer',
                 userSelect: 'none',
                 opacity: visible ? 1 : 0.4,
-                transition: 'all 0.2s ease',
+                transition: 'opacity 0.18s ease-out, background-color 0.18s ease-out',
                 px: 1.5,
                 py: 0.5,
                 borderRadius: 1.5,
@@ -34,7 +33,6 @@ export function LegendItem({ label, color, visible, onToggle }: LegendItemProps)
                     backgroundColor: color,
                     border: '2px solid',
                     borderColor: visible ? color : 'transparent',
-                    boxShadow: visible ? `0 0 0 3px ${alpha(color, 0.1)}` : 'none',
                 }}
             />
             <Typography
@@ -66,7 +64,7 @@ export function CustomTooltip({ active, payload }: any) {
                 borderColor: 'divider',
                 borderRadius: 2,
                 p: 2,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                boxShadow: 'none',
             }}
         >
             <Typography
@@ -127,7 +125,7 @@ export function ChartWrapper({ title, hasData, children }: ChartWrapperProps) {
                 borderColor: 'divider',
                 flexGrow: 1,
                 backgroundColor: 'background.paper',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                boxShadow: 'none',
                 display: 'flex',
                 flexDirection: 'column',
             }}

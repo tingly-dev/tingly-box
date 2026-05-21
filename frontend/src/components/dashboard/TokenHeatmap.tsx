@@ -184,16 +184,17 @@ const Metric = ({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            minWidth: 120,
+            minWidth: { xs: 96, sm: 120 },
         }}
     >
         <Typography
             sx={{
-                fontSize: '10px',
+                fontSize: '0.75rem',
                 fontWeight: 600,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
                 color: 'text.secondary',
+                textAlign: 'center',
             }}
         >
             {caption}
@@ -274,14 +275,11 @@ export const TokenHeatmap = ({
     return (
         <Box
             sx={{
-                borderRadius: '12px',
-                border: '1px solid',
-                borderColor: 'divider',
-                bgcolor: 'background.paper',
-                p: { xs: 2, md: 3 },
+                width: '100%',
+                p: { xs: 0, md: 0.5 },
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 2,
+                gap: 2.5,
             }}
         >
             {/* Header with title and top metrics */}
@@ -295,7 +293,15 @@ export const TokenHeatmap = ({
                 }}
             >
                 <Typography sx={{ fontSize: '14px', fontWeight: 600 }}>{title}</Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, max-content)' },
+                        gap: { xs: 1.5, md: 2 },
+                        justifyContent: 'center',
+                        width: { xs: '100%', md: 'auto' },
+                    }}
+                >
                     <Metric caption="Input tokens" value={formatTokenTotal(totalInput)} />
                     <Metric caption="Cache tokens" value={formatTokenTotal(data.reduce((sum, d) => sum + (d.cacheTokens || 0), 0))} />
                     <Metric caption="Output tokens" value={formatTokenTotal(totalOutput)} />
@@ -306,8 +312,9 @@ export const TokenHeatmap = ({
             {/* Heatmap Grid */}
             <Box
                 sx={{
-                    overflowX: 'hidden',
+                    overflowX: 'auto',
                     overflowY: 'hidden',
+                    pb: 0.5,
                 }}
             >
                 <Box
@@ -316,7 +323,7 @@ export const TokenHeatmap = ({
                         gap,
                         gridTemplateColumns: `max-content repeat(${weeks.length}, ${cellSize}px)`,
                         gridTemplateRows: `repeat(8, ${cellSize}px)`,
-                        margin: '0 auto',
+                        margin: { xs: 0, md: '0 auto' },
                     }}
                 >
                     {/* Day of week labels */}

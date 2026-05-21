@@ -25,39 +25,32 @@ interface UnifiedCardProps {
 }
 
 
-// Preset size configuration - using relative sizes and responsive layout
+// Preset size configuration. Width and height are content-led by default so
+// cards remain predictable inside grids, stacks, and responsive layouts.
 interface PresetDimensions {
   width: string;
-  height?: string;
   minHeight?: string;
-  hasFixedHeight: boolean;
 }
 
 const presetCardDimensions: Record<string, PresetDimensions> = {
   small: {
-    width: '25%',  // 25% width (relative to parent container)
-    height: '50%', // 50% height (relative to parent container)
-    hasFixedHeight: true,
+    width: '100%',
+    minHeight: '160px',
   },
   medium: {
-    width: '50%',  // 50% width (relative to parent container)
-    height: '100%', // 100% height (relative to parent container)
-    hasFixedHeight: true,
+    width: '100%',
+    minHeight: '240px',
   },
   large: {
-    width: '100%', // Adaptive to parent container max width
-    minHeight: '400px', // Min height 400px
-    hasFixedHeight: false,
+    width: '100%',
+    minHeight: '360px',
   },
   full: {
-    width: '100%', // Adaptive to parent container max width
-    // No height constraints - let content determine height
-    hasFixedHeight: false,
+    width: '100%',
   },
   header: {
-    width: '100%', // Adaptive to parent container max width
-    minHeight: '200px', // Min height 200px
-    hasFixedHeight: false,
+    width: '100%',
+    minHeight: '160px',
   },
 };
 
@@ -74,17 +67,20 @@ const getCardDimensions = (
     ? customWidth
     : preset.width;
 
-  // Determine height/minHeight based on preset and custom values
-  const dimensions: any = {
+  const dimensions: {
+    width: number | string;
+    display: string;
+    flexDirection: 'column';
+    height?: number | string;
+    minHeight?: string;
+  } = {
     width,
     display: 'flex',
-    flexDirection: 'column' as const,
+    flexDirection: 'column',
   };
 
   if (customHeight !== undefined) {
     dimensions.height = customHeight;
-  } else if (preset.hasFixedHeight && preset.height) {
-    dimensions.height = preset.height;
   } else if (preset.minHeight) {
     dimensions.minHeight = preset.minHeight;
   }
@@ -95,12 +91,11 @@ const getCardDimensions = (
 const cardVariants = {
   default: {},
   outlined: {
-    border: 2,
     borderColor: 'divider',
     boxShadow: 'none',
   },
   elevated: {
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.10)',
     border: 'none',
   },
 };
@@ -131,10 +126,8 @@ export const UnifiedCard = forwardRef<HTMLDivElement, UnifiedCardProps>(({
         border: '1px solid',
         borderColor: 'divider',
         backgroundColor: 'background.paper',
-        transition: 'all 0.2s ease-in-out',
-        '&:hover': {
-          boxShadow: 2,
-        },
+        boxShadow: variant === 'elevated' ? undefined : 'none',
+        transition: 'box-shadow 0.18s ease-out, border-color 0.18s ease-out',
         '@keyframes pulse': {
           '0%': { opacity: 1 },
           '50%': { opacity: 0.5 },

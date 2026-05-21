@@ -53,63 +53,93 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
 
     const colorMap = getColorMap();
     const colors = colorMap[color];
+    const hoverBgAlpha = theme.palette.mode === 'dark' ? 0.12 : 0.075;
+    const baseBgAlpha = theme.palette.mode === 'dark' ? 0.045 : 0.025;
 
     return (
         <Paper
             elevation={0}
             sx={{
                 p: 2,
-                pl: 2.5,
                 borderRadius: 2,
                 border: '1px solid',
-                borderColor: 'divider',
+                borderColor: alpha(colors.text, 0.18),
                 height: '100%',
-                transition: 'all 0.2s ease-in-out',
-                backgroundColor: 'background.paper',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                transition: 'border-color 0.18s ease-out, background-color 0.18s ease-out',
+                backgroundColor: alpha(colors.text, baseBgAlpha),
+                boxShadow: 'none',
                 position: 'relative',
                 overflow: 'hidden',
                 '&:hover': {
-                    borderColor: alpha(colors.text, 0.3),
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                    transform: 'translateY(-1px)',
-                },
-                '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 3,
-                    background: `linear-gradient(180deg, ${colors.text} 0%, ${alpha(colors.text, 0.6)} 100%)`,
+                    borderColor: alpha(colors.text, 0.55),
+                    backgroundColor: alpha(colors.text, hoverBgAlpha),
                 },
             }}
         >
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', pl: 0.5 }}>
-                <Typography
-                    variant="caption"
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Box
                     sx={{
-                        fontWeight: 600,
-                        color: 'text.secondary',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        fontSize: '0.7rem',
-                        lineHeight: 1.3,
-                        whiteSpace: 'pre-line',
-                        minHeight: '1.7em',
-                        mb: 0.5,
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(0, 1fr) 28px',
+                        alignItems: 'flex-start',
+                        gap: 1,
+                        mb: 1,
+                        minHeight: '2.7em',
                     }}
                 >
-                    {title}
-                </Typography>
+                    <Typography
+                        variant="caption"
+                        sx={{
+                            fontWeight: 600,
+                            color: 'text.secondary',
+                            fontSize: '0.8125rem',
+                            lineHeight: 1.35,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            overflowWrap: 'normal',
+                        }}
+                    >
+                        {title}
+                    </Typography>
+                    {icon && (
+                        <Box
+                            sx={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 1.5,
+                                backgroundColor: colors.bg,
+                                color: colors.text,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                opacity: 0.9,
+                                transition: 'background-color 0.18s ease-out, color 0.18s ease-out, opacity 0.18s ease-out',
+                                '.MuiPaper-root:hover &': {
+                                    backgroundColor: colors.text,
+                                    color: '#fff',
+                                    opacity: 1,
+                                },
+                                '& svg': {
+                                    fontSize: 16,
+                                },
+                            }}
+                        >
+                            {icon}
+                        </Box>
+                    )}
+                </Box>
                 <Typography
                     variant="h4"
                     sx={{
                         fontWeight: 700,
-                        fontSize: '1.5rem',
+                        fontSize: { xs: '1.375rem', sm: '1.5rem' },
                         lineHeight: 1.2,
                         color: 'text.primary',
                         mb: 0.25,
+                        fontVariantNumeric: 'tabular-nums',
                     }}
                 >
                     {value}
@@ -119,42 +149,13 @@ export default function StatCard({ title, value, subtitle, icon, color = 'primar
                         variant="caption"
                         sx={{
                             color: 'text.secondary',
-                            fontSize: '0.7rem',
+                            fontSize: '0.75rem',
                             whiteSpace: 'pre-line',
                             lineHeight: 1.3,
                         }}
                     >
                         {subtitle}
                     </Typography>
-                )}
-                {icon && (
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            top: 8,
-                            right: 8,
-                            width: 24,
-                            height: 24,
-                            borderRadius: 1.5,
-                            backgroundColor: colors.bg,
-                            color: colors.text,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            opacity: 0.7,
-                            transition: 'all 0.2s ease',
-                            '.MuiPaper-root:hover &': {
-                                backgroundColor: colors.hover,
-                                opacity: 1,
-                                transform: 'scale(1.1)',
-                            },
-                            '& svg': {
-                                fontSize: 14,
-                            },
-                        }}
-                    >
-                        {icon}
-                    </Box>
                 )}
             </Box>
         </Paper>

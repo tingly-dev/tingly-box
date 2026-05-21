@@ -99,7 +99,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                     borderRadius: 2,
                     border: '1px solid',
                     borderColor: chartStyles.chart.tooltipBorder,
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                    boxShadow: 'none',
                     backgroundColor: chartStyles.chart.tooltipBg,
                     padding: '12px',
                     minWidth: 200,
@@ -151,7 +151,7 @@ export default function TokenUsageChart({ data }: TokenUsageChartProps) {
                 borderColor: 'divider',
                 flexGrow: 1,
                 backgroundColor: 'background.paper',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                boxShadow: 'none',
                 display: 'flex',
                 flexDirection: 'column',
             }}
