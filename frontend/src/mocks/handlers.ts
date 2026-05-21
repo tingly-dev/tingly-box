@@ -1131,4 +1131,228 @@ export const handlers = [
             data: Array.from({ length: n }, (_, i) => ({ url: makeSvgDataUrl(i) })),
         })
     }),
+
+    // ============================================
+    // Usage Stats API (v1)
+    // ============================================
+    http.get('/api/v1/usage/stats', () => {
+        return HttpResponse.json({
+            success: true,
+            data: [
+                {
+                    key: 'anthropic/claude-sonnet-4-5',
+                    provider_uuid: 'mock-provider-anthropic',
+                    provider_name: 'Anthropic',
+                    model: 'claude-sonnet-4-5',
+                    scenario: 'claude_code',
+                    request_count: 1842,
+                    total_tokens: 9820400,
+                    total_input_tokens: 5210000,
+                    total_output_tokens: 3850000,
+                    cache_input_tokens: 760400,
+                    avg_latency_ms: 1240,
+                    error_count: 12,
+                    error_rate: 0.65,
+                    streamed_count: 1800,
+                },
+                {
+                    key: 'anthropic/claude-opus-4-5',
+                    provider_uuid: 'mock-provider-anthropic',
+                    provider_name: 'Anthropic',
+                    model: 'claude-opus-4-5',
+                    scenario: 'claude_code',
+                    request_count: 420,
+                    total_tokens: 3240000,
+                    total_input_tokens: 1980000,
+                    total_output_tokens: 1100000,
+                    cache_input_tokens: 160000,
+                    avg_latency_ms: 2100,
+                    error_count: 3,
+                    error_rate: 0.71,
+                    streamed_count: 415,
+                },
+                {
+                    key: 'openai/gpt-4o',
+                    provider_uuid: 'mock-provider-openai',
+                    provider_name: 'OpenAI',
+                    model: 'gpt-4o',
+                    scenario: 'openai',
+                    request_count: 938,
+                    total_tokens: 4120000,
+                    total_input_tokens: 2600000,
+                    total_output_tokens: 1520000,
+                    cache_input_tokens: 0,
+                    avg_latency_ms: 980,
+                    error_count: 8,
+                    error_rate: 0.85,
+                    streamed_count: 920,
+                },
+                {
+                    key: 'openai/gpt-4o-mini',
+                    provider_uuid: 'mock-provider-openai',
+                    provider_name: 'OpenAI',
+                    model: 'gpt-4o-mini',
+                    scenario: 'openai',
+                    request_count: 2150,
+                    total_tokens: 3280000,
+                    total_input_tokens: 1840000,
+                    total_output_tokens: 1440000,
+                    cache_input_tokens: 0,
+                    avg_latency_ms: 420,
+                    error_count: 5,
+                    error_rate: 0.23,
+                    streamed_count: 2100,
+                },
+                {
+                    key: 'openrouter/deepseek-r1',
+                    provider_uuid: 'mock-provider-openrouter',
+                    provider_name: 'OpenRouter',
+                    model: 'deepseek/deepseek-r1',
+                    scenario: 'agent',
+                    request_count: 312,
+                    total_tokens: 2180000,
+                    total_input_tokens: 1200000,
+                    total_output_tokens: 980000,
+                    cache_input_tokens: 0,
+                    avg_latency_ms: 3200,
+                    error_count: 2,
+                    error_rate: 0.64,
+                    streamed_count: 308,
+                },
+            ],
+        })
+    }),
+
+    http.get('/api/v1/usage/timeseries', ({ request }) => {
+        const url = new URL(request.url)
+        const interval = url.searchParams.get('interval') || 'day'
+        const now = new Date()
+
+        const generatePoints = (count: number, intervalMs: number) =>
+            Array.from({ length: count }, (_, i) => {
+                const ts = new Date(now.getTime() - (count - 1 - i) * intervalMs)
+                const base = 800000 + Math.sin(i * 0.8) * 300000 + Math.random() * 150000
+                const input = Math.round(base * 0.55)
+                const output = Math.round(base * 0.38)
+                const cache = Math.round(base * 0.07)
+                return {
+                    timestamp: ts.toISOString(),
+                    request_count: Math.round(180 + Math.sin(i * 0.8) * 60 + Math.random() * 40),
+                    input_tokens: input,
+                    output_tokens: output,
+                    cache_input_tokens: cache,
+                    total_tokens: input + output + cache,
+                    error_count: Math.round(Math.random() * 3),
+                    avg_latency_ms: Math.round(900 + Math.random() * 600),
+                }
+            })
+
+        const data = interval === 'hour'
+            ? generatePoints(24, 60 * 60 * 1000)
+            : generatePoints(7, 24 * 60 * 60 * 1000)
+
+        return HttpResponse.json({ success: true, data })
+    }),
+
+    // ============================================
+    // ImBot Settings API (v1)
+    // ============================================
+    http.get('/api/v1/imbot-platforms', () => {
+        return HttpResponse.json({
+            success: true,
+            platforms: [
+                { name: 'telegram', label: 'Telegram', auth_type: 'token', category: 'im' },
+                { name: 'slack', label: 'Slack', auth_type: 'oauth', category: 'im' },
+                { name: 'discord', label: 'Discord', auth_type: 'token', category: 'im' },
+                { name: 'feishu', label: 'Feishu', auth_type: 'qr', category: 'enterprise' },
+                { name: 'wecom', label: 'WeCom', auth_type: 'token', category: 'enterprise' },
+            ],
+        })
+    }),
+
+    http.get('/api/v1/imbot-settings', () => {
+        return HttpResponse.json({
+            success: true,
+            settings: [
+                {
+                    uuid: 'mock-bot-001',
+                    name: 'My Claude Code Bot',
+                    platform: 'telegram',
+                    enabled: true,
+                    auth_type: 'token',
+                    default_cwd: '/home/user/projects',
+                    default_agent: 'claude_code',
+                    chat_id: '123456789',
+                    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+                    auth: { token: 'mock-bot-token-****' },
+                },
+                {
+                    uuid: 'mock-bot-002',
+                    name: 'Team Slack Bot',
+                    platform: 'slack',
+                    enabled: true,
+                    auth_type: 'oauth',
+                    default_cwd: '/home/user/workspace',
+                    default_agent: 'claude_code',
+                    chat_id: 'C0123456789',
+                    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+                    auth: {},
+                },
+                {
+                    uuid: 'mock-bot-003',
+                    name: 'Dev Discord Bot',
+                    platform: 'discord',
+                    enabled: false,
+                    auth_type: 'token',
+                    default_cwd: '/home/user/dev',
+                    default_agent: 'claude_code',
+                    chat_id: '',
+                    created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+                    auth: { token: 'mock-discord-token-****' },
+                },
+            ],
+        })
+    }),
+
+    http.get('/api/v1/imbot-settings/:uuid', ({ params }) => {
+        return HttpResponse.json({
+            success: true,
+            setting: {
+                uuid: params.uuid,
+                name: 'Mock Bot',
+                platform: 'telegram',
+                enabled: true,
+                auth_type: 'token',
+                default_cwd: '/home/user/projects',
+                default_agent: 'claude_code',
+                created_at: new Date().toISOString(),
+                auth: {},
+            },
+        })
+    }),
+
+    http.post('/api/v1/imbot-settings/:uuid/toggle', ({ params }) => {
+        return HttpResponse.json({ success: true, uuid: params.uuid })
+    }),
+
+    http.get('/api/v1/imbot-settings/:uuid/pairing-code', ({ params }) => {
+        return HttpResponse.json({
+            success: true,
+            pairing_code: 'TNGLY-' + String(params.uuid).slice(-4).toUpperCase() + '-8742',
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        })
+    }),
+
+    http.post('/api/v1/imbot-settings/:uuid/pairing-code/rotate', ({ params }) => {
+        return HttpResponse.json({
+            success: true,
+            pairing_code: 'TNGLY-' + Math.random().toString(36).slice(2, 6).toUpperCase() + '-' + Math.floor(Math.random() * 9000 + 1000),
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        })
+    }),
+
+    http.put('/api/v1/imbot-settings/:uuid', async ({ params, request }) => {
+        const body = await request.json() as any
+        return HttpResponse.json({ success: true, uuid: params.uuid, ...body })
+    }),
 ]
