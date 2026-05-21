@@ -102,8 +102,6 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 - ✅ Lark
 - ✅ Weixin
 - ✅ WeCom
-- Slack
-- Discord
 
 **Quick Setup**
 
