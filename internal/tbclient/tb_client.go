@@ -136,12 +136,12 @@ func (c *TBClientImpl) GetConnectionConfig(ctx context.Context) (*ConnectionConf
 
 // GetClaudeCodeEnv builds the env vars needed to route the Claude Code CLI
 // through the local tingly-box gateway. ANTHROPIC_BASE_URL points at the
-// claude_code scenario endpoint and the per-tier ANTHROPIC_*_MODEL vars are set
-// to the request models that the user's active claude_code rules actually route
-// (to whichever provider, e.g. a third-party model service, backs them). The
-// model names are derived from the real rule configuration — unified, separate,
-// or custom — rather than assuming a mode, so @cc routes the same way the user
-// configured @cc / `tb cc` to.
+// claude_code scenario endpoint and the per-tier ANTHROPIC_*_MODEL vars carry
+// the request models the user's claude_code rules actually route. The model
+// names are resolved exactly like the frontend's Claude Code config apply
+// (derivePrefsFromRules): the `separate` scenario flag selects per-tier vs
+// unified, and each model name is read from the matching rule's request_model
+// (by stable UUID) so customized model identifiers route correctly.
 func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	port := c.config.GetServerPort()
 	if port == 0 {
@@ -150,19 +150,13 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	baseURL := fmt.Sprintf("http://localhost:%d", port)
 	apiKey := c.config.GetModelToken()
 
+	models := c.resolveClaudeCodeModels()
 	prefs := tbagent.DefaultClaudeCodePrefs(false)
-	if models := c.resolveClaudeCodeModels(); models != nil {
-		prefs.AnthropicModel = models.def
-		prefs.AnthropicDefaultHaikuModel = models.haiku
-		prefs.AnthropicDefaultSonnetModel = models.sonnet
-		prefs.AnthropicDefaultOpusModel = models.opus
-		prefs.ClaudeCodeSubagentModel = models.subagent
-	} else {
-		// No claude_code rule is wired to a provider; fall back to the
-		// scenario's unified flag and canonical model names so the request
-		// still carries a valid model identifier.
-		prefs = tbagent.DefaultClaudeCodePrefs(c.config.GetScenarioFlag(typ.ScenarioClaudeCode, "unified"))
-	}
+	prefs.AnthropicModel = models.def
+	prefs.AnthropicDefaultHaikuModel = models.haiku
+	prefs.AnthropicDefaultSonnetModel = models.sonnet
+	prefs.AnthropicDefaultOpusModel = models.opus
+	prefs.ClaudeCodeSubagentModel = models.subagent
 
 	envMap, err := prefs.ToEnv(baseURL, apiKey)
 	if err != nil {
@@ -181,52 +175,48 @@ type claudeCodeModels struct {
 	def, haiku, sonnet, opus, subagent string
 }
 
-// resolveClaudeCodeModels derives the per-tier request models from the active
-// claude_code rules that have at least one upstream service configured. This
-// reflects the user's real routing setup (unified, separate, or custom request
-// model names) instead of assuming a mode. Tiers without their own wired rule
-// fall back to the resolved default. Returns nil when no claude_code rule is
-// wired to a provider.
-func (c *TBClientImpl) resolveClaudeCodeModels() *claudeCodeModels {
-	configured := map[string]bool{}
-	var firstModel string
+// resolveClaudeCodeModels resolves the per-tier request models the same way the
+// frontend's derivePrefsFromRules does: the `separate` scenario flag selects
+// per-tier vs unified naming, and each model is taken from the corresponding
+// built-in rule's request_model (looked up by its stable UUID), falling back to
+// tb's canonical model names when a rule is absent.
+func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
+	byUUID := map[string]string{}
 	for _, rule := range c.config.GetRequestConfigs() {
 		if rule.GetScenario() != typ.ScenarioClaudeCode || !rule.Active {
 			continue
 		}
-		if len(rule.GetServices()) == 0 {
-			continue
+		if m := strings.TrimSpace(rule.RequestModel); m != "" {
+			byUUID[rule.UUID] = m
 		}
-		model := strings.TrimSpace(rule.RequestModel)
-		if model == "" {
-			continue
-		}
-		configured[model] = true
-		if firstModel == "" {
-			firstModel = model
-		}
-	}
-	if len(configured) == 0 {
-		return nil
 	}
 
-	// pick returns the first wired candidate, else the fallback.
-	pick := func(fb string, candidates ...string) string {
-		for _, m := range candidates {
-			if configured[m] {
-				return m
-			}
+	ruleModel := func(uuid, fallback string) string {
+		if m, ok := byUUID[uuid]; ok {
+			return m
 		}
-		return fb
+		return fallback
 	}
 
-	def := pick(firstModel, "tingly/cc-default", "tingly/cc")
-	return &claudeCodeModels{
-		def:      def,
-		haiku:    pick(def, "tingly/cc-haiku"),
-		sonnet:   pick(def, "tingly/cc-sonnet"),
-		opus:     pick(def, "tingly/cc-opus"),
-		subagent: pick(def, "tingly/cc-subagent"),
+	// `separate` flag → per-tier models; anything else (unset/unified/smart)
+	// → a single unified model for every tier.
+	if c.config.GetScenarioFlag(typ.ScenarioClaudeCode, "separate") {
+		return claudeCodeModels{
+			def:      ruleModel("built-in-cc-default", "tingly/cc-default"),
+			haiku:    ruleModel("built-in-cc-haiku", "tingly/cc-haiku"),
+			sonnet:   ruleModel("built-in-cc-sonnet", "tingly/cc-sonnet"),
+			opus:     ruleModel("built-in-cc-opus", "tingly/cc-opus"),
+			subagent: ruleModel("built-in-cc-subagent", "tingly/cc-subagent"),
+		}
+	}
+
+	unified := ruleModel("built-in-cc", "tingly/cc")
+	return claudeCodeModels{
+		def:      unified,
+		haiku:    unified,
+		sonnet:   unified,
+		opus:     unified,
+		subagent: unified,
 	}
 }
 
