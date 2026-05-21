@@ -2,6 +2,7 @@
  * Generic event system for cross-component communication.
  * Eliminates duplication across useCustomModels, useNewModels, useRecentModels, useProviderModels.
  */
+import { useEffect } from 'react';
 
 export interface EventSystem<T = any> {
   eventName: string;
@@ -13,49 +14,46 @@ export interface EventSystem<T = any> {
  * Create an event system for cross-component communication.
  *
  * @param eventName - The name of the custom event
+ * @param crossTab - If true, events are also broadcast to other tabs via BroadcastChannel
  * @returns Event system with dispatch and listen methods
- *
- * @example
- * ```ts
- * const modelUpdateEvent = createEventSystem<{ uuid: string }>('model_update');
- *
- * // Dispatch event
- * modelUpdateEvent.dispatch({ uuid: 'abc-123' });
- *
- * // Listen to event
- * const unsubscribe = modelUpdateEvent.listen((data) => {
- *   console.log('Model updated:', data.uuid);
- * });
- *
- * // Cleanup
- * unsubscribe();
- * ```
  */
-export function createEventSystem<T = any>(eventName: string): EventSystem<T> {
+export function createEventSystem<T = any>(eventName: string, crossTab = false): EventSystem<T> {
+  // Unique tab ID to prevent re-processing our own broadcast messages
+  const tabId = Math.random().toString(36).slice(2);
+  const channel = crossTab && typeof BroadcastChannel !== 'undefined'
+    ? new BroadcastChannel(`tingly_event_${eventName}`)
+    : null;
+
   return {
     eventName,
 
-    /**
-     * Dispatch an event to all listeners
-     */
     dispatch: (data?: T) => {
       window.dispatchEvent(new CustomEvent(eventName, { detail: data }));
+      channel?.postMessage({ tabId, data });
     },
 
-    /**
-     * Listen for events. Returns an unsubscribe function.
-     */
     listen: (callback: (data?: T) => void): (() => void) => {
-      const handler = (event: Event) => {
-        const customEvent = event as CustomEvent<T>;
-        callback(customEvent.detail);
+      const localHandler = (event: Event) => {
+        callback((event as CustomEvent<T>).detail);
       };
 
-      window.addEventListener(eventName, handler);
+      window.addEventListener(eventName, localHandler);
 
-      // Return unsubscribe function
+      let channelHandler: ((e: MessageEvent) => void) | undefined;
+      if (channel) {
+        channelHandler = (e: MessageEvent) => {
+          // Ignore messages originating from this tab (already handled locally)
+          if (e.data?.tabId === tabId) return;
+          callback(e.data?.data);
+        };
+        channel.addEventListener('message', channelHandler);
+      }
+
       return () => {
-        window.removeEventListener(eventName, handler);
+        window.removeEventListener(eventName, localHandler);
+        if (channel && channelHandler) {
+          channel.removeEventListener('message', channelHandler);
+        }
       };
     },
   };
@@ -63,10 +61,6 @@ export function createEventSystem<T = any>(eventName: string): EventSystem<T> {
 
 /**
  * React hook for listening to events.
- *
- * @param eventName - The name of the custom event
- * @param callback - The callback function to execute when event is dispatched
- * @param deps - Dependencies for the callback (like useEffect)
  */
 export function useEvent<T = any>(
   eventName: string,

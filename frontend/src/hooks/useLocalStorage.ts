@@ -89,6 +89,17 @@ export function useLocalStorage<T extends Record<string, any>>(
     refetch();
   }, [refetch]);
 
+  // Sync with other tabs: when a different tab writes to the same key, reload
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === storageKey) {
+        refetch();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [storageKey, refetch]);
+
   return {
     data,
     version,
