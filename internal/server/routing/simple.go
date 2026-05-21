@@ -101,3 +101,14 @@ func (s *SimpleSelector) SelectServiceForImageGeneration(
 ) (*typ.Provider, *loadbalance.Service, error) {
 	return s.SelectService(c, scenario, rule, nil)
 }
+
+// SelectServiceForTranslation is a variant of SelectService for translation
+// requests. Translation requests don't carry chat-style context, so
+// content-based smart routing is skipped.
+func (s *SimpleSelector) SelectServiceForTranslation(
+	c *gin.Context,
+	scenario typ.RuleScenario,
+	rule *typ.Rule,
+) (*typ.Provider, *loadbalance.Service, error) {
+	return s.SelectService(c, scenario, rule, nil)
+}

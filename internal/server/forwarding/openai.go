@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/client"
+	"github.com/tingly-dev/tingly-box/internal/translate"
 )
 
 // ForwardOpenAIChat sends a non-streaming OpenAI chat completion request.
@@ -67,6 +68,22 @@ func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClien
 	logrus.Infof("provider: %s, model: %s (image generation)", fc.Provider.Name, req.Model)
 
 	resp, err := wrapper.ImagesGenerate(ctx, *req)
+	fc.Complete(ctx, resp, err)
+
+	return resp, cancel, err
+}
+
+// ForwardTranslation sends a translation request. Translation has no streaming.
+func ForwardTranslation(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *translate.Request) (*translate.Response, context.CancelFunc, error) {
+	if wrapper == nil {
+		return nil, nil, fmt.Errorf("failed to get client for provider: %s", fc.Provider.Name)
+	}
+
+	ctx, cancel := fc.PrepareContext(req)
+
+	logrus.Infof("provider: %s, model: %s (translate)", fc.Provider.Name, req.Model)
+
+	resp, err := wrapper.Translate(ctx, *req)
 	fc.Complete(ctx, resp, err)
 
 	return resp, cancel, err

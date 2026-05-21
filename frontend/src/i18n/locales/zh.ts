@@ -47,6 +47,7 @@ export default {
       "useVSCode": "VS Code",
       "useEmbed": "Embedding",
       "useImageGen": "Image Gen",
+      "useTranslate": "翻译",
       "playground": "Playground",
       "apiKeys": "API 密钥",
       "oauth": "OAuth 凭证",

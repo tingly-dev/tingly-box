@@ -18,6 +18,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
+	"github.com/tingly-dev/tingly-box/internal/translate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -130,6 +131,12 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 
 	// Parse streaming response
 	return c.parseImageGenerationStream(ctx, stream)
+}
+
+// Translate delegates to the embedded OpenAIClient which uses LLM chat
+// completions for translation. Codex does not expose a dedicated translate API.
+func (c *CodexClient) Translate(ctx context.Context, req translate.Request) (*translate.Response, error) {
+	return c.OpenAIClient.Translate(ctx, req)
 }
 
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.

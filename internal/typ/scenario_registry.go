@@ -14,6 +14,7 @@ const (
 	TransportAnthropic ScenarioTransport = "anthropic"
 	TransportEmbed     ScenarioTransport = "embed"
 	TransportImageGen  ScenarioTransport = "imagegen"
+	TransportTranslate ScenarioTransport = "translate"
 )
 
 type ScenarioDescriptor struct {
@@ -90,6 +91,13 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportAnthropic},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioTranslate:
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportTranslate},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}

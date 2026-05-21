@@ -46,6 +46,7 @@ export default {
       "useVSCode": "VS Code",
       "useEmbed": "Embedding",
       "useImageGen": "Image Gen",
+      "useTranslate": "Translate",
       "playground": "Playground",
       "apiKeys": "API Keys",
       "oauth": "OAuth",
@@ -896,6 +897,7 @@ export default {
       "anthropic": "Drop-in Anthropic-compatible SDK endpoint.",
       "embed": "Route embedding requests to your provider.",
       "imagegen": "Route image generation through Tingly Box.",
+      "translate": "Route translation requests to dedicated or LLM-based providers.",
       "agent": "OpenClaw — universal agent runner."
     }
   }

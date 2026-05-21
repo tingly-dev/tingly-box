@@ -108,6 +108,10 @@ func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// the same scenario, with the caller choosing which surface to use.
 	group.POST("/images/generations", s.getModelAuthMiddleware(), s.HandleOpenAIImageGeneration)
 
+	// Translation endpoint. Supports dedicated translation APIs (HuggingFace
+	// Inference API, DeepL) and LLM-based translation via chat completions.
+	group.POST("/translations", s.getModelAuthMiddleware(), s.HandleTranslation)
+
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", s.getModelAuthMiddleware(), s.ListModelsByScenario)
 }

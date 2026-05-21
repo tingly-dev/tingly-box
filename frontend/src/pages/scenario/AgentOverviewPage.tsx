@@ -12,6 +12,7 @@ import {
     IconAiAgents,
     IconPhoto,
     IconVector,
+    IconLanguage,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -120,6 +121,14 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         descKey: 'scenarioOverview.descriptions.imagegen',
         path: '/agent/imagegen',
         icon: (size) => <IconPhoto size={size} />,
+        hideable: true,
+    },
+    {
+        id: 'translate',
+        labelKey: 'layout.nav.useTranslate',
+        descKey: 'scenarioOverview.descriptions.translate',
+        path: '/agent/translate',
+        icon: (size) => <IconLanguage size={size} />,
         hideable: true,
     },
     {

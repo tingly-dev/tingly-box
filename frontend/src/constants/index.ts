@@ -19,6 +19,7 @@ export const SCENARIOS = {
   VSCODE: 'vscode',
   EMBED: 'embed', // Embedding application scenario
   IMAGEGEN: 'imagegen', // Image generation application scenario
+  TRANSLATE: 'translate', // Translation application scenario
   GLOBAL: '_global', // Global flags that apply to all scenarios
 } as const;
 

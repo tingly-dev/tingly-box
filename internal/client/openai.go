@@ -21,6 +21,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/translate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -31,6 +32,7 @@ type OpenAIClientInterface interface {
 	ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
 	ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
 	ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error)
+	Translate(ctx context.Context, req translate.Request) (*translate.Response, error)
 	ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error)
 	ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
 	EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
@@ -158,6 +160,65 @@ func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGener
 	default:
 		return c.client.Images.Generate(ctx, req)
 	}
+}
+
+// Translate translates text using the provider. Dedicated translation API
+// providers (HuggingFace, DeepL) are dispatched through the translate package
+// adapters. All other OpenAI-compatible providers fall back to LLM-based
+// translation via a chat completions request with a system translation prompt.
+func (c *OpenAIClient) Translate(ctx context.Context, req translate.Request) (*translate.Response, error) {
+	vendor := translate.DetectVendor(c.provider)
+	switch vendor {
+	case translate.VendorHuggingFace, translate.VendorDeepL:
+		adapter, err := translate.New(c.provider, req.Model)
+		if err != nil {
+			return nil, err
+		}
+		defer adapter.Close()
+		return adapter.Translate(ctx, &req)
+	default:
+		// LLM-based translation: wrap the request as a chat completion.
+		systemPrompt := buildTranslationSystemPrompt(req.SourceLang, req.TargetLang)
+		chatReq := openai.ChatCompletionNewParams{
+			Model: openai.ChatModel(req.Model),
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(systemPrompt),
+				openai.UserMessage(req.Input),
+			},
+		}
+		resp, err := c.client.Chat.Completions.New(ctx, chatReq)
+		if err != nil {
+			return nil, fmt.Errorf("translate (llm): %w", err)
+		}
+		if len(resp.Choices) == 0 {
+			return nil, fmt.Errorf("translate (llm): empty choices")
+		}
+		translation := resp.Choices[0].Message.Content
+		return &translate.Response{
+			Model:       string(resp.Model),
+			Translation: translation,
+			Usage: translate.Usage{
+				InputCharacters:  len([]rune(req.Input)),
+				OutputCharacters: len([]rune(translation)),
+			},
+		}, nil
+	}
+}
+
+// buildTranslationSystemPrompt builds a system prompt for LLM-based translation.
+func buildTranslationSystemPrompt(sourceLang, targetLang string) string {
+	if sourceLang == "" || sourceLang == "auto" {
+		return fmt.Sprintf(
+			"You are a professional translator. Translate the user's text into %s. "+
+				"Output only the translated text, no explanations or extra content.",
+			targetLang,
+		)
+	}
+	return fmt.Sprintf(
+		"You are a professional translator. Translate the user's text from %s into %s. "+
+			"Output only the translated text, no explanations or extra content.",
+		sourceLang, targetLang,
+	)
 }
 
 // ResponsesNew creates a new Responses API request

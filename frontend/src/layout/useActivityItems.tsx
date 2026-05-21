@@ -21,6 +21,7 @@ import {
     IconLock,
     IconVector,
     IconPhoto,
+    IconLanguage,
     IconFlask,
     IconPlayerPlay,
     IconTools,
@@ -103,6 +104,7 @@ export function useActivityItems(): ActivityItem[] {
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
             { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector size={20} /> } },
             { id: 'imagegen', nav: { path: '/agent/imagegen', label: t('layout.nav.useImageGen', { defaultValue: 'Image Gen' }), icon: <IconPhoto size={20} /> } },
+            { id: 'translate', nav: { path: '/agent/translate', label: t('layout.nav.useTranslate', { defaultValue: 'Translate' }), icon: <IconLanguage size={20} /> } },
         ]);
         const agentTools = visible([
             { id: 'agent', nav: { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> } },
