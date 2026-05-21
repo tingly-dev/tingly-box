@@ -19,6 +19,7 @@
 | 上下文优化 | 智能压缩 & 去重 | 降低 Token 成本、保持对话准确性 |
 | 多租户 & 鉴权 | 双 Token 体系 | UI 管理与 API 调用权限严格分离 |
 | OAuth 托管 | 浏览器一键授权 | 无需手动填 API Key，安全存储刷新 |
+| AgentBoot SDK | 统一 Agent 编程接口 | 用 Go 代码驱动 Claude Code 等 Agent，内嵌权限回调与会话管理 |
 
 ---
 
@@ -134,6 +135,17 @@
 
 ---
 
+### 11. AgentBoot SDK
+
+| 项目 | 内容 |
+|------|------|
+| **类目** | Agent SDK |
+| **解读** | 面向开发者的 Go SDK，提供统一的编程接口来启动、驱动和管理 Claude Code 等 AI Coding Agent 进程，屏蔽各 Agent CLI 的协议差异 |
+| **亮点功能** | · **统一 `Execute` 入口**：一行代码启动任意 Agent，返回完全有序的事件流（Stream JSON）<br>· **内联权限回调**：Agent 请求工具权限（文件读写、命令执行等）时，SDK 直接回调给调用方，支持 Auto / Manual / Skip 三种模式<br>· **交互式 Ask 处理**：拦截 Agent 的 `AskUserQuestion`，由外部系统（IM Bot、Web UI）代替人工响应选项<br>· **会话管理**：列出 / 恢复 `~/.claude/projects` 下的历史会话，无缝续接上次对话<br>· **Per-Execution 精细控制**：每次调用可独立覆盖 Model、FallbackModel、MaxTurns、AllowedTools、MCP Servers、System Prompt、SettingsPath<br>· **费用追踪**：从事件流中提取 `total_cost_usd`，对接计费系统<br>· **可扩展架构**：Driver + Transport + Runner 三层分离，新增 Agent 只需实现两个接口；内置 FakeProcess 工厂，测试无需真实 CLI<br>· **计划支持**：Codex、Gemini CLI、Cursor |
+| **使用场景示例** | 将 Claude Code 嵌入内部自动化平台：用 SDK 接收用户指令 → 启动 Agent → 通过 IM Bot 向人工推送权限审批 → Agent 完成后把结果写回工单系统；或在 CI 流水线中程序化调用 Agent 完成代码审查、自动修复，全程无需交互终端 |
+
+---
+
 ## 能力矩阵速查
 
 | 能力 | 开源可替代方案 | Tingly Box 差异化 |
@@ -144,6 +156,7 @@
 | Agent 工具一键配置 | 手动编辑配置文件 | 向导式 UI + Apply/Restore 一键操作 |
 | 上下文优化 | 无 | 内置 Smart Compact，对 Claude 深度优化 |
 | OAuth 托管 | 无 | 托管 Claude Code OAuth，统一续期 |
+| AgentBoot SDK | claude-sdk-go 等（原生绑定，无进程控制） | 进程级驱动 + 权限拦截 + 会话续接，可嵌入任意 Go 服务 |
 
 ---
 
