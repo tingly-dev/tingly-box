@@ -215,8 +215,12 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
                             )}
                         </Stack>
 
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                            <strong>Optional</strong> — Claude Desktop will auto-discover models from{' '}
+                            <code>/v1/models</code> if left empty.
+                        </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                            Paste into the <em>inferenceModels</em> field in Claude Desktop's gateway config.
+                            To pin a specific list, paste the JSON below into the <em>inferenceModels</em> field.
                             Names must start with <code>claude-</code>.
                         </Typography>
 
