@@ -25,7 +25,7 @@ Last updated: 2026-05-21
 | Phase | Status | Notes |
 | --- | --- | --- |
 | Phase 1: Establish The UI Baseline | Complete | Typography scale, shared `PageHeader`, shared spacing direction, and default flat surface treatment are in place. Dashboard, Overview, Credentials, and Provider List use the shared header pattern. |
-| Phase 2: Refactor Shared Components | In progress | `UnifiedCard` sizing and default hover elevation are refactored. `Surface` has been introduced as the non-card grouping primitive. Table density work has started with dashboard usage tables, credential tables, and Provider List. Agent overview, Connect AI, OAuth provider picker, Onboard, and model-select cards now follow the flat hover model. |
+| Phase 2: Refactor Shared Components | In progress | `UnifiedCard` sizing and default hover elevation are refactored. `Surface` has been introduced as the non-card grouping primitive. Table density work has started with dashboard usage tables, credential tables, and Provider List. Agent overview, Connect AI, OAuth provider picker, Onboard, and model-select cards now follow the flat hover model. Scenario routing graph nodes use a localized, theme-aware hover elevation because dense graph editing needs clearer target separation than ordinary content cards. |
 | Phase 3: Improve Dashboard | Mostly complete | Dashboard header, StatCard side-stripe removal, StatCard hierarchy, skeleton loading, Quick Start flattening, chart wrapper flattening, and flatter dashboard surfaces are complete. Three-column layout can still be tuned with real usage data. |
 | Phase 4: Improve Overview And Heatmap | Mostly complete | Overview uses the shared page header. Heatmap container nesting, metric typography, and small-screen horizontal scrolling have been improved. |
 | Phase 5: Polish Navigation And Icon Consistency | In progress | Side-stripe/glow selected states have been removed from the main sidebar, zen sidebar, and activity bar. ActivityBar label width and icon consistency still need a full pass. |
@@ -46,12 +46,13 @@ The preferred product UI direction is flat, quiet, and operational:
 - Hover feedback on flat metric cards should be visible through stronger borders, tinted backgrounds, and icon state changes, without static shadows or hover lift.
 - Hover and selected states need one shared interaction vocabulary. Navigation items should use the primary blue-tinted background for hover/selected states. Content cards and picker cards should use a consistent flat card state, ideally border-color plus a light tinted background, rather than mixing gray overlays, provider-colored overlays, shadows, and lift effects across modules.
 - Form controls should avoid oversized pill radii unless the surrounding pattern is intentionally pill-based. Search fields and ordinary text inputs should use the same modest radius as standard settings inputs, so pages like Onboard and System feel like one product.
+- Dense interactive graph nodes are an exception to the ordinary flat-card rule. For scenario model/provider/add nodes, hover may use a refined, theme-aware elevation because users are manipulating small graph objects and need stronger target separation. Keep the outer graph panel flat; only raise the active inner node with a primary border, subtle primary tint, text/icon emphasis, and a soft multi-layer shadow. Light themes should use low-alpha slate shadows; dark themes need a deeper shadow plus a faint primary edge so the card does not disappear into dark paper.
 
 Known flattening backlog:
 
-- Card hover/selected states are not fully unified yet. Agent, Connect AI, Credential OAuth, Onboard provider, and model-select cards now use the primary flat hover model; remote-control bot cards, skill cards, and graph nodes still need a focused pass.
+- Card hover/selected states are not fully unified yet. Agent, Connect AI, Credential OAuth, Onboard provider, and model-select cards now use the primary flat hover model; routing graph nodes intentionally use localized hover elevation; remote-control bot cards and skill cards still need a focused pass.
 - Input border radius is not fully normalized yet. Onboard search has been reduced, but search/filter fields across provider lists, tool lists, dialogs, and system pages should be checked as a group.
-- Some graph/node components still use shadows to describe graph objects. Review separately because graph nodes may need a selected/active affordance.
+- Some graph/node components outside the scenario routing graph may still use shadows to describe graph objects. Review separately because graph nodes may need a selected/active affordance. Prefer a refined theme-aware elevation for dense editing nodes instead of a generic heavy card shadow or a muted gray overlay.
 - Dialogs, menus, tooltips, and floating status indicators may keep elevation, but should be checked for excessive shadow strength.
 
 ## Phase 1: Establish The UI Baseline

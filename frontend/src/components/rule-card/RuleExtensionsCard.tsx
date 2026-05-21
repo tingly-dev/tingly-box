@@ -2,7 +2,7 @@ import { Add as AddIcon, Extension as ExtensionIcon } from '@mui/icons-material'
 import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
-import { PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
+import { graphNodeBaseHoverStyles, graphNodeHoverStyles, PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
 
 // Matches ProviderNode dimensions so the extensions card aligns with the
@@ -25,14 +25,14 @@ const StyledExtensionsCard = styled(Box, {
     backgroundColor: theme.palette.background.paper,
     width: CARD_STYLES.width,
     height: CARD_STYLES.height,
-    boxShadow: theme.shadows[1],
+    boxShadow: 'none',
     opacity: active ? 1 : 0.6,
     cursor: 'pointer',
-    transition: 'all 0.2s ease-in-out',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     overflow: 'hidden',
+    ...graphNodeBaseHoverStyles,
     '&:hover': {
-        borderColor: theme.palette.primary.main,
-        boxShadow: theme.shadows[2],
+        ...graphNodeHoverStyles(theme),
     },
 }));
 

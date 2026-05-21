@@ -99,11 +99,12 @@ interface SmartRoutingGraphProps {
 const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => ({
-    transition: 'all 0.2s ease-in-out',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease',
     opacity: active ? 1 : 0.6,
     filter: active ? 'none' : 'grayscale(0.3)',
-    border: active ? 'none' : '2px dashed',
-    borderColor: active ? 'transparent' : theme.palette.text.disabled,
+    border: active ? '1px solid' : '2px dashed',
+    borderColor: active ? theme.palette.divider : theme.palette.text.disabled,
+    boxShadow: 'none',
     margin: "3px",
     position: 'relative',
     ...(active ? {} : {
@@ -120,7 +121,8 @@ const StyledCard = styled(Card, {
         },
     }),
     '&:hover': {
-        boxShadow: active ? theme.shadows[4] : theme.shadows[1],
+        borderColor: active ? theme.palette.primary.main : theme.palette.text.disabled,
+        boxShadow: 'none',
     },
 }));
 

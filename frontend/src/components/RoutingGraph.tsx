@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
+import { graphNodeBaseHoverStyles, graphNodeHoverStyles } from '@/components/nodes/styles';
 import { notify } from '@/utils/notify';
 import type { Provider } from '../types/provider';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
@@ -106,11 +107,12 @@ interface RuleGraphProps {
 const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => ({
-    transition: 'all 0.2s ease-in-out',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease',
     opacity: active ? 1 : 0.6,
     filter: active ? 'none' : 'grayscale(0.3)',
-    border: active ? 'none' : '2px dashed',
-    borderColor: active ? 'transparent' : theme.palette.text.disabled,
+    border: active ? '1px solid' : '2px dashed',
+    borderColor: active ? theme.palette.divider : theme.palette.text.disabled,
+    boxShadow: 'none',
     margin: "3px",
     position: 'relative',
     ...(active ? {} : {
@@ -127,7 +129,8 @@ const StyledCard = styled(Card, {
         },
     }),
     '&:hover': {
-        boxShadow: active ? theme.shadows[4] : theme.shadows[1],
+        borderColor: active ? theme.palette.primary.main : theme.palette.text.disabled,
+        boxShadow: 'none',
     },
 }));
 
@@ -460,23 +463,21 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                                                 width: node.width,
                                                                                 height: node.height,
                                                                                 border: '2px dashed',
-                                                                                borderColor: 'divider',
-                                                                                borderRadius: 2,
-                                                                                backgroundColor: 'background.paper',
-                                                                                boxShadow: theme => theme.shadows[2],
-                                                                                transition: 'all 0.2s ease-in-out',
-                                                                                display: 'flex',
-                                                                                flexDirection: 'column',
+                                                                borderColor: 'divider',
+                                                                borderRadius: 2,
+                                                                backgroundColor: 'background.paper',
+                                                                boxShadow: 'none',
+                                                                transition: 'border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
                                                                                 justifyContent: 'center',
                                                                                 alignItems: 'center',
                                                                                 gap: 1,
-                                                                                '&:hover': {
-                                                                                    borderColor: 'primary.main',
-                                                                                    backgroundColor: 'action.hover',
-                                                                                    borderStyle: 'solid',
-                                                                                    boxShadow: theme => theme.shadows[4],
-                                                                                    transform: 'translateY(-2px)',
-                                                                                },
+                                                                ...graphNodeBaseHoverStyles,
+                                                                '&:hover': (theme) => ({
+                                                                    ...graphNodeHoverStyles(theme),
+                                                                    borderStyle: 'solid',
+                                                                }),
                                                                                 '&:disabled': {
                                                                                     borderColor: 'action.disabled',
                                                                                     backgroundColor: 'action.disabledBackground',

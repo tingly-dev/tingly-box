@@ -9,6 +9,7 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import NodeTooltip from './NodeTooltip';
+import { graphNodeBaseHoverStyles, graphNodeHoverStyles } from './styles';
 
 // ActionAddNode dimensions
 const ADD_PROVIDER_NODE_STYLES = {
@@ -34,16 +35,14 @@ const StyledAddProviderNode = styled(Box, {
     backgroundColor: 'background.paper',
     width: node.width,
     height: node.height,
-    boxShadow: theme.shadows[2],
-    transition: 'all 0.2s ease-in-out',
+    boxShadow: 'none',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     cursor: active ? 'pointer' : 'default',
     opacity: active ? 1 : 0.5,
+    ...graphNodeBaseHoverStyles,
     '&:hover': active ? {
-        borderColor: 'text.secondary',
-        backgroundColor: 'action.hover',
+        ...graphNodeHoverStyles(theme),
         borderStyle: 'solid',
-        boxShadow: theme.shadows[4],
-        transform: 'translateY(-2px)',
     } : {},
 }));
 

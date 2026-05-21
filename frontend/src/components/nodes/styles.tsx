@@ -1,5 +1,5 @@
 import { Box } from '@mui/material';
-import { styled, type Theme } from '@mui/material/styles';
+import { alpha, styled, type Theme } from '@mui/material/styles';
 
 // Node dimensions constants
 export const MODEL_NODE_STYLES = {
@@ -50,6 +50,41 @@ export const ConnectionLine = styled(Box)(() => ({
     '& svg': { fontSize: '2rem' },
 }));
 
+export const graphNodeHoverStyles = (theme: Theme) => {
+    const isDark = theme.palette.mode === 'dark';
+    const emphasisColor = isDark ? theme.palette.primary.light : theme.palette.primary.dark;
+    const tintAlpha = isDark ? 0.12 : 0.045;
+
+    return {
+        borderColor: emphasisColor,
+        backgroundColor: alpha(theme.palette.primary.main, tintAlpha),
+        color: emphasisColor,
+        '& .MuiTypography-root': {
+            color: emphasisColor,
+        },
+        '& .MuiSvgIcon-root': {
+            color: emphasisColor,
+        },
+        boxShadow: isDark
+            ? [
+                '0 14px 30px rgba(0, 0, 0, 0.38)',
+                `0 0 0 1px ${alpha(emphasisColor, 0.22)}`,
+            ].join(', ')
+            : [
+                '0 10px 24px rgba(15, 23, 42, 0.12)',
+                '0 2px 8px rgba(15, 23, 42, 0.08)',
+                `0 0 0 1px ${alpha(emphasisColor, 0.16)}`,
+            ].join(', '),
+        transform: 'translateY(-1px)',
+    };
+};
+
+export const graphNodeBaseHoverStyles = {
+    outline: 'none',
+    boxShadow: 'none',
+    transform: 'translateY(0)',
+} as const;
+
 // Provider node container
 export const ProviderNodeContainer = styled(Box)(({ theme }: { theme: Theme }) => ({
     display: 'flex',
@@ -62,14 +97,11 @@ export const ProviderNodeContainer = styled(Box)(({ theme }: { theme: Theme }) =
     backgroundColor: 'background.paper',
     width: providerNode.width,
     height: providerNode.height,
-    boxShadow: theme.shadows[2],
-    transition: 'all 0.2s ease-in-out',
+    boxShadow: 'none',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     position: 'relative',
-    '&:hover': {
-        borderColor: 'text.secondary',
-        boxShadow: theme.shadows[4],
-        transform: 'translateY(-2px)',
-    },
+    ...graphNodeBaseHoverStyles,
+    '&:hover': graphNodeHoverStyles(theme),
 }));
 
 // Styled model node with unified fixed size
@@ -88,15 +120,12 @@ export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !
     textAlign: 'center',
     width: compact ? modelNode.widthCompact : modelNode.width,
     height: compact ? modelNode.heightCompact : modelNode.height,
-    boxShadow: theme.shadows[2],
-    transition: 'all 0.2s ease-in-out',
+    boxShadow: 'none',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     position: 'relative',
     cursor: 'pointer',
-    '&:hover': {
-        borderColor: 'text.secondary',
-        boxShadow: theme.shadows[4],
-        transform: 'translateY(-2px)',
-    },
+    ...graphNodeBaseHoverStyles,
+    '&:hover': graphNodeHoverStyles(theme),
 }));
 
 // Action button container
@@ -130,16 +159,12 @@ const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: Theme 
     textAlign: 'center' as const,
     width: smartNode.width,
     height: smartNode.height,
-    boxShadow: theme.shadows[2],
-    transition: 'all 0.2s ease-in-out',
+    boxShadow: 'none',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     position: 'relative' as const,
     opacity: active ? 1 : 0.6,
-    '&:hover': {
-        borderColor: 'text.secondary',
-        backgroundColor: 'action.hover',
-        boxShadow: theme.shadows[4],
-        transform: 'translateY(-2px)',
-    },
+    ...graphNodeBaseHoverStyles,
+    '&:hover': graphNodeHoverStyles(theme),
 });
 
 export const StyledSmartNodePrimary = styled(Box, { shouldForwardProp: (prop) => prop !== 'active' })<{
