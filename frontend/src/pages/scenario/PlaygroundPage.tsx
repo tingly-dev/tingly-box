@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box,
     Button,
@@ -25,6 +25,15 @@ const IMAGE_SCENARIO = 'imagegen';
 
 type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
 
+
+const fileToDataURL = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+        reader.readAsDataURL(file);
+    });
+
 const extractModelsFromRules = (rules: any[] | undefined | null): string[] => {
     if (!Array.isArray(rules)) return [];
     const seen = new Set<string>();
@@ -46,6 +55,7 @@ const PlaygroundPage: React.FC = () => {
     const [model, setModel] = useState<string>('');
     const [prompt, setPrompt] = useState<string>('');
     const [imageRefs, setImageRefs] = useState<string>('');
+    const [uploadRefs, setUploadRefs] = useState<string[]>([]);
     const [size, setSize] = useState<string>('1024x1024');
     const [quality, setQuality] = useState<Quality>('auto');
     const [count, setCount] = useState<number>(1);
@@ -69,6 +79,22 @@ const PlaygroundPage: React.FC = () => {
         return () => { cancelled = true; };
     }, []);
 
+
+    const handleRefUpload = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files ?? []);
+        if (files.length === 0) return;
+
+        try {
+            const encoded = await Promise.all(files.map((f) => fileToDataURL(f)));
+            const valid = encoded.map((v) => v.trim()).filter(Boolean);
+            setUploadRefs(valid);
+        } catch (err: any) {
+            showNotification(err?.message || 'Failed to load reference image', 'error');
+        } finally {
+            e.target.value = '';
+        }
+    }, [showNotification]);
+
     const handleGenerate = useCallback(async () => {
         if (!prompt.trim() || !model) return;
         setSending(true);
@@ -76,13 +102,14 @@ const PlaygroundPage: React.FC = () => {
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
             const refs = imageRefs.split('\n').map((v) => v.trim()).filter(Boolean);
+            const mergedRefs = [...refs, ...uploadRefs];
             const resp = await client.images.generate({
                 model,
                 prompt: prompt.trim(),
                 n: count,
                 size: size as any,
                 quality,
-                ...(refs.length > 0 ? ({ extra_body: { input_image_refs: refs } } as any) : {}),
+                ...(mergedRefs.length > 0 ? ({ extra_body: { input_image_refs: mergedRefs } } as any) : {}),
             } as any);
             setResults(resp.data ?? []);
         } catch (err: any) {
@@ -92,7 +119,7 @@ const PlaygroundPage: React.FC = () => {
         } finally {
             setSending(false);
         }
-    }, [prompt, imageRefs, model, count, size, quality, showNotification]);
+    }, [prompt, imageRefs, uploadRefs, model, count, size, quality, showNotification]);
 
     const noModels = useMemo(() => models.length === 0, [models]);
 
@@ -201,6 +228,24 @@ const PlaygroundPage: React.FC = () => {
                             onChange={(e) => setImageRefs(e.target.value)}
                             disabled={noModels}
                         />
+
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                            <Button variant="outlined" component="label" disabled={noModels || sending}>
+                                Upload reference image(s)
+                                <input hidden type="file" accept="image/*" multiple onChange={handleRefUpload} />
+                            </Button>
+                            {uploadRefs.length > 0 && (
+                                <Typography variant="body2" color="text.secondary">
+                                    {uploadRefs.length} uploaded reference image(s)
+                                </Typography>
+                            )}
+                            {uploadRefs.length > 0 && (
+                                <Button size="small" onClick={() => setUploadRefs([])}>
+                                    Clear uploads
+                                </Button>
+                            )}
+                        </Stack>
 
                         <Box>
                             <Button
