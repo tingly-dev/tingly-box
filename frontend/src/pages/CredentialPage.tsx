@@ -6,11 +6,10 @@ import OAuthDetailDialog from '@/components/OAuthDetailDialog.tsx';
 import OAuthDialog from '@/components/OAuthDialog.tsx';
 import OAuthTable from '@/components/OAuthTable.tsx';
 import { PageLayout } from '@/components/PageLayout';
-import LocalModelDialog from '@/components/LocalModelDialog.tsx';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
 import UnifiedCard from '@/components/UnifiedCard';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
-import { Add, Computer, ListAlt, Upload, VpnKey } from '@mui/icons-material';
+import { Add, ListAlt, Upload, VpnKey } from '@mui/icons-material';
 import {
     Box,
     Button,
@@ -57,8 +56,6 @@ const CredentialPage = () => {
     // Unified "Connect Provider" picker state
     const [connectOpen, setConnectOpen] = useState(false);
 
-    // Local Model Dialog state
-    const [localModelDialogOpen, setLocalModelDialogOpen] = useState(false);
     const [isLocalProvider, setIsLocalProvider] = useState(false);
 
     // OAuth Dialog state
@@ -157,6 +154,22 @@ const CredentialPage = () => {
             handleAddApiKey();
             return;
         }
+        if (selection.kind === 'local') {
+            const lp = selection.provider;
+            setIsLocalProvider(true);
+            setApiKeyDialogMode('add');
+            setProviderFormData({
+                uuid: undefined,
+                name: lp.name,
+                apiBase: lp.url,
+                apiStyle: 'openai' as any,
+                token: '',
+                enabled: true,
+                noKeyRequired: true,
+            } as any);
+            setApiKeyDialogOpen(true);
+            return;
+        }
         const p = selection.provider;
         setApiKeyDialogMode('add');
         setProviderFormData({
@@ -171,25 +184,6 @@ const CredentialPage = () => {
             userAgent: '',
             createFusionProvider: false,
             providerBaseUrls: {openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic},
-        } as any);
-        setApiKeyDialogOpen(true);
-    };
-
-    const handleAddLocal = () => {
-        setLocalModelDialogOpen(true);
-    };
-
-    const handleLocalConnect = (provider: { id: string; name: string; url: string }) => {
-        setIsLocalProvider(true);
-        setApiKeyDialogMode('add');
-        setProviderFormData({
-            uuid: undefined,
-            name: provider.name,
-            apiBase: provider.url,
-            apiStyle: 'openai' as any,
-            token: '',
-            enabled: true,
-            noKeyRequired: true,
         } as any);
         setApiKeyDialogOpen(true);
     };
@@ -541,15 +535,6 @@ const CredentialPage = () => {
                             Import
                         </Button>
                         <Button
-                            variant="outlined"
-                            startIcon={<Computer />}
-                            onClick={handleAddLocal}
-                            size="small"
-                            sx={{ minWidth: 110 }}
-                        >
-                            Local
-                        </Button>
-                        <Button
                             variant="contained"
                             startIcon={<Add />}
                             onClick={() => setConnectOpen(true)}
@@ -650,13 +635,6 @@ const CredentialPage = () => {
                 onChange={handleProviderFormChange}
                 mode={apiKeyDialogMode}
                 optionalEditableToken={isLocalProvider}
-            />
-
-            {/* Local Model Picker */}
-            <LocalModelDialog
-                open={localModelDialogOpen}
-                onClose={() => setLocalModelDialogOpen(false)}
-                onConnect={handleLocalConnect}
             />
 
             {/* Unified provider picker */}

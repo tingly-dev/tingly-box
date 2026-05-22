@@ -1,4 +1,4 @@
-import {Add, Close, Key, Login, Search} from '@mui/icons-material';
+import {Add, Close, Computer, Key, Login, Search} from '@mui/icons-material';
 import {
     Box,
     Chip,
@@ -23,7 +23,15 @@ import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './OAuthDialog';
 export type ConnectSelection =
     | {kind: 'key'; provider: UniqueProvider}
     | {kind: 'oauth'; providerId: string}
+    | {kind: 'local'; provider: {id: string; name: string; url: string}}
     | {kind: 'custom'};
+
+const LOCAL_PROVIDERS = [
+    {id: 'ollama',    name: 'Ollama',    url: 'http://localhost:11434/v1'},
+    {id: 'lm-studio', name: 'LM Studio', url: 'http://localhost:1234/v1'},
+    {id: 'localai',   name: 'LocalAI',   url: 'http://localhost:8080/v1'},
+    {id: 'jan',       name: 'Jan',       url: 'http://localhost:1337/v1'},
+];
 
 interface ConnectProviderDialogProps {
     open: boolean;
@@ -31,12 +39,13 @@ interface ConnectProviderDialogProps {
     onSelect: (selection: ConnectSelection) => void;
 }
 
-type Accent = 'custom' | 'oauth' | 'key';
+type Accent = 'custom' | 'oauth' | 'key' | 'local';
 
 const ACCENT: Record<Accent, string> = {
     custom: 'secondary.main',
     oauth: 'success.main',
     key: 'primary.main',
+    local: 'warning.main',
 };
 
 const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: number; accent: Accent}> = ({
@@ -55,7 +64,7 @@ const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: num
                     width: 26, height: 26, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color,
-                    bgcolor: (theme) => alpha(theme.palette[accent === 'key' ? 'primary' : accent === 'oauth' ? 'success' : 'secondary'].main, 0.12),
+                    bgcolor: (theme) => alpha(theme.palette[accent === 'key' ? 'primary' : accent === 'oauth' ? 'success' : accent === 'local' ? 'warning' : 'secondary'].main, 0.12),
                 }}
             >
                 {icon}
@@ -129,15 +138,19 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
     const filteredOAuth = needle
         ? oauthProviders.filter((p) => `${p.name} ${p.displayName}`.toLowerCase().includes(needle))
         : oauthProviders;
+    const filteredLocal = needle
+        ? LOCAL_PROVIDERS.filter((p) => p.name.toLowerCase().includes(needle))
+        : LOCAL_PROVIDERS;
     const showCustom = !needle || 'custom endpoint'.includes(needle);
 
     const keyBadge = {label: 'Key', color: '#1967d2', bg: '#e8f0fe'};
     const oauthBadge = {label: 'OAuth', color: '#1e8e3e', bg: '#e6f4ea'};
+    const localBadge = {label: 'Local', color: '#e37400', bg: '#fef3e0'};
 
     const protocolMeta = (p: UniqueProvider) =>
         [p.supportsOpenAI && 'OpenAI', p.supportsAnthropic && 'Anthropic'].filter(Boolean).join(' · ') || 'Custom API';
 
-    const nothing = filteredKey.length === 0 && filteredOAuth.length === 0 && !showCustom;
+    const nothing = filteredKey.length === 0 && filteredOAuth.length === 0 && filteredLocal.length === 0 && !showCustom;
 
     return (
         <Dialog
@@ -215,6 +228,24 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
                                     meta="OAuth sign-in"
                                     badge={oauthBadge}
                                     onClick={() => onSelect({kind: 'oauth', providerId: p.id})}
+                                />
+                            ))}
+                        </CardGrid>
+                    </>
+                )}
+
+                {filteredLocal.length > 0 && (
+                    <>
+                        <SectionHeader icon={<Computer fontSize="small"/>} title="Local models" count={filteredLocal.length} accent="local"/>
+                        <CardGrid>
+                            {filteredLocal.map((p) => (
+                                <ProviderCard
+                                    key={`local-${p.id}`}
+                                    icon={<Computer sx={{fontSize: 22, color: 'warning.main'}}/>}
+                                    name={p.name}
+                                    meta={p.url}
+                                    badge={localBadge}
+                                    onClick={() => onSelect({kind: 'local', provider: p})}
                                 />
                             ))}
                         </CardGrid>
