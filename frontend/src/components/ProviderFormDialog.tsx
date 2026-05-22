@@ -729,8 +729,8 @@ const ProviderFormDialog = ({
                         </Accordion>
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{px: 3, pb: 2, gap: 1, justifyContent: onBack ? 'space-between' : 'flex-end'}}>
-                    {onBack && (
+                <DialogActions sx={{px: 3, pb: 2, justifyContent: 'space-between'}}>
+                    {onBack ? (
                         <Button
                             type="button"
                             variant="text"
@@ -740,36 +740,36 @@ const ProviderFormDialog = ({
                         >
                             Back
                         </Button>
-                    )}
-                    <Button
-                        type="button"
-                        variant="outlined"
-                        size="small"
-                        disabled={!hasAnyProtocol || verifying || submitting}
-                        onClick={handleVerify}
-                        title="Test connection using available endpoints (optional check)"
-                    >
-                        {verifying ? (
-                            <CircularProgress size={16} thickness={4}/>
-                        ) : (
-                            'Test Connection'
-                        )}
-                    </Button>
-                    <Button
-                        type="submit"
-                        variant="contained"
-                        size="small"
-                        disabled={!hasAnyProtocol || verifying || submitting}
-                        sx={{
-                            minWidth: verifying || submitting ? '80px' : 'auto',
-                        }}
-                    >
-                        {submitting ? (
-                            <CircularProgress size={20} thickness={4}/>
-                        ) : (
-                            submitText || defaultSubmitText
-                        )}
-                    </Button>
+                    ) : <span/>}
+                    <Stack direction="row" spacing={1}>
+                        <Button
+                            type="button"
+                            variant="outlined"
+                            size="small"
+                            disabled={!hasAnyProtocol || verifying || submitting}
+                            onClick={handleVerify}
+                            title="Test connection using available endpoints (optional check)"
+                        >
+                            {verifying ? (
+                                <CircularProgress size={16} thickness={4}/>
+                            ) : (
+                                'Test Connection'
+                            )}
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            size="small"
+                            disabled={!hasAnyProtocol || verifying || submitting}
+                            sx={{minWidth: verifying || submitting ? '80px' : 'auto'}}
+                        >
+                            {submitting ? (
+                                <CircularProgress size={20} thickness={4}/>
+                            ) : (
+                                submitText || defaultSubmitText
+                            )}
+                        </Button>
+                    </Stack>
                 </DialogActions>
             </form>
         </Dialog>
