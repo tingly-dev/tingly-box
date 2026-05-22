@@ -40,7 +40,286 @@ const mockV2Providers = [
         api_base_openai: null,
         api_base_anthropic: null,
     },
+    {
+        uuid: 'mock-provider-glm',
+        name: 'GLM',
+        api_base: 'https://open.bigmodel.cn/api/paas/v4',
+        api_style: 'anthropic',
+        auth_type: 'api_key',
+        token: 'glm-****mnop',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+    },
+    {
+        uuid: 'mock-provider-deepseek',
+        name: 'Deepseek',
+        api_base: 'https://api.deepseek.com/v1',
+        api_style: 'openai',
+        auth_type: 'api_key',
+        token: 'sk-ds-****qrst',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+    },
+    {
+        uuid: 'mock-provider-gemini',
+        name: 'Gemini',
+        api_base: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        api_style: 'openai',
+        auth_type: 'api_key',
+        token: 'AIza****uvwx',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+    },
 ]
+
+// ============================================
+// Mock Rules per scenario
+// ============================================
+const mockV1Rules: Record<string, any[]> = {
+    openai: [
+        {
+            uuid: 'mock-rule-openai-1',
+            scenario: 'openai',
+            request_model: 'gpt-4o',
+            response_model: '',
+            active: true,
+            description: 'Route gpt-4o to Anthropic claude-opus-4-7',
+            services: [{ uuid: 'svc-o1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-openai-2',
+            scenario: 'openai',
+            request_model: 'gpt-4o-mini',
+            response_model: '',
+            active: true,
+            description: 'Route gpt-4o-mini to Deepseek',
+            services: [{ uuid: 'svc-o2', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-openai-3',
+            scenario: 'openai',
+            request_model: 'gpt-3.5-turbo',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-o3a', provider: 'mock-provider-glm', model: 'glm-4-flash', weight: 1, active: true },
+                { uuid: 'svc-o3b', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true },
+            ],
+        },
+    ],
+    anthropic: [
+        {
+            uuid: 'mock-rule-ant-1',
+            scenario: 'anthropic',
+            request_model: 'claude-opus-4-7',
+            response_model: '',
+            active: true,
+            description: 'Opus 4.7 → GLM',
+            services: [{ uuid: 'svc-a1', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-ant-2',
+            scenario: 'anthropic',
+            request_model: 'claude-sonnet-4-6',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-a2', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-ant-3',
+            scenario: 'anthropic',
+            request_model: 'claude-haiku-4-5',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-a3', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true }],
+        },
+    ],
+    claude_code: [
+        {
+            uuid: 'mock-rule-cc-1',
+            scenario: 'claude_code',
+            request_model: 'claude-opus-4-7',
+            response_model: '',
+            active: true,
+            description: 'Claude Code: Opus 4.7',
+            services: [{ uuid: 'svc-cc1', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-cc-2',
+            scenario: 'claude_code',
+            request_model: 'claude-sonnet-4-6',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-cc2a', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true },
+                { uuid: 'svc-cc2b', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true },
+            ],
+            smart_enabled: true,
+            smart_routing: [
+                {
+                    uuid: 'smart-cc-1',
+                    description: 'Use Deepseek for large context',
+                    ops: [{ uuid: 'op-cc-1', position: 'token', operation: 'gt', value: '8000' }],
+                    services: [{ uuid: 'svc-sm-cc1', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true }],
+                },
+            ],
+        },
+        {
+            uuid: 'mock-rule-cc-3',
+            scenario: 'claude_code',
+            request_model: 'claude-haiku-4-5',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-cc3', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true }],
+        },
+    ],
+    claude_desktop: [
+        {
+            uuid: 'mock-rule-cd-1',
+            scenario: 'claude_desktop',
+            request_model: 'claude-sonnet-4-6',
+            response_model: '',
+            active: true,
+            description: 'Claude Desktop - Sonnet 4.6 model for balanced performance',
+            services: [{ uuid: 'svc-cd1', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-cd-2',
+            scenario: 'claude_desktop',
+            request_model: 'claude-opus-4-6',
+            response_model: '',
+            active: true,
+            description: 'Claude Desktop - Opus 4.6 model for complex tasks',
+            services: [{ uuid: 'svc-cd2', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-cd-3',
+            scenario: 'claude_desktop',
+            request_model: 'claude-opus-4-7',
+            response_model: '',
+            active: true,
+            description: 'Claude Desktop - Opus 4.7 model for advanced reasoning',
+            services: [{ uuid: 'svc-cd3', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-cd-4',
+            scenario: 'claude_desktop',
+            request_model: 'claude-haiku-4-5',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-cd4', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-cd-5',
+            scenario: 'claude_desktop',
+            request_model: 'anthropic/tb-ds-4-3',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-cd5', provider: 'mock-provider-deepseek', model: 'deepseek-r1', weight: 1, active: true }],
+        },
+    ],
+    codex: [
+        {
+            uuid: 'mock-rule-codex-1',
+            scenario: 'codex',
+            request_model: 'codex-mini-latest',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-cx1', provider: 'mock-provider-openai', model: 'gpt-4o-mini', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-codex-2',
+            scenario: 'codex',
+            request_model: 'o4-mini',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-cx2a', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true },
+                { uuid: 'svc-cx2b', provider: 'mock-provider-gemini', model: 'gemini-2.5-pro', weight: 1, active: true },
+            ],
+        },
+    ],
+    agent: [
+        {
+            uuid: 'mock-rule-agent-1',
+            scenario: 'agent',
+            request_model: 'claude-opus-4-7',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-ag1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-agent-2',
+            scenario: 'agent',
+            request_model: 'gpt-4o',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [
+                { uuid: 'svc-ag2a', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true },
+                { uuid: 'svc-ag2b', provider: 'mock-provider-gemini', model: 'gemini-2.5-pro', weight: 1, active: true },
+            ],
+        },
+    ],
+    vscode: [
+        {
+            uuid: 'mock-rule-vsc-1',
+            scenario: 'vscode',
+            request_model: 'claude-sonnet-4-6',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-vs1', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true }],
+        },
+    ],
+    xcode: [
+        {
+            uuid: 'mock-rule-xc-1',
+            scenario: 'xcode',
+            request_model: 'claude-sonnet-4-6',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-xc1', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+        },
+    ],
+    opencode: [
+        {
+            uuid: 'mock-rule-oc-1',
+            scenario: 'opencode',
+            request_model: 'claude-opus-4-7',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-oc1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true }],
+        },
+        {
+            uuid: 'mock-rule-oc-2',
+            scenario: 'opencode',
+            request_model: 'gpt-4o',
+            response_model: '',
+            active: true,
+            description: '',
+            services: [{ uuid: 'svc-oc2', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true }],
+        },
+    ],
+}
 
 // ============================================
 // Mock Quota Data
@@ -820,7 +1099,8 @@ export const handlers = [
                 ],
             })
         }
-        return HttpResponse.json({ success: true, data: [] })
+        const rules = scenario ? (mockV1Rules[scenario] ?? []) : []
+        return HttpResponse.json({ success: true, data: rules })
     }),
 
     http.post('*/tingly/imagegen/v1/images/generations', async ({ request }) => {
