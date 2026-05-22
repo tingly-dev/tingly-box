@@ -57,6 +57,7 @@ const CredentialPage = () => {
     const [connectOpen, setConnectOpen] = useState(false);
 
     const [isLocalProvider, setIsLocalProvider] = useState(false);
+    const [fromConnectPicker, setFromConnectPicker] = useState(false);
 
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
@@ -151,12 +152,14 @@ const CredentialPage = () => {
             return;
         }
         if (selection.kind === 'custom') {
+            setFromConnectPicker(true);
             handleAddApiKey();
             return;
         }
         if (selection.kind === 'local') {
             const lp = selection.provider;
             setIsLocalProvider(true);
+            setFromConnectPicker(true);
             setApiKeyDialogMode('add');
             setProviderFormData({
                 uuid: undefined,
@@ -171,6 +174,7 @@ const CredentialPage = () => {
             return;
         }
         const p = selection.provider;
+        setFromConnectPicker(true);
         setApiKeyDialogMode('add');
         setProviderFormData({
             uuid: undefined,
@@ -628,7 +632,8 @@ const CredentialPage = () => {
             {/* API Key Provider Dialog */}
             <ProviderFormDialog
                 open={apiKeyDialogOpen}
-                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); }}
+                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); }}
+                onBack={fromConnectPicker ? () => setConnectOpen(true) : undefined}
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
                 data={providerFormData}

@@ -1,4 +1,4 @@
-import {Close, ExpandMore, InfoOutlined} from '@mui/icons-material';
+import {ArrowBack, Close, ExpandMore, InfoOutlined} from '@mui/icons-material';
 import {
     Accordion,
     AccordionDetails,
@@ -62,6 +62,7 @@ interface PresetProviderFormDialogProps {
     // not yet visible in state when this fires.
     onSubmit: (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => void | Promise<void>;
     onForceAdd?: () => void;
+    onBack?: () => void;
     data: EnhancedProviderFormData;
     onChange: (field: keyof EnhancedProviderFormData, value: any) => void;
     mode: 'add' | 'edit';
@@ -76,6 +77,7 @@ const ProviderFormDialog = ({
                                 open,
                                 onClose,
                                 onSubmit,
+                                onBack,
                                 data,
                                 onChange,
                                 mode,
@@ -727,7 +729,18 @@ const ProviderFormDialog = ({
                         </Accordion>
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{px: 3, pb: 2, gap: 1, justifyContent: 'flex-end'}}>
+                <DialogActions sx={{px: 3, pb: 2, gap: 1, justifyContent: onBack ? 'space-between' : 'flex-end'}}>
+                    {onBack && (
+                        <Button
+                            type="button"
+                            variant="text"
+                            size="small"
+                            startIcon={<ArrowBack fontSize="small"/>}
+                            onClick={() => { onClose(); onBack(); }}
+                        >
+                            Back
+                        </Button>
+                    )}
                     <Button
                         type="button"
                         variant="outlined"
