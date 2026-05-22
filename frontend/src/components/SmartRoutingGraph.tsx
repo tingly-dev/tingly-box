@@ -15,7 +15,7 @@ import {
     IconButton,
     Collapse,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
 import type { Provider } from '../types/provider';
 import {
@@ -25,7 +25,8 @@ import {
     ArrowNode,
     ModelNode,
     NodeContainer,
-    ProviderNode, MODEL_NODE_STYLES
+    ProviderNode, MODEL_NODE_STYLES,
+    getRouteGraphActiveColor,
 } from '@/components/nodes';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
 
@@ -99,7 +100,7 @@ interface SmartRoutingGraphProps {
 const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => ({
-    transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease',
+    transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease',
     opacity: active ? 1 : 0.6,
     filter: active ? 'none' : 'grayscale(0.3)',
     border: active ? '1px solid' : '2px dashed',
@@ -121,8 +122,10 @@ const StyledCard = styled(Card, {
         },
     }),
     '&:hover': {
-        borderColor: active ? theme.palette.primary.main : theme.palette.text.disabled,
-        boxShadow: 'none',
+        borderColor: active ? alpha(getRouteGraphActiveColor(theme), 0.55) : theme.palette.text.disabled,
+        boxShadow: active
+            ? `0 0 0 3px ${alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.12 : 0.10)}`
+            : 'none',
     },
 }));
 
@@ -449,14 +452,20 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                 startIcon={<AddIcon />}
                                                 onClick={onAddSmartRule}
                                                 disabled={!active}
-                                                sx={{
-                                                    borderColor: 'primary.main',
-                                                    color: 'primary.main',
+                                                sx={(theme) => ({
+                                                    borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.72 : 0.82),
+                                                    color: getRouteGraphActiveColor(theme),
+                                                    backgroundColor: 'transparent',
                                                     '&:hover': {
-                                                        borderColor: 'primary.dark',
-                                                        backgroundColor: 'primary.50',
+                                                        borderColor: getRouteGraphActiveColor(theme),
+                                                        backgroundColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.12 : 0.06),
+                                                        boxShadow: `0 0 0 3px ${alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.14 : 0.10)}`,
                                                     },
-                                                }}
+                                                    '&.Mui-disabled': {
+                                                        borderColor: theme.palette.divider,
+                                                        color: theme.palette.text.disabled,
+                                                    },
+                                                })}
                                             >
                                                 Add Smart Rule
                                             </Button>
@@ -533,14 +542,19 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                             {extensionsCard && (
                                 <Box
                                     onClick={(e) => e.stopPropagation()}
-                                    sx={{
+                                    sx={(theme) => ({
                                         display: 'flex',
                                         alignItems: 'center',
                                         flexShrink: 0,
-                                        pl: 1,
+                                        alignSelf: 'stretch',
+                                        ml: 1.5,
+                                        pl: 2,
                                         pr: `${graphContainer.marginX}px`,
                                         py: `${graphContainer.marginY}px`,
-                                    }}
+                                        borderLeft: '1px solid',
+                                        borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.28 : 0.18),
+                                        backgroundImage: `linear-gradient(90deg, ${alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.07 : 0.045)}, transparent 18px)`,
+                                    })}
                                 >
                                     {extensionsCard}
                                 </Box>

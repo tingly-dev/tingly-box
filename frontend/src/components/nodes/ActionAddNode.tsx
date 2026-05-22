@@ -9,7 +9,7 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import NodeTooltip from './NodeTooltip';
-import { graphNodeBaseHoverStyles, graphNodeHoverStyles } from './styles';
+import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles } from './styles';
 
 // ActionAddNode dimensions
 const ADD_PROVIDER_NODE_STYLES = {
@@ -30,8 +30,8 @@ const StyledAddProviderNode = styled(Box, {
     justifyContent: 'center',
     padding: node.padding,
     borderRadius: theme.shape.borderRadius,
-    border: 'dashed',
-    borderColor: 'divider',
+    border: '2px dashed',
+    borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
     width: node.width,
     height: node.height,

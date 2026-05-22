@@ -16,9 +16,9 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
-import { graphNodeBaseHoverStyles, graphNodeHoverStyles } from '@/components/nodes/styles';
+import { getRouteGraphActiveColor, graphNodeBaseHoverStyles, graphNodeHoverStyles } from '@/components/nodes/styles';
 import { notify } from '@/utils/notify';
 import type { Provider } from '../types/provider';
 import type { ConfigRecord } from './RoutingGraphTypes.ts';
@@ -621,14 +621,19 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                             {extensionsCard && (
                                 <Box
                                     onClick={(e) => e.stopPropagation()}
-                                    sx={{
+                                    sx={(theme) => ({
                                         display: 'flex',
                                         alignItems: 'center',
                                         flexShrink: 0,
-                                        pl: 1,
+                                        alignSelf: 'stretch',
+                                        ml: 1.5,
+                                        pl: 2,
                                         pr: `${graphContainer.marginX}px`,
                                         py: `${graphContainer.marginY}px`,
-                                    }}
+                                        borderLeft: '1px solid',
+                                        borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.28 : 0.18),
+                                        backgroundImage: `linear-gradient(90deg, ${alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.07 : 0.045)}, transparent 18px)`,
+                                    })}
                                 >
                                     {extensionsCard}
                                 </Box>

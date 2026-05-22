@@ -1,9 +1,11 @@
 import { CheckCircle } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Button, alpha } from '@mui/material';
+import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
+import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '../../types/provider.ts';
+import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface CustomModelCardProps {
     model: string;
@@ -61,29 +63,33 @@ export default function CustomModelCard({
     return (
         <>
             <Card
-                sx={{
+                sx={(theme: Theme) => ({
                     width: '100%',
                     height: 60,
                     border: 1,
-                    borderColor: variant === 'selected' ? 'primary.main' : 'grey.300',
                     borderRadius: 1,
-                    backgroundColor: isSelected ? 'primary.50' : 'background.paper',
                     cursor: loading ? 'wait' : 'pointer',
-                    transition: 'border-color 0.16s ease, background-color 0.16s ease',
+                    transition: modelCardTransition,
                     position: 'relative',
-                    boxShadow: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     overflow: 'hidden',
-                    '&:hover': loading ? {} : {
-                        borderColor: 'primary.main',
-                        backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
-                        '& .control-bar': {
-                            opacity: 1,
-                        },
+                    ...(loading
+                        ? {
+                            borderColor: theme.palette.divider,
+                            backgroundColor: theme.palette.background.paper,
+                            boxShadow: 'none',
+                            transform: 'translateY(0)',
+                        }
+                        : getModelCardStateStyles(theme, isSelected || variant === 'selected')),
+                    '& .control-bar': {
+                        opacity: 0,
                     },
-                }}
+                    '&:hover .control-bar': {
+                        opacity: 1,
+                    },
+                })}
                 onClick={handleCardClick}
             >
                 {/* Main content area */}
@@ -120,13 +126,13 @@ export default function CustomModelCard({
                 {/* Selected indicator */}
                 {isSelected && !loading && (
                     <CheckCircle
-                        color="primary"
                         sx={{
                             position: 'absolute',
                             top: 4,
                             right: 4,
                             fontSize: 16,
                             zIndex: 2,
+                            color: (theme) => getModelCardActiveColor(theme),
                         }}
                     />
                 )}

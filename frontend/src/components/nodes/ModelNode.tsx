@@ -12,11 +12,21 @@ import {
     Divider,
 } from '@mui/material';
 import NodeTooltip from './NodeTooltip.tsx';
-import { Settings as SettingsIcon } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
+import {
+    AutoAwesome as AutoAwesomeIcon,
+    NearMeOutlined as DirectIcon,
+    Settings as SettingsIcon,
+} from '@mui/icons-material';
+import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyledModelNode, NODE_LAYER_STYLES } from './styles.tsx';
+import {
+    getRouteGraphActiveColor,
+    getRouteGraphControlFill,
+    getRouteGraphControlFillHover,
+    StyledModelNode,
+    NODE_LAYER_STYLES,
+} from './styles.tsx';
 import { isWildcardModelName } from '@/components/rule-card/utils';
 
 // Action button container
@@ -183,10 +193,6 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            '&:hover': editable ? {
-                                backgroundColor: 'action.hover',
-                                borderRadius: 1,
-                            } : {},
                         }}
                     >
                         {isWildcard ? (
@@ -229,20 +235,30 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                 selected={!smartEnabled}
                                 disabled={!active || switchDisabled}
                                 onClick={onSwitch}
-                                sx={{
+                                sx={(theme) => ({
                                     ...NODE_LAYER_STYLES.toggleButton,
                                     flex: 1,
-                                    borderColor: 'text.primary',
+                                    borderColor: alpha(getRouteGraphActiveColor(theme), 0.7),
+                                    color: !smartEnabled ? theme.palette.common.white : theme.palette.text.secondary,
                                     '&.Mui-selected': {
-                                        backgroundColor: !smartEnabled ? 'secondary.main' : 'transparent',
-                                        color: !smartEnabled ? 'white' : 'text.primary',
-                                        borderColor: 'text.primary',
+                                        backgroundColor: !smartEnabled ? getRouteGraphControlFill(theme) : 'transparent',
+                                        color: !smartEnabled ? theme.palette.common.white : theme.palette.text.primary,
+                                        borderColor: !smartEnabled ? getRouteGraphControlFill(theme) : getRouteGraphActiveColor(theme),
+                                        '& .MuiSvgIcon-root': {
+                                            color: theme.palette.common.white,
+                                        },
+                                        '&:hover': {
+                                            backgroundColor: getRouteGraphControlFillHover(theme),
+                                        },
                                     },
                                     '&:hover': {
-                                        backgroundColor: !smartEnabled ? 'secondary.dark' : 'action.hover',
+                                        backgroundColor: !smartEnabled
+                                            ? getRouteGraphControlFillHover(theme)
+                                            : alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.16 : 0.08),
                                     },
-                                }}
+                                })}
                             >
+                                <DirectIcon sx={{ fontSize: 13 }} />
                                 Direct
                             </ToggleButton>
                         </NodeTooltip>
@@ -252,20 +268,30 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                 selected={smartEnabled}
                                 disabled={!active || switchDisabled}
                                 onClick={onSwitch}
-                                sx={{
+                                sx={(theme) => ({
                                     ...NODE_LAYER_STYLES.toggleButton,
                                     flex: 1,
-                                    borderColor: 'text.primary',
+                                    borderColor: alpha(getRouteGraphActiveColor(theme), 0.7),
+                                    color: smartEnabled ? theme.palette.common.white : theme.palette.text.secondary,
                                     '&.Mui-selected': {
-                                        backgroundColor: smartEnabled ? 'secondary.main' : 'transparent',
-                                        color: smartEnabled ? 'white' : 'text.primary',
-                                        borderColor: 'text.primary',
+                                        backgroundColor: smartEnabled ? getRouteGraphControlFill(theme) : 'transparent',
+                                        color: smartEnabled ? theme.palette.common.white : theme.palette.text.primary,
+                                        borderColor: smartEnabled ? getRouteGraphControlFill(theme) : getRouteGraphActiveColor(theme),
+                                        '& .MuiSvgIcon-root': {
+                                            color: theme.palette.common.white,
+                                        },
+                                        '&:hover': {
+                                            backgroundColor: getRouteGraphControlFillHover(theme),
+                                        },
                                     },
                                     '&:hover': {
-                                        backgroundColor: smartEnabled ? 'secondary.dark' : 'action.hover',
+                                        backgroundColor: smartEnabled
+                                            ? getRouteGraphControlFillHover(theme)
+                                            : alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.16 : 0.08),
                                     },
-                                }}
+                                })}
                             >
+                                <AutoAwesomeIcon sx={{ fontSize: 13 }} />
                                 Smart
                             </ToggleButton>
                         </NodeTooltip>
@@ -279,9 +305,19 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
-                            sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                            sx={(theme) => ({
+                                p: 0.45,
+                                backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === 'dark' ? 0.72 : 0.78),
+                                border: '1px solid',
+                                borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.24 : 0.18),
+                                boxShadow: 'none',
+                                '&:hover': {
+                                    backgroundColor: theme.palette.background.paper,
+                                    borderColor: getRouteGraphActiveColor(theme),
+                                },
+                            })}
                         >
-                            <SettingsIcon sx={{ fontSize: '1rem', color: 'text.primary' }} />
+                            <SettingsIcon sx={{ fontSize: '0.95rem', color: 'text.secondary' }} />
                         </IconButton>
                     </NodeTooltip>
                 </ActionButtonsBox>

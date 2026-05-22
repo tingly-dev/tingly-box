@@ -1,5 +1,8 @@
 import { CheckCircle } from '@mui/icons-material';
-import { Box, Card, CardContent, CircularProgress, Typography, alpha } from '@mui/material';
+import { Box, Card, CardContent, CircularProgress, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import type { Theme } from '@mui/material/styles';
+import { getModelCardActiveColor, getModelCardStateStyles, modelCardTransition } from './cardStyles';
 
 interface ModelCardProps {
     model: string;
@@ -27,36 +30,45 @@ export default function ModelCard({
             border: 1,
             borderRadius: 1,
             cursor: loading ? 'wait' : 'pointer',
-            transition: 'border-color 0.16s ease, background-color 0.16s ease',
+            transition: modelCardTransition,
             position: 'relative' as const,
-            boxShadow: 'none',
-            '&:hover': loading ? {} : {
-                borderColor: 'primary.main',
-                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
-            },
+            outline: 'none',
+            overflow: 'visible',
         };
 
         if (variant === 'starred') {
-            return {
+            return (theme: Theme) => ({
                 ...baseStyles,
-                borderColor: isSelected ? 'primary.main' : 'warning.main',
-                backgroundColor: isSelected ? 'primary.50' : 'warning.50',
-                '&:hover': {
-                    borderColor: 'primary.main',
-                    backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
-                },
-            };
+                ...(isSelected
+                    ? getModelCardStateStyles(theme, true)
+                    : {
+                        borderColor: theme.palette.warning.main,
+                        backgroundColor: alpha(theme.palette.warning.main, theme.palette.mode === 'dark' ? 0.14 : 0.08),
+                        boxShadow: 'none',
+                        transform: 'translateY(0)',
+                    }),
+                ...(loading ? {} : {
+                    '&:hover': {
+                        ...(isSelected
+                            ? getModelCardStateStyles(theme, true)
+                            : getModelCardStateStyles(theme, false)['&:hover']),
+                        transform: 'translateY(-1px)',
+                    },
+                }),
+            });
         }
 
-        return {
+        return (theme: Theme) => ({
             ...baseStyles,
-            borderColor: isSelected ? 'primary.main' : 'grey.300',
-            backgroundColor: isSelected ? 'primary.50' : 'background.paper',
-            '&:hover': {
-                borderColor: 'primary.main',
-                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.04),
-            },
-        };
+            ...(loading
+                ? {
+                    borderColor: theme.palette.divider,
+                    backgroundColor: theme.palette.background.paper,
+                    boxShadow: 'none',
+                    transform: 'translateY(0)',
+                }
+                : getModelCardStateStyles(theme, isSelected)),
+        });
     };
 
     return (
@@ -94,12 +106,12 @@ export default function ModelCard({
                 )}
                 {isSelected && !loading && (
                     <CheckCircle
-                        color="primary"
                         sx={{
                             position: 'absolute',
                             top: 4,
                             right: 4,
-                            fontSize: 16
+                            fontSize: 16,
+                            color: (theme) => getModelCardActiveColor(theme),
                         }}
                     />
                 )}

@@ -1,10 +1,28 @@
 import { Box } from '@mui/material';
 import { alpha, styled, type Theme } from '@mui/material/styles';
 
+export const routeGraphActive = '#4F6F9F';
+export const routeGraphActiveBg = '#F7F9FC';
+
+export const getRouteGraphActiveColor = (theme: Theme) =>
+    theme.palette.mode === 'dark' ? '#D4E3FF' : routeGraphActive;
+
+export const getRouteGraphControlFill = (theme: Theme) =>
+    theme.palette.mode === 'dark' ? '#4F6F9F' : routeGraphActive;
+
+export const getRouteGraphControlFillHover = (theme: Theme) =>
+    theme.palette.mode === 'dark' ? '#5F82BA' : routeGraphActive;
+
+export const getRouteGraphActiveBg = (theme: Theme) =>
+    theme.palette.mode === 'dark' ? alpha(routeGraphActive, 0.18) : routeGraphActiveBg;
+
+export const getRouteGraphBorderColor = (theme: Theme) =>
+    alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.48 : 0.50);
+
 // Node dimensions constants
 export const MODEL_NODE_STYLES = {
     width: 220,
-    height: 72,
+    height: 76,
     heightCompact: 48,
     widthCompact: 220,
     padding: 5,
@@ -52,12 +70,10 @@ export const ConnectionLine = styled(Box)(() => ({
 
 export const graphNodeHoverStyles = (theme: Theme) => {
     const isDark = theme.palette.mode === 'dark';
-    const emphasisColor = isDark ? theme.palette.primary.light : theme.palette.primary.dark;
-    const tintAlpha = isDark ? 0.12 : 0.045;
+    const emphasisColor = getRouteGraphActiveColor(theme);
 
     return {
         borderColor: emphasisColor,
-        backgroundColor: alpha(theme.palette.primary.main, tintAlpha),
         color: emphasisColor,
         '& .MuiTypography-root': {
             color: emphasisColor,
@@ -67,15 +83,16 @@ export const graphNodeHoverStyles = (theme: Theme) => {
         },
         boxShadow: isDark
             ? [
-                '0 14px 30px rgba(0, 0, 0, 0.38)',
-                `0 0 0 1px ${alpha(emphasisColor, 0.22)}`,
+                `0 0 0 1px ${alpha(emphasisColor, 0.92)}`,
+                `0 0 0 5px ${alpha(emphasisColor, 0.34)}`,
+                '0 18px 38px rgba(0, 0, 0, 0.50)',
             ].join(', ')
             : [
-                '0 10px 24px rgba(15, 23, 42, 0.12)',
-                '0 2px 8px rgba(15, 23, 42, 0.08)',
-                `0 0 0 1px ${alpha(emphasisColor, 0.16)}`,
+                `0 0 0 4px ${alpha(routeGraphActive, 0.18)}`,
+                '0 14px 34px rgba(31, 41, 55, 0.14)',
+                '0 3px 10px rgba(31, 41, 55, 0.08)',
             ].join(', '),
-        transform: 'translateY(-1px)',
+        transform: 'translateY(-2px)',
     };
 };
 
@@ -93,7 +110,7 @@ export const ProviderNodeContainer = styled(Box)(({ theme }: { theme: Theme }) =
     padding: providerNode.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
-    borderColor: 'divider',
+    borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
     width: providerNode.width,
     height: providerNode.height,
@@ -115,7 +132,7 @@ export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !
     padding: modelNode.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
-    borderColor: 'divider',
+    borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
     textAlign: 'center',
     width: compact ? modelNode.widthCompact : modelNode.width,
@@ -154,8 +171,8 @@ const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: Theme 
     padding: smartNode.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px solid',
-    borderColor: active ? 'text.secondary' : 'divider',
-    backgroundColor: active ? 'action.hover' : 'background.paper',
+    borderColor: getRouteGraphBorderColor(theme),
+    backgroundColor: 'background.paper',
     textAlign: 'center' as const,
     width: smartNode.width,
     height: smartNode.height,
@@ -184,22 +201,27 @@ export const NODE_LAYER_STYLES = {
         justifyContent: 'center',
         width: '100%',
     } as const,
-    divider: { width: '78%', my: 0.125 } as const,
+    divider: { width: '84%', my: 0.25 } as const,
     bottomLayer: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         width: '100%',
-        minHeight: 18,
+        minHeight: 26,
+        px: 0.5,
+        gap: 0.5,
     } as const,
     typography: { fontWeight: 600, fontSize: '0.8rem', lineHeight: 1.15 } as const,
     toggleButton: {
-        height: 20,
-        padding: '0 6px',
-        fontSize: '0.6rem',
+        height: 24,
+        minWidth: 0,
+        padding: '0 8px',
+        gap: 0.5,
+        fontSize: '0.68rem',
         fontWeight: 600,
         textTransform: 'none' as const,
         border: '1px solid',
-        borderRadius: 1,
+        borderRadius: 1.25,
+        lineHeight: 1,
     } as const,
 };

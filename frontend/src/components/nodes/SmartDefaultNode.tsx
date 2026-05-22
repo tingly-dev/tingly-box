@@ -1,18 +1,19 @@
 import {
-    Add as AddIcon,
-    Add as DefaultIcon,
-} from '@mui/icons-material';
-import {
     Box,
-    IconButton,
     Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import React from 'react';
 import {
-    ActionButtonsBox,
+    getRouteGraphActiveColor,
     StyledSmartNodeWarning,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
+
+const DEFAULT_NODE_INTERNAL_STYLES = {
+    contentHeight: 62,
+    fieldHeight: 31,
+} as const;
 
 export interface DefaultNodeProps {
     providersCount: number;
@@ -29,7 +30,14 @@ export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
         <StyledSmartNodeWrapper>
             <StyledSmartNodeWarning active={active}>
                 {/* Content */}
-                <Box sx={{ mt: 1, width: '100%' }}>
+                <Box
+                    sx={{
+                        width: '100%',
+                        height: DEFAULT_NODE_INTERNAL_STYLES.contentHeight,
+                        display: 'flex',
+                        alignItems: 'center',
+                    }}
+                >
                     {/* Summary Info */}
                     <Box
                         sx={{
@@ -37,18 +45,19 @@ export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
                         }}
                     >
                         <Box
-                            sx={{
+                            sx={(theme) => ({
                                 width: '100%',
-                                p: 1,
+                                height: DEFAULT_NODE_INTERNAL_STYLES.fieldHeight,
+                                px: 1,
                                 border: '1px solid',
-                                borderColor: 'divider',
+                                borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.34 : 0.22),
                                 borderRadius: 1,
                                 backgroundColor: 'background.paper',
-                                transition: 'all 0.2s',
+                                transition: 'border-color 0.16s ease, background-color 0.16s ease',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                            }}
+                            })}
                         >
                             <Typography
                                 variant="body2"
@@ -56,6 +65,7 @@ export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
                                     fontSize: '0.8rem',
                                     color: 'text.secondary',
                                     fontWeight: 500,
+                                    lineHeight: 1,
                                 }}
                             >
                                 Default

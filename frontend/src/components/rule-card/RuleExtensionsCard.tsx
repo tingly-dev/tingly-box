@@ -1,17 +1,25 @@
 import { Add as AddIcon, Extension as ExtensionIcon } from '@mui/icons-material';
 import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
-import { graphNodeBaseHoverStyles, graphNodeHoverStyles, PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
+import {
+    getRouteGraphActiveColor,
+    getRouteGraphBorderColor,
+    graphNodeBaseHoverStyles,
+    graphNodeHoverStyles,
+    MODEL_NODE_STYLES,
+} from '@/components/nodes/styles';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
 
-// Matches ProviderNode dimensions so the extensions card aligns with the
-// providers row visually. Content overflow scrolls inside the card body.
+// Matches the route graph node footprint so this feels like a pinned tool node,
+// not a smaller floating card. Content overflow scrolls inside the body.
 const CARD_STYLES = {
-    width: 180,
-    height: PROVIDER_NODE_STYLES.height,
-    padding: 6,
+    width: MODEL_NODE_STYLES.width,
+    minHeight: MODEL_NODE_STYLES.height,
+    padding: 8,
 } as const;
+
+const CARD_HEADER_HEIGHT = 18;
 
 const StyledExtensionsCard = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
@@ -21,10 +29,11 @@ const StyledExtensionsCard = styled(Box, {
     padding: CARD_STYLES.padding,
     borderRadius: theme.shape.borderRadius,
     border: '1px dashed',
-    borderColor: theme.palette.divider,
+    borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: theme.palette.background.paper,
     width: CARD_STYLES.width,
-    height: CARD_STYLES.height,
+    minHeight: CARD_STYLES.minHeight,
+    maxHeight: '100%',
     boxShadow: 'none',
     opacity: active ? 1 : 0.6,
     cursor: 'pointer',
@@ -101,14 +110,23 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
     return (
         <StyledExtensionsCard active={active} onClick={onOpenCatalog}>
             {/* Fixed-height header so the body has a stable scroll region */}
-            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0, mb: 0.25 }}>
-                <ExtensionIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.65rem', color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
+            <Stack
+                direction="row"
+                alignItems="center"
+                spacing={0.75}
+                sx={{
+                    flexShrink: 0,
+                    height: CARD_HEADER_HEIGHT,
+                    mb: 0.75,
+                }}
+            >
+                <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.72rem', color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
                     Extensions{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
                 {/* Visual affordance only — the whole card is clickable. */}
                 <Tooltip title="Configure rule extensions">
-                    <AddIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                    <AddIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                 </Tooltip>
             </Stack>
 
@@ -116,13 +134,15 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                 <Box
                     sx={{
                         flexGrow: 1,
+                        minHeight: 0,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         color: 'text.disabled',
-                        fontSize: '0.65rem',
+                        fontSize: '0.72rem',
+                        lineHeight: 1.25,
                         textAlign: 'center',
-                        px: 0.25,
+                        px: 1,
                     }}
                 >
                     None enabled. Click to configure.
@@ -132,14 +152,25 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                     sx={{
                         flexGrow: 1,
                         minHeight: 0,
+                        pr: 0.25,
                         overflowY: 'auto',
                         // Hide scrollbar visually but keep it functional.
                         scrollbarWidth: 'thin',
-                        '&::-webkit-scrollbar': { width: 4 },
-                        '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 2 },
+                        scrollbarGutter: 'stable',
+                        '&::-webkit-scrollbar': { width: 5 },
+                        '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+                        '&::-webkit-scrollbar-thumb': {
+                            backgroundColor: (theme) => alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.34 : 0.24),
+                            borderRadius: 3,
+                        },
+                        '&::-webkit-scrollbar-thumb:hover': {
+                            backgroundColor: (theme) => alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.5 : 0.36),
+                        },
                     }}
+                    onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
                 >
-                    <Stack direction="row" flexWrap="wrap" gap={0.25}>
+                    <Stack direction="row" flexWrap="wrap" gap={0.5}>
                         {enabled.map((spec) => {
                             const isString = spec.type === 'string';
                             const isEnum = spec.type === 'enum';
@@ -160,7 +191,6 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                                     <Chip
                                         size="small"
                                         label={label}
-                                        color="primary"
                                         variant="outlined"
                                         onDelete={
                                             spec.type === 'bool' && onToggleFlag
@@ -172,7 +202,24 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                                                 }
                                                 : undefined
                                         }
-                                        sx={{ maxWidth: '100%', fontSize: '0.6rem', height: 18 }}
+                                        sx={(theme) => ({
+                                            maxWidth: '100%',
+                                            height: 20,
+                                            fontSize: '0.65rem',
+                                            borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.55 : 0.48),
+                                            color: getRouteGraphActiveColor(theme),
+                                            backgroundColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.08 : 0.035),
+                                            '& .MuiChip-label': {
+                                                px: 0.75,
+                                            },
+                                            '& .MuiChip-deleteIcon': {
+                                                color: alpha(getRouteGraphActiveColor(theme), 0.72),
+                                                fontSize: 15,
+                                                '&:hover': {
+                                                    color: getRouteGraphActiveColor(theme),
+                                                },
+                                            },
+                                        })}
                                     />
                                 </Tooltip>
                             );

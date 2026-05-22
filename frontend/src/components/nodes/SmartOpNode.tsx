@@ -1,15 +1,21 @@
 import {Delete as DeleteIcon,} from '@mui/icons-material';
 import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography,} from '@mui/material';
 import NodeTooltip from './NodeTooltip.tsx';
+import { alpha } from '@mui/material/styles';
 import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import type {SmartRouting, SmartOp} from '../RoutingGraphTypes.ts';
-import {ActionButtonsBox, StyledSmartNodePrimary, StyledSmartNodeWrapper,} from './styles.tsx';
+import {
+    ActionButtonsBox,
+    getRouteGraphActiveColor,
+    StyledSmartNodePrimary,
+    StyledSmartNodeWrapper,
+} from './styles.tsx';
 
 // Smart node internal dimensions
 const SMART_NODE_INTERNAL_STYLES = {
-    badgeHeight: 20,
-    fieldPadding: 4,
+    contentHeight: 62,
+    fieldHeight: 31,
 } as const;
 
 export interface SmartNodeProps {
@@ -136,7 +142,16 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     </Box>
                 )}
                 {/* Content */}
-                <Box sx={{mt: 1, width: '100%'}}>
+                <Box
+                    sx={{
+                        width: '100%',
+                        height: SMART_NODE_INTERNAL_STYLES.contentHeight,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        gap: 0.75,
+                    }}
+                >
                     {/* Value display - the truncated value is a subset of the summary
                         below, so it shares the single tooltip on the summary box. */}
                     <Typography
@@ -145,7 +160,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                             fontWeight: 600,
                             color: 'text.primary',
                             fontSize: '0.85rem',
-                            mb: 1,
+                            lineHeight: 1.15,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -162,18 +177,20 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     >
                         <NodeTooltip title={getMultiOpDisplayFull()} placement="top">
                             <Box
-                                sx={{
+                                sx={(theme) => ({
                                     width: '100%',
-                                    p: 1,
+                                    height: SMART_NODE_INTERNAL_STYLES.fieldHeight,
+                                    px: 1,
                                     border: '1px solid',
-                                    borderColor: 'divider',
+                                    borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.34 : 0.22),
                                     borderRadius: 1,
                                     backgroundColor: 'background.paper',
-                                    transition: 'all 0.2s',
+                                    transition: 'border-color 0.16s ease, background-color 0.16s ease',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                }}
+                                    overflow: 'hidden',
+                                })}
                             >
                                 <Typography
                                     variant="body2"
@@ -181,6 +198,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                         fontSize: '0.8rem',
                                         color: 'text.secondary',
                                         fontWeight: 500,
+                                        lineHeight: 1,
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
                                         whiteSpace: 'nowrap',
