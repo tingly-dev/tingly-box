@@ -729,8 +729,8 @@ const ProviderFormDialog = ({
                         </Accordion>
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{px: 3, pb: 2, justifyContent: 'space-between'}}>
-                    {onBack ? (
+                <DialogActions sx={{px: 3, pb: 2}}>
+                    {onBack && (
                         <Button
                             type="button"
                             variant="text"
@@ -740,8 +740,8 @@ const ProviderFormDialog = ({
                         >
                             Back
                         </Button>
-                    ) : <span/>}
-                    <Stack direction="row" spacing={1}>
+                    )}
+                    <Stack direction="row" spacing={1} sx={{ml: 'auto'}}>
                         <Button
                             type="button"
                             variant="outlined"
