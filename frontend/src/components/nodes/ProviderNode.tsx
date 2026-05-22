@@ -2,7 +2,8 @@ import {
     Delete as DeleteIcon,
     Warning as WarningIcon,
     MoreVert as MoreVertIcon,
-    PlayArrow as PlayIcon
+    PlayArrow as PlayIcon,
+    LowPriority as LowPriorityIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -158,7 +159,6 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
         close();
     };
 
-    const label = priority > 0 ? String(priority) : '–';
     const tooltip = priority > 0
         ? `Priority ${priority} (higher = tried first). Click to change.`
         : 'No priority set. Click to assign a priority (higher = tried first).';
@@ -172,7 +172,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                         active={active}
                         onClick={active ? open : undefined}
                     >
-                        {label}
+                        {priority > 0 ? String(priority) : <LowPriorityIcon sx={{ fontSize: 15 }} />}
                     </PriorityBadgeDisk>
                 </NodeTooltip>
             </PriorityBadgeAnchor>
