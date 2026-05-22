@@ -45,6 +45,7 @@ const PlaygroundPage: React.FC = () => {
     const [models, setModels] = useState<string[]>([]);
     const [model, setModel] = useState<string>('');
     const [prompt, setPrompt] = useState<string>('');
+    const [imageRefs, setImageRefs] = useState<string>('');
     const [size, setSize] = useState<string>('1024x1024');
     const [quality, setQuality] = useState<Quality>('auto');
     const [count, setCount] = useState<number>(1);
@@ -74,13 +75,15 @@ const PlaygroundPage: React.FC = () => {
         setResults([]);
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
+            const refs = imageRefs.split('\n').map((v) => v.trim()).filter(Boolean);
             const resp = await client.images.generate({
                 model,
                 prompt: prompt.trim(),
                 n: count,
                 size: size as any,
                 quality,
-            });
+                ...(refs.length > 0 ? ({ extra_body: { input_image_refs: refs } } as any) : {}),
+            } as any);
             setResults(resp.data ?? []);
         } catch (err: any) {
             const status = err?.status ? `${err.status}: ` : '';
@@ -89,7 +92,7 @@ const PlaygroundPage: React.FC = () => {
         } finally {
             setSending(false);
         }
-    }, [prompt, model, count, size, quality, showNotification]);
+    }, [prompt, imageRefs, model, count, size, quality, showNotification]);
 
     const noModels = useMemo(() => models.length === 0, [models]);
 
@@ -183,6 +186,19 @@ const PlaygroundPage: React.FC = () => {
                             })}
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
+                            disabled={noModels}
+                        />
+
+
+                        <TextField
+                            multiline
+                            minRows={2}
+                            fullWidth
+                            placeholder={t('playground.refsPlaceholder', {
+                                defaultValue: 'Optional reference image URLs, one per line…',
+                            })}
+                            value={imageRefs}
+                            onChange={(e) => setImageRefs(e.target.value)}
                             disabled={noModels}
                         />
 
