@@ -34,6 +34,7 @@ type streamState struct {
 	outputTokens               int64
 	inputTokens                int64
 	cacheTokens                int64        // Cache read tokens (from Anthropic or other sources)
+	reasoningTokens            int64        // Reasoning tokens (subset of outputTokens, for reasoning models)
 	stoppedBlocks              map[int]bool // Tracks blocks that have already sent content_block_stop
 	thinkingBlocks             map[int]bool // Tracks which block indices are thinking blocks (need signature_delta before stop)
 }

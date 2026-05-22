@@ -26,17 +26,29 @@ func OpenAIResponsesToChat(resp *responses.Response, responseModel string) map[s
 		},
 	}
 
+	usage := map[string]any{
+		"prompt_tokens":     resp.Usage.InputTokens,
+		"completion_tokens": resp.Usage.OutputTokens,
+		"total_tokens":      resp.Usage.InputTokens + resp.Usage.OutputTokens,
+	}
+	if resp.Usage.InputTokensDetails.CachedTokens > 0 {
+		usage["prompt_tokens_details"] = map[string]any{
+			"cached_tokens": resp.Usage.InputTokensDetails.CachedTokens,
+		}
+	}
+	if resp.Usage.OutputTokensDetails.ReasoningTokens > 0 {
+		usage["completion_tokens_details"] = map[string]any{
+			"reasoning_tokens": resp.Usage.OutputTokensDetails.ReasoningTokens,
+		}
+	}
+
 	return map[string]any{
 		"id":      resp.ID,
 		"object":  "chat.completion",
 		"created": int64(resp.CreatedAt),
 		"model":   responseModel,
 		"choices": choices,
-		"usage": map[string]any{
-			"prompt_tokens":     resp.Usage.InputTokens,
-			"completion_tokens": resp.Usage.OutputTokens,
-			"total_tokens":      resp.Usage.InputTokens + resp.Usage.OutputTokens,
-		},
+		"usage":   usage,
 	}
 }
 

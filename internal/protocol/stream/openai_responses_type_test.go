@@ -10,11 +10,12 @@ import (
 
 func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 	state := &chatToResponsesState{
-		responseID:   "resp_test",
-		createdAt:    123,
-		inputTokens:  10,
-		outputTokens: 5,
-		cacheTokens:  3,
+		responseID:      "resp_test",
+		createdAt:       123,
+		inputTokens:     10,
+		outputTokens:    5,
+		cacheTokens:     3,
+		reasoningTokens: 2,
 	}
 
 	wireEvent := responsesCreatedEvent{
@@ -38,7 +39,9 @@ func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 				InputTokensDetails: responses.ResponseUsageInputTokensDetails{
 					CachedTokens: 3,
 				},
-				OutputTokensDetails: responses.ResponseUsageOutputTokensDetails{},
+				OutputTokensDetails: responses.ResponseUsageOutputTokensDetails{
+					ReasoningTokens: 2,
+				},
 			},
 		},
 	}
@@ -66,8 +69,13 @@ func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 	require.Contains(t, sdkResponse, "tools")
 	require.Contains(t, sdkResponse, "top_p")
 	require.Greater(t, len(sdkResponse), len(wireResponse))
-	t.Logf("%v", sdkResponse)
-	t.Logf("%v", wireResponse)
+
+	// Verify reasoning_tokens is propagated in wire response
+	wireUsage := wireResponse["usage"].(map[string]any)
+	wireOutputDetails := wireUsage["output_tokens_details"].(map[string]any)
+	require.Equal(t, float64(2), wireOutputDetails["reasoning_tokens"])
+	wireInputDetails := wireUsage["input_tokens_details"].(map[string]any)
+	require.Equal(t, float64(3), wireInputDetails["cached_tokens"])
 }
 
 func TestResponsesWireFunctionCallPreservesEmptyArguments(t *testing.T) {

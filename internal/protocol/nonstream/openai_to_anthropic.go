@@ -23,8 +23,9 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 		"stop_reason":   "end_turn",
 		"stop_sequence": "",
 		"usage": map[string]interface{}{
-			"input_tokens":  openaiResp.Usage.PromptTokens,
-			"output_tokens": openaiResp.Usage.CompletionTokens,
+			"input_tokens":            openaiResp.Usage.PromptTokens,
+			"output_tokens":           openaiResp.Usage.CompletionTokens,
+			"cache_read_input_tokens": openaiResp.Usage.PromptTokensDetails.CachedTokens,
 		},
 	}
 
@@ -97,8 +98,9 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 		"stop_reason":   string(anthropic.BetaStopReasonEndTurn),
 		"stop_sequence": "",
 		"usage": map[string]interface{}{
-			"input_tokens":  openaiResp.Usage.PromptTokens,
-			"output_tokens": openaiResp.Usage.CompletionTokens,
+			"input_tokens":            openaiResp.Usage.PromptTokens,
+			"output_tokens":           openaiResp.Usage.CompletionTokens,
+			"cache_read_input_tokens": openaiResp.Usage.PromptTokensDetails.CachedTokens,
 		},
 	}
 
@@ -170,8 +172,9 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 		"stop_reason":   string(anthropic.BetaStopReasonEndTurn),
 		"stop_sequence": "",
 		"usage": map[string]interface{}{
-			"input_tokens":  responsesResp.Usage.InputTokens,
-			"output_tokens": responsesResp.Usage.OutputTokens,
+			"input_tokens":            responsesResp.Usage.InputTokens,
+			"output_tokens":           responsesResp.Usage.OutputTokens,
+			"cache_read_input_tokens": responsesResp.Usage.InputTokensDetails.CachedTokens,
 		},
 	}
 
@@ -269,8 +272,9 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 		"stop_reason":   "end_turn",
 		"stop_sequence": "",
 		"usage": map[string]interface{}{
-			"input_tokens":  responsesResp.Usage.InputTokens,
-			"output_tokens": responsesResp.Usage.OutputTokens,
+			"input_tokens":            responsesResp.Usage.InputTokens,
+			"output_tokens":           responsesResp.Usage.OutputTokens,
+			"cache_read_input_tokens": responsesResp.Usage.InputTokensDetails.CachedTokens,
 		},
 	}
 

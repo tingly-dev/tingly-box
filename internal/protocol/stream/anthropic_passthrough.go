@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
@@ -37,16 +38,28 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
 
+			// Read usage from SDK struct; fall back to raw JSON for providers
+			// or test decoders where apijson doesn't populate struct fields.
+			raw := evt.RawJSON()
 			if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
+				hasUsage = true
+			} else if v := gjson.Get(raw, "usage.input_tokens"); v.Int() > 0 {
+				inputTokens = int(v.Int())
 				hasUsage = true
 			}
 			if evt.Usage.OutputTokens > 0 {
 				outputTokens = int(evt.Usage.OutputTokens)
 				hasUsage = true
+			} else if v := gjson.Get(raw, "usage.output_tokens"); v.Int() > 0 {
+				outputTokens = int(v.Int())
+				hasUsage = true
 			}
 			if evt.Usage.CacheReadInputTokens > 0 {
 				cacheTokens = int(evt.Usage.CacheReadInputTokens)
+				hasUsage = true
+			} else if v := gjson.Get(raw, "usage.cache_read_input_tokens"); v.Int() > 0 {
+				cacheTokens = int(v.Int())
 				hasUsage = true
 			}
 
