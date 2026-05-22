@@ -166,9 +166,9 @@ const CredentialPage = () => {
                 name: lp.name,
                 apiBase: lp.url,
                 apiStyle: 'openai' as any,
-                token: '',
+                token: lp.defaultApiKey ?? '',
                 enabled: true,
-                noKeyRequired: true,
+                noKeyRequired: !lp.defaultApiKey,
             } as any);
             setApiKeyDialogOpen(true);
             return;

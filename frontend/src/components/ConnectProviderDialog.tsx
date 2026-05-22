@@ -23,16 +23,16 @@ import {FALLBACK_OAUTH_PROVIDERS, type OAuthProvider} from './OAuthDialog';
 export type ConnectSelection =
     | {kind: 'key'; provider: UniqueProvider}
     | {kind: 'oauth'; providerId: string}
-    | {kind: 'local'; provider: {id: string; name: string; url: string}}
+    | {kind: 'local'; provider: {id: string; name: string; url: string; defaultApiKey?: string}}
     | {kind: 'custom'};
 
 const SELF_HOSTED_PROVIDERS = [
-    {id: 'ollama',    name: 'Ollama',    url: 'http://localhost:11434/v1'},
-    {id: 'lm-studio', name: 'LM Studio', url: 'http://localhost:1234/v1'},
+    {id: 'ollama',    name: 'Ollama',    url: 'http://localhost:11434/v1', defaultApiKey: 'ollama'},
+    {id: 'lm-studio', name: 'LM Studio', url: 'http://localhost:1234/v1',  defaultApiKey: 'lm-studio'},
     {id: 'localai',   name: 'LocalAI',   url: 'http://localhost:8080/v1'},
     {id: 'jan',       name: 'Jan',       url: 'http://localhost:1337/v1'},
-    {id: 'vllm',      name: 'vLLM',      url: 'http://localhost:8000/v1'},
-    {id: 'sglang',    name: 'SGLang',    url: 'http://localhost:30000/v1'},
+    {id: 'vllm',      name: 'vLLM',      url: 'http://localhost:8000/v1',  defaultApiKey: 'EMPTY'},
+    {id: 'sglang',    name: 'SGLang',    url: 'http://localhost:30000/v1', defaultApiKey: 'EMPTY'},
 ];
 
 interface ConnectProviderDialogProps {
