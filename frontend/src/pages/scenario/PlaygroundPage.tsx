@@ -87,7 +87,7 @@ const PlaygroundPage: React.FC = () => {
         try {
             const encoded = await Promise.all(files.map((f) => fileToDataURL(f)));
             const valid = encoded.map((v) => v.trim()).filter(Boolean);
-            setUploadRefs(valid);
+            setUploadRefs((prev) => Array.from(new Set([...prev, ...valid])));
         } catch (err: any) {
             showNotification(err?.message || 'Failed to load reference image', 'error');
         } finally {
@@ -232,20 +232,40 @@ const PlaygroundPage: React.FC = () => {
 
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
                             <Button variant="outlined" component="label" disabled={noModels || sending}>
-                                Upload reference image(s)
+                                {t('playground.uploadRefs', { defaultValue: 'Upload reference image(s)' })}
                                 <input hidden type="file" accept="image/*" multiple onChange={handleRefUpload} />
                             </Button>
                             {uploadRefs.length > 0 && (
                                 <Typography variant="body2" color="text.secondary">
-                                    {uploadRefs.length} uploaded reference image(s)
+                                    {t('playground.uploadedCount', { defaultValue: "{{count}} uploaded reference image(s)", count: uploadRefs.length })}
                                 </Typography>
                             )}
                             {uploadRefs.length > 0 && (
                                 <Button size="small" onClick={() => setUploadRefs([])}>
-                                    Clear uploads
+                                    {t('playground.clearUploads', { defaultValue: 'Clear uploads' })}
                                 </Button>
                             )}
                         </Stack>
+
+                        {uploadRefs.length > 0 && (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
+                                    gap: 1,
+                                }}
+                            >
+                                {uploadRefs.slice(0, 8).map((src, idx) => (
+                                    <Box
+                                        key={`ref-${idx}`}
+                                        component="img"
+                                        src={src}
+                                        alt={`reference-${idx}`}
+                                        sx={{ width: '100%', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}
+                                    />
+                                ))}
+                            </Box>
+                        )}
 
                         <Box>
                             <Button
