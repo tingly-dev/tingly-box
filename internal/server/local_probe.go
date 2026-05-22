@@ -17,10 +17,12 @@ type localProviderTarget struct {
 }
 
 var localProviderTargets = []localProviderTarget{
-	{ID: "ollama", Name: "Ollama", URL: "http://localhost:11434/v1"},
+	{ID: "ollama",    Name: "Ollama",    URL: "http://localhost:11434/v1"},
 	{ID: "lm-studio", Name: "LM Studio", URL: "http://localhost:1234/v1"},
-	{ID: "localai", Name: "LocalAI", URL: "http://localhost:8080/v1"},
-	{ID: "jan", Name: "Jan", URL: "http://localhost:1337/v1"},
+	{ID: "localai",   Name: "LocalAI",   URL: "http://localhost:8080/v1"},
+	{ID: "jan",       Name: "Jan",       URL: "http://localhost:1337/v1"},
+	{ID: "vllm",      Name: "vLLM",      URL: "http://localhost:8000/v1"},
+	{ID: "sglang",    Name: "SGLang",    URL: "http://localhost:30000/v1"},
 }
 
 // LocalModelProbeResult is the detection result for a single provider.

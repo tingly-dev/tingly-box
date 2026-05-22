@@ -26,11 +26,13 @@ export type ConnectSelection =
     | {kind: 'local'; provider: {id: string; name: string; url: string}}
     | {kind: 'custom'};
 
-const LOCAL_PROVIDERS = [
+const SELF_HOSTED_PROVIDERS = [
     {id: 'ollama',    name: 'Ollama',    url: 'http://localhost:11434/v1'},
     {id: 'lm-studio', name: 'LM Studio', url: 'http://localhost:1234/v1'},
     {id: 'localai',   name: 'LocalAI',   url: 'http://localhost:8080/v1'},
     {id: 'jan',       name: 'Jan',       url: 'http://localhost:1337/v1'},
+    {id: 'vllm',      name: 'vLLM',      url: 'http://localhost:8000/v1'},
+    {id: 'sglang',    name: 'SGLang',    url: 'http://localhost:30000/v1'},
 ];
 
 interface ConnectProviderDialogProps {
@@ -138,19 +140,19 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
     const filteredOAuth = needle
         ? oauthProviders.filter((p) => `${p.name} ${p.displayName}`.toLowerCase().includes(needle))
         : oauthProviders;
-    const filteredLocal = needle
-        ? LOCAL_PROVIDERS.filter((p) => p.name.toLowerCase().includes(needle))
-        : LOCAL_PROVIDERS;
+    const filteredSelfHosted = needle
+        ? SELF_HOSTED_PROVIDERS.filter((p) => p.name.toLowerCase().includes(needle))
+        : SELF_HOSTED_PROVIDERS;
     const showCustom = !needle || 'custom endpoint'.includes(needle);
 
     const keyBadge = {label: 'Key', color: '#1967d2', bg: '#e8f0fe'};
     const oauthBadge = {label: 'OAuth', color: '#1e8e3e', bg: '#e6f4ea'};
-    const localBadge = {label: 'Local', color: '#e37400', bg: '#fef3e0'};
+    const selfHostedBadge = {label: 'Self-hosted', color: '#e37400', bg: '#fef3e0'};
 
     const protocolMeta = (p: UniqueProvider) =>
         [p.supportsOpenAI && 'OpenAI', p.supportsAnthropic && 'Anthropic'].filter(Boolean).join(' · ') || 'Custom API';
 
-    const nothing = filteredKey.length === 0 && filteredOAuth.length === 0 && filteredLocal.length === 0 && !showCustom;
+    const nothing = filteredKey.length === 0 && filteredOAuth.length === 0 && filteredSelfHosted.length === 0 && !showCustom;
 
     return (
         <Dialog
@@ -234,17 +236,17 @@ const ConnectProviderDialog: React.FC<ConnectProviderDialogProps> = ({open, onCl
                     </>
                 )}
 
-                {filteredLocal.length > 0 && (
+                {filteredSelfHosted.length > 0 && (
                     <>
-                        <SectionHeader icon={<Computer fontSize="small"/>} title="Local models" count={filteredLocal.length} accent="local"/>
+                        <SectionHeader icon={<Computer fontSize="small"/>} title="Self-hosted" count={filteredSelfHosted.length} accent="local"/>
                         <CardGrid>
-                            {filteredLocal.map((p) => (
+                            {filteredSelfHosted.map((p) => (
                                 <ProviderCard
-                                    key={`local-${p.id}`}
+                                    key={`self-${p.id}`}
                                     icon={<Computer sx={{fontSize: 22, color: 'warning.main'}}/>}
                                     name={p.name}
                                     meta={p.url}
-                                    badge={localBadge}
+                                    badge={selfHostedBadge}
                                     onClick={() => onSelect({kind: 'local', provider: p})}
                                 />
                             ))}
