@@ -4,6 +4,9 @@ import "context"
 
 // SessionStore defines the session storage interface
 type SessionStore interface {
+	// ListProjects returns all project paths that have at least one session
+	ListProjects(ctx context.Context) ([]string, error)
+
 	// ListSessions returns all sessions for a project, ordered by start time (newest first)
 	ListSessions(ctx context.Context, projectPath string) ([]SessionMetadata, error)
 
