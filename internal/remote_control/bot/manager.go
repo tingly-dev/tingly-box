@@ -212,7 +212,6 @@ type Manager struct {
 	dataPath   string // Data path for JSON chat store (replaces dbPath)
 	sessionMgr *session.Manager
 	agentBoot  *agentboot.AgentBoot
-	msgHandler agentboot.MessageHandler
 	tbClient   tbclient.TBClient // TB Client for SmartGuide model configuration
 	pairing    *PairingManager   // Pairing-code (TOFU) manager
 	audit      *audit.Logger     // Audit logger for security events

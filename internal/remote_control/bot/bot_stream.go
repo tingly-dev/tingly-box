@@ -9,15 +9,15 @@ import (
 	"unicode/utf8"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	"github.com/tingly-dev/tingly-box/imbot"
 )
 
-// streamingMessageHandler implements agentboot.MessageStreamer for real-time message streaming.
-// It also implements CompletionCallback for sending action keyboard when done.
+// streamingMessageHandler renders agent output to an IM chat in real time.
+// It is the streaming sink for both the Claude path (MessageEvent.Raw values)
+// and the smart-guide path (map status/assistant frames).
 type streamingMessageHandler struct {
 	bot       imbot.Bot
 	chatID    string
@@ -46,10 +46,6 @@ const toolBufferFlushThreshold = 20
 // an "(+N more)" suffix.
 const quietToolPreviewCount = 3
 
-// Ensure streamingMessageHandler implements required interfaces
-var _ agentboot.MessageStreamer = (*streamingMessageHandler)(nil)
-var _ agentboot.CompletionCallback = (*streamingMessageHandler)(nil)
-
 // newStreamingMessageHandler creates a new streaming message handler
 func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose bool, meta *ResponseMeta) *streamingMessageHandler {
 	return &streamingMessageHandler{
@@ -62,7 +58,11 @@ func newStreamingMessageHandler(bot imbot.Bot, chatID, replyTo string, verbose b
 	}
 }
 
-// OnMessage implements agentboot.MessageHandler
+// OnMessage receives the per-message payload from an agent run.
+//
+// Two payload shapes reach here:
+//   - Claude path: MessageEvent.Raw values (*claude.AssistantMessage / claude.Message)
+//   - Smart-guide path: plain map[string]interface{} status/assistant frames
 func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -72,12 +72,6 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 		"chatID":  h.chatID,
 	}).Debug("Received message from agent")
 
-	// Try to handle as unified AgentMessage first
-	if agentMsg, ok := msg.(agentboot.AgentMessage); ok {
-		return h.handleAgentMessage(agentMsg)
-	}
-
-	// Handle specific types
 	switch m := msg.(type) {
 	case string:
 		h.sendMessage(m)
@@ -90,144 +84,12 @@ func (h *streamingMessageHandler) OnMessage(msg interface{}) error {
 	case claude.Message:
 		return h.handleClaudeMessage(m)
 
-	case agentboot.Event:
-		// Convert Event to AgentMessage and handle
-		agentType := agentboot.AgentTypeMockAgent // default
-		if at, ok := m.Data["agent_type"].(string); ok {
-			agentType = agentboot.AgentType(at)
-		}
-		agentMsg := agentboot.MessageFromEvent(m, agentType)
-		if agentMsg != nil {
-			return h.handleAgentMessage(agentMsg)
-		}
-		return h.handleAgentbootEvent(m)
-
 	case map[string]interface{}:
-		// Handle raw map messages (legacy support)
 		return h.handleMapMessage(m)
 
 	default:
 		// Skip unknown message types
 		logrus.WithField("msgType", fmt.Sprintf("%T", msg)).Debug("Skipping unknown message type")
-		return nil
-	}
-}
-
-func (f *streamingMessageHandler) OnApproval(context.Context, agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	// This should not be called - use CompositeHandler with ApprovalHandler instead
-	logrus.Warn("OnApproval called on streamingMessageHandler - use CompositeHandler instead")
-	return agentboot.PermissionResult{Approved: true}, nil
-}
-
-func (f *streamingMessageHandler) OnAsk(context.Context, agentboot.AskRequest) (agentboot.AskResult, error) {
-	// This should not be called - use CompositeHandler with AskHandler instead
-	logrus.Warn("OnAsk called on streamingMessageHandler - use CompositeHandler instead")
-	return agentboot.AskResult{Approved: true}, nil
-}
-
-// OnComplete is called when the agent completes its task
-func (f *streamingMessageHandler) OnComplete(result *agentboot.CompletionResult) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	// Drain any tool renders that never met a trailing text message so the
-	// user sees them before the completion banner.
-	f.flushToolBufferLocked()
-
-	// Build action keyboard
-	kb := feature.BuildActionKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-
-	// Prepare completion message based on verbose mode
-	completionText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
-	if !f.verbose {
-		completionText = IconDone + " " + MsgTaskDone + ". (Quiet mode: /verbose to show details) " + MsgContinueOrHelp + BuildFooter(f.meta.AgentType, f.meta.ProjectPath)
-	}
-
-	_, err := f.bot.SendMessage(context.Background(), f.chatID, &imbot.SendMessageOptions{
-		Text:     completionText,
-		Metadata: buildActionCardMetadata(tgKeyboard, feature.BuildActionCard()),
-	})
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to send action keyboard")
-	}
-}
-
-// handleAgentMessage processes unified agentboot.AgentMessage
-func (h *streamingMessageHandler) handleAgentMessage(msg agentboot.AgentMessage) error {
-	logrus.WithFields(logrus.Fields{
-		"type":      msg.GetType(),
-		"agentType": msg.GetAgentType(),
-		"chatID":    h.chatID,
-		"verbose":   h.verbose,
-	}).Debug("Handling unified agent message")
-
-	if h.bufferToolEvent(msg.GetType(), toolFieldsFromRaw(msg.GetRawData())) {
-		return nil
-	}
-
-	switch msg.GetType() {
-	case agentboot.EventTypeAssistant:
-		if assistantMsg, ok := msg.(*agentboot.AssistantMessage); ok {
-			h.sendText(assistantMsg.GetText())
-		}
-		return nil
-
-	case agentboot.EventTypePermissionRequest:
-		// Permission requests are handled by IMPrompter directly
-		// In verbose mode, log for visibility; in quiet mode, silently handle
-		if permMsg, ok := msg.(*agentboot.PermissionRequestMessage); ok {
-			logrus.WithFields(logrus.Fields{
-				"request_id": permMsg.RequestID,
-				"tool_name":  permMsg.ToolName,
-				"step":       permMsg.Step,
-				"total":      permMsg.Total,
-			}).Info("Permission request received (handled by IMPrompter)")
-			// In quiet mode, don't show anything to user - IMPrompter will handle it
-		}
-		return nil
-
-	case agentboot.EventTypePermissionResult:
-		if permResultMsg, ok := msg.(*agentboot.PermissionResultMessage); ok {
-			status := "denied"
-			if permResultMsg.Approved {
-				status = "approved"
-			}
-			logrus.WithFields(logrus.Fields{
-				"request_id": permResultMsg.RequestID,
-				"status":     status,
-			}).Debug("Permission result received")
-			// In quiet mode, don't show permission results to user
-		}
-		return nil
-
-	case agentboot.EventTypeResult:
-		// Result events are handled by OnComplete; still flush so a trailing
-		// run of tool events shows up before OnComplete's completion banner.
-		h.flushToolBufferLocked()
-		if resultMsg, ok := msg.(*agentboot.ResultMessage); ok {
-			logrus.WithFields(logrus.Fields{
-				"status":  resultMsg.Status,
-				"message": resultMsg.Message,
-			}).Info("Agent result event received")
-			// In quiet mode, result is shown by OnComplete, not here
-		}
-		return nil
-
-	case agentboot.EventTypeInit:
-		logrus.WithField("agentType", msg.GetAgentType()).Debug("Agent init event received")
-		return nil
-
-	case agentboot.EventTypeStreamDelta:
-		if deltaMsg, ok := msg.(*agentboot.StreamDeltaMessage); ok {
-			// For streaming, we could accumulate or send directly
-			// In quiet mode, don't show stream deltas
-			logrus.WithField("delta", deltaMsg.Delta).Debug("Stream delta received")
-		}
-		return nil
-
-	default:
-		logrus.WithField("type", msg.GetType()).Debug("Unhandled agent message type")
 		return nil
 	}
 }
@@ -286,18 +148,6 @@ type toolEventFields struct {
 	Name    string
 	Input   map[string]interface{}
 	IsError bool
-}
-
-// toolFieldsFromRaw reads tool fields from a flat map — the shape produced by
-// agentboot.AgentMessage.GetRawData() and agentboot.Event.Data.
-func toolFieldsFromRaw(raw map[string]interface{}) toolEventFields {
-	if raw == nil {
-		return toolEventFields{}
-	}
-	name, _ := raw["tool_name"].(string)
-	input, _ := raw["input"].(map[string]interface{})
-	isError, _ := raw["is_error"].(bool)
-	return toolEventFields{Name: name, Input: input, IsError: isError}
 }
 
 // toolFieldsFromNestedMap reads tool fields from a map message whose fields
@@ -462,41 +312,7 @@ func (h *streamingMessageHandler) renderToolBuffer(items []string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// handleAgentbootEvent processes agentboot.Event messages (fallback for unknown event types)
-func (h *streamingMessageHandler) handleAgentbootEvent(event agentboot.Event) error {
-	logrus.WithFields(logrus.Fields{
-		"eventType": event.Type,
-		"chatID":    h.chatID,
-	}).Debug("Handling agentboot event")
-
-	if h.bufferToolEvent(event.Type, toolFieldsFromRaw(event.Data)) {
-		return nil
-	}
-
-	switch event.Type {
-	case agentboot.EventTypeAssistant:
-		h.sendText(assistantTextFromMap(event.Data))
-	case agentboot.EventTypePermissionRequest:
-		logrus.WithFields(logrus.Fields{
-			"request_id": event.Data["request_id"],
-			"tool_name":  event.Data["tool_name"],
-		}).Info("Permission request event received (handled by IMPrompter)")
-	case agentboot.EventTypePermissionResult:
-		logrus.WithField("request_id", event.Data["request_id"]).Debug("Permission result event")
-	case agentboot.EventTypeResult:
-		// Flush trailing tool renders before OnComplete emits the banner.
-		h.flushToolBufferLocked()
-		status, _ := event.Data["status"].(string)
-		logrus.WithField("status", status).Info("Agent result event received")
-	case agentboot.EventTypeInit, agentboot.EventTypeSystem:
-		logrus.WithField("data", event.Data).Debug("System/init event received")
-	default:
-		logrus.WithField("eventType", event.Type).Debug("Unhandled event type")
-	}
-	return nil
-}
-
-// handleMapMessage processes raw map messages (legacy support)
+// handleMapMessage processes raw map messages (smart-guide stream frames)
 func (h *streamingMessageHandler) handleMapMessage(m map[string]interface{}) error {
 	msgType, ok := m["type"].(string)
 	if !ok {
@@ -550,7 +366,7 @@ func mapNestedField[T any](m map[string]interface{}, key string) (T, bool) {
 	return zero, false
 }
 
-// OnError implements agentboot.MessageStreamer
+// OnError surfaces an execution error to the chat, flushing buffered tools first.
 func (h *streamingMessageHandler) OnError(err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

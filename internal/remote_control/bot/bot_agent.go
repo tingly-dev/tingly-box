@@ -57,13 +57,18 @@ func (w *messageTrackingWrapper) OnError(err error) {
 	w.delegate.OnError(err)
 }
 
+// OnComplete forwards to the completion callback.
+func (w *messageTrackingWrapper) OnComplete(result *smart_guide.CompletionResult) {
+	w.completionCallback.OnComplete(result)
+}
+
 // GetOutput forwards to delegate
 func (w *messageTrackingWrapper) GetOutput() string {
 	return w.delegate.GetOutput()
 }
 
-// OnComplete implements agentboot.CompletionCallback
-func (c *SmartGuideCompletionCallback) OnComplete(result *agentboot.CompletionResult) {
+// OnComplete handles the smart-guide completion signal.
+func (c *SmartGuideCompletionCallback) OnComplete(result *smart_guide.CompletionResult) {
 	// Get response text from the agent's memory
 	responseText := ""
 	if result.Success {

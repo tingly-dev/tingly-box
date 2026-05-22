@@ -67,10 +67,10 @@ type AgentConfig struct {
 	UpdateProjectFunc func(chatID string, projectPath string) error // Updates project path in chat store
 
 	// Approval context for non-allowlisted commands
-	Handler  agentboot.MessageHandler // Message handler for approval requests
-	ChatID   string                   // Chat ID for approval routing
-	Platform string                   // Platform identifier
-	BotUUID  string                   // Bot UUID for routing
+	Approver Approver // Answers approval requests for non-whitelisted commands
+	ChatID   string   // Chat ID for approval routing
+	Platform string   // Platform identifier
+	BotUUID  string   // Bot UUID for routing
 
 	// ToolContext for injecting file send capability and cross-path approval.
 	// If nil, send_file tool will not be registered.
@@ -151,9 +151,8 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 
 	reactAgent := agent.NewReActAgent(reactConfig)
 
-	// Register hook to capture intermediate messages
-	// This will be set later via SetMessageHandler when ExecuteWithHandler is called
-	// For now, create the agent without hooks
+	// Intermediate-message streaming hooks are registered per run inside
+	// ExecuteWithHandler; the agent is created without hooks here.
 
 	tb := &TinglyBoxAgent{
 		ReActAgent: reactAgent,
@@ -162,15 +161,15 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 		toolkit:    toolkit,
 	}
 
-	// Set approval callback if handler is provided (must be done after tb creation)
-	if config.Handler != nil {
+	// Set approval callback if an approver is provided (must be done after tb creation)
+	if config.Approver != nil {
 		executor.SetApprovalCallback(tb.createApprovalCallback(config))
 		logrus.WithFields(logrus.Fields{
-			"chatID":      config.ChatID,
-			"handlerType": fmt.Sprintf("%T", config.Handler),
+			"chatID":       config.ChatID,
+			"approverType": fmt.Sprintf("%T", config.Approver),
 		}).Info("Approval callback configured for ToolExecutor")
 	} else {
-		logrus.WithField("chatID", config.ChatID).Warn("No handler provided - approval callback NOT set (non-whitelisted commands will fail)")
+		logrus.WithField("chatID", config.ChatID).Warn("No approver provided - approval callback NOT set (non-whitelisted commands will fail)")
 	}
 
 	return tb, nil
@@ -226,9 +225,9 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 		logrus.WithFields(logrus.Fields{
 			"command":     req.Command,
 			"args":        req.Args,
-			"reason":      req.Reason,
-			"chatID":      config.ChatID,
-			"handlerType": fmt.Sprintf("%T", config.Handler),
+			"reason":       req.Reason,
+			"chatID":       config.ChatID,
+			"approverType": fmt.Sprintf("%T", config.Approver),
 		}).Info("ToolExecutor approval callback invoked for non-whitelisted command")
 
 		// Build permission request
@@ -253,13 +252,13 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 			"platform":  permReq.Platform,
 		}).Debug("Calling handler.OnApproval with permission request")
 
-		// Request approval from handler
-		result, err := config.Handler.OnApproval(ctx, permReq)
+		// Request approval from the approver
+		result, err := config.Approver.OnApproval(ctx, permReq)
 		if err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"command":   req.Command,
 				"requestID": permReq.RequestID,
-			}).Error("Approval request failed - handler.OnApproval returned error")
+			}).Error("Approval request failed - approver.OnApproval returned error")
 			return false, err
 		}
 
@@ -267,7 +266,7 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 			"command":   req.Command,
 			"approved":  result.Approved,
 			"requestID": permReq.RequestID,
-		}).Info("Approval result received from handler")
+		}).Info("Approval result received from approver")
 
 		return result.Approved, nil
 	}
@@ -520,7 +519,7 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 	ctx context.Context,
 	prompt string,
 	toolCtx *ToolContext,
-	handler agentboot.MessageHandler,
+	handler StreamHandler,
 ) (*agentboot.Result, error) {
 	startTime := time.Now()
 	result := &agentboot.Result{
@@ -591,7 +590,7 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 		// Send error callback
 		if handler != nil {
 			handler.OnError(err)
-			handler.OnComplete(&agentboot.CompletionResult{
+			handler.OnComplete(&CompletionResult{
 				Success:    false,
 				DurationMS: duration.Milliseconds(),
 				Error:      err.Error(),
@@ -615,7 +614,7 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 
 		// Send message callback with the response
 		if handler != nil {
-			handler.OnComplete(&agentboot.CompletionResult{
+			handler.OnComplete(&CompletionResult{
 				Success:    true,
 				DurationMS: duration.Milliseconds(),
 				SessionID:  toolCtx.SessionID,

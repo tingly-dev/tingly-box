@@ -1,10 +1,7 @@
 package claude
 
 import (
-	"context"
-	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -210,53 +207,6 @@ func TestSDKsMessage(t *testing.T) {
 }
 
 // Helper functions
-
-// TestMessageHandler is a test implementation of MessageHandler
-type TestMessageHandler struct {
-	messages  []Message
-	errors    []error
-	completed bool
-	success   bool
-	mu        sync.Mutex
-}
-
-func (h *TestMessageHandler) OnMessage(msg interface{}) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.messages = append(h.messages, msg.(Message))
-	fmt.Printf("TestMessageHandler OnMessage %v\n", msg)
-	return nil
-}
-
-func (h *TestMessageHandler) OnError(err error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.errors = append(h.errors, err)
-	fmt.Printf("TestMessageHandler OnError %v\n", err)
-}
-
-func (h *TestMessageHandler) OnComplete(result *agentboot.CompletionResult) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.completed = true
-	if result != nil {
-		h.success = result.Success
-	}
-}
-
-func (h *TestMessageHandler) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	// Auto-approve all permissions
-	return agentboot.PermissionResult{Approved: true, UpdatedInput: req.Input}, nil
-}
-
-func (h *TestMessageHandler) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	// Auto-approve all asks
-	return agentboot.AskResult{ID: req.ID, Approved: true}, nil
-}
 
 func extractTextFromAssistant(msg *AssistantMessage) string {
 	var text strings.Builder

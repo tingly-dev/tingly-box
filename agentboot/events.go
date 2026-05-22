@@ -11,8 +11,8 @@ type StreamEvent interface {
 
 // MessageEvent wraps a streamable agent message after the per-agent
 // accumulator has consumed the raw common.Event. The concrete type of Raw
-// is agent-specific (e.g. *claude.AssistantMessage, *claude.ToolUseMessage,
-// or agentboot.AgentMessage); consumers type-switch.
+// is agent-specific (e.g. *claude.AssistantMessage, *claude.ToolUseMessage);
+// consumers type-switch.
 //
 // In addition to emitting MessageEvents, the runner appends the raw
 // underlying common.Event values to [Result.Events] for callers that

@@ -626,8 +626,9 @@ func normalizeQuestionList(v any) []map[string]any { return ask.NormalizeQuestio
 
 // Legacy compatibility methods
 
-// OnApproval implements agentboot.ApprovalHandler.
-// It handles permission confirmation requests via IM.
+// OnApproval handles permission confirmation requests via IM.
+// It satisfies the prompter contract consumed by the Claude executor and the
+// smart-guide approver.
 func (p *IMPrompter) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
 	askReq := ask.FromPermissionRequest(req)
 	result, err := p.Prompt(ctx, *askReq)
@@ -637,8 +638,7 @@ func (p *IMPrompter) OnApproval(ctx context.Context, req agentboot.PermissionReq
 	return result.ToPermissionResult(), nil
 }
 
-// OnAsk implements agentboot.AskHandler.
-// It handles user questions/selections via IM.
+// OnAsk handles user questions/selections via IM.
 func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
 	// Convert AskRequest to ask.Request
 	askReq := ask.Request{

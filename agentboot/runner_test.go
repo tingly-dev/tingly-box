@@ -80,26 +80,3 @@ func TestAgentBoot_SetDefaultAgent_Unregistered(t *testing.T) {
 	err = ab.SetDefaultAgent("ghost")
 	assert.Error(t, err)
 }
-
-// --- CompositeHandler wiring (legacy; smart_guide still consumes this) -----
-
-func TestCompositeHandler_DefaultAutoApproves(t *testing.T) {
-	h := agentboot.NewCompositeHandler()
-
-	result, err := h.OnApproval(context.Background(), agentboot.PermissionRequest{ToolName: "bash"})
-	require.NoError(t, err)
-	assert.True(t, result.Approved)
-
-	askResult, err := h.OnAsk(context.Background(), agentboot.AskRequest{ID: "x"})
-	require.NoError(t, err)
-	assert.True(t, askResult.Approved)
-}
-
-func TestCompositeHandler_WithCompletionFunc(t *testing.T) {
-	called := false
-	h := agentboot.NewCompositeHandler().
-		WithCompletionFunc(func(_ *agentboot.CompletionResult) { called = true })
-
-	h.OnComplete(&agentboot.CompletionResult{Success: true})
-	assert.True(t, called)
-}

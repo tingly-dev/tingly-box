@@ -115,20 +115,6 @@ func TestStreamingHandler_FlushOnThreshold(t *testing.T) {
 	assert.NotEmpty(t, sent[0])
 }
 
-func TestStreamingHandler_OnCompleteFlushesBuffer(t *testing.T) {
-	bot := &captureBot{}
-	meta := &ResponseMeta{AgentType: "claude"}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, meta)
-
-	require.NoError(t, h.OnMessage(toolUseMsg("Read", "id-1", map[string]interface{}{"file_path": "/a.go"})))
-	h.OnComplete(nil)
-
-	sent := bot.snapshot()
-	require.GreaterOrEqual(t, len(sent), 2, "OnComplete should flush buffered tools before the completion banner")
-	assert.NotEmpty(t, sent[0])
-	assert.Contains(t, sent[len(sent)-1], MsgTaskDone)
-}
-
 func TestStreamingHandler_AssistantWithTextDoesNotBuffer(t *testing.T) {
 	bot := &captureBot{}
 	meta := &ResponseMeta{}
@@ -193,79 +179,9 @@ func TestStreamingHandler_QuietSuppressedMessageStillFlushesBuffer(t *testing.T)
 	assert.Contains(t, sent[0], "2 tool call(s)")
 }
 
-// --- Main-path handler tests (handleAgentMessage / handleAgentbootEvent /
-// handleMapMessage). These are the production paths for both Claude Code and
-// Tingly Box agents; aggregation must work here, not only on the claude
-// stream path.
-
-func agentToolUseMsg(name, input string) agentboot.AgentMessage {
-	return agentboot.MessageFromEvent(agentboot.Event{
-		Type: agentboot.EventTypeToolUse,
-		Data: map[string]interface{}{
-			"tool_name": name,
-			"input":     map[string]interface{}{"command": input},
-		},
-	}, agentboot.AgentType("claude"))
-}
-
-func agentAssistantMsg(text string) agentboot.AgentMessage {
-	return agentboot.MessageFromEvent(agentboot.Event{
-		Type: agentboot.EventTypeAssistant,
-		Data: map[string]interface{}{"message": text},
-	}, agentboot.AgentType("claude"))
-}
-
-func TestHandleAgentMessage_AggregatesToolEvents(t *testing.T) {
-	bot := &captureBot{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
-
-	require.NoError(t, h.OnMessage(agentToolUseMsg("Bash", "ls -la")))
-	require.NoError(t, h.OnMessage(agentToolUseMsg("Read", "/x.go")))
-	assert.Empty(t, bot.snapshot(), "tool events on the AgentMessage path should buffer")
-
-	require.NoError(t, h.OnMessage(agentAssistantMsg("done")))
-	sent := bot.snapshot()
-	require.Len(t, sent, 2, "expected one aggregated tool message then the assistant text")
-	assert.Contains(t, sent[0], "Bash")
-	assert.Contains(t, sent[0], "Read")
-	assert.Contains(t, sent[1], "done")
-}
-
-func TestHandleAgentbootEvent_AggregatesToolEvents(t *testing.T) {
-	bot := &captureBot{}
-	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
-
-	// Force the Event path: pass an Event whose Type has no MessageFromEvent
-	// case, so OnMessage routes via handleAgentbootEvent fallback. We do this
-	// by calling handleAgentbootEvent directly under the handler lock to
-	// mirror what OnMessage does.
-	h.mu.Lock()
-	require.NoError(t, h.handleAgentbootEvent(agentboot.Event{
-		Type: agentboot.EventTypeToolUse,
-		Data: map[string]interface{}{
-			"tool_name": "Bash",
-			"input":     map[string]interface{}{"command": "ls"},
-		},
-	}))
-	require.NoError(t, h.handleAgentbootEvent(agentboot.Event{
-		Type: agentboot.EventTypeToolResult,
-		Data: map[string]interface{}{"tool_name": "Bash", "is_error": false},
-	}))
-	h.mu.Unlock()
-	assert.Empty(t, bot.snapshot(), "tool events on the Event path should buffer")
-
-	h.mu.Lock()
-	require.NoError(t, h.handleAgentbootEvent(agentboot.Event{
-		Type: agentboot.EventTypeAssistant,
-		Data: map[string]interface{}{"message": "wrap up"},
-	}))
-	h.mu.Unlock()
-
-	sent := bot.snapshot()
-	require.Len(t, sent, 2)
-	assert.Contains(t, sent[0], "Bash")
-	assert.Contains(t, sent[1], "wrap up")
-}
+// --- Map-path handler tests (handleMapMessage). This is the production path
+// for the smart-guide agent, which streams status/assistant frames as plain
+// maps; tool aggregation must work here too, not only on the claude stream.
 
 func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
 	bot := &captureBot{}
@@ -299,33 +215,24 @@ func TestHandleMapMessage_AggregatesToolEvents(t *testing.T) {
 	assert.Contains(t, sent[1], "ok")
 }
 
-// TestBufferToolEvent_SharedAcrossSources is the dispatcher-level test: it
-// asserts that the same eventType+fields produces the same buffer entry
-// regardless of which source extractor (Raw vs NestedMap) fed it. That's
-// the whole point of the refactor — if these ever diverge, all three
-// main-path handlers diverge too.
-func TestBufferToolEvent_SharedAcrossSources(t *testing.T) {
+// TestBufferToolEvent_Dispatcher asserts the dispatcher buffers tool events
+// and ignores non-tool types, and that sendText flushes the buffer.
+func TestBufferToolEvent_Dispatcher(t *testing.T) {
 	bot := &captureBot{}
 	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", true, &ResponseMeta{})
 
-	flatFields := toolFieldsFromRaw(map[string]interface{}{
-		"tool_name": "Bash",
-		"input":     map[string]interface{}{"command": "echo hi"},
-	})
 	nestedFields := toolFieldsFromNestedMap(map[string]interface{}{
 		"data": map[string]interface{}{
 			"tool_name": "Bash",
 			"input":     map[string]interface{}{"command": "echo hi"},
 		},
 	})
-	assert.Equal(t, flatFields, nestedFields,
-		"flat and nested extractors must produce identical toolEventFields")
 
 	h.mu.Lock()
-	require.True(t, h.bufferToolEvent(agentboot.EventTypeToolUse, flatFields))
+	require.True(t, h.bufferToolEvent(agentboot.EventTypeToolUse, nestedFields))
 	require.True(t, h.bufferToolEvent(agentboot.EventTypeToolUse, nestedFields))
 	// Non-tool types are not handled by the dispatcher.
-	require.False(t, h.bufferToolEvent(agentboot.EventTypeAssistant, flatFields))
+	require.False(t, h.bufferToolEvent(agentboot.EventTypeAssistant, nestedFields))
 	h.mu.Unlock()
 	assert.Empty(t, bot.snapshot(), "buffered tool events must not send yet")
 

@@ -106,7 +106,7 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		BaseURL:          baseURL,
 		APIKey:           apiKey,
 		Model:            botSetting.UUID, // use bot uuid as model (rule)
-		Handler:          agentboot.NewCompositeHandler().SetApprovalHandler(e.deps.IMPrompter),
+		Approver:         e.deps.IMPrompter,
 		ChatID:           hCtx.ChatID,
 		Platform:         string(hCtx.Platform),
 		BotUUID:          botSetting.UUID,
@@ -192,18 +192,13 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		messagesSent:   0,
 	}
 
-	// 8. Create message tracker wrapper
+	// 8. Create message tracker wrapper (streams messages + forwards completion)
 	messageTracker := &messageTrackingWrapper{
 		delegate:           streamHandler,
 		completionCallback: completionCallback,
 	}
 
-	// 9. Create composite handler
-	compositeHandler := agentboot.NewCompositeHandler().
-		SetStreamer(messageTracker).
-		SetCompletionCallback(completionCallback)
-
-	// 10. Save user message to session before execution
+	// 9. Save user message to session before execution
 	if e.deps.TBSessionStore != nil {
 		userMsg := message.NewMsg("user", req.Text, types.RoleUser)
 		if err := e.deps.TBSessionStore.AddMessage(req.HCtx.ChatID, userMsg); err != nil {
@@ -211,10 +206,10 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		}
 	}
 
-	// 11. Execute
+	// 10. Execute
 	startTime := time.Now()
 
-	result, err := agent.ExecuteWithHandler(ctx, req.Text, toolCtx, compositeHandler)
+	result, err := agent.ExecuteWithHandler(ctx, req.Text, toolCtx, messageTracker)
 	duration := time.Since(startTime)
 
 	if err != nil {

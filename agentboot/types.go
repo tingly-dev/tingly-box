@@ -53,37 +53,6 @@ func (m PermissionMode) String() string {
 	return string(m)
 }
 
-// MessageHandler is the primary interface for handling agent callbacks
-// This interface is defined here to avoid circular dependencies
-type MessageHandler interface {
-	OnMessage(msg interface{}) error
-	OnError(err error)
-	OnComplete(result *CompletionResult)
-	OnApproval(ctx context.Context, req PermissionRequest) (PermissionResult, error)
-	OnAsk(ctx context.Context, req AskRequest) (AskResult, error)
-}
-
-// MessageStreamer handles streaming messages (subset of MessageHandler)
-type MessageStreamer interface {
-	OnMessage(msg interface{}) error
-	OnError(err error)
-}
-
-// ApprovalHandler handles permission confirmations
-type ApprovalHandler interface {
-	OnApproval(ctx context.Context, req PermissionRequest) (PermissionResult, error)
-}
-
-// AskHandler handles user questions/selections
-type AskHandler interface {
-	OnAsk(ctx context.Context, req AskRequest) (AskResult, error)
-}
-
-// CompletionCallback handles completion notification
-type CompletionCallback interface {
-	OnComplete(result *CompletionResult)
-}
-
 // AskRequest represents a request to ask the user something
 // This is a simplified version of ask.Request to avoid circular imports
 type AskRequest struct {
@@ -113,15 +82,6 @@ type AskResult struct {
 	Remember     bool                   `json:"remember,omitempty"`
 	Reason       string                 `json:"reason,omitempty"`
 	UpdatedInput map[string]interface{} `json:"updated_input,omitempty"`
-}
-
-// CompletionResult contains the final result information
-type CompletionResult struct {
-	Success     bool
-	DurationMS  int64
-	SessionID   string
-	Error       string
-	ExtraFields map[string]any
 }
 
 // ExecutionOptions controls agent execution

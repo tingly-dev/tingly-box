@@ -264,18 +264,35 @@ users and are deleted.
 
 ## 4. Migration plan (phased)
 
-### P0 — delete dead code (no behavior change, ~900 LoC)
+### P0 — delete dead code (no behavior change) — DONE
 
-1. In `bot_stream.go` `OnMessage`, drop the dead branches; keep
-   `*claude.AssistantMessage` and `claude.Message`. Remove now-dead helpers
-   (`handleAgentMessage`, `handleAgentbootEvent`, `handleMapMessage`,
-   `toolFieldsFromRaw`/`FromNestedMap`, `mapNestedField`, `MessageFromEvent` use).
-2. Migrate `smart_guide` (agent.go + agent_smart_guide.go) to a local callback
-   type; drop its `agentboot.CompositeHandler`/`MessageHandler` use.
-3. Delete `message.go`, `handler.go`, `builder.go`.
-4. Delete `MessageHandler`, `MessageStreamer`, `ApprovalHandler`, `AskHandler`,
+Done in this branch (~3,660 LoC removed). What shipped:
+
+1. `bot_stream.go` `OnMessage`: dropped the dead `agentboot.AgentMessage` and
+   `agentboot.Event`+`MessageFromEvent` branches; kept `*claude.AssistantMessage`,
+   `claude.Message`, and the smart-guide `map[string]interface{}` path. Removed
+   the now-dead `handleAgentMessage`, `handleAgentbootEvent`, `toolFieldsFromRaw`,
+   the unused `OnApproval`/`OnAsk`/`OnComplete` stubs, and the `MessageStreamer`/
+   `CompletionCallback` assertions.
+2. `smart_guide` now owns a local callback contract
+   (`smart_guide/handler.go`: `StreamHandler`, `CompletionResult`, `Approver`).
+   `AgentConfig.Handler` → `Approver`; `ExecuteWithHandler` takes `StreamHandler`.
+   The bot's `messageTrackingWrapper` gained `OnComplete` and is passed directly
+   (no more `CompositeHandler`). `*imchannel.IMPrompter` satisfies `Approver`
+   structurally via its existing `OnApproval`.
+3. Deleted `message.go`, `handler.go`, `builder.go`. The `EventType*` string
+   constants (still used by `bot_stream.go`) moved to `agentboot/eventtype.go`.
+4. Deleted `MessageHandler`, `MessageStreamer`, `ApprovalHandler`, `AskHandler`,
    `CompletionCallback`, `CompletionResult` from `types.go`.
-5. `go build ./... && go test ./...` across module + main module.
+5. Also removed: the three `//go:build e2e` legacy tests
+   (`claude_e2e_test.go`, `runner_e2e_test.go`, `launcher_e2e_test.go`), the two
+   `//go:build ignore` legacy examples (`claude/examples/server`, `.../query`),
+   the legacy `TestMessageHandler` helper + `TestCompositeHandler_*` tests, and an
+   unused `Manager.msgHandler` field. All were written against the removed
+   paradigm with zero new-paradigm coverage.
+
+Verified: `go build ./...` + `go test ./...` green in both the `agentboot`
+module and the root module (`internal/remote_control/...`, `remote/...`).
 
 ### P1 — make `Service` real, collapse representations
 
