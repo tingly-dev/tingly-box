@@ -169,17 +169,6 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithResponseModel(ModelRequestDetail{}),
 	)
 
-	// Smart Routing log routes (per-request rule evaluation traces)
-	apiV1.GET("/system/smart-routing/logs", s.GetSmartRoutingLogs,
-		swagger.WithDescription("Get recent smart routing evaluation traces. Each entry contains the request snapshot and per-rule per-op match results."),
-		swagger.WithTags("system-logs"),
-		swagger.WithResponseModel(SmartRoutingLogsResponse{}),
-	)
-	apiV1.DELETE("/system/smart-routing/logs", s.ClearSmartRoutingLogs,
-		swagger.WithDescription("Clear the in-memory smart routing log buffer"),
-		swagger.WithTags("system-logs"),
-	)
-
 	// Action History API routes (user operations/audit log)
 	apiV1.GET("/actions/history", s.GetActionHistory,
 		swagger.WithDescription("Get user action history from memory (recent operations)"),

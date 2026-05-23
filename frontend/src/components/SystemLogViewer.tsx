@@ -40,12 +40,11 @@ export interface SystemLogsResponse {
 interface SystemLogViewerProps {
     getLogs: (params?: { limit?: number; level?: string; since?: string }) => Promise<SystemLogsResponse>;
     getRequestBody?: (bodyRef: string) => Promise<{ id: string; method: string; path: string; body: string; truncated: boolean } | null>;
-    pathPrefix?: string;
 }
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal', 'panic'];
 
-const SystemLogViewer = ({ getLogs, getRequestBody, pathPrefix }: SystemLogViewerProps) => {
+const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
     const [logs, setLogs] = useState<SystemLogEntry[]>([]);
     const [allLogs, setAllLogs] = useState<SystemLogEntry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -163,15 +162,9 @@ const SystemLogViewer = ({ getLogs, getRequestBody, pathPrefix }: SystemLogViewe
         }
     };
 
-    // Client-side filter: path prefix first, then level
+    // Client-side filter by level
     useEffect(() => {
         let next = allLogs;
-        if (pathPrefix) {
-            next = next.filter(log => {
-                const p = (log.fields?.path as string | undefined) ?? '';
-                return p.startsWith(pathPrefix);
-            });
-        }
         if (selectedLevels.size > 0) {
             next = next.filter(log => {
                 const l = log.level?.toLowerCase() ?? '';
@@ -182,7 +175,7 @@ const SystemLogViewer = ({ getLogs, getRequestBody, pathPrefix }: SystemLogViewe
             });
         }
         setLogs(next);
-    }, [selectedLevels, allLogs, pathPrefix]);
+    }, [selectedLevels, allLogs]);
 
     useEffect(() => {
         loadLogs();
