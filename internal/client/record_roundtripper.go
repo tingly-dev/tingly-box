@@ -58,12 +58,12 @@ func (r *RecordRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 
 	// Mark advisor loopback requests with depth header to prevent recursive MCP tool injection
 	if r.provider != nil && r.provider.Name == "advisor" {
-		logrus.Debug("[RECORD-TRIPPER] Setting X-Tingly-Advisor-Depth header for advisor provider")
+		logrus.WithContext(req.Context()).Debug("[RECORD-TRIPPER] Setting X-Tingly-Advisor-Depth header for advisor provider")
 		req.Header.Set(advisorDepthHeader, "1")
 	} else if r.provider != nil {
-		logrus.Debugf("[RECORD-TRIPPER] Provider name: %s (not advisor)", r.provider.Name)
+		logrus.WithContext(req.Context()).Debugf("[RECORD-TRIPPER] Provider name: %s (not advisor)", r.provider.Name)
 	} else {
-		logrus.Debug("[RECORD-TRIPPER] Provider is nil")
+		logrus.WithContext(req.Context()).Debug("[RECORD-TRIPPER] Provider is nil")
 	}
 
 	// Extract scenario from request context

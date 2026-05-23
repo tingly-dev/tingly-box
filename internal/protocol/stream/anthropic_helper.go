@@ -39,7 +39,7 @@ func MarshalAndSendErrorEvent(c *gin.Context, message, errorType, code string) {
 	errorEvent := BuildErrorEvent(message, errorType, code)
 	errorJSON, marshalErr := json.Marshal(errorEvent)
 	if marshalErr != nil {
-		logrus.Debugf("Failed to marshal error event: %v", marshalErr)
+		logrus.WithContext(c.Request.Context()).Debugf("Failed to marshal error event: %v", marshalErr)
 		SendSSErrorEvent(c, "Failed to marshal error", "internal_error")
 	} else {
 		SendSSErrorEventJSON(c, errorJSON)
@@ -153,7 +153,7 @@ func sendMessageStart(
 func sendAnthropicStreamEvent(c *gin.Context, eventType string, eventData map[string]interface{}, flusher http.Flusher) {
 	eventJSON, err := json.Marshal(eventData)
 	if err != nil {
-		logrus.Errorf("Failed to marshal Anthropic stream event: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Failed to marshal Anthropic stream event: %v", err)
 		return
 	}
 

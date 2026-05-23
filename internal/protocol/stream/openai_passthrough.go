@@ -326,7 +326,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 	StreamLoop(c, func(w io.Writer) bool {
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Responses stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Responses stream")
 			return false
 		default:
 		}
@@ -356,13 +356,13 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		if gjson.Get(eventRaw, "response.usage.input_tokens_details").Exists() {
 			if cachedTokens := gjson.Get(eventRaw, "response.usage.input_tokens_details.cached_tokens"); cachedTokens.Exists() {
 				cacheTokens = cachedTokens.Int()
-				logrus.Debugf("cached tokens: %v", cacheTokens)
+				logrus.WithContext(c.Request.Context()).Debugf("cached tokens: %v", cacheTokens)
 			} else {
 				// set raw use "0" as 0
 				if modified, err := sjson.SetRaw(eventRaw, "response.usage.input_tokens_details.cached_tokens", "0"); err == nil {
 					eventRaw = modified
 				} else {
-					logrus.WithError(err).Error("Failed to set cached tokens")
+					logrus.WithContext(c.Request.Context()).WithError(err).Error("Failed to set cached tokens")
 				}
 			}
 		}
@@ -377,7 +377,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 				if modified, err := sjson.SetRaw(eventRaw, "response.usage.output_tokens_details.reasoning_tokens", "0"); err == nil {
 					eventRaw = modified
 				} else {
-					logrus.WithError(err).Error("Failed to set reasoning tokens")
+					logrus.WithContext(c.Request.Context()).WithError(err).Error("Failed to set reasoning tokens")
 				}
 			}
 		}
@@ -396,11 +396,11 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
-			logrus.Debug("Responses stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("Responses stream canceled by client")
 			return protocol.NewTokenUsageFull(int(inputTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens)), nil
 		}
 
-		logrus.Errorf("Responses stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Responses stream error: %v", err)
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
 				"message": err.Error(),
@@ -437,10 +437,10 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
-	logrus.Debug("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
+	logrus.WithContext(c.Request.Context()).Debug("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("[ChatGPT] Panic in streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("[ChatGPT] Panic in streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -449,7 +449,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 				}
 			}
 		}
-		logrus.Info("[ChatGPT] Finished OpenAI Responses to Anthropic streaming handler")
+		logrus.WithContext(c.Request.Context()).Info("[ChatGPT] Finished OpenAI Responses to Anthropic streaming handler")
 	}()
 
 	// Set SSE headers
@@ -481,7 +481,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 		// Check context cancellation
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("[ChatGPT] Client disconnected, stopping stream")
+			logrus.WithContext(c.Request.Context()).Debug("[ChatGPT] Client disconnected, stopping stream")
 			return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), c.Request.Context().Err()
 		default:
 		}
@@ -489,7 +489,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 		evt := stream.Current()
 
 		if chunkCount < 3 {
-			logrus.Debugf("[ChatGPT] SSE chunk #%d: %s", chunkCount+1, evt.RawJSON())
+			logrus.WithContext(c.Request.Context()).Debugf("[ChatGPT] SSE chunk #%d: %s", chunkCount+1, evt.RawJSON())
 		}
 
 		chunkCount++
@@ -528,13 +528,13 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
-			logrus.Debug("[ChatGPT] Stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("[ChatGPT] Stream canceled by client")
 			return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), nil
 		}
 		return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), fmt.Errorf("stream error: %w", err)
 	}
 
-	logrus.Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
+	logrus.WithContext(c.Request.Context()).Infof("[ChatGPT] Finished reading SSE stream: %d chunks, tokens: %d in, %d out", chunkCount, inputTokens, outputTokens)
 
 	// Send content_block_stop event
 	sendAnthropicV1ContentBlockStop(c, flusher)

@@ -19,10 +19,10 @@ import (
 
 // HandleGoogleToOpenAIStreamResponse processes Google streaming events and converts them to OpenAI format
 func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) error {
-	logrus.Info("Starting Google to OpenAI streaming response handler")
+	logrus.WithContext(c.Request.Context()).Info("Starting Google to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Google to OpenAI streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Google to OpenAI streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -31,7 +31,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 				}
 			}
 		}
-		logrus.Info("Finished Google to OpenAI streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished Google to OpenAI streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -58,7 +58,7 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 		// Check context cancellation
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Google to OpenAI stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Google to OpenAI stream")
 			return nil
 		default:
 		}
@@ -66,10 +66,10 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 		if err != nil {
 			// Check if it was a client cancellation
 			if errors.Is(err, context.Canceled) {
-				logrus.Debug("Google stream canceled by client")
+				logrus.WithContext(c.Request.Context()).Debug("Google stream canceled by client")
 				return nil
 			}
-			logrus.Errorf("Google stream error: %v", err)
+			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
 			return nil
 		}
 
@@ -204,10 +204,10 @@ func HandleGoogleToOpenAIStreamResponse(c *gin.Context, stream iter.Seq2[*genai.
 // HandleGoogleToAnthropicStreamResponse processes Google streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (*protocol.TokenUsage, error) {
-	logrus.Info("Starting Google to Anthropic streaming response handler")
+	logrus.WithContext(c.Request.Context()).Info("Starting Google to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Google to Anthropic streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Google to Anthropic streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -216,7 +216,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 				}
 			}
 		}
-		logrus.Info("Finished Google to Anthropic streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished Google to Anthropic streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -266,7 +266,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 		// Check context cancellation
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Google to Anthropic stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Google to Anthropic stream")
 			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 		default:
 		}
@@ -274,10 +274,10 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 		if err != nil {
 			// Check if it was a client cancellation
 			if errors.Is(err, context.Canceled) {
-				logrus.Debug("Google stream canceled by client")
+				logrus.WithContext(c.Request.Context()).Debug("Google stream canceled by client")
 				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
-			logrus.Errorf("Google stream error: %v", err)
+			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
 			errorEvent := map[string]interface{}{
 				"type": "error",
 				"error": map[string]interface{}{
@@ -407,10 +407,10 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 // HandleGoogleToAnthropicBetaStreamResponse processes Google streaming events and converts them to Anthropic beta format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[*genai.GenerateContentResponse, error], responseModel string) (*protocol.TokenUsage, error) {
-	logrus.Info("Starting Google to Anthropic beta streaming response handler")
+	logrus.WithContext(c.Request.Context()).Info("Starting Google to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Google to Anthropic beta streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Google to Anthropic beta streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -419,7 +419,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 				}
 			}
 		}
-		logrus.Info("Finished Google to Anthropic beta streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished Google to Anthropic beta streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -469,7 +469,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 		// Check context cancellation
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Google to Anthropic beta stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Google to Anthropic beta stream")
 			return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 		default:
 		}
@@ -477,10 +477,10 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 		if err != nil {
 			// Check if it was a client cancellation
 			if errors.Is(err, context.Canceled) {
-				logrus.Debug("Google stream canceled by client")
+				logrus.WithContext(c.Request.Context()).Debug("Google stream canceled by client")
 				return protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil
 			}
-			logrus.Errorf("Google stream error: %v", err)
+			logrus.WithContext(c.Request.Context()).Errorf("Google stream error: %v", err)
 			errorEvent := map[string]interface{}{
 				"type": "error",
 				"error": map[string]interface{}{

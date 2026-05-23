@@ -45,10 +45,10 @@ func handleOpenAIToAnthropicBetaStream(
 	responseModel string,
 	hooks *OpenAIToAnthropicMCPHooks,
 ) (*protocol.TokenUsage, error) {
-	logrus.Debug("Starting OpenAI to Anthropic beta streaming response handler")
+	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in OpenAI to Anthropic beta streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in OpenAI to Anthropic beta streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -59,10 +59,10 @@ func handleOpenAIToAnthropicBetaStream(
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing OpenAI stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing OpenAI stream: %v", err)
 			}
 		}
-		logrus.Info("Finished OpenAI to Anthropic beta streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished OpenAI to Anthropic beta streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -87,7 +87,7 @@ func handleOpenAIToAnthropicBetaStream(
 	// Initialize token counter for accurate usage tracking
 	tokenCounter, err := token.NewStreamTokenCounter()
 	if err != nil {
-		logrus.Errorf("Failed to create token counter: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Failed to create token counter: %v", err)
 		// Continue without token counter - will fall back to estimation
 		tokenCounter = nil
 	}
@@ -132,7 +132,7 @@ func handleOpenAIToAnthropicBetaStream(
 		// Check context cancellation first
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping OpenAI to Anthropic beta stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping OpenAI to Anthropic beta stream")
 			return false
 		default:
 		}
@@ -163,7 +163,7 @@ func handleOpenAIToAnthropicBetaStream(
 
 		choice := chunk.Choices[0]
 
-		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
+		logrus.WithContext(c.Request.Context()).Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
 			chunkCount, len(chunk.Choices),
 			choice.Delta.Content, choice.FinishReason)
 
@@ -190,7 +190,7 @@ func handleOpenAIToAnthropicBetaStream(
 						state.thinkingBlockIndex = state.nextBlockIndex
 						state.nextBlockIndex++
 						state.thinkingBlocks[state.thinkingBlockIndex] = true
-						logrus.Debugf("[Thinking] Initializing thinking block at index %d", state.thinkingBlockIndex)
+						logrus.WithContext(c.Request.Context()).Debugf("[Thinking] Initializing thinking block at index %d", state.thinkingBlockIndex)
 						ensureMessageStart()
 						sendContentBlockStart(c, state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{
 							"thinking": "",
@@ -201,7 +201,7 @@ func handleOpenAIToAnthropicBetaStream(
 					thinkingText := extractString(v)
 					if thinkingText != "" {
 						preview := thinkingText
-						logrus.Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
+						logrus.WithContext(c.Request.Context()).Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
 						// Send content_block_delta with thinking_delta
 						ensureMessageStart()
 						sendContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
@@ -378,10 +378,10 @@ func handleOpenAIToAnthropicBetaStream(
 	if err := stream.Err(); err != nil {
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
-			logrus.Debug("OpenAI to Anthropic beta stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("OpenAI to Anthropic beta stream canceled by client")
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
-		logrus.Errorf("OpenAI stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
 			"type": "error",
 			"error": map[string]interface{}{
@@ -511,7 +511,7 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 			}
 
 			bs, _ := json.Marshal(msg)
-			logrus.Debugf("Assemble response: %s", string(bs))
+			logrus.WithContext(c.Request.Context()).Debugf("Assemble response: %s", string(bs))
 
 			// Send result
 			c.JSON(200, msg)

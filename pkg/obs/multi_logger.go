@@ -319,10 +319,20 @@ func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
 		return nil
 	}
 
-	// Extract source from fields, default to system if not present
+	// Determine the source. An explicit source field (set by per-source
+	// loggers such as the HTTP access log or smart routing) always wins.
+	// Otherwise, a request-scoped entry — one whose context carries a
+	// correlation id, e.g. from logrus.WithContext(ctx) inside the protocol
+	// or client packages — is routed to the model_request source and stamped
+	// with its id. Everything else falls back to system.
 	source := LogSourceSystem
-	if src, ok := entry.Data["source"].(string); ok {
+	if src, ok := entry.Data["source"].(string); ok && src != "" {
 		source = LogSource(src)
+	} else if id := RequestIDFromContext(entry.Context); id != "" {
+		source = LogSourceModelRequest
+		if _, exists := entry.Data["request_id"]; !exists {
+			entry.Data["request_id"] = id
+		}
 	}
 
 	// Write to memory sink for this source (if configured)

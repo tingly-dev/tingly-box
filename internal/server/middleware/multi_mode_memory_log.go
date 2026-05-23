@@ -80,17 +80,10 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		}
 		c.Set(GinRequestIDKey, requestID)
 
-		// Build a request-scoped logger bound to the model_request source and
-		// stash it (plus the id) in the request context. Protocol and client
-		// code retrieve it via obs.LogFromContext to emit correlated logs
-		// without holding the MultiLogger directly.
-		reqCtx := obs.ContextWithRequestID(c.Request.Context(), requestID)
-		if m.multiLogger != nil {
-			entry := m.multiLogger.GetLogrusLogger(obs.LogSourceModelRequest).
-				WithField("request_id", requestID)
-			reqCtx = obs.ContextWithLogger(reqCtx, entry)
-		}
-		c.Request = c.Request.WithContext(reqCtx)
+		// Carry the id on the request context so request-scoped code (protocol
+		// conversion, upstream client calls) can log via logrus.WithContext(ctx);
+		// the MultiLogger hook routes those entries to the model_request source.
+		c.Request = c.Request.WithContext(obs.ContextWithRequestID(c.Request.Context(), requestID))
 
 		// Capture request body using TeeReader for logging.
 		// We ALWAYS read (to support error debugging), but only STORE on errors (4xx/5xx).

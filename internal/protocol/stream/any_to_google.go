@@ -21,10 +21,10 @@ import (
 // HandleOpenAIToGoogleStreamResponse processes OpenAI streaming events and converts them to Google format
 // This handler writes Google-format streaming responses to the gin.Context
 func HandleOpenAIToGoogleStreamResponse(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) error {
-	logrus.Debug("Starting OpenAI to Google streaming response handler")
+	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI to Google streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in OpenAI to Google streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in OpenAI to Google streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("error: Internal streaming error\n"))
@@ -35,10 +35,10 @@ func HandleOpenAIToGoogleStreamResponse(c *gin.Context, stream *openaistream.Str
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing OpenAI stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing OpenAI stream: %v", err)
 			}
 		}
-		logrus.Info("Finished OpenAI to Google streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished OpenAI to Google streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -202,7 +202,7 @@ func HandleOpenAIToGoogleStreamResponse(c *gin.Context, stream *openaistream.Str
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
-		logrus.Errorf("OpenAI stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
 		return nil
 	}
 
@@ -211,10 +211,10 @@ func HandleOpenAIToGoogleStreamResponse(c *gin.Context, stream *openaistream.Str
 
 // HandleAnthropicToGoogleStreamResponse processes Anthropic streaming events and converts them to Google format
 func HandleAnthropicToGoogleStreamResponse(c *gin.Context, stream *anthropicstream.Stream[anthropic.MessageStreamEventUnion], responseModel string) error {
-	logrus.Info("Starting Anthropic to Google streaming response handler")
+	logrus.WithContext(c.Request.Context()).Info("Starting Anthropic to Google streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Anthropic to Google streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Anthropic to Google streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("error: Internal streaming error\n"))
@@ -225,10 +225,10 @@ func HandleAnthropicToGoogleStreamResponse(c *gin.Context, stream *anthropicstre
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing Anthropic stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing Anthropic stream: %v", err)
 			}
 		}
-		logrus.Info("Finished Anthropic to Google streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished Anthropic to Google streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -371,7 +371,7 @@ func HandleAnthropicToGoogleStreamResponse(c *gin.Context, stream *anthropicstre
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
-		logrus.Errorf("Anthropic stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
 		return nil
 	}
 
@@ -383,7 +383,7 @@ func sendGoogleStreamChunk(c *gin.Context, resp *genai.GenerateContentResponse, 
 	// Use the SDK's JSON marshal to ensure proper format
 	chunkJSON, err := json.Marshal(resp)
 	if err != nil {
-		logrus.Errorf("Failed to marshal Google stream chunk: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Failed to marshal Google stream chunk: %v", err)
 		return
 	}
 	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(chunkJSON))))

@@ -21,7 +21,7 @@ func OpenAIResponsesEvent(c *gin.Context, event string, v any) {
 	default:
 		data, err := json.Marshal(v)
 		if err != nil {
-			logrus.Errorf("OpenAISSE: failed to marshal: %v", err)
+			logrus.WithContext(c.Request.Context()).Errorf("OpenAISSE: failed to marshal: %v", err)
 			return
 		}
 		c.Writer.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", event, data))
@@ -39,7 +39,7 @@ func OpenAISSE(c *gin.Context, v any) {
 	default:
 		data, err := json.Marshal(v)
 		if err != nil {
-			logrus.Errorf("OpenAISSE: failed to marshal: %v", err)
+			logrus.WithContext(c.Request.Context()).Errorf("OpenAISSE: failed to marshal: %v", err)
 			return
 		}
 		c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", data))
