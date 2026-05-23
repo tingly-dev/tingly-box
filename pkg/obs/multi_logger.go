@@ -386,7 +386,31 @@ func (m *MultiLogger) ReadJSONLogs(limit int) ([]LogEntry, error) {
 	logPath := m.jsonLogger.Filename
 	m.mu.RUnlock()
 
-	return readLogEntriesBackwards(logPath, limit)
+	return readLogEntriesBackwards(logPath, limit, nil)
+}
+
+// ReadJSONLogsBySource reads recent log entries from the JSON log file keeping
+// only entries whose source is in the allowed set. An empty/absent source on a
+// legacy entry is treated as LogSourceSystem. Reading stops once limit matching
+// entries are collected.
+func (m *MultiLogger) ReadJSONLogsBySource(limit int, allowed ...LogSource) ([]LogEntry, error) {
+	m.mu.RLock()
+	logPath := m.jsonLogger.Filename
+	m.mu.RUnlock()
+
+	set := make(map[LogSource]struct{}, len(allowed))
+	for _, s := range allowed {
+		set[s] = struct{}{}
+	}
+	keep := func(e LogEntry) bool {
+		src := LogSource(e.Source)
+		if src == "" {
+			src = LogSourceSystem
+		}
+		_, ok := set[src]
+		return ok
+	}
+	return readLogEntriesBackwards(logPath, limit, keep)
 }
 
 // Close closes the logger
@@ -493,8 +517,10 @@ func (s *ScopedLogger) LogAction(action string, details map[string]interface{}, 
 }
 
 // readLogEntriesBackwards reads log entries from the end of the file for efficiency
-// Returns entries in reverse chronological order (newest first)
-func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {
+// Returns entries in reverse chronological order (newest first). When keep is
+// non-nil, only entries for which keep returns true are collected (the limit
+// applies to kept entries).
+func readLogEntriesBackwards(filePath string, limit int, keep func(LogEntry) bool) ([]LogEntry, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -551,7 +577,7 @@ func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {
 
 			if len(partialLine) > 0 {
 				var entry LogEntry
-				if err := json.Unmarshal(partialLine, &entry); err == nil {
+				if err := json.Unmarshal(partialLine, &entry); err == nil && (keep == nil || keep(entry)) {
 					// Append entries in order found (newest first since we're reading backwards)
 					entries = append(entries, entry)
 					if limit > 0 && len(entries) >= limit {
@@ -566,7 +592,7 @@ func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {
 	// Handle last line (if file doesn't end with newline)
 	if len(partialLine) > 0 {
 		var entry LogEntry
-		if err := json.Unmarshal(partialLine, &entry); err == nil {
+		if err := json.Unmarshal(partialLine, &entry); err == nil && (keep == nil || keep(entry)) {
 			entries = append(entries, entry)
 		}
 	}
