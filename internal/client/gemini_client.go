@@ -144,7 +144,7 @@ func (t *geminiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	}
 
-	logrus.WithContext(req.Context()).Debugf("[Gemini] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
+	logrus.WithContext(req.Context()).Infof("[Gemini] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
 
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
@@ -152,7 +152,7 @@ func (t *geminiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		return nil, err
 	}
 
-	logrus.WithContext(req.Context()).Debugf("[Gemini] Response received, status=%d", resp.StatusCode)
+	logrus.WithContext(req.Context()).Infof("[Gemini] Response received, status=%d", resp.StatusCode)
 
 	if resp.Body != nil {
 		if isStreaming {
