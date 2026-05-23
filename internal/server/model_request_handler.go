@@ -106,12 +106,14 @@ func (s *Server) GetModelRequests(c *gin.Context) {
 	sort.Slice(summaries, func(i, j int) bool {
 		return summaries[i].Time.After(summaries[j].Time)
 	})
+
+	total := len(summaries)
 	if len(summaries) > limit {
 		summaries = summaries[:limit]
 	}
 
 	c.JSON(http.StatusOK, ModelRequestsResponse{
-		Total:    len(summaries),
+		Total:    total,
 		Requests: summaries,
 	})
 }
