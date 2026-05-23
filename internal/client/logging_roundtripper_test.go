@@ -18,7 +18,7 @@ func TestRedactProxy(t *testing.T) {
 		{ProxyURLNone, "direct"},
 		{"http://proxy.example.com:8080", "http://proxy.example.com:8080"},
 		{"socks5://10.0.0.1:1080", "socks5://10.0.0.1:1080"},
-		{"http://user:secret@proxy.example.com:8080", "http://proxy.example.com:8080"},
+		{"http://user:secret@proxy.example.com:8080", "http://***@proxy.example.com:8080"},
 		{"://bad", "proxy(set)"},
 	}
 	for _, c := range cases {

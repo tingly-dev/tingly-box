@@ -66,9 +66,11 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	return resp, nil
 }
 
-// redactProxy returns a credential-free description of a proxy URL for logging:
-// "scheme://host" with any userinfo stripped, or "direct" when no proxy is
-// configured for the provider.
+// redactProxy returns a safe description of a proxy URL for logging.
+// Credentials are masked as "***" rather than dropped so it remains clear that
+// authentication is in use: "scheme://***@host:port". Without the mask,
+// "scheme://host" looks identical to an unauthenticated proxy, which is
+// misleading. Returns "direct" when no proxy is configured.
 func redactProxy(raw string) string {
 	if raw == "" || raw == ProxyURLNone {
 		return "direct"
@@ -77,6 +79,9 @@ func redactProxy(raw string) string {
 	if err != nil || u.Host == "" {
 		// Unparseable — never echo the raw string (may contain credentials).
 		return "proxy(set)"
+	}
+	if u.User != nil {
+		return u.Scheme + "://***@" + u.Host
 	}
 	return u.Scheme + "://" + u.Host
 }
