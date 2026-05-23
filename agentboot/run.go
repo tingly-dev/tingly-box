@@ -28,11 +28,14 @@ import (
 //     error AND a deny result (Approved=false), so [RunWithPrompter]
 //     always has a safe response to send to the agent.
 //
-// Implementations: IMPrompter (production) and prompt.FakePrompter
-// (tests).
+// The Prompter consumes the stream event types ([ApprovalRequestEvent],
+// [AskRequestEvent]) directly and returns the matching control responses,
+// so there is no intermediate request/result representation.
+//
+// Implementation: IMPrompter (production).
 type Prompter interface {
-	OnApproval(ctx context.Context, req PermissionRequest) (PermissionResult, error)
-	OnAsk(ctx context.Context, req AskRequest) (AskResult, error)
+	OnApproval(ctx context.Context, req ApprovalRequestEvent) (ApprovalResponse, error)
+	OnAsk(ctx context.Context, req AskRequestEvent) (AskResponse, error)
 }
 
 // MessageSink receives the [MessageEvent.Raw] value of each message event,
@@ -67,57 +70,22 @@ func RunWithPrompter(ctx context.Context, h ExecutionHandle, prompter Prompter, 
 			}
 
 		case ApprovalRequestEvent:
-			req := PermissionRequest{
-				RequestID: e.ID,
-				AgentType: e.AgentType,
-				ToolName:  e.ToolName,
-				Input:     e.Input,
-				Reason:    e.Reason,
-				SessionID: e.SessionID,
-				BotUUID:   e.BotUUID,
-				ChatID:    e.ChatID,
-				Platform:  e.Platform,
-			}
-			res, perr := prompter.OnApproval(ctx, req)
+			res, perr := prompter.OnApproval(ctx, e)
 			if perr != nil {
 				logrus.WithError(perr).Warn("agentboot.RunWithPrompter: prompter.OnApproval error; denying")
-				res = PermissionResult{Approved: false, Reason: perr.Error()}
+				res = ApprovalResponse{Approved: false, Reason: perr.Error()}
 			}
-			if rerr := h.Respond(e.ID, ApprovalResponse{
-				Approved:     res.Approved,
-				UpdatedInput: res.UpdatedInput,
-				Reason:       res.Reason,
-			}); rerr != nil {
+			if rerr := h.Respond(e.ID, res); rerr != nil {
 				logrus.WithError(rerr).Warn("agentboot.RunWithPrompter: Respond error")
 			}
 
 		case AskRequestEvent:
-			req := AskRequest{
-				ID:        e.ID,
-				Type:      e.Type,
-				AgentType: e.AgentType,
-				Platform:  e.Platform,
-				ChatID:    e.ChatID,
-				BotUUID:   e.BotUUID,
-				SessionID: e.SessionID,
-				ToolName:  e.ToolName,
-				Input:     e.Input,
-				Message:   e.Message,
-				CallID:    e.CallID,
-				Reason:    e.Reason,
-			}
-			res, aerr := prompter.OnAsk(ctx, req)
+			res, aerr := prompter.OnAsk(ctx, e)
 			if aerr != nil {
 				logrus.WithError(aerr).Warn("agentboot.RunWithPrompter: prompter.OnAsk error; denying")
-				res = AskResult{ID: e.ID, Approved: false, Reason: aerr.Error()}
+				res = AskResponse{Approved: false, Reason: aerr.Error()}
 			}
-			if rerr := h.Respond(e.ID, AskResponse{
-				Approved:     res.Approved,
-				UpdatedInput: res.UpdatedInput,
-				Reason:       res.Reason,
-				Response:     res.Response,
-				Selection:    res.Selection,
-			}); rerr != nil {
+			if rerr := h.Respond(e.ID, res); rerr != nil {
 				logrus.WithError(rerr).Warn("agentboot.RunWithPrompter: Respond error")
 			}
 

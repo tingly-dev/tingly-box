@@ -47,11 +47,11 @@ var noApprovalModes = map[string]bool{
 // AskUserQuestion prompts to the underlying prompter.
 type autoApprovePrompter struct{ inner agentboot.Prompter }
 
-func (p autoApprovePrompter) OnApproval(context.Context, agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	return agentboot.PermissionResult{Approved: true}, nil
+func (p autoApprovePrompter) OnApproval(context.Context, agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	return agentboot.ApprovalResponse{Approved: true}, nil
 }
 
-func (p autoApprovePrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+func (p autoApprovePrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
 	return p.inner.OnAsk(ctx, req)
 }
 

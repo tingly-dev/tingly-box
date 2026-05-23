@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/tingly-dev/tingly-box/agentboot"
 )
 
 // StdinPrompter implements Prompter using stdin/stdout
@@ -266,29 +264,4 @@ func (p *DenyAllPrompter) Prompt(ctx context.Context, req Request) (Result, erro
 // StdinPrompterFromLegacy creates a StdinPrompter from legacy config
 func StdinPrompterFromLegacy() *StdinPrompter {
 	return NewStdinPrompter()
-}
-
-// ToLegacyUserPrompter creates a legacy-compatible prompter wrapper
-func ToLegacyUserPrompter(p Prompter) UserPrompter {
-	return &legacyPrompterWrapper{p: p}
-}
-
-// UserPrompter is the legacy interface for backward compatibility
-type UserPrompter interface {
-	PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error)
-}
-
-// legacyPrompterWrapper wraps a Prompter to implement UserPrompter
-type legacyPrompterWrapper struct {
-	p Prompter
-}
-
-// PromptPermission implements UserPrompter
-func (w *legacyPrompterWrapper) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	askReq := FromPermissionRequest(req)
-	result, err := w.p.Prompt(ctx, *askReq)
-	if err != nil {
-		return agentboot.PermissionResult{}, err
-	}
-	return result.ToPermissionResult(), nil
 }
