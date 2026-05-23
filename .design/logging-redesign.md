@@ -5,6 +5,8 @@ Route chosen: **lightweight logrus correlation** (not a rewrite onto the
 recording pipeline). Frontend target: **two views (Requests / System)**
 with smart-routing folded in as a per-request drill-down.
 
+![Requests view with an expanded pipeline timeline](images/logging-requests-view.png)
+
 ## Why
 
 The Logs page splits logs into three tabs — **Model / System / Smart** —
