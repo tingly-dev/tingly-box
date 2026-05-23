@@ -46,7 +46,7 @@ func NewAntigravityClient(provider *typ.Provider, model string, sessionID typ.Se
 		project:      project,
 		proxyURL:     provider.ProxyURL,
 	}
-	httpClient := &http.Client{Transport: transport}
+	httpClient := &http.Client{Transport: wrapWithLogging(transport, provider)}
 
 	base, err := newGoogleClientFromHTTPClient(provider, httpClient)
 	if err != nil {
@@ -145,7 +145,7 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	}
 
-	logrus.WithContext(req.Context()).Infof("[Antigravity] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
+	logrus.WithContext(req.Context()).Debugf("[Antigravity] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
 
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
@@ -153,7 +153,7 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 		return nil, err
 	}
 
-	logrus.WithContext(req.Context()).Infof("[Antigravity] Response received, status=%d", resp.StatusCode)
+	logrus.WithContext(req.Context()).Debugf("[Antigravity] Response received, status=%d", resp.StatusCode)
 
 	if resp.Body != nil {
 		if isStreaming {

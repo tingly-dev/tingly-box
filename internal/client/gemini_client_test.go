@@ -36,9 +36,13 @@ func TestNewGeminiClient_AppliesRoundTripper(t *testing.T) {
 	if c.httpClient == nil {
 		t.Fatal("expected embedded http.Client to be set")
 	}
-	rt, ok := c.httpClient.Transport.(*geminiRoundTripper)
+	lrt, ok := c.httpClient.Transport.(*loggingRoundTripper)
 	if !ok {
-		t.Fatalf("expected transport to be *geminiRoundTripper, got %T", c.httpClient.Transport)
+		t.Fatalf("expected transport to be *loggingRoundTripper, got %T", c.httpClient.Transport)
+	}
+	rt, ok := lrt.inner.(*geminiRoundTripper)
+	if !ok {
+		t.Fatalf("expected wrapped transport to be *geminiRoundTripper, got %T", lrt.inner)
 	}
 	if rt.project != "test-project" {
 		t.Errorf("expected project_id=test-project on round tripper, got %q", rt.project)

@@ -60,7 +60,7 @@ func NewCodexClient(provider *typ.Provider, model string, sessionID typ.SessionI
 		RoundTripper: createSessionBoundTransport(provider, sessionID),
 	}
 	httpClient := &http.Client{
-		Transport: transport,
+		Transport: wrapWithLogging(transport, provider),
 	}
 	options = append(options, option.WithHTTPClient(httpClient))
 
@@ -596,7 +596,7 @@ func (c *CodexClient) parseResponsesStream(ctx context.Context, stream *ssestrea
 		return nil, fmt.Errorf("response assembly failed: status=%s", asm.Status())
 	}
 
-	logrus.WithContext(ctx).Infof("[Codex] Response assembled via assembler, id: %s, status: %s", resp.ID, asm.Status())
+	logrus.WithContext(ctx).Debugf("[Codex] Response assembled via assembler, id: %s, status: %s", resp.ID, asm.Status())
 	return resp, nil
 }
 
