@@ -36,9 +36,13 @@ func TestNewAntigravityClient_AppliesRoundTripper(t *testing.T) {
 		t.Fatal("expected embedded http.Client to be set")
 	}
 
-	rt, ok := c.httpClient.Transport.(*antigravityRoundTripper)
+	lrt, ok := c.httpClient.Transport.(*loggingRoundTripper)
 	if !ok {
-		t.Fatalf("expected transport to be *antigravityRoundTripper, got %T", c.httpClient.Transport)
+		t.Fatalf("expected transport to be *loggingRoundTripper, got %T", c.httpClient.Transport)
+	}
+	rt, ok := lrt.inner.(*antigravityRoundTripper)
+	if !ok {
+		t.Fatalf("expected wrapped transport to be *antigravityRoundTripper, got %T", lrt.inner)
 	}
 	if rt.project != "antigrav-proj" {
 		t.Errorf("expected project_id=antigrav-proj on round tripper, got %q", rt.project)

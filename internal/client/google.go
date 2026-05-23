@@ -56,7 +56,7 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 		transport = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 	}
 
-	httpClient := &http.Client{Transport: transport}
+	httpClient := &http.Client{Transport: wrapWithLogging(transport, provider)}
 	return newGoogleClientFromHTTPClient(provider, httpClient)
 }
 
