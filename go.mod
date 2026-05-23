@@ -12,9 +12,12 @@ replace github.com/tingly-dev/tingly-box/imbot => ./imbot
 
 replace github.com/tingly-dev/tingly-box/ai => ./ai
 
+replace github.com/tingly-dev/tingly-box/agentboot => ./agentboot
+
 //replace github.com/tingly-dev/tingly-agentscope => ./tingly-scope
 
 require (
+	github.com/tingly-dev/tingly-box/agentboot v0.1.0
 	github.com/tingly-dev/tingly-box/ai v0.1.0
 	github.com/tingly-dev/tingly-box/imbot v0.1.0
 )
