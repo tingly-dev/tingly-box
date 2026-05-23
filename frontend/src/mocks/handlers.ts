@@ -73,6 +73,18 @@ const mockRequestEvents: Record<string, Array<{ source: string; level: string; s
 }
 
 // ============================================
+// Mock System Logs (genuine app/system logs, not request-scoped)
+// ============================================
+const mockSystemLogs = [
+    { time: '', level: 'info', message: 'tingly-box server started on :8080', fields: { component: 'server' } },
+    { time: '', level: 'info', message: 'loaded 4 providers from config', fields: { component: 'config' } },
+    { time: '', level: 'info', message: 'StoreManager: all stores initialized', fields: { component: 'db' } },
+    { time: '', level: 'warning', message: 'config file changed, reloading rules', fields: { component: 'config' } },
+    { time: '', level: 'info', message: 'transport pool cleanup: 2 idle transports removed', fields: { component: 'client' } },
+    { time: '', level: 'error', message: 'background quota refresh failed: context deadline exceeded', fields: { component: 'quota' } },
+]
+
+// ============================================
 // Mock Providers (v2 API with uuid)
 // ============================================
 const mockV2Providers = [
@@ -1508,6 +1520,17 @@ export const handlers = [
     http.put('/api/v1/imbot-settings/:uuid', async ({ params, request }) => {
         const body = await request.json() as any
         return HttpResponse.json({ success: true, uuid: params.uuid, ...body })
+    }),
+
+    http.get('/api/v1/system/logs', ({ request }) => {
+        const url = new URL(request.url)
+        const limit = Number(url.searchParams.get('limit')) || 100
+        const now = Date.now()
+        const logs = mockSystemLogs.slice(0, limit).map((l, i) => ({
+            ...l,
+            time: new Date(now - i * 1500).toISOString(),
+        }))
+        return HttpResponse.json({ total: logs.length, logs })
     }),
 
     http.get('/api/v1/requests', ({ request }) => {
