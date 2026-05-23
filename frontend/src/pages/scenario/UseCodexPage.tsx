@@ -1,6 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
 import CodexConfigModal from "@/components/CodexConfigModal.tsx";
+import { defaultCodexPrefs } from "@/components/CodexQuickConfig.tsx";
 import { api } from '@/services/api';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
@@ -29,7 +30,7 @@ const UseCodexPageContent: React.FC = () => {
     const handleApply = async (): Promise<AgentApplyResult> => {
         try {
             setIsApplyLoading(true);
-            const result = await api.applyCodexConfig();
+            const result = await api.applyCodexConfig(defaultCodexPrefs() as Record<string, string>);
             if (result.success) {
                 // Extract files from config and auth results
                 const files: string[] = [];

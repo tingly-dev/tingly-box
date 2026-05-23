@@ -885,6 +885,71 @@ func ApplyOpenCodeConfig(payload map[string]interface{}) (*ApplyResult, error) {
 // tingly-served models.
 const codexModelCatalogFile = "tingly-model-catalog.json"
 
+// CodexPrefs is the typed, user-tunable surface of Codex's config.toml.
+// JSON tags map 1:1 to the config.toml keys, so the frontend round-trips the
+// same field names. Values are kept as strings so empty = omit (let Codex use
+// its own default), avoiding the "0/false means unset" ambiguity.
+//
+// The struct itself is the whitelist: only these keys can ever be set from a
+// request, so prefs can never clobber tingly-managed fields (model,
+// model_provider, model_catalog_json, model_providers.*) or inject arbitrary
+// TOML. Scope is deliberately limited to model/reasoning knobs (not
+// approval_policy / sandbox_mode safety toggles).
+type CodexPrefs struct {
+	ModelReasoningEffort            string `json:"model_reasoning_effort,omitempty"`
+	ModelReasoningSummary           string `json:"model_reasoning_summary,omitempty"`
+	ModelVerbosity                  string `json:"model_verbosity,omitempty"`
+	ModelSupportsReasoningSummaries string `json:"model_supports_reasoning_summaries,omitempty"`
+}
+
+// codexEnumValues lists the valid values for each enum-typed CodexPrefs field.
+// Values outside the set are dropped during conversion (forward-compatible,
+// injection-safe).
+var codexEnumValues = map[string][]string{
+	"model_reasoning_effort":  {"none", "minimal", "low", "medium", "high", "xhigh"},
+	"model_reasoning_summary": {"auto", "concise", "detailed", "none"},
+	"model_verbosity":         {"low", "medium", "high"},
+}
+
+// DefaultCodexPrefs returns the canonical defaults — the keys whose previously
+// hardcoded values we preserve when no user prefs are supplied (CLI path and
+// "apply without prefs").
+func DefaultCodexPrefs() *CodexPrefs {
+	return &CodexPrefs{
+		ModelReasoningSummary:           "auto",
+		ModelSupportsReasoningSummaries: "true",
+	}
+}
+
+// toConfig converts prefs into a map of native TOML values ready to merge into
+// config.toml. Empty values and invalid enum members are dropped; the bool
+// field maps "true" -> true (anything else omitted).
+func (p *CodexPrefs) toConfig() map[string]interface{} {
+	out := map[string]interface{}{}
+	if p == nil {
+		return out
+	}
+	addEnum := func(key, val string) {
+		val = strings.TrimSpace(val)
+		if val == "" {
+			return
+		}
+		for _, allowed := range codexEnumValues[key] {
+			if val == allowed {
+				out[key] = val
+				return
+			}
+		}
+	}
+	addEnum("model_reasoning_effort", p.ModelReasoningEffort)
+	addEnum("model_reasoning_summary", p.ModelReasoningSummary)
+	addEnum("model_verbosity", p.ModelVerbosity)
+	if strings.TrimSpace(p.ModelSupportsReasoningSummaries) == "true" {
+		out["model_supports_reasoning_summaries"] = true
+	}
+	return out
+}
+
 // ApplyCodexConfig merges tingly-box Codex settings into ~/.codex/config.toml
 // and writes ~/.codex/tingly-model-catalog.json with one entry per supplied
 // model so Codex's `/model` picker can see them.
@@ -895,15 +960,17 @@ const codexModelCatalogFile = "tingly-model-catalog.json"
 //
 // Managed fields:
 //   - top-level `model` (set to models[0] when models is non-empty)
-//   - top-level `model_provider = "tingly-box"`,
-//     `model_supports_reasoning_summaries = true`,
-//     `model_reasoning_summary = "auto"`
+//   - top-level `model_provider = "tingly-box"`
 //   - top-level `model_catalog_json` (set to the absolute path of the
 //     catalog file when models is non-empty; cleared otherwise so we don't
 //     point at a missing file)
 //   - `[model_providers.tingly-box]` (always re-pinned to the supplied base URL)
 //   - `[profiles.<sanitized(model)>]` for each model — overwritten unconditionally
 //     under that key; `agent restore codex` recovers the previous file if needed
+//   - the whitelisted user prefs (see codexPrefSpec, e.g.
+//     `model_reasoning_effort`, `model_reasoning_summary`,
+//     `model_supports_reasoning_summaries`, `model_verbosity`) at the top level
+//     and inside each managed profile
 //
 // Note: Codex's `model_catalog_json` REPLACES the bundled catalog (it does not
 // merge), and is read on startup only — switching via `/model` doesn't reload
@@ -915,7 +982,7 @@ const codexModelCatalogFile = "tingly-model-catalog.json"
 //
 // The previous config.toml and catalog (if any) are backed up before being
 // rewritten.
-func ApplyCodexConfig(baseURL string, models []string) (*ApplyResult, error) {
+func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -959,7 +1026,7 @@ func ApplyCodexConfig(baseURL string, models []string) (*ApplyResult, error) {
 	if len(models) > 0 {
 		catalogPathForConfig = catalogPath
 	}
-	mergeCodexConfig(existing, baseURL, models, catalogPathForConfig)
+	mergeCodexConfig(existing, baseURL, models, catalogPathForConfig, prefs)
 
 	out, err := tomlpkg.Marshal(existing)
 	if err != nil {
@@ -1003,7 +1070,7 @@ func ApplyCodexConfig(baseURL string, models []string) (*ApplyResult, error) {
 // RenderCodexConfigTOML returns the TOML that would be written to a fresh
 // ~/.codex/config.toml — i.e. the merge applied to an empty starting point.
 // Used by the preview endpoint so the UI can show exactly what's pending.
-func RenderCodexConfigTOML(baseURL string, models []string) ([]byte, error) {
+func RenderCodexConfigTOML(baseURL string, models []string, prefs *CodexPrefs) ([]byte, error) {
 	catalogPathForConfig := ""
 	if len(models) > 0 {
 		// Guard against environments where UserHomeDir returns "" with no
@@ -1015,7 +1082,7 @@ func RenderCodexConfigTOML(baseURL string, models []string) ([]byte, error) {
 		}
 	}
 	cfg := map[string]interface{}{}
-	mergeCodexConfig(cfg, baseURL, models, catalogPathForConfig)
+	mergeCodexConfig(cfg, baseURL, models, catalogPathForConfig, prefs)
 	return tomlpkg.Marshal(cfg)
 }
 
@@ -1025,13 +1092,21 @@ func RenderCodexConfigTOML(baseURL string, models []string) ([]byte, error) {
 // catalogPath is the absolute path to write into `model_catalog_json`. Pass
 // "" to leave that key untouched (e.g. when no models are configured — we
 // don't want to point Codex at a file we never wrote).
-func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []string, catalogPath string) {
+func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []string, catalogPath string, prefs *CodexPrefs) {
+	// User-tunable, whitelist-validated keys. Applied at the top level (global
+	// default) and stamped into each generated profile so profiles are
+	// self-contained. Converted first so it can never carry a managed key.
+	coerced := prefs.toConfig()
+	for k, v := range coerced {
+		cfg[k] = v
+	}
+
+	// Managed fields — written after prefs so they always win, guaranteeing
+	// prefs cannot clobber them (defense in depth on top of the whitelist).
 	if len(models) > 0 {
 		cfg["model"] = models[0]
 	}
 	cfg["model_provider"] = "tingly-box"
-	cfg["model_supports_reasoning_summaries"] = true
-	cfg["model_reasoning_summary"] = "auto"
 	if catalogPath != "" {
 		cfg["model_catalog_json"] = catalogPath
 	}
@@ -1053,10 +1128,14 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 		profiles = map[string]interface{}{}
 	}
 	for _, model := range models {
-		profiles[sanitizeCodexProfileKey(model)] = map[string]interface{}{
+		profile := map[string]interface{}{
 			"model":          model,
 			"model_provider": "tingly-box",
 		}
+		for k, v := range coerced {
+			profile[k] = v
+		}
+		profiles[sanitizeCodexProfileKey(model)] = profile
 	}
 	if len(profiles) > 0 {
 		cfg["profiles"] = profiles

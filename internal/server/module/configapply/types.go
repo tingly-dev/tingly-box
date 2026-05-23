@@ -40,6 +40,13 @@ type OpenCodeConfigPreviewResponse struct {
 	Message    string `json:"message,omitempty"`
 }
 
+// ApplyCodexConfigRequest is the request body for the Codex apply and preview
+// endpoints. `preferences` is the typed, whitelisted set of Codex config.toml
+// keys (see config.CodexPrefs). nil means "use built-in defaults".
+type ApplyCodexConfigRequest struct {
+	Preferences *config.CodexPrefs `json:"preferences"`
+}
+
 // ApplyCodexConfigResponse is the response for ApplyCodexConfigFromState.
 type ApplyCodexConfigResponse struct {
 	Success      bool               `json:"success"`

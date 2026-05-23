@@ -20,6 +20,10 @@ type CodexParams struct {
 	// Models is a list of model names for the Codex profiles
 	// Caller is responsible for collecting and deduplicating these
 	Models []string
+
+	// Prefs holds the typed, whitelisted, user-tunable Codex config.toml keys
+	// (see serverconfig.CodexPrefs). nil means "use built-in defaults".
+	Prefs *serverconfig.CodexPrefs
 }
 
 // Apply applies Codex CLI configuration
@@ -30,7 +34,7 @@ func (c *CodexConfig) Apply(paramsInterface interface{}) (*ApplyAgentResult, err
 	}
 
 	// Apply config.toml
-	configResult, err := serverconfig.ApplyCodexConfig(params.CodexBaseURL, params.Models)
+	configResult, err := serverconfig.ApplyCodexConfig(params.CodexBaseURL, params.Models, params.Prefs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply Codex config: %w", err)
 	}
