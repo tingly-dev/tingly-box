@@ -139,6 +139,8 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
     const [provider, setProvider] = useState('');
     const [status, setStatus] = useState('');
     const tableContainerRef = useRef<HTMLDivElement>(null);
+    // Whether the user is pinned to the bottom; controls live-tail auto-scroll.
+    const atBottomRef = useRef(true);
 
     const loadRequests = async () => {
         setLoading(true);
@@ -177,8 +179,12 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoRefresh, scenario, provider, status, lockedScenario]);
 
+    // Live-tail: only auto-scroll to the newest row when the user is already
+    // pinned at the bottom, so polling doesn't yank them away from a row
+    // they're inspecting higher up.
     useEffect(() => {
         if (!tableContainerRef.current || requests.length === 0) return;
+        if (!atBottomRef.current) return;
         const el = tableContainerRef.current;
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -186,6 +192,11 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
             });
         });
     }, [requests]);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const el = e.currentTarget;
+        atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    };
 
     const toggleRow = async (id: string) => {
         if (expandedId === id) {
@@ -382,6 +393,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
 
             <Box
                 ref={tableContainerRef}
+                onScroll={handleScroll}
                 sx={{ flex: 1, overflow: 'auto', minHeight: 0, backgroundColor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}
             >
                 <TableContainer sx={{ maxHeight: 'none' }}>
@@ -447,7 +459,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
                                                     {req.provider || '-'}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {req.status ? (
+                                                    {req.status != null ? (
                                                         <Chip
                                                             size="small"
                                                             label={req.status}
@@ -459,7 +471,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
                                                     )}
                                                 </TableCell>
                                                 <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                                                    {req.latency_ms ? `${req.latency_ms} ms` : '-'}
+                                                    {req.latency_ms != null ? `${req.latency_ms} ms` : '-'}
                                                 </TableCell>
                                             </TableRow>
                                             <TableRow>
