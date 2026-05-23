@@ -88,7 +88,7 @@ func (c *CodexClient) ChatCompletionsNew(ctx context.Context, req openai.ChatCom
 // For Codex, this returns nil as ChatGPT backend API does not support standard Chat Completions.
 // Use Responses API instead.
 func (c *CodexClient) ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk] {
-	logrus.Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
+	logrus.WithContext(ctx).Errorf("[Codex] Chat Completions Streaming not supported, use Responses API instead")
 	return nil
 }
 
@@ -120,7 +120,7 @@ func (c *CodexClient) ResponsesNewStreaming(ctx context.Context, req responses.R
 // as ChatGPT backend API does not support the standard /images/generations endpoint.
 // Persistence of generated images is handled by the server layer, not the client.
 func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error) {
-	logrus.Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
+	logrus.WithContext(ctx).Debugf("[Codex] Using Responses API for image generation, model: %s", req.Model)
 
 	// Build Responses API request
 	responsesReq := c.buildImageGenerationResponsesRequest(req)
@@ -460,7 +460,7 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 			if partialEvent.PartialImageB64 != "" {
 				b64JSON += partialEvent.PartialImageB64
 				imageCallID = partialEvent.ItemID
-				logrus.Debugf("[Codex] Received partial image chunk, item_id: %s, total_size: %d",
+				logrus.WithContext(ctx).Debugf("[Codex] Received partial image chunk, item_id: %s, total_size: %d",
 					partialEvent.ItemID, len(b64JSON))
 			}
 
@@ -477,7 +477,7 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 				if b64JSON == "" && imageCall.Result != "" {
 					b64JSON = imageCall.Result
 					imageCallID = imageCall.ID
-					logrus.Debugf("[Codex] Received image result in done event, id: %s, status: %s",
+					logrus.WithContext(ctx).Debugf("[Codex] Received image result in done event, id: %s, status: %s",
 						imageCall.ID, imageCall.Status)
 				}
 				// Update imageCallID even if we already have data from partial events
@@ -496,7 +496,7 @@ func (c *CodexClient) parseImageGenerationStream(ctx context.Context, stream *ss
 		return nil, fmt.Errorf("no image data in response (image_call_id: %s)", imageCallID)
 	}
 
-	logrus.Infof("[Codex] Successfully extracted image data, id: %s, size: %d bytes", imageCallID, len(b64JSON))
+	logrus.WithContext(ctx).Infof("[Codex] Successfully extracted image data, id: %s, size: %d bytes", imageCallID, len(b64JSON))
 
 	// Build standard ImagesResponse from extracted data
 	return &openai.ImagesResponse{
@@ -549,7 +549,7 @@ func (c *CodexClient) parseImageGenerationStreamNext(ctx context.Context, stream
 	for idx := 0; idx < imageCount; idx++ {
 		b64JSON := asm.ImageDataAt(idx)
 		if b64JSON == "" {
-			logrus.Warnf("[Codex] Missing image data at index %d", idx)
+			logrus.WithContext(ctx).Warnf("[Codex] Missing image data at index %d", idx)
 			continue
 		}
 		data = append(data, openai.Image{
@@ -561,7 +561,7 @@ func (c *CodexClient) parseImageGenerationStreamNext(ctx context.Context, stream
 		return nil, fmt.Errorf("no valid image data in response")
 	}
 
-	logrus.Infof("[Codex] Successfully extracted %d image(s) via assembler", len(data))
+	logrus.WithContext(ctx).Infof("[Codex] Successfully extracted %d image(s) via assembler", len(data))
 	return &openai.ImagesResponse{
 		Data: data,
 	}, nil
@@ -596,7 +596,7 @@ func (c *CodexClient) parseResponsesStream(ctx context.Context, stream *ssestrea
 		return nil, fmt.Errorf("response assembly failed: status=%s", asm.Status())
 	}
 
-	logrus.Debugf("[Codex] Response assembled via assembler, id: %s, status: %s", resp.ID, asm.Status())
+	logrus.WithContext(ctx).Debugf("[Codex] Response assembled via assembler, id: %s, status: %s", resp.ID, asm.Status())
 	return resp, nil
 }
 

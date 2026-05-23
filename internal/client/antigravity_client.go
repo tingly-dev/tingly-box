@@ -94,7 +94,7 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	}
 
 	if newPath != originalPath {
-		logrus.Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
+		logrus.WithContext(req.Context()).Debugf("[Antigravity] Rewriting URL path: %s -> %s", originalPath, newPath)
 		req.URL.Path = newPath
 	}
 
@@ -145,15 +145,15 @@ func (t *antigravityRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
 	}
 
-	logrus.Debugf("[Antigravity] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
+	logrus.WithContext(req.Context()).Debugf("[Antigravity] Sending request to %s, Content-Length=%d, isStreaming=%v", req.URL.Path, req.ContentLength, isStreaming)
 
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
-		logrus.Errorf("[Antigravity] Request failed: %v", err)
+		logrus.WithContext(req.Context()).Errorf("[Antigravity] Request failed: %v", err)
 		return nil, err
 	}
 
-	logrus.Debugf("[Antigravity] Response received, status=%d", resp.StatusCode)
+	logrus.WithContext(req.Context()).Debugf("[Antigravity] Response received, status=%d", resp.StatusCode)
 
 	if resp.Body != nil {
 		if isStreaming {

@@ -25,6 +25,10 @@ const (
 	LogSourceAction LogSource = "action"
 	// LogSourceSmartRouting indicates logs from smart routing rule evaluation
 	LogSourceSmartRouting LogSource = "smart_routing"
+	// LogSourceModelRequest indicates request-scoped logs from the model
+	// request pipeline (protocol conversion, upstream client calls). These
+	// are correlated by a request_id field rather than by transport path.
+	LogSourceModelRequest LogSource = "model_request"
 	// LogSourceUnknown indicates unknown log source
 	LogSourceUnknown LogSource = "unknown"
 )
@@ -128,6 +132,7 @@ func DefaultMultiLoggerConfig(configDir string) *MultiLoggerConfig {
 			LogSourceSystem:       {MaxEntries: 500},  // System logs: medium volume
 			LogSourceAction:       {MaxEntries: 100},  // User actions: low volume, important
 			LogSourceSmartRouting: {MaxEntries: 500},  // Smart routing evaluations: per-request
+			LogSourceModelRequest: {MaxEntries: 1000}, // Model request stages: aligned with HTTP envelope
 		},
 	}
 }
@@ -265,6 +270,8 @@ func (m *MultiLogger) getDefaultMemorySinkSize(source LogSource) int {
 		return 100
 	case LogSourceSmartRouting:
 		return 500
+	case LogSourceModelRequest:
+		return 1000
 	default:
 		return 100
 	}
@@ -312,10 +319,20 @@ func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
 		return nil
 	}
 
-	// Extract source from fields, default to system if not present
+	// Determine the source. An explicit source field (set by per-source
+	// loggers such as the HTTP access log or smart routing) always wins.
+	// Otherwise, a request-scoped entry — one whose context carries a
+	// correlation id, e.g. from logrus.WithContext(ctx) inside the protocol
+	// or client packages — is routed to the model_request source and stamped
+	// with its id. Everything else falls back to system.
 	source := LogSourceSystem
-	if src, ok := entry.Data["source"].(string); ok {
+	if src, ok := entry.Data["source"].(string); ok && src != "" {
 		source = LogSource(src)
+	} else if id := RequestIDFromContext(entry.Context); id != "" {
+		source = LogSourceModelRequest
+		if _, exists := entry.Data["request_id"]; !exists {
+			entry.Data["request_id"] = id
+		}
 	}
 
 	// Write to memory sink for this source (if configured)

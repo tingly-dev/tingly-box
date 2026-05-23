@@ -60,10 +60,10 @@ func handleOpenAIToAnthropicStreamResponse(
 	responseModel string,
 	hooks *OpenAIToAnthropicMCPHooks,
 ) (*protocol.TokenUsage, error) {
-	logrus.Debug("Starting OpenAI to Anthropic streaming response handler")
+	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in OpenAI to Anthropic streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in OpenAI to Anthropic streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("event: error\ndata: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -74,10 +74,10 @@ func handleOpenAIToAnthropicStreamResponse(
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing OpenAI stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing OpenAI stream: %v", err)
 			}
 		}
-		logrus.Info("Finished OpenAI to Anthropic streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished OpenAI to Anthropic streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -102,7 +102,7 @@ func handleOpenAIToAnthropicStreamResponse(
 	// Initialize token counter for accurate usage tracking
 	tokenCounter, err := token.NewStreamTokenCounter()
 	if err != nil {
-		logrus.Errorf("Failed to create token counter: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Failed to create token counter: %v", err)
 		// Continue without token counter - will fall back to estimation
 		tokenCounter = nil
 	}
@@ -147,7 +147,7 @@ func handleOpenAIToAnthropicStreamResponse(
 		// Check context cancellation first
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping OpenAI to Anthropic stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping OpenAI to Anthropic stream")
 			return false
 		default:
 		}
@@ -160,7 +160,7 @@ func handleOpenAIToAnthropicStreamResponse(
 		chunkCount++
 		chunk := stream.Current()
 
-		logrus.Debugf("[Stream] Got chunk #%d: len(choices)=%d", chunkCount, len(chunk.Choices))
+		logrus.WithContext(c.Request.Context()).Debugf("[Stream] Got chunk #%d: len(choices)=%d", chunkCount, len(chunk.Choices))
 
 		// Skip empty chunks (no choices)
 		if len(chunk.Choices) == 0 {
@@ -180,13 +180,13 @@ func handleOpenAIToAnthropicStreamResponse(
 
 		choice := chunk.Choices[0]
 
-		logrus.Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
+		logrus.WithContext(c.Request.Context()).Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
 			chunkCount, len(chunk.Choices),
 			choice.Delta.Content, choice.FinishReason)
 
 		// Log first few chunks in detail for debugging
 		if chunkCount <= 5 || choice.FinishReason != "" {
-			logrus.Debugf("Full chunk #%d: %v", chunkCount, chunk)
+			logrus.WithContext(c.Request.Context()).Debugf("Full chunk #%d: %v", chunkCount, chunk)
 		}
 
 		delta := choice.Delta
@@ -397,10 +397,10 @@ func handleOpenAIToAnthropicStreamResponse(
 	if err := stream.Err(); err != nil {
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
-			logrus.Debug("OpenAI to Anthropic stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("OpenAI to Anthropic stream canceled by client")
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
-		logrus.Errorf("OpenAI stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
 		errorEvent := map[string]interface{}{
 			"type": "error",
 			"error": map[string]interface{}{
@@ -454,10 +454,10 @@ func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 // and converting them to Anthropic format (v1 or beta depending on the senders provided).
 // Returns UsageStat containing token usage information for tracking.
 func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
-	logrus.Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
+	logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Responses API to Anthropic streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Responses API to Anthropic streaming handler: %v", r)
 			if c.Writer != nil {
 				c.SSEvent("error", "{\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}")
 				if flusher, ok := c.Writer.(http.Flusher); ok {
@@ -467,10 +467,10 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing Responses API stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing Responses API stream: %v", err)
 			}
 		}
-		logrus.Debug("[ResponsesAPI] Finished Responses API to Anthropic streaming response handler")
+		logrus.WithContext(c.Request.Context()).Debug("[ResponsesAPI] Finished Responses API to Anthropic streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -565,7 +565,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				"text": textDelta.Delta,
 			}, flusher)
 			lastOutputItemType = "text"
-			logrus.Debugf("Processing Responses API event #%d: type=%s", eventCount, textDelta.Delta)
+			logrus.WithContext(c.Request.Context()).Debugf("Processing Responses API event #%d: type=%s", eventCount, textDelta.Delta)
 		case "response.output_text.done", "response.content_part.done":
 			if state.textBlockIndex != -1 {
 				senders.SendContentBlockStop(state, state.textBlockIndex, flusher)
@@ -578,18 +578,18 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				state.thinkingBlockIndex = state.nextBlockIndex
 				state.nextBlockIndex++
 				state.thinkingBlocks[state.thinkingBlockIndex] = true
-				logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
+				logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
 			preview := reasoningDelta.Delta
-			logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
+			logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 			senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 				"type":     deltaTypeThinkingDelta,
 				"thinking": reasoningDelta.Delta,
 			}, flusher)
 
 		case "response.reasoning_text.done":
-			logrus.Debugf("[Thinking][ResponsesAPI] Thinking block done at index %d", state.thinkingBlockIndex)
+			logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Thinking block done at index %d", state.thinkingBlockIndex)
 			if state.thinkingBlockIndex != -1 && !state.stoppedBlocks[state.thinkingBlockIndex] {
 				// Send signature_delta before stopping thinking block (Anthropic extended thinking requirement)
 				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
@@ -647,7 +647,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.output_item.added":
 			itemAdded := currentEvent.AsResponseOutputItemAdded()
-			logrus.Debugf("item type: %s", itemAdded.Item.Type)
+			logrus.WithContext(c.Request.Context()).Debugf("item type: %s", itemAdded.Item.Type)
 			switch itemAdded.Item.Type {
 			case "reasoning":
 				reasoningDelta := currentEvent.AsResponseReasoningTextDelta()
@@ -655,11 +655,11 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					state.thinkingBlockIndex = state.nextBlockIndex
 					state.nextBlockIndex++
 					state.thinkingBlocks[state.thinkingBlockIndex] = true
-					logrus.Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
+					logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 					senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
 				preview := reasoningDelta.Delta
-				logrus.Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
+				logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 					"type":     deltaTypeThinkingDelta,
 					"thinking": reasoningDelta.Delta,
@@ -703,7 +703,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					"input": map[string]interface{}{},
 				}, flusher)
 			default:
-				logrus.Warnf("missing process for stream chunk: %s, %s", itemAdded.Type, itemAdded.Item.Type)
+				logrus.WithContext(c.Request.Context()).Warnf("missing process for stream chunk: %s, %s", itemAdded.Type, itemAdded.Item.Type)
 			}
 
 		case "response.function_call_arguments.delta":
@@ -773,7 +773,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			state.cacheTokens = completed.Response.Usage.InputTokensDetails.CachedTokens
 			state.reasoningTokens = completed.Response.Usage.OutputTokensDetails.ReasoningTokens
 
-			logrus.Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)
 
 			// Process any tool calls from the output array that weren't already handled via streaming events
 			// This handles cases where tool calls come in the final response without intermediate events
@@ -844,12 +844,12 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			senders.SendMessageDelta(state, stopReason, flusher)
 			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
 
-			logrus.Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Sent message_stop event with stop_reason=%s, finishing stream", stopReason)
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 
 		case "response.output_text.annotation.added":
 			annotationAdded := currentEvent.AsResponseOutputTextAnnotationAdded()
-			logrus.Debugf("[ResponsesAPI] Text annotation added: index=%d, citation_type=%s",
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Text annotation added: index=%d, citation_type=%s",
 				annotationAdded.OutputIndex,
 				annotationAdded.Annotation)
 
@@ -888,90 +888,90 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.audio.delta":
 			audioDelta := currentEvent.AsResponseAudioDelta()
-			logrus.Debugf("[ResponsesAPI] Audio delta: sequence=%d, len=%d", audioDelta.SequenceNumber, len(audioDelta.Delta))
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio delta: sequence=%d, len=%d", audioDelta.SequenceNumber, len(audioDelta.Delta))
 
 		case "response.audio.done":
-			logrus.Debugf("[ResponsesAPI] Audio done")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio done")
 
 		case "response.audio.transcript.delta":
 			transcriptDelta := currentEvent.AsResponseAudioTranscriptDelta()
-			logrus.Debugf("[ResponsesAPI] Audio transcript delta: sequence=%d, len=%d", transcriptDelta.SequenceNumber, len(transcriptDelta.Delta))
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio transcript delta: sequence=%d, len=%d", transcriptDelta.SequenceNumber, len(transcriptDelta.Delta))
 
 		case "response.audio.transcript.done":
-			logrus.Debugf("[ResponsesAPI] Audio transcript done")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio transcript done")
 
 		case "response.code_interpreter_call_code.delta":
 			codeDelta := currentEvent.AsResponseCodeInterpreterCallCodeDelta()
-			logrus.Debugf("[ResponsesAPI] Code interpreter code delta: len=%d", len(codeDelta.Delta))
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter code delta: len=%d", len(codeDelta.Delta))
 
 		case "response.code_interpreter_call_code.done":
-			logrus.Debugf("[ResponsesAPI] Code interpreter code done")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter code done")
 
 		case "response.code_interpreter_call.in_progress":
-			logrus.Debugf("[ResponsesAPI] Code interpreter in progress")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter in progress")
 
 		case "response.code_interpreter_call.interpreting":
-			logrus.Debugf("[ResponsesAPI] Code interpreter interpreting")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter interpreting")
 
 		case "response.code_interpreter_call.completed":
-			logrus.Debugf("[ResponsesAPI] Code interpreter completed")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter completed")
 
 		case "response.file_search_call.in_progress":
-			logrus.Debugf("[ResponsesAPI] File search in progress")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search in progress")
 
 		case "response.file_search_call.searching":
-			logrus.Debugf("[ResponsesAPI] File search searching: query=%s", currentEvent.RawJSON())
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search searching: query=%s", currentEvent.RawJSON())
 
 		case "response.file_search_call.completed":
-			logrus.Debugf("[ResponsesAPI] File search completed")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search completed")
 
 		case "response.web_search_call.in_progress":
-			logrus.Debugf("[ResponsesAPI] Web search in progress")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Web search in progress")
 
 		case "response.web_search_call.searching":
 			searching := currentEvent.AsResponseWebSearchCallSearching()
-			logrus.Debugf("[ResponsesAPI] Web search searching: %v", searching)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Web search searching: %v", searching)
 
 		case "response.web_search_call.completed":
-			logrus.Debugf("[ResponsesAPI] Web search completed")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Web search completed")
 
 		case "response.image_generation_call.in_progress":
-			logrus.Debugf("[ResponsesAPI] Image generation in progress")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Image generation in progress")
 
 		case "response.image_generation_call.generating":
 			generating := currentEvent.AsResponseImageGenerationCallGenerating()
-			logrus.Debugf("[ResponsesAPI] Image generation generating: %v", generating)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Image generation generating: %v", generating)
 
 		case "response.image_generation_call.partial_image":
 			partial := currentEvent.AsResponseImageGenerationCallPartialImage()
-			logrus.Debugf("[ResponsesAPI] Image generation partial: index=%d", partial.PartialImageIndex)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Image generation partial: index=%d", partial.PartialImageIndex)
 
 		case "response.image_generation_call.completed":
-			logrus.Debugf("[ResponsesAPI] Image generation completed")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Image generation completed")
 
 		case "response.mcp_call.in_progress":
 			mcpInProgress := currentEvent.AsResponseMcpCallInProgress()
-			logrus.Debugf("[ResponsesAPI] MCP call in progress: %v", mcpInProgress)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] MCP call in progress: %v", mcpInProgress)
 
 		case "response.mcp_call.completed":
 			mcpCompleted := currentEvent.AsResponseMcpCallCompleted()
-			logrus.Debugf("[ResponsesAPI] MCP call completed: %v", mcpCompleted)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] MCP call completed: %v", mcpCompleted)
 
 		case "response.mcp_call.failed":
 			mcpFailed := currentEvent.AsResponseMcpCallFailed()
-			logrus.Debugf("[ResponsesAPI] MCP call failed: %v", mcpFailed)
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] MCP call failed: %v", mcpFailed)
 
 		case "response.mcp_list_tools.in_progress":
-			logrus.Debugf("[ResponsesAPI] MCP list tools in progress")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] MCP list tools in progress")
 
 		case "response.mcp_list_tools.completed":
-			logrus.Debugf("[ResponsesAPI] MCP list tools completed")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] MCP list tools completed")
 
 		case "response.mcp_list_tools.failed":
-			logrus.Debugf("[ResponsesAPI] MCP list tools failed")
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] MCP list tools failed")
 
 		case "error", "response.failed", "response.incomplete":
-			logrus.Errorf("Responses API error event: %v", currentEvent)
+			logrus.WithContext(c.Request.Context()).Errorf("Responses API error event: %v", currentEvent)
 			errorEvent := map[string]interface{}{
 				"type": "error",
 				"error": map[string]interface{}{
@@ -983,12 +983,12 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), fmt.Errorf("Responses API error: %v", currentEvent)
 
 		default:
-			logrus.Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
+			logrus.WithContext(c.Request.Context()).Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
 		}
 	}
 
 	if err := stream.Err(); err != nil {
-		logrus.Errorf("Responses API stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Responses API stream error: %v", err)
 		errorEvent := map[string]interface{}{
 			"type": "error",
 			"error": map[string]interface{}{
@@ -1087,7 +1087,7 @@ func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream *openaistream.S
 			}
 
 			bs, _ := json.Marshal(msg)
-			logrus.Debugf("Assemble response: %s", string(bs))
+			logrus.WithContext(c.Request.Context()).Debugf("Assemble response: %s", string(bs))
 
 			// Send result
 			c.JSON(200, msg)

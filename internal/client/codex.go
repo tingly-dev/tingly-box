@@ -35,7 +35,7 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	newPath := rewriteCodexPath(originalPath)
 
 	if newPath != originalPath {
-		logrus.Debugf("[Codex] Rewriting URL path: %s -> %s", originalPath, newPath)
+		logrus.WithContext(req.Context()).Debugf("[Codex] Rewriting URL path: %s -> %s", originalPath, newPath)
 		req.URL.Path = newPath
 	}
 
@@ -85,7 +85,7 @@ func (t *codexRoundTripper) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	resp.Header.Set("Content-Type", "text/event-stream")
-	logrus.Debugf("[Codex] Must use stream: %s", resp.Status)
+	logrus.WithContext(req.Context()).Debugf("[Codex] Must use stream: %s", resp.Status)
 
 	return resp, nil
 }

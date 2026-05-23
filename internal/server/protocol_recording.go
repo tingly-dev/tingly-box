@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/obs"
+	"github.com/tingly-dev/tingly-box/internal/server/middleware"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -304,7 +305,7 @@ func (sr *ProtocolRecorder) emit(err error) {
 
 	r := &obs.Record{
 		Timestamp:  time.Now().UTC(),
-		RequestID:  uuid.New().String(),
+		RequestID:  sr.resolveRequestID(),
 		SessionID:  sr.sessionShort,
 		SessionSrc: sr.sessionSrc,
 		Provider:   sr.providerName,
@@ -330,6 +331,19 @@ func (sr *ProtocolRecorder) emit(err error) {
 	}
 
 	sr.sink.Emit(r)
+}
+
+// resolveRequestID returns the request correlation id established by the
+// access-log middleware so the recording (system B) shares an id with the
+// logrus traces (system A). Falls back to a fresh uuid when the recorder
+// runs outside an HTTP request.
+func (sr *ProtocolRecorder) resolveRequestID() string {
+	if sr.c != nil {
+		if id := sr.c.GetString(middleware.GinRequestIDKey); id != "" {
+			return id
+		}
+	}
+	return uuid.New().String()
 }
 
 func (sr *ProtocolRecorder) resolveModel() string {
