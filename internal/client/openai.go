@@ -84,6 +84,7 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 	transport = &customUserAgentTransport{base: base}
 	transport = wrapWithUserAgent(transport, provider)
+	transport = wrapWithLogging(transport, provider)
 
 	httpClient := &http.Client{
 		Transport: transport,

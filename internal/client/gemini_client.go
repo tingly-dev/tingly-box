@@ -52,7 +52,7 @@ func NewGeminiClient(provider *typ.Provider, model string, sessionID typ.Session
 		project:      project,
 		proxyURL:     provider.ProxyURL,
 	}
-	httpClient := &http.Client{Transport: transport}
+	httpClient := &http.Client{Transport: wrapWithLogging(transport, provider)}
 
 	base, err := newGoogleClientFromHTTPClient(provider, httpClient)
 	if err != nil {

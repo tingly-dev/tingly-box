@@ -46,7 +46,7 @@ func NewAntigravityClient(provider *typ.Provider, model string, sessionID typ.Se
 		project:      project,
 		proxyURL:     provider.ProxyURL,
 	}
-	httpClient := &http.Client{Transport: transport}
+	httpClient := &http.Client{Transport: wrapWithLogging(transport, provider)}
 
 	base, err := newGoogleClientFromHTTPClient(provider, httpClient)
 	if err != nil {

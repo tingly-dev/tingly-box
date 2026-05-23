@@ -60,7 +60,7 @@ func NewCodexClient(provider *typ.Provider, model string, sessionID typ.SessionI
 		RoundTripper: createSessionBoundTransport(provider, sessionID),
 	}
 	httpClient := &http.Client{
-		Transport: transport,
+		Transport: wrapWithLogging(transport, provider),
 	}
 	options = append(options, option.WithHTTPClient(httpClient))
 
