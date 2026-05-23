@@ -134,9 +134,12 @@ const LogsPage = () => {
         [],
     );
 
-    const getRequests = useCallback(async (params?: { limit?: number }) => {
+    const getRequests = useCallback(async (params?: { limit?: number; scenario?: string; provider?: string; status?: string }) => {
         const queryParams = new URLSearchParams();
         if (params?.limit) queryParams.append('limit', params.limit.toString());
+        if (params?.scenario) queryParams.append('scenario', params.scenario);
+        if (params?.provider) queryParams.append('provider', params.provider);
+        if (params?.status) queryParams.append('status', params.status);
 
         const response = await fetch(`/api/v1/requests?${queryParams.toString()}`, {
             headers: {

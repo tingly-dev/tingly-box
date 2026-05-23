@@ -1510,13 +1510,22 @@ export const handlers = [
         return HttpResponse.json({ success: true, uuid: params.uuid, ...body })
     }),
 
-    http.get('/api/v1/requests', () => {
+    http.get('/api/v1/requests', ({ request }) => {
+        const url = new URL(request.url)
+        const scenario = url.searchParams.get('scenario')
+        const provider = url.searchParams.get('provider')
+        const status = url.searchParams.get('status')
         const now = Date.now()
+        const filtered = mockModelRequests.filter((r) =>
+            (!scenario || r.scenario === scenario) &&
+            (!provider || r.provider === provider) &&
+            (!status || String(r.status) === status),
+        )
         return HttpResponse.json({
-            total: mockModelRequests.length,
-            requests: mockModelRequests.map((r, i) => ({
+            total: filtered.length,
+            requests: filtered.map((r, i) => ({
                 ...r,
-                time: new Date(now - (mockModelRequests.length - i) * 4000).toISOString(),
+                time: new Date(now - (filtered.length - i) * 4000).toISOString(),
             })),
         })
     }),

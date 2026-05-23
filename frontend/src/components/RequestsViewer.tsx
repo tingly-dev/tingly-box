@@ -12,6 +12,7 @@ import {
     TableContainer,
     TableHead,
     TableRow,
+    TextField,
     Typography,
 } from '@mui/material';
 import { Fragment, useEffect, useRef, useState } from 'react';
@@ -49,9 +50,19 @@ export interface ModelRequestDetail extends ModelRequestSummary {
     events: ModelRequestEvent[];
 }
 
+export interface RequestFilters {
+    limit?: number;
+    scenario?: string;
+    provider?: string;
+    status?: string;
+}
+
 interface RequestsViewerProps {
-    getRequests: (params?: { limit?: number }) => Promise<{ total: number; requests: ModelRequestSummary[] }>;
+    getRequests: (params?: RequestFilters) => Promise<{ total: number; requests: ModelRequestSummary[] }>;
     getRequestDetail: (id: string) => Promise<ModelRequestDetail | null>;
+    // When set, the scenario filter is fixed to this value and its input is
+    // hidden (used by the per-scenario quick-open dialog).
+    lockedScenario?: string;
 }
 
 const statusColor = (status?: number): 'default' | 'success' | 'warning' | 'error' => {
@@ -117,20 +128,28 @@ const SUPPRESSED_FIELDS = new Set([
     'request',
 ]);
 
-const RequestsViewer = ({ getRequests, getRequestDetail }: RequestsViewerProps) => {
+const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: RequestsViewerProps) => {
     const [requests, setRequests] = useState<ModelRequestSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [details, setDetails] = useState<Record<string, ModelRequestDetail>>({});
     const [error, setError] = useState<string | null>(null);
+    const [scenario, setScenario] = useState('');
+    const [provider, setProvider] = useState('');
+    const [status, setStatus] = useState('');
     const tableContainerRef = useRef<HTMLDivElement>(null);
 
     const loadRequests = async () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await getRequests({ limit: 200 });
+            const response = await getRequests({
+                limit: 200,
+                scenario: lockedScenario ?? (scenario || undefined),
+                provider: provider || undefined,
+                status: status || undefined,
+            });
             if (response && response.requests) {
                 const sorted = [...response.requests].sort(
                     (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
@@ -144,17 +163,19 @@ const RequestsViewer = ({ getRequests, getRequestDetail }: RequestsViewerProps) 
         }
     };
 
+    // Reload whenever the filters change (and on mount).
     useEffect(() => {
         loadRequests();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [scenario, provider, status, lockedScenario]);
 
     useEffect(() => {
         if (autoRefresh) {
             const id = setInterval(loadRequests, 5000);
             return () => clearInterval(id);
         }
-    }, [autoRefresh]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoRefresh, scenario, provider, status, lockedScenario]);
 
     useEffect(() => {
         if (!tableContainerRef.current || requests.length === 0) return;
@@ -321,6 +342,31 @@ const RequestsViewer = ({ getRequests, getRequestDetail }: RequestsViewerProps) 
                     <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                         {requests.length} requests
                     </Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    {!lockedScenario && (
+                        <TextField
+                            size="small"
+                            label="Scenario"
+                            value={scenario}
+                            onChange={(e) => setScenario(e.target.value.trim())}
+                            sx={{ width: 130 }}
+                        />
+                    )}
+                    <TextField
+                        size="small"
+                        label="Provider"
+                        value={provider}
+                        onChange={(e) => setProvider(e.target.value.trim())}
+                        sx={{ width: 130 }}
+                    />
+                    <TextField
+                        size="small"
+                        label="Status"
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value.trim())}
+                        sx={{ width: 90 }}
+                    />
                 </Stack>
                 <Box sx={{ flex: 1 }} />
                 <Typography variant="caption" color="text.secondary">
