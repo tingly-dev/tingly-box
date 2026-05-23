@@ -1,7 +1,7 @@
 import { Box, FormControlLabel, Stack, Switch, Typography, Alert, Tabs, Tab } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import SystemLogViewer from '@/components/SystemLogViewer';
-import SmartRoutingLogViewer from '@/components/SmartRoutingLogViewer';
+import RequestsViewer, { type ModelRequestDetail, type ModelRequestSummary } from '@/components/RequestsViewer';
 import UnifiedCard from '@/components/UnifiedCard';
 
 interface TabPanelProps {
@@ -134,11 +134,11 @@ const LogsPage = () => {
         [],
     );
 
-    const getSmartRoutingLogs = useCallback(async (params?: { limit?: number }) => {
+    const getRequests = useCallback(async (params?: { limit?: number }) => {
         const queryParams = new URLSearchParams();
         if (params?.limit) queryParams.append('limit', params.limit.toString());
 
-        const response = await fetch(`/api/v1/system/smart-routing/logs?${queryParams.toString()}`, {
+        const response = await fetch(`/api/v1/requests?${queryParams.toString()}`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
             },
@@ -153,19 +153,20 @@ const LogsPage = () => {
             throw new Error(errorDetail);
         }
         const data = await response.json();
-        return { total: data.total || 0, logs: data.logs || [] };
+        return { total: data.total || 0, requests: (data.requests || []) as ModelRequestSummary[] };
     }, []);
 
-    const clearSmartRoutingLogs = useCallback(async () => {
-        const response = await fetch('/api/v1/system/smart-routing/logs', {
-            method: 'DELETE',
+    const getRequestDetail = useCallback(async (id: string): Promise<ModelRequestDetail | null> => {
+        const response = await fetch(`/api/v1/requests/${encodeURIComponent(id)}`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
             },
         });
         if (!response.ok) {
-            throw new Error(`Failed to clear smart routing logs (${response.status})`);
+            if (response.status === 404) return null;
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        return (await response.json()) as ModelRequestDetail;
     }, []);
 
     const getRequestBody = useCallback(async (bodyRef: string) => {
@@ -210,9 +211,8 @@ const LogsPage = () => {
                     onChange={(_, newValue) => setTabValue(newValue)}
                     sx={{ borderBottom: 1, borderColor: 'divider' }}
                 >
-                    <Tab label="Model Requests" />
+                    <Tab label="Requests" />
                     <Tab label="System Logs" />
-                    <Tab label="Smart Routing" />
                 </Tabs>
 
                 {logError && (
@@ -222,10 +222,9 @@ const LogsPage = () => {
                 )}
 
                 <TabPanel value={tabValue} index={0}>
-                    <SystemLogViewer
-                        getLogs={getLogs}
-                        getRequestBody={getRequestBody}
-                        pathPrefix="/tingly/"
+                    <RequestsViewer
+                        getRequests={getRequests}
+                        getRequestDetail={getRequestDetail}
                     />
                 </TabPanel>
 
@@ -233,13 +232,6 @@ const LogsPage = () => {
                     <SystemLogViewer
                         getLogs={getLogs}
                         getRequestBody={getRequestBody}
-                    />
-                </TabPanel>
-
-                <TabPanel value={tabValue} index={2}>
-                    <SmartRoutingLogViewer
-                        getLogs={getSmartRoutingLogs}
-                        clearLogs={clearSmartRoutingLogs}
                     />
                 </TabPanel>
             </Stack>

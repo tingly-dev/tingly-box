@@ -1,6 +1,78 @@
 import { http, HttpResponse } from 'msw'
 
 // ============================================
+// Mock Model Requests (correlated per-request traces)
+// ============================================
+const mockModelRequests = [
+    {
+        request_id: 'req-anthropic-ok',
+        time: '',
+        scenario: 'anthropic',
+        request_model: 'claude-sonnet-4',
+        routed_model: 'claude-sonnet-4-20250514',
+        provider: 'Anthropic',
+        method: 'POST',
+        path: '/anthropic/v1/messages',
+        status: 200,
+        latency_ms: 1840,
+        has_error: false,
+        max_level: 'info',
+        event_count: 4,
+    },
+    {
+        request_id: 'req-openai-routed',
+        time: '',
+        scenario: 'openai',
+        request_model: 'gpt-4o',
+        routed_model: 'claude-sonnet-4-20250514',
+        provider: 'Anthropic',
+        method: 'POST',
+        path: '/openai/v1/chat/completions',
+        status: 200,
+        latency_ms: 2210,
+        has_error: false,
+        max_level: 'warning',
+        event_count: 5,
+    },
+    {
+        request_id: 'req-openai-fail',
+        time: '',
+        scenario: 'openai',
+        request_model: 'gpt-4o',
+        routed_model: 'gpt-4o',
+        provider: 'OpenAI',
+        method: 'POST',
+        path: '/openai/v1/chat/completions',
+        status: 502,
+        latency_ms: 740,
+        has_error: true,
+        max_level: 'error',
+        event_count: 3,
+    },
+]
+
+const mockRequestEvents: Record<string, Array<{ source: string; level: string; stage?: string; message: string; fields?: Record<string, any> }>> = {
+    'req-anthropic-ok': [
+        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-4-20250514', trace: [{ rule_index: 0, description: 'route sonnet', matched: true, ops: [{ position: 'model', operation: 'equals', matched: true, reason: 'model == claude-sonnet-4' }] }] } },
+        { source: 'model_request', level: 'info', stage: 'transform', message: 'anthropic passthrough (no conversion)' },
+        { source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
+        { source: 'http', level: 'info', message: 'POST /anthropic/v1/messages 200', fields: { status: 200, latency: 1840000000, method: 'POST', path: '/anthropic/v1/messages' } },
+    ],
+    'req-openai-routed': [
+        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 1, selected_provider: 'Anthropic', selected_model: 'claude-sonnet-4-20250514', trace: [{ rule_index: 0, description: 'keep gpt', matched: false, ops: [{ position: 'model', operation: 'equals', matched: false, reason: 'model != gpt-3.5' }] }, { rule_index: 1, description: 'upgrade to sonnet', matched: true, ops: [{ position: 'model', operation: 'prefix', matched: true, reason: 'model startswith gpt-4' }] }] } },
+        { source: 'model_request', level: 'warning', stage: 'transform', message: 'dropped unsupported field: logprobs' },
+        { source: 'model_request', level: 'info', stage: 'transform', message: 'openai chat -> anthropic messages' },
+        { source: 'model_request', level: 'info', stage: 'upstream', message: 'upstream responded', fields: { status: 200, provider: 'Anthropic' } },
+        { source: 'http', level: 'info', message: 'POST /openai/v1/chat/completions 200', fields: { status: 200, latency: 2210000000, method: 'POST', path: '/openai/v1/chat/completions' } },
+    ],
+    'req-openai-fail': [
+        { source: 'smart_routing', level: 'info', stage: 'routing', message: 'rule matched', fields: { outcome: 'selected', matched_rule_index: 0, selected_provider: 'OpenAI', selected_model: 'gpt-4o' } },
+        { source: 'model_request', level: 'error', stage: 'upstream', message: 'upstream call failed: 502 Bad Gateway', fields: { status: 502, provider: 'OpenAI', error: 'bad gateway' } },
+        { source: 'http', level: 'error', message: 'POST /openai/v1/chat/completions 502', fields: { status: 502, latency: 740000000, method: 'POST', path: '/openai/v1/chat/completions', error: 'upstream error' } },
+    ],
+}
+
+// ============================================
 // Mock Providers (v2 API with uuid)
 // ============================================
 const mockV2Providers = [
@@ -1436,5 +1508,33 @@ export const handlers = [
     http.put('/api/v1/imbot-settings/:uuid', async ({ params, request }) => {
         const body = await request.json() as any
         return HttpResponse.json({ success: true, uuid: params.uuid, ...body })
+    }),
+
+    http.get('/api/v1/requests', () => {
+        const now = Date.now()
+        return HttpResponse.json({
+            total: mockModelRequests.length,
+            requests: mockModelRequests.map((r, i) => ({
+                ...r,
+                time: new Date(now - (mockModelRequests.length - i) * 4000).toISOString(),
+            })),
+        })
+    }),
+
+    http.get('/api/v1/requests/:id', ({ params }) => {
+        const id = String(params.id)
+        const summary = mockModelRequests.find((r) => r.request_id === id)
+        if (!summary) {
+            return HttpResponse.json({ error: 'request not found' }, { status: 404 })
+        }
+        const base = Date.now() - 4000
+        return HttpResponse.json({
+            ...summary,
+            time: new Date(base).toISOString(),
+            events: (mockRequestEvents[id] || []).map((e, i) => ({
+                ...e,
+                time: new Date(base + i * 120).toISOString(),
+            })),
+        })
     }),
 ]
