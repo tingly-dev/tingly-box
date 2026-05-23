@@ -37,22 +37,32 @@ func wrapWithLogging(inner http.RoundTripper, provider *typ.Provider) http.Round
 
 func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
+
+	// When no provider proxy is configured, resolve the env proxy at request
+	// time so HTTP_PROXY/HTTPS_PROXY vars are reflected accurately in logs.
+	proxy := t.proxy
+	if proxy == "direct" {
+		if envProxy, err := http.ProxyFromEnvironment(req); err == nil && envProxy != nil {
+			proxy = redactProxy(envProxy.String())
+		}
+	}
+
 	resp, err := t.inner.RoundTrip(req)
 	latencyMs := time.Since(start).Milliseconds()
 
 	entry := logrus.WithContext(req.Context()).WithFields(logrus.Fields{
 		"stage":      "upstream",
 		"provider":   t.provider,
-		"proxy":      t.proxy,
+		"proxy":      proxy,
 		"method":     req.Method,
 		"host":       req.URL.Host,
 		"latency_ms": latencyMs,
 	})
 	if err != nil {
-		entry.WithError(err).Errorf("upstream call failed via %s", t.proxy)
+		entry.WithError(err).Errorf("upstream call failed via %s", proxy)
 		return resp, err
 	}
-	entry.WithField("status", resp.StatusCode).Infof("upstream %d via %s", resp.StatusCode, t.proxy)
+	entry.WithField("status", resp.StatusCode).Infof("upstream %d via %s", resp.StatusCode, proxy)
 	return resp, nil
 }
 
