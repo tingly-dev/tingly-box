@@ -132,8 +132,22 @@ func (r *Result) TextOutput() string {
 		for _, event := range r.Events {
 			// Handle SDK stream types
 			if event.Type == "assistant" {
-				// Assistant events contain the message
-				if message, ok := event.Data["message"].(string); ok {
+				// Real CLI shape: message is an object whose content is an
+				// array of blocks; concatenate the text blocks.
+				if msg, ok := event.Data["message"].(map[string]any); ok {
+					if content, ok := msg["content"].([]any); ok {
+						for _, block := range content {
+							bm, ok := block.(map[string]any)
+							if !ok || bm["type"] != "text" {
+								continue
+							}
+							if txt, ok := bm["text"].(string); ok {
+								output.WriteString(txt)
+							}
+						}
+					}
+				} else if message, ok := event.Data["message"].(string); ok {
+					// Legacy/simple shape: message is already a string.
 					output.WriteString(message)
 				}
 			} else if event.Type == "text_delta" {
