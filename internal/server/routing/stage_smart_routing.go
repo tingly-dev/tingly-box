@@ -112,7 +112,7 @@ func (s *SmartRoutingStage) emitTrace(
 	}
 	if ctx.GinContext != nil {
 		fields["client_ip"] = ctx.GinContext.ClientIP()
-		fields["request_id"] = ctx.GinContext.GetString("X-Request-Id")
+		fields["request_id"] = ctx.GinContext.GetString("request_id")
 	}
 
 	if s.multiLogger != nil {

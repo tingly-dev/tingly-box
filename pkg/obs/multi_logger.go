@@ -25,6 +25,10 @@ const (
 	LogSourceAction LogSource = "action"
 	// LogSourceSmartRouting indicates logs from smart routing rule evaluation
 	LogSourceSmartRouting LogSource = "smart_routing"
+	// LogSourceModelRequest indicates request-scoped logs from the model
+	// request pipeline (protocol conversion, upstream client calls). These
+	// are correlated by a request_id field rather than by transport path.
+	LogSourceModelRequest LogSource = "model_request"
 	// LogSourceUnknown indicates unknown log source
 	LogSourceUnknown LogSource = "unknown"
 )
@@ -128,6 +132,7 @@ func DefaultMultiLoggerConfig(configDir string) *MultiLoggerConfig {
 			LogSourceSystem:       {MaxEntries: 500},  // System logs: medium volume
 			LogSourceAction:       {MaxEntries: 100},  // User actions: low volume, important
 			LogSourceSmartRouting: {MaxEntries: 500},  // Smart routing evaluations: per-request
+			LogSourceModelRequest: {MaxEntries: 1000}, // Model request stages: aligned with HTTP envelope
 		},
 	}
 }
@@ -265,6 +270,8 @@ func (m *MultiLogger) getDefaultMemorySinkSize(source LogSource) int {
 		return 100
 	case LogSourceSmartRouting:
 		return 500
+	case LogSourceModelRequest:
+		return 1000
 	default:
 		return 100
 	}
