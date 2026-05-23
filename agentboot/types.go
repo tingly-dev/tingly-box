@@ -156,22 +156,6 @@ func (r *Result) TextOutput() string {
 	}
 }
 
-// GetStatus extracts the final status from events
-func (r *Result) GetStatus() string {
-	if r == nil || r.Format != OutputFormatStreamJSON {
-		return "unknown"
-	}
-
-	for i := len(r.Events) - 1; i >= 0; i-- {
-		if r.Events[i].Type == "status" {
-			if status, ok := r.Events[i].Data["status"].(string); ok {
-				return status
-			}
-		}
-	}
-	return "unknown"
-}
-
 // IsSuccess returns true if the execution was successful
 func (r *Result) IsSuccess() bool {
 	return r != nil && r.ExitCode == 0 && r.Error == ""
@@ -211,16 +195,6 @@ func (r *Result) GetMessageChain() []Event {
 // GetAssistantMessages returns all assistant message events
 func (r *Result) GetAssistantMessages() []Event {
 	return r.GetMessagesByType("assistant")
-}
-
-// GetToolUseMessages returns all tool_use message events
-func (r *Result) GetToolUseMessages() []Event {
-	return r.GetMessagesByType("tool_use")
-}
-
-// GetToolResultMessages returns all tool_result message events
-func (r *Result) GetToolResultMessages() []Event {
-	return r.GetMessagesByType("tool_result")
 }
 
 // GetUserMessages returns all user message events

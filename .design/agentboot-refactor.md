@@ -361,12 +361,54 @@ clean on the changed packages.
 
 Verified: `go build ./...` + `go test ./...` + `go vet` green in both modules.
 
-### P2 — optional deeper cleanup
+### P2 — deeper cleanup — TRIMMED BY REAL EVENT MODEL (this PR)
 
-10. Make `ask.Request`/`ask.Result` the prompter's native types end-to-end
-    (remove the one remaining conversion hop in `imprompter.go`).
-11. Prune unused `Result` getters; inline `session_bridge.go`.
-    (`prompt/` already deleted in P1.5.)
+`agentboot` is its own Go module and is kept as a reusable library, so a coherent
+public surface is retained even where the single consumer (the bot) doesn't use
+it. But "coherent" is the bar: an accessor that is *misleading* against the real
+event model, or has *no semantic consumer*, is not coherent — it's noise. Applying
+that test:
+
+**Removed (3 `*Result` getters):**
+
+- `GetToolUseMessages` / `GetToolResultMessages` — misleading. `Result.Events`
+  holds the CLI's **raw top-level** stream events (runner.go appends each decoded
+  `ev` verbatim). `tool_use` / `tool_result` are *not* top-level events in this
+  pipeline — they are content blocks inside `assistant` messages; the only
+  standalone top-level `tool_use` is an SDK duplicate the formatter explicitly
+  suppresses (`formatter.go`, `seenAssistantToolIDs`). So these getters return
+  either nothing or that suppressed-duplicate noise, while *looking* symmetric
+  with `GetAssistantMessages`. To read tool calls you must walk assistant content
+  blocks, so the getters are a trap.
+- `GetStatus` — zero callers and no semantic consumer. The authoritative terminal
+  signal is the `result` event + `IsSuccess`.
+
+**Kept (the genuinely coherent surface):**
+
+- `GetMessagesByType` (generic filter) and `GetMessageChain` (conversational view)
+  — foundational queries.
+- `GetAssistantMessages` / `GetUserMessages` — `assistant` / `user` *are* real
+  top-level events, so these wrappers return correct data.
+- `TextOutput` (used by the bot), and the scalar accessors `GetSessionID` /
+  `GetCostUSD` / `IsSuccess` (httpserver example) — session / cost / success map
+  directly to this product's LLM-gateway domain.
+
+**Inlined `session_bridge.go`** (`NewClaudeStore`) into `agentboot.New` and
+deleted the file. Its only non-redundant value would have been converting the
+concrete `*ccsession.Store` to the `common.SessionStore` interface — but `ab.store`
+is already typed as that interface, so the conversion is implicit at assignment.
+With a single internal caller and no external consumer, the exported one-line
+passthrough was ceremony. (If Codex/Gemini backends land later, re-introduce a
+symmetric set of `New*Store` constructors then.)
+
+**Item 10** (make `ask.Request`/`ask.Result` the prompter's native types) is still
+not pursued: it would create an `agentboot → ask → agentboot` import cycle (the
+`Prompter` interface lives in `agentboot`), and the single `event → ask.Request →
+ask.Result → response` hop in `imprompter.go` is already minimal.
+
+Net: the refactor stops after P1.5. The earlier P0/P1/P1.5 deletions removed a
+genuinely redundant *parallel paradigm*; this PR removes only the
+misleading/orphan accessors and keeps one coherent query + scalar surface.
 
 ### Verification per phase
 

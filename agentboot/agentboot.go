@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	ccsession "github.com/tingly-dev/tingly-box/agentboot/claude/session"
 	"github.com/tingly-dev/tingly-box/agentboot/common"
 )
 
@@ -49,7 +50,7 @@ func New(config Config) (*AgentBoot, error) {
 		agents: make(map[AgentType]Agent),
 	}
 
-	store, err := NewClaudeStore(config.ClaudeProjectsDir)
+	store, err := ccsession.NewStore(config.ClaudeProjectsDir)
 	if err != nil {
 		return nil, fmt.Errorf("initialize session store: %w", err)
 	}
