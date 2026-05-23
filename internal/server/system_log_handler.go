@@ -46,8 +46,10 @@ func (s *Server) GetSystemLogs(c *gin.Context) {
 		limit = 1000 // Max limit
 	}
 
-	// Read logs from JSON log file (only recent entries, system source only)
-	entries, err := s.multiLogger.ReadJSONLogs(limit)
+	// Read logs from JSON log file, keeping only genuine system logs. HTTP
+	// access logs, model-request stage logs and smart-routing traces are
+	// request-scoped and surfaced through the Requests view instead.
+	entries, err := s.multiLogger.ReadJSONLogsBySource(limit, obs.LogSourceSystem, obs.LogSourceAction, obs.LogSourceUnknown)
 	if err != nil {
 		logrus.Errorf("Failed to read system logs: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{

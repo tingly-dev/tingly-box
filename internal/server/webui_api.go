@@ -157,6 +157,18 @@ func (s *Server) useWebAPIEndpoints(manager *swagger.RouteManager) {
 		swagger.WithTags("system-logs"),
 	)
 
+	// Model Request routes (correlated per-request traces across pipeline stages)
+	apiV1.GET("/requests", s.GetModelRequests,
+		swagger.WithDescription("List recent model requests, one row per correlation id, joining the HTTP access log, model-request stage logs and smart-routing traces. Supports 'limit', 'scenario', 'provider' and 'status' filters."),
+		swagger.WithTags("requests"),
+		swagger.WithResponseModel(ModelRequestsResponse{}),
+	)
+	apiV1.GET("/requests/:id", s.GetModelRequestDetail,
+		swagger.WithDescription("Get the full, time-ordered event timeline for a single model request by correlation id."),
+		swagger.WithTags("requests"),
+		swagger.WithResponseModel(ModelRequestDetail{}),
+	)
+
 	// Smart Routing log routes (per-request rule evaluation traces)
 	apiV1.GET("/system/smart-routing/logs", s.GetSmartRoutingLogs,
 		swagger.WithDescription("Get recent smart routing evaluation traces. Each entry contains the request snapshot and per-rule per-op match results."),
