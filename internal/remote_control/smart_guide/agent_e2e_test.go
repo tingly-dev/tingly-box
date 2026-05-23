@@ -722,11 +722,11 @@ func (h *testMessageHandler) OnError(err error) {
 	}
 }
 
-func (h *testMessageHandler) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+func (h *testMessageHandler) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
 	// Auto-approve all in tests
-	return agentboot.PermissionResult{Approved: true, Reason: "auto-approved in test"}, nil
+	return agentboot.ApprovalResponse{Approved: true, Reason: "auto-approved in test"}, nil
 }
 
-func (h *testMessageHandler) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
-	return agentboot.AskResult{Response: "test response"}, nil
+func (h *testMessageHandler) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
+	return agentboot.AskResponse{Response: "test response"}, nil
 }

@@ -624,23 +624,20 @@ func (p *IMPrompter) IsWhitelisted(toolName string) bool {
 // coercion logic is used by every prompter (IM, stdin, tool_handlers).
 func normalizeQuestionList(v any) []map[string]any { return ask.NormalizeQuestions(v) }
 
-// Legacy compatibility methods
-
 // OnApproval handles permission confirmation requests via IM.
-// It satisfies the prompter contract consumed by the Claude executor and the
-// smart-guide approver.
-func (p *IMPrompter) OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	askReq := ask.FromPermissionRequest(req)
+// It satisfies the [agentboot.Prompter] contract consumed by the Claude
+// executor and the smart-guide approver.
+func (p *IMPrompter) OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	askReq := ask.FromApprovalEvent(req)
 	result, err := p.Prompt(ctx, *askReq)
 	if err != nil {
-		return agentboot.PermissionResult{}, err
+		return agentboot.ApprovalResponse{}, err
 	}
-	return result.ToPermissionResult(), nil
+	return result.ToApprovalResponse(), nil
 }
 
 // OnAsk handles user questions/selections via IM.
-func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
-	// Convert AskRequest to ask.Request
+func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
 	askReq := ask.Request{
 		ID:        req.ID,
 		Type:      ask.Type(req.Type),
@@ -653,21 +650,17 @@ func (p *IMPrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agent
 		Input:     req.Input,
 		Message:   req.Message,
 		Reason:    req.Reason,
-		Metadata:  req.Metadata,
 	}
 
 	result, err := p.Prompt(ctx, askReq)
 	if err != nil {
-		return agentboot.AskResult{}, err
+		return agentboot.AskResponse{}, err
 	}
 
-	// Convert back to AskResult
-	return agentboot.AskResult{
-		ID:           result.ID,
+	return agentboot.AskResponse{
 		Approved:     result.Approved,
 		Response:     result.Response,
 		Selection:    result.Selection,
-		Remember:     result.Remember,
 		Reason:       result.Reason,
 		UpdatedInput: result.UpdatedInput,
 	}, nil
@@ -682,9 +675,4 @@ func (p *IMPrompter) SubmitDecision(requestID string, approved bool, remember bo
 		Reason:   reason,
 	}
 	return p.SubmitResult(requestID, result)
-}
-
-// PromptPermission implements the legacy agentboot.UserPrompter interface
-func (p *IMPrompter) PromptPermission(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	return p.OnApproval(ctx, req)
 }

@@ -214,12 +214,12 @@ func (h *handler) runExecution(
 // For production use, replace with a real approval mechanism.
 type autoApprove struct{}
 
-func (autoApprove) OnApproval(_ context.Context, _ agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
-	return agentboot.PermissionResult{Approved: true}, nil
+func (autoApprove) OnApproval(_ context.Context, _ agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error) {
+	return agentboot.ApprovalResponse{Approved: true}, nil
 }
 
-func (autoApprove) OnAsk(_ context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
-	return agentboot.AskResult{ID: req.ID, Approved: true}, nil
+func (autoApprove) OnAsk(_ context.Context, _ agentboot.AskRequestEvent) (agentboot.AskResponse, error) {
+	return agentboot.AskResponse{Approved: true}, nil
 }
 
 func isNotFound(err error) bool {

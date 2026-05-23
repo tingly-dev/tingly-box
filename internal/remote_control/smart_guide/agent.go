@@ -231,8 +231,8 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 		}).Info("ToolExecutor approval callback invoked for non-whitelisted command")
 
 		// Build permission request
-		permReq := agentboot.PermissionRequest{
-			RequestID: uuid.New().String(),
+		permReq := agentboot.ApprovalRequestEvent{
+			ID:        uuid.New().String(),
 			AgentType: AgentTypeTinglyBox,
 			ToolName:  "bash",
 			Input: map[string]interface{}{
@@ -247,7 +247,7 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"requestID": permReq.RequestID,
+			"requestID": permReq.ID,
 			"chatID":    permReq.ChatID,
 			"platform":  permReq.Platform,
 		}).Debug("Calling handler.OnApproval with permission request")
@@ -257,7 +257,7 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 		if err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"command":   req.Command,
-				"requestID": permReq.RequestID,
+				"requestID": permReq.ID,
 			}).Error("Approval request failed - approver.OnApproval returned error")
 			return false, err
 		}
@@ -265,7 +265,7 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 		logrus.WithFields(logrus.Fields{
 			"command":   req.Command,
 			"approved":  result.Approved,
-			"requestID": permReq.RequestID,
+			"requestID": permReq.ID,
 		}).Info("Approval result received from approver")
 
 		return result.Approved, nil

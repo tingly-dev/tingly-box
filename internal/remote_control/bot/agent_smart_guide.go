@@ -80,8 +80,8 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 			if e.deps.IMPrompter == nil {
 				return false, nil
 			}
-			permReq := agentboot.PermissionRequest{
-				RequestID: uuid.New().String(),
+			permReq := agentboot.ApprovalRequestEvent{
+				ID:        uuid.New().String(),
 				AgentType: smart_guide.AgentTypeTinglyBox,
 				ToolName:  "send_file",
 				Input: map[string]interface{}{

@@ -28,5 +28,5 @@ type StreamHandler interface {
 // Approver answers a permission request for a non-whitelisted command.
 // *imchannel.IMPrompter satisfies this via its OnApproval method.
 type Approver interface {
-	OnApproval(ctx context.Context, req agentboot.PermissionRequest) (agentboot.PermissionResult, error)
+	OnApproval(ctx context.Context, req agentboot.ApprovalRequestEvent) (agentboot.ApprovalResponse, error)
 }

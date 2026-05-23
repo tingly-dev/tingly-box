@@ -99,24 +99,3 @@ func (l *Launcher) Interrupt(ctx context.Context, stdin io.WriteCloser, reason s
 	return controlMgr.SendRequestAsync(builder.Build(), stdin)
 }
 
-// SendPermissionRequest sends a permission request and waits for the response.
-func (l *Launcher) SendPermissionRequest(ctx context.Context, req agentboot.PermissionRequest, stdin io.WriteCloser) (agentboot.PermissionResult, error) {
-	controlMgr := NewControlManager()
-	builder := NewPermissionRequestBuilder().
-		WithRequestID(req.RequestID).
-		WithTool(req.ToolName, req.Input)
-
-	resp, err := controlMgr.SendRequest(ctx, builder.Build(), stdin)
-	if err != nil {
-		return agentboot.PermissionResult{Approved: false}, err
-	}
-
-	result := agentboot.PermissionResult{Approved: true}
-	if resp.Response != nil {
-		if subtype, _ := resp.Response["subtype"].(string); subtype == ResultSubtypeError {
-			result.Approved = false
-			result.Reason, _ = resp.Response["error"].(string)
-		}
-	}
-	return result, nil
-}

@@ -198,44 +198,30 @@ func (r *Request) SetChatContext(chatID, platform string) {
 	r.Metadata["_platform"] = platform
 }
 
-// ToPermissionRequest converts to the legacy PermissionRequest type
-// This is for backward compatibility
-func (r *Request) ToPermissionRequest() agentboot.PermissionRequest {
-	return agentboot.PermissionRequest{
-		RequestID: r.ID,
-		AgentType: r.AgentType,
-		ToolName:  r.ToolName,
-		Input:     r.Input,
-		Reason:    r.Reason,
-		SessionID: r.SessionID,
-		Timestamp: time.Now(),
-	}
-}
-
-// FromPermissionRequest creates a Request from legacy PermissionRequest
-func FromPermissionRequest(pr agentboot.PermissionRequest) *Request {
+// FromApprovalEvent builds an ask.Request from an [agentboot.ApprovalRequestEvent].
+func FromApprovalEvent(e agentboot.ApprovalRequestEvent) *Request {
 	req := &Request{
-		ID:        pr.RequestID,
+		ID:        e.ID,
 		Type:      TypePermission,
-		SessionID: pr.SessionID,
-		AgentType: pr.AgentType,
-		ToolName:  pr.ToolName,
-		Input:     pr.Input,
-		Reason:    pr.Reason,
-		BotUUID:   pr.BotUUID, // Include bot UUID for routing
-		Metadata:  pr.Input,
-		ChatID:    pr.ChatID,   // Use ChatID field directly
-		Platform:  pr.Platform, // Use Platform field directly
+		SessionID: e.SessionID,
+		AgentType: e.AgentType,
+		ToolName:  e.ToolName,
+		Input:     e.Input,
+		Reason:    e.Reason,
+		BotUUID:   e.BotUUID,
+		Metadata:  e.Input,
+		ChatID:    e.ChatID,
+		Platform:  e.Platform,
 	}
 
-	// Fallback: extract chat context from Input (for backward compatibility)
-	if req.ChatID == "" && pr.Input != nil {
-		if chatID, ok := pr.Input["_chat_id"].(string); ok {
+	// Fallback: extract chat context from Input.
+	if req.ChatID == "" && e.Input != nil {
+		if chatID, ok := e.Input["_chat_id"].(string); ok {
 			req.ChatID = chatID
 		}
 	}
-	if req.Platform == "" && pr.Input != nil {
-		if platform, ok := pr.Input["_platform"].(string); ok {
+	if req.Platform == "" && e.Input != nil {
+		if platform, ok := e.Input["_platform"].(string); ok {
 			req.Platform = platform
 		}
 	}
@@ -243,12 +229,13 @@ func FromPermissionRequest(pr agentboot.PermissionRequest) *Request {
 	return req
 }
 
-// ToPermissionResult converts Result to legacy PermissionResult
-func (r *Result) ToPermissionResult() agentboot.PermissionResult {
-	return agentboot.PermissionResult{
+// ToApprovalResponse converts an ask Result to an [agentboot.ApprovalResponse].
+// The Remember flag is intentionally not propagated to the agent — the ask
+// subsystem owns AlwaysAllow caching internally.
+func (r *Result) ToApprovalResponse() agentboot.ApprovalResponse {
+	return agentboot.ApprovalResponse{
 		Approved:     r.Approved,
 		Reason:       r.Reason,
 		UpdatedInput: r.UpdatedInput,
-		Remember:     r.Remember,
 	}
 }

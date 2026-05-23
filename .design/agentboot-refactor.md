@@ -327,10 +327,46 @@ types and remove `PermissionRequest` / `AskRequest` / `PermissionResult` /
 Verified: `go build ./...` + `go test ./...` green in both modules; `go vet`
 clean on the changed packages.
 
+### P1.5 — collapse permission/ask representation (§3.2) — DONE (this PR)
+
+9. `Prompter` now consumes the stream event types directly:
+
+   ```go
+   type Prompter interface {
+       OnApproval(ctx, req ApprovalRequestEvent) (ApprovalResponse, error)
+       OnAsk(ctx, req AskRequestEvent) (AskResponse, error)
+   }
+   ```
+
+   Deleted from `agentboot/types.go`: `PermissionRequest`, `PermissionResult`,
+   `AskRequest`, `AskResult`, and the dead `PermissionResponse`. `RunWithPrompter`
+   now passes the event straight to the prompter and the returned response straight
+   to `handle.Respond` — the two field-copy blocks are gone.
+
+   `imprompter.go` keeps a single `event → ask.Request → ask.Result → response`
+   conversion via the new `ask.FromApprovalEvent` / `Result.ToApprovalResponse`
+   (replacing `FromPermissionRequest` / `ToPermissionResult`). `smart_guide`'s
+   `Approver` and its two request builders now use `ApprovalRequestEvent` /
+   `ApprovalResponse`. `agent_claude_code.go`'s `autoApprovePrompter` and the
+   `httpserver` example updated to the event types.
+
+   Also removed as now-dead: the `ask.UserPrompter` / `legacyPrompterWrapper` /
+   `ToLegacyUserPrompter` shim and `ask.Request.ToPermissionRequest`,
+   `IMPrompter.PromptPermission`, `claude.Launcher.SendPermissionRequest`, and the
+   entire `prompt/` package (test-only `FakePrompter`, unused in prod — item 11).
+
+   Note: the prompter's `Remember` flag is no longer carried on the response to the
+   agent; AlwaysAllow caching stays internal to the ask subsystem (matches the
+   prior behavior — `RunWithPrompter` already dropped it at the boundary).
+
+Verified: `go build ./...` + `go test ./...` + `go vet` green in both modules.
+
 ### P2 — optional deeper cleanup
 
-10. Make `ask.Request`/`ask.Result` the prompter's native types end-to-end.
-11. Delete `prompt/`; prune unused `Result` getters; inline `session_bridge.go`.
+10. Make `ask.Request`/`ask.Result` the prompter's native types end-to-end
+    (remove the one remaining conversion hop in `imprompter.go`).
+11. Prune unused `Result` getters; inline `session_bridge.go`.
+    (`prompt/` already deleted in P1.5.)
 
 ### Verification per phase
 
@@ -361,5 +397,3 @@ clean on the changed packages.
   (SetRunning/SetFailed/SetCompleted) stay in the runner — unaffected.
 - **Other importers** (`cli/harness/agent.go`, `remote/scenario/builtin/...`)
   must be re-checked against any signature change to `Prompter`/types before P1.
-</content>
-</invoke>
