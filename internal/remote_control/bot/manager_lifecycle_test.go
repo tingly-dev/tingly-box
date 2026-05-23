@@ -78,10 +78,10 @@ func newLifecycleManager(t *testing.T) (*bot.Manager, string, *tingly.InProcessT
 		MessageRetention: time.Hour,
 	}, nil)
 
-	ab, err := agentboot.New(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
+	svc, err := agentboot.NewAgentService(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
 	require.NoError(t, err)
 
-	m := bot.NewManager(store, sessionMgr, ab)
+	m := bot.NewManager(store, sessionMgr, svc)
 	m.SetDataPath(t.TempDir() + "/chats.json")
 
 	return m, uuid, tr
@@ -161,10 +161,10 @@ func TestManager_StopOneBotDoesNotAffectOthers(t *testing.T) {
 		Timeout:          10 * time.Minute,
 		MessageRetention: time.Hour,
 	}, nil)
-	ab, err := agentboot.New(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
+	svc, err := agentboot.NewAgentService(agentboot.Config{ClaudeProjectsDir: t.TempDir()})
 	require.NoError(t, err)
 
-	m := bot.NewManager(store, sessionMgr, ab)
+	m := bot.NewManager(store, sessionMgr, svc)
 	m.SetDataPath(t.TempDir() + "/chats.json")
 
 	ctx, cancel := context.WithCancel(context.Background())

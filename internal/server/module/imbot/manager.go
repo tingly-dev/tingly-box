@@ -26,10 +26,10 @@ import (
 type BotManager struct {
 	mu         sync.RWMutex
 	manager    *bot.Manager // Internal bot manager from remote_control/bot
-	store      *db.ImBotSettingsStore
-	sessionMgr *session.Manager
-	agentBoot  *agentboot.AgentBoot
-	tbClient   tbclient.TBClient
+	store        *db.ImBotSettingsStore
+	sessionMgr   *session.Manager
+	agentService *agentboot.AgentService
+	tbClient     tbclient.TBClient
 	dataPath   string
 	config     *config.Config
 }
@@ -78,20 +78,20 @@ func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error)
 		MessageRetention: 7 * 24 * time.Hour,
 	}, sessionStore)
 
-	// Create AgentBoot instance
+	// Create the agent service (registry + session store façade)
 	agentBootConfig := agentboot.DefaultConfig()
 	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
-	agentBoot, err := agentboot.New(agentBootConfig)
+	agentService, err := agentboot.NewAgentService(agentBootConfig)
 	if err != nil {
-		return nil, fmt.Errorf("create agentboot: %w", err)
+		return nil, fmt.Errorf("create agent service: %w", err)
 	}
 
 	// Register Claude agent
 	claudeAgent := claude.NewAgent(agentBootConfig)
-	agentBoot.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
+	agentService.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
 	// Create internal bot manager
-	internalMgr := bot.NewManager(store, sessionMgr, agentBoot)
+	internalMgr := bot.NewManager(store, sessionMgr, agentService)
 	internalMgr.SetDataPath(dataPath)
 
 	// Create TBClient
@@ -99,13 +99,13 @@ func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error)
 	internalMgr.SetTBClient(tbClient)
 
 	bm := &BotManager{
-		manager:    internalMgr,
-		store:      store,
-		sessionMgr: sessionMgr,
-		agentBoot:  agentBoot,
-		tbClient:   tbClient,
-		dataPath:   dataPath,
-		config:     cfg,
+		manager:      internalMgr,
+		store:        store,
+		sessionMgr:   sessionMgr,
+		agentService: agentService,
+		tbClient:     tbClient,
+		dataPath:     dataPath,
+		config:       cfg,
 	}
 
 	go bm.periodicBotSync(ctx)

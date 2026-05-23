@@ -234,15 +234,15 @@ func (a *botHandlerAdapter) BuildReplyFooter(chatID, platform string) string {
 // slice (and no error) if the store has no entries; only configuration or I/O
 // failures bubble up.
 func (a *botHandlerAdapter) ListResumableSessions(projectPath string, limit int) ([]ResumableSession, error) {
-	if a.handler.agentBoot == nil {
-		return nil, fmt.Errorf("agentboot not configured")
+	if a.handler.agentService == nil {
+		return nil, fmt.Errorf("agent service not configured")
 	}
 	if limit <= 0 {
 		limit = resumeListLimit
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	metas, err := a.handler.agentBoot.ListRecentSessions(ctx, projectPath, limit)
+	metas, err := a.handler.agentService.ListSessions(ctx, projectPath, limit)
 	if err != nil {
 		return nil, err
 	}

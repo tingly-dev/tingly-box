@@ -22,7 +22,7 @@ type BotHandler struct {
 	botSetting       BotSetting
 	chatStore        ChatStoreInterface // Use interface for flexibility
 	sessionMgr       *session.Manager
-	agentBoot        *agentboot.AgentBoot
+	agentService     *agentboot.AgentService
 	directoryBrowser *feature.DirectoryBrowser
 	manager          *imbot.Manager
 	imPrompter       *imchannel.IMPrompter

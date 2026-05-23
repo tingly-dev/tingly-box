@@ -294,13 +294,38 @@ Done in this branch (~3,660 LoC removed). What shipped:
 Verified: `go build ./...` + `go test ./...` green in both the `agentboot`
 module and the root module (`internal/remote_control/...`, `remote/...`).
 
-### P1 — make `Service` real, collapse representations
+### P1 — make `AgentService` the real façade — DONE (this PR)
 
-6. Move query methods onto `Service`; drop the `AgentBoot` duplicates.
-7. Add `Service.Run` + `RunRequest`; thread `AgentService` into the bot deps
-   (replace the raw `*AgentBoot` dependency).
-8. Rewrite `agent_claude_code.go` to call `Service.Run`; delete the manual loop.
-9. Collapse `Prompter` onto the event types (§3.2); update `imprompter.go`.
+Scope of this PR is the façade only; the permission-type collapse (item 9 /
+§3.2) is deferred to a separate PR. What shipped:
+
+6. Query methods (`ListProjects` / `ListSessions` / `GetSession` /
+   `GetSessionSummary`) now live on `AgentService` and read `boot.store`
+   directly. The duplicate `AgentBoot.ListProjects` / `ListRecentSessions` /
+   `GetSessionSummary` were removed (`AgentBoot` is now registry-only).
+7. Added `AgentService.Run(ctx, RunRequest, Prompter, MessageSink)` (wraps
+   `RunWithPrompter`) plus `RunRequest`. `Execute*` now accept an empty
+   `AgentType` to mean the default agent.
+8. Threaded `*agentboot.AgentService` through the bot in place of
+   `*agentboot.AgentBoot`: creation sites (`internal/server/module/imbot`,
+   `internal/command/remote.go`), `bot.NewManager` / `Manager`,
+   `NewBotHandler` / `BotHandler`, `ExecutorDependencies`, and the test harness.
+   `agent_claude_code.go` now calls `AgentService.Run` with an `autoApprovePrompter`
+   wrapper + a streaming sink, deleting the ~90-line hand-rolled event loop.
+   `command_integration.go` uses `AgentService.ListSessions`.
+
+Behavior note: non-fatal `ErrorEvent`s (rare decoder-level errors) are now
+logged by `RunWithPrompter` instead of being printed to chat as `[ERROR] …`.
+Fatal errors are unchanged — still surfaced via the returned error (incl. the
+session-conflict message). `streamWriter.OnError` remains live on the
+smart-guide path.
+
+Deferred to a follow-up PR (item 9 / §3.2): collapse `Prompter` onto the event
+types and remove `PermissionRequest` / `AskRequest` / `PermissionResult` /
+`AskResult`, updating `imprompter.go` and `smart_guide`.
+
+Verified: `go build ./...` + `go test ./...` green in both modules; `go vet`
+clean on the changed packages.
 
 ### P2 — optional deeper cleanup
 

@@ -40,35 +40,35 @@ func TestNew_ValidProjectsDir_StoreInitialized(t *testing.T) {
 	assert.NotNil(t, ab.store, "store should be initialized when valid dir provided")
 }
 
-// --- Session API ---
+// --- Session API (AgentService) ---
 
-func TestListRecentSessions_DefaultStore_NoError(t *testing.T) {
-	ab, err := New(Config{})
+func TestListSessions_DefaultStore_NoError(t *testing.T) {
+	svc, err := NewAgentService(Config{})
 	require.NoError(t, err)
 
 	// Default store points at ~/.claude/projects; an unknown path inside it
 	// returns an empty slice (not an error), matching the on-disk store
 	// behavior for missing project dirs.
-	_, err = ab.ListRecentSessions(context.Background(), "/nonexistent/path/xyz", 10)
+	_, err = svc.ListSessions(context.Background(), "/nonexistent/path/xyz", 10)
 	assert.NoError(t, err)
 }
 
 func TestGetSessionSummary_DefaultStore_ReturnsNotFound(t *testing.T) {
-	ab, err := New(Config{})
+	svc, err := NewAgentService(Config{})
 	require.NoError(t, err)
 
 	// Store is configured; the session simply doesn't exist on disk.
-	_, err = ab.GetSessionSummary(context.Background(), "definitely-not-a-real-session-id", 5, 5)
+	_, err = svc.GetSessionSummary(context.Background(), "definitely-not-a-real-session-id", 5, 5)
 	assert.Error(t, err)
 }
 
-func TestListRecentSessions_WithStore_Delegates(t *testing.T) {
+func TestListSessions_WithStore_Delegates(t *testing.T) {
 	dir := t.TempDir()
-	ab, err := New(Config{ClaudeProjectsDir: dir})
+	svc, err := NewAgentService(Config{ClaudeProjectsDir: dir})
 	require.NoError(t, err)
 
 	// Empty dir → returns empty slice, no error
-	sessions, err := ab.ListRecentSessions(context.Background(), dir, 10)
+	sessions, err := svc.ListSessions(context.Background(), dir, 10)
 	assert.NoError(t, err)
 	assert.Empty(t, sessions)
 }

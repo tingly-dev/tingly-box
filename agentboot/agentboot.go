@@ -1,7 +1,6 @@
 package agentboot
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -122,30 +121,6 @@ func (ab *AgentBoot) ListAgents() []AgentType {
 		types = append(types, agentType)
 	}
 	return types
-}
-
-// ListProjects returns all project paths known to the session store
-func (ab *AgentBoot) ListProjects(ctx context.Context) ([]string, error) {
-	if ab.store == nil {
-		return nil, fmt.Errorf("session store not configured: set ClaudeProjectsDir in Config")
-	}
-	return ab.store.ListProjects(ctx)
-}
-
-// ListRecentSessions returns recent sessions for a project
-func (ab *AgentBoot) ListRecentSessions(ctx context.Context, projectPath string, limit int) ([]common.SessionMetadata, error) {
-	if ab.store == nil {
-		return nil, fmt.Errorf("session store not configured: set ClaudeProjectsDir in Config")
-	}
-	return ab.store.GetRecentSessions(ctx, projectPath, limit)
-}
-
-// GetSessionSummary returns a summary of a session
-func (ab *AgentBoot) GetSessionSummary(ctx context.Context, sessionID string, firstN, lastM int) (*common.SessionSummary, error) {
-	if ab.store == nil {
-		return nil, fmt.Errorf("session store not configured: set ClaudeProjectsDir in Config")
-	}
-	return ab.store.GetSessionSummary(ctx, sessionID, firstN, lastM)
 }
 
 // ResumeSession creates ExecutionOptions to resume a session

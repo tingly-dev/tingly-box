@@ -35,10 +35,10 @@ import (
 type TestHarness struct {
 	Setting    BotSetting
 	Handler    *BotHandler
-	ChatStore  ChatStoreInterface
-	SessionMgr *session.Manager
-	AgentBoot  *agentboot.AgentBoot
-	Pairing    *PairingManager
+	ChatStore    ChatStoreInterface
+	SessionMgr   *session.Manager
+	AgentService *agentboot.AgentService
+	Pairing      *PairingManager
 	Audit      *audit.Logger
 	DataDir    string
 	Manager    *imbot.Manager
@@ -94,18 +94,18 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 	agentCfg := agentboot.Config{
 		ClaudeProjectsDir: filepath.Join(opt.DataDir, "claude-projects"),
 	}
-	ab, err := agentboot.New(agentCfg)
+	agentService, err := agentboot.NewAgentService(agentCfg)
 	if err != nil {
 		// ClaudeProjectsDir failed; fall back to a config without it.
-		ab, err = agentboot.New(agentboot.Config{})
+		agentService, err = agentboot.NewAgentService(agentboot.Config{})
 		if err != nil {
-			t.Fatalf("BootForTest: agentboot: %v", err)
+			t.Fatalf("BootForTest: agent service: %v", err)
 		}
 	}
 	if opt.FixtureScript != nil {
 		fixtureAgent := claude.NewAgentWithFactory(claude.Config{}, fixture.Factory(opt.FixtureScript))
-		ab.RegisterAgent(agentboot.AgentTypeClaude, fixtureAgent)
-		_ = ab.SetDefaultAgent(agentboot.AgentTypeClaude)
+		agentService.RegisterAgent(agentboot.AgentTypeClaude, fixtureAgent)
+		_ = agentService.Boot().SetDefaultAgent(agentboot.AgentTypeClaude)
 	}
 
 	auditLog := audit.NewLogger(audit.Config{Console: false, MaxEntries: 1000})
@@ -118,7 +118,7 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 		setting,
 		chatStore,
 		sessionMgr,
-		ab,
+		agentService,
 		dirBrowser,
 		manager,
 		nil, // tbClient — SmartGuide path not exercised by tests; falls back to mock/claude as configured
@@ -132,11 +132,11 @@ func BootForTest(t *testing.T, manager *imbot.Manager, setting BotSetting, opts 
 	h := &TestHarness{
 		Setting:    setting,
 		Handler:    handler,
-		ChatStore:  chatStore,
-		SessionMgr: sessionMgr,
-		AgentBoot:  ab,
-		Pairing:    pairing,
-		Audit:      auditLog,
+		ChatStore:    chatStore,
+		SessionMgr:   sessionMgr,
+		AgentService: agentService,
+		Pairing:      pairing,
+		Audit:        auditLog,
 		DataDir:    opt.DataDir,
 		Manager:    manager,
 		cleanup: func() {

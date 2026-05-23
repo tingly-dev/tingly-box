@@ -24,7 +24,7 @@ import (
 )
 
 // runBotWithSettings starts a bot using JSON file storage for chat state
-func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot, tbClient tbclient.TBClient, pairing *PairingManager, auditLog *audit.Logger, store SettingsStore, channels *channel.Registry) error {
+func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string, sessionMgr *session.Manager, agentService *agentboot.AgentService, tbClient tbclient.TBClient, pairing *PairingManager, auditLog *audit.Logger, store SettingsStore, channels *channel.Registry) error {
 	// Create a JSON-based chat store
 	chatStore, err := NewChatStoreJSON(dataPath)
 	if err != nil {
@@ -76,7 +76,7 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 	}
 
 	// Register unified message handler with platform parameter
-	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, directoryBrowser, manager, tbClient, pairing, auditLog, store)
+	handler := NewBotHandler(ctx, setting, chatStore, sessionMgr, agentService, directoryBrowser, manager, tbClient, pairing, auditLog, store)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
@@ -211,7 +211,7 @@ type Manager struct {
 	store      SettingsStore
 	dataPath   string // Data path for JSON chat store (replaces dbPath)
 	sessionMgr *session.Manager
-	agentBoot  *agentboot.AgentBoot
+	agentService *agentboot.AgentService
 	tbClient   tbclient.TBClient // TB Client for SmartGuide model configuration
 	pairing    *PairingManager   // Pairing-code (TOFU) manager
 	audit      *audit.Logger     // Audit logger for security events
@@ -219,16 +219,16 @@ type Manager struct {
 }
 
 // NewManager creates a new bot manager with a settings store
-func NewManager(store SettingsStore, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot,
+func NewManager(store SettingsStore, sessionMgr *session.Manager, agentService *agentboot.AgentService,
 ) *Manager {
 	auditLog := audit.NewLogger(audit.Config{Console: true})
 	return &Manager{
-		running:    make(map[string]*runningBot),
-		store:      store,
-		sessionMgr: sessionMgr,
-		agentBoot:  agentBoot,
-		audit:      auditLog,
-		pairing:    NewPairingManager(auditLog),
+		running:      make(map[string]*runningBot),
+		store:        store,
+		sessionMgr:   sessionMgr,
+		agentService: agentService,
+		audit:        auditLog,
+		pairing:      NewPairingManager(auditLog),
 	}
 }
 
@@ -463,7 +463,7 @@ func (m *Manager) runBotSupervised(
 		}
 	}()
 
-	if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentBoot, tbClient, pairing, auditLog, store, channels); err != nil {
+	if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentService, tbClient, pairing, auditLog, store, channels); err != nil {
 		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 	}
 	logrus.WithField("uuid", uuid).Info("Bot stopped")

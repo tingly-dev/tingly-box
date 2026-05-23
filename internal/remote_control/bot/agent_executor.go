@@ -65,7 +65,7 @@ type ExecutorDependencies struct {
 
 	ChatStore                  ChatStoreInterface
 	SessionMgr                 *SessionManager
-	AgentBoot                  *agentboot.AgentBoot
+	AgentService               *agentboot.AgentService
 	IMPrompter                 *imchannel.IMPrompter
 	FileStore                  *FileStore
 	TBClient                   TBClient

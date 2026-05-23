@@ -42,6 +42,19 @@ var noApprovalModes = map[string]bool{
 	string(claude.PermissionModePlan):              true,
 }
 
+// autoApprovePrompter wraps a Prompter to auto-approve every tool permission
+// request (for permission modes like plan/bypass) while still deferring
+// AskUserQuestion prompts to the underlying prompter.
+type autoApprovePrompter struct{ inner agentboot.Prompter }
+
+func (p autoApprovePrompter) OnApproval(context.Context, agentboot.PermissionRequest) (agentboot.PermissionResult, error) {
+	return agentboot.PermissionResult{Approved: true}, nil
+}
+
+func (p autoApprovePrompter) OnAsk(ctx context.Context, req agentboot.AskRequest) (agentboot.AskResult, error) {
+	return p.inner.OnAsk(ctx, req)
+}
+
 // Execute processes a user message through Claude Code.
 func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (*ExecutionResult, error) {
 	if strings.TrimSpace(req.Text) == "" {
@@ -67,18 +80,6 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		statusMsg = "⏳ CC: Resuming session..."
 	}
 	e.deps.SendTextWithReply(req.HCtx, e.deps.FormatResponseWithFooter(*meta, statusMsg), req.ReplyTo)
-
-	agent, err := e.deps.AgentBoot.GetDefaultAgent()
-	if err != nil {
-		e.deps.SessionMgr.SetFailed(sessionID, "agent not available: "+err.Error())
-		e.deps.SendTextWithReply(req.HCtx, "Agent not available", req.ReplyTo)
-		return &ExecutionResult{
-			SessionID: sessionID,
-			Success:   false,
-			Error:     err,
-			Meta:      meta,
-		}, err
-	}
 
 	shouldResume := !req.IsNewSession
 	permissionMode := req.PermissionMode
@@ -111,102 +112,35 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		}
 	}
 
-	startTime := time.Now()
-	handle, err := agent.Execute(ctx, req.Text, agentboot.ExecutionOptions{
-		ProjectPath:          projectPath,
-		SessionID:            sessionID,
-		Resume:               shouldResume,
-		ChatID:               req.HCtx.ChatID,
-		Platform:             string(req.HCtx.Platform),
-		BotUUID:              req.HCtx.BotUUID,
-		PermissionPromptTool: "stdio",
-		PermissionMode:       permissionMode,
-		Env:                  execEnv,
-		Store:                e.deps.SessionMgr,
-	})
-	if err != nil {
-		duration := time.Since(startTime)
-		// Runner already called Store.SetFailed; send the user-facing message.
-		e.deps.SendTextWithReply(req.HCtx, fmt.Sprintf("Execution failed: %v", err), req.ReplyTo)
-		return &ExecutionResult{
-			SessionID:    sessionID,
-			Success:      false,
-			Error:        err,
-			Response:     err.Error(),
-			Meta:         meta,
-			IsNewSession: req.IsNewSession,
-			Duration:     duration,
-		}, err
+	// Drive the run through AgentService.Run: it streams MessageEvent.Raw to the
+	// sink and routes Approval/Ask to the prompter. autoApprove modes bypass
+	// IMPrompter for permission requests but still defer Ask prompts to it.
+	var prompter agentboot.Prompter = e.deps.IMPrompter
+	if autoApprove {
+		prompter = autoApprovePrompter{inner: e.deps.IMPrompter}
 	}
-
-	for ev := range handle.Events() {
-		switch e2 := ev.(type) {
-		case agentboot.MessageEvent:
-			if mErr := streamWriter.OnMessage(e2.Raw); mErr != nil {
-				streamWriter.OnError(mErr)
-			}
-
-		case agentboot.ApprovalRequestEvent:
-			if autoApprove {
-				_ = handle.Respond(e2.ID, agentboot.ApprovalResponse{Approved: true})
-				continue
-			}
-			permReq := agentboot.PermissionRequest{
-				RequestID: e2.ID,
-				AgentType: e2.AgentType,
-				ToolName:  e2.ToolName,
-				Input:     e2.Input,
-				Reason:    e2.Reason,
-				SessionID: e2.SessionID,
-				BotUUID:   e2.BotUUID,
-				ChatID:    e2.ChatID,
-				Platform:  e2.Platform,
-			}
-			res, perr := e.deps.IMPrompter.OnApproval(ctx, permReq)
-			if perr != nil {
-				logrus.WithError(perr).Warn("ClaudeCodeExecutor: IMPrompter.OnApproval error; denying")
-				res = agentboot.PermissionResult{Approved: false, Reason: perr.Error()}
-			}
-			_ = handle.Respond(e2.ID, agentboot.ApprovalResponse{
-				Approved:     res.Approved,
-				UpdatedInput: res.UpdatedInput,
-				Reason:       res.Reason,
-			})
-
-		case agentboot.AskRequestEvent:
-			askReq := agentboot.AskRequest{
-				ID:        e2.ID,
-				Type:      e2.Type,
-				AgentType: e2.AgentType,
-				Platform:  e2.Platform,
-				ChatID:    e2.ChatID,
-				BotUUID:   e2.BotUUID,
-				SessionID: e2.SessionID,
-				ToolName:  e2.ToolName,
-				Input:     e2.Input,
-				CallID:    e2.CallID,
-				Message:   e2.Message,
-				Reason:    e2.Reason,
-			}
-			res, aerr := e.deps.IMPrompter.OnAsk(ctx, askReq)
-			if aerr != nil {
-				logrus.WithError(aerr).Warn("ClaudeCodeExecutor: IMPrompter.OnAsk error; denying")
-				res = agentboot.AskResult{ID: e2.ID, Approved: false, Reason: aerr.Error()}
-			}
-			_ = handle.Respond(e2.ID, agentboot.AskResponse{
-				Approved:     res.Approved,
-				UpdatedInput: res.UpdatedInput,
-				Reason:       res.Reason,
-				Response:     res.Response,
-				Selection:    res.Selection,
-			})
-
-		case agentboot.ErrorEvent:
-			streamWriter.OnError(e2.Err)
+	sink := func(raw any) {
+		if mErr := streamWriter.OnMessage(raw); mErr != nil {
+			streamWriter.OnError(mErr)
 		}
 	}
 
-	result, werr := handle.Wait()
+	startTime := time.Now()
+	result, werr := e.deps.AgentService.Run(ctx, agentboot.RunRequest{
+		ProjectPath: projectPath,
+		Prompt:      req.Text,
+		Opts: agentboot.ExecutionOptions{
+			SessionID:            sessionID,
+			Resume:               shouldResume,
+			ChatID:               req.HCtx.ChatID,
+			Platform:             string(req.HCtx.Platform),
+			BotUUID:              req.HCtx.BotUUID,
+			PermissionPromptTool: "stdio",
+			PermissionMode:       permissionMode,
+			Env:                  execEnv,
+			Store:                e.deps.SessionMgr,
+		},
+	}, prompter, sink)
 	duration := time.Since(startTime)
 	logrus.WithFields(logrus.Fields{
 		"chatID":    req.HCtx.ChatID,

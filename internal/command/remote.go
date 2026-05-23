@@ -355,27 +355,27 @@ func runStandaloneBot(ctx context.Context, appManager *AppManager, setting db.Se
 		MessageRetention: 7 * 24 * time.Hour,
 	}, msgStore)
 
-	// Create AgentBoot instance
+	// Create the agent service (registry + session store façade)
 	agentBootConfig := agentboot.DefaultConfig()
 	agentBootConfig.DefaultExecutionTimeout = 30 * time.Minute
-	agentBoot, err := agentboot.New(agentBootConfig)
+	agentService, err := agentboot.NewAgentService(agentBootConfig)
 	if err != nil {
-		return fmt.Errorf("create agentboot: %w", err)
+		return fmt.Errorf("create agent service: %w", err)
 	}
 
 	// Register Claude agent
 	claudeAgent := claude.NewAgent(agentBootConfig)
-	agentBoot.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
+	agentService.RegisterAgent(agentboot.AgentTypeClaude, claudeAgent)
 
 	// Create chat store path
 	chatStorePath := filepath.Join(dataPath, "bot_chats.json")
 
 	// Run the bot
-	return runBotWithSettingsInternal(ctx, appManager, botSetting, chatStorePath, sessionMgr, agentBoot)
+	return runBotWithSettingsInternal(ctx, appManager, botSetting, chatStorePath, sessionMgr, agentService)
 }
 
 // runBotWithSettingsInternal is an internal wrapper that calls the bot runner
-func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, setting bot.BotSetting, dataPath string, sessionMgr *session.Manager, agentBoot *agentboot.AgentBoot) error {
+func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, setting bot.BotSetting, dataPath string, sessionMgr *session.Manager, agentService *agentboot.AgentService) error {
 	// Create a JSON-based chat store
 	chatStore, err := bot.NewChatStoreJSON(dataPath)
 	if err != nil {
@@ -447,7 +447,7 @@ func runBotWithSettingsInternal(ctx context.Context, appManager *AppManager, set
 
 	// Register unified message handler
 	// Pass nil as SettingsStore - standalone bots don't have dynamic config updates
-	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentBoot, directoryBrowser, manager, tbClient, pairing, auditLog, nil)
+	handler := bot.NewBotHandler(ctx, setting, chatStore, sessionMgr, agentService, directoryBrowser, manager, tbClient, pairing, auditLog, nil)
 	manager.OnMessage(handler.HandleMessage)
 
 	if err := manager.Start(ctx); err != nil {
