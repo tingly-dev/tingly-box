@@ -59,7 +59,8 @@ type requestGroup struct {
 	id       string
 	events   []ModelRequestEvent
 	summary  ModelRequestSummary
-	hasModel bool // saw a model_request or smart_routing event, or AI tracking fields
+	severity logrus.Level // most severe (lowest) level seen across events
+	hasModel bool         // saw a model_request or smart_routing event, or AI tracking fields
 }
 
 // GetModelRequests returns recent model requests, one row per correlation id,
@@ -204,8 +205,9 @@ func (s *Server) collectRequestGroups() map[string]*requestGroup {
 func applyToSummary(g *requestGroup, source obs.LogSource, entry *logrus.Entry) {
 	data := entry.Data
 
-	// Track the most severe level seen.
-	if g.summary.MaxLevel == "" || entry.Level < parseLevelOrInfo(g.summary.MaxLevel) {
+	// Track the most severe level seen (lower logrus level == more severe).
+	if g.summary.MaxLevel == "" || entry.Level < g.severity {
+		g.severity = entry.Level
 		g.summary.MaxLevel = entry.Level.String()
 	}
 	if entry.Level <= logrus.ErrorLevel {
@@ -250,16 +252,15 @@ func applyToSummary(g *requestGroup, source obs.LogSource, entry *logrus.Entry) 
 
 	// model_request / smart_routing entries supplement fields the envelope may
 	// lack (e.g. when the request errored before the access log captured them).
-	if g.summary.Time.IsZero() || entry.Time.After(g.summary.Time) {
-		if g.summary.Status == 0 {
-			g.summary.Time = entry.Time
-		}
+	// Until an HTTP envelope arrives (Status==0), track the latest event time.
+	if g.summary.Status == 0 && entry.Time.After(g.summary.Time) {
+		g.summary.Time = entry.Time
 	}
 	if g.summary.Scenario == "" {
 		g.summary.Scenario = stringField(data, "scenario")
 	}
 	if g.summary.RequestModel == "" {
-		g.summary.RequestModel = firstStringField(data, "request_model", "request_model")
+		g.summary.RequestModel = stringField(data, "request_model")
 	}
 	if g.summary.RoutedModel == "" {
 		g.summary.RoutedModel = firstStringField(data, "routed_model", "selected_model", "model")
@@ -278,13 +279,6 @@ func parseLimit(s string) int {
 		limit = 1000
 	}
 	return limit
-}
-
-func parseLevelOrInfo(s string) logrus.Level {
-	if lvl, err := logrus.ParseLevel(s); err == nil {
-		return lvl
-	}
-	return logrus.InfoLevel
 }
 
 func stringField(data map[string]interface{}, key string) string {

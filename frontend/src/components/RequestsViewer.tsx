@@ -14,7 +14,7 @@ import {
     TableRow,
     Typography,
 } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -365,9 +365,8 @@ const RequestsViewer = ({ getRequests, getRequestDetail }: RequestsViewerProps) 
                                     const expanded = expandedId === req.request_id;
                                     const detail = details[req.request_id];
                                     return (
-                                        <>
+                                        <Fragment key={req.request_id}>
                                             <TableRow
-                                                key={req.request_id}
                                                 hover
                                                 sx={{ cursor: 'pointer' }}
                                                 onClick={() => toggleRow(req.request_id)}
@@ -417,7 +416,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail }: RequestsViewerProps) 
                                                     {req.latency_ms ? `${req.latency_ms} ms` : '-'}
                                                 </TableCell>
                                             </TableRow>
-                                            <TableRow key={`${req.request_id}-expanded`}>
+                                            <TableRow>
                                                 <TableCell colSpan={7} sx={{ pb: 0, pt: 0, border: 'none' }}>
                                                     <Collapse in={expanded} timeout="auto" unmountOnExit>
                                                         <Box sx={{ p: 1.5, backgroundColor: 'rgba(0,0,0,0.02)' }}>
@@ -443,7 +442,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail }: RequestsViewerProps) 
                                                     </Collapse>
                                                 </TableCell>
                                             </TableRow>
-                                        </>
+                                        </Fragment>
                                     );
                                 })
                             )}
