@@ -74,7 +74,25 @@ const Rocket = tablerMui(IconRocket);
 
 统一后的效果（图标全部为 Tabler，尺寸/语义色由 MUI 体系驱动）：
 
-Dashboard 统计卡片 —— 语义色（primary / success / warning / info / secondary）自动套用：
+Usage Dashboard（light / dark） —— 统计卡片图标继承语义色，侧边栏导航图标统一线条风格：
+
+| Light | Dark |
+|---|---|
+| ![Dashboard light](images/icon-tabler-dashboard-light.png) | ![Dashboard dark](images/icon-tabler-dashboard-dark.png) |
+
+Scenario Routing Graph —— 路由图节点（Model Node / Provider Node）中的 Direct/Smart 切换、齿轮图标均来自 Tabler，描边风格与 UI 整体协调：
+
+| Light | Dark |
+|---|---|
+| ![Routing graph light](images/icon-tabler-routing-graph-light.png) | ![Routing graph dark](images/icon-tabler-routing-graph-dark.png) |
+
+Smart Routing Rule card（放大图）—— 路由条件节点 "token [gt]"、Add Smart Rule 按钮（`+` icon）、Extensions 齿轮图标一致使用 Tabler 描边风格：
+
+| Light | Dark |
+|---|---|
+| ![Smart rule light](images/icon-tabler-routing-smart-light.png) | ![Smart rule dark](images/icon-tabler-routing-smart-dark.png) |
+
+Dashboard 统计卡片（早期截图）—— 语义色（primary / success / warning / info / secondary）自动套用：
 
 ![Dashboard 统计卡片](images/icon-tabler-dashboard-cards.png)
 
