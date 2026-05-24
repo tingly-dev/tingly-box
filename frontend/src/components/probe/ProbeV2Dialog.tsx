@@ -25,7 +25,7 @@ import {
     Token as TokenIcon,
     ContentCopy as CopyIcon,
     Refresh as RefreshIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { useTheme } from '@mui/material/styles';
 import type { ProbeV2TestMode, ProbeV2TargetType } from '@/types/probe-v2.ts';
 

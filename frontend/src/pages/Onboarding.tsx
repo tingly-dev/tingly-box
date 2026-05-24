@@ -21,7 +21,7 @@ import {
 import {
     Home as HomeIcon,
     Help as HelpIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import ProviderFormDialog, {type EnhancedProviderFormData} from '@/components/ProviderFormDialog';

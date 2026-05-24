@@ -1,4 +1,4 @@
-import { ContentCopy, Download, FileDownload, MoreVert } from '@mui/icons-material';
+import { ContentCopy, Download, FileDownload, MoreVert } from '@/components/icons';
 import { IconButton, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useCallback, useState } from 'react';
 import type { ExportFormat } from '@/components/rule-card/utils';

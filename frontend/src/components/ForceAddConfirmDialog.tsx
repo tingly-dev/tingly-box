@@ -1,4 +1,4 @@
-import { WarningAmber, Info } from '@mui/icons-material';
+import { WarningAmber, Info } from '@/components/icons';
 import {
     Alert,
     Box,

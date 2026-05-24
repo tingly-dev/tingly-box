@@ -1,4 +1,4 @@
-import { Add as AddIcon, Extension as ExtensionIcon } from '@mui/icons-material';
+import { Add as AddIcon, Extension as ExtensionIcon } from '@/components/icons';
 import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';

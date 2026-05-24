@@ -15,12 +15,12 @@ import {
     Alert,
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import { KeyboardArrowDown as KeyboardArrowDownIcon } from '@/components/icons';
+import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
+import { CheckCircle as CheckCircleIcon } from '@/components/icons';
+import { Cancel as CancelIcon } from '@/components/icons';
+import { Refresh as RefreshIcon } from '@/components/icons';
+import { DeleteSweep as DeleteSweepIcon } from '@/components/icons';
 
 interface OpEvalResult {
     uuid?: string;

@@ -1,5 +1,5 @@
 import type { AgentConfig } from '@/types/remoteGraph';
-import { CheckCircle as CheckCircleIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { CheckCircle as CheckCircleIcon, Settings as SettingsIcon } from '@/components/icons';
 import { Box, Divider, styled } from '@mui/material';
 import { NODE_LAYER_STYLES } from './styles';
 

@@ -2,7 +2,7 @@ import {
     Add as AddIcon,
     DeleteOutline as DeleteOutlineIcon,
     OpenInNew as OpenInNewIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     Button,

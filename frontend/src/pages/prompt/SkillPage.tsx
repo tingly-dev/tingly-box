@@ -13,7 +13,7 @@ import {
     Search,
     Visibility,
     ViewList,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Alert,
     Box,

@@ -1,4 +1,4 @@
-import {Visibility, VisibilityOff} from '@mui/icons-material';
+import {Visibility, VisibilityOff} from '@/components/icons';
 import {Box, Checkbox, FormControlLabel, IconButton, InputAdornment, TextField} from '@mui/material';
 import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';

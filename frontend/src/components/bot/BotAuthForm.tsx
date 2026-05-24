@@ -12,7 +12,7 @@ import {
     ToggleButton,
     ToggleButtonGroup,
 } from '@mui/material';
-import { Visibility, VisibilityOff, OpenInNew, CheckCircle as CheckCircleIcon, QrCode as QrCodeIcon } from '@mui/icons-material';
+import { Visibility, VisibilityOff, OpenInNew, CheckCircle as CheckCircleIcon, QrCode as QrCodeIcon } from '@/components/icons';
 import { type FieldSpec } from '@/types/bot.ts';
 import { WeixinQRAuth } from './WeixinQRAuth.tsx';
 import { FeishuQRAuth } from './FeishuQRAuth.tsx';

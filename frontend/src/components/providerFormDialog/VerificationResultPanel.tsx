@@ -1,4 +1,4 @@
-import {Check, Close} from '@mui/icons-material';
+import {Check, Close} from '@/components/icons';
 import {Box, IconButton, Stack, Typography} from '@mui/material';
 import React from 'react';
 import type {VerificationResult} from './probe';

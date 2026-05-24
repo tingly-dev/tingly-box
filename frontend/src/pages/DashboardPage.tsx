@@ -18,12 +18,15 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CallMadeIcon from '@mui/icons-material/CallMade';
-import PaidIcon from '@mui/icons-material/Paid';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import StreamIcon from '@mui/icons-material/Stream';
-import CachedIcon from '@mui/icons-material/Cached';
+import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
+import { tablerMui } from '@/components/icons';
+import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
+
+// Predefined ones come from the central module; these three have no MUI-named
+// equivalent there, so build them ad-hoc via the generic factory.
+const PaidIcon = tablerMui(IconCoin);
+const StreamIcon = tablerMui(IconActivity);
+const CachedIcon = tablerMui(IconReload);
 import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import PageHeader from '@/components/PageHeader';

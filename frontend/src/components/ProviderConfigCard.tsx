@@ -1,6 +1,6 @@
-import { ContentCopy as CopyIcon } from '@mui/icons-material';
-import InfoIcon from '@mui/icons-material/Info';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import { ContentCopy as CopyIcon } from '@/components/icons';
+import { Info as InfoIcon } from '@/components/icons';
+import { Visibility as VisibilityIcon } from '@/components/icons';
 import {
     Box,
     type BoxProps,

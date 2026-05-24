@@ -1,4 +1,4 @@
-import { Close } from '@mui/icons-material';
+import { Close } from '@/components/icons';
 import {
     Box,
     Button,

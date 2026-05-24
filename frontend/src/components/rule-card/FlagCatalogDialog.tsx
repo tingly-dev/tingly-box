@@ -15,13 +15,13 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import CableIcon from '@mui/icons-material/Cable';
-import OutboundIcon from '@mui/icons-material/Outbound';
-import TerminalIcon from '@mui/icons-material/Terminal';
-import ExtensionIcon from '@mui/icons-material/Extension';
-import InputIcon from '@mui/icons-material/Input';
-import CloseIcon from '@mui/icons-material/Close';
+import { AutoAwesome as AutoAwesomeIcon } from '@/components/icons';
+import { Cable as CableIcon } from '@/components/icons';
+import { Outbound as OutboundIcon } from '@/components/icons';
+import { Terminal as TerminalIcon } from '@/components/icons';
+import { Extension as ExtensionIcon } from '@/components/icons';
+import { Input as InputIcon } from '@/components/icons';
+import { Close as CloseIcon } from '@/components/icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
 

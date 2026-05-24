@@ -12,7 +12,7 @@ import {
     Speed as SpeedIcon,
     Stream as StreamIcon,
     Build as ToolIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { IconButton, Menu, MenuItem, Tooltip, Divider } from '@mui/material';
 import { useState } from 'react';
 import type { ExportFormat } from '@/components/rule-card/utils';

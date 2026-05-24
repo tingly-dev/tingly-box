@@ -8,7 +8,7 @@ import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import type { BotPlatformConfig, BotSettings } from '@/types/bot';
 import type { Provider } from '@/types/provider';
-import { Add } from '@mui/icons-material';
+import { Add } from '@/components/icons';
 import {
     Alert,
     Box,

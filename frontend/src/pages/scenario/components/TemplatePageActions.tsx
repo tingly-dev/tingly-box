@@ -7,7 +7,7 @@ import {
     UnfoldMore as UnfoldMoreIcon,
     Upload as ImportIcon,
     Speed as SpeedIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { Button, Stack, Tooltip } from '@mui/material';
 import { ProbeMenu } from '@/components/probe';
 

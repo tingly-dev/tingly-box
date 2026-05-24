@@ -1,4 +1,4 @@
-import { KeyboardArrowDown, KeyboardArrowUp } from '@mui/icons-material';
+import { KeyboardArrowDown, KeyboardArrowUp } from '@/components/icons';
 import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import UnifiedCard from '@/components/UnifiedCard';
 import { useState } from 'react';

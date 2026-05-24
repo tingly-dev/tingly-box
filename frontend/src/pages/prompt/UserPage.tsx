@@ -5,7 +5,7 @@ import {
   Paper,
   Stack,
 } from '@mui/material';
-import { Description, FolderOpen } from '@mui/icons-material';
+import { Description, FolderOpen } from '@/components/icons';
 import PageLayout from '@/components/PageLayout';
 import { RecordingCalendar, FilterBar, RecordingTimeline } from '@/components/prompt';
 import type { Recording, RecordingType } from '@/types/prompt';

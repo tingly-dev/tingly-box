@@ -1,4 +1,4 @@
-import { Add, Search } from '@mui/icons-material';
+import { Add, Search } from '@/components/icons';
 import {
     Box,
     Button,

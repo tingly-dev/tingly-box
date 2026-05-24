@@ -4,7 +4,7 @@ import {
     Download,
     Search,
     WarningAmber,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Alert,
     Box,

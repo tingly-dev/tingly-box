@@ -3,7 +3,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import ImageGenQuickStartCard from "@/components/ImageGenQuickStartCard.tsx";
 import { Box, Button } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { PlayArrow as PlayArrowIcon } from '@/components/icons';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';

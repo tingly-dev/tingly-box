@@ -1,4 +1,4 @@
-import {Close, ContentCopy, Launch, OpenInNew} from '@mui/icons-material';
+import {Close, ContentCopy, Launch, OpenInNew} from '@/components/icons';
 import {
     Alert,
     Box,

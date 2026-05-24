@@ -3,7 +3,7 @@ import {
     Description,
     FolderOpen,
     Search,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     CircularProgress,

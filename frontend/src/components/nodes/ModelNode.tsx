@@ -16,7 +16,7 @@ import {
     AutoAwesome as AutoAwesomeIcon,
     NearMeOutlined as DirectIcon,
     Settings as SettingsIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -258,7 +258,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                     },
                                 })}
                             >
-                                <DirectIcon sx={{ fontSize: 13 }} />
+                                <DirectIcon sx={{ fontSize: 13, transform: 'rotate(90deg)' }} />
                                 Direct
                             </ToggleButton>
                         </NodeTooltip>

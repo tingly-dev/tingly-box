@@ -1,4 +1,4 @@
-import CloseIcon from '@mui/icons-material/Close';
+import { Close as CloseIcon } from '@/components/icons';
 import { Box, Divider, IconButton, Typography } from '@mui/material';
 import ModelCard from './ModelCard';
 

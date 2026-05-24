@@ -7,7 +7,7 @@ import {
     PlayArrow as TestIcon,
     Timer as TimerIcon,
     Token as TokenIcon
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Accordion,
     AccordionDetails,

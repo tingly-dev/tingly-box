@@ -1,4 +1,4 @@
-import {Edit} from '@mui/icons-material';
+import {Edit} from '@/components/icons';
 import {Box, IconButton, TextField, Tooltip, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';

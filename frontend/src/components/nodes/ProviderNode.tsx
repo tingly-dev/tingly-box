@@ -4,7 +4,7 @@ import {
     MoreVert as MoreVertIcon,
     PlayArrow as PlayIcon,
     HorizontalRule as HorizontalRuleIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     Button,

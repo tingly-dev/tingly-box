@@ -51,7 +51,7 @@ import {
     Rule,
     Remove,
     Terminal,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { Anthropic, Claude, OpenAI } from '@/components/BrandIcons';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import PageLayout from '@/components/PageLayout';

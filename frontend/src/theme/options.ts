@@ -1,8 +1,8 @@
 import React from 'react';
-import { Computer, DarkMode, LightMode, WbTwilight } from '@mui/icons-material';
+import { Computer, DarkMode, LightMode, WbTwilight } from '@/components/icons';
 import { SvgIcon } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
-import type { SvgIconComponent } from '@mui/icons-material';
+import type { SvgIconComponent } from '@/components/icons';
 import type { ThemeMode, ResolvedThemeMode } from './types';
 
 export const THEME_MODE_VALUES = ['light', 'dark', 'sunlit', 'claude', 'system'] as const satisfies readonly ThemeMode[];

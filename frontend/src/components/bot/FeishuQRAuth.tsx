@@ -11,7 +11,7 @@ import {
 import {
     Refresh as RefreshIcon,
     CheckCircle as CheckCircleIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/services/api';
 

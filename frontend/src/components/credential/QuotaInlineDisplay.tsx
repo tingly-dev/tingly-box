@@ -1,7 +1,7 @@
 import { Box, Stack, IconButton, Typography, CircularProgress, Tooltip } from '@mui/material';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import InfoIcon from '@mui/icons-material/Info';
+import { AccessTime as AccessTimeIcon } from '@/components/icons';
+import { Refresh as RefreshIcon } from '@/components/icons';
+import { Info as InfoIcon } from '@/components/icons';
 import { QuotaBarItem } from './QuotaBarItem';
 import type { ProviderQuota } from '@/types/quota';
 

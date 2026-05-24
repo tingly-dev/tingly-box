@@ -4,7 +4,7 @@ import {
     FolderOpen,
     Refresh,
     Visibility,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     Card,

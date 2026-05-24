@@ -3,7 +3,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import AgentSetupCard, { hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
 import { Box, Button, Tooltip, IconButton, Typography, Link } from '@mui/material';
-import InfoIcon from '@mui/icons-material/Info';
+import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';

@@ -4,7 +4,7 @@ import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
 import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
 import { Box, Button, IconButton, Tooltip } from '@mui/material';
-import InfoIcon from '@mui/icons-material/Info';
+import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';

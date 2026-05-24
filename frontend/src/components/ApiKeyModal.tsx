@@ -1,6 +1,6 @@
 import {
     ContentCopy as CopyIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     Button,

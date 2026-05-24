@@ -14,9 +14,9 @@ import {
     Tooltip,
 } from '@mui/material';
 import React, { useState } from 'react';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { Delete as DeleteIcon } from '@/components/icons';
+import { Add as AddIcon } from '@/components/icons';
+import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import api from '@/services/api';
 

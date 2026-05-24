@@ -1,4 +1,4 @@
-import { ContentPaste as PasteIcon, Upload as UploadIcon, Code as CodeIcon } from '@mui/icons-material';
+import { ContentPaste as PasteIcon, Upload as UploadIcon, Code as CodeIcon } from '@/components/icons';
 import {
     Box,
     Button,

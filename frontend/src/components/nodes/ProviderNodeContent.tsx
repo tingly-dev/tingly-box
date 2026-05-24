@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
     Delete as DeleteIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 
 interface ProviderNodeContentProps {
     menuAnchorEl: HTMLElement | null;

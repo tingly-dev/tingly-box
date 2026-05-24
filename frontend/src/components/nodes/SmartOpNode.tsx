@@ -1,4 +1,4 @@
-import {Delete as DeleteIcon,} from '@mui/icons-material';
+import {Delete as DeleteIcon,} from '@/components/icons';
 import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography,} from '@mui/material';
 import NodeTooltip from './NodeTooltip.tsx';
 import { alpha } from '@mui/material/styles';

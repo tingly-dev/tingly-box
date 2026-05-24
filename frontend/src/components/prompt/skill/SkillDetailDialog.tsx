@@ -4,7 +4,7 @@ import {
     ContentCopy,
     Description,
     ErrorOutline,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Alert,
     Box,

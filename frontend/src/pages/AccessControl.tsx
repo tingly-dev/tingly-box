@@ -21,7 +21,7 @@ import {
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
     Security as SecurityIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';

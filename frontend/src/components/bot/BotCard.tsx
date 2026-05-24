@@ -1,4 +1,4 @@
-import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon, Warning as WarningIcon} from '@mui/icons-material';
+import {Delete as DeleteIcon, Edit as EditIcon, RestartAlt as RestartIcon, Warning as WarningIcon} from '@/components/icons';
 import {
     Box,
     Button,

@@ -14,8 +14,8 @@ import {
   Tooltip,
   alpha,
 } from '@mui/material';
-import LanguageIcon from '@mui/icons-material/Language';
-import DescriptionIcon from '@mui/icons-material/Description';
+import { Language as LanguageIcon } from '@/components/icons';
+import { Description as DescriptionIcon } from '@/components/icons';
 import ProviderIcon from '@/components/ProviderIcon';
 import ProtocolBadge from './ProtocolBadge';
 

@@ -22,7 +22,7 @@ import {
     Terminal,
     ArticleOutlined,
     HelpOutline,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';

@@ -1,5 +1,5 @@
 import { Box, Tooltip, Typography, CircularProgress } from '@mui/material';
-import { CheckCircle, Error, Refresh } from '@mui/icons-material';
+import { CheckCircle, Error, Refresh } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '../contexts/HealthContext';
 

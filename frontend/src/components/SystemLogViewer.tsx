@@ -20,10 +20,10 @@ import {
     Alert,
 } from '@mui/material';
 import { useState, useEffect, useRef } from 'react';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CloseIcon from '@mui/icons-material/Close';
+import { KeyboardArrowDown as KeyboardArrowDownIcon } from '@/components/icons';
+import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
+import { Refresh as RefreshIcon } from '@/components/icons';
+import { Close as CloseIcon } from '@/components/icons';
 
 export interface SystemLogEntry {
     time: string;

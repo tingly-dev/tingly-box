@@ -1,11 +1,11 @@
 import { Box, Button, Card, CardContent, CardActions, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { OpenAI, Anthropic, Claude, Codex } from '../components/BrandIcons';
-import { Settings as SystemIcon, Code as CodeIcon, BarChart as BarChartIcon, Lock as LockIcon, AutoAwesome } from '@mui/icons-material';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import { Settings as SystemIcon, Code as CodeIcon, BarChart as BarChartIcon, Lock as LockIcon, AutoAwesome } from '@/components/icons';
+import { ArrowForward as ArrowForwardIcon } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
-import { Send as UserPromptIcon, Bolt as SkillIcon } from '@mui/icons-material';
+import { Send as UserPromptIcon, Bolt as SkillIcon } from '@/components/icons';
 
 interface NavCard {
     title: string;

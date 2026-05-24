@@ -1,5 +1,5 @@
 import { Box, Typography, styled, Divider, Chip } from '@mui/material';
-import { Warning as WarningIcon } from '@mui/icons-material';
+import { Warning as WarningIcon } from '@/components/icons';
 import { NODE_LAYER_STYLES } from './styles';
 import NodeTooltip from './NodeTooltip';
 import { useCallback } from 'react';

@@ -1,6 +1,4 @@
-import { CheckCircle } from '@mui/icons-material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
+import { CheckCircle, Delete as DeleteIcon, Edit as EditIcon } from '@/components/icons';
 import { Box, Card, CircularProgress, IconButton, Tooltip, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Button } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import React, { useState } from 'react';

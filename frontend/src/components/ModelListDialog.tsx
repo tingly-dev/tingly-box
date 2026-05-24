@@ -1,4 +1,4 @@
-import { Close as CloseIcon, ContentCopy } from '@mui/icons-material';
+import { Close as CloseIcon, ContentCopy } from '@/components/icons';
 import {
     Box,
     Dialog,

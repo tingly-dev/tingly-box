@@ -8,7 +8,7 @@ import {
     MenuItem,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
-import { Science, FiberManualRecord } from '@mui/icons-material';
+import { Science, FiberManualRecord } from '@/components/icons';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 

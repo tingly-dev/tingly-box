@@ -1,5 +1,5 @@
-import {OpenInNew} from '@mui/icons-material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import {OpenInNew} from '@/components/icons';
+import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import {Accordion, AccordionDetails, AccordionSummary, Box, Chip, Link, Stack, Typography,} from '@mui/material';
 
 interface PlatformGuideProps {

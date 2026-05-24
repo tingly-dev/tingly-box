@@ -8,11 +8,11 @@ import { useProfileContext } from '@/contexts/ProfileContext';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { api } from '@/services/api';
 import { copyableTextStyle } from '@/styles/textStyles';
-import { ContentCopy as ContentCopyIcon } from '@mui/icons-material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import InfoIcon from '@mui/icons-material/Info';
-import TerminalIcon from '@mui/icons-material/Terminal';
+import { ContentCopy as ContentCopyIcon } from '@/components/icons';
+import { Delete as DeleteIcon } from '@/components/icons';
+import { Edit as EditIcon } from '@/components/icons';
+import { Info as InfoIcon } from '@/components/icons';
+import { Terminal as TerminalIcon } from '@/components/icons';
 import Chip from '@mui/material/Chip';
 import Switch from '@mui/material/Switch';
 import {

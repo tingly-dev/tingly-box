@@ -1,4 +1,4 @@
-import {InfoOutlined} from '@mui/icons-material';
+import {InfoOutlined} from '@/components/icons';
 import {Box, Checkbox, FormControlLabel, Stack, Tooltip, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
