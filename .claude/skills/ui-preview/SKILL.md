@@ -116,6 +116,50 @@ expected; the test asserts on the payload + the resulting top-right error toast,
 not on a successful save. Unlike `screenshot.mjs`, this file IS committed — it's
 the regression asset, not throwaway tooling.
 
+## Scenario routing graph (needs a REAL backend)
+
+The Claude Code **scenario routing graph** (`RuleCard` → `RoutingGraph` /
+`SmartRoutingGraph` on `/agent/claude_code`) is a frequently-requested
+screenshot, but **mock mode cannot render it**: unified mode fetches a
+`built-in-cc` rule the MSW handlers don't return, and switching to separate
+mode needs a config-apply the mock can't perform. You must run the real Go
+server and seed data through its API.
+
+`scenario-routing-graph.mjs` (committed, next to this file) automates the
+seed + capture. Full procedure:
+
+```bash
+# 1. Submodules must be checked out, or the Go build fails on libs/*.
+git submodule update --init --recursive
+
+# 2. Build + start the real server (auto-generates a login token, printed in the log).
+go build -o /tmp/tingly-box ./cli/tingly-box
+/tmp/tingly-box --verbose start --debug --port 12580 --browser=false \
+  > /tmp/tingly-server.log 2>&1 &
+until curl -fs http://localhost:12580/ >/dev/null; do sleep 1; done
+
+# 3. Frontend in REAL mode — proxies /api + /tingly to :12580.
+#    NOTE: if :3000 is taken, vite falls back to :3001 (check the log).
+cd frontend && USE_MOCK= npm run dev:real > /tmp/vite-real.log 2>&1 &
+
+# 4. Seed providers + rules and capture (run from frontend/ so playwright resolves).
+#    TOKEN is auto-read from /tmp/tingly-server.log; FE defaults to :3001.
+FE=http://localhost:3001 node ../.claude/skills/ui-preview/scenario-routing-graph.mjs
+```
+
+Outputs:
+- `/tmp/scenario-routing-{light,dark}.png` — full page, all rules
+- `/tmp/scenario-routing-smart-{light,dark}.png` — the smart-routing rule card
+  (`claude-sonnet-4-6`: condition `token > 8000` → deepseek, Default → glm)
+
+The script seeds two providers (`glm`, `deepseek`, with dummy keys via
+`?force=true`) and three `claude_code` rules (one with smart routing), then
+drives the real UI: sets `user_auth_token`, switches to "Separate Model",
+confirms the dialog, and screenshots. Re-running appends more rules — restart
+the server (fresh config) for a clean slate. Like the other committed assets,
+this file is a reference, not throwaway tooling. Clean up afterwards:
+`pkill -f "tingly-box.*start"; pkill -f "vite --mode production"`.
+
 ## Why not Playwright MCP / Chrome MCP?
 
 MCP servers are configured at the harness level (`settings.json`) and cannot
