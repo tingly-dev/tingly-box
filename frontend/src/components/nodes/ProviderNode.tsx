@@ -3,7 +3,7 @@ import {
     Warning as WarningIcon,
     MoreVert as MoreVertIcon,
     PlayArrow as PlayIcon,
-    LowPriority as LowPriorityIcon,
+    HorizontalRule as HorizontalRuleIcon,
 } from '@mui/icons-material';
 import {
     Box,
@@ -172,7 +172,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                         active={active}
                         onClick={active ? open : undefined}
                     >
-                        {priority > 0 ? String(priority) : <LowPriorityIcon sx={{ fontSize: 15 }} />}
+                        {priority > 0 ? String(priority) : <HorizontalRuleIcon sx={{ fontSize: 15 }} />}
                     </PriorityBadgeDisk>
                 </NodeTooltip>
             </PriorityBadgeAnchor>
