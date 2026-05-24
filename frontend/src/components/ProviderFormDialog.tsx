@@ -749,6 +749,13 @@ const ProviderFormDialog = ({
                             disabled={!hasAnyProtocol || verifying || submitting}
                             onClick={handleVerify}
                             title="Test connection using available endpoints (optional check)"
+                            sx={(theme) => ({
+                                '&.Mui-disabled': {
+                                    color: theme.palette.mode === 'dark'
+                                        ? 'rgba(255, 255, 255, 0.68)'
+                                        : theme.palette.text.secondary,
+                                },
+                            })}
                         >
                             {verifying ? (
                                 <CircularProgress size={16} thickness={4}/>
@@ -761,7 +768,12 @@ const ProviderFormDialog = ({
                             variant="contained"
                             size="small"
                             disabled={!hasAnyProtocol || verifying || submitting}
-                            sx={{minWidth: verifying || submitting ? '80px' : 'auto'}}
+                            sx={(theme) => ({
+                                minWidth: verifying || submitting ? '80px' : 'auto',
+                                '&.Mui-disabled': {
+                                    color: theme.palette.primary.contrastText,
+                                },
+                            })}
                         >
                             {submitting ? (
                                 <CircularProgress size={20} thickness={4}/>
