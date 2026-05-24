@@ -1,153 +1,111 @@
 # Logging Redesign: Correlated Model-Request Traces
 
-Status: in progress on branch `claude/lucid-keller-hn71e`.
-Route chosen: **lightweight logrus correlation** (not a rewrite onto the
-recording pipeline). Frontend target: **two views (Requests / System)**
-with smart-routing folded in as a per-request drill-down.
+**Status: shipped** on `base/logging-system`.
 
-![Requests view with an expanded pipeline timeline](images/logging-requests-view.png)
+Route chosen: **lightweight logrus correlation** — attach a `request_id` to
+the request context, route entries to a dedicated `model_request` sink via
+the existing `MultiLogger.WriteEntry` hook, no new logging API.  
+Frontend target: **two views (Requests / System)** with smart-routing folded
+into the per-request drill-down.
+
+## UI
+
+**Requests** — one row per request (scenario, routed model, provider, status,
+latency). Scenario / provider / status filter bar. Auto-refresh, pinned
+auto-scroll.
+
+![Requests list](images/logs-requests.png)
+
+**Expanded timeline** — full pipeline for one request: `smart_routing`
+(rule evaluation + match) → `model_request` (conversion stages) →
+`upstream` (provider call) → `http` (access log), correlated by `request_id`:
+
+![Request timeline](images/logs-timeline.png)
+
+**System Logs** — genuine system entries only (startup, config, jobs), with
+level-filter chips:
+
+![System logs](images/logs-system.png)
 
 ## Why
 
-The Logs page splits logs into three tabs — **Model / System / Smart** —
-and the split backfires:
+The previous Logs page split logs into three tabs — **Model / System / Smart**
+— and the split backfired:
 
-- The "Model Requests" tab is not model-centric. It and "System Logs"
-  call the **same** endpoint `/api/v1/system/logs`; the only difference
-  is a client-side filter `pathPrefix="/tingly/"`
-  (`frontend/src/pages/system/LogsPage.tsx:228`). What it shows is the
-  HTTP **access log** (status / latency / path) produced by
-  `internal/server/middleware/multi_mode_memory_log.go` — no model
-  semantics: no conversion, no upstream call, no error reason. Hence
-  "model 里看不到对应日志".
-- **protocol and client logs leak into "System".** Both packages call
-  the global `logrus.*` directly (no structured fields, no context). In
-  `pkg/obs/multi_logger.go:316`, `WriteEntry` defaults a sourceless entry
-  to `system`. So the most request-relevant detail (conversion warnings,
-  client errors, retries, auth) sinks into the System tab, disconnected
-  from the request it belongs to. Hence "protocol 和 client 日志不充分，
-  也没落入 model request 范畴".
-- **No correlation id.** A single request scatters across four places —
-  inbound access log, smart-routing decision, protocol conversion
-  (leaked to system), upstream client call (leaked to system) — with no
-  shared id tying them together. Even the recording pipeline's
-  `obs.Record.RequestID` is freshly generated at emit time
-  (`internal/server/protocol_recording.go:307`), not threaded through.
-- **Wrong axis.** The split is by transport path prefix (an accidental,
-  leaky boundary), not by semantics. That is why the split feels
-  counterproductive.
-
-### Three parallel observability systems (context)
-
-The Logs page only consumes (A), the weakest of the three:
-
-| System | Location | Captures | Surfaced in |
-|---|---|---|---|
-| A. logrus logging (`pkg/obs.MultiLogger`) | `pkg/obs/multi_logger.go` | text/json/memory, bucketed by source | **Logs page** (model/system/smart) |
-| B. request recording (`internal/obs.Record/Sink`, `ProtocolRecorder`) | `internal/server/protocol_recording.go`, `internal/obs/` | original→transformed request, response, stream chunks, steps, duration | Prompt recording page; **off by default**, opt-in per scenario |
-| C. usage tracking (`UsageTracker`) | `internal/server/tracking.go` | tokens, provider, model, latency | Dashboard / DB |
-
-This redesign fixes (A). It deliberately keeps (B) and (C) separate, but
-aligns (A)'s correlation id with (B)'s `RequestID` so a later
-convergence onto a single source of truth stays open.
-
-## What this is not
-
-- **Not** a rewrite onto `internal/obs.Record`. Full request/response
-  bodies stay the job of the recording pipeline (B); the Requests view
-  links to a recording when one exists, otherwise shows structured stage
-  logs.
-- **Not** a new persistent store. Aggregation is over the existing
-  in-memory sinks + JSON log; no DB table is added.
-- **Not** a change to usage tracking or load-balancing behavior.
+- **"Model Requests" wasn't model-centric.** It and "System Logs" called the
+  same endpoint `/api/v1/system/logs`; the only difference was a client-side
+  `pathPrefix="/tingly/"` filter. What it showed was the HTTP access log
+  (status / latency / path), not model semantics.
+- **Protocol and client logs leaked into "System".** Both packages called
+  global `logrus.*` with no context, so `WriteEntry` defaulted them to
+  `LogSourceSystem`. Conversion warnings, client errors, retries — all in the
+  wrong tab, disconnected from the request.
+- **No correlation id.** A single request scattered across four places with
+  nothing tying them together. The recording pipeline's `RequestID` was freshly
+  generated at emit time, not threaded through.
 
 ## How
 
 ### Core idea
 
-A "model request" becomes a **correlated trace**: one `request_id`
-threaded through the whole pipeline, and logs categorized by **scope +
-stage** instead of transport path.
+A "model request" is a **correlated trace**: one `request_id` threads through
+the whole pipeline; logs are categorized by **scope + stage** rather than
+transport path.
 
 - scope `model_request` → everything tied to a `request_id`
-- scope `system` → genuine non-request logs (startup, config, jobs,
-  unattached panics)
-- stage ∈ `inbound | routing | transform | upstream | response`
+- scope `system` → genuine non-request logs (startup, config, jobs)
+- stage ∈ `inbound | routing | transform | upstream`
 
-### Backend
+### Key implementation decisions
 
-1. **request_id (foundation).** Earliest AI-route middleware generates
-   `request_id` (reuse `X-Request-Id` header, else uuid). Store in
-   `c.Set("request_id", id)` and inject into `c.Request.Context()` so
-   protocol (which already receives a context via
-   `internal/protocol/transform/chain.go:87 WithContext`) and client can
-   read it. In the same place, build a bound entry
-   `multiLogger.GetLogrusLogger(LogSourceModelRequest).WithField("request_id", id)`
-   and stash it in the context so downstream code logs without holding
-   the MultiLogger. Make `ProtocolRecorder.emit` reuse this id instead of
-   `uuid.New()` so (A) and (B) line up.
+**`logrus.WithContext(ctx)` over `obs.LogFromContext(ctx)`.**  
+An `obs.LogFromContext` helper was considered but rejected as too disruptive —
+it changes every call site's import and signature. The standard logrus API is
+preserved: downstream code switches from `logrus.Info(...)` to
+`logrus.WithContext(ctx).Info(...)`. Central routing in `WriteEntry` reads
+`entry.Context`, extracts the `request_id`, and routes the entry to the
+`model_request` sink. Zero new logging concepts for call sites.
 
-2. **New source + scoped logger helper.** Add
-   `LogSourceModelRequest = "model_request"` and a memory sink in
-   `pkg/obs/multi_logger.go`. Add `obs.LogFromContext(ctx) *logrus.Entry`
-   returning a no-op-safe entry when no request id / logger is present.
-   Field convention: `source=model_request` + `request_id` + `stage`
-   (+ `provider/model/attempt/status/latency_ms` as relevant).
+**Uniform `loggingRoundTripper`.**  
+One wrapper around every provider transport emits a single Info line per
+upstream call — provider / proxy / status / latency — rather than each client
+open-coding its own. Correlates via request context so the upstream outcome
+lands in the same timeline. Proxy credentials are never logged; masking is
+`scheme://***@host` (not stripped to `scheme://host`, which would hide that
+auth is in use). Env `HTTP_PROXY`/`HTTPS_PROXY` is resolved at request time
+so `direct` is only logged when it really is direct.
 
-3. **Migrate protocol/client logging (the bulk).** Replace global
-   `logrus.*` in `internal/protocol/` and `internal/client/` with
-   `obs.LogFromContext(ctx).WithField("stage", ...)`, threading `ctx`
-   where missing. Add structured fields (transform steps, upstream
-   status, retry attempt, latency). This is what fixes both the
-   "insufficient" and the "leaked to system" problems.
+**Source-honest System tab.**  
+`ReadJSONLogsBySource` filters the System view to `system / action / unknown`
+sources only, replacing fragile path-prefix matching.
 
-4. **Access log carries request_id.**
-   `internal/server/middleware/multi_mode_memory_log.go` adds
-   `request_id` to its fields so the inbound envelope joins the stage
-   logs by id.
+**Shared component, two entry points.**  
+`LogExplorer` (Requests + System tabs) is used by both the main Logs page and
+the per-scenario quick-open dialog; the dialog passes `lockedScenario` for a
+preset filter — no special-case UI.
 
-5. **API (define model + swagger first, per CLAUDE.md).**
-   - `GET /api/v1/requests` — list aggregated by `request_id` (join of
-     http envelope + model_request + smart_routing sources); filters
-     `scenario/provider/model/status/level/limit`.
-   - `GET /api/v1/requests/:id` — full per-request stage timeline.
-   - `/api/v1/system/logs` narrowed to **only** the `system` source
-     (exclude http/model_request/smart_routing) so the System tab is
-     genuinely system-only.
+### What diverged from the original design
 
-### Frontend
+| Design | Actual |
+|---|---|
+| `obs.LogFromContext(ctx)` helper | `logrus.WithContext(ctx)` + central routing in `WriteEntry` |
+| Per-client ad-hoc Debug→Info promotion | Single `loggingRoundTripper` wrapping all provider transports |
+| `X-Request-Id` header as primary ID source | UUID generated fresh in middleware, stored in both gin context and `request.Context()` |
 
-- `LogsPage.tsx`: three tabs → two tabs **Requests / System**; drop the
-  `pathPrefix="/tingly/"` hack.
-- New `RequestsViewer`: one row per request (time / scenario /
-  provider→model / status / latency / error badge), expandable to a
-  stage timeline (inbound → routing → transform → upstream → response).
-  Reuse `SmartRoutingLogViewer`'s trace rendering for the routing stage.
-- System tab keeps `SystemLogViewer` (no path filter; now truly system).
-- "View full request/response" entry on a row opens the recording (B)
-  when present, else shows structured stage logs.
+### Relation to other observability systems
 
-> Note: client API SDK is codegen (swagger). New endpoints land as
-> placeholders on the frontend side until regenerated — see CLAUDE.md.
+| System | Location | Captures | Surfaced in |
+|---|---|---|---|
+| A. logrus logging (`pkg/obs.MultiLogger`) | `pkg/obs/multi_logger.go` | text/json/memory, bucketed by source | **Logs page** ← this redesign |
+| B. request recording (`ProtocolRecorder`) | `internal/server/protocol_recording.go` | original→transformed request/response, stream chunks | Prompt recording page; opt-in per scenario |
+| C. usage tracking (`UsageTracker`) | `internal/server/tracking.go` | tokens, provider, model, latency | Dashboard / DB |
 
-## Sequencing (separate PRs/commits)
+This redesign fixes (A). The `request_id` from (A) is now aligned with (B)'s
+`RequestID` so a later convergence onto a single source of truth stays open.
 
-1. **Foundation** — request_id generation/propagation +
-   `LogSourceModelRequest` + `LogFromContext` + access log carries id.
-   No behavior change; independently verifiable. ← *starting here*
-2. **Stop the bleed** — migrate protocol/client to the scoped logger.
-   Even with no frontend change, this re-attaches the leaked logs and
-   makes them correlatable by id.
-3. **API + frontend two views.**
-4. **Cleanup** — narrow the System endpoint, remove the path-prefix hack,
-   fold smart routing into the drill-down.
+## Open
 
-## Risks
-
-- Deep protocol/client call sites may lack a `ctx`; each needs threading
-  (most time-consuming, most error-prone — but it is the root cause of
-  the missing logs).
-- Per-`request_id` aggregation over ring buffers: the http sink (1000)
-  and the model_request sink must have comparable capacity, or a
-  request's stage logs may be evicted before its envelope when expanded.
-  Keep capacities aligned.
+- `GetSystemLogStats` still reads unfiltered (`ReadJSONLogs`); align its source
+  filter with `GetSystemLogs`.
+- `openapi.json` not regenerated for `GET /api/v1/requests` and
+  `GET /api/v1/requests/:id`; frontend uses placeholder client.
