@@ -32,6 +32,7 @@ interface ApplyCodexConfigResponse {
         created?: boolean;
         updated?: boolean;
     };
+    catalogWritten?: boolean;
     models?: string[];
     message?: string;
 }
@@ -48,8 +49,10 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const { token } = useScenarioPageModal();
     const [mainTab, setMainTab] = React.useState<MainTab>('quick');
     const [prefs, setPrefs] = React.useState<CodexPrefs>(() => defaultCodexPrefs());
+    const [writeCatalog, setWriteCatalog] = React.useState(true);
     const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
     const [authTab, setAuthTab] = React.useState<ScriptTab>('json');
+    const [catalogTab, setCatalogTab] = React.useState<ScriptTab>('json');
     const [sessionAction, setSessionAction] = React.useState<SessionAction | null>(null);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [result, setResult] = React.useState<any | null>(null);
@@ -58,6 +61,8 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [autoUndoOnStop, setAutoUndoOnStop] = React.useState(false);
     const [configToml, setConfigToml] = React.useState<string>('# Loading...');
     const [authJson, setAuthJson] = React.useState<string>(`{\n  "OPENAI_API_KEY": "${token}"\n}`);
+    const [catalogJson, setCatalogJson] = React.useState<string>('');
+    const [previewModels, setPreviewModels] = React.useState<string[]>([]);
 
     // Apply configuration state
     const [isApplying, setIsApplying] = React.useState(false);
@@ -73,19 +78,21 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
         setPrefs(defaultCodexPrefs());
     }, [open]);
 
-    // Re-render the server-authoritative TOML whenever prefs change while the
-    // modal is open. Debounced so dragging through Select options doesn't spam
-    // the backend.
+    // Re-render the server-authoritative TOML whenever prefs or writeCatalog change
+    // while the modal is open. Debounced so dragging through Select options doesn't
+    // spam the backend.
     React.useEffect(() => {
         if (!open) return;
         let cancelled = false;
         const handle = setTimeout(async () => {
             try {
-                const resp = await api.getCodexConfigPreview(prefs as Record<string, string>);
+                const resp = await api.getCodexConfigPreview(prefs as Record<string, string>, writeCatalog);
                 if (cancelled) return;
                 if (resp?.success) {
                     setConfigToml(resp.configToml || '');
                     setAuthJson(resp.authJson || `{\n  "OPENAI_API_KEY": "${token}"\n}`);
+                    setCatalogJson(resp.catalogJson || '');
+                    setPreviewModels(resp.models || []);
                 }
             } catch {
                 // Leave existing placeholders in place; the user can still copy the
@@ -93,7 +100,22 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             }
         }, 250);
         return () => { cancelled = true; clearTimeout(handle); };
-    }, [open, prefs, token]);
+    }, [open, prefs, writeCatalog, token]);
+
+    const windowsCatalogScript = `$catalogDir = Join-Path $HOME ".codex"
+$catalogPath = Join-Path $catalogDir "tingly-model-catalog.json"
+
+New-Item -ItemType Directory -Force -Path $catalogDir | Out-Null
+
+@'
+${catalogJson}
+'@ | Set-Content -Path $catalogPath`;
+
+    const unixCatalogScript = `mkdir -p ~/.codex
+
+cat > ~/.codex/tingly-model-catalog.json <<'EOF'
+${catalogJson}
+EOF`;
 
     const windowsConfigScript = `$configDir = Join-Path $HOME ".codex"
 $configPath = Join-Path $configDir "config.toml"
@@ -155,7 +177,7 @@ EOF`;
         setApplyError(null);
         setApplyResult(null);
         try {
-            const response = await api.applyCodexConfig(prefs as Record<string, string>);
+            const response = await api.applyCodexConfig(prefs as Record<string, string>, writeCatalog);
             if (response?.success) {
                 setApplyResult(response);
             } else {
@@ -215,6 +237,8 @@ EOF`;
                         prefs={prefs}
                         setPrefs={setPrefs}
                         onResetDefaults={() => setPrefs(defaultCodexPrefs())}
+                        writeCatalog={writeCatalog}
+                        setWriteCatalog={setWriteCatalog}
                     />
                 )}
 
@@ -331,6 +355,66 @@ EOF`;
                             </Box>
                         </Box>
 
+                        {writeCatalog && previewModels.length > 0 && catalogJson && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Step 3 · Create or update `~/.codex/tingly-model-catalog.json`
+                                    </Typography>
+                                    <Tabs
+                                        value={catalogTab}
+                                        onChange={(_, value) => setCatalogTab(value)}
+                                        variant="standard"
+                                        sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                                    >
+                                        <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                        <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                        <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    </Tabs>
+                                </Box>
+                                <Box sx={{ mb: 1.5 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Lets Codex's <code>/model</code> picker list tingly-served models. Required when <code>model_catalog_json</code> is set in config.toml.
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    {catalogTab === 'json' && (
+                                        <CodeBlock
+                                            code={catalogJson}
+                                            language="json"
+                                            filename="Create or update ~/.codex/tingly-model-catalog.json"
+                                            wrap={true}
+                                            onCopy={(code) => copyToClipboard(code, 'tingly-model-catalog.json')}
+                                            maxHeight={220}
+                                            minHeight={140}
+                                        />
+                                    )}
+                                    {catalogTab === 'windows' && (
+                                        <CodeBlock
+                                            code={windowsCatalogScript}
+                                            language="js"
+                                            filename="PowerShell script to setup ~/.codex/tingly-model-catalog.json"
+                                            wrap={true}
+                                            onCopy={(code) => copyToClipboard(code, 'Windows catalog script')}
+                                            maxHeight={260}
+                                            minHeight={220}
+                                        />
+                                    )}
+                                    {catalogTab === 'unix' && (
+                                        <CodeBlock
+                                            code={unixCatalogScript}
+                                            language="js"
+                                            filename="Bash script to setup ~/.codex/tingly-model-catalog.json"
+                                            wrap={true}
+                                            onCopy={(code) => copyToClipboard(code, 'Unix catalog script')}
+                                            maxHeight={260}
+                                            minHeight={220}
+                                        />
+                                    )}
+                                </Box>
+                            </Box>
+                        )}
+
                         {SHOW_CODEX_SESSION_IMPORT && (
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                 <Typography variant="subtitle2" color="text.secondary">
@@ -395,6 +479,16 @@ EOF`;
                             {applyResult.authResult?.updated && (
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                                     ✓ Updated ~/.codex/auth.json
+                                </Typography>
+                            )}
+                            {applyResult.catalogWritten && (
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                    ✓ Written ~/.codex/tingly-model-catalog.json
+                                </Typography>
+                            )}
+                            {applyResult.models && applyResult.models.length > 0 && (
+                                <Typography variant="caption" color="text.secondary">
+                                    Models: {applyResult.models.join(', ')}
                                 </Typography>
                             )}
                             {applyResult.configResult?.backupPath && (

@@ -851,7 +851,7 @@ func TestApplyCodexConfig_NewFile_WritesManagedFields(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	result, err := ApplyCodexConfig("http://localhost:12580/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}, DefaultCodexPrefs())
+	result, err := ApplyCodexConfig("http://localhost:12580/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}, DefaultCodexPrefs(), true)
 	if err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
@@ -912,7 +912,7 @@ inherit = "all"
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://example/tingly/codex", []string{"my-rule"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://example/tingly/codex", []string{"my-rule"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -966,7 +966,7 @@ model_provider = "tingly-box"
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://new-host/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://new-host/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1010,14 +1010,14 @@ func TestApplyCodexConfig_Idempotent(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 	first, err := os.ReadFile(filepath.Join(tempDir, ".codex", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 	cfg := loadCodexConfigForTest(t, filepath.Join(tempDir, ".codex", "config.toml"))
@@ -1050,7 +1050,7 @@ model_provider = "openai"
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1069,7 +1069,7 @@ func TestApplyCodexConfig_WritesCatalogAndPointsConfigAtIt(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1118,7 +1118,7 @@ func TestApplyCodexConfig_CatalogReasoningPresetsAreObjects(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1158,7 +1158,7 @@ func TestApplyCodexConfig_NoModels_SkipsCatalog(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1168,6 +1168,28 @@ func TestApplyCodexConfig_NoModels_SkipsCatalog(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(tempDir, ".codex", "tingly-model-catalog.json")); !os.IsNotExist(err) {
 		t.Errorf("catalog file should not exist when no models, err=%v", err)
+	}
+}
+
+func TestApplyCodexConfig_WriteCatalogFalse_SkipsCatalog(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	result, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), false)
+	if err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success: %s", result.Message)
+	}
+
+	codexDir := filepath.Join(tempDir, ".codex")
+	cfg := loadCodexConfigForTest(t, filepath.Join(codexDir, "config.toml"))
+	if _, ok := cfg["model_catalog_json"]; ok {
+		t.Errorf("model_catalog_json should be absent when writeCatalog=false, got %v", cfg["model_catalog_json"])
+	}
+	if _, err := os.Stat(filepath.Join(codexDir, "tingly-model-catalog.json")); !os.IsNotExist(err) {
+		t.Errorf("catalog file should not exist when writeCatalog=false")
 	}
 }
 
@@ -1185,7 +1207,7 @@ func TestApplyCodexConfig_BacksUpExistingCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"new-model"}, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"new-model"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1214,7 +1236,7 @@ some_user_flag = true
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil, DefaultCodexPrefs()); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1243,7 +1265,7 @@ func TestApplyCodexConfig_PrefsAppliedTopLevelAndPerProfile(t *testing.T) {
 		ModelVerbosity:                  "low",
 		ModelSupportsReasoningSummaries: "true",
 	}
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, prefs); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, prefs, true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1280,7 +1302,7 @@ func TestApplyCodexConfig_PrefsRejectInvalidEnumAndCannotClobberManaged(t *testi
 		ModelReasoningEffort:            "bogus", // invalid enum -> dropped
 		ModelSupportsReasoningSummaries: "yes",   // not "true" -> dropped
 	}
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"m1"}, prefs); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"m1"}, prefs, true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 

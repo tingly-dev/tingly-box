@@ -1036,17 +1036,17 @@ export const api = {
         });
     },
 
-    applyCodexConfig: async (preferences?: Record<string, string>): Promise<any> => {
+    applyCodexConfig: async (preferences?: Record<string, string>, writeCatalog?: boolean): Promise<any> => {
         return uiAPI('/config/apply/codex', {
             method: 'POST',
-            body: JSON.stringify({ preferences: preferences ?? null }),
+            body: JSON.stringify({ preferences: preferences ?? null, writeCatalog: writeCatalog ?? true }),
         });
     },
 
-    getCodexConfigPreview: async (preferences?: Record<string, string>): Promise<any> => {
+    getCodexConfigPreview: async (preferences?: Record<string, string>, writeCatalog?: boolean): Promise<any> => {
         return uiAPI('/config/preview/codex', {
             method: 'POST',
-            body: JSON.stringify({ preferences: preferences ?? null }),
+            body: JSON.stringify({ preferences: preferences ?? null, writeCatalog: writeCatalog ?? true }),
         });
     },
 

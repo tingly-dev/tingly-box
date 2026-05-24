@@ -694,7 +694,8 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	codexBaseURL := getBaseURLFromRequest(c, port) + "/tingly/codex"
 	apiKey := h.config.GetModelToken()
 
-	configResult, err := config.ApplyCodexConfig(codexBaseURL, models, prefs)
+	writeCatalog := req.WriteCatalog == nil || *req.WriteCatalog
+	configResult, err := config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
 			Success: false,
@@ -712,10 +713,11 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, ApplyCodexConfigResponse{
-		Success:      configResult.Success && authResult.Success,
-		ConfigResult: *configResult,
-		AuthResult:   *authResult,
-		Models:       models,
+		Success:        configResult.Success && authResult.Success,
+		ConfigResult:   *configResult,
+		AuthResult:     *authResult,
+		CatalogWritten: writeCatalog && len(models) > 0,
+		Models:         models,
 	})
 }
 
@@ -749,7 +751,8 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 	codexBaseURL := getBaseURLFromRequest(c, port) + "/tingly/codex"
 	apiKey := h.config.GetModelToken()
 
-	tomlBytes, err := config.RenderCodexConfigTOML(codexBaseURL, models, prefs)
+	writeCatalog := req.WriteCatalog == nil || *req.WriteCatalog
+	tomlBytes, err := config.RenderCodexConfigTOML(codexBaseURL, models, prefs, writeCatalog)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, CodexConfigPreviewResponse{
 			Success: false,
@@ -767,12 +770,19 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, CodexConfigPreviewResponse{
+	resp := CodexConfigPreviewResponse{
 		Success:    true,
 		ConfigToml: string(tomlBytes),
 		AuthJson:   string(authBytes),
 		Models:     models,
-	})
+	}
+	if writeCatalog && len(models) > 0 {
+		catalogBytes, err := config.RenderCodexModelCatalog(models)
+		if err == nil {
+			resp.CatalogJson = string(catalogBytes)
+		}
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // RestoreCodexConfig rolls back Codex config files to their most recent backup.

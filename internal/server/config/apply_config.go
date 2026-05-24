@@ -911,14 +911,12 @@ var codexEnumValues = map[string][]string{
 	"model_verbosity":         {"low", "medium", "high"},
 }
 
-// DefaultCodexPrefs returns the canonical defaults — the keys whose previously
-// hardcoded values we preserve when no user prefs are supplied (CLI path and
-// "apply without prefs").
+// DefaultCodexPrefs returns the defaults for the CLI path and no-prefs fallback.
+// All fields are empty so tingly-box stays out of the way for third-party
+// providers that may not support OpenAI reasoning-summary extensions.
+// Users who need reasoning summaries can enable them via the Quick Config form.
 func DefaultCodexPrefs() *CodexPrefs {
-	return &CodexPrefs{
-		ModelReasoningSummary:           "auto",
-		ModelSupportsReasoningSummaries: "true",
-	}
+	return &CodexPrefs{}
 }
 
 // toConfig converts prefs into a map of native TOML values ready to merge into
@@ -982,7 +980,7 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 //
 // The previous config.toml and catalog (if any) are backed up before being
 // rewritten.
-func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs) (*ApplyResult, error) {
+func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1023,7 +1021,7 @@ func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs) (*Appl
 	}
 
 	catalogPathForConfig := ""
-	if len(models) > 0 {
+	if len(models) > 0 && writeCatalog {
 		catalogPathForConfig = catalogPath
 	}
 	mergeCodexConfig(existing, baseURL, models, catalogPathForConfig, prefs)
@@ -1038,14 +1036,14 @@ func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs) (*Appl
 		return result, nil
 	}
 
-	if len(models) > 0 {
+	if len(models) > 0 && writeCatalog {
 		if _, err := os.Stat(catalogPath); err == nil {
 			if _, err := backupFile(catalogPath); err != nil {
 				result.Message = fmt.Sprintf("Failed to back up catalog: %v", err)
 				return result, nil
 			}
 		}
-		catalogBytes, err := renderCodexModelCatalog(models)
+		catalogBytes, err := RenderCodexModelCatalog(models)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to render model catalog: %v", err)
 			return result, nil
@@ -1070,9 +1068,9 @@ func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs) (*Appl
 // RenderCodexConfigTOML returns the TOML that would be written to a fresh
 // ~/.codex/config.toml — i.e. the merge applied to an empty starting point.
 // Used by the preview endpoint so the UI can show exactly what's pending.
-func RenderCodexConfigTOML(baseURL string, models []string, prefs *CodexPrefs) ([]byte, error) {
+func RenderCodexConfigTOML(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool) ([]byte, error) {
 	catalogPathForConfig := ""
-	if len(models) > 0 {
+	if len(models) > 0 && writeCatalog {
 		// Guard against environments where UserHomeDir returns "" with no
 		// error (rare, but it makes filepath.Join emit "/.codex/..." which
 		// Codex then fails to parse as AbsolutePathBuf). Better to omit the
@@ -1149,7 +1147,7 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 // no verbosity knob). Codex 0.124+ deserializes this into
 // `protocol::openai_models::ModelsResponse`; field names and value types must
 // stay in sync with that struct.
-func renderCodexModelCatalog(models []string) ([]byte, error) {
+func RenderCodexModelCatalog(models []string) ([]byte, error) {
 	// supported_reasoning_levels is Vec<ReasoningEffortPreset>, not a bare
 	// string list — each element is an {effort, description} object. Values
 	// mirror Codex's bundled catalog for GPT-5 so /model shows the familiar
@@ -1173,8 +1171,8 @@ func renderCodexModelCatalog(models []string) ([]byte, error) {
 			"supported_in_api":                 true,
 			"priority":                         0,
 			"base_instructions":                "",
-			"supports_reasoning_summaries":     true,
-			"default_reasoning_summary":        "auto",
+			"supports_reasoning_summaries":     false,
+			"default_reasoning_summary":        "none",
 			"support_verbosity":                false,
 			"truncation_policy":                map[string]interface{}{"mode": "tokens", "limit": 10000},
 			"supports_parallel_tool_calls":     true,

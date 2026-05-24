@@ -43,26 +43,31 @@ type OpenCodeConfigPreviewResponse struct {
 // ApplyCodexConfigRequest is the request body for the Codex apply and preview
 // endpoints. `preferences` is the typed, whitelisted set of Codex config.toml
 // keys (see config.CodexPrefs). nil means "use built-in defaults".
+// `writeCatalog` controls whether ~/.codex/tingly-model-catalog.json is written
+// and model_catalog_json is set in config.toml. nil defaults to true.
 type ApplyCodexConfigRequest struct {
-	Preferences *config.CodexPrefs `json:"preferences"`
+	Preferences  *config.CodexPrefs `json:"preferences"`
+	WriteCatalog *bool              `json:"writeCatalog"`
 }
 
 // ApplyCodexConfigResponse is the response for ApplyCodexConfigFromState.
 type ApplyCodexConfigResponse struct {
-	Success      bool               `json:"success"`
-	ConfigResult config.ApplyResult `json:"configResult"`
-	AuthResult   config.ApplyResult `json:"authResult"`
-	Models       []string           `json:"models"`
-	Message      string             `json:"message,omitempty"`
+	Success        bool               `json:"success"`
+	ConfigResult   config.ApplyResult `json:"configResult"`
+	AuthResult     config.ApplyResult `json:"authResult"`
+	CatalogWritten bool               `json:"catalogWritten"`
+	Models         []string           `json:"models"`
+	Message        string             `json:"message,omitempty"`
 }
 
 // CodexConfigPreviewResponse is the response for GetCodexConfigPreview.
 type CodexConfigPreviewResponse struct {
-	Success    bool     `json:"success"`
-	ConfigToml string   `json:"configToml"`
-	AuthJson   string   `json:"authJson"`
-	Models     []string `json:"models"`
-	Message    string   `json:"message,omitempty"`
+	Success     bool     `json:"success"`
+	ConfigToml  string   `json:"configToml"`
+	AuthJson    string   `json:"authJson"`
+	CatalogJson string   `json:"catalogJson,omitempty"`
+	Models      []string `json:"models"`
+	Message     string   `json:"message,omitempty"`
 }
 
 // RestoreConfigResponse is the response for the restore endpoints. It mirrors

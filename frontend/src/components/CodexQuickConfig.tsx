@@ -216,18 +216,45 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, unsetLabel, prefs, set
     );
 };
 
+// ── Catalog section text ───────────────────────────────────────────────
+
+const CATALOG_TEXT: Record<Lang, { sectionTitle: string; label: string; purpose: string; tooltip: string }> = {
+    zh: {
+        sectionTitle: '文件',
+        label: '写入模型目录',
+        purpose: '让 Codex 的 /model 选择器列出 tingly 托管的模型',
+        tooltip: '写入 ~/.codex/tingly-model-catalog.json。Codex 启动时读取该文件，将 tingly 服务的模型加入 /model 选择器。关闭后 config.toml 中不写入 model_catalog_json，Codex 使用内置模型列表。',
+    },
+    en: {
+        sectionTitle: 'Files',
+        label: 'Write model catalog',
+        purpose: 'Lets Codex\'s /model picker list tingly-served models',
+        tooltip: 'Writes ~/.codex/tingly-model-catalog.json. Codex reads this on startup to populate the /model picker with tingly-served models. When off, model_catalog_json is omitted from config.toml and Codex uses its built-in model list.',
+    },
+};
+
 // ── Panel ──────────────────────────────────────────────────────────────
 
 interface CodexQuickConfigProps {
     prefs: CodexPrefs;
     setPrefs: (p: CodexPrefs) => void;
     onResetDefaults: () => void;
+    writeCatalog: boolean;
+    setWriteCatalog: (v: boolean) => void;
 }
 
-const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, onResetDefaults }) => {
+const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, onResetDefaults, writeCatalog, setWriteCatalog }) => {
     const lang = useLang();
     const uiText = UI_TEXT[lang];
     const fieldsText = FIELDS_TEXT[lang];
+    const catalogText = CATALOG_TEXT[lang];
+
+    const catalogTooltip = (
+        <Box sx={{ maxWidth: 300 }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>{catalogText.purpose}</Typography>
+            <Typography variant="caption" sx={{ display: 'block', opacity: 0.85 }}>{catalogText.tooltip}</Typography>
+        </Box>
+    );
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
@@ -258,6 +285,40 @@ const CodexQuickConfig: React.FC<CodexQuickConfigProps> = ({ prefs, setPrefs, on
                         />
                     ))}
                 </Stack>
+            </Box>
+
+            <Box>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{catalogText.sectionTitle}</Typography>
+                </Box>
+                <Divider />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1, minHeight: 44 }}>
+                    <Box sx={{ flex: '0 0 180px', display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                        <Typography variant="body2" fontWeight={500} noWrap>{catalogText.label}</Typography>
+                        <Tooltip placement="top" arrow title={catalogTooltip}>
+                            <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
+                        </Tooltip>
+                    </Box>
+                    <Box sx={{ flex: '0 0 320px', minWidth: 0 }}>
+                        <Box
+                            component="span"
+                            sx={{
+                                px: 0.75, py: 0.25, borderRadius: 0.75,
+                                bgcolor: 'action.hover', fontFamily: 'monospace',
+                                fontSize: '0.72rem', color: 'text.secondary', whiteSpace: 'nowrap',
+                            }}
+                        >
+                            ~/.codex/tingly-model-catalog.json
+                        </Box>
+                    </Box>
+                    <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <Switch
+                            size="small"
+                            checked={writeCatalog}
+                            onChange={(_, c) => setWriteCatalog(c)}
+                        />
+                    </Box>
+                </Box>
             </Box>
         </Box>
     );
