@@ -26,10 +26,7 @@ export interface CodexPrefs {
 }
 
 export function defaultCodexPrefs(): CodexPrefs {
-    return {
-        model_reasoning_summary: 'auto',
-        model_supports_reasoning_summaries: 'true',
-    };
+    return {};
 }
 
 type PrefsKey = keyof CodexPrefs;
