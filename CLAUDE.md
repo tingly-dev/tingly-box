@@ -11,12 +11,12 @@ For each new feature, use a placeholder function for api (if not support for cur
 - take care of `layout` while add new pages.
 
 ### Icons
-通用 UI 图标统一从 `@/components/icons` 引入（Tabler 图标经 `tablerMui()` 适配 MUI），**不要直接 import `@mui/icons-material`**。
+General UI icons come from `@/components/icons` (Tabler icons adapted to MUI via `tablerMui()`). **Do not import `@mui/icons-material` directly.**
 
-- 优先用预定义的同名图标：`import { Close, Add, Delete, Search } from '@/components/icons'`（用法与 MUI 一致，支持 `fontSize` / `color` 语义色）。
-- 没有预定义时用泛用工厂：`const Foo = tablerMui(IconFoo)`（`IconFoo` 来自 `@tabler/icons-react`），需要的话顺手把它加到 `index.tsx` 复用。
-- 品牌/提供商 logo 仍走 `BrandIcons.tsx` / `ProviderIcon.tsx`（Lobehub + 自定义 SVG）。
-- 细节见 `.design/icon-hierarchy.md`。
+- Prefer the predefined, MUI-named icons: `import { Close, Add, Delete, Search } from '@/components/icons'` (same API as MUI — `fontSize` / `color` semantic colors all work).
+- When one isn't predefined, use the generic factory: `const Foo = tablerMui(IconFoo)` (`IconFoo` from `@tabler/icons-react`), and add it to `index.tsx` if it's worth reusing.
+- Brand / provider logos still go through `BrandIcons.tsx` / `ProviderIcon.tsx` (Lobehub + custom SVG).
+- See `.design/icon-hierarchy.md` for details.
 
 ## Backend
 Golang backend contains CLI version and GUI version.
