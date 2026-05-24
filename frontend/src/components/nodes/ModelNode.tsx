@@ -258,7 +258,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                                     },
                                 })}
                             >
-                                <DirectIcon sx={{ fontSize: 13 }} />
+                                <DirectIcon sx={{ fontSize: 13, transform: 'rotate(90deg)' }} />
                                 Direct
                             </ToggleButton>
                         </NodeTooltip>
