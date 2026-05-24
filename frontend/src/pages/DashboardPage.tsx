@@ -18,12 +18,23 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CallMadeIcon from '@mui/icons-material/CallMade';
-import PaidIcon from '@mui/icons-material/Paid';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import StreamIcon from '@mui/icons-material/Stream';
-import CachedIcon from '@mui/icons-material/Cached';
+import {
+    IconRefresh,
+    IconArrowUpRight,
+    IconCoin,
+    IconAlertCircle,
+    IconActivity,
+    IconReload,
+} from '@tabler/icons-react';
+import { tablerMui } from '@/components/icons/tablerMui';
+
+// Tabler icons adapted to MUI's SvgIcon (inherit theme color + fontSize).
+const RefreshIcon = tablerMui(IconRefresh);
+const CallMadeIcon = tablerMui(IconArrowUpRight);
+const PaidIcon = tablerMui(IconCoin);
+const ErrorOutlineIcon = tablerMui(IconAlertCircle);
+const StreamIcon = tablerMui(IconActivity);
+const CachedIcon = tablerMui(IconReload);
 import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
 import PageHeader from '@/components/PageHeader';
