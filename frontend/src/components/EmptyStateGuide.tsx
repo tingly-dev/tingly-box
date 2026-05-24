@@ -1,4 +1,4 @@
-import { Add, VpnKey } from '@mui/icons-material';
+import { Add, VpnKey } from '@/components/icons';
 import { Box, Button, Stack, Typography } from '@mui/material';
 
 interface EmptyStateGuideProps {

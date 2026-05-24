@@ -10,7 +10,7 @@ import {
 import {
     PlayArrow as DirectIcon,
     Stream as StreamingIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { ProbeV2Dialog } from './ProbeV2Dialog';
 import type { ProbeV2TestMode, ProbeV2TargetType } from '@/types/probe-v2.ts';

@@ -1,6 +1,6 @@
 import { Alert, AlertTitle, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Link, Tab, Tabs, Typography } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import { Close as CloseIcon } from '@/components/icons';
+import { VisibilityOutlined as VisibilityOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import CodeBlock from './CodeBlock';

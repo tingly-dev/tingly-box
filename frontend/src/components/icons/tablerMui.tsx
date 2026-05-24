@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { SvgIcon } from '@mui/material';
 import type { SvgIconProps } from '@mui/material';
+import type { SvgIconComponent } from '@mui/icons-material';
 import type { Icon as TablerIcon } from '@tabler/icons-react';
 
 /**
@@ -27,5 +28,7 @@ export function tablerMui(Icon: TablerIcon, defaultStrokeWidth = 1.75) {
         );
     });
     Wrapped.displayName = `TablerMui(${Icon.displayName ?? 'Icon'})`;
-    return Wrapped;
+    // Typed as MUI's SvgIconComponent so these are drop-in compatible anywhere
+    // an `@mui/icons-material` icon is expected.
+    return Wrapped as unknown as SvgIconComponent;
 }

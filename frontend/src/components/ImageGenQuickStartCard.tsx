@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Box, Collapse, IconButton, Tab, Tabs } from '@mui/material';
-import { ExpandLess, ExpandMore } from '@mui/icons-material';
+import { ExpandLess, ExpandMore } from '@/components/icons';
 import UnifiedCard from '@/components/UnifiedCard';
 import CodeBlock from '@/components/CodeBlock';
 

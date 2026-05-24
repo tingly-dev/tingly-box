@@ -27,7 +27,7 @@ import {
     IconServer,
 } from '@tabler/icons-react';
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
-import { SettingsApplications } from '@mui/icons-material';
+import { SettingsApplications } from '@/components/icons';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { isFullEdition } from '@/utils/edition';

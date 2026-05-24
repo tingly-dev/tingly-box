@@ -1,4 +1,4 @@
-import { CheckCircle } from '@mui/icons-material';
+import { CheckCircle } from '@/components/icons';
 import { Box, Card, CardContent, CircularProgress, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';

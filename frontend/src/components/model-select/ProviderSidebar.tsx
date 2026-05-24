@@ -1,4 +1,4 @@
-import { CheckCircle } from '@mui/icons-material';
+import { CheckCircle } from '@/components/icons';
 import { Box, Stack, Typography } from '@mui/material';
 import React from 'react';
 import type { Provider } from '../../types/provider';

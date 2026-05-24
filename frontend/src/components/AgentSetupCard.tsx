@@ -1,6 +1,6 @@
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { ContentCopy as ContentCopyIcon } from '@/components/icons';
+import { ExpandLess as ExpandLessIcon } from '@/components/icons';
+import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import {
     Alert,
     Box,

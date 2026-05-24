@@ -3,7 +3,7 @@ import {
     Refresh as RotateIcon,
     Visibility as RevealIcon,
     VisibilityOff as HideIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     CircularProgress,

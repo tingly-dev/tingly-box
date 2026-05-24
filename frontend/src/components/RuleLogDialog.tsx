@@ -11,7 +11,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useCallback, useState } from 'react';
-import CloseIcon from '@mui/icons-material/Close';
+import { Close as CloseIcon } from '@/components/icons';
 import SystemLogViewer from '@/components/SystemLogViewer';
 import SmartRoutingLogViewer from '@/components/SmartRoutingLogViewer';
 import type { SmartRoutingLogEntry } from '@/components/SmartRoutingLogViewer';

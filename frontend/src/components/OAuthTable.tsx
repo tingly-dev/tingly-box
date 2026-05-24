@@ -19,7 +19,7 @@ import {
     Route,
     Schedule,
     VpnKey,
-} from "@mui/icons-material";
+} from '@/components/icons';
 import {
     Box,
     Button,

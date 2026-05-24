@@ -1,6 +1,6 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import { IconBrain, IconShield } from '@tabler/icons-react';
-import { SettingsApplications, Hub as HubIcon } from '@mui/icons-material';
+import { SettingsApplications, Hub as HubIcon } from '@/components/icons';
 import {Alert, Box, Chip, Tooltip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';

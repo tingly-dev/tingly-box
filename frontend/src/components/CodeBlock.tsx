@@ -1,4 +1,4 @@
-import { ContentCopy as CopyIcon, Check as CheckIcon } from '@mui/icons-material';
+import { ContentCopy as CopyIcon, Check as CheckIcon } from '@/components/icons';
 import { Box, IconButton, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';

@@ -18,21 +18,13 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import {
-    IconRefresh,
-    IconArrowUpRight,
-    IconCoin,
-    IconAlertCircle,
-    IconActivity,
-    IconReload,
-} from '@tabler/icons-react';
-import { tablerMui } from '@/components/icons/tablerMui';
+import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
+import { tablerMui } from '@/components/icons';
+import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
 
-// Tabler icons adapted to MUI's SvgIcon (inherit theme color + fontSize).
-const RefreshIcon = tablerMui(IconRefresh);
-const CallMadeIcon = tablerMui(IconArrowUpRight);
+// Predefined ones come from the central module; these three have no MUI-named
+// equivalent there, so build them ad-hoc via the generic factory.
 const PaidIcon = tablerMui(IconCoin);
-const ErrorOutlineIcon = tablerMui(IconAlertCircle);
 const StreamIcon = tablerMui(IconActivity);
 const CachedIcon = tablerMui(IconReload);
 import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';

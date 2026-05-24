@@ -14,9 +14,9 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-import LinkIcon from '@mui/icons-material/Link';
-import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import { AutoFixHigh as AutoFixHighIcon } from '@/components/icons';
+import { Link as LinkIcon } from '@/components/icons';
+import { VpnKey as VpnKeyIcon } from '@/components/icons';
 import {extractOnboardingCandidates, type OnboardingTokenCandidate} from '@/services/onboardingExtract';
 import type {EnhancedProviderFormData} from '@/components/ProviderFormDialog';
 

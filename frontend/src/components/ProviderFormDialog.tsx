@@ -1,4 +1,4 @@
-import {ArrowBack, Close, ExpandMore, InfoOutlined} from '@mui/icons-material';
+import {ArrowBack, Close, ExpandMore, InfoOutlined} from '@/components/icons';
 import {
     Accordion,
     AccordionDetails,

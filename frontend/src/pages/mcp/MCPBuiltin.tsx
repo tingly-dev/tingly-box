@@ -19,7 +19,7 @@ import {
     Add as AddIcon,
     DeleteOutline as DeleteOutlineIcon,
     Edit as EditIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { useEffect, useState } from 'react';
 import { useNotify } from '@/hooks/useNotify';
 import MCPSourceEditor from './MCPSourceEditor';

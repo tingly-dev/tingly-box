@@ -1,6 +1,6 @@
 import {
     Router as RouterIcon
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { Box, Divider, styled, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { NODE_LAYER_STYLES } from './styles';
 import NodeTooltip from './NodeTooltip';

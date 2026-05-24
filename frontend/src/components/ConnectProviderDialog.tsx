@@ -1,4 +1,4 @@
-import {Add, Close, Computer, Key, Login, Search} from '@mui/icons-material';
+import {Add, Close, Computer, Key, Login, Search} from '@/components/icons';
 import {
     Box,
     Chip,

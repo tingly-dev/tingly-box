@@ -9,7 +9,7 @@ import {
     Button,
     Typography,
 } from '@mui/material';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
 
 interface AuthContextType {
     token: string | null;

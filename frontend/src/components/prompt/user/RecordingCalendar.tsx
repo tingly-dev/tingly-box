@@ -1,4 +1,4 @@
-import { ArrowBackIosNew, ArrowForwardIos } from '@mui/icons-material';
+import { ArrowBackIosNew, ArrowForwardIos } from '@/components/icons';
 import { Box, Button, ButtonGroup, IconButton, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { DateCalendar, LocalizationProvider } from '@mui/x-date-pickers';

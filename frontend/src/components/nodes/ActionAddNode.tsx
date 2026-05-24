@@ -1,6 +1,6 @@
 import {
     Add as AddIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     IconButton,

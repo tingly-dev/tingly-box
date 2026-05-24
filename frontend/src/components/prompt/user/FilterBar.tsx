@@ -1,5 +1,5 @@
 import { Box, TextField, FormControl, InputLabel, Select, MenuItem, Chip } from '@mui/material';
-import { Search } from '@mui/icons-material';
+import { Search } from '@/components/icons';
 import type { RecordingType } from '@/types/prompt';
 
 const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {

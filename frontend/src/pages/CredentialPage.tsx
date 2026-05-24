@@ -10,7 +10,7 @@ import { PageLayout } from '@/components/PageLayout';
 import ProviderFormDialog, { type EnhancedProviderFormData } from '@/components/ProviderFormDialog.tsx';
 import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
-import { Add, ListAlt, Upload, VpnKey } from '@mui/icons-material';
+import { Add, ListAlt, Upload, VpnKey } from '@/components/icons';
 import {
     Button,
     Chip,

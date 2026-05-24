@@ -12,8 +12,8 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import { Refresh as RefreshIcon } from '@/components/icons';
+import { CalendarToday as CalendarTodayIcon } from '@/components/icons';
 import {type DailyUsage, TokenHeatmap} from '@/components/dashboard';
 import PageHeader from '@/components/PageHeader';
 import api from '@/services/api';

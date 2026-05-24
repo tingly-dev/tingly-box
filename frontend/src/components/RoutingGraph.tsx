@@ -3,7 +3,7 @@ import {
     Add as AddIcon,
     ExpandMore as ExpandMoreIcon,
     Warning as WarningIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     Button,

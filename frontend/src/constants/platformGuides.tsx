@@ -1,5 +1,5 @@
 import { Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, QQ, Discord, Slack } from '@/components/BrandIcons';
-import { OpenInNew } from '@mui/icons-material';
+import { OpenInNew } from '@/components/icons';
 import { Box, Link, Stack, Typography } from '@mui/material';
 import type { ComponentType } from 'react';
 

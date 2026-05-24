@@ -1,5 +1,5 @@
 import { Box, styled } from '@mui/material';
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+import { CompareArrows as CompareArrowsIcon } from '@/components/icons';
 import React from 'react';
 import NodeTooltip from './NodeTooltip';
 

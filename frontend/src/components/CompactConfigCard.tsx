@@ -1,4 +1,4 @@
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import { Visibility as VisibilityIcon } from '@/components/icons';
 import { IconButton, Tooltip, Typography } from '@mui/material';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';

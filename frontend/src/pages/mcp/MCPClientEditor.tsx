@@ -20,7 +20,7 @@ import {
 import {
     Add as AddIcon,
     DeleteOutline as DeleteOutlineIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { useEffect, useState } from 'react';
 import type { MCPClient, MCPClientFormValue } from './localTypes';
 import {

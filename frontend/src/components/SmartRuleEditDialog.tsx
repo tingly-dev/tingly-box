@@ -15,8 +15,8 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
+import { Delete as DeleteIcon } from '@/components/icons';
+import { Add as AddIcon } from '@/components/icons';
 import React, { useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { SmartRouting, SmartOp } from './RoutingGraphTypes';

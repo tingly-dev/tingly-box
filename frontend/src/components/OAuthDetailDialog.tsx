@@ -1,4 +1,4 @@
-import { ContentCopy, Info, Visibility, VisibilityOff, VpnKey } from '@mui/icons-material';
+import { ContentCopy, Info, Visibility, VisibilityOff, VpnKey } from '@/components/icons';
 import {
     Alert,
     Box,

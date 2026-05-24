@@ -5,7 +5,7 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
     ExpandMore as ExpandMoreIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Box,
     Collapse,

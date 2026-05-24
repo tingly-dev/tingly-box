@@ -1,5 +1,5 @@
 import { Box, Typography, Card, CardContent } from '@mui/material';
-import { ChevronRight } from '@mui/icons-material';
+import { ChevronRight } from '@/components/icons';
 import type { Recording, RecordingType } from '@/types/prompt';
 
 const RECORDING_TYPE_LABELS: Record<RecordingType, string> = {

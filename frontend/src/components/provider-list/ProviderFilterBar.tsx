@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
+import { Search as SearchIcon } from '@/components/icons';
 
 interface FilterState {
   search: string;

@@ -1,4 +1,4 @@
-import LaptopIcon from '@mui/icons-material/Laptop';
+import { Laptop as LaptopIcon } from '@/components/icons';
 import { Box, Tooltip, Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import React from 'react';

@@ -9,7 +9,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {api} from '@/services/api';
 import {toggleButtonGroupStyle, toggleButtonStyle} from "@/styles/toggleStyles";
-import InfoIcon from '@mui/icons-material/Info';
+import { Info as InfoIcon } from '@/components/icons';
 import {
     Box,
     Button,

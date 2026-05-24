@@ -1,10 +1,10 @@
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import SearchIcon from '@mui/icons-material/Search';
-import BugReportIcon from '@mui/icons-material/BugReport';
+import { AddCircleOutline as AddCircleOutlineIcon } from '@/components/icons';
+import { NavigateBefore as NavigateBeforeIcon } from '@/components/icons';
+import { NavigateNext as NavigateNextIcon } from '@/components/icons';
+import { PlayArrow as PlayArrowIcon } from '@/components/icons';
+import { Refresh as RefreshIcon } from '@/components/icons';
+import { Search as SearchIcon } from '@/components/icons';
+import { BugReport as BugReportIcon } from '@/components/icons';
 import {
     Box,
     Button,

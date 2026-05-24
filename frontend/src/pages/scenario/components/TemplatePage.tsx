@@ -2,7 +2,7 @@ import ApiKeyModal from '@/components/ApiKeyModal';
 import ScenarioLogDialog from '@/components/RuleLogDialog';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Alert, Box, Fab, Snackbar} from '@mui/material';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import { KeyboardArrowUp as KeyboardArrowUpIcon } from '@/components/icons';
 import {useNavigate} from 'react-router-dom';
 import EmptyStateGuide from '@/components/EmptyStateGuide';
 import RuleCard from '@/components/RuleCard.tsx';

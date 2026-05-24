@@ -3,7 +3,7 @@ import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 import type { BotSettings } from '@/types/bot';
 import type { Provider } from '@/types/provider';
-import { Add, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Add, Refresh as RefreshIcon } from '@/components/icons';
 import {
     Alert,
     Box,

@@ -2,7 +2,7 @@ import api from '@/services/api';
 import {
     Refresh as RefreshIcon,
     Send as SendIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     Alert,
     Box,

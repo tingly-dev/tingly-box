@@ -14,7 +14,7 @@ import {
     ContentCopy as ContentCopyIcon,
     CheckCircle as CheckCircleIcon,
     Terminal as TerminalIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import { useEffect, useState } from 'react';
 import { useNotify } from '@/hooks/useNotify';
 

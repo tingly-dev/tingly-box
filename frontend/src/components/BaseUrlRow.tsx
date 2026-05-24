@@ -1,4 +1,4 @@
-import { ContentCopy as CopyIcon } from '@mui/icons-material';
+import { ContentCopy as CopyIcon } from '@/components/icons';
 import { Box, IconButton, Tooltip, Typography } from '@mui/material';
 import DockerOriginal from "devicons-react/icons/DockerOriginal";
 import React from "react";

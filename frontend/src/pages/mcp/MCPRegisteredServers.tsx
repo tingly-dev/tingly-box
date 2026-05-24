@@ -25,7 +25,7 @@ import {
     InfoOutlined as InfoIcon,
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 import {
     IconSearch,
     IconWorldDownload,

@@ -15,7 +15,7 @@ import { Alert, Box, Chip, IconButton, Tooltip, Typography } from '@mui/material
 import {
     ContentCopy as CopyIcon,
     Terminal as TerminalIcon,
-} from '@mui/icons-material';
+} from '@/components/icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

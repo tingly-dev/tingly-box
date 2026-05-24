@@ -12,12 +12,12 @@ import {
     Typography,
     alpha,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import LanguageIcon from '@mui/icons-material/Language';
-import DescriptionIcon from '@mui/icons-material/Description';
-import AddIcon from '@mui/icons-material/Add';
-import PublicIcon from '@mui/icons-material/Public';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
+import { Search as SearchIcon } from '@/components/icons';
+import { Language as LanguageIcon } from '@/components/icons';
+import { Description as DescriptionIcon } from '@/components/icons';
+import { Add as AddIcon } from '@/components/icons';
+import { Public as PublicIcon } from '@/components/icons';
+import { LocationOn as LocationOnIcon } from '@/components/icons';
 import ProviderIcon from '@/components/ProviderIcon';
 import {useProviderTemplates, type UniqueProvider} from '@/services/serviceProviders';
 import type {EnhancedProviderFormData} from '@/components/ProviderFormDialog';

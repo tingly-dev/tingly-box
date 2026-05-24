@@ -9,8 +9,8 @@ import {
     Tooltip,
     Typography,
 } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
+import { RestartAlt as RestartAltIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 

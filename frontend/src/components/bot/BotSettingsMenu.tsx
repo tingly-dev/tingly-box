@@ -1,4 +1,4 @@
-import { Block as InactiveIcon, CheckCircle as ActiveIcon, Delete as DeleteIcon, Edit as EditIcon, MoreHoriz as MoreHorizIcon } from '@mui/icons-material';
+import { Block as InactiveIcon, CheckCircle as ActiveIcon, Delete as DeleteIcon, Edit as EditIcon, MoreHoriz as MoreHorizIcon } from '@/components/icons';
 import { IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import { useState, useCallback } from 'react';
 import type { MouseEvent } from 'react';
