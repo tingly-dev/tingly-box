@@ -3,10 +3,15 @@ package data
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// ModelCacheTTL is how long a cached model list is considered fresh.
+// After this duration, GetModels returns empty so the caller re-fetches.
+const ModelCacheTTL = time.Hour
 
 // ModelList represents the models available for a specific provider (kept for backward compatibility)
 type ModelList struct {
@@ -41,20 +46,22 @@ func NewProviderModelManager(configDir string) (*ModelListManager, error) {
 	}, nil
 }
 
-// SaveModels saves models for a provider by UUID to the database
-func (mm *ModelListManager) SaveModels(provider *typ.Provider, apiBase string, models []string) error {
+// SaveModels saves models for a provider by UUID to the database.
+// source should be db.ModelSourceAPI or db.ModelSourceTemplate.
+func (mm *ModelListManager) SaveModels(provider *typ.Provider, models []string, source db.ModelSource) error {
 	if mm.modelStore == nil {
 		return fmt.Errorf("model store not initialized")
 	}
-	return mm.modelStore.SaveModels(provider, apiBase, models)
+	return mm.modelStore.SaveModels(provider, models, source)
 }
 
-// GetModels returns models for a provider by reading from database
+// GetModels returns models for a provider by reading from database.
+// Returns empty if the cached record is older than ModelCacheTTL.
 func (mm *ModelListManager) GetModels(uid string) []string {
 	if mm.modelStore == nil {
 		return []string{}
 	}
-	return mm.modelStore.GetModels(uid)
+	return mm.modelStore.GetModels(uid, ModelCacheTTL)
 }
 
 // GetAllProviders returns all provider UUIDs that have models

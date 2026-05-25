@@ -558,13 +558,21 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 
 	models := providerModelManager.GetModels(uid)
 
-	// For vmodel providers the model list lives on the provider record, not in the
-	// model manager cache (which is populated by FetchAndSaveProviderModels).
-	// Fall back to the provider's VModelDetail when the cache is empty.
+	// Cache miss or stale (TTL expired) — re-fetch, then check for embedded template fallback.
 	if len(models) == 0 {
-		if p, err := s.config.GetProviderByUUID(uid); err == nil && p.IsVirtual() {
-			if p.VModelDetail != nil {
-				models = p.VModelDetail.Models
+		p, provErr := s.config.GetProviderByUUID(uid)
+		if provErr == nil {
+			if p.IsVirtual() {
+				if p.VModelDetail != nil {
+					models = p.VModelDetail.Models
+				}
+			} else {
+				_ = s.config.FetchAndSaveProviderModels(uid)
+				models = providerModelManager.GetModels(uid)
+				// API fetch failed — serve embedded template models directly without caching.
+				if len(models) == 0 && s.config.GetTemplateManager() != nil {
+					models, _ = s.config.GetTemplateManager().GetEmbeddedModelsForProvider(p)
+				}
 			}
 		}
 	}

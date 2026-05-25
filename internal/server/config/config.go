@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -1802,7 +1803,6 @@ func (c *Config) IsScenarioRecordingEnabled(scenario typ.RuleScenario) bool {
 
 // FetchAndSaveProviderModels fetches models from a provider with fallback hierarchy
 func (c *Config) FetchAndSaveProviderModels(uid string) error {
-	// Use GetProviderByUUID which queries the database first, then falls back to in-memory providers
 	provider, err := c.GetProviderByUUID(uid)
 	if err != nil {
 		return fmt.Errorf("provider with UUID %s not found: %w", uid, err)
@@ -1814,16 +1814,15 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		if provider.VModelDetail != nil {
 			models = provider.VModelDetail.Models
 		}
-		return c.modelManager.SaveModels(provider, provider.APIBase, models)
+		return c.modelManager.SaveModels(provider, models, db.ModelSourceAPI)
 	}
 
-	// Try provider API first using client layer
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	var models []string
 	var apiErr error
 
-	// Create appropriate client based on provider API style
-	// Note: For model listing, we use empty SessionID as no user session is involved
 	var lister client.ModelLister
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
@@ -1851,14 +1850,11 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		apiErr = err
 	}
 
-	// If we have a lister, try to fetch models
 	if lister != nil {
 		models, apiErr = lister.ListModels(ctx)
 		if apiErr == nil && len(models) > 0 {
-			// Successfully fetched models from API
-			return c.modelManager.SaveModels(provider, provider.APIBase, models)
+			return c.modelManager.SaveModels(provider, models, db.ModelSourceAPI)
 		}
-		// Check if the error is because the endpoint is not supported
 		if client.IsModelsEndpointNotSupported(apiErr) {
 			logrus.Infof("Provider %s does not support models endpoint, using template fallback", provider.Name)
 			apiErr = nil // Clear error to proceed to template fallback
@@ -1869,16 +1865,15 @@ func (c *Config) FetchAndSaveProviderModels(uid string) error {
 		logrus.Errorf("Failed to create client for provider %s: %v", provider.Name, apiErr)
 	}
 
-	// API failed or not supported, try template fallback
+	// API failed or not supported, fall back to compile-time embedded providers.json.
+	// Do not persist template data to DB — callers should use it directly without caching.
 	if c.templateManager != nil {
-		tmplModels, _, tmplErr := c.templateManager.GetModelsForProvider(provider)
+		tmplModels, tmplErr := c.templateManager.GetEmbeddedModelsForProvider(provider)
 		if tmplErr == nil && len(tmplModels) > 0 {
-			// Use the fallback models
-			return c.modelManager.SaveModels(provider, provider.APIBase, tmplModels)
+			return nil // signal success; caller uses GetEmbeddedModelsForProvider directly
 		}
 	}
 
-	// All fallbacks failed
 	if apiErr != nil {
 		return fmt.Errorf("failed to fetch models (API: %v, template fallback: not available)", apiErr)
 	}
