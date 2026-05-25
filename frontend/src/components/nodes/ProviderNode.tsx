@@ -8,7 +8,6 @@ import {
 import {
     Box,
     Button,
-    Divider,
     IconButton,
     Popover,
     Stack,
@@ -304,95 +303,64 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         active={active}
                     />
                 )}
-                {/* Top Layer - Provider/Model Field */}
-                <Box sx={NODE_LAYER_STYLES.topLayer}>
-                    <NodeTooltip
-                        title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
-                        placement="top"
-                    >
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                            {isProviderMissing && (
-                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main' }} />
-                            )}
+                {!provider.provider ? (
+                    /* Placeholder state */
+                    <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}
+                        >
+                            Select Provider
+                        </Typography>
+                    </Box>
+                ) : (
+                    <>
+                        {/* Row 1: Provider name + style tag(s) */}
+                        <NodeTooltip
+                            title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
+                            placement="top"
+                        >
+                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', px: 1, gap: 0.75, width: '100%', minWidth: 0 }}>
+                                {isProviderMissing && (
+                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                                )}
+                                <Typography
+                                    variant="body2"
+                                    color={isProviderMissing ? 'warning.main' : 'text.primary'}
+                                    noWrap
+                                    sx={{ ...NODE_LAYER_STYLES.typography, flex: 1, minWidth: 0 }}
+                                >
+                                    {providerInfo.name}
+                                </Typography>
+                                {hasDualApiStyle ? (
+                                    <Box sx={{ display: 'flex', gap: 0.25, flexShrink: 0 }}>
+                                        <ApiStyleBadge apiStyle="openai" minimal />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal />
+                                    </Box>
+                                ) : (
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal />
+                                )}
+                            </Box>
+                        </NodeTooltip>
+
+                        {/* Row 2: Model name */}
+                        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', px: 1, width: '100%', minWidth: 0 }}>
                             <Typography
                                 variant="body2"
-                                color={isProviderMissing ? 'warning.main' : 'text.primary'}
                                 noWrap
                                 sx={{
                                     ...NODE_LAYER_STYLES.typography,
-                                    fontStyle: !provider.provider ? 'italic' : 'normal',
-                                    width: '80px',
-                                    textAlign: 'center',
+                                    fontWeight: 400,
+                                    fontStyle: !provider.model ? 'italic' : 'normal',
+                                    color: provider.model ? 'text.secondary' : 'text.disabled',
+                                    width: '100%',
                                 }}
                             >
-                                {providerInfo.name || 'Select Provider'}
+                                {provider.model || 'select model'}
                             </Typography>
-
-                            {provider.provider && (
-                                <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-                            )}
-
-                            {provider.provider && (
-                                <Typography
-                                    variant="body2"
-                                    color="text.primary"
-                                    noWrap
-                                    sx={{
-                                        ...NODE_LAYER_STYLES.typography,
-                                        fontStyle: !provider.model ? 'italic' : 'normal',
-                                        width: '80px',
-                                        textAlign: 'center',
-                                    }}
-                                >
-                                    {provider.model || '?'}
-                                </Typography>
-                            )}
                         </Box>
-                    </NodeTooltip>
-                </Box>
-
-                {/* Divider */}
-                <Divider sx={NODE_LAYER_STYLES.divider} />
-
-                {/* Bottom Layer - API Style Badge(s) */}
-                {provider.provider && (
-                    <Box sx={NODE_LAYER_STYLES.bottomLayer}>
-                        {providerInfo.provider?.api_base_openai && providerInfo.provider?.api_base_anthropic ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, width: '100%' }}>
-                                <ApiStyleBadge
-                                    apiStyle="openai"
-                                    sx={{
-                                        flex: 1,
-                                        borderRadius: 1,
-                                        transition: 'all 0.2s',
-                                        fontWeight: null,
-                                    }}
-                                />
-                                <ApiStyleBadge
-                                    apiStyle="anthropic"
-                                    sx={{
-                                        flex: 1,
-                                        borderRadius: 1,
-                                        transition: 'all 0.2s',
-                                        fontWeight: null,
-                                    }}
-                                />
-                            </Box>
-                        ) : (
-                            <ApiStyleBadge
-                                apiStyle={apiStyle}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderRadius: 1,
-                                    transition: 'all 0.2s',
-                                    width: '100%',
-                                    fontWeight: null,
-                                }}
-                            />
-                        )}
-                    </Box>
+                    </>
                 )}
 
                 {/* Action Buttons - visible on hover */}
