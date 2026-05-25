@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Tab, Tabs, Typography } from '@mui/material';
 import React from 'react';
 import CodeBlock from './CodeBlock';
+import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs } from './CodexQuickConfig';
 import { shouldIgnoreDialogClose } from './dialogClose';
 import { api } from '@/services/api';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
@@ -11,6 +12,7 @@ interface CodexConfigModalProps {
     copyToClipboard: (text: string, label: string) => Promise<void>;
 }
 
+type MainTab = 'quick' | 'manual';
 type ScriptTab = 'json' | 'windows' | 'unix';
 type SessionAction = 'import' | 'undo';
 
@@ -30,6 +32,7 @@ interface ApplyCodexConfigResponse {
         created?: boolean;
         updated?: boolean;
     };
+    catalogWritten?: boolean;
     models?: string[];
     message?: string;
 }
@@ -44,8 +47,12 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     // Keep token in context as a fallback for the auth.json preview while
     // the preview API request is in flight.
     const { token } = useScenarioPageModal();
+    const [mainTab, setMainTab] = React.useState<MainTab>('quick');
+    const [prefs, setPrefs] = React.useState<CodexPrefs>(() => defaultCodexPrefs());
+    const [writeCatalog, setWriteCatalog] = React.useState(true);
     const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
     const [authTab, setAuthTab] = React.useState<ScriptTab>('json');
+    const [catalogTab, setCatalogTab] = React.useState<ScriptTab>('json');
     const [sessionAction, setSessionAction] = React.useState<SessionAction | null>(null);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [result, setResult] = React.useState<any | null>(null);
@@ -54,33 +61,61 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [autoUndoOnStop, setAutoUndoOnStop] = React.useState(false);
     const [configToml, setConfigToml] = React.useState<string>('# Loading...');
     const [authJson, setAuthJson] = React.useState<string>(`{\n  "OPENAI_API_KEY": "${token}"\n}`);
+    const [catalogJson, setCatalogJson] = React.useState<string>('');
+    const [previewModels, setPreviewModels] = React.useState<string[]>([]);
 
     // Apply configuration state
     const [isApplying, setIsApplying] = React.useState(false);
     const [applyResult, setApplyResult] = React.useState<ApplyCodexConfigResponse | null>(null);
     const [applyError, setApplyError] = React.useState<string | null>(null);
 
+    // Seed defaults on open; reset transient state on close.
     React.useEffect(() => {
         if (!open) {
             resetApplyState();
             return;
         }
+        setPrefs(defaultCodexPrefs());
+    }, [open]);
+
+    // Re-render the server-authoritative TOML whenever prefs or writeCatalog change
+    // while the modal is open. Debounced so dragging through Select options doesn't
+    // spam the backend.
+    React.useEffect(() => {
+        if (!open) return;
         let cancelled = false;
-        (async () => {
+        const handle = setTimeout(async () => {
             try {
-                const resp = await api.getCodexConfigPreview();
+                const resp = await api.getCodexConfigPreview(prefs as Record<string, string>, writeCatalog);
                 if (cancelled) return;
                 if (resp?.success) {
                     setConfigToml(resp.configToml || '');
                     setAuthJson(resp.authJson || `{\n  "OPENAI_API_KEY": "${token}"\n}`);
+                    setCatalogJson(resp.catalogJson || '');
+                    setPreviewModels(resp.models || []);
                 }
             } catch {
                 // Leave existing placeholders in place; the user can still copy the
                 // base URL from the page itself.
             }
-        })();
-        return () => { cancelled = true; };
-    }, [open, token]);
+        }, 250);
+        return () => { cancelled = true; clearTimeout(handle); };
+    }, [open, prefs, writeCatalog, token]);
+
+    const windowsCatalogScript = `$catalogDir = Join-Path $HOME ".codex"
+$catalogPath = Join-Path $catalogDir "tingly-model-catalog.json"
+
+New-Item -ItemType Directory -Force -Path $catalogDir | Out-Null
+
+@'
+${catalogJson}
+'@ | Set-Content -Path $catalogPath`;
+
+    const unixCatalogScript = `mkdir -p ~/.codex
+
+cat > ~/.codex/tingly-model-catalog.json <<'EOF'
+${catalogJson}
+EOF`;
 
     const windowsConfigScript = `$configDir = Join-Path $HOME ".codex"
 $configPath = Join-Path $configDir "config.toml"
@@ -142,7 +177,7 @@ EOF`;
         setApplyError(null);
         setApplyResult(null);
         try {
-            const response = await api.applyCodexConfig();
+            const response = await api.applyCodexConfig(prefs as Record<string, string>, writeCatalog);
             if (response?.success) {
                 setApplyResult(response);
             } else {
@@ -186,157 +221,237 @@ EOF`;
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     Configure Codex to use Tingly Box through `~/.codex/config.toml` and `~/.codex/auth.json`
                 </Typography>
+                <Tabs
+                    value={mainTab}
+                    onChange={(_, value) => setMainTab(value)}
+                    sx={{ mt: 1, minHeight: 40, '& .MuiTabs-indicator': { height: 3 } }}
+                >
+                    <Tab label="Quick Config" value="quick" sx={{ minHeight: 40, textTransform: 'none' }} />
+                    <Tab label="Manual" value="manual" sx={{ minHeight: 40, textTransform: 'none' }} />
+                </Tabs>
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Step 1 · Create or update `~/.codex/config.toml`
-                            </Typography>
-                            <Tabs
-                                value={configTab}
-                                onChange={(_, value) => setConfigTab(value)}
-                                variant="standard"
-                                sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                            >
-                                <Tab label="TOML" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                            </Tabs>
-                        </Box>
-                        <Box>
-                            {configTab === 'json' && (
-                                <CodeBlock
-                                    code={configToml}
-                                    language="toml"
-                                    filename="Create or update ~/.codex/config.toml"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'config.toml')}
-                                    maxHeight={220}
-                                    minHeight={180}
-                                />
-                            )}
-                            {configTab === 'windows' && (
-                                <CodeBlock
-                                    code={windowsConfigScript}
-                                    language="js"
-                                    filename="PowerShell script to setup ~/.codex/config.toml"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Windows config script')}
-                                    maxHeight={260}
-                                    minHeight={220}
-                                />
-                            )}
-                            {configTab === 'unix' && (
-                                <CodeBlock
-                                    code={unixConfigScript}
-                                    language="js"
-                                    filename="Bash script to setup ~/.codex/config.toml"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Unix config script')}
-                                    maxHeight={260}
-                                    minHeight={220}
-                                />
-                            )}
-                        </Box>
-                    </Box>
+                {mainTab === 'quick' && (
+                    <CodexQuickConfig
+                        prefs={prefs}
+                        setPrefs={setPrefs}
+                        onResetDefaults={() => setPrefs(defaultCodexPrefs())}
+                        writeCatalog={writeCatalog}
+                        setWriteCatalog={setWriteCatalog}
+                    />
+                )}
 
-                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Step 2 · Create or update `~/.codex/auth.json`
-                            </Typography>
-                            <Tabs
-                                value={authTab}
-                                onChange={(_, value) => setAuthTab(value)}
-                                variant="standard"
-                                sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
-                            >
-                                <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                                <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
-                            </Tabs>
-                        </Box>
-                        <Box sx={{ mb: 1.5 }}>
-                            <Typography variant="body2" color="text.secondary">
-                                Set `OPENAI_API_KEY` in `~/.codex/auth.json` to the API key generated by Tingly Box. If the file already exists, update the existing value.
-                            </Typography>
-                        </Box>
-                        <Box>
-                            {authTab === 'json' && (
-                                <CodeBlock
-                                    code={authJson}
-                                    language="json"
-                                    filename="Create or update ~/.codex/auth.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'auth.json')}
-                                    maxHeight={140}
-                                    minHeight={100}
-                                />
-                            )}
-                            {authTab === 'windows' && (
-                                <CodeBlock
-                                    code={windowsAuthScript}
-                                    language="js"
-                                    filename="PowerShell script to setup ~/.codex/auth.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Windows auth script')}
-                                    maxHeight={220}
-                                    minHeight={180}
-                                />
-                            )}
-                            {authTab === 'unix' && (
-                                <CodeBlock
-                                    code={unixAuthScript}
-                                    language="js"
-                                    filename="Bash script to setup ~/.codex/auth.json"
-                                    wrap={true}
-                                    onCopy={(code) => copyToClipboard(code, 'Unix auth script')}
-                                    maxHeight={220}
-                                    minHeight={180}
-                                />
-                            )}
-                        </Box>
-                    </Box>
-
-                    {SHOW_CODEX_SESSION_IMPORT && (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Step 3 · Optional: import previous OpenAI sessions
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                If you previously used Codex with the built-in OpenAI provider, import those local sessions so they remain visible after switching to `tingly-box`. If needed, you can undo the import later.
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Button
-                                    variant="contained"
-                                    onClick={() => setSessionAction('import')}
-                                    disabled={isSubmitting}
+                {mainTab === 'manual' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    Step 1 · Create or update `~/.codex/config.toml`
+                                </Typography>
+                                <Tabs
+                                    value={configTab}
+                                    onChange={(_, value) => setConfigTab(value)}
+                                    variant="standard"
+                                    sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
                                 >
-                                    Import Sessions
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    onClick={() => setSessionAction('undo')}
-                                    disabled={isSubmitting}
-                                >
-                                    Undo Import
-                                </Button>
+                                    <Tab label="TOML" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                </Tabs>
                             </Box>
-                            {error && <Alert severity="error">{error}</Alert>}
-                            {result && (
-                                <Alert severity="success">
-                                    Updated {result.updatedSessionFiles || 0} active sessions, {result.updatedArchivedFiles || 0} archived sessions, and {result.updatedThreadRows || 0} SQLite thread records.
-                                    {Array.isArray(result.skippedLockedFiles) && result.skippedLockedFiles.length > 0
-                                        ? ` Skipped ${result.skippedLockedFiles.length} locked files; close Codex and retry if needed.`
-                                        : ''}
-                                </Alert>
-                            )}
+                            <Box>
+                                {configTab === 'json' && (
+                                    <CodeBlock
+                                        code={configToml}
+                                        language="toml"
+                                        filename="Create or update ~/.codex/config.toml"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'config.toml')}
+                                        maxHeight={220}
+                                        minHeight={180}
+                                    />
+                                )}
+                                {configTab === 'windows' && (
+                                    <CodeBlock
+                                        code={windowsConfigScript}
+                                        language="js"
+                                        filename="PowerShell script to setup ~/.codex/config.toml"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Windows config script')}
+                                        maxHeight={260}
+                                        minHeight={220}
+                                    />
+                                )}
+                                {configTab === 'unix' && (
+                                    <CodeBlock
+                                        code={unixConfigScript}
+                                        language="js"
+                                        filename="Bash script to setup ~/.codex/config.toml"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Unix config script')}
+                                        maxHeight={260}
+                                        minHeight={220}
+                                    />
+                                )}
+                            </Box>
                         </Box>
-                    )}
-                </Box>
+
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    Step 2 · Create or update `~/.codex/auth.json`
+                                </Typography>
+                                <Tabs
+                                    value={authTab}
+                                    onChange={(_, value) => setAuthTab(value)}
+                                    variant="standard"
+                                    sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                                >
+                                    <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                </Tabs>
+                            </Box>
+                            <Box sx={{ mb: 1.5 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Set `OPENAI_API_KEY` in `~/.codex/auth.json` to the API key generated by Tingly Box. If the file already exists, update the existing value.
+                                </Typography>
+                            </Box>
+                            <Box>
+                                {authTab === 'json' && (
+                                    <CodeBlock
+                                        code={authJson}
+                                        language="json"
+                                        filename="Create or update ~/.codex/auth.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'auth.json')}
+                                        maxHeight={140}
+                                        minHeight={100}
+                                    />
+                                )}
+                                {authTab === 'windows' && (
+                                    <CodeBlock
+                                        code={windowsAuthScript}
+                                        language="js"
+                                        filename="PowerShell script to setup ~/.codex/auth.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Windows auth script')}
+                                        maxHeight={220}
+                                        minHeight={180}
+                                    />
+                                )}
+                                {authTab === 'unix' && (
+                                    <CodeBlock
+                                        code={unixAuthScript}
+                                        language="js"
+                                        filename="Bash script to setup ~/.codex/auth.json"
+                                        wrap={true}
+                                        onCopy={(code) => copyToClipboard(code, 'Unix auth script')}
+                                        maxHeight={220}
+                                        minHeight={180}
+                                    />
+                                )}
+                            </Box>
+                        </Box>
+
+                        {writeCatalog && previewModels.length > 0 && catalogJson && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Typography variant="subtitle2" color="text.secondary">
+                                        Step 3 · Create or update `~/.codex/tingly-model-catalog.json`
+                                    </Typography>
+                                    <Tabs
+                                        value={catalogTab}
+                                        onChange={(_, value) => setCatalogTab(value)}
+                                        variant="standard"
+                                        sx={{ minHeight: 32, '& .MuiTabs-indicator': { height: 3 } }}
+                                    >
+                                        <Tab label="JSON" value="json" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                        <Tab label="Windows" value="windows" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                        <Tab label="Linux/macOS" value="unix" sx={{ minHeight: 32, py: 0.5, fontSize: '0.875rem' }} />
+                                    </Tabs>
+                                </Box>
+                                <Box sx={{ mb: 1.5 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Lets Codex's <code>/model</code> picker list tingly-served models. Required when <code>model_catalog_json</code> is set in config.toml.
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    {catalogTab === 'json' && (
+                                        <CodeBlock
+                                            code={catalogJson}
+                                            language="json"
+                                            filename="Create or update ~/.codex/tingly-model-catalog.json"
+                                            wrap={true}
+                                            onCopy={(code) => copyToClipboard(code, 'tingly-model-catalog.json')}
+                                            maxHeight={220}
+                                            minHeight={140}
+                                        />
+                                    )}
+                                    {catalogTab === 'windows' && (
+                                        <CodeBlock
+                                            code={windowsCatalogScript}
+                                            language="js"
+                                            filename="PowerShell script to setup ~/.codex/tingly-model-catalog.json"
+                                            wrap={true}
+                                            onCopy={(code) => copyToClipboard(code, 'Windows catalog script')}
+                                            maxHeight={260}
+                                            minHeight={220}
+                                        />
+                                    )}
+                                    {catalogTab === 'unix' && (
+                                        <CodeBlock
+                                            code={unixCatalogScript}
+                                            language="js"
+                                            filename="Bash script to setup ~/.codex/tingly-model-catalog.json"
+                                            wrap={true}
+                                            onCopy={(code) => copyToClipboard(code, 'Unix catalog script')}
+                                            maxHeight={260}
+                                            minHeight={220}
+                                        />
+                                    )}
+                                </Box>
+                            </Box>
+                        )}
+
+                        {SHOW_CODEX_SESSION_IMPORT && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    Step 3 · Optional: import previous OpenAI sessions
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    If you previously used Codex with the built-in OpenAI provider, import those local sessions so they remain visible after switching to `tingly-box`. If needed, you can undo the import later.
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Button
+                                        variant="contained"
+                                        onClick={() => setSessionAction('import')}
+                                        disabled={isSubmitting}
+                                    >
+                                        Import Sessions
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        onClick={() => setSessionAction('undo')}
+                                        disabled={isSubmitting}
+                                    >
+                                        Undo Import
+                                    </Button>
+                                </Box>
+                                {error && <Alert severity="error">{error}</Alert>}
+                                {result && (
+                                    <Alert severity="success">
+                                        Updated {result.updatedSessionFiles || 0} active sessions, {result.updatedArchivedFiles || 0} archived sessions, and {result.updatedThreadRows || 0} SQLite thread records.
+                                        {Array.isArray(result.skippedLockedFiles) && result.skippedLockedFiles.length > 0
+                                            ? ` Skipped ${result.skippedLockedFiles.length} locked files; close Codex and retry if needed.`
+                                            : ''}
+                                    </Alert>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
+                )}
             </DialogContent>
 
             <DialogActions sx={{ px: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -364,6 +479,16 @@ EOF`;
                             {applyResult.authResult?.updated && (
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
                                     ✓ Updated ~/.codex/auth.json
+                                </Typography>
+                            )}
+                            {applyResult.catalogWritten && (
+                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                    ✓ Written ~/.codex/tingly-model-catalog.json
+                                </Typography>
+                            )}
+                            {applyResult.models && applyResult.models.length > 0 && (
+                                <Typography variant="caption" color="text.secondary">
+                                    Models: {applyResult.models.join(', ')}
                                 </Typography>
                             )}
                             {applyResult.configResult?.backupPath && (

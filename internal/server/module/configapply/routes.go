@@ -34,6 +34,7 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 	router.POST("/config/apply/codex", handler.ApplyCodexConfigFromState,
 		swagger.WithDescription("Generate and apply Codex CLI configuration from system state"),
 		swagger.WithTags("config"),
+		swagger.WithRequestModel(ApplyCodexConfigRequest{}),
 		swagger.WithResponseModel(ApplyCodexConfigResponse{}),
 	)
 
@@ -44,9 +45,10 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(OpenCodeConfigPreviewResponse{}),
 	)
 
-	router.GET("/config/preview/codex", handler.GetCodexConfigPreview,
+	router.POST("/config/preview/codex", handler.GetCodexConfigPreview,
 		swagger.WithDescription("Generate Codex configuration preview from system state"),
 		swagger.WithTags("config"),
+		swagger.WithRequestModel(ApplyCodexConfigRequest{}),
 		swagger.WithResponseModel(CodexConfigPreviewResponse{}),
 	)
 

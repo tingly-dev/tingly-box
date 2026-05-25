@@ -851,7 +851,7 @@ func TestApplyCodexConfig_NewFile_WritesManagedFields(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	result, err := ApplyCodexConfig("http://localhost:12580/tingly/codex", []string{"tingly-codex", "tingly-gpt5"})
+	result, err := ApplyCodexConfig("http://localhost:12580/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}, DefaultCodexPrefs(), true)
 	if err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
@@ -912,7 +912,7 @@ inherit = "all"
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://example/tingly/codex", []string{"my-rule"}); err != nil {
+	if _, err := ApplyCodexConfig("http://example/tingly/codex", []string{"my-rule"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -966,7 +966,7 @@ model_provider = "tingly-box"
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://new-host/tingly/codex", []string{"tingly-codex"}); err != nil {
+	if _, err := ApplyCodexConfig("http://new-host/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1010,14 +1010,14 @@ func TestApplyCodexConfig_Idempotent(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 	first, err := os.ReadFile(filepath.Join(tempDir, ".codex", "config.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"a", "b"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 	cfg := loadCodexConfigForTest(t, filepath.Join(tempDir, ".codex", "config.toml"))
@@ -1050,7 +1050,7 @@ model_provider = "openai"
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1069,7 +1069,7 @@ func TestApplyCodexConfig_WritesCatalogAndPointsConfigAtIt(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1118,7 +1118,7 @@ func TestApplyCodexConfig_CatalogReasoningPresetsAreObjects(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1158,7 +1158,7 @@ func TestApplyCodexConfig_NoModels_SkipsCatalog(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1168,6 +1168,28 @@ func TestApplyCodexConfig_NoModels_SkipsCatalog(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(tempDir, ".codex", "tingly-model-catalog.json")); !os.IsNotExist(err) {
 		t.Errorf("catalog file should not exist when no models, err=%v", err)
+	}
+}
+
+func TestApplyCodexConfig_WriteCatalogFalse_SkipsCatalog(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	result, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, DefaultCodexPrefs(), false)
+	if err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success: %s", result.Message)
+	}
+
+	codexDir := filepath.Join(tempDir, ".codex")
+	cfg := loadCodexConfigForTest(t, filepath.Join(codexDir, "config.toml"))
+	if _, ok := cfg["model_catalog_json"]; ok {
+		t.Errorf("model_catalog_json should be absent when writeCatalog=false, got %v", cfg["model_catalog_json"])
+	}
+	if _, err := os.Stat(filepath.Join(codexDir, "tingly-model-catalog.json")); !os.IsNotExist(err) {
+		t.Errorf("catalog file should not exist when writeCatalog=false")
 	}
 }
 
@@ -1185,7 +1207,7 @@ func TestApplyCodexConfig_BacksUpExistingCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"new-model"}); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"new-model"}, DefaultCodexPrefs(), true); err != nil {
 		t.Fatalf("ApplyCodexConfig: %v", err)
 	}
 
@@ -1214,7 +1236,7 @@ some_user_flag = true
 		t.Fatal(err)
 	}
 
-	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil); err != nil {
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", nil, DefaultCodexPrefs(), true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1230,5 +1252,72 @@ some_user_flag = true
 	providers, _ := cfg["model_providers"].(map[string]interface{})
 	if _, ok := providers["tingly-box"]; !ok {
 		t.Errorf("tingly-box provider should still be installed: %#v", providers)
+	}
+}
+
+func TestApplyCodexConfig_PrefsAppliedTopLevelAndPerProfile(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	prefs := &CodexPrefs{
+		ModelReasoningEffort:            "high",
+		ModelReasoningSummary:           "detailed",
+		ModelVerbosity:                  "low",
+		ModelSupportsReasoningSummaries: "true",
+	}
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex"}, prefs, true); err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+
+	cfg := loadCodexConfigForTest(t, filepath.Join(tempDir, ".codex", "config.toml"))
+	// Top-level
+	if cfg["model_reasoning_effort"] != "high" {
+		t.Errorf("top model_reasoning_effort = %v, want high", cfg["model_reasoning_effort"])
+	}
+	if cfg["model_reasoning_summary"] != "detailed" {
+		t.Errorf("top model_reasoning_summary = %v, want detailed", cfg["model_reasoning_summary"])
+	}
+	if cfg["model_verbosity"] != "low" {
+		t.Errorf("top model_verbosity = %v, want low", cfg["model_verbosity"])
+	}
+	if cfg["model_supports_reasoning_summaries"] != true {
+		t.Errorf("top model_supports_reasoning_summaries = %v, want true", cfg["model_supports_reasoning_summaries"])
+	}
+	// Per-profile (self-contained)
+	profiles, _ := cfg["profiles"].(map[string]interface{})
+	p, _ := profiles["tingly-codex"].(map[string]interface{})
+	if p["model_reasoning_effort"] != "high" {
+		t.Errorf("profile model_reasoning_effort = %v, want high", p["model_reasoning_effort"])
+	}
+	if p["model_verbosity"] != "low" {
+		t.Errorf("profile model_verbosity = %v, want low", p["model_verbosity"])
+	}
+}
+
+func TestApplyCodexConfig_PrefsRejectInvalidEnumAndCannotClobberManaged(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	prefs := &CodexPrefs{
+		ModelReasoningEffort:            "bogus", // invalid enum -> dropped
+		ModelSupportsReasoningSummaries: "yes",   // not "true" -> dropped
+	}
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"m1"}, prefs, true); err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+
+	cfg := loadCodexConfigForTest(t, filepath.Join(tempDir, ".codex", "config.toml"))
+	if _, ok := cfg["model_reasoning_effort"]; ok {
+		t.Errorf("invalid enum should be dropped, got %v", cfg["model_reasoning_effort"])
+	}
+	if _, ok := cfg["model_supports_reasoning_summaries"]; ok {
+		t.Errorf("non-true bool should be dropped, got %v", cfg["model_supports_reasoning_summaries"])
+	}
+	// Managed fields remain controlled by tingly-box.
+	if cfg["model_provider"] != "tingly-box" {
+		t.Errorf("model_provider = %v, want tingly-box", cfg["model_provider"])
+	}
+	if cfg["model"] != "m1" {
+		t.Errorf("model = %v, want m1", cfg["model"])
 	}
 }
