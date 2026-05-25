@@ -432,6 +432,29 @@ export function useSmartRoutingHandlers({
         }
     }, [configRecord, setConfigRecord, autoSave, showNotification]);
 
+    const handleMoveSmartRule = useCallback(async (ruleUuid: string, direction: 'up' | 'down') => {
+        if (!configRecord) return;
+
+        const rules = configRecord.smartRouting || [];
+        const idx = rules.findIndex((r) => r.uuid === ruleUuid);
+        if (idx < 0) return;
+
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= rules.length) return;
+
+        const reordered = [...rules];
+        [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+
+        const updated: ConfigRecord = { ...configRecord, smartRouting: reordered };
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+
+        const success = await autoSave(updated);
+        if (!success) {
+            setConfigRecord(previousRecord);
+        }
+    }, [configRecord, setConfigRecord, autoSave]);
+
     const handleDeleteDefaultProvider = useCallback(async (providerUuid: string) => {
         if (!configRecord) return;
 
@@ -462,6 +485,7 @@ export function useSmartRoutingHandlers({
             handleSaveSmartRule,
             handleCancelSmartRuleEdit,
             handleDeleteSmartRule,
+            handleMoveSmartRule,
             handleAddServiceToSmartRule,
             handleDeleteServiceFromSmartRule,
             handleDeleteDefaultProvider,

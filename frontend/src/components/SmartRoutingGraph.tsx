@@ -74,6 +74,7 @@ interface SmartRoutingGraphProps {
     onAddSmartRule: () => void;
     onEditSmartRule: (ruleUuid: string) => void;
     onDeleteSmartRule: (ruleUuid: string) => void;
+    onMoveSmartRule?: (ruleUuid: string, direction: 'up' | 'down') => void;
     onAddServiceToSmartRule: (ruleIndex: number) => void;
     onDeleteServiceFromSmartRule: (ruleUuid: string, serviceUuid: string) => void;
     onAddDefaultProvider?: () => void;
@@ -167,6 +168,7 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                  onAddSmartRule,
                                                                  onEditSmartRule,
                                                                  onDeleteSmartRule,
+                                                                 onMoveSmartRule,
                                                                  onAddServiceToSmartRule,
                                                                  onDeleteServiceFromSmartRule,
                                                                  onAddDefaultProvider,
@@ -369,12 +371,10 @@ const SmartRoutingGraph: React.FC<SmartRoutingGraphProps> = ({
                                                                 smartRouting={rule}
                                                                 index={index}
                                                                 active={active}
-                                                                onEdit={() => {
-                                                                    onEditSmartRule(rule.uuid);
-                                                                }}
-                                                                onDelete={() => {
-                                                                    onDeleteSmartRule(rule.uuid);
-                                                                }}
+                                                                onEdit={() => onEditSmartRule(rule.uuid)}
+                                                                onDelete={() => onDeleteSmartRule(rule.uuid)}
+                                                                onMoveUp={index > 0 ? () => onMoveSmartRule?.(rule.uuid, 'up') : undefined}
+                                                                onMoveDown={index < smartRouting.length - 1 ? () => onMoveSmartRule?.(rule.uuid, 'down') : undefined}
                                                             />
                                                         </NodeContainer>
 

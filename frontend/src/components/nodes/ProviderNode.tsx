@@ -104,13 +104,15 @@ const PriorityBadgeDisk = styled(Box, {
     transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
     ...(hasPriority
         ? {
-              backgroundColor: theme.palette.primary.main,
-              color: theme.palette.primary.contrastText,
+              backgroundColor: 'transparent',
+              color: theme.palette.primary.main,
               borderColor: theme.palette.primary.main,
+              borderWidth: '1.5px',
               '&:hover': active
                   ? {
-                        backgroundColor: theme.palette.primary.dark,
+                        backgroundColor: theme.palette.action.hover,
                         borderColor: theme.palette.primary.dark,
+                        color: theme.palette.primary.dark,
                     }
                   : {},
           }

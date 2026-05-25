@@ -330,6 +330,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     onAddSmartRule={smartHandlers.handleAddSmartRule}
                     onEditSmartRule={smartHandlers.handleEditSmartRule}
                     onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
+                    onMoveSmartRule={smartHandlers.handleMoveSmartRule}
                     onAddServiceToSmartRule={smartHandlers.handleAddServiceToSmartRule}
                     onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
                     onAddDefaultProvider={handleAddProviderButtonClick}
