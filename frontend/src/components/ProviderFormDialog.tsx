@@ -640,7 +640,23 @@ const ProviderFormDialog = ({
                             />
                         )}
 
-                        {/* Advanced accordion — name, proxy, user-agent, enabled */}
+                        {/* Proxy URL — exposed at top level since it's a common requirement */}
+                        <ProxyUrlField
+                            mode={mode}
+                            proxyUrl={data.proxyUrl || ''}
+                            onProxyUrlChange={(value) => {
+                                onChange('proxyUrl', value);
+                                if (useGlobalProxy && value !== globalProxyUrl) {
+                                    setUseGlobalProxy(false);
+                                    localStorage.setItem('provider_use_global_proxy', 'false');
+                                }
+                            }}
+                            globalProxyUrl={globalProxyUrl}
+                            useGlobalProxy={useGlobalProxy}
+                            onUseGlobalProxyChange={handleUseGlobalProxyChange}
+                        />
+
+                        {/* Advanced accordion — user-agent, name, enabled */}
                         <Accordion
                             disableGutters
                             elevation={0}
@@ -663,7 +679,7 @@ const ProviderFormDialog = ({
                                 }}
                             >
                                 <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                                    {t('providerDialog.advanced.label', {defaultValue: 'Advanced — proxy, user-agent, name'})}
+                                    {t('providerDialog.advanced.label', {defaultValue: 'Advanced — user-agent, name'})}
                                 </Typography>
                             </AccordionSummary>
                             <AccordionDetails sx={{px: 0, pb: 1}}>
@@ -683,21 +699,6 @@ const ProviderFormDialog = ({
                                             setVerificationResult(null);
                                             setNameIsAutoFilled(false);
                                         }}
-                                    />
-
-                                    <ProxyUrlField
-                                        mode={mode}
-                                        proxyUrl={data.proxyUrl || ''}
-                                        onProxyUrlChange={(value) => {
-                                            onChange('proxyUrl', value);
-                                            if (useGlobalProxy && value !== globalProxyUrl) {
-                                                setUseGlobalProxy(false);
-                                                localStorage.setItem('provider_use_global_proxy', 'false');
-                                            }
-                                        }}
-                                        globalProxyUrl={globalProxyUrl}
-                                        useGlobalProxy={useGlobalProxy}
-                                        onUseGlobalProxyChange={handleUseGlobalProxyChange}
                                     />
 
                                     <TextField

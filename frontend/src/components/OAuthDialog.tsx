@@ -550,6 +550,8 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
     const [useGlobalProxy, setUseGlobalProxy] = useState(false);
     const [globalProxyUrl, setGlobalProxyUrl] = useState('');
+    // For autoStartProviderId mode: whether user has clicked "Connect & Authorize"
+    const [configConfirmed, setConfigConfirmed] = useState(false);
 
     // Load saved proxy URL and global proxy setting from localStorage/config on mount
     useEffect(() => {
@@ -624,6 +626,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
         }
         setAuthDialogOpen(false);
         setAuthData(null);
+        setConfigConfirmed(false);
         onClose();
     };
 
@@ -723,8 +726,8 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
     };
 
     // When opened with an autoStartProviderId, kick off that provider's flow
-    // once instead of waiting for an in-grid click. Reset on close so the next
-    // open re-triggers cleanly.
+    // only after the user has confirmed config (clicked "Connect & Authorize").
+    // Reset on close so the next open re-triggers cleanly.
     const autoStartedRef = useRef<string | null>(null);
     useEffect(() => {
         if (!open) {
@@ -732,21 +735,29 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
             return;
         }
         if (!autoStartProviderId || autoStartedRef.current === autoStartProviderId) return;
+        if (!configConfirmed) return;
         const provider = oauthProviders.find((p) => p.id === autoStartProviderId);
         if (provider && provider.enabled !== false) {
             autoStartedRef.current = autoStartProviderId;
             handleProviderClick(provider);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, autoStartProviderId, oauthProviders]);
+    }, [open, autoStartProviderId, oauthProviders, configConfirmed]);
 
     // Direct mode: launched from the unified picker for a single provider.
-    // Skip the in-dialog provider grid entirely — show a compact connecting/
-    // error panel until the authorization dialog takes over, and route every
-    // close straight to a full close (there is no grid to fall back to).
+    // Shows a config screen (proxy settings, etc.) before starting the OAuth
+    // flow. Only begins authorization when the user clicks "Connect & Authorize".
     if (autoStartProviderId) {
         const provider = oauthProviders.find((p) => p.id === autoStartProviderId);
         const name = provider?.displayName || provider?.name || 'provider';
+        const isConnecting = configConfirmed && !initError;
+
+        const handleRetry = () => {
+            setConfigConfirmed(false);
+            setInitError(null);
+            autoStartedRef.current = null;
+        };
+
         return (
             <>
                 <Dialog open={open && !authDialogOpen} onClose={handleClose} maxWidth="xs" fullWidth>
@@ -757,14 +768,94 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
                         </Stack>
                     </DialogTitle>
                     <DialogContent>
-                        {initError ? (
-                            <Alert severity="error" sx={{my: 1}}>{initError}</Alert>
-                        ) : (
+                        {isConnecting ? (
                             <Stack alignItems="center" spacing={2} sx={{py: 3}}>
                                 <CircularProgress size={28}/>
                                 <Typography variant="body2" color="text.secondary">
                                     Connecting to {name}…
                                 </Typography>
+                            </Stack>
+                        ) : (
+                            <Stack spacing={2.5} sx={{py: 1}}>
+                                {/* Provider info */}
+                                {provider && (
+                                    <Stack direction="row" alignItems="center" spacing={2}>
+                                        <Box
+                                            sx={{
+                                                fontSize: 32,
+                                                width: 48,
+                                                height: 48,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                bgcolor: `${provider.color}15`,
+                                                borderRadius: 2,
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            {provider.icon}
+                                        </Box>
+                                        <Box>
+                                            <Typography variant="subtitle1" fontWeight={600}>
+                                                {provider.displayName}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                {provider.description}
+                                            </Typography>
+                                        </Box>
+                                    </Stack>
+                                )}
+
+                                {initError && (
+                                    <Alert severity="error" onClose={handleRetry}>{initError}</Alert>
+                                )}
+
+                                {/* Proxy URL */}
+                                <TextField
+                                    fullWidth
+                                    label="HTTP/SOCKS Proxy URL (Optional)"
+                                    placeholder="http://127.0.0.1:7890 or socks5://127.0.0.1:7890"
+                                    value={proxyUrl}
+                                    onChange={(e) => handleProxyUrlChange(e.target.value)}
+                                    helperText={
+                                        autoDetectedProxy
+                                            ? 'Auto-detected from existing provider. You can override if needed.'
+                                            : 'Optional: use a proxy to bypass regional restrictions.'
+                                    }
+                                    size="small"
+                                    color={autoDetectedProxy ? 'success' : 'primary'}
+                                    focused={autoDetectedProxy ? true : undefined}
+                                />
+                                <Box sx={{display: 'flex', justifyContent: 'flex-end', mt: -1.5}}>
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                size="small"
+                                                checked={useGlobalProxy}
+                                                disabled={!globalProxyUrl}
+                                                onChange={(e) => handleUseGlobalProxyChange(e.target.checked)}
+                                            />
+                                        }
+                                        label={
+                                            <Typography variant="body2" color={globalProxyUrl ? 'text.secondary' : 'text.disabled'}>
+                                                {globalProxyUrl
+                                                    ? `Use quick proxy (${globalProxyUrl})`
+                                                    : 'Use quick proxy (not configured)'}
+                                            </Typography>
+                                        }
+                                        labelPlacement="start"
+                                    />
+                                </Box>
+
+                                <Button
+                                    variant="contained"
+                                    fullWidth
+                                    startIcon={<Launch/>}
+                                    disabled={provider?.enabled === false}
+                                    onClick={() => setConfigConfirmed(true)}
+                                >
+                                    Connect &amp; Authorize
+                                </Button>
                             </Stack>
                         )}
                     </DialogContent>
