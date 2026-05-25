@@ -50,10 +50,10 @@ func HandleResponsesToOpenAIChatStream(
 	responseModel string,
 ) (*protocol.TokenUsage, error) {
 	c := hc.GinContext
-	logrus.Debug("Starting Responses to Chat streaming conversion handler")
+	logrus.WithContext(c.Request.Context()).Debug("Starting Responses to Chat streaming conversion handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Responses to Chat streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Responses to Chat streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -64,10 +64,10 @@ func HandleResponsesToOpenAIChatStream(
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing Responses stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing Responses stream: %v", err)
 			}
 		}
-		logrus.Info("Finished Responses to Chat streaming conversion handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished Responses to Chat streaming conversion handler")
 	}()
 
 	// Set SSE headers for Chat Completions
@@ -92,7 +92,7 @@ func HandleResponsesToOpenAIChatStream(
 	// Trigger stream event hook
 	for _, hook := range hc.OnStreamEventHooks {
 		if err := hook(nil); err != nil {
-			logrus.Errorf("Stream event hook error: %v", err)
+			logrus.WithContext(c.Request.Context()).Errorf("Stream event hook error: %v", err)
 		}
 	}
 
@@ -100,7 +100,7 @@ func HandleResponsesToOpenAIChatStream(
 	StreamLoop(c, func(w io.Writer) bool {
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Responses to Chat stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Responses to Chat stream")
 			return false
 		default:
 		}
@@ -226,10 +226,10 @@ func HandleResponsesToOpenAIChatStream(
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) {
-			logrus.Debug("Responses to Chat stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("Responses to Chat stream canceled by client")
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 		}
-		logrus.Errorf("Responses to Chat stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Responses to Chat stream error: %v", err)
 		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 	}
 
@@ -379,7 +379,7 @@ func newResponsesToChatChunk(state *responsesToChatState, responseModel string, 
 func writeSSEChunk(c *gin.Context, flusher http.Flusher, chunk any) {
 	jsonBytes, err := json.Marshal(chunk)
 	if err != nil {
-		logrus.Errorf("Failed to marshal chunk: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Failed to marshal chunk: %v", err)
 		return
 	}
 	c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", string(jsonBytes))))

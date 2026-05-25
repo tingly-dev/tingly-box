@@ -35,10 +35,10 @@ func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams
 }
 
 func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (int, int, error) {
-	logrus.Info("Starting Anthropic to OpenAI streaming response handler")
+	logrus.WithContext(c.Request.Context()).Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Anthropic to OpenAI streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Anthropic to OpenAI streaming handler: %v", r)
 			// Try to send an error event if possible
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
@@ -48,10 +48,10 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 		// Ensure stream is always closed
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing Anthropic stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing Anthropic stream: %v", err)
 			}
 		}
-		logrus.Info("Finished Anthropic to OpenAI streaming response handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished Anthropic to OpenAI streaming response handler")
 	}()
 
 	// Set SSE headers
@@ -87,7 +87,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 		// Check context cancellation first
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Anthropic to OpenAI stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Anthropic to OpenAI stream")
 			return false
 		default:
 		}
@@ -321,15 +321,15 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 	if err := stream.Err(); err != nil {
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
-			logrus.Debug("Anthropic to OpenAI stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("Anthropic to OpenAI stream canceled by client")
 			return inputTokens, outputTokens, nil
 		}
 		// EOF is expected when stream ends normally
 		if errors.Is(err, io.EOF) {
-			logrus.Info("Anthropic stream ended normally (EOF)")
+			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
 			return inputTokens, outputTokens, nil
 		}
-		logrus.Errorf("Anthropic stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
 		// Return the error so TB's usage tracking can detect and report health status
 		return inputTokens, outputTokens, fmt.Errorf("anthropic stream error: %w", err)
@@ -342,7 +342,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk, disableStreamUsage bool) {
 	chunkMap, err := chunkToMap(chunk)
 	if err != nil {
-		logrus.Errorf("Failed to convert chunk to map: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Failed to convert chunk to map: %v", err)
 		return
 	}
 

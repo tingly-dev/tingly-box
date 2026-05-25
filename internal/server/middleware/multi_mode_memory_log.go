@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/obs"
@@ -20,6 +21,11 @@ const (
 	// MaxRequestBodies is the maximum number of request bodies to keep in memory
 	MaxRequestBodies = 50
 )
+
+// GinRequestIDKey is the gin context key under which the per-request
+// correlation id is stored. Handlers and later stages read it via
+// c.GetString(GinRequestIDKey) to tie their logs to the request.
+const GinRequestIDKey = "request_id"
 
 // MultiModeMemoryLogMiddleware provides Gin middleware with both persistent and memory log storage
 // Logs are written to:
@@ -63,6 +69,21 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		start := time.Now()
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
+
+		// Establish a correlation id for this request as early as possible so
+		// every stage (routing, protocol conversion, upstream client call)
+		// can tie its logs back to one request. Reuse an inbound X-Request-Id
+		// when the caller supplies one, otherwise mint a fresh id.
+		requestID := c.GetHeader("X-Request-Id")
+		if requestID == "" {
+			requestID = uuid.NewString()
+		}
+		c.Set(GinRequestIDKey, requestID)
+
+		// Carry the id on the request context so request-scoped code (protocol
+		// conversion, upstream client calls) can log via logrus.WithContext(ctx);
+		// the MultiLogger hook routes those entries to the model_request source.
+		c.Request = c.Request.WithContext(obs.ContextWithRequestID(c.Request.Context(), requestID))
 
 		// Capture request body using TeeReader for logging.
 		// We ALWAYS read (to support error debugging), but only STORE on errors (4xx/5xx).
@@ -119,6 +140,7 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		// Build fields with error message if available
 		fields := logrus.Fields{
 			"type":       "http_request",
+			"request_id": requestID,
 			"status":     statusCode,
 			"latency":    latency,
 			"client_ip":  clientIP,

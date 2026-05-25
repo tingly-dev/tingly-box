@@ -25,6 +25,10 @@ const (
 	LogSourceAction LogSource = "action"
 	// LogSourceSmartRouting indicates logs from smart routing rule evaluation
 	LogSourceSmartRouting LogSource = "smart_routing"
+	// LogSourceModelRequest indicates request-scoped logs from the model
+	// request pipeline (protocol conversion, upstream client calls). These
+	// are correlated by a request_id field rather than by transport path.
+	LogSourceModelRequest LogSource = "model_request"
 	// LogSourceUnknown indicates unknown log source
 	LogSourceUnknown LogSource = "unknown"
 )
@@ -128,6 +132,7 @@ func DefaultMultiLoggerConfig(configDir string) *MultiLoggerConfig {
 			LogSourceSystem:       {MaxEntries: 500},  // System logs: medium volume
 			LogSourceAction:       {MaxEntries: 100},  // User actions: low volume, important
 			LogSourceSmartRouting: {MaxEntries: 500},  // Smart routing evaluations: per-request
+			LogSourceModelRequest: {MaxEntries: 1000}, // Model request stages: aligned with HTTP envelope
 		},
 	}
 }
@@ -265,6 +270,8 @@ func (m *MultiLogger) getDefaultMemorySinkSize(source LogSource) int {
 		return 100
 	case LogSourceSmartRouting:
 		return 500
+	case LogSourceModelRequest:
+		return 1000
 	default:
 		return 100
 	}
@@ -312,10 +319,20 @@ func (m *MultiLogger) WriteEntry(entry *logrus.Entry) error {
 		return nil
 	}
 
-	// Extract source from fields, default to system if not present
+	// Determine the source. An explicit source field (set by per-source
+	// loggers such as the HTTP access log or smart routing) always wins.
+	// Otherwise, a request-scoped entry — one whose context carries a
+	// correlation id, e.g. from logrus.WithContext(ctx) inside the protocol
+	// or client packages — is routed to the model_request source and stamped
+	// with its id. Everything else falls back to system.
 	source := LogSourceSystem
-	if src, ok := entry.Data["source"].(string); ok {
+	if src, ok := entry.Data["source"].(string); ok && src != "" {
 		source = LogSource(src)
+	} else if id := RequestIDFromContext(entry.Context); id != "" {
+		source = LogSourceModelRequest
+		if _, exists := entry.Data["request_id"]; !exists {
+			entry.Data["request_id"] = id
+		}
 	}
 
 	// Write to memory sink for this source (if configured)
@@ -369,7 +386,31 @@ func (m *MultiLogger) ReadJSONLogs(limit int) ([]LogEntry, error) {
 	logPath := m.jsonLogger.Filename
 	m.mu.RUnlock()
 
-	return readLogEntriesBackwards(logPath, limit)
+	return readLogEntriesBackwards(logPath, limit, nil)
+}
+
+// ReadJSONLogsBySource reads recent log entries from the JSON log file keeping
+// only entries whose source is in the allowed set. An empty/absent source on a
+// legacy entry is treated as LogSourceSystem. Reading stops once limit matching
+// entries are collected.
+func (m *MultiLogger) ReadJSONLogsBySource(limit int, allowed ...LogSource) ([]LogEntry, error) {
+	m.mu.RLock()
+	logPath := m.jsonLogger.Filename
+	m.mu.RUnlock()
+
+	set := make(map[LogSource]struct{}, len(allowed))
+	for _, s := range allowed {
+		set[s] = struct{}{}
+	}
+	keep := func(e LogEntry) bool {
+		src := LogSource(e.Source)
+		if src == "" {
+			src = LogSourceSystem
+		}
+		_, ok := set[src]
+		return ok
+	}
+	return readLogEntriesBackwards(logPath, limit, keep)
 }
 
 // Close closes the logger
@@ -476,8 +517,10 @@ func (s *ScopedLogger) LogAction(action string, details map[string]interface{}, 
 }
 
 // readLogEntriesBackwards reads log entries from the end of the file for efficiency
-// Returns entries in reverse chronological order (newest first)
-func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {
+// Returns entries in reverse chronological order (newest first). When keep is
+// non-nil, only entries for which keep returns true are collected (the limit
+// applies to kept entries).
+func readLogEntriesBackwards(filePath string, limit int, keep func(LogEntry) bool) ([]LogEntry, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -534,7 +577,7 @@ func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {
 
 			if len(partialLine) > 0 {
 				var entry LogEntry
-				if err := json.Unmarshal(partialLine, &entry); err == nil {
+				if err := json.Unmarshal(partialLine, &entry); err == nil && (keep == nil || keep(entry)) {
 					// Append entries in order found (newest first since we're reading backwards)
 					entries = append(entries, entry)
 					if limit > 0 && len(entries) >= limit {
@@ -549,7 +592,7 @@ func readLogEntriesBackwards(filePath string, limit int) ([]LogEntry, error) {
 	// Handle last line (if file doesn't end with newline)
 	if len(partialLine) > 0 {
 		var entry LogEntry
-		if err := json.Unmarshal(partialLine, &entry); err == nil {
+		if err := json.Unmarshal(partialLine, &entry); err == nil && (keep == nil || keep(entry)) {
 			entries = append(entries, entry)
 		}
 	}

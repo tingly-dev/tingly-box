@@ -278,7 +278,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 		originalBody, err = io.ReadAll(req.Body)
 		_ = req.Body.Close()
 		if err != nil {
-			logrus.WithError(err).Errorf("error reading body")
+			logrus.WithContext(req.Context()).WithError(err).Errorf("error reading body")
 			return nil, fmt.Errorf("failed to read request body: %w", err)
 		}
 
@@ -324,7 +324,7 @@ func (t *claudeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// Execute the request
 	resp, err := t.RoundTripper.RoundTrip(req)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to round trip request: %v", err)
+		logrus.WithContext(req.Context()).WithError(err).Errorf("failed to round trip request: %v", err)
 		return nil, err
 	}
 

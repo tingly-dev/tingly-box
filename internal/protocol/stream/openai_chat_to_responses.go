@@ -47,10 +47,10 @@ type pendingToolCallResponse struct {
 // HandleOpenAIChatToResponsesStream converts OpenAI Chat Completions streaming to Responses API format.
 // Returns UsageStat containing token usage information for tracking.
 func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
-	logrus.Debug("Starting OpenAI Chat to Responses streaming conversion handler")
+	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI Chat to Responses streaming conversion handler")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Chat to Responses streaming handler: %v", r)
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Chat to Responses streaming handler: %v", r)
 			if c.Writer != nil {
 				c.Writer.WriteHeader(http.StatusInternalServerError)
 				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
@@ -61,10 +61,10 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing Chat Completions stream: %v", err)
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing Chat Completions stream: %v", err)
 			}
 		}
-		logrus.Info("Finished Chat to Responses streaming conversion handler")
+		logrus.WithContext(c.Request.Context()).Info("Finished Chat to Responses streaming conversion handler")
 	}()
 
 	// Set SSE headers for Responses API
@@ -103,7 +103,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		// Check context cancellation first
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Chat to Responses stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Chat to Responses stream")
 			return false
 		default:
 		}
@@ -231,10 +231,10 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 	if err := stream.Err(); err != nil {
 		// Check if it was a client cancellation
 		if errors.Is(err, context.Canceled) {
-			logrus.Debug("Chat to Responses stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("Chat to Responses stream canceled by client")
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
-		logrus.Errorf("Chat to Responses stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Chat to Responses stream error: %v", err)
 
 		errorEvent := responsesStreamErrorEvent{
 			Type:           "error",

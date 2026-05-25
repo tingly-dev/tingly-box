@@ -155,8 +155,8 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 		panic("invalid metadata")
 	}
 	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
-	logrus.Debugf("session: %s", meta.SessionID)
-	logrus.Debugf("metadata: %s", req.Metadata.UserID)
+	logrus.WithContext(ctx).Debugf("session: %s", meta.SessionID)
+	logrus.WithContext(ctx).Debugf("metadata: %s", req.Metadata.UserID)
 
 	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)
@@ -186,8 +186,8 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 		panic("invalid metadata")
 	}
 	options := append(c.AnthropicClient.Client().Options, anthropicOption.WithHeader("X-Claude-Code-Session-Id", meta.SessionID))
-	logrus.Debugf("session: %s", meta.SessionID)
-	logrus.Debugf("metadata: %s", req.Metadata.UserID)
+	logrus.WithContext(ctx).Debugf("session: %s", meta.SessionID)
+	logrus.WithContext(ctx).Debugf("metadata: %s", req.Metadata.UserID)
 
 	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)

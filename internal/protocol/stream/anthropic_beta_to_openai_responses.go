@@ -25,10 +25,10 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
 	responseModel string,
 ) (*protocol.TokenUsage, error) {
-	logrus.Info("Starting Anthropic to OpenAI Responses streaming converter")
+	logrus.WithContext(hc.GinContext.Request.Context()).Info("Starting Anthropic to OpenAI Responses streaming converter")
 	defer func() {
 		if r := recover(); r != nil {
-			logrus.Errorf("Panic in Anthropic to Responses converter: %v", r)
+			logrus.WithContext(hc.GinContext.Request.Context()).Errorf("Panic in Anthropic to Responses converter: %v", r)
 			if hc.GinContext.Writer != nil {
 				hc.GinContext.Writer.WriteHeader(http.StatusInternalServerError)
 				sendResponsesErrorEvent(hc.GinContext, "Internal streaming error", "internal_error")
@@ -36,10 +36,10 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		}
 		if stream != nil {
 			if err := stream.Close(); err != nil {
-				logrus.Errorf("Error closing Anthropic stream: %v", err)
+				logrus.WithContext(hc.GinContext.Request.Context()).Errorf("Error closing Anthropic stream: %v", err)
 			}
 		}
-		logrus.Info("Finished Anthropic to Responses converter")
+		logrus.WithContext(hc.GinContext.Request.Context()).Info("Finished Anthropic to Responses converter")
 	}()
 
 	// Set SSE headers for Responses API
@@ -73,10 +73,10 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		// Check context cancellation first
 		select {
 		case <-c.Request.Context().Done():
-			logrus.Debug("Client disconnected, stopping Anthropic to Responses stream")
+			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Anthropic to Responses stream")
 			// Send completion event before returning since client is disconnecting
 			if !completedSent && !state.finished {
-				logrus.Info("Client disconnected, sending completion event before close")
+				logrus.WithContext(c.Request.Context()).Info("Client disconnected, sending completion event before close")
 				sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
 				completedSent = true
 			}
@@ -126,13 +126,13 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		if !completedSent && !state.finished {
 			// Send completion event for all errors including context.Canceled
 			// The Stream loop's context check may not have run if stream.Next() was blocking
-			logrus.WithError(err).Warn("Stream error occurred, sending completion event")
+			logrus.WithContext(c.Request.Context()).WithError(err).Warn("Stream error occurred, sending completion event")
 			sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
 			completedSent = true
 		}
 
 		if errors.Is(err, context.Canceled) {
-			logrus.Debug("Anthropic to Responses stream canceled by client")
+			logrus.WithContext(c.Request.Context()).Debug("Anthropic to Responses stream canceled by client")
 			if hasUsage {
 				return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 			}
@@ -140,14 +140,14 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		}
 
 		if errors.Is(err, io.EOF) {
-			logrus.Info("Anthropic stream ended normally (EOF)")
+			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
 			if hasUsage {
 				return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 			}
 			return protocol.ZeroTokenUsage(), nil
 		}
 
-		logrus.Errorf("Anthropic stream error: %v", err)
+		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
 		sendResponsesErrorEvent(c, err.Error(), "stream_error", flusher)
 		if hasUsage {
 			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
