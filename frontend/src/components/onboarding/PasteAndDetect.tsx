@@ -240,6 +240,14 @@ const PasteAndDetect: React.FC<PasteAndDetectProps> = ({onPick, onManualFill}) =
                     )}
                 </Box>
             )}
+
+            <Box sx={{mt: 3}}>
+                <Typography variant="caption" color="text.secondary">
+                    {t('onboarding.hint', {
+                        defaultValue: 'Detection runs locally in the box; pasted text is not sent to any third party.',
+                    })}
+                </Typography>
+            </Box>
         </Box>
     );
 };
