@@ -255,52 +255,52 @@ func sanitizeInputItemID(item *responses.ResponseInputItemUnionParam) bool {
 	if item.OfReasoning != nil {
 		item.OfReasoning.ID = strings.TrimSpace(item.OfReasoning.ID)
 		if item.OfReasoning.ID == "" || !isValidCodexID(item.OfReasoning.ID) {
-			logrus.Warnf("[Codex] Dropping reasoning input item with invalid id: %q", item.OfReasoning.ID)
+			logrus.Debugf("[Codex] Dropping reasoning input item with invalid id: %q", item.OfReasoning.ID)
 			return false
 		}
 	}
 	if item.OfFileSearchCall != nil && !isValidCodexIDStrict(item.OfFileSearchCall.ID) {
-		logrus.Warnf("[Codex] Dropping file_search_call input item with invalid id: %q", item.OfFileSearchCall.ID)
+		logrus.Debugf("[Codex] Dropping file_search_call input item with invalid id: %q", item.OfFileSearchCall.ID)
 		return false
 	}
 	if item.OfComputerCall != nil && !isValidCodexIDStrict(item.OfComputerCall.ID) {
-		logrus.Warnf("[Codex] Dropping computer_call input item with invalid id: %q", item.OfComputerCall.ID)
+		logrus.Debugf("[Codex] Dropping computer_call input item with invalid id: %q", item.OfComputerCall.ID)
 		return false
 	}
 	if item.OfWebSearchCall != nil && !isValidCodexIDStrict(item.OfWebSearchCall.ID) {
-		logrus.Warnf("[Codex] Dropping web_search_call input item with invalid id: %q", item.OfWebSearchCall.ID)
+		logrus.Debugf("[Codex] Dropping web_search_call input item with invalid id: %q", item.OfWebSearchCall.ID)
 		return false
 	}
 	if item.OfImageGenerationCall != nil && !isValidCodexIDStrict(item.OfImageGenerationCall.ID) {
-		logrus.Warnf("[Codex] Dropping image_generation_call input item with invalid id: %q", item.OfImageGenerationCall.ID)
+		logrus.Debugf("[Codex] Dropping image_generation_call input item with invalid id: %q", item.OfImageGenerationCall.ID)
 		return false
 	}
 	if item.OfCodeInterpreterCall != nil && !isValidCodexIDStrict(item.OfCodeInterpreterCall.ID) {
-		logrus.Warnf("[Codex] Dropping code_interpreter_call input item with invalid id: %q", item.OfCodeInterpreterCall.ID)
+		logrus.Debugf("[Codex] Dropping code_interpreter_call input item with invalid id: %q", item.OfCodeInterpreterCall.ID)
 		return false
 	}
 	if item.OfLocalShellCall != nil && !isValidCodexIDStrict(item.OfLocalShellCall.ID) {
-		logrus.Warnf("[Codex] Dropping local_shell_call input item with invalid id: %q", item.OfLocalShellCall.ID)
+		logrus.Debugf("[Codex] Dropping local_shell_call input item with invalid id: %q", item.OfLocalShellCall.ID)
 		return false
 	}
 	if item.OfLocalShellCallOutput != nil && !isValidCodexIDStrict(item.OfLocalShellCallOutput.ID) {
-		logrus.Warnf("[Codex] Dropping local_shell_call_output input item with invalid id: %q", item.OfLocalShellCallOutput.ID)
+		logrus.Debugf("[Codex] Dropping local_shell_call_output input item with invalid id: %q", item.OfLocalShellCallOutput.ID)
 		return false
 	}
 	if item.OfMcpListTools != nil && !isValidCodexIDStrict(item.OfMcpListTools.ID) {
-		logrus.Warnf("[Codex] Dropping mcp_list_tools input item with invalid id: %q", item.OfMcpListTools.ID)
+		logrus.Debugf("[Codex] Dropping mcp_list_tools input item with invalid id: %q", item.OfMcpListTools.ID)
 		return false
 	}
 	if item.OfMcpApprovalRequest != nil && !isValidCodexIDStrict(item.OfMcpApprovalRequest.ID) {
-		logrus.Warnf("[Codex] Dropping mcp_approval_request input item with invalid id: %q", item.OfMcpApprovalRequest.ID)
+		logrus.Debugf("[Codex] Dropping mcp_approval_request input item with invalid id: %q", item.OfMcpApprovalRequest.ID)
 		return false
 	}
 	if item.OfMcpCall != nil && !isValidCodexIDStrict(item.OfMcpCall.ID) {
-		logrus.Warnf("[Codex] Dropping mcp_call input item with invalid id: %q", item.OfMcpCall.ID)
+		logrus.Debugf("[Codex] Dropping mcp_call input item with invalid id: %q", item.OfMcpCall.ID)
 		return false
 	}
 	if item.OfItemReference != nil && !isValidCodexIDStrict(item.OfItemReference.ID) {
-		logrus.Warnf("[Codex] Dropping item_reference input item with invalid id: %q", item.OfItemReference.ID)
+		logrus.Debugf("[Codex] Dropping item_reference input item with invalid id: %q", item.OfItemReference.ID)
 		return false
 	}
 	return true
@@ -419,13 +419,13 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 	if req.N.Valid() {
 		n := req.N.Value
 		if n > 1 {
-			logrus.Warnf("[Codex] Multiple images (N=%d) not supported, using N=1", n)
+			logrus.Debugf("[Codex] Multiple images (N=%d) not supported, using N=1", n)
 		}
 	}
 
 	// Log warning for unsupported style parameter
 	if req.Style != "" {
-		logrus.Warnf("[Codex] Style parameter not supported for image generation")
+		logrus.Debugf("[Codex] Style parameter not supported for image generation")
 	}
 
 	// Set stream=true via ExtraFields
