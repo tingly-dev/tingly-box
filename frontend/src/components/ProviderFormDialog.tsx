@@ -22,7 +22,6 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
 import {api} from '../services/api';
-import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import ApiKeyField from './providerFormDialog/ApiKeyField';
 import FusionToggle from './providerFormDialog/FusionToggle';
 import KeyNameField from './providerFormDialog/KeyNameField';
@@ -108,8 +107,12 @@ const ProviderFormDialog = ({
     const [createFusionProvider, setCreateFusionProvider] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [baseUrlError, setBaseUrlError] = useState(false);
-
-    const {enableFusion} = useFeatureFlags();
+    // Whether the provider being edited already has both fusion URLs stored.
+    const [isExistingFusion, setIsExistingFusion] = useState(false);
+    // Snapshot of fusion URLs captured on dialog open, used for downgrade/revert.
+    const initialFusionRef = useRef<{ openAI: string; anthropic: string; apiBase: string; apiStyle: string }>({
+        openAI: '', anthropic: '', apiBase: '', apiStyle: 'openai',
+    });
 
     const allProviders = useProviderTemplates();
 
@@ -119,14 +122,6 @@ const ProviderFormDialog = ({
     useEffect(() => {
         onChangeRef.current = onChange;
     });
-
-    // Mirror the fusion flag into a ref so syncProtocolsToParent can read the
-    // current value without being re-created (and thus not re-triggering the
-    // open-effect that hydrates state).
-    const enableFusionRef = useRef(enableFusion);
-    useEffect(() => {
-        enableFusionRef.current = enableFusion;
-    }, [enableFusion]);
 
     const openAICapabilities = useMemo(
         () => detectOpenAICapabilities(selectedProvider),
@@ -184,6 +179,16 @@ const ProviderFormDialog = ({
             // is already enabled, regardless of the legacy apiStyle pin.
             const hasFusionOpenAI = !!data.apiBaseOpenAI;
             const hasFusionAnthropic = !!data.apiBaseAnthropic;
+            const existingFusion = hasFusionOpenAI && hasFusionAnthropic;
+            setIsExistingFusion(existingFusion);
+            // Snapshot for downgrade/revert operations.
+            initialFusionRef.current = {
+                openAI: data.apiBaseOpenAI || '',
+                anthropic: data.apiBaseAnthropic || '',
+                apiBase: data.apiBase,
+                apiStyle: data.apiStyle || 'openai',
+            };
+            setCreateFusionProvider(false);
             setProtocolOpenAI(hasFusionOpenAI || data.apiStyle === 'openai');
             setProtocolAnthropic(hasFusionAnthropic || data.apiStyle === 'anthropic');
             setSelectedProvider(matchingProvider);
@@ -206,6 +211,8 @@ const ProviderFormDialog = ({
                 setProtocolOpenAI(false);
                 setProtocolAnthropic(false);
             }
+            setIsExistingFusion(false);
+            setCreateFusionProvider(false);
             // If the parent prefilled apiBase to a known provider (onboarding
             // browse / paste-detect), seed the Autocomplete with it so users
             // see the picked provider rather than a blank field.
@@ -262,11 +269,7 @@ const ProviderFormDialog = ({
                     anthropic: provider.baseUrlAnthropic,
                 });
 
-                // Fusion-mode is only available when the global experiment is
-                // on. With the flag OFF, picking both protocols falls through
-                // to the legacy two-record split handled by the parent submit.
-                const fusion = enableFusionRef.current
-                    && createFusionProvider
+                const fusion = createFusionProvider
                     && nextOpenAI && nextAnthropic
                     && !!provider.baseUrlOpenAI && !!provider.baseUrlAnthropic;
 
@@ -308,26 +311,60 @@ const ProviderFormDialog = ({
         }
     };
 
-    // OAuth-bound providers are issuer-locked to a single protocol; fusion
-    // is api_key only.
+    // OAuth-bound providers are issuer-locked to a single protocol.
+    // In edit mode, non-fusion providers are also locked — protocol changes
+    // require upgrading to fusion (via the fusion toggle) or creating a new entry.
     const fusionLocked = data.authType === 'oauth';
+    const protocolLocked = mode === 'edit' && !isExistingFusion;
+    const effectiveLocked = fusionLocked || protocolLocked;
+
+    // For an existing fusion provider being edited: deselecting one side
+    // downgrades it to a single-protocol provider.
+    const handleFusionDowngrade = (nextOpenAI: boolean, nextAnthropic: boolean) => {
+        const cb = onChangeRef.current;
+        const snap = initialFusionRef.current;
+        if (nextOpenAI && !nextAnthropic) {
+            cb('apiBase', snap.openAI || snap.apiBase);
+            cb('apiStyle', 'openai');
+            cb('apiBaseOpenAI', '');
+            cb('apiBaseAnthropic', '');
+        } else if (!nextOpenAI && nextAnthropic) {
+            cb('apiBase', snap.anthropic);
+            cb('apiStyle', 'anthropic');
+            cb('apiBaseOpenAI', '');
+            cb('apiBaseAnthropic', '');
+        }
+        // Disallowing both-false: ignore the toggle if it would leave no protocol.
+    };
 
     const toggleOpenAIProtocol = () => {
-        if (fusionLocked) return;
+        if (effectiveLocked) return;
         if (selectedProvider && !selectedProvider.supportsOpenAI) return;
         const next = !protocolOpenAI;
+        // Prevent deselecting the last protocol on a fusion provider.
+        if (isExistingFusion && !next && !protocolAnthropic) return;
         setProtocolOpenAI(next);
         setVerificationResult(null);
-        syncProtocolsToParent(next, protocolAnthropic, selectedProvider);
+        if (isExistingFusion) {
+            handleFusionDowngrade(next, protocolAnthropic);
+        } else {
+            syncProtocolsToParent(next, protocolAnthropic, selectedProvider);
+        }
     };
 
     const toggleAnthropicProtocol = () => {
-        if (fusionLocked) return;
+        if (effectiveLocked) return;
         if (selectedProvider && !selectedProvider.supportsAnthropic) return;
         const next = !protocolAnthropic;
+        // Prevent deselecting the last protocol on a fusion provider.
+        if (isExistingFusion && !next && !protocolOpenAI) return;
         setProtocolAnthropic(next);
         setVerificationResult(null);
-        syncProtocolsToParent(protocolOpenAI, next, selectedProvider);
+        if (isExistingFusion) {
+            handleFusionDowngrade(protocolOpenAI, next);
+        } else {
+            syncProtocolsToParent(protocolOpenAI, next, selectedProvider);
+        }
     };
 
     const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
@@ -525,14 +562,18 @@ const ProviderFormDialog = ({
     };
 
     const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
-    const showFusionToggle = enableFusion && mode === 'add' && protocolOpenAI && protocolAnthropic;
 
     // When both protocols are checked on a template that exposes two base URLs,
     // the outcome ("merge into one" vs "create two") is otherwise invisible.
     // Surface it as a one-line hint that tracks the fusion toggle.
     const hasBothBaseUrls = !!selectedProvider?.baseUrlOpenAI && !!selectedProvider?.baseUrlAnthropic;
-    const showTopologyHint = mode === 'add' && protocolOpenAI && protocolAnthropic && hasBothBaseUrls;
-    const willMergeBaseUrls = enableFusion && createFusionProvider;
+    // add mode: shown when both protocols are selected
+    // edit mode: shown for non-fusion providers when the template supports both sides (upgrade path)
+    const showFusionToggle = mode === 'add'
+        ? (protocolOpenAI && protocolAnthropic)
+        : (!isExistingFusion && hasBothBaseUrls);
+    const showTopologyHint = protocolOpenAI && protocolAnthropic && hasBothBaseUrls;
+    const willMergeBaseUrls = createFusionProvider;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
@@ -593,7 +634,7 @@ const ProviderFormDialog = ({
                             selectedProvider={selectedProvider}
                             protocolOpenAI={protocolOpenAI}
                             protocolAnthropic={protocolAnthropic}
-                            fusionLocked={fusionLocked}
+                            fusionLocked={effectiveLocked}
                             openAICapabilities={openAICapabilities}
                             onToggleOpenAI={toggleOpenAIProtocol}
                             onToggleAnthropic={toggleAnthropicProtocol}
@@ -605,7 +646,28 @@ const ProviderFormDialog = ({
                                 onChange={(checked) => {
                                     setCreateFusionProvider(checked);
                                     onChange('createFusionProvider', checked);
-                                    syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
+                                    if (mode === 'edit' && selectedProvider) {
+                                        if (checked) {
+                                            // Upgrade: auto-select both protocols and populate URLs from template.
+                                            setProtocolOpenAI(true);
+                                            setProtocolAnthropic(true);
+                                            onChange('apiBaseOpenAI', selectedProvider.baseUrlOpenAI || '');
+                                            onChange('apiBaseAnthropic', selectedProvider.baseUrlAnthropic || '');
+                                            onChange('apiBase', selectedProvider.baseUrlOpenAI || data.apiBase);
+                                            onChange('apiStyle', 'openai');
+                                        } else {
+                                            // Revert: restore original single-protocol state.
+                                            const snap = initialFusionRef.current;
+                                            setProtocolOpenAI(snap.apiStyle === 'openai');
+                                            setProtocolAnthropic(snap.apiStyle === 'anthropic');
+                                            onChange('apiBaseOpenAI', '');
+                                            onChange('apiBaseAnthropic', '');
+                                            onChange('apiBase', snap.apiBase);
+                                            onChange('apiStyle', snap.apiStyle as 'openai' | 'anthropic');
+                                        }
+                                    } else {
+                                        syncProtocolsToParent(protocolOpenAI, protocolAnthropic, selectedProvider);
+                                    }
                                     setVerificationResult(null);
                                 }}
                             />

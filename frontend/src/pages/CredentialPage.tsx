@@ -20,7 +20,6 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
-import { useFeatureFlags } from '@/contexts/FeatureFlagsContext';
 import { useNotify } from '@/hooks/useNotify';
 
 type ProviderFormData = EnhancedProviderFormData;
@@ -34,7 +33,6 @@ interface OAuthEditFormData {
 }
 
 const CredentialPage = () => {
-    const { enableFusion } = useFeatureFlags();
     const [searchParams, setSearchParams] = useSearchParams();
     const [providers, setProviders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -202,14 +200,10 @@ const CredentialPage = () => {
         setLoading(false);
     };
 
-    // Build the body for an add request. The shape depends on the global
-    // fusion experiment:
-    //
-    // - Flag ON + BOTH protocols + both base URLs available → single
-    //   fusion-mode provider (one entry, two URLs, one credential).
-    // - Flag OFF + BOTH protocols → return an ARRAY of two single-protocol
-    //   payloads, restoring the legacy "create two providers" behavior.
-    // - Single protocol selected → single provider payload (unchanged).
+    // Build the body for an add request:
+    // - BOTH protocols + both base URLs + fusion toggle ON → single fusion-mode provider.
+    // - BOTH protocols + fusion toggle OFF → two separate single-protocol payloads.
+    // - Single protocol selected → single provider payload.
     const buildAddProviderPayload = (override?: Partial<ProviderFormData>): any | any[] => {
         // Merge dialog-resolved fields (e.g. free-typed apiBase / auto name)
         // over the form state; those land via async onChange and may not be in
@@ -226,7 +220,7 @@ const CredentialPage = () => {
             protocols.length === 2 &&
             !!providerBaseUrls?.openai &&
             !!providerBaseUrls?.anthropic;
-        const shouldCreateFusion = enableFusion && !!(fd as any).createFusionProvider;
+        const shouldCreateFusion = !!(fd as any).createFusionProvider;
 
         if (bothProtocols && shouldCreateFusion) {
             return {
@@ -286,12 +280,9 @@ const CredentialPage = () => {
         };
     };
 
-    // Build the body for an edit/update request. When fusion is OFF, omit
-    // the fusion fields entirely so the backend (which ignores them under
-    // flag-off anyway) doesn't get spurious empty-string pointers.
     const buildEditProviderPayload = (override?: Partial<ProviderFormData>) => {
         const fd: any = { ...providerFormData, ...(override || {}) };
-        const base: any = {
+        return {
             name: fd.name,
             api_base: fd.apiBase,
             api_style: fd.apiStyle,
@@ -300,12 +291,9 @@ const CredentialPage = () => {
             enabled: fd.enabled,
             proxy_url: (fd as any).proxyUrl ?? '',
             user_agent: (fd as any).userAgent ?? '',
+            api_base_openai: (fd as any).apiBaseOpenAI ?? '',
+            api_base_anthropic: (fd as any).apiBaseAnthropic ?? '',
         };
-        if (enableFusion) {
-            base.api_base_openai = (fd as any).apiBaseOpenAI ?? '';
-            base.api_base_anthropic = (fd as any).apiBaseAnthropic ?? '';
-        }
-        return base;
     };
 
     // Submit a single payload OR an array of payloads (legacy split). Returns

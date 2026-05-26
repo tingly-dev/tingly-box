@@ -43,7 +43,7 @@ Layout top → bottom:
 1. **Base URL \*** — required; inline error if submitted empty
 2. **API Key** — password field with show/hide toggle
 3. **No API Key Required** — right-aligned checkbox; disables the key field
-4. **API Style** — OpenAI / Anthropic checkboxes; topology hint appears when both are checked on a dual-URL template
+4. **API Style** — OpenAI / Anthropic checkboxes; when both are checked on a dual-URL template a **Fusion mode** toggle and topology hint appear (see [fusion-provider.md](fusion-provider.md))
 5. **Advanced accordion** — collapsed by default in add mode, auto-expanded in edit mode
 
 When opened from the picker, the form shows a **← Back** button (bottom-left) that
