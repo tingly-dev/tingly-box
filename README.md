@@ -55,6 +55,11 @@ npx -y tingly-box@latest
 
 # if any network trouble, try bundle with binary built-in
 npx -y tingly-box-bundle@latest
+
+# npm mirror is supported for CN
+npx --registry=https://mirrors.huaweicloud.com/repository/npm/ -y tingly-box-bundle@latest
+# or
+npx --registry=http://mirrors.tencent.com/npm/ -y tingly-box-bundle@latest
 ```
 
 > if any trouble, please check tingly-box output, or call for an issue to help. 
