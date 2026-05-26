@@ -5,8 +5,6 @@ import {
     Alert,
     Box,
     Button,
-    Card,
-    CardContent,
     Dialog,
     DialogActions,
     DialogContent,
@@ -26,12 +24,15 @@ import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import ProviderFormDialog, {type EnhancedProviderFormData} from '@/components/ProviderFormDialog';
 import {ProviderListContent, type ConnectSelection} from '@/components/ConnectProviderDialog';
+import OAuthDialog from '@/components/OAuthDialog';
 import PasteAndDetect from '@/components/onboarding/PasteAndDetect';
 import {api} from '@/services/api';
 
 type OnboardingTab = 'browse' | 'paste';
 
-const emptyForm = (): EnhancedProviderFormData => ({
+type ProviderFormData = EnhancedProviderFormData;
+
+const emptyForm = (): ProviderFormData => ({
     name: '',
     apiBase: '',
     apiStyle: undefined,
@@ -45,9 +46,17 @@ const Onboarding: React.FC = () => {
     const {t} = useTranslation();
     const navigate = useNavigate();
     const [tab, setTab] = useState<OnboardingTab>('browse');
-    const [dialogOpen, setDialogOpen] = useState(false);
     const [browseQuery, setBrowseQuery] = useState('');
-    const [formData, setFormData] = useState<EnhancedProviderFormData>(emptyForm());
+
+    // Dialog state
+    const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+    const [providerFormData, setProviderFormData] = useState<ProviderFormData>(emptyForm());
+    const [isLocalProvider, setIsLocalProvider] = useState(false);
+
+    // OAuth Dialog state
+    const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
+    const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
+
     const [snackbar, setSnackbar] = useState<{open: boolean; message: string; severity: 'success' | 'error' | 'info'}>({
         open: false,
         message: '',
@@ -59,73 +68,63 @@ const Onboarding: React.FC = () => {
         setSnackbar({open: true, message, severity});
     };
 
-    const openDialogWith = (prefill: EnhancedProviderFormData) => {
-        setFormData({
+    const openDialogWith = (prefill: ProviderFormData) => {
+        setProviderFormData({
             ...emptyForm(),
             ...prefill,
         });
-        setDialogOpen(true);
+        setApiKeyDialogOpen(true);
     };
 
+    // Route a pick from the provider list to the matching dialog.
+    // This is the single truth for provider selection - same as CredentialPage.
     const handleBrowseSelect = (selection: ConnectSelection) => {
+        if (selection.kind === 'oauth') {
+            setOAuthAutoStartId(selection.providerId);
+            setOAuthDialogOpen(true);
+            return;
+        }
+
         if (selection.kind === 'custom') {
             openDialogWith(emptyForm());
             return;
         }
 
-        if (selection.kind === 'oauth') {
-            showMessage('OAuth flow coming soon', 'info');
-            return;
-        }
-
         if (selection.kind === 'local') {
-            const p = selection.provider;
-            const apiBase = p.baseUrlOpenAI || p.baseUrlAnthropic || '';
-            const apiStyle: 'openai' | 'anthropic' = p.baseUrlOpenAI ? 'openai' : 'anthropic';
+            const lp = selection.provider as any; // Cast to access url/defaultApiKey
+            setIsLocalProvider(true);
             openDialogWith({
-                name: p.alias || p.name,
-                apiBase,
-                apiStyle,
-                token: '',
+                name: lp.alias || lp.name,
+                apiBase: lp.url || lp.baseUrlOpenAI || lp.baseUrlAnthropic || '',
+                apiStyle: 'openai' as any,
+                token: lp.defaultApiKey ?? '',
                 enabled: true,
-                noKeyRequired: true,
-                protocols: p.supportsOpenAI && p.supportsAnthropic ? ['openai', 'anthropic'] : p.supportsOpenAI ? ['openai'] : ['anthropic'],
-                providerBaseUrls: {
-                    openai: p.baseUrlOpenAI,
-                    anthropic: p.baseUrlAnthropic,
-                },
+                noKeyRequired: !lp.defaultApiKey,
             });
             return;
         }
 
-        if (selection.kind === 'key') {
-            const p = selection.provider;
-            const apiBase = p.baseUrlOpenAI || p.baseUrlAnthropic || '';
-            const apiStyle: 'openai' | 'anthropic' = p.baseUrlOpenAI ? 'openai' : 'anthropic';
-            openDialogWith({
-                name: p.alias || p.name,
-                apiBase,
-                apiStyle,
-                token: '',
-                enabled: true,
-                protocols: p.supportsOpenAI && p.supportsAnthropic ? ['openai', 'anthropic'] : p.supportsOpenAI ? ['openai'] : ['anthropic'],
-                providerBaseUrls: {
-                    openai: p.baseUrlOpenAI,
-                    anthropic: p.baseUrlAnthropic,
-                },
-            });
-            return;
-        }
+        const p = selection.provider;
+        openDialogWith({
+            name: p.alias || p.name,
+            apiBase: p.baseUrlOpenAI || p.baseUrlAnthropic || '',
+            apiStyle: (p.baseUrlOpenAI ? 'openai' : 'anthropic') as any,
+            token: '',
+            enabled: true,
+            protocols: p.supportsOpenAI && p.supportsAnthropic ? ['openai', 'anthropic'] : p.supportsOpenAI ? ['openai'] : ['anthropic'],
+            providerBaseUrls: {
+                openai: p.baseUrlOpenAI,
+                anthropic: p.baseUrlAnthropic,
+            },
+        });
     };
 
-    const handleFieldChange = (field: keyof EnhancedProviderFormData, value: any) => {
-        setFormData(prev => ({...prev, [field]: value}));
+    const handleFieldChange = (field: keyof ProviderFormData, value: any) => {
+        setProviderFormData(prev => ({...prev, [field]: value}));
     };
 
-    const submitProvider = async (force: boolean, resolved?: Partial<EnhancedProviderFormData>) => {
-        // Merge dialog-resolved fields over form state; they arrive via async
-        // onChange and may not be in state yet at submit time.
-        const fd = { ...formData, ...(resolved || {}) };
+    const submitProvider = async (force: boolean, resolved?: Partial<ProviderFormData>) => {
+        const fd = {...providerFormData, ...(resolved || {})};
         const payload = {
             name: fd.name,
             api_base: fd.apiBase,
@@ -136,20 +135,25 @@ const Onboarding: React.FC = () => {
         };
         const result = await api.addProvider(payload, force);
         if (result?.success) {
-            setDialogOpen(false);
+            setApiKeyDialogOpen(false);
             setSuccessDialogOpen(true);
         } else {
             showMessage(`Failed to add provider: ${result?.error || 'unknown error'}`, 'error');
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
+    const handleSubmit = async (e: React.FormEvent, resolved?: Partial<ProviderFormData>) => {
         e.preventDefault();
         await submitProvider(false, resolved);
     };
 
     const handleForceAdd = async () => {
         await submitProvider(true);
+    };
+
+    const handleOAuthSuccess = () => {
+        showMessage('Provider added successfully!', 'success');
+        setSuccessDialogOpen(true);
     };
 
     const handleGoToAgents = () => {
@@ -169,7 +173,7 @@ const Onboarding: React.FC = () => {
                     size="full"
                     title={t('onboarding.title', {defaultValue: 'Welcome to Tingly Box'})}
                     subtitle={t('onboarding.subtitle', {
-                        defaultValue: 'Add your first AI provider to get started. Browse the catalog or paste a config snippet — we’ll figure out the rest.',
+                        defaultValue: 'Add your first AI provider to get started. Browse the catalog or paste a config snippet — we\'ll figure out the rest.',
                     })}
                 >
                     <Tabs
@@ -216,15 +220,31 @@ const Onboarding: React.FC = () => {
                 </UnifiedCard>
             </Box>
 
+            {/* API Key Provider Dialog */}
             <ProviderFormDialog
-                open={dialogOpen}
-                onClose={() => setDialogOpen(false)}
+                open={apiKeyDialogOpen}
+                onClose={() => {
+                    setApiKeyDialogOpen(false);
+                    setIsLocalProvider(false);
+                }}
                 onSubmit={handleSubmit}
                 onForceAdd={handleForceAdd}
-                data={formData}
+                data={providerFormData}
                 onChange={handleFieldChange}
                 mode="add"
                 isFirstProvider
+                optionalEditableToken={isLocalProvider}
+            />
+
+            {/* OAuth Add Dialog - now functional in onboarding */}
+            <OAuthDialog
+                open={oauthDialogOpen}
+                autoStartProviderId={oauthAutoStartId}
+                onClose={() => {
+                    setOAuthDialogOpen(false);
+                    setOAuthAutoStartId(null);
+                }}
+                onSuccess={handleOAuthSuccess}
             />
 
             <Dialog
