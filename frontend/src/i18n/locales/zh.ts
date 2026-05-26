@@ -497,18 +497,15 @@ export default {
       "skills": "Skills",
       "guardrails": "Guardrails",
       "mcp": "MCP",
-      "fusion": "融合 Provider",
       "enableIdeSkills": "启用 IDE Skills 功能，用于管理来自 IDE 的代码片段和技能",
       "enableGuardrails": "启用 Guardrails - 阻止有风险的工具调用并过滤敏感输出",
       "enableMCP": "启用 MCP Tools - 配置 MCP（Model Context Protocol）工具，如网页搜索和网页获取",
-      "enableFusion": "允许单个 Provider 条目同时暴露 OpenAI 和 Anthropic 兼容的 base URL，入站请求按协议原生路由，无需协议转换。",
       "on": "On",
       "off": "Off",
       "enabled": "已启用",
       "disabled": "已禁用 - 点击启用",
       "guardrailsEnabledInfo": "Guardrails 已启用。侧边栏中提供了「Guardrails」页面用于规则管理。",
-      "mcpEnabledInfo": "MCP Tools 已启用。侧边栏 System 下方提供了「MCP Tools」页面进行配置。",
-      "fusionEnabledInfo": "融合 Provider 已启用。Provider 表单现在允许在同一条目中配置 OpenAI 与 Anthropic 的 URL。"
+      "mcpEnabledInfo": "MCP Tools 已启用。侧边栏 System 下方提供了「MCP Tools」页面进行配置。"
     },
     "about": {
       "title": "关于",

@@ -120,18 +120,8 @@ func (s *Server) CreateProvider(c *gin.Context) {
 	}
 
 	// Fusion-mode constraints: optional dual base URLs are only valid for
-	// api_key auth, and Google-style providers cannot opt in. The global
-	// fusion experiment must also be enabled — when off, fusion fields on
-	// new records are rejected so users cannot accidentally opt in until
-	// they explicitly turn on the experiment.
+	// api_key auth, and Google-style providers cannot opt in.
 	if req.APIBaseOpenAI != "" || req.APIBaseAnthropic != "" {
-		if !s.IsFusionEnabled() {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"success": false,
-				"error":   "Fusion provider mode is disabled. Enable it under System → Experimental Features, or save the OpenAI and Anthropic providers separately.",
-			})
-			return
-		}
 		if req.AuthType != string(typ.AuthTypeAPIKey) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"success": false,
@@ -322,17 +312,11 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	if req.APIStyle != nil {
 		provider.APIStyle = protocol.APIStyle(*req.APIStyle)
 	}
-	// Apply fusion-field updates only when the global fusion experiment is on.
-	// When off, incoming fusion pointers are ignored — existing stored values
-	// are preserved (so flipping the flag back on reactivates them) and no
-	// new fusion data can be introduced via the update path.
-	if s.IsFusionEnabled() {
-		if req.APIBaseOpenAI != nil {
-			provider.APIBaseOpenAI = *req.APIBaseOpenAI
-		}
-		if req.APIBaseAnthropic != nil {
-			provider.APIBaseAnthropic = *req.APIBaseAnthropic
-		}
+	if req.APIBaseOpenAI != nil {
+		provider.APIBaseOpenAI = *req.APIBaseOpenAI
+	}
+	if req.APIBaseAnthropic != nil {
+		provider.APIBaseAnthropic = *req.APIBaseAnthropic
 	}
 	// Only update token if it's provided and not empty
 	if req.Token != nil && *req.Token != "" {

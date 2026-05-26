@@ -17,19 +17,12 @@ import (
 // APIBase/APIStyle pair is preserved so single-protocol providers behave
 // exactly as before.
 //
-// When the global fusion-provider experiment flag is OFF, the original
-// provider is returned unchanged — fusion fields are inert at dispatch time
-// and existing single-protocol behavior is preserved bit-for-bit.
-//
 // Downstream HTTP clients and protocol-transform code read APIBase and
 // APIStyle off of the provider; returning a shallow copy keeps that contract
 // without requiring changes to every client constructor.
 func (s *Server) resolveProviderForClient(p *typ.Provider, clientStyle protocol.APIStyle) *typ.Provider {
 	if p == nil {
 		return nil
-	}
-	if !s.IsFusionEnabled() {
-		return p
 	}
 	baseURL, style := p.ResolveEndpoint(clientStyle)
 	if baseURL == p.APIBase && style == p.APIStyle {

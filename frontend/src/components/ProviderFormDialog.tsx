@@ -22,7 +22,6 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
 import {api} from '../services/api';
-import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
 import ApiKeyField from './providerFormDialog/ApiKeyField';
 import FusionToggle from './providerFormDialog/FusionToggle';
 import KeyNameField from './providerFormDialog/KeyNameField';
@@ -109,8 +108,6 @@ const ProviderFormDialog = ({
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [baseUrlError, setBaseUrlError] = useState(false);
 
-    const {enableFusion} = useFeatureFlags();
-
     const allProviders = useProviderTemplates();
 
     // Keep onChange in a ref so we can call it from effects/handlers without
@@ -119,14 +116,6 @@ const ProviderFormDialog = ({
     useEffect(() => {
         onChangeRef.current = onChange;
     });
-
-    // Mirror the fusion flag into a ref so syncProtocolsToParent can read the
-    // current value without being re-created (and thus not re-triggering the
-    // open-effect that hydrates state).
-    const enableFusionRef = useRef(enableFusion);
-    useEffect(() => {
-        enableFusionRef.current = enableFusion;
-    }, [enableFusion]);
 
     const openAICapabilities = useMemo(
         () => detectOpenAICapabilities(selectedProvider),
@@ -262,11 +251,7 @@ const ProviderFormDialog = ({
                     anthropic: provider.baseUrlAnthropic,
                 });
 
-                // Fusion-mode is only available when the global experiment is
-                // on. With the flag OFF, picking both protocols falls through
-                // to the legacy two-record split handled by the parent submit.
-                const fusion = enableFusionRef.current
-                    && createFusionProvider
+                const fusion = createFusionProvider
                     && nextOpenAI && nextAnthropic
                     && !!provider.baseUrlOpenAI && !!provider.baseUrlAnthropic;
 
@@ -525,14 +510,14 @@ const ProviderFormDialog = ({
     };
 
     const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
-    const showFusionToggle = enableFusion && mode === 'add' && protocolOpenAI && protocolAnthropic;
+    const showFusionToggle = mode === 'add' && protocolOpenAI && protocolAnthropic;
 
     // When both protocols are checked on a template that exposes two base URLs,
     // the outcome ("merge into one" vs "create two") is otherwise invisible.
     // Surface it as a one-line hint that tracks the fusion toggle.
     const hasBothBaseUrls = !!selectedProvider?.baseUrlOpenAI && !!selectedProvider?.baseUrlAnthropic;
     const showTopologyHint = mode === 'add' && protocolOpenAI && protocolAnthropic && hasBothBaseUrls;
-    const willMergeBaseUrls = enableFusion && createFusionProvider;
+    const willMergeBaseUrls = createFusionProvider;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth

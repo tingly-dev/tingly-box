@@ -496,18 +496,15 @@ export default {
       "skills": "Skills",
       "guardrails": "Guardrails",
       "mcp": "MCP",
-      "fusion": "Fusion Provider",
       "enableIdeSkills": "Enable IDE Skills feature for managing code snippets and skills from IDEs",
       "enableGuardrails": "Enable Guardrails - block risky tool calls and filter sensitive outputs",
       "enableMCP": "Enable MCP Tools - Configure MCP (Model Context Protocol) tools like web search and web fetch",
-      "enableFusion": "Allow a single provider entry to expose both OpenAI- and Anthropic-compatible base URLs. Inbound requests route natively to the matching protocol with no transform.",
       "on": "On",
       "off": "Off",
       "enabled": "enabled",
       "disabled": "disabled - Click to enable",
       "guardrailsEnabledInfo": "Guardrails is enabled. A \"Guardrails\" page is available in the sidebar for rule management.",
-      "mcpEnabledInfo": "MCP Tools is enabled. An \"MCP Tools\" page is available under System in the sidebar for configuration.",
-      "fusionEnabledInfo": "Fusion Provider is enabled. The provider form now lets you configure OpenAI and Anthropic URLs on a single entry."
+      "mcpEnabledInfo": "MCP Tools is enabled. An \"MCP Tools\" page is available under System in the sidebar for configuration."
     },
     "about": {
       "title": "About",
