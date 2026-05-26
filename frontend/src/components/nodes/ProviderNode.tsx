@@ -253,11 +253,11 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             <Box sx={{ position: 'absolute', right: '0px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '2px', backgroundColor: 'background.paper', px: '2px', lineHeight: 0 }}>
                                 {hasDualApiStyle ? (
                                     <>
-                                        <ApiStyleBadge apiStyle="openai" minimal />
-                                        <ApiStyleBadge apiStyle="anthropic" minimal />
+                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: '0.72rem', width: 22, height: 22 }} />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: '0.72rem', width: 22, height: 22 }} />
                                     </>
                                 ) : (
-                                    <ApiStyleBadge apiStyle={apiStyle} minimal />
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: '0.72rem', width: 22, height: 22 }} />
                                 )}
                             </Box>
                         </Box>
