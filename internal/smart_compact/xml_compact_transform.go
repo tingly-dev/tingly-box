@@ -111,7 +111,15 @@ func (s *XMLCompactionStrategy) CompressBeta(messages []anthropic.BetaMessagePar
 	return []anthropic.BetaMessageParam{
 		{
 			Role:    anthropic.BetaMessageParamRoleAssistant,
-			Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaCompactionBlock(xmlContent)},
+			Content: []anthropic.BetaContentBlockParamUnion{NewBetaCompactionBlock(xmlContent)},
+		},
+	}
+}
+
+func NewBetaCompactionBlock(content string) anthropic.BetaContentBlockParamUnion {
+	return anthropic.BetaContentBlockParamUnion{
+		OfText: &anthropic.BetaTextBlockParam{
+			Text: content,
 		},
 	}
 }
