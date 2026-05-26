@@ -224,19 +224,12 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     </Box>
                 ) : (
                     <>
-                        {/* Row 1: priority (left, optional) + model */}
+                        {/* Row 1: model name */}
                         <NodeTooltip title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>} placement="top">
-                            <Box sx={{ ...NODE_LAYER_STYLES.topLayer, gap: 0.75 }}>
-                                {hasPriority && (
-                                    <PriorityBadge
-                                        priority={provider.priority ?? 0}
-                                        onChange={onPriorityChange!}
-                                        active={active}
-                                    />
-                                )}
+                            <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
                                 <Typography variant="body2" noWrap sx={{
                                     ...NODE_LAYER_STYLES.typography,
-                                    flex: 1, minWidth: 0, textAlign: 'center',
+                                    maxWidth: '100%', textAlign: 'center',
                                     fontStyle: !provider.model ? 'italic' : 'normal',
                                     color: provider.model ? 'text.primary' : 'text.disabled',
                                 }}>
@@ -245,19 +238,17 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             </Box>
                         </NodeTooltip>
 
-                        <Divider sx={NODE_LAYER_STYLES.divider} />
-
-                        {/* Row 2: provider name (centered) + style tags (right) */}
-                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, gap: 0.75 }}>
-                            {isProviderMissing && (
-                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                        {/* Divider axis: priority (left) ── tags (right) */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', px: '5px', my: 0.25 }}>
+                            {hasPriority && (
+                                <PriorityBadge
+                                    priority={provider.priority ?? 0}
+                                    onChange={onPriorityChange!}
+                                    active={active}
+                                />
                             )}
-                            <Typography variant="body2" noWrap
-                                color={isProviderMissing ? 'warning.main' : 'text.secondary'}
-                                sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, flex: 1, minWidth: 0, textAlign: 'center' }}>
-                                {providerInfo.name}
-                            </Typography>
-                            <Box sx={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                            <Box sx={{ flex: 1, height: 0, borderBottom: '1px solid', borderColor: 'divider', mx: 0.5 }} />
+                            <Box sx={{ display: 'flex', gap: '2px' }}>
                                 {hasDualApiStyle ? (
                                     <>
                                         <ApiStyleBadge apiStyle="openai" minimal />
@@ -267,6 +258,18 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     <ApiStyleBadge apiStyle={apiStyle} minimal />
                                 )}
                             </Box>
+                        </Box>
+
+                        {/* Row 2: provider name */}
+                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer }}>
+                            {isProviderMissing && (
+                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0, mr: 0.5 }} />
+                            )}
+                            <Typography variant="body2" noWrap
+                                color={isProviderMissing ? 'warning.main' : 'text.secondary'}
+                                sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, maxWidth: '100%', textAlign: 'center' }}>
+                                {providerInfo.name}
+                            </Typography>
                         </Box>
                     </>
                 )}
