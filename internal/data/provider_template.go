@@ -604,6 +604,16 @@ func (tm *TemplateManager) searchTemplates(matcher func(*ProviderTemplate) bool)
 	return nil
 }
 
+// searchEmbedded searches only tm.embedded, bypassing the (possibly disk-cached) tm.templates.
+func (tm *TemplateManager) searchEmbedded(matcher func(*ProviderTemplate) bool) *ProviderTemplate {
+	for _, tmpl := range tm.embedded {
+		if matcher(tmpl) {
+			return tmpl
+		}
+	}
+	return nil
+}
+
 // deepCopyTemplate creates a deep copy of a ProviderTemplate
 func deepCopyTemplate(tmpl *ProviderTemplate) *ProviderTemplate {
 	result := *tmpl
@@ -667,6 +677,56 @@ func (tm *TemplateManager) GetModelsForProvider(provider *typ.Provider) ([]strin
 	}
 
 	return nil, TemplateSourceLocal, fmt.Errorf("no models found for provider with api_base '%s'", provider.APIBase)
+}
+
+// GetEmbeddedModelsForProvider returns models from the compile-time embedded providers.json,
+// bypassing any disk cache. Use this for fallback paths where the provider API is unavailable,
+// so the result is always the binary's built-in defaults rather than a potentially stale cache.
+func (tm *TemplateManager) GetEmbeddedModelsForProvider(provider *typ.Provider) ([]string, error) {
+	tmpl := tm.findEmbeddedTemplateByProvider(provider)
+	if tmpl == nil {
+		return nil, fmt.Errorf("no embedded template found for provider with api_base '%s'", provider.APIBase)
+	}
+	if len(tmpl.Models) == 0 {
+		return nil, fmt.Errorf("no models in embedded template for provider with api_base '%s'", provider.APIBase)
+	}
+	modelIDs := make([]string, len(tmpl.Models))
+	for i, m := range tmpl.Models {
+		modelIDs[i] = m.ID
+	}
+	return modelIDs, nil
+}
+
+// findEmbeddedTemplateByProvider is like findTemplateByProvider but searches only tm.embedded,
+// not the (possibly disk-cached) tm.templates.
+func (tm *TemplateManager) findEmbeddedTemplateByProvider(provider *typ.Provider) *ProviderTemplate {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
+		issuer := provider.OAuthDetail.Issuer
+		return tm.searchEmbedded(func(tmpl *ProviderTemplate) bool {
+			return tmpl.OAuthProvider == string(issuer)
+		})
+	}
+
+	apiBase := strings.TrimRight(provider.APIBase, "/")
+	if apiBase == "" {
+		return nil
+	}
+
+	if result := tm.searchEmbedded(func(tmpl *ProviderTemplate) bool {
+		return tmpl.CanonicalDomain != "" && strings.Contains(apiBase, tmpl.CanonicalDomain)
+	}); result != nil {
+		return result
+	}
+
+	switch provider.APIStyle {
+	case protocol.APIStyleAnthropic:
+		return tm.searchEmbedded(func(tmpl *ProviderTemplate) bool { return tmpl.BaseURLAnthropic == apiBase })
+	default:
+		return tm.searchEmbedded(func(tmpl *ProviderTemplate) bool { return tmpl.BaseURLOpenAI == apiBase })
+	}
 }
 
 // GetMaxTokensForModel returns the maximum allowed tokens for a specific model

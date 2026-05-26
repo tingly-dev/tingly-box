@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
+	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -556,21 +558,56 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 		return
 	}
 
+	// Step 1: Try DB cache (API-sourced, 1h TTL)
 	models := providerModelManager.GetModels(uid)
+	source := ModelCacheSourceDB
+	expiresAt := time.Now().Add(1 * time.Hour)
+	lastUpdated := ""
 
-	// For vmodel providers the model list lives on the provider record, not in the
-	// model manager cache (which is populated by FetchAndSaveProviderModels).
-	// Fall back to the provider's VModelDetail when the cache is empty.
-	if len(models) == 0 {
-		if p, err := s.config.GetProviderByUUID(uid); err == nil && p.IsVirtual() {
-			if p.VModelDetail != nil {
-				models = p.VModelDetail.Models
+	if len(models) > 0 {
+		if _, updated, exists := providerModelManager.GetProviderInfo(uid); exists {
+			lastUpdated = updated
+		}
+	} else {
+		// Cache miss or stale — proceed to fallback
+		p, provErr := s.config.GetProviderByUUID(uid)
+		if provErr == nil {
+			if p.IsVirtual() {
+				// Step 2a: VModel fallback (static, no cache)
+				if p.VModelDetail != nil {
+					models = p.VModelDetail.Models
+					source = ModelCacheSourceVModel
+				}
+			} else {
+				// Step 2b: Try Provider API
+				apiErr := s.config.FetchAndSaveProviderModels(uid)
+				if apiErr == nil {
+					models = providerModelManager.GetModels(uid)
+					if len(models) > 0 {
+						source = ModelCacheSourceAPI
+					}
+				}
+
+				// Step 3: Template fallback (save to DB with 1h TTL)
+				if len(models) == 0 && s.config.GetTemplateManager() != nil {
+					templateModels, tmplErr := s.config.GetTemplateManager().GetEmbeddedModelsForProvider(p)
+					if tmplErr == nil && len(templateModels) > 0 {
+						// Save template models to DB (Source=template, 1h TTL)
+						_ = providerModelManager.SaveModels(p, templateModels, db.ModelSourceTemplate)
+						models = templateModels
+						source = ModelCacheSourceTemplate
+					}
+				}
 			}
 		}
 	}
 
+	// Build response with cache metadata
 	providerModels := ProviderModelInfo{
-		Models: models,
+		Models:      models,
+		Source:      source,
+		ExpiresAt:   expiresAt,
+		LastUpdated: lastUpdated,
 	}
 
 	// Attach quota information if quota manager is available

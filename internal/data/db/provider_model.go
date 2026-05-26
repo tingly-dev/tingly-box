@@ -16,15 +16,24 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
+// ModelSource identifies how a cached model list was obtained.
+type ModelSource string
+
+const (
+	ModelSourceAPI      ModelSource = "api"
+	ModelSourceTemplate ModelSource = "template"
+)
+
 // ProviderModelRecord is the GORM model for persisting provider models
 type ProviderModelRecord struct {
-	ProviderUUID string    `gorm:"primaryKey;column:provider_uuid"`
-	ProviderName string    `gorm:"column:provider_name;index"`
-	APIBase      string    `gorm:"column:api_base"`
-	Models       string    `gorm:"column:models;type:text"` // JSON array of model names
-	LastUpdated  time.Time `gorm:"column:last_updated"`
-	CreatedAt    time.Time `gorm:"column:created_at"`
-	UpdatedAt    time.Time `gorm:"column:updated_at"`
+	ProviderUUID string      `gorm:"primaryKey;column:provider_uuid"`
+	ProviderName string      `gorm:"column:provider_name;index"`
+	APIBase      string      `gorm:"column:api_base"`
+	Models       string      `gorm:"column:models;type:text"`
+	Source       ModelSource `gorm:"column:source"`
+	LastUpdated  time.Time   `gorm:"column:last_updated"`
+	CreatedAt    time.Time   `gorm:"column:created_at"`
+	UpdatedAt    time.Time   `gorm:"column:updated_at"`
 }
 
 // TableName specifies the table name for GORM
@@ -36,7 +45,7 @@ func (ProviderModelRecord) TableName() string {
 type ModelStore struct {
 	db     *gorm.DB
 	dbPath string
-	mu     sync.Mutex
+	mu     sync.RWMutex
 }
 
 // NewModelStore creates or loads a model store using SQLite database.
@@ -69,7 +78,7 @@ func NewModelStore(baseDir string) (*ModelStore, error) {
 }
 
 // SaveModels saves models for a provider by UUID
-func (ms *ModelStore) SaveModels(provider *typ.Provider, apiBase string, models []string) error {
+func (ms *ModelStore) SaveModels(provider *typ.Provider, models []string, source ModelSource) error {
 	if provider == nil {
 		return errors.New("provider cannot be nil")
 	}
@@ -79,27 +88,24 @@ func (ms *ModelStore) SaveModels(provider *typ.Provider, apiBase string, models 
 
 	now := time.Now()
 
-	// Marshal models to JSON
 	modelsJSON, err := json.Marshal(models)
 	if err != nil {
 		return fmt.Errorf("failed to marshal models: %w", err)
 	}
 
-	// Use Save to create or update the record
 	record := ProviderModelRecord{
 		ProviderUUID: provider.UUID,
 		ProviderName: provider.Name,
-		APIBase:      apiBase,
+		APIBase:      provider.APIBase,
 		Models:       string(modelsJSON),
+		Source:       source,
 		LastUpdated:  now,
 		UpdatedAt:    now,
 	}
 
-	// Check if record exists
 	var existing ProviderModelRecord
 	err = ms.db.Where("provider_uuid = ?", provider.UUID).First(&existing).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// Create new record
 		record.CreatedAt = now
 		if err := ms.db.Create(&record).Error; err != nil {
 			return fmt.Errorf("failed to create model record: %w", err)
@@ -107,7 +113,6 @@ func (ms *ModelStore) SaveModels(provider *typ.Provider, apiBase string, models 
 	} else if err != nil {
 		return fmt.Errorf("failed to query existing record: %w", err)
 	} else {
-		// Update existing record, preserve CreatedAt
 		record.CreatedAt = existing.CreatedAt
 		if err := ms.db.Model(&existing).Updates(&record).Error; err != nil {
 			return fmt.Errorf("failed to update model record: %w", err)
@@ -117,13 +122,21 @@ func (ms *ModelStore) SaveModels(provider *typ.Provider, apiBase string, models 
 	return nil
 }
 
-// GetModels returns models for a provider by UUID
-func (ms *ModelStore) GetModels(providerUUID string) []string {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+// GetModels returns models for a provider by UUID.
+// All records use the same TTL (1 hour), regardless of source.
+// If multiple records exist (api + template), the most recently updated is returned.
+func (ms *ModelStore) GetModels(providerUUID string, ttl time.Duration) []string {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 
 	var record ProviderModelRecord
-	if err := ms.db.Where("provider_uuid = ?", providerUUID).First(&record).Error; err != nil {
+	if err := ms.db.Where("provider_uuid = ?", providerUUID).
+		Order("last_updated DESC").
+		First(&record).Error; err != nil {
+		return []string{}
+	}
+
+	if ttl > 0 && time.Since(record.LastUpdated) > ttl {
 		return []string{}
 	}
 
@@ -137,8 +150,8 @@ func (ms *ModelStore) GetModels(providerUUID string) []string {
 
 // GetAllProviders returns all provider UUIDs that have models
 func (ms *ModelStore) GetAllProviders() []string {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 
 	var records []ProviderModelRecord
 	if err := ms.db.Find(&records).Error; err != nil {
@@ -155,8 +168,8 @@ func (ms *ModelStore) GetAllProviders() []string {
 
 // HasModels checks if a provider has models
 func (ms *ModelStore) HasModels(providerUUID string) bool {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 
 	var count int64
 	if err := ms.db.Model(&ProviderModelRecord{}).
@@ -178,8 +191,8 @@ func (ms *ModelStore) RemoveProvider(providerUUID string) error {
 
 // GetProviderInfo returns basic info about a provider (apiBase, lastUpdated, exists)
 func (ms *ModelStore) GetProviderInfo(providerUUID string) (apiBase string, lastUpdated string, exists bool) {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 
 	var record ProviderModelRecord
 	err := ms.db.Where("provider_uuid = ?", providerUUID).First(&record).Error
@@ -191,10 +204,33 @@ func (ms *ModelStore) GetProviderInfo(providerUUID string) (apiBase string, last
 	return record.APIBase, record.LastUpdated.Format("2006-01-02 15:04:05"), true
 }
 
+// GetModelsBySource returns models for a provider by UUID, filtered by source.
+// Records are only returned if they match the source AND are within the TTL.
+func (ms *ModelStore) GetModelsBySource(providerUUID string, source ModelSource, ttl time.Duration) []string {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+
+	var record ProviderModelRecord
+	if err := ms.db.Where("provider_uuid = ? AND source = ?", providerUUID, source).First(&record).Error; err != nil {
+		return []string{}
+	}
+
+	if ttl > 0 && time.Since(record.LastUpdated) > ttl {
+		return []string{}
+	}
+
+	var models []string
+	if err := json.Unmarshal([]byte(record.Models), &models); err != nil {
+		return []string{}
+	}
+
+	return models
+}
+
 // GetModelCount returns the number of models for a provider
 func (ms *ModelStore) GetModelCount(providerUUID string) int {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 
 	var record ProviderModelRecord
 	if err := ms.db.Where("provider_uuid = ?", providerUUID).First(&record).Error; err != nil {
@@ -211,8 +247,8 @@ func (ms *ModelStore) GetModelCount(providerUUID string) int {
 
 // GetAllModelRecords returns all provider records (with metadata)
 func (ms *ModelStore) GetAllModelRecords() []ProviderModelRecord {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
 
 	var records []ProviderModelRecord
 	if err := ms.db.Find(&records).Error; err != nil {
