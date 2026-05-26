@@ -224,9 +224,9 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     </Box>
                 ) : (
                     <>
-                        {/* Row 1: model name */}
+                        {/* Row 1: model name — px leaves room for overlaid priority/tags */}
                         <NodeTooltip title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>} placement="top">
-                            <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
+                            <Box sx={{ ...NODE_LAYER_STYLES.topLayer, px: '28px' }}>
                                 <Typography variant="body2" noWrap sx={{
                                     ...NODE_LAYER_STYLES.typography,
                                     maxWidth: '100%', textAlign: 'center',
@@ -238,17 +238,19 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             </Box>
                         </NodeTooltip>
 
-                        {/* Divider axis: priority (left) ── tags (right) */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', px: '5px', my: 0.25 }}>
+                        {/* Divider — priority floats left, tags float right, both centered on the line */}
+                        <Box sx={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                            <Box sx={{ ...NODE_LAYER_STYLES.divider, borderBottom: '1px solid', borderColor: 'divider', height: 0 }} />
                             {hasPriority && (
-                                <PriorityBadge
-                                    priority={provider.priority ?? 0}
-                                    onChange={onPriorityChange!}
-                                    active={active}
-                                />
+                                <Box sx={{ position: 'absolute', left: '5px', top: '50%', transform: 'translateY(-50%)', lineHeight: 0, backgroundColor: 'background.paper', px: '2px' }}>
+                                    <PriorityBadge
+                                        priority={provider.priority ?? 0}
+                                        onChange={onPriorityChange!}
+                                        active={active}
+                                    />
+                                </Box>
                             )}
-                            <Box sx={{ flex: 1, height: 0, borderBottom: '1px solid', borderColor: 'divider', mx: 0.5 }} />
-                            <Box sx={{ display: 'flex', gap: '2px' }}>
+                            <Box sx={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '2px', backgroundColor: 'background.paper', px: '2px', lineHeight: 0 }}>
                                 {hasDualApiStyle ? (
                                     <>
                                         <ApiStyleBadge apiStyle="openai" minimal />
@@ -260,8 +262,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             </Box>
                         </Box>
 
-                        {/* Row 2: provider name */}
-                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer }}>
+                        {/* Row 2: provider name — same px inset */}
+                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, px: '28px' }}>
                             {isProviderMissing && (
                                 <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0, mr: 0.5 }} />
                             )}
