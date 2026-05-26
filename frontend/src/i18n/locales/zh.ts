@@ -233,6 +233,10 @@ export default {
       "label": "Base URL",
       "placeholder": "选择已知服务或粘贴 Base URL"
     },
+    "region": {
+      "cn": "中国",
+      "global": "全球"
+    },
     "protocol": {
       "label": "协议"
     },

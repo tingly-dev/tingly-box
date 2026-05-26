@@ -25,7 +25,7 @@ import {
 import PageLayout from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import ProviderFormDialog, {type EnhancedProviderFormData} from '@/components/ProviderFormDialog';
-import BrowseProviders from '@/components/onboarding/BrowseProviders';
+import {ProviderListContent, type ConnectSelection} from '@/components/ConnectProviderDialog';
 import PasteAndDetect from '@/components/onboarding/PasteAndDetect';
 import {api} from '@/services/api';
 
@@ -46,6 +46,7 @@ const Onboarding: React.FC = () => {
     const navigate = useNavigate();
     const [tab, setTab] = useState<OnboardingTab>('browse');
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [browseQuery, setBrowseQuery] = useState('');
     const [formData, setFormData] = useState<EnhancedProviderFormData>(emptyForm());
     const [snackbar, setSnackbar] = useState<{open: boolean; message: string; severity: 'success' | 'error' | 'info'}>({
         open: false,
@@ -64,6 +65,57 @@ const Onboarding: React.FC = () => {
             ...prefill,
         });
         setDialogOpen(true);
+    };
+
+    const handleBrowseSelect = (selection: ConnectSelection) => {
+        if (selection.kind === 'custom') {
+            openDialogWith(emptyForm());
+            return;
+        }
+
+        if (selection.kind === 'oauth') {
+            showMessage('OAuth flow coming soon', 'info');
+            return;
+        }
+
+        if (selection.kind === 'local') {
+            const p = selection.provider;
+            const apiBase = p.baseUrlOpenAI || p.baseUrlAnthropic || '';
+            const apiStyle: 'openai' | 'anthropic' = p.baseUrlOpenAI ? 'openai' : 'anthropic';
+            openDialogWith({
+                name: p.alias || p.name,
+                apiBase,
+                apiStyle,
+                token: '',
+                enabled: true,
+                noKeyRequired: true,
+                protocols: p.supportsOpenAI && p.supportsAnthropic ? ['openai', 'anthropic'] : p.supportsOpenAI ? ['openai'] : ['anthropic'],
+                providerBaseUrls: {
+                    openai: p.baseUrlOpenAI,
+                    anthropic: p.baseUrlAnthropic,
+                },
+            });
+            return;
+        }
+
+        if (selection.kind === 'key') {
+            const p = selection.provider;
+            const apiBase = p.baseUrlOpenAI || p.baseUrlAnthropic || '';
+            const apiStyle: 'openai' | 'anthropic' = p.baseUrlOpenAI ? 'openai' : 'anthropic';
+            openDialogWith({
+                name: p.alias || p.name,
+                apiBase,
+                apiStyle,
+                token: '',
+                enabled: true,
+                protocols: p.supportsOpenAI && p.supportsAnthropic ? ['openai', 'anthropic'] : p.supportsOpenAI ? ['openai'] : ['anthropic'],
+                providerBaseUrls: {
+                    openai: p.baseUrlOpenAI,
+                    anthropic: p.baseUrlAnthropic,
+                },
+            });
+            return;
+        }
     };
 
     const handleFieldChange = (field: keyof EnhancedProviderFormData, value: any) => {
@@ -146,7 +198,14 @@ const Onboarding: React.FC = () => {
                     </Tabs>
 
                     {tab === 'browse' && (
-                        <BrowseProviders onPick={openDialogWith}/>
+                        <ProviderListContent
+                            onSelect={handleBrowseSelect}
+                            query={browseQuery}
+                            onQueryChange={setBrowseQuery}
+                            hideOfficialInfo={true}
+                            showDetails={true}
+                            wide={true}
+                        />
                     )}
                     {tab === 'paste' && (
                         <PasteAndDetect
@@ -154,14 +213,6 @@ const Onboarding: React.FC = () => {
                             onManualFill={() => openDialogWith(emptyForm())}
                         />
                     )}
-
-                    <Box sx={{mt: 3}}>
-                        <Typography variant="caption" color="text.secondary">
-                            {t('onboarding.hint', {
-                                defaultValue: 'Detection runs locally in the box; pasted text is not sent to any third party.',
-                            })}
-                        </Typography>
-                    </Box>
                 </UnifiedCard>
             </Box>
 

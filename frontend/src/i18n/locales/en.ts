@@ -232,6 +232,10 @@ export default {
       "label": "Base URL",
       "placeholder": "Pick a known service or paste a base URL"
     },
+    "region": {
+      "cn": "China",
+      "global": "Global"
+    },
     "protocol": {
       "label": "Protocol"
     },

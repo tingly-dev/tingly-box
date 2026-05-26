@@ -161,14 +161,16 @@ export interface UniqueProvider {
     website?: string;
     apiDoc?: string;
     icon?: string; // Icon identifier for Lobe Icons
-    region?: 'cn' | 'global'; // Derived region grouping for UI
+    region?: 'cn' | 'global' | 'self-hosted'; // Derived region grouping for UI
+    type?: string; // Provider type: "official" | "reseller" | "self-hosted" | etc.
 }
 
 // Heuristic classification of a provider into "cn" (China) or "global".
 // Prefers explicit region from Schema V2 when present; otherwise falls back
 // to id/name patterns (e.g. "(CN)" suffix, "-speciale" coding-only CN endpoint).
-function classifyRegion(sp: ServiceProvider): 'cn' | 'global' {
+function classifyRegion(sp: ServiceProvider): 'cn' | 'global' | 'self-hosted' {
     const explicit = (sp.region || '').toLowerCase();
+    if (explicit === 'self-hosted') return 'self-hosted';
     if (explicit === 'cn') return 'cn';
     if (explicit === 'intl' || explicit === 'global') return 'global';
 
@@ -205,6 +207,7 @@ export function getAllUniqueProviders(): UniqueProvider[] {
             apiDoc: sp.api_doc,
             icon: sp.icon,
             region: classifyRegion(sp),
+            type: sp.type,
         });
     });
 
