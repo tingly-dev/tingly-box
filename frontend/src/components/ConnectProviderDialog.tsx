@@ -3,7 +3,6 @@ import RegionBadge from './RegionBadge';
 import {
     Box,
     Card,
-    CardActionArea,
     Chip,
     Dialog,
     DialogContent,
@@ -101,50 +100,49 @@ const ProviderCard: React.FC<{
                 border: 1, borderColor: 'divider', borderRadius: 1,
                 p: 1.25, display: 'flex', alignItems: 'center', gap: 1.25,
                 cursor: 'pointer',
-                boxShadow: 'none',
+                boxShadow: 0,
                 transition: 'border-color 0.15s ease, background-color 0.15s ease',
                 '&:hover': {
                     borderColor: 'primary.main',
                     bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
                 },
             }}
+            onClick={onClick}
         >
-            <CardActionArea onClick={onClick} sx={{flex: 1, display: 'flex', alignItems: 'center', gap: 1.25, justifyContent: 'flex-start'}}>
-                <Box sx={{width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                    {icon}
-                </Box>
-                <Box sx={{minWidth: 0, flex: 1}}>
-                    <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            lineHeight: 1.3,
-                        }}
-                        title={name}
-                    >
-                        {name}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5} sx={{mt: 0.5}}>
-                        {showDetails ? (
-                            <>
-                                {/* Show protocol chips in details mode */}
-                                {meta.split(' · ').map((protocol, idx) => (
-                                    <Chip key={idx} label={protocol} size="small" sx={{height: 18}}/>
-                                ))}
-                            </>
-                        ) : (
-                            <Typography variant="caption" color="text.secondary" noWrap sx={{display: 'block'}}>
-                                {meta}
-                            </Typography>
-                        )}
-                    </Stack>
-                </Box>
-            </CardActionArea>
+            <Box sx={{width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                {icon}
+            </Box>
+            <Box sx={{minWidth: 0, flex: 1}}>
+                <Typography
+                    variant="body2"
+                    fontWeight={600}
+                    sx={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        lineHeight: 1.3,
+                    }}
+                    title={name}
+                >
+                    {name}
+                </Typography>
+                <Stack direction="row" spacing={0.5} sx={{mt: 0.5}}>
+                    {showDetails ? (
+                        <>
+                            {/* Show protocol chips in details mode */}
+                            {meta.split(' · ').map((protocol, idx) => (
+                                <Chip key={idx} label={protocol} size="small" sx={{height: 18}}/>
+                            ))}
+                        </>
+                    ) : (
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{display: 'block'}}>
+                            {meta}
+                        </Typography>
+                    )}
+                </Stack>
+            </Box>
             {showDetails && (
                 <Stack direction="row" spacing={0.3} sx={{pr: 10}}>
                     {website && (
@@ -187,7 +185,7 @@ const ProviderCard: React.FC<{
 
 const CardGrid: React.FC<{children: React.ReactNode; single?: boolean; wide?: boolean}> = ({children, single, wide}) => {
     // single: force 1 column (for API key providers in dialog mode)
-    // wide: allow 2-3 columns (for onboarding/page mode)
+    // wide: 3 columns for onboarding/page mode
     // default: 1-2 columns (for cards in dialog mode)
     if (single) {
         return (
@@ -202,9 +200,7 @@ const CardGrid: React.FC<{children: React.ReactNode; single?: boolean; wide?: bo
                 display: 'grid',
                 gridTemplateColumns: {
                     xs: '1fr',
-                    sm: 'repeat(2, 1fr)',
-                    md: 'repeat(3, 1fr)',
-                    lg: 'repeat(3, 1fr)',
+                    sm: 'repeat(3, 1fr)',
                 },
                 gap: 1.5,
             }}>
@@ -382,7 +378,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                                         {cnKeyProviders.length} providers
                                     </Typography>
                                 </Stack>
-                                <CardGrid single={!wide}>
+                                <CardGrid wide={wide}>
                                     {cnKeyProviders.map((p) => (
                                         <ProviderCard
                                             key={`key-${p.id}`}
@@ -408,7 +404,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                                         {globalKeyProviders.length} providers
                                     </Typography>
                                 </Stack>
-                                <CardGrid single={!wide}>
+                                <CardGrid wide={wide}>
                                     {globalKeyProviders.map((p) => (
                                         <ProviderCard
                                             key={`key-${p.id}`}
