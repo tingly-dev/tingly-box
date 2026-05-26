@@ -436,14 +436,14 @@ tasks:
   smart-rule:
     cmds:
       - |
-        curl -X POST http://localhost:12580/tingly/anthropic/v1/chat/completions \
+        curl -X POST http://localhost:12580/tingly/openai/v1/chat/completions \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
         -d '{
-          "model": "smart",
+          "model": "tingly-smart",
           "messages": [
             {"role":"system","content":"You are a professional language assistant."},
-            {"role": "user", "content": "who are you?"}
+            {"role": "user", "content": "@@@ who are you?"}
           ]
         }'
   
