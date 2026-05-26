@@ -279,7 +279,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                         variant="body2"
                                         color={isProviderMissing ? 'warning.main' : 'text.primary'}
                                         noWrap
-                                        sx={{ ...NODE_LAYER_STYLES.typography, flex: 1, minWidth: 0 }}
+                                        sx={{ ...NODE_LAYER_STYLES.typography, flex: 1, minWidth: 0, textAlign: 'center' }}
                                     >
                                         {providerInfo.name}
                                     </Typography>
@@ -298,6 +298,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                         color: provider.model ? 'text.secondary' : 'text.disabled',
                                         flex: 1,
                                         minWidth: 0,
+                                        textAlign: 'center',
                                     }}
                                 >
                                     {provider.model || 'select model'}
