@@ -2,7 +2,6 @@ import {
     Delete as DeleteIcon,
     Warning as WarningIcon,
     PlayArrow as PlayIcon,
-    HorizontalRule as HorizontalRuleIcon,
 } from '@/components/icons';
 import {
     Box,
@@ -121,7 +120,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                     active={active}
                     onClick={active ? open : undefined}
                 >
-                    {priority > 0 ? String(priority) : <HorizontalRuleIcon sx={{ fontSize: 13 }} />}
+                    {priority > 0 ? String(priority) : null}
                 </PriorityDisk>
             </NodeTooltip>
             <Popover
