@@ -101,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     borderColor: 'divider',
                 }}
             >
-                <Typography variant="subtitle2" sx={{ color: 'text.primary', fontWeight: 600, fontSize: '0.875rem' }}>
+                <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>
                     {activeActivityLabel}
                 </Typography>
                 {headerAction}
@@ -172,10 +172,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                     primary={item.label}
                                     secondary={item.subtitle}
                                     slotProps={{
-                                        primary: { fontWeight: active ? 600 : 400, fontSize: '0.875rem', lineHeight: 1.3 },
-                                        secondary: { fontSize: '0.6875rem', lineHeight: 1.2 },
+                                        primary: { fontWeight: active ? 600 : 400, variant: 'body2' as const, sx: { lineHeight: 1.3 } },
+                                        secondary: { variant: 'caption' as const, sx: { fontSize: '0.6875rem', lineHeight: 1.2 } },
                                     }}
                                     sx={{
+                                        '& .MuiListItemText-primary': {
+                                            fontSize: '0.875rem',
+                                        },
                                         '& .MuiListItemText-secondary': {
                                             color: active ? 'rgba(255,255,255,0.7)' : 'text.secondary',
                                         },
@@ -231,9 +234,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                 }}
             >
                 <Typography
+                    variant="caption"
                     sx={{
                         color: 'text.secondary',
-                        fontSize: '0.7rem',
                         textAlign: 'center',
                         display: 'block',
                         fontStyle: 'italic',
@@ -305,7 +308,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                         variant="caption"
                         sx={{
                             color: 'text.secondary',
-                            fontSize: '0.7rem',
                             textAlign: 'center',
                             display: 'block',
                             fontStyle: 'italic',

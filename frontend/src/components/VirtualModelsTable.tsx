@@ -52,7 +52,7 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                                             label="Builtin"
                                             size="small"
                                             variant="outlined"
-                                            sx={{ height: 18, fontSize: '0.65rem', color: 'text.secondary' }}
+                                            sx={{ height: 18, color: 'text.secondary' }}
                                         />
                                     </Stack>
                                 </TableCell>
@@ -72,7 +72,7 @@ const VirtualModelsTable = ({ providers, onToggle }: VirtualModelsTableProps) =>
                                                     label={m}
                                                     size="small"
                                                     variant="outlined"
-                                                    sx={{ height: 20, fontSize: '0.7rem' }}
+                                                    sx={{ height: 20 }}
                                                 />
                                             ))}
                                         </Box>

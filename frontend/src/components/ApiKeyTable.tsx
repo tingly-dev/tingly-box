@@ -284,7 +284,7 @@ const ApiKeyTable = ({
                                             size="small"
                                             color={provider.enabled ? "success" : "default"}
                                             variant={provider.enabled ? "filled" : "outlined"}
-                                            sx={{height: 22, fontSize: "0.7rem", minWidth: 40}}
+                                            sx={{height: 22, minWidth: 40}}
                                         />
                                     </Stack>
                                 </TableCell>
@@ -430,7 +430,7 @@ const ApiKeyTable = ({
                                                         ? "primary"
                                                         : "inherit"
                                                 }
-                                                sx={{fontSize: "0.75rem", minWidth: "auto", px: 1}}
+                                                sx={{minWidth: "auto", px: 1}}
                                             >
                                                 Quota
                                             </Button>
@@ -585,7 +585,6 @@ const ApiKeyTable = ({
                                     bgcolor: "action.hover",
                                     borderRadius: 1,
                                     fontFamily: "monospace",
-                                    fontSize: "0.875rem",
                                     wordBreak: "break-all",
                                     border: "1px solid",
                                     borderColor: "divider",

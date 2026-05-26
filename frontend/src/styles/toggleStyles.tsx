@@ -29,7 +29,6 @@ export const toggleButtonGroupStyle: SxProps<Theme> = {
         textTransform: 'none',
         px: 2,
         py: 1,
-        fontSize: '0.875rem',
         height: 32,
     },
     '& .MuiToggleButton-root.Mui-selected': {
@@ -61,7 +60,6 @@ export const switchControlLabelStyle: SxProps<Theme> = {
     mx: 0,
     alignItems: 'center',
     '& .MuiFormControlLabel-label': {
-        fontSize: '0.875rem',
         color: 'text.primary',
         fontWeight: 500,
     },
@@ -102,7 +100,6 @@ export const toggleButtonCompactStyle: SxProps<Theme> = {
     ...toggleButtonStyle,
     px: 1.5,
     py: 0.5,
-    fontSize: '0.8125rem',
     minHeight: 32,
 };
 

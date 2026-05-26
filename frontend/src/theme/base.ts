@@ -8,10 +8,13 @@ export const baseTypography = (textPrimary: string, textSecondary: string, textD
   h4: { fontSize: '1.125rem', lineHeight: 1.35, fontWeight: 650, color: textPrimary },
   h5: { fontSize: '1rem', lineHeight: 1.4, fontWeight: 650, color: textPrimary },
   h6: { fontSize: '0.875rem', lineHeight: 1.45, fontWeight: 650, color: textPrimary },
-  body1: { fontSize: '1rem', lineHeight: 1.6, color: textSecondary },
-  body2: { fontSize: '0.875rem', lineHeight: 1.55, color: textSecondary },
-  caption: { fontSize: '0.75rem', lineHeight: 1.45, color: textDisabled },
-  button: { fontSize: '0.875rem', fontWeight: 600, textTransform: 'none' },
+  subtitle1: { fontSize: '0.875rem', lineHeight: 1.5, fontWeight: 400, color: textSecondary },
+  subtitle2: { fontSize: '0.75rem', lineHeight: 1.5, fontWeight: 500, color: textSecondary },
+  body1: { fontSize: '0.875rem', lineHeight: 1.6, color: textSecondary },
+  body2: { fontSize: '0.8rem', lineHeight: 1.55, color: textSecondary },
+  caption: { fontSize: '0.65rem', lineHeight: 1.45, color: textDisabled },
+  button: { fontSize: '0.8rem', fontWeight: 600, textTransform: 'none' },
+  overline: { fontSize: '0.65rem', lineHeight: 1.5, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: textSecondary },
 });
 
 export const baseShape: ThemeOptions['shape'] = {

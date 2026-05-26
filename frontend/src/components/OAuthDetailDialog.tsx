@@ -317,7 +317,6 @@ const OAuthDetailDialog = ({ open, provider, onClose, onSubmit }: OAuthDetailDia
                                         input: {
                                             sx: {
                                                 fontFamily: 'monospace',
-                                                fontSize: '0.75rem',
                                                 '&.Mui-disabled': {
                                                     color: 'text.primary',
                                                 },

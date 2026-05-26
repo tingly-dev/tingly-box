@@ -478,7 +478,7 @@ const Layout = ({ children }: LayoutProps) => {
                         onClose={() => setEasterEggAnchorEl(null)}
                         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
                         transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                        sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
+                        sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1 } }}
                     >
                         {t('layout.easterEgg')} · {currentVersion}
                     </Popover>
@@ -530,7 +530,7 @@ const Layout = ({ children }: LayoutProps) => {
                         onClose={() => setEasterEggAnchorEl(null)}
                         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
                         transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                        sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1, fontSize: '0.875rem' } }}
+                        sx={{ zIndex: Z_INDEX.popover, '& .MuiPopover-paper': { bgcolor: 'primary.main', color: 'white', borderRadius: 2, px: 2, py: 1 } }}
                     >
                         {t('layout.easterEgg')} · {currentVersion}
                     </Popover>

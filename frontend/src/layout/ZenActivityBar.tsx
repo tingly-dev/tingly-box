@@ -165,7 +165,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             <Typography
                                 variant="caption"
                                 sx={{
-                                    fontSize: '0.65rem',
                                     fontWeight: isActiveItem ? 600 : 400,
                                     color: 'inherit',
                                     textAlign: 'center',
@@ -272,7 +271,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             <Typography
                                 variant="caption"
                                 sx={{
-                                    fontSize: '0.65rem',
                                     fontWeight: isOnboardingActive ? 600 : 400,
                                     color: 'inherit',
                                     textAlign: 'center',
@@ -297,7 +295,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <IconDots size={22} />
                             </ListItemIcon>
-                            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                                 {t('layout.activityBar.more')}
                             </Typography>
                         </ListItemButton>
@@ -316,7 +314,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <IconYinYang size={22} />
                             </ListItemIcon>
-                            <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                                 {t('layout.activityBar.exitZen')}
                             </Typography>
                         </ListItemButton>
@@ -360,7 +358,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                             <IconMessageReport size={22} />
                         </ListItemIcon>
-                        <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
+                        <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                             {t('layout.activityBar.feedback')}
                         </Typography>
                     </ListItemButton>
@@ -401,7 +399,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 <IconLanguage size={22} />
                             </ListItemIcon>
-                            <Typography variant="caption" sx={{ fontSize: '0.5rem', color: 'inherit', textAlign: 'center', lineHeight: 1.1 }}>
+                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.1, fontSize: '0.65rem' }}>
                                 {i18n.language === 'zh' ? '中文' : 'EN'}
                             </Typography>
                         </ListItemButton>
@@ -443,7 +441,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
                                 {renderCurrentThemeIcon({ size: 22 })}
                             </ListItemIcon>
-                            <Typography variant="caption" sx={{ fontSize: '0.5rem', color: 'inherit', textAlign: 'center', lineHeight: 1.1 }}>
+                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.1, fontSize: '0.65rem' }}>
                                 {currentThemeOption?.label ?? 'Light'}
                             </Typography>
                         </ListItemButton>

@@ -305,7 +305,7 @@ const OAuthTable = ({
                                                 size="small"
                                                 color={provider.enabled ? "success" : "default"}
                                                 variant={provider.enabled ? "filled" : "outlined"}
-                                                sx={{height: 22, fontSize: "0.7rem", minWidth: 40}}
+                                                sx={{height: 22, minWidth: 40}}
                                             />
                                         </Stack>
                                     </TableCell>
@@ -354,7 +354,7 @@ const OAuthTable = ({
                                                     label="Expired"
                                                     color="error"
                                                     size="small"
-                                                    sx={{height: 20, fontSize: "0.7rem"}}
+                                                    sx={{height: 20}}
                                                 />
                                             )}
                                         </Stack>
@@ -420,7 +420,7 @@ const OAuthTable = ({
                                                             ? "primary"
                                                             : "inherit"
                                                     }
-                                                    sx={{fontSize: "0.75rem", minWidth: "auto", px: 1}}
+                                                    sx={{minWidth: "auto", px: 1}}
                                                 >
                                                     Quota
                                                 </Button>

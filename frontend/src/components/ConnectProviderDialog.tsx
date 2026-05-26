@@ -77,7 +77,7 @@ const SectionHeader: React.FC<{icon: React.ReactNode; title: string; count?: num
             </Box>
             <Typography variant="subtitle2" fontWeight={700}>{title}</Typography>
             {typeof count === 'number' && (
-                <Chip label={count} size="small" sx={{height: 18, fontSize: '0.65rem', fontWeight: 600}}/>
+                <Chip label={count} size="small" sx={{height: 18, fontWeight: 600}}/>
             )}
         </Stack>
     );
@@ -134,7 +134,7 @@ const ProviderCard: React.FC<{
                             <>
                                 {/* Show protocol chips in details mode */}
                                 {meta.split(' · ').map((protocol, idx) => (
-                                    <Chip key={idx} label={protocol} size="small" sx={{height: 18, fontSize: '0.65rem'}}/>
+                                    <Chip key={idx} label={protocol} size="small" sx={{height: 18}}/>
                                 ))}
                             </>
                         ) : (

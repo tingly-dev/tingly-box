@@ -67,7 +67,6 @@ export const ZenButton: React.FC<ZenButtonProps> = ({
         <Typography
           variant="caption"
           sx={{
-            fontSize: '0.65rem',
             fontWeight: active ? 600 : 400,
             lineHeight: 1.2,
             textAlign: 'center',

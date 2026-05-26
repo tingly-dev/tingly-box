@@ -6,7 +6,6 @@ import { type SxProps, type Theme } from '@mui/material/styles';
  */
 export const copyableTextStyle: SxProps<Theme> = {
     fontFamily: 'monospace',
-    fontSize: '0.75rem',
     color: 'primary.main',
     cursor: 'pointer',
     '&:hover': {
