@@ -8,17 +8,16 @@ import RequestsViewer, {
 } from '@/components/RequestsViewer';
 
 interface LogExplorerProps {
-    // When set, the Requests tab is pre-filtered and locked to this scenario.
-    // System logs are global (not scenario-scoped), so the System tab is
-    // unaffected — both surfaces stay structurally identical.
-    lockedScenario?: string;
+    // When set, the scenario filter is initialized to this value but can be changed/cleared by the user.
+    // Used by the per-scenario quick-open dialog to provide context without locking the view.
+    initialScenario?: string;
 }
 
 const getAuthHeader = () => ({
     Authorization: `Bearer ${localStorage.getItem('user_auth_token') || ''}`,
 });
 
-const LogExplorer = ({ lockedScenario }: LogExplorerProps) => {
+const LogExplorer = ({ initialScenario }: LogExplorerProps) => {
     const [tab, setTab] = useState(0);
 
     const getRequests = useCallback(async (params?: RequestFilters) => {
@@ -70,7 +69,7 @@ const LogExplorer = ({ lockedScenario }: LogExplorerProps) => {
     return (
         <Stack sx={{ height: '100%', minHeight: 0 }} spacing={0}>
             <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tab label="Requests" />
+                <Tab label="AI Logs" />
                 <Tab label="System Logs" />
             </Tabs>
 
@@ -78,7 +77,7 @@ const LogExplorer = ({ lockedScenario }: LogExplorerProps) => {
                 <RequestsViewer
                     getRequests={getRequests}
                     getRequestDetail={getRequestDetail}
-                    lockedScenario={lockedScenario}
+                    initialScenario={initialScenario}
                 />
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, display: tab === 1 ? 'flex' : 'none', flexDirection: 'column' }}>

@@ -60,9 +60,9 @@ export interface RequestFilters {
 interface RequestsViewerProps {
     getRequests: (params?: RequestFilters) => Promise<{ total: number; requests: ModelRequestSummary[] }>;
     getRequestDetail: (id: string) => Promise<ModelRequestDetail | null>;
-    // When set, the scenario filter is fixed to this value and its input is
-    // hidden (used by the per-scenario quick-open dialog).
-    lockedScenario?: string;
+    // When set, the scenario filter is initialized to this value but can be changed/cleared.
+    // Used by the per-scenario quick-open dialog to provide context without locking the view.
+    initialScenario?: string;
 }
 
 const statusColor = (status?: number): 'default' | 'success' | 'warning' | 'error' => {
@@ -128,19 +128,27 @@ const SUPPRESSED_FIELDS = new Set([
     'request',
 ]);
 
-const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: RequestsViewerProps) => {
+const RequestsViewer = ({ getRequests, getRequestDetail, initialScenario }: RequestsViewerProps) => {
     const [requests, setRequests] = useState<ModelRequestSummary[]>([]);
     const [loading, setLoading] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [details, setDetails] = useState<Record<string, ModelRequestDetail>>({});
     const [error, setError] = useState<string | null>(null);
-    const [scenario, setScenario] = useState('');
+    // Initialize scenario filter from initialScenario prop on mount
+    const [scenario, setScenario] = useState(initialScenario ?? '');
     const [provider, setProvider] = useState('');
     const [status, setStatus] = useState('');
     const tableContainerRef = useRef<HTMLDivElement>(null);
     // Whether the user is pinned to the bottom; controls live-tail auto-scroll.
     const atBottomRef = useRef(true);
+
+    // Initialize scenario from initialScenario when prop changes
+    useEffect(() => {
+        if (initialScenario !== undefined) {
+            setScenario(initialScenario);
+        }
+    }, [initialScenario]);
 
     const loadRequests = async () => {
         setLoading(true);
@@ -148,7 +156,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
         try {
             const response = await getRequests({
                 limit: 200,
-                scenario: lockedScenario ?? (scenario || undefined),
+                scenario: scenario || undefined,
                 provider: provider || undefined,
                 status: status || undefined,
             });
@@ -169,7 +177,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
     useEffect(() => {
         loadRequests();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scenario, provider, status, lockedScenario]);
+    }, [scenario, provider, status]);
 
     useEffect(() => {
         if (autoRefresh) {
@@ -177,7 +185,7 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
             return () => clearInterval(id);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoRefresh, scenario, provider, status, lockedScenario]);
+    }, [autoRefresh, scenario, provider, status]);
 
     // Live-tail: only auto-scroll to the newest row when the user is already
     // pinned at the bottom, so polling doesn't yank them away from a row
@@ -355,15 +363,13 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
                     </Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
-                    {!lockedScenario && (
-                        <TextField
-                            size="small"
-                            label="Scenario"
-                            value={scenario}
-                            onChange={(e) => setScenario(e.target.value.trim())}
-                            sx={{ width: 130 }}
-                        />
-                    )}
+                    <TextField
+                        size="small"
+                        label="Scenario"
+                        value={scenario}
+                        onChange={(e) => setScenario(e.target.value.trim())}
+                        sx={{ width: 130 }}
+                    />
                     <TextField
                         size="small"
                         label="Provider"
@@ -378,6 +384,16 @@ const RequestsViewer = ({ getRequests, getRequestDetail, lockedScenario }: Reque
                         onChange={(e) => setStatus(e.target.value.trim())}
                         sx={{ width: 90 }}
                     />
+                    {(scenario || provider || status) && (
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => { setScenario(''); setProvider(''); setStatus(''); }}
+                            sx={{ fontSize: '0.7rem', py: 0.5, px: 1 }}
+                        >
+                            Clear
+                        </Button>
+                    )}
                 </Stack>
                 <Box sx={{ flex: 1 }} />
                 <Typography variant="caption" color="text.secondary">

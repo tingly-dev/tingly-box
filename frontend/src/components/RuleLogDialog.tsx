@@ -16,7 +16,7 @@ interface ScenarioLogDialogProps {
     scenario: string;
 }
 
-const ScenarioLogDialog = ({ open, onClose, scenario }: ScenarioLogDialogProps) => {
+const ScenarioLogDialog = ({ open, onClose, scenario, initialScenario }: ScenarioLogDialogProps) => {
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { height: '80vh' } }}>
             <DialogTitle sx={{ pb: 1 }}>
@@ -32,7 +32,7 @@ const ScenarioLogDialog = ({ open, onClose, scenario }: ScenarioLogDialogProps) 
             </DialogTitle>
 
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', pt: 1.5 }}>
-                <LogExplorer lockedScenario={scenario} />
+                <LogExplorer initialScenario={scenario} />
             </DialogContent>
         </Dialog>
     );
