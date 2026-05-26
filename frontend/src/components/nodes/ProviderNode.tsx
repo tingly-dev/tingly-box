@@ -247,8 +247,16 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
 
                         <Divider sx={NODE_LAYER_STYLES.divider} />
 
-                        {/* Row 2: style tags (left) + provider name */}
+                        {/* Row 2: provider name (centered) + style tags (right) */}
                         <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, gap: 0.75 }}>
+                            {isProviderMissing && (
+                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                            )}
+                            <Typography variant="body2" noWrap
+                                color={isProviderMissing ? 'warning.main' : 'text.secondary'}
+                                sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, flex: 1, minWidth: 0, textAlign: 'center' }}>
+                                {providerInfo.name}
+                            </Typography>
                             <Box sx={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                                 {hasDualApiStyle ? (
                                     <>
@@ -259,14 +267,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     <ApiStyleBadge apiStyle={apiStyle} minimal />
                                 )}
                             </Box>
-                            {isProviderMissing && (
-                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
-                            )}
-                            <Typography variant="body2" noWrap
-                                color={isProviderMissing ? 'warning.main' : 'text.secondary'}
-                                sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, flex: 1, minWidth: 0 }}>
-                                {providerInfo.name}
-                            </Typography>
                         </Box>
                     </>
                 )}
