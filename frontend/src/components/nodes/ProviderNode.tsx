@@ -54,18 +54,17 @@ const PriorityDisk = styled(Box, {
     userSelect: 'none',
     cursor: active ? 'pointer' : 'not-allowed',
     transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
+    // Always hollow/outline style — differentiates from smart-routing's solid disks
+    border: '1.5px solid',
+    backgroundColor: 'transparent',
     ...(hasPriority
         ? {
-              border: '1px solid',
-              backgroundColor: theme.palette.primary.main,
-              color: theme.palette.primary.contrastText,
+              color: theme.palette.primary.main,
               borderColor: theme.palette.primary.main,
-              '&:hover': active ? { backgroundColor: theme.palette.primary.dark, borderColor: theme.palette.primary.dark } : {},
+              '&:hover': active ? { borderColor: theme.palette.primary.dark, color: theme.palette.primary.dark } : {},
           }
         : {
-              border: '1.5px solid',
-              backgroundColor: theme.palette.background.paper,
-              color: theme.palette.text.secondary,
+              color: theme.palette.text.disabled,
               borderColor: theme.palette.text.disabled,
               '&:hover': active ? { borderColor: theme.palette.primary.main, color: theme.palette.primary.main } : {},
           }),
@@ -244,7 +243,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     </Box>
                 )}
 
-                {/* Content: provider name (row 1) + model (row 2) */}
+                {/* Content: provider name (row 1) + model + style tags (row 2) */}
                 <Box
                     sx={{
                         flex: 1,
@@ -252,8 +251,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         flexDirection: 'column',
                         minWidth: 0,
                         pl: hasPriority ? 1 : 1.5,
-                        // leave room on the right so text doesn't run into the style tag area
-                        pr: provider.provider ? (hasDualApiStyle ? 1 : 0.5) : 1,
+                        pr: 1,
                     }}
                 >
                     {!provider.provider ? (
@@ -288,8 +286,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                 </Box>
                             </NodeTooltip>
 
-                            {/* Row 2: model name */}
-                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                            {/* Row 2: model name + style tag(s) inline at right */}
+                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                                 <Typography
                                     variant="body2"
                                     noWrap
@@ -304,33 +302,18 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                 >
                                     {provider.model || 'select model'}
                                 </Typography>
+                                {hasDualApiStyle ? (
+                                    <>
+                                        <ApiStyleBadge apiStyle="openai" minimal />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal />
+                                    </>
+                                ) : (
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal />
+                                )}
                             </Box>
                         </>
                     )}
                 </Box>
-
-                {/* Style tag(s): bottom-right corner, bleeding out */}
-                {provider.provider && (
-                    <Box
-                        sx={{
-                            position: 'absolute',
-                            bottom: -8,
-                            right: -8,
-                            display: 'flex',
-                            gap: '2px',
-                            zIndex: 2,
-                        }}
-                    >
-                        {hasDualApiStyle ? (
-                            <>
-                                <ApiStyleBadge apiStyle="openai" minimal />
-                                <ApiStyleBadge apiStyle="anthropic" minimal />
-                            </>
-                        ) : (
-                            <ApiStyleBadge apiStyle={apiStyle} minimal />
-                        )}
-                    </Box>
-                )}
 
                 {/* Action buttons (hover) */}
                 <ActionButtonsBox className="action-buttons">
