@@ -588,15 +588,14 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 					}
 				}
 
-				// Step 3: Template fallback (save to DB with 1d TTL)
+				// Step 3: Template fallback (save to DB with 1h TTL)
 				if len(models) == 0 && s.config.GetTemplateManager() != nil {
 					templateModels, tmplErr := s.config.GetTemplateManager().GetEmbeddedModelsForProvider(p)
 					if tmplErr == nil && len(templateModels) > 0 {
-						// Save template models to DB (Source=template, 1d TTL)
+						// Save template models to DB (Source=template, 1h TTL)
 						_ = providerModelManager.SaveModels(p, templateModels, db.ModelSourceTemplate)
 						models = templateModels
 						source = ModelCacheSourceTemplate
-						expiresAt = time.Now().Add(24 * time.Hour)
 					}
 				}
 			}

@@ -123,14 +123,16 @@ func (ms *ModelStore) SaveModels(provider *typ.Provider, models []string, source
 }
 
 // GetModels returns models for a provider by UUID.
-// Records sourced from "api" use the provided ttl (typically 1 hour).
-// Records sourced from "template" use a longer ttl (typically 24 hours) for fallback.
+// All records use the same TTL (1 hour), regardless of source.
+// If multiple records exist (api + template), the most recently updated is returned.
 func (ms *ModelStore) GetModels(providerUUID string, ttl time.Duration) []string {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
 	var record ProviderModelRecord
-	if err := ms.db.Where("provider_uuid = ?", providerUUID).First(&record).Error; err != nil {
+	if err := ms.db.Where("provider_uuid = ?", providerUUID).
+		Order("last_updated DESC").
+		First(&record).Error; err != nil {
 		return []string{}
 	}
 
@@ -200,6 +202,29 @@ func (ms *ModelStore) GetProviderInfo(providerUUID string) (apiBase string, last
 	}
 
 	return record.APIBase, record.LastUpdated.Format("2006-01-02 15:04:05"), true
+}
+
+// GetModelsBySource returns models for a provider by UUID, filtered by source.
+// Records are only returned if they match the source AND are within the TTL.
+func (ms *ModelStore) GetModelsBySource(providerUUID string, source ModelSource, ttl time.Duration) []string {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+
+	var record ProviderModelRecord
+	if err := ms.db.Where("provider_uuid = ? AND source = ?", providerUUID, source).First(&record).Error; err != nil {
+		return []string{}
+	}
+
+	if ttl > 0 && time.Since(record.LastUpdated) > ttl {
+		return []string{}
+	}
+
+	var models []string
+	if err := json.Unmarshal([]byte(record.Models), &models); err != nil {
+		return []string{}
+	}
+
+	return models
 }
 
 // GetModelCount returns the number of models for a provider
