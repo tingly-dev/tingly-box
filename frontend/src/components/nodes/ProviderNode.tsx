@@ -7,6 +7,7 @@ import {
 import {
     Box,
     Button,
+    Divider,
     IconButton,
     Popover,
     Stack,
@@ -243,19 +244,21 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     </Box>
                 )}
 
-                {/* Content: provider name (row 1) + model + style tags (row 2) */}
+                {/* Content: standard topLayer / divider / bottomLayer pattern */}
                 <Box
                     sx={{
                         flex: 1,
                         display: 'flex',
                         flexDirection: 'column',
+                        alignItems: 'center',
                         minWidth: 0,
-                        pl: hasPriority ? 1 : 1.5,
-                        pr: 1,
+                        py: '5px',
+                        pl: hasPriority ? 1 : '5px',
+                        pr: '5px',
                     }}
                 >
                     {!provider.provider ? (
-                        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                        <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
                             <Typography
                                 variant="body2"
                                 color="text.secondary"
@@ -266,12 +269,12 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         </Box>
                     ) : (
                         <>
-                            {/* Row 1: provider name */}
+                            {/* Top layer: provider name */}
                             <NodeTooltip
                                 title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
                                 placement="top"
                             >
-                                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                                <Box sx={{ ...NODE_LAYER_STYLES.topLayer, gap: 0.5 }}>
                                     {isProviderMissing && (
                                         <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
                                     )}
@@ -279,15 +282,17 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                         variant="body2"
                                         color={isProviderMissing ? 'warning.main' : 'text.primary'}
                                         noWrap
-                                        sx={{ ...NODE_LAYER_STYLES.typography, flex: 1, minWidth: 0, textAlign: 'center' }}
+                                        sx={{ ...NODE_LAYER_STYLES.typography, textAlign: 'center', maxWidth: '100%' }}
                                     >
                                         {providerInfo.name}
                                     </Typography>
                                 </Box>
                             </NodeTooltip>
 
-                            {/* Row 2: model name + style tag(s) inline at right */}
-                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                            <Divider sx={NODE_LAYER_STYLES.divider} />
+
+                            {/* Bottom layer: model name + style tag(s) */}
+                            <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer }}>
                                 <Typography
                                     variant="body2"
                                     noWrap
