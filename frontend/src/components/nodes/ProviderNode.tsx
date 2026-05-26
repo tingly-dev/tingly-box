@@ -303,7 +303,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                         color: provider.model ? 'text.secondary' : 'text.disabled',
                                         flex: 1,
                                         minWidth: 0,
-                                        textAlign: 'center',
                                     }}
                                 >
                                     {provider.model || 'select model'}
