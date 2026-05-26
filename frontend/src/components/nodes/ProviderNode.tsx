@@ -222,28 +222,44 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     overflow: 'visible',
                 }}
             >
-                {/* Left column: inline priority badge */}
-                {hasPriority && (
+                {/* Left column: priority (top) + style tags (bottom) */}
+                {(hasPriority || !!provider.provider) && (
                     <Box
                         sx={{
-                            width: 32,
+                            width: 34,
                             flexShrink: 0,
                             display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
-                            justifyContent: 'center',
+                            justifyContent: hasPriority && provider.provider ? 'space-between' : 'center',
                             borderRight: '1px solid',
                             borderColor: 'divider',
+                            py: '6px',
                         }}
                     >
-                        <PriorityBadge
-                            priority={provider.priority ?? 0}
-                            onChange={onPriorityChange!}
-                            active={active}
-                        />
+                        {hasPriority && (
+                            <PriorityBadge
+                                priority={provider.priority ?? 0}
+                                onChange={onPriorityChange!}
+                                active={active}
+                            />
+                        )}
+                        {provider.provider && (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                {hasDualApiStyle ? (
+                                    <>
+                                        <ApiStyleBadge apiStyle="openai" minimal />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal />
+                                    </>
+                                ) : (
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal />
+                                )}
+                            </Box>
+                        )}
                     </Box>
                 )}
 
-                {/* Content: standard topLayer / divider / bottomLayer pattern */}
+                {/* Right column: model (top) + provider (bottom) */}
                 <Box
                     sx={{
                         flex: 1,
@@ -252,7 +268,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         alignItems: 'center',
                         minWidth: 0,
                         py: '5px',
-                        pl: hasPriority ? 1 : '5px',
+                        pl: 1,
                         pr: '5px',
                     }}
                 >
@@ -268,7 +284,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         </Box>
                     ) : (
                         <>
-                            {/* Top layer: model name */}
+                            {/* Top: model name */}
                             <NodeTooltip
                                 title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
                                 placement="top"
@@ -292,7 +308,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
 
                             <Divider sx={NODE_LAYER_STYLES.divider} />
 
-                            {/* Bottom layer: provider name + style tag(s) */}
+                            {/* Bottom: provider name */}
                             <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer }}>
                                 {isProviderMissing && (
                                     <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
@@ -301,18 +317,10 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     variant="body2"
                                     color={isProviderMissing ? 'warning.main' : 'text.secondary'}
                                     noWrap
-                                    sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, flex: 1, minWidth: 0 }}
+                                    sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, textAlign: 'center', maxWidth: '100%' }}
                                 >
                                     {providerInfo.name}
                                 </Typography>
-                                {hasDualApiStyle ? (
-                                    <>
-                                        <ApiStyleBadge apiStyle="openai" minimal />
-                                        <ApiStyleBadge apiStyle="anthropic" minimal />
-                                    </>
-                                ) : (
-                                    <ApiStyleBadge apiStyle={apiStyle} minimal />
-                                )}
                             </Box>
                         </>
                     )}
