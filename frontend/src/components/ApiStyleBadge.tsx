@@ -57,14 +57,14 @@ export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false, minimal = fal
         return (
             <Box
                 sx={{
-                    width: 16,
-                    height: 16,
+                    width: 13,
+                    height: 13,
                     borderRadius: '50%',
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
-                    fontSize: '9px',
+                    fontSize: '8px',
                     fontWeight: 700,
                     lineHeight: 1,
                     border: `1px solid ${badgeStyles.borderColor}`,
