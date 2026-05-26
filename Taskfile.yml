@@ -23,9 +23,9 @@ vars:
 
   # Submodule versions (format: "name:branch/tag/commit")
   # Example: "openai-go:tingly-dev-v3.32.0"
-  OPENAI_GO_VERSION: "tingly-dev-v3.35.0"
-  ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.41.0"
-  GO_GENAI_VERSION: "upstream-v1.56.0"
+  OPENAI_GO_VERSION: "tingly-dev-v3.37.0"
+  ANTHROPIC_SDK_GO_VERSION: "tingly-dev-v1.45.0"
+  GO_GENAI_VERSION: "upstream-v1.58.0"
 
 tasks:
   build:
@@ -279,9 +279,40 @@ tasks:
         git checkout {{.GO_GENAI_VERSION}}
         cd - > /dev/null
       - |
-        echo ""
-        echo "Submodule versions updated:"
-        task: submodule
+        echo "Updating .gitmodules with new branch versions..."
+        # Update each submodule's branch in .gitmodules
+        python3 << 'EOF'
+        import re
+        with open('.gitmodules', 'r') as f:
+            content = f.read()
+
+        # Update openai-go branch
+        content = re.sub(
+            r'(\[submodule "libs/openai-go"\]\s+path = libs/openai-go\s+url = [^\n]+\s+)branch = "[^"]+"',
+            r'\1branch = "{{.OPENAI_GO_VERSION}}"',
+            content
+        )
+
+        # Update anthropic-sdk-go branch
+        content = re.sub(
+            r'(\[submodule "libs/anthropic-sdk-go"\]\s+path = libs/anthropic-sdk-go\s+url = [^\n]+\s+)branch = "[^"]+"',
+            r'\1branch = "{{.ANTHROPIC_SDK_GO_VERSION}}"',
+            content
+        )
+
+        # Update go-genai branch
+        content = re.sub(
+            r'(\[submodule "libs/go-genai"\]\s+path = libs/go-genai\s+url = [^\n]+\s+)branch = "[^"]+"',
+            r'\1branch = "{{.GO_GENAI_VERSION}}"',
+            content
+        )
+
+        with open('.gitmodules', 'w') as f:
+            f.write(content)
+
+        print(".gitmodules updated successfully")
+        EOF
+      - task: submodule
 
   submodule:openai-go:
     summary: Update openai-go submodule to a specific version (branch/tag/commit)
