@@ -59,15 +59,21 @@ async function api(path, opts = {}) {
 
 async function seed() {
     // Providers (force=true skips the live connectivity check; token is a dummy).
-    const mk = async (name, api_base) => {
+    const mk = async (name, body_extra) => {
         const r = await api('/api/v2/providers?force=true', {
             method: 'POST',
-            body: JSON.stringify({ name, api_base, api_style: 'openai', token: 'demo-key', enabled: true }),
+            body: JSON.stringify({ name, api_style: 'openai', token: 'demo-key', enabled: true, ...body_extra }),
         });
         return r.json?.data?.uuid;
     };
-    const glm = await mk('glm', 'https://open.bigmodel.cn/api/paas/v4');
-    const ds = await mk('deepseek', 'https://api.deepseek.com/v1');
+    const glm = await mk('glm', { api_base: 'https://open.bigmodel.cn/api/paas/v4' });
+    const ds  = await mk('deepseek', { api_base: 'https://api.deepseek.com/v1' });
+    // fusion: supports both OpenAI and Anthropic API styles (shows dual O+A tags)
+    const fusion = await mk('fusion', {
+        api_base: 'https://fusion-proxy.example.com/v1',
+        api_base_openai: 'https://fusion-proxy.example.com/v1',
+        api_base_anthropic: 'https://fusion-proxy.example.com/anthropic',
+    });
     if (!glm || !ds) throw new Error('provider seeding failed: ' + JSON.stringify({ glm, ds }));
 
     const rule = (body) => api('/api/v1/rule', { method: 'POST', body: JSON.stringify(body) });
@@ -78,8 +84,8 @@ async function seed() {
     await rule({
         scenario: SCENARIO, request_model: 'claude-sonnet-4-6', description: 'Sonnet with smart routing', active: true,
         services: [
-            { provider: glm, model: 'glm-4.6', weight: 1, active: true },
-            { provider: ds, model: 'deepseek-chat', weight: 1, active: true },
+            { provider: glm,    model: 'glm-4.6',      weight: 1, active: true },
+            { provider: ds,     model: 'deepseek-chat', weight: 1, active: true },
         ],
         smart_enabled: true,
         smart_routing: [{
@@ -89,10 +95,10 @@ async function seed() {
         }],
     });
     await rule({
-        scenario: SCENARIO, request_model: 'claude-haiku-4-5', description: 'Haiku to Deepseek', active: true,
-        services: [{ provider: ds, model: 'deepseek-chat', weight: 1, active: true }],
+        scenario: SCENARIO, request_model: 'claude-haiku-4-5', description: 'Haiku via fusion proxy', active: true,
+        services: [{ provider: fusion || ds, model: 'claude-haiku-4-5', weight: 1, active: true }],
     });
-    console.log('seeded providers + 3 rules (incl. one smart-routing)');
+    console.log('seeded providers + 3 rules (incl. one smart-routing, one fusion)');
 }
 
 async function shoot(browser, mode) {

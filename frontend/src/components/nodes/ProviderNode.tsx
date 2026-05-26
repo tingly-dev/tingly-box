@@ -1,7 +1,6 @@
 import {
     Delete as DeleteIcon,
     Warning as WarningIcon,
-    MoreVert as MoreVertIcon,
     PlayArrow as PlayIcon,
     HorizontalRule as HorizontalRuleIcon,
 } from '@/components/icons';
@@ -14,7 +13,7 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
@@ -24,8 +23,7 @@ import { ProviderNodeContainer, NODE_LAYER_STYLES } from './styles.tsx';
 import ProviderNodeContent from './ProviderNodeContent.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 
-// Action button container
-const ActionButtonsBox = styled(Box)(({ theme }) => ({
+const ActionButtonsBox = styled(Box)(() => ({
     position: 'absolute',
     top: 4,
     right: 4,
@@ -35,24 +33,49 @@ const ActionButtonsBox = styled(Box)(({ theme }) => ({
     transition: 'opacity 0.2s',
 }));
 
-const ProviderNodeWrapper = styled(Box)(({ theme }) => ({
+const ProviderNodeWrapper = styled(Box)(() => ({
     position: 'relative',
-    '&:hover .action-buttons': {
-        opacity: 1,
-    }
+    '&:hover .action-buttons': { opacity: 1 },
 }));
 
-// Helper function to get provider info from providersData
+// Inline priority disk — lives inside the left column of the node, no overflow.
+const PriorityDisk = styled(Box, {
+    shouldForwardProp: (p) => p !== 'hasPriority' && p !== 'active',
+})<{ hasPriority: boolean; active: boolean }>(({ theme, hasPriority, active }) => ({
+    width: 22,
+    height: 22,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.72rem',
+    fontWeight: 700,
+    lineHeight: 1,
+    userSelect: 'none',
+    cursor: active ? 'pointer' : 'not-allowed',
+    transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
+    ...(hasPriority
+        ? {
+              border: '1px solid',
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              borderColor: theme.palette.primary.main,
+              '&:hover': active ? { backgroundColor: theme.palette.primary.dark, borderColor: theme.palette.primary.dark } : {},
+          }
+        : {
+              border: '1.5px solid',
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.secondary,
+              borderColor: theme.palette.text.disabled,
+              '&:hover': active ? { borderColor: theme.palette.primary.main, color: theme.palette.primary.main } : {},
+          }),
+}));
+
 const getProviderInfo = (providerUuid: string, providersData: Provider[]) => {
     const provider = providersData.find(p => p.uuid === providerUuid);
-    return {
-        name: provider?.name || 'Unknown Provider',
-        exists: !!provider,
-        provider
-    };
+    return { name: provider?.name || 'Unknown Provider', exists: !!provider, provider };
 };
 
-// Provider Node Component Props
 export interface ProviderNodeComponentProps {
     provider: ConfigProvider;
     apiStyle: string;
@@ -60,77 +83,8 @@ export interface ProviderNodeComponentProps {
     active: boolean;
     onDelete: () => void;
     onNodeClick: () => void;
-    /** Called when the user edits this service's priority. Omit to hide the badge. */
     onPriorityChange?: (priority: number) => void;
 }
-
-// Clickable priority badge anchored to the top-left corner of the node.
-//
-// Implementation note: this mirrors the existing SmartOpNode index badge
-// — a styled `Box` rather than a `Button`. When a `Button` is wrapped in
-// `Tooltip`, MUI injects a `<span>` anchor that sizes to the rendered
-// flow of its child; an absolutely-positioned button has zero flow size,
-// so the span's hit region collapses and the visually-overflowing
-// portion of the badge becomes unresponsive to hover/click. Using a
-// `Box` with its own onClick and putting the `position: absolute` on a
-// non-Tooltip wrapper keeps the visible disk and the hit region in sync.
-const PriorityBadgeAnchor = styled(Box)({
-    position: 'absolute',
-    top: -10,
-    left: -10,
-    width: 26,
-    height: 26,
-    zIndex: 3,
-    pointerEvents: 'auto',
-});
-
-const PriorityBadgeDisk = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'hasPriority' && prop !== 'active',
-})<{ hasPriority: boolean; active: boolean }>(({ theme, hasPriority, active }) => ({
-    width: '100%',
-    height: '100%',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '0.8rem',
-    fontWeight: 700,
-    lineHeight: 1,
-    border: '1px solid',
-    boxShadow: theme.shadows[2],
-    userSelect: 'none',
-    cursor: active ? 'pointer' : 'not-allowed',
-    transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
-    ...(hasPriority
-        ? {
-              backgroundColor: theme.palette.primary.main,
-              color: theme.palette.primary.contrastText,
-              borderColor: theme.palette.primary.main,
-              '&:hover': active
-                  ? {
-                        backgroundColor: theme.palette.primary.dark,
-                        borderColor: theme.palette.primary.dark,
-                    }
-                  : {},
-          }
-        : {
-              // Slightly lifted surface + 1.5px text.disabled border so the
-              // disk stays legible against both the node card (light) and the
-              // dark Paper surface where a thin `divider` collapses into
-              // invisibility. Without this lift the no-priority badge merges
-              // into the node card in dark mode.
-              border: '1.5px solid',
-              backgroundColor: theme.palette.background.paper,
-              color: theme.palette.text.secondary,
-              borderColor: theme.palette.text.disabled,
-              '&:hover': active
-                  ? {
-                        borderColor: theme.palette.primary.main,
-                        color: theme.palette.primary.main,
-                    }
-                  : {},
-          }),
-}));
 
 interface PriorityBadgeProps {
     priority: number;
@@ -140,7 +94,7 @@ interface PriorityBadgeProps {
 
 const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, active }) => {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-    const [draft, setDraft] = useState<string>(String(priority || ''));
+    const [draft, setDraft] = useState(String(priority || ''));
 
     const open = (e: React.MouseEvent<HTMLElement>) => {
         e.stopPropagation();
@@ -148,33 +102,28 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
         setAnchor(e.currentTarget);
     };
     const close = () => setAnchor(null);
-
     const commit = () => {
         const parsed = parseInt(draft, 10);
         const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-        if (next !== priority) {
-            onChange(next);
-        }
+        if (next !== priority) onChange(next);
         close();
     };
 
     const tooltip = priority > 0
         ? `Priority ${priority} (higher = tried first). Click to change.`
-        : 'No priority set. Click to assign a priority (higher = tried first).';
+        : 'No priority set. Click to assign a priority.';
 
     return (
         <>
-            <PriorityBadgeAnchor>
-                <NodeTooltip title={tooltip} placement="left">
-                    <PriorityBadgeDisk
-                        hasPriority={priority > 0}
-                        active={active}
-                        onClick={active ? open : undefined}
-                    >
-                        {priority > 0 ? String(priority) : <HorizontalRuleIcon sx={{ fontSize: 15 }} />}
-                    </PriorityBadgeDisk>
-                </NodeTooltip>
-            </PriorityBadgeAnchor>
+            <NodeTooltip title={tooltip} placement="left">
+                <PriorityDisk
+                    hasPriority={priority > 0}
+                    active={active}
+                    onClick={active ? open : undefined}
+                >
+                    {priority > 0 ? String(priority) : <HorizontalRuleIcon sx={{ fontSize: 13 }} />}
+                </PriorityDisk>
+            </NodeTooltip>
             <Popover
                 open={Boolean(anchor)}
                 anchorEl={anchor}
@@ -183,27 +132,20 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                 onClick={(e) => e.stopPropagation()}
             >
                 <Box sx={{ p: 1.5, width: 220 }}>
-                    <Typography variant="caption" color="text.secondary">
-                        Priority
-                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Priority</Typography>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                         <TextField
                             type="number"
                             size="small"
                             value={draft}
                             onChange={(e) => setDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') commit();
-                                if (e.key === 'Escape') close();
-                            }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') close(); }}
                             inputProps={{ min: 0, step: 1 }}
                             autoFocus
                             fullWidth
                             placeholder="0 = unset"
                         />
-                        <Button size="small" variant="contained" onClick={commit}>
-                            Set
-                        </Button>
+                        <Button size="small" variant="contained" onClick={commit}>Set</Button>
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
                         Higher number runs first. Same number = parallel tier.
@@ -214,7 +156,6 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
     );
 };
 
-// Provider Node Component for Graph View
 export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     provider,
     apiStyle,
@@ -231,50 +172,27 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
 
     const providerInfo = getProviderInfo(provider.provider, providersData);
     const isProviderMissing = provider.provider && !providerInfo.exists;
-
-    const hasDualApiStyle = !!(
-        providerInfo.provider?.api_base_openai && providerInfo.provider?.api_base_anthropic
-    );
+    const hasDualApiStyle = !!(providerInfo.provider?.api_base_openai && providerInfo.provider?.api_base_anthropic);
     const apiStyleLabel = hasDualApiStyle ? 'openai / anthropic' : apiStyle;
 
     const identityTooltip = (() => {
-        if (isProviderMissing) {
-            return 'Provider not found. Please refresh the page or re-import the provider.';
-        }
+        if (isProviderMissing) return 'Provider not found. Please refresh or re-import.';
         if (!provider.provider) return 'Select Provider';
         const modelLine = provider.model ? `Model: ${provider.model}` : 'Model: (select model)';
         const styleLine = apiStyleLabel ? `API Style: ${apiStyleLabel}` : '';
-        return [`Provider: ${providerInfo.name}`, modelLine, styleLine]
-            .filter(Boolean)
-            .join('\n');
+        return [`Provider: ${providerInfo.name}`, modelLine, styleLine].filter(Boolean).join('\n');
     })();
 
-    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-        event.stopPropagation();
-        setMenuAnchorEl(event.currentTarget);
-    };
+    const handleMenuClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setMenuAnchorEl(e.currentTarget); };
+    const handleMenuClose = () => setMenuAnchorEl(null);
+    const handleDelete = () => { handleMenuClose(); onDelete(); };
+    const handleProbeClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setProbeAnchorEl(e.currentTarget); };
+    const handleProbeClose = () => setProbeAnchorEl(null);
 
-    const handleMenuClose = () => {
-        setMenuAnchorEl(null);
-    };
-
-    const handleDelete = () => {
-        handleMenuClose();
-        onDelete();
-    };
-
-    const handleProbeClick = (event: React.MouseEvent<HTMLElement>) => {
-        event.stopPropagation();
-        setProbeAnchorEl(event.currentTarget);
-    };
-
-    const handleProbeClose = () => {
-        setProbeAnchorEl(null);
-    };
+    const hasPriority = !!onPriorityChange;
 
     return (
         <ProviderNodeWrapper>
-            {/* Delete Menu */}
             <ProviderNodeContent
                 menuAnchorEl={menuAnchorEl}
                 menuOpen={menuOpen}
@@ -282,7 +200,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 onDelete={handleDelete}
             />
 
-            {/* Probe Menu */}
             {provider.provider && providerInfo.exists && (
                 <ProbeV2Menu
                     anchorEl={probeAnchorEl}
@@ -295,77 +212,128 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 />
             )}
 
-            <ProviderNodeContainer onClick={onNodeClick} sx={{ cursor: active ? 'pointer' : 'default', display: 'flex', flexDirection: 'column' }}>
-                {onPriorityChange && (
-                    <PriorityBadge
-                        priority={provider.priority ?? 0}
-                        onChange={onPriorityChange}
-                        active={active}
-                    />
-                )}
-                {!provider.provider ? (
-                    /* Placeholder state */
-                    <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}
-                        >
-                            Select Provider
-                        </Typography>
+            <ProviderNodeContainer
+                onClick={onNodeClick}
+                sx={{
+                    cursor: active ? 'pointer' : 'default',
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'stretch',
+                    p: 0,
+                    overflow: 'visible',
+                }}
+            >
+                {/* Left column: inline priority badge */}
+                {hasPriority && (
+                    <Box
+                        sx={{
+                            width: 32,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRight: '1px solid',
+                            borderColor: 'divider',
+                        }}
+                    >
+                        <PriorityBadge
+                            priority={provider.priority ?? 0}
+                            onChange={onPriorityChange!}
+                            active={active}
+                        />
                     </Box>
-                ) : (
-                    <>
-                        {/* Row 1: Provider name + style tag(s) */}
-                        <NodeTooltip
-                            title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
-                            placement="top"
-                        >
-                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', px: 1, gap: 0.75, width: '100%', minWidth: 0 }}>
-                                {isProviderMissing && (
-                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
-                                )}
-                                <Typography
-                                    variant="body2"
-                                    color={isProviderMissing ? 'warning.main' : 'text.primary'}
-                                    noWrap
-                                    sx={{ ...NODE_LAYER_STYLES.typography, flex: 1, minWidth: 0 }}
-                                >
-                                    {providerInfo.name}
-                                </Typography>
-                                {hasDualApiStyle ? (
-                                    <Box sx={{ display: 'flex', gap: 0.25, flexShrink: 0 }}>
-                                        <ApiStyleBadge apiStyle="openai" minimal />
-                                        <ApiStyleBadge apiStyle="anthropic" minimal />
-                                    </Box>
-                                ) : (
-                                    <ApiStyleBadge apiStyle={apiStyle} minimal />
-                                )}
-                            </Box>
-                        </NodeTooltip>
+                )}
 
-                        {/* Row 2: Model name */}
-                        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', px: 1, width: '100%', minWidth: 0 }}>
+                {/* Content: provider name (row 1) + model (row 2) */}
+                <Box
+                    sx={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minWidth: 0,
+                        pl: hasPriority ? 1 : 1.5,
+                        // leave room on the right so text doesn't run into the style tag area
+                        pr: provider.provider ? (hasDualApiStyle ? 1 : 0.5) : 1,
+                    }}
+                >
+                    {!provider.provider ? (
+                        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                             <Typography
                                 variant="body2"
-                                noWrap
-                                sx={{
-                                    ...NODE_LAYER_STYLES.typography,
-                                    fontWeight: 400,
-                                    fontStyle: !provider.model ? 'italic' : 'normal',
-                                    color: provider.model ? 'text.secondary' : 'text.disabled',
-                                    width: '100%',
-                                }}
+                                color="text.secondary"
+                                sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}
                             >
-                                {provider.model || 'select model'}
+                                Select Provider
                             </Typography>
                         </Box>
-                    </>
+                    ) : (
+                        <>
+                            {/* Row 1: provider name */}
+                            <NodeTooltip
+                                title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
+                                placement="top"
+                            >
+                                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                                    {isProviderMissing && (
+                                        <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                                    )}
+                                    <Typography
+                                        variant="body2"
+                                        color={isProviderMissing ? 'warning.main' : 'text.primary'}
+                                        noWrap
+                                        sx={{ ...NODE_LAYER_STYLES.typography, flex: 1, minWidth: 0 }}
+                                    >
+                                        {providerInfo.name}
+                                    </Typography>
+                                </Box>
+                            </NodeTooltip>
+
+                            {/* Row 2: model name */}
+                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                                <Typography
+                                    variant="body2"
+                                    noWrap
+                                    sx={{
+                                        ...NODE_LAYER_STYLES.typography,
+                                        fontWeight: 400,
+                                        fontStyle: !provider.model ? 'italic' : 'normal',
+                                        color: provider.model ? 'text.secondary' : 'text.disabled',
+                                        flex: 1,
+                                        minWidth: 0,
+                                    }}
+                                >
+                                    {provider.model || 'select model'}
+                                </Typography>
+                            </Box>
+                        </>
+                    )}
+                </Box>
+
+                {/* Style tag(s): bottom-right corner, bleeding out */}
+                {provider.provider && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            bottom: -8,
+                            right: -8,
+                            display: 'flex',
+                            gap: '2px',
+                            zIndex: 2,
+                        }}
+                    >
+                        {hasDualApiStyle ? (
+                            <>
+                                <ApiStyleBadge apiStyle="openai" minimal />
+                                <ApiStyleBadge apiStyle="anthropic" minimal />
+                            </>
+                        ) : (
+                            <ApiStyleBadge apiStyle={apiStyle} minimal />
+                        )}
+                    </Box>
                 )}
 
-                {/* Action Buttons - visible on hover */}
+                {/* Action buttons (hover) */}
                 <ActionButtonsBox className="action-buttons">
-                    {/* Probe Button */}
                     {provider.provider && providerInfo.exists && (
                         <NodeTooltip title="Test Provider" placement="bottom">
                             <IconButton
@@ -377,7 +345,6 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             </IconButton>
                         </NodeTooltip>
                     )}
-                    {/* Delete Button */}
                     <NodeTooltip title="Delete Provider" placement="bottom">
                         <IconButton
                             size="small"
