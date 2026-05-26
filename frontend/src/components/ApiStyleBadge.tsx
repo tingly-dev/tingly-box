@@ -1,5 +1,6 @@
 import {Box, useTheme, alpha} from '@mui/material';
 import type {SxProps, Theme} from '@mui/material';
+import { OpenAI as OpenAIIcon, Anthropic as AnthropicIcon, Google as GoogleIcon } from './BrandIcons.tsx';
 
 interface ApiStyleBadgeProps {
     apiStyle: string;
@@ -54,26 +55,12 @@ export const ApiStyleBadge = ({apiStyle, sx = {}, compact = false, minimal = fal
     const badgeStyles = getBadgeStyles();
 
     if (minimal) {
+        const BrandIcon = isOpenAI ? OpenAIIcon : isAnthropic ? AnthropicIcon : GoogleIcon;
         return (
             <Box
-                sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: '50%',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    fontSize: '9px',
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    border: `1px solid ${badgeStyles.borderColor}`,
-                    backgroundColor: badgeStyles.backgroundColor,
-                    color: badgeStyles.color,
-                    ...sx,
-                }}
+                sx={{ display: 'inline-flex', flexShrink: 0, ...sx }}
             >
-                {letter}
+                <BrandIcon size={14} />
             </Box>
         );
     }
