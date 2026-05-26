@@ -268,52 +268,52 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         </Box>
                     ) : (
                         <>
-                            {/* Top layer: provider name */}
+                            {/* Top layer: model name + style tag(s) */}
                             <NodeTooltip
                                 title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
                                 placement="top"
                             >
                                 <Box sx={{ ...NODE_LAYER_STYLES.topLayer, gap: 0.5 }}>
-                                    {isProviderMissing && (
-                                        <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
-                                    )}
                                     <Typography
                                         variant="body2"
-                                        color={isProviderMissing ? 'warning.main' : 'text.primary'}
                                         noWrap
-                                        sx={{ ...NODE_LAYER_STYLES.typography, textAlign: 'center', maxWidth: '100%' }}
+                                        sx={{
+                                            ...NODE_LAYER_STYLES.typography,
+                                            textAlign: 'center',
+                                            flex: 1,
+                                            minWidth: 0,
+                                            fontStyle: !provider.model ? 'italic' : 'normal',
+                                            color: provider.model ? 'text.primary' : 'text.disabled',
+                                        }}
                                     >
-                                        {providerInfo.name}
+                                        {provider.model || 'select model'}
                                     </Typography>
+                                    {hasDualApiStyle ? (
+                                        <>
+                                            <ApiStyleBadge apiStyle="openai" minimal />
+                                            <ApiStyleBadge apiStyle="anthropic" minimal />
+                                        </>
+                                    ) : (
+                                        <ApiStyleBadge apiStyle={apiStyle} minimal />
+                                    )}
                                 </Box>
                             </NodeTooltip>
 
                             <Divider sx={NODE_LAYER_STYLES.divider} />
 
-                            {/* Bottom layer: model name + style tag(s) */}
+                            {/* Bottom layer: provider name */}
                             <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer }}>
+                                {isProviderMissing && (
+                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                                )}
                                 <Typography
                                     variant="body2"
+                                    color={isProviderMissing ? 'warning.main' : 'text.secondary'}
                                     noWrap
-                                    sx={{
-                                        ...NODE_LAYER_STYLES.typography,
-                                        fontWeight: 400,
-                                        fontStyle: !provider.model ? 'italic' : 'normal',
-                                        color: provider.model ? 'text.secondary' : 'text.disabled',
-                                        flex: 1,
-                                        minWidth: 0,
-                                    }}
+                                    sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, textAlign: 'center', flex: 1, minWidth: 0 }}
                                 >
-                                    {provider.model || 'select model'}
+                                    {providerInfo.name}
                                 </Typography>
-                                {hasDualApiStyle ? (
-                                    <>
-                                        <ApiStyleBadge apiStyle="openai" minimal />
-                                        <ApiStyleBadge apiStyle="anthropic" minimal />
-                                    </>
-                                ) : (
-                                    <ApiStyleBadge apiStyle={apiStyle} minimal />
-                                )}
                             </Box>
                         </>
                     )}
