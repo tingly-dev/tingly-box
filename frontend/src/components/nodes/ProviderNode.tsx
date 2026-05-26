@@ -213,79 +213,43 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
 
             <ProviderNodeContainer
                 onClick={onNodeClick}
-                sx={{
-                    cursor: active ? 'pointer' : 'default',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'stretch',
-                    p: 0,
-                    overflow: 'visible',
-                }}
+                sx={{ cursor: active ? 'pointer' : 'default' }}
             >
                 {!provider.provider ? (
-                    /* No provider selected: single centred placeholder */
                     <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
-                        <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}
-                        >
+                        <Typography variant="body2" color="text.secondary"
+                            sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}>
                             Select Provider
                         </Typography>
                     </Box>
                 ) : (
                     <>
-                        {/* Top row: priority cell + model cell */}
-                        <NodeTooltip
-                            title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>}
-                            placement="top"
-                        >
-                            <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', flex: 1 }}>
-                                {/* Top-left: priority */}
-                                <Box sx={{
-                                    width: 34, flexShrink: 0,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    borderRight: '1px solid', borderColor: 'divider',
+                        {/* Row 1: priority (left, optional) + model */}
+                        <NodeTooltip title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>} placement="top">
+                            <Box sx={{ ...NODE_LAYER_STYLES.topLayer, gap: 0.75 }}>
+                                {hasPriority && (
+                                    <PriorityBadge
+                                        priority={provider.priority ?? 0}
+                                        onChange={onPriorityChange!}
+                                        active={active}
+                                    />
+                                )}
+                                <Typography variant="body2" noWrap sx={{
+                                    ...NODE_LAYER_STYLES.typography,
+                                    flex: 1, minWidth: 0, textAlign: 'center',
+                                    fontStyle: !provider.model ? 'italic' : 'normal',
+                                    color: provider.model ? 'text.primary' : 'text.disabled',
                                 }}>
-                                    {hasPriority && (
-                                        <PriorityBadge
-                                            priority={provider.priority ?? 0}
-                                            onChange={onPriorityChange!}
-                                            active={active}
-                                        />
-                                    )}
-                                </Box>
-                                {/* Top-right: model name */}
-                                <Box sx={{ ...NODE_LAYER_STYLES.topLayer, pl: 1, pr: '5px' }}>
-                                    <Typography
-                                        variant="body2"
-                                        noWrap
-                                        sx={{
-                                            ...NODE_LAYER_STYLES.typography,
-                                            textAlign: 'center',
-                                            maxWidth: '100%',
-                                            fontStyle: !provider.model ? 'italic' : 'normal',
-                                            color: provider.model ? 'text.primary' : 'text.disabled',
-                                        }}
-                                    >
-                                        {provider.model || 'select model'}
-                                    </Typography>
-                                </Box>
+                                    {provider.model || 'select model'}
+                                </Typography>
                             </Box>
                         </NodeTooltip>
 
-                        {/* Full-width divider */}
-                        <Divider sx={{ width: '100%' }} />
+                        <Divider sx={NODE_LAYER_STYLES.divider} />
 
-                        {/* Bottom row: style tags cell + provider cell */}
-                        <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'stretch', ...NODE_LAYER_STYLES.bottomLayer, p: 0 }}>
-                            {/* Bottom-left: style tags */}
-                            <Box sx={{
-                                width: 34, flexShrink: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                flexDirection: 'column', gap: '2px',
-                                borderRight: '1px solid', borderColor: 'divider',
-                            }}>
+                        {/* Row 2: style tags (left) + provider name */}
+                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, gap: 0.75 }}>
+                            <Box sx={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                                 {hasDualApiStyle ? (
                                     <>
                                         <ApiStyleBadge apiStyle="openai" minimal />
@@ -295,20 +259,14 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     <ApiStyleBadge apiStyle={apiStyle} minimal />
                                 )}
                             </Box>
-                            {/* Bottom-right: provider name */}
-                            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', pl: 1, pr: '5px', minWidth: 0 }}>
-                                {isProviderMissing && (
-                                    <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0, mr: 0.5 }} />
-                                )}
-                                <Typography
-                                    variant="body2"
-                                    color={isProviderMissing ? 'warning.main' : 'text.secondary'}
-                                    noWrap
-                                    sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, flex: 1, minWidth: 0 }}
-                                >
-                                    {providerInfo.name}
-                                </Typography>
-                            </Box>
+                            {isProviderMissing && (
+                                <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0 }} />
+                            )}
+                            <Typography variant="body2" noWrap
+                                color={isProviderMissing ? 'warning.main' : 'text.secondary'}
+                                sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, flex: 1, minWidth: 0 }}>
+                                {providerInfo.name}
+                            </Typography>
                         </Box>
                     </>
                 )}
