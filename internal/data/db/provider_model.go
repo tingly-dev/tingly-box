@@ -123,19 +123,14 @@ func (ms *ModelStore) SaveModels(provider *typ.Provider, models []string, source
 }
 
 // GetModels returns models for a provider by UUID.
-// Records sourced from "api" expire after ttl. Records sourced from "template"
-// are never cached — they always return empty so the caller retries the real API.
+// Records sourced from "api" use the provided ttl (typically 1 hour).
+// Records sourced from "template" use a longer ttl (typically 24 hours) for fallback.
 func (ms *ModelStore) GetModels(providerUUID string, ttl time.Duration) []string {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
 	var record ProviderModelRecord
 	if err := ms.db.Where("provider_uuid = ?", providerUUID).First(&record).Error; err != nil {
-		return []string{}
-	}
-
-	// Template fallback data is not cached — always re-attempt the provider API.
-	if record.Source == ModelSourceTemplate {
 		return []string{}
 	}
 

@@ -278,6 +278,16 @@ type ServerActionResponse struct {
 	Message string `json:"message" example:"Server stopped successfully"`
 }
 
+// ModelCacheSource identifies where the model list was sourced from
+type ModelCacheSource string
+
+const (
+	ModelCacheSourceDB       ModelCacheSource = "db"
+	ModelCacheSourceAPI      ModelCacheSource = "api"
+	ModelCacheSourceTemplate ModelCacheSource = "template"
+	ModelCacheSourceVModel   ModelCacheSource = "vmodel"
+)
+
 // ProviderModelInfo represents model information for a specific provider
 type ProviderModelInfo struct {
 	Models      []string             `json:"models" example:"gpt-3.5-turbo,gpt-4"`
@@ -285,6 +295,8 @@ type ProviderModelInfo struct {
 	CustomModel []string             `json:"custom_model" example:"custom-gpt-model"`
 	APIBase     string               `json:"api_base" example:"https://api.openai.com/v1"`
 	LastUpdated string               `json:"last_updated,omitempty" example:"2024-01-15 10:30:00"`
+	Source      ModelCacheSource     `json:"source,omitempty" example:"db"`
+	ExpiresAt   time.Time            `json:"expiresAt,omitempty" example:"2024-01-15T11:30:00Z"`
 	Quota       *quota.ProviderUsage `json:"quota,omitempty"` // Quota information for this provider
 }
 

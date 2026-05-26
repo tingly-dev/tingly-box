@@ -2,87 +2,41 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '../services/api';
 import type { ProviderModelData, ProviderModelsDataByUuid } from '../types/provider';
 import { useNewModels } from './useNewModels';
-import { useLocalStorage } from './useLocalStorage';
 import { createEventSystem } from '../utils/eventSystem';
 import { usePageVisibility } from './usePageVisibility';
 
-// Local storage key for refresh timestamps
-const REFRESH_TIMESTAMPS_KEY = 'tingly_provider_refresh_timestamps';
-const AUTO_REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-const DEFAULT_TIMESTAMPS = {};
-
-// Type for refresh timestamps
-type RefreshTimestamps = { [providerUuid: string]: string };
+// Event types for cross-tab model cache synchronization
+type ModelCacheEvent =
+  | { type: 'provider_models_update'; providerUuid: string; models: ProviderModelData | null }
+  | { type: 'refresh_trigger'; providerUuid: string }
+  | { type: 'cache_invalidated'; providerUuid: string; reason: 'ttl_expired' | 'manual_refresh' | 'provider_deleted' };
 
 // Event system for provider models updates — crossTab:true propagates to other browser tabs
-const providerModelsEvent = createEventSystem<{ providerUuid: string; models: ProviderModelData | null }>(
-    'tingly_provider_models_update',
-    true
-);
+const modelCacheEvent = createEventSystem<ModelCacheEvent>('tingly_model_cache', true);
 
 // Export event name for backward compatibility
-export const PROVIDER_MODELS_UPDATE_EVENT = providerModelsEvent.eventName;
-
-// Helper functions to manage refresh timestamps (now using useLocalStorage internally)
-export const loadRefreshTimestamps = (): RefreshTimestamps => {
-    try {
-        const stored = localStorage.getItem(REFRESH_TIMESTAMPS_KEY);
-        return stored ? JSON.parse(stored) : {};
-    } catch (error) {
-        console.error('Failed to load refresh timestamps:', error);
-        return {};
-    }
-};
-
-export const saveRefreshTimestamp = (providerUuid: string, timestamp: string): boolean => {
-    try {
-        const timestamps = loadRefreshTimestamps();
-        timestamps[providerUuid] = timestamp;
-        localStorage.setItem(REFRESH_TIMESTAMPS_KEY, JSON.stringify(timestamps));
-        return true;
-    } catch (error) {
-        console.error('Failed to save refresh timestamp:', error);
-        return false;
-    }
-};
-
-export const shouldAutoRefresh = (providerUuid: string): boolean => {
-    const timestamps = loadRefreshTimestamps();
-    const lastRefresh = timestamps[providerUuid];
-
-    if (!lastRefresh) {
-        return true; // Never refreshed, should auto-refresh
-    }
-
-    const now = Date.now();
-    const lastRefreshTime = new Date(lastRefresh).getTime();
-    return now - lastRefreshTime >= AUTO_REFRESH_INTERVAL;
-};
-
-// Helper to dispatch provider models update event (backward compatibility)
-export const dispatchProviderModelsUpdate = (providerUuid: string, models: ProviderModelData | null) => {
-    providerModelsEvent.dispatch({ providerUuid, models });
-};
-
-// Helper to listen for provider models updates (backward compatibility)
-export const listenForProviderModelsUpdates = (
-    callback: (providerUuid: string, models: ProviderModelData | null) => void
-) => {
-    return providerModelsEvent.listen(({ providerUuid, models }) => {
-        callback(providerUuid, models);
-    });
-};
+export const MODEL_CACHE_EVENT = modelCacheEvent.eventName;
+// Legacy event name (deprecated)
+export const PROVIDER_MODELS_UPDATE_EVENT = 'tingly_provider_models_update';
 
 // Custom hook to manage provider models
 export const useProviderModels = () => {
     const [providerModels, setProviderModels] = useState<ProviderModelsDataByUuid>({});
+    const [cacheMeta, setCacheMeta] = useState<{ [providerUuid: string]: { expiresAt: string; source: string } }>({});
     const [refreshingProviders, setRefreshingProviders] = useState<Set<string>>(new Set());
     const { detectAndStoreNewModels } = useNewModels();
 
-    // Fetch models for a provider (GET - cached data, auto-refresh if empty or 24h passed)
+    // Check if cached data is still valid based on server-provided expiresAt
+    const isCacheValid = useCallback((providerUuid: string): boolean => {
+        const meta = cacheMeta[providerUuid];
+        if (!meta || !meta.expiresAt) return false;
+        return new Date(meta.expiresAt) > new Date();
+    }, [cacheMeta]);
+
+    // Fetch models for a provider (uses server-side caching)
     const fetchModels = useCallback(async (providerUuid: string): Promise<ProviderModelData | null> => {
-        // Return cached data if available
-        if (providerModels[providerUuid]) {
+        // Return cached data if valid
+        if (isCacheValid(providerUuid) && providerModels[providerUuid]) {
             return providerModels[providerUuid];
         }
 
@@ -94,62 +48,32 @@ export const useProviderModels = () => {
         setRefreshingProviders(prev => new Set(prev).add(providerUuid));
 
         try {
-            // Check if we should auto-refresh (24h passed or never refreshed)
-            const needAutoRefresh = shouldAutoRefresh(providerUuid);
-
-            // If auto-refresh is needed, fetch from provider API directly
-            if (needAutoRefresh) {
-                const oldModels = providerModels[providerUuid]?.models || [];
-                const refreshResult = await api.updateProviderModelsByUUID(providerUuid);
-
-                if (refreshResult.success && refreshResult.data) {
-                    // Detect and store new models
-                    const newModelsList = refreshResult.data.models || [];
-                    detectAndStoreNewModels(providerUuid, oldModels, newModelsList);
-
-                    // Update refresh timestamp
-                    saveRefreshTimestamp(providerUuid, new Date().toISOString());
-
-                    setProviderModels(prev => ({
-                        ...prev,
-                        [providerUuid]: refreshResult.data!
-                    }));
-                    providerModelsEvent.dispatch({ providerUuid, models: refreshResult.data });
-                    return refreshResult.data;
-                }
-            }
-
-            // Try GET for cached data
             const result = await api.getProviderModelsByUUID(providerUuid);
 
             if (result.success && result.data) {
-                // If GET returns empty list, auto-refresh from provider API
-                if (!result.data.models || result.data.models.length === 0) {
-                    const oldModels = providerModels[providerUuid]?.models || [];
-                    const refreshResult = await api.updateProviderModelsByUUID(providerUuid);
-                    if (refreshResult.success && refreshResult.data) {
-                        // Detect and store new models
-                        const newModelsList = refreshResult.data.models || [];
-                        detectAndStoreNewModels(providerUuid, oldModels, newModelsList);
+                const data = result.data;
 
-                        // Update refresh timestamp
-                        saveRefreshTimestamp(providerUuid, new Date().toISOString());
+                // Update cache metadata from server response
+                setCacheMeta(prev => ({
+                    ...prev,
+                    [providerUuid]: {
+                        expiresAt: data.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                        source: data.source || 'unknown',
+                    },
+                }));
 
-                        setProviderModels(prev => ({
-                            ...prev,
-                            [providerUuid]: refreshResult.data!
-                        }));
-                        providerModelsEvent.dispatch({ providerUuid, models: refreshResult.data });
-                        return refreshResult.data;
-                    }
-                } else {
-                    setProviderModels(prev => ({
-                        ...prev,
-                        [providerUuid]: result.data!
-                    }));
-                    providerModelsEvent.dispatch({ providerUuid, models: result.data });
-                    return result.data;
-                }
+                setProviderModels(prev => ({
+                    ...prev,
+                    [providerUuid]: data
+                }));
+
+                modelCacheEvent.dispatch({
+                    type: 'provider_models_update',
+                    providerUuid,
+                    models: data
+                });
+
+                return data;
             }
         } catch (error) {
             console.error(`Failed to fetch models for provider ${providerUuid}:`, error);
@@ -162,7 +86,7 @@ export const useProviderModels = () => {
         }
 
         return null;
-    }, [providerModels, refreshingProviders, detectAndStoreNewModels]);
+    }, [providerModels, cacheMeta, refreshingProviders, isCacheValid]);
 
     // Refresh models for a provider (POST - force fetch from provider API)
     const refreshModels = useCallback(async (providerUuid: string): Promise<ProviderModelData | null> => {
@@ -172,6 +96,12 @@ export const useProviderModels = () => {
         }
 
         setRefreshingProviders(prev => new Set(prev).add(providerUuid));
+
+        // Broadcast refresh start to other tabs
+        modelCacheEvent.dispatch({
+            type: 'refresh_trigger',
+            providerUuid,
+        });
 
         try {
             // Store old models for diff detection
@@ -185,14 +115,24 @@ export const useProviderModels = () => {
                 const newModelsList = result.data.models || [];
                 detectAndStoreNewModels(providerUuid, oldModels, newModelsList);
 
-                // Update refresh timestamp
-                saveRefreshTimestamp(providerUuid, new Date().toISOString());
+                // Update cache metadata from server response
+                setCacheMeta(prev => ({
+                    ...prev,
+                    [providerUuid]: {
+                        expiresAt: result.data.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                        source: result.data.source || 'api',
+                    },
+                }));
 
                 setProviderModels(prev => ({
                     ...prev,
                     [providerUuid]: result.data!
                 }));
-                providerModelsEvent.dispatch({ providerUuid, models: result.data });
+                modelCacheEvent.dispatch({
+                    type: 'provider_models_update',
+                    providerUuid,
+                    models: result.data
+                });
                 return result.data;
             }
         } catch (error) {
@@ -214,7 +154,11 @@ export const useProviderModels = () => {
             ...prev,
             [providerUuid]: models
         }));
-        providerModelsEvent.dispatch({ providerUuid, models });
+        modelCacheEvent.dispatch({
+            type: 'provider_models_update',
+            providerUuid,
+            models
+        });
     }, []);
 
     // Remove models for a provider
@@ -224,7 +168,16 @@ export const useProviderModels = () => {
             delete next[providerUuid];
             return next;
         });
-        providerModelsEvent.dispatch({ providerUuid, models: null });
+        setCacheMeta(prev => {
+            const next = { ...prev };
+            delete next[providerUuid];
+            return next;
+        });
+        modelCacheEvent.dispatch({
+            type: 'cache_invalidated',
+            providerUuid,
+            reason: 'provider_deleted'
+        });
     }, []);
 
     // Refetch all providers that have cached data
@@ -243,20 +196,43 @@ export const useProviderModels = () => {
         return providerModels[providerUuid];
     }, [providerModels]);
 
-    // Listen for updates from other components (and other tabs via BroadcastChannel)
+    // Listen for cross-tab cache events
     useEffect(() => {
-        const cleanup = providerModelsEvent.listen(({ providerUuid, models }) => {
-            if (models) {
-                setProviderModels(prev => ({
-                    ...prev,
-                    [providerUuid]: models
-                }));
-            } else {
-                setProviderModels(prev => {
-                    const next = { ...prev };
-                    delete next[providerUuid];
-                    return next;
-                });
+        const cleanup = modelCacheEvent.listen((event) => {
+            switch (event.type) {
+                case 'provider_models_update':
+                    if (event.models) {
+                        setProviderModels(prev => ({
+                            ...prev,
+                            [event.providerUuid]: event.models
+                        }));
+                    } else {
+                        setProviderModels(prev => {
+                            const next = { ...prev };
+                            delete next[event.providerUuid];
+                            return next;
+                        });
+                    }
+                    break;
+
+                case 'refresh_trigger':
+                    // Another tab is refreshing, show loading state
+                    setRefreshingProviders(prev => new Set(prev).add(event.providerUuid));
+                    break;
+
+                case 'cache_invalidated':
+                    // Clear local cache for this provider
+                    setProviderModels(prev => {
+                        const next = { ...prev };
+                        delete next[event.providerUuid];
+                        return next;
+                    });
+                    setCacheMeta(prev => {
+                        const next = { ...prev };
+                        delete next[event.providerUuid];
+                        return next;
+                    });
+                    break;
             }
         });
         return cleanup;
@@ -266,6 +242,7 @@ export const useProviderModels = () => {
     // fetchModels call re-fetches from the server instead of serving stale data.
     usePageVisibility(useCallback(() => {
         setProviderModels(prev => Object.keys(prev).length === 0 ? prev : {});
+        setCacheMeta(prev => Object.keys(prev).length === 0 ? prev : {});
     }, []));
 
     return {
