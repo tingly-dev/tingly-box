@@ -7,9 +7,7 @@ import {
     TextField,
     Menu,
     MenuItem,
-    ListItemIcon,
     ListItemText,
-    ToggleButton,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -19,23 +17,21 @@ import {
     Close as CloseIcon,
     ExpandMore as ExpandMoreIcon,
 } from '@/components/icons';
-import {
-    getRouteGraphActiveColor,
-    getRouteGraphControlFill,
-    getRouteGraphControlFillHover,
-    NODE_LAYER_STYLES,
-} from '@/components/nodes/styles';
 import { isWildcardModelName } from '@/components/rule-card/utils';
+import { notify } from '@/utils/notify';
 
 // Styled components - compact for graph use
+const HEADER_PADDING_X = 40;
+const HEADER_PADDING_Y = 6;
+
 const HeaderContainer = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
 })<{ collapsible?: boolean }>(({ collapsible }) => ({
     display: 'flex',
-    flexWrap: 'wrap',
+    flexWrap: 'wrap' as const,
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: `2px 8px`,  // Even more compact
+    padding: `${HEADER_PADDING_Y}px ${HEADER_PADDING_X}px`,
     gap: 4,
     cursor: collapsible ? 'pointer' : 'default',
     ...(collapsible && {
@@ -48,10 +44,11 @@ const HeaderContainer = styled(Box, {
 const TitleSection = styled(Box)(({ theme }) => ({
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: theme.spacing(0.5),
-    flexGrow: 1,
+    flexGrow: 0,
     minWidth: 0,
-    flexWrap: 'wrap',
+    flexWrap: 'wrap' as const,
 }));
 
 const ActionsSection = styled(Box)(({ theme }) => ({
@@ -69,69 +66,12 @@ const ModelNameText = styled(Typography)(({ theme }) => ({
     fontFamily: 'monospace',
 }));
 
-const StyledChip = styled(Chip)(({ theme }) => ({
-    height: 28,
-    borderRadius: 14,
-    fontSize: '0.75rem',
-    fontWeight: 500,
-    px: 1,
-    backgroundColor: theme.palette.mode === 'dark'
-        ? alpha(getRouteGraphActiveColor(theme), 0.12)
-        : alpha(getRouteGraphActiveColor(theme), 0.08),
-    color: getRouteGraphActiveColor(theme),
-    border: `1px solid ${alpha(getRouteGraphActiveColor(theme), 0.3)}`,
-    '&:hover': {
-        backgroundColor: alpha(getRouteGraphActiveColor(theme), 0.15),
-    },
-    transition: 'all 0.16s ease',
-}));
-
-const ModeToggleChip = styled(ToggleButton, {
-    shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active, theme }) => ({
-    ...NODE_LAYER_STYLES.toggleButton,
-    flex: 1,
-    height: 32,
-    borderColor: alpha(getRouteGraphActiveColor(theme), 0.7),
-    color: active ? theme.palette.common.white : theme.palette.text.secondary,
-    '&.Mui-selected': {
-        backgroundColor: active ? getRouteGraphControlFill(theme) : 'transparent',
-        color: active ? theme.palette.common.white : theme.palette.text.primary,
-        borderColor: active ? getRouteGraphControlFill(theme) : getRouteGraphActiveColor(theme),
-        '& .MuiSvgIcon-root': {
-            color: theme.palette.common.white,
-        },
-        '&:hover': {
-            backgroundColor: getRouteGraphControlFillHover(theme),
-        },
-    },
-    '&:hover': {
-        backgroundColor: active
-            ? getRouteGraphControlFillHover(theme)
-            : alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.16 : 0.08),
-    },
-}));
-
-// Action button types
-export interface ModelRequestHeaderAction {
-    id: string;
-    icon: React.ReactNode;
-    label: string;
-    onClick: () => void;
-    disabled?: boolean;
-    variant?: 'chip' | 'icon-button';
-    showInEdit?: boolean;
-}
-
 // Main component props
 export interface ModelRequestHeaderProps {
     modelName: string;
     onModelChange?: (newName: string) => void;
     editable?: boolean;
     active?: boolean;
-    smartEnabled?: boolean;
-    onSmartModeToggle?: () => void;
-    actions?: ModelRequestHeaderAction[];
     subtitle?: React.ReactNode;
     responseModelName?: string;  // For response model transformation
     sx?: React.CSSProperties;
@@ -148,9 +88,6 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     onModelChange,
     editable = false,
     active = true,
-    smartEnabled = false,
-    onSmartModeToggle,
-    actions = [],
     subtitle,
     responseModelName,
     sx,
@@ -188,9 +125,9 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
         }
     };
 
-    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-        event.stopPropagation();
-        setMenuAnchor(event.currentTarget);
+    const handleCopy = () => {
+        void navigator.clipboard.writeText(modelName);
+        notify.success(`Model name "${modelName}" copied to clipboard`);
     };
 
     const handleMenuClose = () => {
@@ -206,15 +143,10 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
 
     const isWildcard = isWildcardModelName(modelName);
 
-    // Filter actions based on edit mode
-    const visibleActions = actions.filter(
-        action => editMode ? action.showInEdit !== false : action.showInEdit !== true
-    );
-
     const renderTitle = () => {
         if (editMode && editable) {
             return (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', maxWidth: 300 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', maxWidth: 300 }} onClick={(e) => e.stopPropagation()}>
                     <TextField
                         value={tempValue}
                         onChange={(e) => setTempValue(e.target.value)}
@@ -240,12 +172,12 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                         }}
                     />
                     <Tooltip title="Save (Enter)">
-                        <IconButton size="small" onClick={handleSave} sx={{ p: 0.5 }}>
+                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleSave(); }} sx={{ p: 0.5 }}>
                             <CheckIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Cancel (Esc)">
-                        <IconButton size="small" onClick={handleCancel} sx={{ p: 0.5 }}>
+                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleCancel(); }} sx={{ p: 0.5 }}>
                             <CloseIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                     </Tooltip>
@@ -254,53 +186,64 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
         }
 
         return (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-                {isWildcard ? (
-                    <Chip
-                        label={
-                            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
-                                {modelName}
-                            </Typography>
-                        }
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                            '& .MuiChip-label': { fontWeight: 600 },
-                            height: 22,
-                        }}
-                    />
-                ) : (
-                    <ModelNameText
-                        onClick={() => editable && setEditMode(true)}
-                        sx={{
-                            cursor: editable ? 'pointer' : 'default',
-                            ...(editable && {
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
+                <Tooltip
+                    title={modelName
+                        ? `The model name that clients use to make requests. This will be matched against incoming API calls. Supports wildcards (* or [any]) for matching any model. (click to copy)`
+                        : 'No model specified'}
+                    placement="top"
+                >
+                    {isWildcard ? (
+                        <Chip
+                            label={
+                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                                    {modelName}
+                                </Typography>
+                            }
+                            size="small"
+                            variant="outlined"
+                            onClick={(e) => { e.stopPropagation(); handleCopy(); }}
+                            sx={{
+                                '& .MuiChip-label': { fontWeight: 600 },
+                                height: 22,
+                                cursor: 'pointer',
                                 '&:hover': {
+                                    backgroundColor: 'action.hover',
+                                },
+                            }}
+                        />
+                    ) : (
+                        <ModelNameText
+                            onClick={(e) => { e.stopPropagation(); handleCopy(); }}
+                            sx={{
+                                cursor: modelName ? 'pointer' : 'default',
+                                '&:hover': modelName ? {
                                     textDecoration: 'underline',
                                     textDecorationStyle: 'dotted',
                                     textDecorationColor: 'text.secondary',
-                                },
-                            }),
-                        }}
-                    >
-                        {modelName}
-                    </ModelNameText>
-                )}
-                {editable && !editMode && (
-                    <Tooltip title="Edit model name">
-                        <IconButton
-                            size="small"
-                            onClick={() => setEditMode(true)}
-                            sx={{
-                                opacity: 0.6,
-                                p: 0.5,
-                                '&:hover': { opacity: 1 }
+                                    color: 'primary.main',
+                                } : {},
                             }}
                         >
-                            <EditIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
-                    </Tooltip>
-                )}
+                            {modelName}
+                        </ModelNameText>
+                    )}
+                </Tooltip>
+                <Tooltip title="Edit model name">
+                    <IconButton
+                        size="small"
+                        onClick={(e) => { e.stopPropagation(); setEditMode(true); }}
+                        sx={{
+                            opacity: editable ? 0.6 : 0,
+                            p: 0.5,
+                            ml: 0.25,
+                            pointerEvents: editable ? 'auto' : 'none',
+                            '&:hover': { opacity: 1 }
+                        }}
+                    >
+                        <EditIcon sx={{ fontSize: '0.95rem' }} />
+                    </IconButton>
+                </Tooltip>
             </Box>
         );
     };
