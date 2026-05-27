@@ -16,9 +16,9 @@ import (
 // Kimi-cli impersonation values sent with every inference request.
 // Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
 const (
-	kimiCLIUserAgent = "KimiCLI/1.45.0"
+	kimiCLIUserAgent = "KimiCLI/1.10.6"
 	kimiCLIPlatform  = "kimi_cli"
-	kimiCLIVersion   = "1.45.0"
+	kimiCLIVersion   = "1.10.6"
 )
 
 // kimiRoundTripper layers kimi-cli impersonation headers on an inner
