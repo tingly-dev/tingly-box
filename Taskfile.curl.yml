@@ -132,6 +132,23 @@ tasks:
               }]
         	}'
   
+  anthropic-nonstream:
+    cmds:
+      - |
+        curl -X POST -k http://localhost:12580/tingly/claude_code/v1/messages \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer {{.TINGLY_BOX_KEY}}" \
+        -d '{
+          "thinking": {
+              "type": "enabled",
+              "budget_tokens": 100
+          },
+          "temperature":0.2,
+          "model": "tingly/cc",
+          "messages": [{"role": "user", "content": "who are you!"}],
+          "max_tokens": 100
+        }'
+  
   anthropic-stream:
     cmds:
       - |
