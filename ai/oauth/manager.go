@@ -468,6 +468,8 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		req.Body = io.NopCloser(reqBody)
 	}
 
+	applyExtraHeaders(req.Header, opts.ExtraHeaders)
+
 	// Debug: print request details
 	m.debugRequest(req, config.TokenRequestFormat)
 
@@ -631,6 +633,8 @@ func (m *Manager) refreshToken(ctx context.Context, providerType ai.Issuer, refr
 	// Set Content-Type after hook (hook may have modified it)
 	req.Header.Set("Content-Type", contentType)
 
+	applyExtraHeaders(req.Header, opts.ExtraHeaders)
+
 	// Debug: print request details
 	m.debugRequest(req, config.TokenRequestFormat)
 
@@ -783,7 +787,9 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	// Build common parameters
 	params := map[string]string{
 		"client_id": config.ClientID,
-		"scope":     strings.Join(config.Scopes, " "),
+	}
+	if len(config.Scopes) > 0 {
+		params["scope"] = strings.Join(config.Scopes, " ")
 	}
 	// Add PKCE parameters for Device Code PKCE flow
 	if config.OAuthMethod == OAuthMethodDeviceCodePKCE {
@@ -818,6 +824,8 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 		req.Header.Set("Content-Type", contentType)
 	}
 
+	applyExtraHeaders(req.Header, options.ExtraHeaders)
+
 	client := m.getHTTPClient(options)
 	client.Timeout = 30 * time.Second
 	resp, err := client.Do(req)
@@ -851,6 +859,16 @@ func (m *Manager) InitiateDeviceCodeFlow(ctx context.Context, userID string, pro
 	}
 
 	return data, nil
+}
+
+// applyExtraHeaders lets callers inject provider-specific header state
+// (e.g. Kimi's X-Msh-Device-Id) without the manager knowing the provider.
+func applyExtraHeaders(dst http.Header, src http.Header) {
+	for k, vs := range src {
+		for _, v := range vs {
+			dst.Set(k, v)
+		}
+	}
 }
 
 // PollForToken polls the token endpoint until the user completes authentication
@@ -963,6 +981,8 @@ func (m *Manager) pollTokenRequest(ctx context.Context, config *ProviderConfig, 
 		}
 		req.Body = io.NopCloser(reqBody)
 	}
+
+	applyExtraHeaders(req.Header, opts.ExtraHeaders)
 
 	client := m.getHTTPClient(opts)
 	client.Timeout = 30 * time.Second

@@ -76,6 +76,7 @@ type OAuthDetail struct {
 	UserID       string                 `json:"user_id"`                // OAuth user identifier
 	RefreshToken string                 `json:"refresh_token"`          // Token for refreshing access token
 	ExpiresAt    string                 `json:"expires_at"`             // Token expiration time (RFC3339)
+	DeviceID     string                 `json:"device_id,omitempty"`    // Per-credential device id (e.g. Kimi's X-Msh-Device-Id). Bound at OAuth time and reused on refresh + inference.
 	ExtraFields  map[string]interface{} `json:"extra_fields,omitempty"` // Any extra field for some special clients
 
 	// Deprecated: Use Issuer instead. Kept for backward compatibility.

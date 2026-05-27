@@ -20,6 +20,11 @@ type Options struct {
 
 	// HTTPClient allows passing a custom HTTP client
 	HTTPClient *http.Client
+
+	// ExtraHeaders are merged into every token-related outbound request
+	// (device-code, polling, refresh, code exchange). Escape hatch for
+	// per-flow header state like Kimi's X-Msh-Device-Id binding.
+	ExtraHeaders http.Header
 }
 
 // WithProxyURL sets a proxy URL for the request
@@ -67,6 +72,20 @@ func WithHTTPClient(client *http.Client) Option {
 func WithBaseURL(baseURL string) Option {
 	return func(o *Options) {
 		o.BaseURL = baseURL
+	}
+}
+
+// WithExtraHeader sets a header applied to every token-related OAuth
+// request in this flow. Repeated calls accumulate; same-key values replace.
+func WithExtraHeader(key, value string) Option {
+	return func(o *Options) {
+		if key == "" {
+			return
+		}
+		if o.ExtraHeaders == nil {
+			o.ExtraHeaders = make(http.Header)
+		}
+		o.ExtraHeaders.Set(key, value)
 	}
 }
 

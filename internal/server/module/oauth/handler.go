@@ -50,7 +50,7 @@ func (h *Handler) SetCallbackServerManager(csm CallbackServerManager) {
 
 // CreateProviderFromToken is exported for use by the server's root OAuth callback
 func (h *Handler) CreateProviderFromToken(token *oauth.Token, issuer ai.Issuer, customName, sessionID string) (string, error) {
-	return h.createProviderFromToken(token, issuer, customName, sessionID)
+	return h.createProviderFromToken(token, issuer, customName, sessionID, "")
 }
 
 // =============================================
@@ -344,6 +344,15 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	}
 
 	deviceOpts := OAuthOptions(proxyURL, callbackBaseURL)
+
+	// Kimi binds one X-Msh-Device-Id to every request of a flow and to the
+	// persisted credential — refresh and inference must keep using it.
+	var kimiDeviceID string
+	if issuer == ai.IssuerKimiCode {
+		kimiDeviceID = uuid.New().String()
+		deviceOpts = append(deviceOpts, WithKimiDeviceID(kimiDeviceID))
+	}
+
 	// Handle device code flow
 	if config.OAuthMethod == oauth.OAuthMethodDeviceCode || config.OAuthMethod == oauth.OAuthMethodDeviceCodePKCE {
 		deviceCodeData, err := h.oauthManager.InitiateDeviceCodeFlow(c.Request.Context(), userID, issuer, req.Redirect, req.Name, deviceOpts...)
@@ -356,7 +365,7 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		}
 
 		// Start polling for token in background
-		go h.pollForDeviceCodeToken(c.Request.Context(), deviceCodeData, issuer, req.Name, sessionID, proxyURL)
+		go h.pollForDeviceCodeToken(c.Request.Context(), deviceCodeData, issuer, req.Name, sessionID, proxyURL, kimiDeviceID)
 
 		// Return device code flow response
 		resp := OAuthAuthorizeResponse{
@@ -399,12 +408,16 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 }
 
 // pollForDeviceCodeToken polls for token in background after device code flow initiation
-func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oauth.DeviceCodeData, issuer ai.Issuer, customName, sessionID, proxyURL string) {
+func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oauth.DeviceCodeData, issuer ai.Issuer, customName, sessionID, proxyURL, kimiDeviceID string) {
 	fmt.Printf("[OAuth] Starting device code polling for %s in background\n", issuer)
 	ctx, cancel := context.WithTimeout(context.Background(), oauth.DefaultSessionExpiry)
 	defer cancel()
 
-	token, err := h.oauthManager.PollForToken(ctx, deviceCodeData, nil, OAuthOptions(proxyURL, "")...)
+	pollOpts := OAuthOptions(proxyURL, "")
+	if kimiDeviceID != "" {
+		pollOpts = append(pollOpts, WithKimiDeviceID(kimiDeviceID))
+	}
+	token, err := h.oauthManager.PollForToken(ctx, deviceCodeData, nil, pollOpts...)
 	if err != nil {
 		fmt.Printf("[OAuth] Device code polling failed for %s: %v\n", issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
@@ -412,7 +425,7 @@ func (h *Handler) pollForDeviceCodeToken(ctx context.Context, deviceCodeData *oa
 	}
 
 	fmt.Printf("[OAuth] Device code polling succeeded for %s, creating provider\n", issuer)
-	providerUUID, err := h.createProviderFromToken(token, issuer, customName, sessionID)
+	providerUUID, err := h.createProviderFromToken(token, issuer, customName, sessionID, kimiDeviceID)
 	if err != nil {
 		fmt.Printf("[OAuth] Failed to create provider for %s: %v\n", issuer, err)
 		_ = h.oauthManager.UpdateSessionStatus(sessionID, oauth.SessionStatusFailed, "", err.Error())
@@ -558,12 +571,16 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 	}
 
 	// Refresh token
+	refreshOpts := []oauth.Option{oauth.WithProxyString(provider.ProxyURL)}
+	if issuer == ai.IssuerKimiCode && provider.OAuthDetail.DeviceID != "" {
+		refreshOpts = append(refreshOpts, WithKimiDeviceID(provider.OAuthDetail.DeviceID))
+	}
 	token, err := h.oauthManager.RefreshToken(
 		c.Request.Context(),
 		provider.OAuthDetail.UserID,
 		issuer,
 		provider.OAuthDetail.RefreshToken,
-		oauth.WithProxyString(provider.ProxyURL),
+		refreshOpts...,
 	)
 
 	if err != nil {
@@ -879,7 +896,7 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 
 	// Use createProviderFromToken to create the provider
 	// Pass session ID to retrieve proxy URL from the session
-	providerUUID, err := h.createProviderFromToken(token, token.Provider, "", token.SessionID)
+	providerUUID, err := h.createProviderFromToken(token, token.Provider, "", token.SessionID, "")
 	if err != nil {
 		log.Printf("[OAuth] Failed to create provider for token.SessionID %s: %v", token.SessionID, err)
 		_ = h.oauthManager.UpdateSessionStatus(token.SessionID, oauth.SessionStatusFailed, "", err.Error())
@@ -922,7 +939,7 @@ func (h *Handler) OAuthCallback(c *gin.Context) {
 // =============================================
 
 // createProviderFromToken creates a provider from OAuth token
-func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, customName, sessionID string) (string, error) {
+func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, customName, sessionID, deviceID string) (string, error) {
 	// Get custom name from token (stored in state during authorize)
 	if customName == "" {
 		customName = token.Name
@@ -983,7 +1000,9 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			apiBase = protocol.CodexAPIBase
 			apiStyle = protocol.APIStyleOpenAI
 		case ai.IssuerKimiCode:
-			apiBase = "https://api.moonshot.cn/v1"
+			// Kimi OAuth tokens target kimi.com's coding API, not Moonshot.
+			// Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
+			apiBase = "https://api.kimi.com/coding/v1"
 			apiStyle = protocol.APIStyleOpenAI
 		default:
 			apiBase = "mock"
@@ -1014,6 +1033,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			UserID:       uuid.New().String(),
 			RefreshToken: token.RefreshToken,
 			ExpiresAt:    expiresAt,
+			DeviceID:     deviceID,
 			ExtraFields:  make(map[string]interface{}),
 		},
 	}
