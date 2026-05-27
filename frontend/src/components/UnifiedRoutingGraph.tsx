@@ -7,7 +7,6 @@ import {
     Button,
     Card,
     CardContent,
-    Chip,
     Collapse,
     IconButton,
     Stack,
@@ -143,7 +142,7 @@ const StyledCard = styled(Card, {
 
 const GraphContainer = styled(Box)(({ theme }) => ({
     padding: `${graphContainer.paddingY}px ${graphContainer.paddingX}px`,
-    backgroundColor: 'grey.50',
+    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[50],
     borderRadius: theme.shape.borderRadius,
     margin: `${graphContainer.marginY}px ${graphContainer.marginX}px 0`,
 }));
@@ -294,7 +293,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 <ActionAddNode
                     active={active && !saving}
                     warning={record.providers.length === 0}
-                    onAdd={onAddProvider}
+                    onAdd={onAddProvider ?? (() => {})}
                     tooltip={
                         record.providers.length === 0
                             ? "Add a provider to enable request forwarding"
@@ -428,7 +427,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <SmartDefaultNode
                         providersCount={record.providers.length}
                         active={active}
-                        onAddProvider={onAddProvider}
+                        onAddProvider={onAddProvider ?? (() => {})}
                     />
                 </NodeContainer>
 
@@ -486,21 +485,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 onSwitch={onSwitchRoutingMode}
                                                 switchDisabled={saving}
                                             />
-                                            {record.responseModel && (
-                                                <Tooltip title={`Response model: ${record.responseModel}`}>
-                                                    <Chip
-                                                        label={`→ ${record.responseModel}`}
-                                                        size="small"
-                                                        color="info"
-                                                        sx={{
-                                                            height: 20,
-                                                            fontSize: '0.65rem',
-                                                            mt: 0.5,
-                                                            opacity: active ? 1 : 0.5,
-                                                        }}
-                                                    />
-                                                </Tooltip>
-                                            )}
                                         </Box>
 
                                         {/* Arrow - visual flow indication */}

@@ -26,7 +26,7 @@ const HEADER_PADDING_Y = 6;
 
 const HeaderContainer = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'collapsible',
-})<{ collapsible?: boolean }>(({ collapsible }) => ({
+})<{ collapsible?: boolean }>(({ collapsible, theme }) => ({
     display: 'flex',
     flexWrap: 'wrap' as const,
     alignItems: 'center',
@@ -36,7 +36,7 @@ const HeaderContainer = styled(Box, {
     cursor: collapsible ? 'pointer' : 'default',
     ...(collapsible && {
         '&:hover': {
-            backgroundColor: 'action.hover',
+            backgroundColor: theme.palette.action.hover,
         },
     }),
 }));

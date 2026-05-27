@@ -30,7 +30,7 @@ const StyledEntryNode = styled('div')<{ active: boolean; compact?: boolean }>(
         borderColor: active
             ? getRouteGraphActiveColor(theme)
             : alpha(getRouteGraphActiveColor(theme), 0.4),
-        backgroundColor: 'background.paper',
+        backgroundColor: theme.palette.background.paper,
         boxShadow: 'none',
         transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
         cursor: active ? 'pointer' : 'default',
