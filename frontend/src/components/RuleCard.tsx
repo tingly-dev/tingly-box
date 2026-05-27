@@ -225,8 +225,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [rule.uuid, onRuleDelete, showNotification]);
 
-    const isSmartMode = rule.smart_enabled;
-
     const handleOpenFlagEditor = useCallback(() => {
         if (!configRecord) return;
         const currentFlags = formatRuleFlags(configRecord.flags);

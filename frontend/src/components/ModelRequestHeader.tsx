@@ -153,6 +153,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                         size="small"
                         fullWidth
                         placeholder="Model name..."
+                        error={!tempValue.trim()}
                         autoFocus
                         sx={{
                             '& .MuiInputBase-input': {
@@ -169,10 +170,12 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                             },
                         }}
                     />
-                    <Tooltip title="Save (Enter)">
-                        <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleSave(); }} sx={{ p: 0.5 }}>
-                            <CheckIcon sx={{ fontSize: '1rem' }} />
-                        </IconButton>
+                    <Tooltip title={tempValue.trim() ? 'Save (Enter)' : 'Model name cannot be empty'}>
+                        <span>
+                            <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleSave(); }} disabled={!tempValue.trim()} sx={{ p: 0.5 }}>
+                                <CheckIcon sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </span>
                     </Tooltip>
                     <Tooltip title="Cancel (Esc)">
                         <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleCancel(); }} sx={{ p: 0.5 }}>

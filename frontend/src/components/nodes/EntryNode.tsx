@@ -20,7 +20,7 @@ const StyledEntryNode = styled('div')<{ active: boolean; compact?: boolean }>(
         flexDirection: compact ? 'row' : 'column',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: compact ? 4 : 4,
+        gap: 4,
         width: compact ? 120 : SMALL_NODE_STYLES.width,
         height: compact ? 32 : SMALL_NODE_STYLES.height,
         minHeight: compact ? 32 : SMALL_NODE_STYLES.height,
@@ -117,7 +117,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         value="direct"
                         selected={!smartEnabled}
                         disabled={!active || switchDisabled}
-                        onClick={onSwitch}
+                        onClick={smartEnabled ? onSwitch : undefined}
                         aria-label="Direct routing mode"
                         aria-pressed={!smartEnabled}
                     >
@@ -128,7 +128,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         value="smart"
                         selected={smartEnabled}
                         disabled={!active || switchDisabled}
-                        onClick={onSwitch}
+                        onClick={smartEnabled ? undefined : onSwitch}
                         aria-label="Smart routing mode"
                         aria-pressed={smartEnabled}
                     >
@@ -143,7 +143,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         value="direct"
                         selected={!smartEnabled}
                         disabled={!active || switchDisabled}
-                        onClick={onSwitch}
+                        onClick={smartEnabled ? onSwitch : undefined}
                         aria-label="Direct routing mode"
                         aria-pressed={!smartEnabled}
                     >
@@ -154,7 +154,7 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         value="smart"
                         selected={smartEnabled}
                         disabled={!active || switchDisabled}
-                        onClick={onSwitch}
+                        onClick={smartEnabled ? undefined : onSwitch}
                         aria-label="Smart routing mode"
                         aria-pressed={smartEnabled}
                     >

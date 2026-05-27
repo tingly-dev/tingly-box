@@ -246,22 +246,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     }, [smartRouting, onAddServiceToSmartRule]);
 
     // Reusable provider list renderer - eliminates duplication
-    const renderProviderList = React.useCallback((context: 'smart' | 'direct') => {
-        const tooltipBuilder = (provider: typeof sortedDefaultProviders[0], index: number) => {
-            if (context === 'smart') {
-                return (provider.priority ?? 0) > 0
-                    ? `Priority ${provider.priority} (higher = tried first)`
-                    : record.providers.length >= 2
-                        ? `Service ${index + 1} of ${record.providers.length} (load balanced)`
-                        : 'Default provider';
-            } else {
-                return (provider.priority ?? 0) > 0
-                    ? `Priority ${provider.priority} (higher = tried first)`
-                    : record.providers.length >= 2
-                        ? `Provider ${index + 1} of ${record.providers.length} (load balanced)`
-                        : 'Provider for request forwarding';
-            }
-        };
+    const renderProviderList = React.useCallback(() => {
+        const tooltipBuilder = (provider: typeof sortedDefaultProviders[0], index: number) =>
+            (provider.priority ?? 0) > 0
+                ? `Priority ${provider.priority} (higher = tried first)`
+                : record.providers.length >= 2
+                    ? `Provider ${index + 1} of ${record.providers.length} (load balanced)`
+                    : 'Provider for request forwarding';
 
         return (
             <>
@@ -354,7 +345,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                         providersData={providers}
                                                         active={active && service.active !== false}
                                                         onDelete={() => onDeleteServiceFromSmartRule?.(rule.uuid, service.uuid)}
-                                                        onNodeClick={() => onProviderNodeClick?.(service.uuid)}
+                                                        onNodeClick={() => onProviderNodeClick?.(service.provider)}
                                                     />
                                                 </Box>
                                             </Tooltip>
@@ -439,7 +430,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     justifyContent: 'flex-start',
                     alignItems: 'center'
                 }}>
-                    {renderProviderList('direct')}
+                    {renderProviderList()}
                 </Box>
             </GraphRow>
         );
@@ -505,7 +496,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         ) : (
                                             /* Direct Mode: Providers only */
                                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-                                                {renderProviderList('direct')}
+                                                {renderProviderList()}
                                             </Box>
                                         )}
                                     </GraphRow>
