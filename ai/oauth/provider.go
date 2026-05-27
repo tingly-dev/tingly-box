@@ -197,7 +197,7 @@ func DefaultRegistry() *Registry {
 	registry.Register(&ProviderConfig{
 		Type:               ai.IssuerKimiCode,
 		GrantType:          "urn:ietf:params:oauth:grant-type:device_code",
-		DisplayName:        "Kimi CLI",
+		DisplayName:        "Kimi Code",
 		ClientID:           "17e5f671-d194-4dfb-9706-5516cb48c098",
 		ClientSecret:       "",
 		DeviceCodeURL:      "https://auth.kimi.com/api/oauth/device_authorization",

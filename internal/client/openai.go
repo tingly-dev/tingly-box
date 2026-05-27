@@ -86,7 +86,7 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	transport = wrapWithUserAgent(transport, provider)
 	transport = wrapWithLogging(transport, provider)
 
-	// Kimi CLI OAuth requires kimi-cli impersonation headers on every request.
+	// Kimi Code OAuth requires kimi-cli impersonation headers on every request.
 	// Layer the Kimi round tripper on top of a session-bound transport so each
 	// session gets its own connection pool while still emitting the right
 	// X-Msh-* / User-Agent headers.

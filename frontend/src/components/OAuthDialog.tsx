@@ -88,7 +88,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
     {
         id: 'kimi_code',
         name: 'Kimi Code',
-        displayName: 'Kimi CLI',
+        displayName: 'Kimi Code',
         description: 'Access Kimi Code via device code flow',
         icon: <Kimi size={32}/>,
         color: '#6366F1',
