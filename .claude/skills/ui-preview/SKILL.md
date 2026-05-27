@@ -167,25 +167,30 @@ slate. Clean up afterwards:
 ### Known issues with this script
 
 **recharts / es-toolkit vite error** (`require_isUnsafeProperty is not a function`):
-recharts v3.x imports `es-toolkit/compat/*` sub-paths that Vite's rolldown
-bundler cannot resolve, causing a JS runtime error in the browser. This makes
-the routing-graph cards render blank. The fix (a virtual-module plugin in
-`vite.config.ts` that redirects sub-paths to the ESM barrel) is intentionally
-**not committed** because it is too environment-specific. If the screenshot
-shows blank rule cards, apply the fix temporarily:
+recharts v3.x imports `es-toolkit/compat/*` sub-paths. These resolve to CJS
+wrappers that Vite 8's rolldown inlines with broken IIFE-helper naming. The
+`es-toolkit/compat/*.js` shims don't have an `"import"` condition in
+`package.json`, so rolldown uses the CJS path even for ESM bundles.
 
-```ts
-// vite.config.ts — optimizeDeps.rolldownOptions.plugins (do NOT commit)
-import { createRequire } from 'node:module';
-const _require = createRequire(import.meta.url);
-const esToolkitCompatPath = _require.resolve('es-toolkit/compat');
-{
-  name: 'fix-es-toolkit-compat',
-  resolveId(id) {
-    if (id.startsWith('es-toolkit/compat/')) return esToolkitCompatPath;
-  },
-}
+**Working fix**: patch the affected shim files in `node_modules` before
+starting the dev server. These files are not tracked by git so the patch is
+not committed. Recharts imports 11 functions; run this once per container:
+
+```bash
+for func in get isPlainObject last maxBy minBy omit range sortBy sumBy throttle uniqBy; do
+  echo "export { ${func} as default } from '../dist/compat/index.mjs';" \
+    > frontend/node_modules/es-toolkit/compat/${func}.js
+done
 ```
+
+Then clear the vite dep cache and restart: `rm -rf frontend/node_modules/.vite`.
+
+**Why other approaches fail**:
+- `resolve.alias` with string → appends sub-path to the alias path (broken)
+- Plugin `resolveId` hook (normal or `enforce:'pre'`) → NOT called by rolldown's
+  optimizeDeps pre-bundler; only works for the dev server's module-graph serving
+- `optimizeDeps.exclude: ['recharts']` → recharts' deps (e.g. `use-sync-external-store`)
+  also lack ESM shims and fail the same way
 
 **"Separate Model" button not found** (mode-switch timeout):
 The script was originally written for the old `RoutingGraph`/`SmartRoutingGraph`
