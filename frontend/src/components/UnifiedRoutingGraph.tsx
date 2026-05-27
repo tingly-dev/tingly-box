@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
-import { getRouteGraphActiveColor } from '@/components/nodes/styles';
+import { getRouteGraphActiveColor, SMART_NODE_STYLES } from '@/components/nodes/styles';
 import {
     ActionAddNode,
     ArrowNode,
@@ -324,6 +324,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         onClick={onAddSmartRule}
                         disabled={!active || saving}
                         sx={(theme) => ({
+                            width: SMART_NODE_STYLES.width,
                             borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.72 : 0.82),
                             color: getRouteGraphActiveColor(theme),
                             backgroundColor: 'transparent',
@@ -424,10 +425,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 onModelChange={(value) => onUpdateRecord?.('requestModel', value)}
                 editable={active}
                 active={active}
-                smartEnabled={smartEnabled}
-                onSmartModeToggle={onSwitchRoutingMode}
                 subtitle={record.description}
-                actions={[]}
                 collapsible={collapsible}
                 onClick={collapsible ? onToggleExpanded : undefined}
                 extraActions={extraActions}
