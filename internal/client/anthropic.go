@@ -109,6 +109,9 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 	// MENTION: extra will be applied at last to confirm override
 	options = append(options, extraOptions...)
 
+	// MENTION: must set time, otherwise nonstream and stream may work badly
+	options = append(options, anthropicOption.WithRequestTimeout(time.Duration(provider.Timeout)*time.Second))
+
 	anthropicClient := anthropic.NewClient(options...)
 
 	return &AnthropicClient{
