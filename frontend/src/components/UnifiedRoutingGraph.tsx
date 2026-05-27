@@ -142,7 +142,6 @@ const StyledCard = styled(Card, {
 
 const GraphContainer = styled(Box)(({ theme }) => ({
     padding: `${graphContainer.paddingY}px ${graphContainer.paddingX}px`,
-    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[50],
     borderRadius: theme.shape.borderRadius,
     margin: `${graphContainer.marginY}px ${graphContainer.marginX}px 0`,
 }));
