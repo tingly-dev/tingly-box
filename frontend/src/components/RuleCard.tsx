@@ -328,6 +328,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onProviderNodeClick={handleProviderNodeClick}
                 onProviderPriorityChange={handleProviderPriorityChange}
                 onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
+                onAddProvider={handleAddProviderButtonClick}
                 onAddSmartRule={smartHandlers.handleAddSmartRule}
                 onEditSmartRule={smartHandlers.handleEditSmartRule}
                 onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}

@@ -118,6 +118,8 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         selected={!smartEnabled}
                         disabled={!active || switchDisabled}
                         onClick={onSwitch}
+                        aria-label="Direct routing mode"
+                        aria-pressed={!smartEnabled}
                     >
                         <DirectIcon sx={{ fontSize: 9, transform: 'rotate(90deg)' }} />
                         Direct
@@ -127,6 +129,8 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         selected={smartEnabled}
                         disabled={!active || switchDisabled}
                         onClick={onSwitch}
+                        aria-label="Smart routing mode"
+                        aria-pressed={smartEnabled}
                     >
                         <AutoAwesomeIcon sx={{ fontSize: 9 }} />
                         Smart
@@ -140,6 +144,8 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         selected={!smartEnabled}
                         disabled={!active || switchDisabled}
                         onClick={onSwitch}
+                        aria-label="Direct routing mode"
+                        aria-pressed={!smartEnabled}
                     >
                         <DirectIcon sx={{ fontSize: 10, transform: 'rotate(90deg)' }} />
                         Direct
@@ -149,6 +155,8 @@ export const EntryNode: React.FC<EntryNodeProps> = ({
                         selected={smartEnabled}
                         disabled={!active || switchDisabled}
                         onClick={onSwitch}
+                        aria-label="Smart routing mode"
+                        aria-pressed={smartEnabled}
                     >
                         <AutoAwesomeIcon sx={{ fontSize: 10 }} />
                         Smart

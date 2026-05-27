@@ -94,18 +94,29 @@ interface PriorityBadgeProps {
 const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, active }) => {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [draft, setDraft] = useState(String(priority || ''));
+    const [error, setError] = useState<string | null>(null);
 
     const open = (e: React.MouseEvent<HTMLElement>) => {
         e.stopPropagation();
         setDraft(String(priority || ''));
+        setError(null);
         setAnchor(e.currentTarget);
     };
-    const close = () => setAnchor(null);
+    const close = () => {
+        setAnchor(null);
+        setError(null);
+    };
     const commit = () => {
-        const parsed = parseInt(draft, 10);
-        const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-        if (next !== priority) onChange(next);
-        close();
+        try {
+            const parsed = parseInt(draft, 10);
+            const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+            if (next !== priority) {
+                onChange(next);
+            }
+            close();
+        } catch (err) {
+            setError('Invalid priority value. Please enter a number.');
+        }
     };
 
     const tooltip = priority > 0
@@ -119,6 +130,9 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                     hasPriority={priority > 0}
                     active={active}
                     onClick={active ? open : undefined}
+                    aria-label={priority > 0 ? `Priority ${priority}` : 'No priority set'}
+                    role="button"
+                    tabIndex={active ? 0 : undefined}
                 >
                     {priority > 0 ? String(priority) : null}
                 </PriorityDisk>
@@ -137,12 +151,17 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                             type="number"
                             size="small"
                             value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
+                            onChange={(e) => {
+                                setDraft(e.target.value);
+                                setError(null);
+                            }}
                             onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') close(); }}
                             inputProps={{ min: 0, step: 1 }}
                             autoFocus
                             fullWidth
                             placeholder="0 = unset"
+                            error={!!error}
+                            helperText={error}
                         />
                         <Button size="small" variant="contained" onClick={commit}>Set</Button>
                     </Stack>

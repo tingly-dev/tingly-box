@@ -89,6 +89,7 @@ export interface UnifiedRoutingGraphProps {
     onProviderNodeClick?: (providerUuid: string) => void;
     onProviderPriorityChange?: (providerUuid: string, priority: number) => void;
     onDeleteProvider?: (providerUuid: string) => void;
+    onAddProvider?: () => void;
     onToggleExpanded?: () => void;
 
     // Smart routing callbacks
@@ -172,6 +173,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     onProviderNodeClick,
     onProviderPriorityChange,
     onDeleteProvider,
+    onAddProvider,
     onToggleExpanded,
     onAddSmartRule,
     onEditSmartRule,
@@ -221,6 +223,20 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         }
     }, [onDeleteProvider]);
 
+    // Handle provider node click - unified callback
+    const handleProviderNodeClick = React.useCallback((providerUuid: string) => {
+        if (onProviderNodeClick) {
+            onProviderNodeClick(providerUuid);
+        }
+    }, [onProviderNodeClick]);
+
+    // Handle provider priority change - unified callback
+    const handleProviderPriorityChange = React.useCallback((providerUuid: string, priority: number) => {
+        if (onProviderPriorityChange) {
+            onProviderPriorityChange(providerUuid, priority);
+        }
+    }, [onProviderPriorityChange]);
+
     // Handle add service to smart rule
     const handleAddServiceToSmartRule = React.useCallback((ruleIndex: number) => {
         if (onAddServiceToSmartRule) {
@@ -230,6 +246,64 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
             }
         }
     }, [smartRouting, onAddServiceToSmartRule]);
+
+    // Reusable provider list renderer - eliminates duplication
+    const renderProviderList = React.useCallback((context: 'smart' | 'direct') => {
+        const tooltipBuilder = (provider: typeof sortedDefaultProviders[0], index: number) => {
+            if (context === 'smart') {
+                return (provider.priority ?? 0) > 0
+                    ? `Priority ${provider.priority} (higher = tried first)`
+                    : record.providers.length >= 2
+                        ? `Service ${index + 1} of ${record.providers.length} (load balanced)`
+                        : 'Default provider';
+            } else {
+                return (provider.priority ?? 0) > 0
+                    ? `Priority ${provider.priority} (higher = tried first)`
+                    : record.providers.length >= 2
+                        ? `Provider ${index + 1} of ${record.providers.length} (load balanced)`
+                        : 'Provider for request forwarding';
+            }
+        };
+
+        return (
+            <>
+                {sortedDefaultProviders.map((provider, index) => (
+                    <Tooltip
+                        key={provider.uuid}
+                        title={tooltipBuilder(provider, index)}
+                        placement="top"
+                        arrow
+                    >
+                        <Box>
+                            <ProviderNode
+                                provider={provider}
+                                apiStyle={getApiStyle(provider.provider)}
+                                providersData={providers}
+                                active={active && provider.active !== false}
+                                onDelete={() => handleDeleteProvider(provider.uuid)}
+                                onNodeClick={() => handleProviderNodeClick(provider.uuid)}
+                                onPriorityChange={
+                                    onProviderPriorityChange
+                                        ? (priority) => handleProviderPriorityChange(provider.uuid, priority)
+                                        : undefined
+                                }
+                            />
+                        </Box>
+                    </Tooltip>
+                ))}
+                <ActionAddNode
+                    active={active && !saving}
+                    warning={record.providers.length === 0}
+                    onAdd={onAddProvider}
+                    tooltip={
+                        record.providers.length === 0
+                            ? "Add a provider to enable request forwarding"
+                            : "Add another provider (load balancing will be enabled)"
+                    }
+                />
+            </>
+        );
+    }, [sortedDefaultProviders, providers, active, saving, record.providers.length, onProviderPriorityChange, handleDeleteProvider, handleProviderNodeClick, handleProviderPriorityChange]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -264,12 +338,12 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         justifyContent: 'flex-start',
                                         alignItems: 'center'
                                     }}>
-                                        {rule.services.map((service) => (
+                                        {rule.services.map((service, serviceIndex) => (
                                             <Tooltip
                                                 key={service.uuid}
                                                 title={
                                                     rule.services && rule.services.length >= 2
-                                                        ? `Service ${rule.services.indexOf(service) + 1} of ${rule.services.length} (load balanced)`
+                                                        ? `Service ${serviceIndex + 1} of ${rule.services.length} (load balanced)`
                                                         : 'Service for this smart rule'
                                                 }
                                                 placement="top"
@@ -354,10 +428,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <SmartDefaultNode
                         providersCount={record.providers.length}
                         active={active}
-                        onAddProvider={() => {
-                            // Trigger provider selection dialog
-                            // This will be handled by the parent
-                        }}
+                        onAddProvider={onAddProvider}
                     />
                 </NodeContainer>
 
@@ -370,48 +441,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     justifyContent: 'flex-start',
                     alignItems: 'center'
                 }}>
-                    {sortedDefaultProviders.map((provider) => (
-                        <Tooltip
-                            key={provider.uuid}
-                            title={
-                                (provider.priority ?? 0) > 0
-                                    ? `Priority ${provider.priority} (higher = tried first)`
-                                    : record.providers.length >= 2
-                                        ? `Provider ${record.providers.indexOf(provider) + 1} of ${record.providers.length} (load balanced)`
-                                        : 'Default provider'
-                            }
-                            placement="top"
-                            arrow
-                        >
-                            <Box>
-                                <ProviderNode
-                                    provider={provider}
-                                    apiStyle={getApiStyle(provider.provider)}
-                                    providersData={providers}
-                                    active={active && provider.active !== false}
-                                    onDelete={() => handleDeleteProvider(provider.uuid)}
-                                    onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
-                                    onPriorityChange={
-                                        onProviderPriorityChange
-                                            ? (priority) => onProviderPriorityChange(provider.uuid, priority)
-                                            : undefined
-                                    }
-                                />
-                            </Box>
-                        </Tooltip>
-                    ))}
-                    <ActionAddNode
-                        active={active && !saving}
-                        warning={record.providers.length === 0}
-                        onAdd={() => {
-                            // Trigger provider selection dialog
-                        }}
-                        tooltip={
-                            record.providers.length === 0
-                                ? "Add a provider to enable request forwarding"
-                                : "Add another provider (load balancing will be enabled)"
-                        }
-                    />
+                    {renderProviderList('direct')}
                 </Box>
             </GraphRow>
         );
@@ -493,48 +523,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         ) : (
                                             /* Direct Mode: Providers only */
                                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-                                                {sortedDefaultProviders.map((provider) => (
-                                                    <Tooltip
-                                                        key={provider.uuid}
-                                                        title={
-                                                            (provider.priority ?? 0) > 0
-                                                                ? `Priority ${provider.priority} (higher = tried first)`
-                                                                : record.providers.length >= 2
-                                                                    ? `Provider ${record.providers.indexOf(provider) + 1} of ${record.providers.length} (load balanced)`
-                                                                    : 'Provider for request forwarding'
-                                                        }
-                                                        placement="top"
-                                                        arrow
-                                                    >
-                                                        <Box>
-                                                            <ProviderNode
-                                                                provider={provider}
-                                                                apiStyle={getApiStyle(provider.provider)}
-                                                                providersData={providers}
-                                                                active={active && provider.active !== false}
-                                                                onDelete={() => handleDeleteProvider(provider.uuid)}
-                                                                onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
-                                                                onPriorityChange={
-                                                                    onProviderPriorityChange
-                                                                        ? (priority) => onProviderPriorityChange(provider.uuid, priority)
-                                                                        : undefined
-                                                                }
-                                                            />
-                                                        </Box>
-                                                    </Tooltip>
-                                                ))}
-                                                <ActionAddNode
-                                                    active={active && !saving}
-                                                    warning={record.providers.length === 0}
-                                                    onAdd={() => {
-                                                        // Trigger provider selection
-                                                    }}
-                                                    tooltip={
-                                                        record.providers.length === 0
-                                                            ? "Add a provider to enable request forwarding"
-                                                            : "Add another provider (load balancing will be enabled)"
-                                                    }
-                                                />
+                                                {renderProviderList('direct')}
                                             </Box>
                                         )}
                                     </GraphRow>

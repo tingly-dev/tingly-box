@@ -224,6 +224,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 size="small"
                                 onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
                                 sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                                aria-label="Move smart rule up"
                             >
                                 <KeyboardArrowUp sx={{ fontSize: '1rem' }} />
                             </IconButton>
@@ -235,6 +236,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 size="small"
                                 onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
                                 sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                                aria-label="Move smart rule down"
                             >
                                 <KeyboardArrowDown sx={{ fontSize: '1rem' }} />
                             </IconButton>
@@ -245,6 +247,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                             size="small"
                             onClick={handleMenuClick}
                             sx={{p: 0.5, backgroundColor: 'background.paper'}}
+                            aria-label={t('rule.smart.deleteTooltip')}
                         >
                             <DeleteIcon sx={{fontSize: '1rem', color: 'error.main'}}/>
                         </IconButton>
