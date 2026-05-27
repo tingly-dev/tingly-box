@@ -118,12 +118,10 @@ the regression asset, not throwaway tooling.
 
 ## Scenario routing graph (needs a REAL backend)
 
-The Claude Code **scenario routing graph** (`RuleCard` → `RoutingGraph` /
-`SmartRoutingGraph` on `/agent/claude_code`) is a frequently-requested
-screenshot, but **mock mode cannot render it**: unified mode fetches a
-`built-in-cc` rule the MSW handlers don't return, and switching to separate
-mode needs a config-apply the mock can't perform. You must run the real Go
-server and seed data through its API.
+The Claude Code **scenario routing graph** (`RuleCard` → `UnifiedRoutingGraph`
+on `/agent/claude_code`) is a frequently-requested screenshot, but **mock mode
+cannot render it**: unified mode fetches a `built-in-cc` rule the MSW handlers
+don't return. You must run the real Go server and seed data through its API.
 
 `scenario-routing-graph.mjs` (committed, next to this file) automates the
 seed + capture. Full procedure:
@@ -132,33 +130,74 @@ seed + capture. Full procedure:
 # 1. Submodules must be checked out, or the Go build fails on libs/*.
 git submodule update --init --recursive
 
-# 2. Build + start the real server (auto-generates a login token, printed in the log).
+# 2. Build + start the real server.
+#    The server reuses its existing token from ~/.tingly-box/config.json
+#    (field: user_token). It no longer prints a fresh token to the log.
+#    Read the token before starting:
+export TOKEN=$(python3 -c "import json; print(json.load(open('/root/.tingly-box/config.json'))['user_token'])")
 go build -o /tmp/tingly-box ./cli/tingly-box
 /tmp/tingly-box --verbose start --debug --port 12580 --browser=false \
-  > /tmp/tingly-server.log 2>&1 &
+  >> /tmp/tingly-server.log 2>&1 &
 until curl -fs http://localhost:12580/ >/dev/null; do sleep 1; done
 
 # 3. Frontend in REAL mode — proxies /api + /tingly to :12580.
-#    NOTE: if :3000 is taken, vite falls back to :3001 (check the log).
+#    NOTE: vite defaults to :3000 in real mode; check /tmp/vite-real.log.
 cd frontend && USE_MOCK= npm run dev:real > /tmp/vite-real.log 2>&1 &
+until curl -fs http://localhost:3000/ >/dev/null 2>&1 || \
+      curl -fs http://localhost:3001/ >/dev/null 2>&1; do sleep 1; done
 
-# 4. Seed providers + rules and capture (run from frontend/ so playwright resolves).
-#    TOKEN is auto-read from /tmp/tingly-server.log; FE defaults to :3001.
-FE=http://localhost:3001 node ../.claude/skills/ui-preview/scenario-routing-graph.mjs
+# 4. playwright must be installed in frontend/ (it's not in package.json).
+npm i -D playwright   # run from frontend/
+
+# 5. Seed providers + rules and capture (run from frontend/).
+TOKEN=$TOKEN FE=http://localhost:3000 API=http://localhost:12580 \
+  node ../.claude/skills/ui-preview/scenario-routing-graph.mjs
 ```
 
 Outputs:
 - `/tmp/scenario-routing-{light,dark}.png` — full page, all rules
 - `/tmp/scenario-routing-smart-{light,dark}.png` — the smart-routing rule card
-  (`claude-sonnet-4-6`: condition `token > 8000` → deepseek, Default → glm)
 
 The script seeds two providers (`glm`, `deepseek`, with dummy keys via
-`?force=true`) and three `claude_code` rules (one with smart routing), then
-drives the real UI: sets `user_auth_token`, switches to "Separate Model",
-confirms the dialog, and screenshots. Re-running appends more rules — restart
-the server (fresh config) for a clean slate. Like the other committed assets,
-this file is a reference, not throwaway tooling. Clean up afterwards:
-`pkill -f "tingly-box.*start"; pkill -f "vite --mode production"`.
+`?force=true`) and three `claude_code` rules (one with smart routing).
+Re-running appends more rules — restart the server (fresh config) for a clean
+slate. Clean up afterwards:
+`pkill -f "tingly-box.*start"; pkill -f "vite"`.
+
+### Known issues with this script
+
+**recharts / es-toolkit vite error** (`require_isUnsafeProperty is not a function`):
+recharts v3.x imports `es-toolkit/compat/*` sub-paths that Vite's rolldown
+bundler cannot resolve, causing a JS runtime error in the browser. This makes
+the routing-graph cards render blank. The fix (a virtual-module plugin in
+`vite.config.ts` that redirects sub-paths to the ESM barrel) is intentionally
+**not committed** because it is too environment-specific. If the screenshot
+shows blank rule cards, apply the fix temporarily:
+
+```ts
+// vite.config.ts — optimizeDeps.rolldownOptions.plugins (do NOT commit)
+import { createRequire } from 'node:module';
+const _require = createRequire(import.meta.url);
+const esToolkitCompatPath = _require.resolve('es-toolkit/compat');
+{
+  name: 'fix-es-toolkit-compat',
+  resolveId(id) {
+    if (id.startsWith('es-toolkit/compat/')) return esToolkitCompatPath;
+  },
+}
+```
+
+**"Separate Model" button not found** (mode-switch timeout):
+The script was originally written for the old `RoutingGraph`/`SmartRoutingGraph`
+architecture which had a "Separate Model" dialog. The new `UnifiedRoutingGraph`
+has an inline `EntryNode` Direct/Smart toggle — no modal confirm step. Update
+the script's mode-switch section to click the `EntryNode` Smart button directly
+instead of looking for "Separate Model".
+
+**playwright not in package.json**:
+`playwright` is a dev dependency used only for screenshots — it's not in
+`package.json` to avoid bloating production installs. Run `npm i -D playwright`
+from `frontend/` each fresh container session before running the script.
 
 ## Why not Playwright MCP / Chrome MCP?
 

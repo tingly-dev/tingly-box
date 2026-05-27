@@ -38,13 +38,22 @@ const SCENARIO = 'claude_code';
 
 function resolveToken() {
     if (process.env.TOKEN) return process.env.TOKEN;
+    // Server reuses existing token from config — no longer prints to log.
+    // Read it from ~/.tingly-box/config.json (field: user_token).
+    for (const f of ['/root/.tingly-box/config.json', '/home/user/.tingly-box/config.json']) {
+        try {
+            const cfg = JSON.parse(readFileSync(f, 'utf8'));
+            if (cfg.user_token) return cfg.user_token;
+        } catch { /* ignore */ }
+    }
+    // Fallback: old "Login Token: tb-user-..." line in server log.
     for (const f of ['/tmp/tingly-server.log']) {
         try {
             const m = readFileSync(f, 'utf8').match(/Login Token:\s*(tb-user-[0-9a-f]+)/);
             if (m) return m[1];
         } catch { /* ignore */ }
     }
-    throw new Error('No TOKEN: set $TOKEN or ensure /tmp/tingly-server.log has the Login Token line');
+    throw new Error('No TOKEN: set $TOKEN env var, or ensure ~/.tingly-box/config.json has user_token');
 }
 
 const TOKEN = resolveToken();
@@ -112,15 +121,9 @@ async function shoot(browser, mode) {
     await page.goto(`${FE}/agent/${SCENARIO}`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForTimeout(2500);
 
-    // Default view is "Unified Model" (a single built-in rule). Switch to
-    // "Separate Model" to render the per-rule routing graphs, confirming the dialog.
-    try {
-        await page.getByText('Separate Model', { exact: true }).first().click({ timeout: 8000 });
-        await page.waitForTimeout(600);
-        await page.getByRole('button', { name: /^Confirm$/ }).first().click({ timeout: 6000 });
-    } catch (e) {
-        console.log('[mode switch]', e.message.slice(0, 100));
-    }
+    // The UnifiedRoutingGraph shows an EntryNode with inline Direct/Smart toggle.
+    // No "Separate Model" dialog needed — rules render directly on the page.
+    // Allow extra time for the real API data to load and React to settle.
     await page.waitForTimeout(4000);
 
     await page.screenshot({ path: `/tmp/scenario-routing-${mode}.png`, fullPage: true });
