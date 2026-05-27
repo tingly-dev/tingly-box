@@ -92,7 +92,7 @@ export const FALLBACK_OAUTH_PROVIDERS: OAuthProvider[] = [
         description: 'Access Kimi Code via device code flow',
         icon: <Kimi size={32}/>,
         color: '#6366F1',
-        enabled: false, // DISABLED: Kimi OAuth backend wiring in progress
+        enabled: true,
         deviceCodeFlow: true,
     },
     {
