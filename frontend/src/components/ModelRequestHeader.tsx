@@ -17,8 +17,6 @@ import {
     Edit as EditIcon,
     Check as CheckIcon,
     Close as CloseIcon,
-    AutoAwesome as AutoAwesomeIcon,
-    NearMeOutlined as DirectIcon,
     ExpandMore as ExpandMoreIcon,
 } from '@/components/icons';
 import {
@@ -37,7 +35,8 @@ const HeaderContainer = styled(Box, {
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: `${4}px ${8}px`,  // More compact for graph use
+    padding: `2px 8px`,  // Even more compact
+    gap: 4,
     cursor: collapsible ? 'pointer' : 'default',
     ...(collapsible && {
         '&:hover': {
@@ -49,7 +48,7 @@ const HeaderContainer = styled(Box, {
 const TitleSection = styled(Box)(({ theme }) => ({
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing(1),
+    gap: theme.spacing(0.5),
     flexGrow: 1,
     minWidth: 0,
     flexWrap: 'wrap',
@@ -58,7 +57,7 @@ const TitleSection = styled(Box)(({ theme }) => ({
 const ActionsSection = styled(Box)(({ theme }) => ({
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing(0.5),
+    gap: theme.spacing(0.25),
     flexShrink: 0,
 }));
 
@@ -215,7 +214,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     const renderTitle = () => {
         if (editMode && editable) {
             return (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', maxWidth: 300 }}>
                     <TextField
                         value={tempValue}
                         onChange={(e) => setTempValue(e.target.value)}
@@ -223,27 +222,31 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                         onKeyDown={handleKeyDown}
                         size="small"
                         fullWidth
-                        placeholder="Enter model name..."
+                        placeholder="Model name..."
                         autoFocus
                         sx={{
                             '& .MuiInputBase-input': {
                                 color: 'text.primary',
                                 fontWeight: 600,
-                                fontSize: '1rem',
+                                fontSize: '0.875rem',
+                                px: 0.5,
                             },
                             '& .MuiOutlinedInput-notchedOutline': {
                                 borderColor: 'divider',
                             },
+                            '& .MuiInputBase-root': {
+                                padding: '2px 8px',
+                            },
                         }}
                     />
                     <Tooltip title="Save (Enter)">
-                        <IconButton size="small" onClick={handleSave}>
-                            <CheckIcon fontSize="small" />
+                        <IconButton size="small" onClick={handleSave} sx={{ p: 0.5 }}>
+                            <CheckIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Cancel (Esc)">
-                        <IconButton size="small" onClick={handleCancel}>
-                            <CloseIcon fontSize="small" />
+                        <IconButton size="small" onClick={handleCancel} sx={{ p: 0.5 }}>
+                            <CloseIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                     </Tooltip>
                 </Box>
@@ -251,11 +254,11 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
         }
 
         return (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                 {isWildcard ? (
                     <Chip
                         label={
-                            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
                                 {modelName}
                             </Typography>
                         }
@@ -263,7 +266,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                         variant="outlined"
                         sx={{
                             '& .MuiChip-label': { fontWeight: 600 },
-                            height: 28,
+                            height: 22,
                         }}
                     />
                 ) : (
@@ -288,9 +291,13 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                         <IconButton
                             size="small"
                             onClick={() => setEditMode(true)}
-                            sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
+                            sx={{
+                                opacity: 0.6,
+                                p: 0.5,
+                                '&:hover': { opacity: 1 }
+                            }}
                         >
-                            <EditIcon fontSize="small" />
+                            <EditIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                     </Tooltip>
                 )}
@@ -301,120 +308,6 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     const renderActions = () => {
         return (
             <ActionsSection>
-                {/* Smart/Direct Mode Toggle - matching ModelNode style */}
-                {onSmartModeToggle && (
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Tooltip title="Direct routing mode">
-                            <ToggleButton
-                                value="direct"
-                                selected={!smartEnabled}
-                                disabled={!active}
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSmartModeToggle();
-                                }}
-                                sx={(theme) => ({
-                                    ...NODE_LAYER_STYLES.toggleButton,
-                                    height: 32,
-                                    borderColor: alpha(getRouteGraphActiveColor(theme), 0.7),
-                                    color: !smartEnabled ? theme.palette.common.white : theme.palette.text.secondary,
-                                    '&.Mui-selected': {
-                                        backgroundColor: !smartEnabled ? getRouteGraphControlFill(theme) : 'transparent',
-                                        color: !smartEnabled ? theme.palette.common.white : theme.palette.text.primary,
-                                        borderColor: !smartEnabled ? getRouteGraphControlFill(theme) : getRouteGraphActiveColor(theme),
-                                        '& .MuiSvgIcon-root': {
-                                            color: theme.palette.common.white,
-                                        },
-                                        '&:hover': {
-                                            backgroundColor: getRouteGraphControlFillHover(theme),
-                                        },
-                                    },
-                                    '&:hover': {
-                                        backgroundColor: !smartEnabled
-                                            ? getRouteGraphControlFillHover(theme)
-                                            : alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.16 : 0.08),
-                                    },
-                                })}
-                            >
-                                <DirectIcon sx={{ fontSize: 13, transform: 'rotate(90deg)' }} />
-                                Direct
-                            </ToggleButton>
-                        </Tooltip>
-                        <Tooltip title="Smart routing mode">
-                            <ToggleButton
-                                value="smart"
-                                selected={smartEnabled}
-                                disabled={!active}
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSmartModeToggle();
-                                }}
-                                sx={(theme) => ({
-                                    ...NODE_LAYER_STYLES.toggleButton,
-                                    height: 32,
-                                    borderColor: alpha(getRouteGraphActiveColor(theme), 0.7),
-                                    color: smartEnabled ? theme.palette.common.white : theme.palette.text.secondary,
-                                    '&.Mui-selected': {
-                                        backgroundColor: smartEnabled ? getRouteGraphControlFill(theme) : 'transparent',
-                                        color: smartEnabled ? theme.palette.common.white : theme.palette.text.primary,
-                                        borderColor: smartEnabled ? getRouteGraphControlFill(theme) : getRouteGraphActiveColor(theme),
-                                        '& .MuiSvgIcon-root': {
-                                            color: theme.palette.common.white,
-                                        },
-                                        '&:hover': {
-                                            backgroundColor: getRouteGraphControlFillHover(theme),
-                                        },
-                                    },
-                                    '&:hover': {
-                                        backgroundColor: smartEnabled
-                                            ? getRouteGraphControlFillHover(theme)
-                                            : alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.16 : 0.08),
-                                    },
-                                })}
-                            >
-                                <AutoAwesomeIcon sx={{ fontSize: 13 }} />
-                                Smart
-                            </ToggleButton>
-                        </Tooltip>
-                    </Box>
-                )}
-
-                {/* Custom Actions */}
-                {visibleActions.map((action) => {
-                    if (action.variant === 'icon-button') {
-                        return (
-                            <Tooltip key={action.id} title={action.label}>
-                                <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        action.onClick();
-                                    }}
-                                    disabled={action.disabled || !active}
-                                >
-                                    {action.icon}
-                                </IconButton>
-                            </Tooltip>
-                        );
-                    }
-                    return (
-                        <Tooltip key={action.id} title={action.label}>
-                            <StyledChip
-                                label={action.label}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    action.onClick();
-                                }}
-                                disabled={action.disabled || !active}
-                                clickable
-                                icon={action.icon as React.ReactElement}
-                            />
-                        </Tooltip>
-                    );
-                })}
-
                 {/* Extra Actions (from parent) */}
                 {extraActions && (
                     <Box onClick={(e) => e.stopPropagation()}>
@@ -434,7 +327,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 opacity: active ? 1 : 0.5,
                                 backgroundColor: active ? 'info.main' : 'action.disabled',
                                 color: active ? 'info.contrastText' : 'text.disabled',
-                                height: 24,
+                                height: 22,
                                 fontSize: '0.7rem',
                             }}
                         />
@@ -453,7 +346,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                                 cursor: 'pointer',
                                 transition: 'transform 0.2s',
                                 transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                fontSize: '1.25rem',
+                                fontSize: '1.1rem',
                                 color: 'text.secondary',
                                 '&:hover': { color: 'text.primary' },
                             }}

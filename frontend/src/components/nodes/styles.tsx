@@ -52,6 +52,13 @@ export const { modelNode, providerNode, smartNode } = {
     smartNode: SMART_NODE_STYLES,
 };
 
+// ActionAddNode dimensions
+export const SMALL_NODE_STYLES = {
+    width: 100,
+    height: 72,
+    padding: 5,
+} as const;
+
 // Common styled components
 export const NodeContainer = styled(Box)(() => ({
     display: 'flex',

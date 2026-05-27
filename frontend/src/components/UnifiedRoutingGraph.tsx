@@ -20,13 +20,12 @@ import { getRouteGraphActiveColor } from '@/components/nodes/styles';
 import {
     ActionAddNode,
     ArrowNode,
-    ModelNode,
     NodeContainer,
     ProviderNode,
     SmartOpNode,
     SmartDefaultNode,
-    MODEL_NODE_STYLES,
 } from '@/components/nodes';
+import { EntryNode } from '@/components/nodes';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
 import type { Provider } from '../types/provider';
 import type { ConfigRecord } from './RoutingGraphTypes';
@@ -446,18 +445,38 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             <Box sx={{ flexGrow: 1, minWidth: 0, overflowX: 'auto' }}>
                                 <GraphContainer>
                                     <GraphRow sx={{ alignItems: 'flex-start' }}>
-                                        {/* Request Model Node - original visual representation */}
+                                        {/* EntryNode - Direct/Smart mode selector */}
                                         <Box sx={{
                                             display: 'flex',
                                             flexDirection: 'column',
                                             alignItems: 'center',
                                             pr: 1,
                                         }}>
-
+                                            <EntryNode
+                                                active={active}
+                                                smartEnabled={smartEnabled}
+                                                onSwitch={onSwitchRoutingMode}
+                                                switchDisabled={saving}
+                                            />
+                                            {record.responseModel && (
+                                                <Tooltip title={`Response model: ${record.responseModel}`}>
+                                                    <Chip
+                                                        label={`→ ${record.responseModel}`}
+                                                        size="small"
+                                                        color="info"
+                                                        sx={{
+                                                            height: 20,
+                                                            fontSize: '0.65rem',
+                                                            mt: 0.5,
+                                                            opacity: active ? 1 : 0.5,
+                                                        }}
+                                                    />
+                                                </Tooltip>
+                                            )}
                                         </Box>
 
                                         {/* Arrow - visual flow indication */}
-                                        <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: MODEL_NODE_STYLES.height }}>
+                                        <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 48 }}>
                                             <ArrowNode direction={record.responseModel ? 'bidirectional' : 'forward'} flowing={false} flowSpeed={1.} />
                                         </Box>
 
