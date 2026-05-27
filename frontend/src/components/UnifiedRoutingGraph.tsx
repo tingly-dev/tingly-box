@@ -458,7 +458,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 collapsible={collapsible}
                 onClick={collapsible ? onToggleExpanded : undefined}
                 extraActions={extraActions}
-                responseModelName={record.responseModel}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
             />
@@ -489,7 +488,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
                                         {/* Arrow - visual flow indication */}
                                         <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 48 }}>
-                                            <ArrowNode direction={record.responseModel ? 'bidirectional' : 'forward'} flowing={false} flowSpeed={1.} />
+                                            <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
                                         </Box>
 
                                         {/* Smart Routing Section (conditional) */}

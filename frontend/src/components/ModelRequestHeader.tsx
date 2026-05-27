@@ -73,7 +73,6 @@ export interface ModelRequestHeaderProps {
     editable?: boolean;
     active?: boolean;
     subtitle?: React.ReactNode;
-    responseModelName?: string;  // For response model transformation
     sx?: React.CSSProperties;
     onClick?: () => void;
     collapsible?: boolean;
@@ -89,7 +88,6 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     editable = false,
     active = true,
     subtitle,
-    responseModelName,
     sx,
     onClick,
     collapsible = false,
@@ -258,24 +256,6 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                     </Box>
                 )}
 
-                {/* Response Model Chip */}
-                {responseModelName && (
-                    <Tooltip title={`Response model: ${responseModelName}`}>
-                        <Chip
-                            label={`→ ${responseModelName}`}
-                            size="small"
-                            color="info"
-                            onClick={(e) => e.stopPropagation()}
-                            sx={{
-                                opacity: active ? 1 : 0.5,
-                                backgroundColor: active ? 'info.main' : 'action.disabled',
-                                color: active ? 'info.contrastText' : 'text.disabled',
-                                height: 22,
-                                fontSize: '0.7rem',
-                            }}
-                        />
-                    </Tooltip>
-                )}
 
                 {/* Expand/Collapse Button */}
                 {collapsible && onToggleExpanded && (
