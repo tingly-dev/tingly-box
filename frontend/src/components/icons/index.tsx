@@ -107,6 +107,7 @@ import {
     IconMinus,
     IconList,
     IconNavigation,
+    IconBrain,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -199,6 +200,7 @@ export const LocationOn = tablerMui(IconMapPin);
 export const Hub = tablerMui(IconShare);
 export const Cable = tablerMui(IconPlugConnected);
 export const Input = tablerMui(IconArrowBarToRight);
+export const Psychology = tablerMui(IconBrain);
 
 // --- Devices / brand / theme -------------------------------------------------
 export const Laptop = tablerMui(IconDeviceLaptop);

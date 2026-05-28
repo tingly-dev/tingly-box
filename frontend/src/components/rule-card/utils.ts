@@ -74,6 +74,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             useMaxTokens: rule.flags?.use_max_tokens || false,
             openaiEndpointOverride: rule.flags?.openai_endpoint_override || '',
             blockTools: rule.flags?.block_tools || '',
+            thinkingEffort: rule.flags?.thinking_effort || '',
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -225,11 +226,18 @@ const FALSE_VALUES = new Set(['false', '0', 'no', 'off']);
 
 const ENUM_FLAG_VALUES: Record<string, Set<string>> = {
     openai_endpoint_override: new Set(['auto', 'chat', 'responses']),
+    thinking_effort: new Set(['off', 'low', 'medium', 'high', 'max']),
+};
+
+// The sentinel value that means "inactive/By Client" for each enum flag.
+// Empty string (omitted on the wire) is always inactive too.
+const ENUM_INACTIVE_VALUE: Record<string, string> = {
+    openai_endpoint_override: 'auto',
+    thinking_effort: '',
 };
 
 function isEnumActive(key: string, value: string): boolean {
-    // "auto" (and empty) are inactive defaults; anything else counts as active.
-    return value !== '' && value !== 'auto';
+    return value !== '' && value !== (ENUM_INACTIVE_VALUE[key] ?? '');
 }
 
 export function formatRuleFlags(flags?: RuleFlags): string {
@@ -245,6 +253,9 @@ export function formatRuleFlags(flags?: RuleFlags): string {
         entries.push(`openai_endpoint_override=${flags.openaiEndpointOverride}`);
     }
     if (flags.blockTools) entries.push(`block_tools=${flags.blockTools}`);
+    if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) {
+        entries.push(`thinking_effort=${flags.thinkingEffort}`);
+    }
     return entries.join(',');
 }
 
@@ -261,6 +272,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         useMaxTokens: false,
         openaiEndpointOverride: '',
         blockTools: '',
+        thinkingEffort: '',
     };
 
     const trimmed = input.trim();
@@ -301,6 +313,9 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             switch (rawKey) {
                 case 'openai_endpoint_override':
                     flags.openaiEndpointOverride = rawValue;
+                    break;
+                case 'thinking_effort':
+                    flags.thinkingEffort = rawValue;
                     break;
             }
             continue;
@@ -352,6 +367,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.customUserAgent && flags.customUserAgent.trim() !== '') n++;
     if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) n++;
     if (flags.blockTools && flags.blockTools.trim() !== '') n++;
+    if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) n++;
     return n;
 }
 

@@ -33,6 +33,7 @@ const UseOpenAIPageContent: React.FC = () => {
                         baseUrlPath="/tingly/openai"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
+                        scenario={scenario}
                     />
                 </UnifiedCard>
                 <TemplatePage

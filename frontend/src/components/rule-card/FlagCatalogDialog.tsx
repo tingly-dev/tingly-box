@@ -15,18 +15,18 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { AutoAwesome as AutoAwesomeIcon } from '@/components/icons';
-import { Cable as CableIcon } from '@/components/icons';
-import { Outbound as OutboundIcon } from '@/components/icons';
-import { Terminal as TerminalIcon } from '@/components/icons';
-import { Extension as ExtensionIcon } from '@/components/icons';
-import { Input as InputIcon } from '@/components/icons';
-import { Close as CloseIcon } from '@/components/icons';
+import {
+    AutoAwesome as AutoAwesomeIcon,
+    Cable as CableIcon,
+    Close as CloseIcon,
+    Extension as ExtensionIcon,
+    Input as InputIcon,
+    Outbound as OutboundIcon,
+    Psychology as PsychologyIcon,
+    Terminal as TerminalIcon,
+} from '@/components/icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
-
-// Default enum value treated as "unset" (matches the registry's first option).
-const ENUM_DEFAULT_VALUE = 'auto';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -64,6 +64,8 @@ const flagToString = (flags: RuleFlags | undefined, key: string): string => {
             return flags.openaiEndpointOverride || '';
         case 'block_tools':
             return flags.blockTools || '';
+        case 'thinking_effort':
+            return flags.thinkingEffort || '';
         default:
             return '';
     }
@@ -92,18 +94,25 @@ const setString = (flags: RuleFlags, key: string, value: string): RuleFlags => {
             return { ...flags, customUserAgent: value };
         case 'openai_endpoint_override':
             // Persist "auto" as empty string so omitempty hides it on the wire.
-            return { ...flags, openaiEndpointOverride: value === ENUM_DEFAULT_VALUE ? '' : value };
+            return { ...flags, openaiEndpointOverride: value === 'auto' ? '' : value };
         case 'block_tools':
             return { ...flags, blockTools: value };
+        case 'thinking_effort':
+            // First option already uses "" for the inactive ("By Client") value.
+            return { ...flags, thinkingEffort: value };
         default:
             return flags;
     }
 };
 
+// The inactive/default value for an enum flag is its first registry option
+// (e.g. "auto" for endpoint override, "" for thinking effort, "default" for thinking mode).
+const enumDefault = (spec: FlagSpec): string => spec.options?.[0]?.value ?? '';
+
 const isFlagActive = (spec: FlagSpec, flags: RuleFlags): boolean => {
     if (spec.type === 'bool') return flagToBool(flags, spec.key);
     const v = flagToString(flags, spec.key);
-    if (spec.type === 'enum') return v !== '' && v !== ENUM_DEFAULT_VALUE;
+    if (spec.type === 'enum') return v !== '' && v !== enumDefault(spec);
     return v !== '';
 };
 
@@ -124,6 +133,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     http: { label: 'HTTP', icon: <CableIcon fontSize="small" /> },
     response: { label: 'Response', icon: <OutboundIcon fontSize="small" /> },
     request: { label: 'Request', icon: <InputIcon fontSize="small" /> },
+    reasoning: { label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
 };
 
 const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] || {
@@ -334,7 +344,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                     {currentGroup.specs.map((spec) => {
                                         const enabled = isFlagActive(spec, draft);
                                         const enumValue = spec.type === 'enum'
-                                            ? (flagToString(draft, spec.key) || ENUM_DEFAULT_VALUE)
+                                            ? (flagToString(draft, spec.key) || enumDefault(spec))
                                             : '';
                                         const pulsing = pulseKey === spec.key;
                                         return (

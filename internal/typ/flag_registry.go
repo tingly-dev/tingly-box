@@ -25,6 +25,8 @@ const (
 	// FlagCategoryRequest — protocol-agnostic request-body guard rails
 	// (tool blocking, etc).
 	FlagCategoryRequest FlagCategory = "request"
+	// FlagCategoryReasoning — extended-thinking / reasoning-effort controls.
+	FlagCategoryReasoning FlagCategory = "reasoning"
 )
 
 // FlagOption is one selectable value for a FlagTypeEnum spec.
@@ -114,6 +116,21 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeString,
 			Category:    FlagCategoryRequest,
 			Placeholder: "e.g. web_search,run_terminal_cmd",
+		},
+		{
+			Key:         "thinking_effort",
+			Label:       "Thinking",
+			Description: "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on with the matching budget — mapped to budget_tokens for Anthropic targets (low 1K / medium 5K / high 20K / max 32K) and to reasoning_effort for OpenAI targets (\"max\" collapses to \"high\").",
+			Type:        FlagTypeEnum,
+			Category:    FlagCategoryReasoning,
+			Options: []FlagOption{
+				{Value: "", Label: "By Client"},
+				{Value: "off", Label: "Off"},
+				{Value: "low", Label: "Low (~1K tokens)"},
+				{Value: "medium", Label: "Medium (~5K tokens)"},
+				{Value: "high", Label: "High (~20K tokens)"},
+				{Value: "max", Label: "Max (~32K tokens)"},
+			},
 		},
 	}
 }

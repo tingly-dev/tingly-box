@@ -1289,6 +1289,12 @@ func (c *Config) GetScenarios() []typ.ScenarioConfig {
 func (c *Config) GetScenarioConfig(scenario typ.RuleScenario) *typ.ScenarioConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	return c.scenarioConfigLocked(scenario)
+}
+
+// scenarioConfigLocked returns the scenario config without acquiring the mutex.
+// Callers must hold at least a read lock.
+func (c *Config) scenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioConfig {
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == scenario {
 			return &c.Scenarios[i]
@@ -1534,7 +1540,7 @@ func (c *Config) ResolveProfileNameOrID(baseScenario typ.RuleScenario, input str
 func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	config := c.GetScenarioConfig(scenario)
+	config := c.scenarioConfigLocked(scenario)
 	if config == nil {
 		return false
 	}
@@ -1649,7 +1655,7 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	config := c.GetScenarioConfig(scenario)
+	config := c.scenarioConfigLocked(scenario)
 	if config == nil {
 		return ""
 	}
@@ -1657,8 +1663,6 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	switch flagName {
 	case "thinking_effort":
 		return flags.ThinkingEffort
-	case "thinking_mode":
-		return flags.ThinkingMode
 	case "recording_v2":
 		return string(flags.RecordingV2)
 	default:
@@ -1695,8 +1699,6 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	switch flagName {
 	case "thinking_effort":
 		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
-	case "thinking_mode":
-		config.Flags.ThinkingMode = value
 	case "recording_v2":
 		if !typ.IsValidRecordingMode(value) {
 			return fmt.Errorf("invalid recording_v2 value: %s (must be one of: request, request_response, staged_request_response, or empty)", value)

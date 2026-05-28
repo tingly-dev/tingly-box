@@ -50,6 +50,7 @@ const UseImageGenPageContent: React.FC = () => {
                         baseUrlPath="/tingly/imagegen"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
+                        scenario={scenario}
                     />
                 </UnifiedCard>
                 <ImageGenQuickStartCard
