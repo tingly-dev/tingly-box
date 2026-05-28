@@ -19,6 +19,7 @@ import {
 import {
     Add as AddIcon,
     Delete as DeleteIcon,
+    Close as CloseIcon,
     AutoAwesome as AutoAwesomeIcon,
     Article as ArticleIcon,
     Speed as SpeedIcon,
@@ -135,6 +136,15 @@ const isOpValid = (op: SmartOp): boolean => {
     return !!op.value && op.value.trim() !== '';
 };
 
+const opSummary = (op: SmartOp): string => {
+    if (!op.position) return 'Unset';
+    const pos = positionMeta(op.position);
+    const posLabel = pos?.label || op.position;
+    if (!op.operation) return posLabel;
+    if (op.meta?.type === 'bool') return `${posLabel} · ${op.operation}`;
+    return `${posLabel} · ${op.operation}${op.value ? ` · ${op.value}` : ''}`;
+};
+
 export interface SmartRuleCatalogDialogProps {
     open: boolean;
     smartRouting: SmartRouting | null;
@@ -249,7 +259,6 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                     px: 3,
                     py: 1.5,
                     borderTop: 1,
-                    borderBottom: 1,
                     borderColor: 'divider',
                     bgcolor: 'action.hover',
                 }}
@@ -263,6 +272,43 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                     placeholder="e.g., Route image requests to vision model"
                 />
             </Box>
+
+            {/* Active conditions strip — mirrors FlagCatalogDialog's active-flags strip */}
+            {ops.length > 0 && (
+                <Box
+                    sx={{
+                        px: 3,
+                        py: 1.25,
+                        borderTop: 1,
+                        borderBottom: 1,
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                            Active ({ops.length})
+                        </Typography>
+                        {ops.map((op) => {
+                            const cat = positionMeta(op.position)?.category || '';
+                            const meta = categoryMeta(cat);
+                            const valid = isOpValid(op);
+                            return (
+                                <Chip
+                                    key={op.uuid}
+                                    size="small"
+                                    icon={meta.icon}
+                                    label={opSummary(op)}
+                                    onClick={() => setActiveCategory(cat || 'agent')}
+                                    onDelete={() => handleRemoveOp(op.uuid)}
+                                    deleteIcon={<CloseIcon />}
+                                    color={valid ? 'default' : 'warning'}
+                                    sx={{ maxWidth: 240 }}
+                                />
+                            );
+                        })}
+                    </Stack>
+                </Box>
+            )}
 
             <DialogContent sx={{ p: 0, display: 'flex', minHeight: 460 }} dividers={false}>
                 {/* Left: category sidebar */}
