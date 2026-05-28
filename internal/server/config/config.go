@@ -1657,8 +1657,6 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	switch flagName {
 	case "thinking_effort":
 		return flags.ThinkingEffort
-	case "thinking_mode":
-		return flags.ThinkingMode
 	case "recording_v2":
 		return string(flags.RecordingV2)
 	default:
@@ -1695,8 +1693,6 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	switch flagName {
 	case "thinking_effort":
 		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
-	case "thinking_mode":
-		config.Flags.ThinkingMode = value
 	case "recording_v2":
 		if !typ.IsValidRecordingMode(value) {
 			return fmt.Errorf("invalid recording_v2 value: %s (must be one of: request, request_response, staged_request_response, or empty)", value)

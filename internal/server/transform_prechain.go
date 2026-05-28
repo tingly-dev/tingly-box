@@ -17,8 +17,8 @@ func buildAnthropicPreChain(
 
 	if scenarioConfig != nil {
 		flags := &scenarioConfig.Flags
-		if flags.ThinkingMode != "" {
-			chain = append(chain, NewThinkingModeTransform(scenarioConfig))
+		if flags.ThinkingEffort != typ.ThinkingEffortDefault {
+			chain = append(chain, NewThinkingEffortTransform(flags.ThinkingEffort))
 		}
 		if flags.CleanHeader {
 			chain = append(chain, NewCleanHeaderTransform())
