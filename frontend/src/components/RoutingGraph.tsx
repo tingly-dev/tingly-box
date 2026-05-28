@@ -98,6 +98,7 @@ interface RuleGraphProps {
     onAddSmartRule?: () => void;
     onEditSmartRule?: (ruleUuid: string) => void;
     onDeleteSmartRule?: (ruleUuid: string) => void;
+    onMoveSmartRule?: (ruleUuid: string, direction: 'up' | 'down') => void;
     onAddServiceToSmartRule?: (ruleUuid: string) => void;
     onDeleteServiceFromSmartRule?: (ruleUuid: string, serviceUuid: string) => void;
     // Routing mode switch
@@ -186,6 +187,7 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
     onAddSmartRule,
     onEditSmartRule,
     onDeleteSmartRule,
+    onMoveSmartRule,
     onAddServiceToSmartRule,
     onDeleteServiceFromSmartRule,
     // Routing mode switch
@@ -425,9 +427,12 @@ const RoutingGraph: React.FC<RuleGraphProps> = ({
                                                         <NodeContainer>
                                                             <SmartOpNode
                                                                 smartRouting={rule}
+                                                                index={smartRouting.indexOf(rule)}
                                                                 active={record.active}
                                                                 onEdit={() => onEditSmartRule?.(rule.uuid)}
                                                                 onDelete={() => onDeleteSmartRule?.(rule.uuid)}
+                                                                onMoveUp={smartRouting.indexOf(rule) > 0 ? () => onMoveSmartRule?.(rule.uuid, 'up') : undefined}
+                                                                onMoveDown={smartRouting.indexOf(rule) < smartRouting.length - 1 ? () => onMoveSmartRule?.(rule.uuid, 'down') : undefined}
                                                             />
                                                         </NodeContainer>
 

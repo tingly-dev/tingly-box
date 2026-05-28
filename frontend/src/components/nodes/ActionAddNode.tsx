@@ -9,16 +9,9 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import NodeTooltip from './NodeTooltip';
-import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles } from './styles';
+import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, SMALL_NODE_STYLES } from './styles';
 
-// ActionAddNode dimensions
-const ADD_PROVIDER_NODE_STYLES = {
-    width: 100,
-    height: 72,
-    padding: 5,
-} as const;
-
-const { node } = { node: ADD_PROVIDER_NODE_STYLES };
+const { node } = { node: SMALL_NODE_STYLES };
 
 // ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
@@ -35,7 +28,6 @@ const StyledAddProviderNode = styled(Box, {
     backgroundColor: 'background.paper',
     width: node.width,
     height: node.height,
-    boxShadow: 'none',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     cursor: active ? 'pointer' : 'default',
     opacity: active ? 1 : 0.5,

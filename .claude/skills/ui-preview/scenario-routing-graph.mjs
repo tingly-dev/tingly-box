@@ -38,13 +38,22 @@ const SCENARIO = 'claude_code';
 
 function resolveToken() {
     if (process.env.TOKEN) return process.env.TOKEN;
+    // Server reuses existing token from config — no longer prints to log.
+    // Read it from ~/.tingly-box/config.json (field: user_token).
+    for (const f of ['/root/.tingly-box/config.json', '/home/user/.tingly-box/config.json']) {
+        try {
+            const cfg = JSON.parse(readFileSync(f, 'utf8'));
+            if (cfg.user_token) return cfg.user_token;
+        } catch { /* ignore */ }
+    }
+    // Fallback: old "Login Token: tb-user-..." line in server log.
     for (const f of ['/tmp/tingly-server.log']) {
         try {
             const m = readFileSync(f, 'utf8').match(/Login Token:\s*(tb-user-[0-9a-f]+)/);
             if (m) return m[1];
         } catch { /* ignore */ }
     }
-    throw new Error('No TOKEN: set $TOKEN or ensure /tmp/tingly-server.log has the Login Token line');
+    throw new Error('No TOKEN: set $TOKEN env var, or ensure ~/.tingly-box/config.json has user_token');
 }
 
 const TOKEN = resolveToken();
@@ -59,15 +68,21 @@ async function api(path, opts = {}) {
 
 async function seed() {
     // Providers (force=true skips the live connectivity check; token is a dummy).
-    const mk = async (name, api_base) => {
+    const mk = async (name, body_extra) => {
         const r = await api('/api/v2/providers?force=true', {
             method: 'POST',
-            body: JSON.stringify({ name, api_base, api_style: 'openai', token: 'demo-key', enabled: true }),
+            body: JSON.stringify({ name, api_style: 'openai', token: 'demo-key', enabled: true, ...body_extra }),
         });
         return r.json?.data?.uuid;
     };
-    const glm = await mk('glm', 'https://open.bigmodel.cn/api/paas/v4');
-    const ds = await mk('deepseek', 'https://api.deepseek.com/v1');
+    const glm = await mk('glm', { api_base: 'https://open.bigmodel.cn/api/paas/v4' });
+    const ds  = await mk('deepseek', { api_base: 'https://api.deepseek.com/v1' });
+    // fusion: supports both OpenAI and Anthropic API styles (shows dual O+A tags)
+    const fusion = await mk('fusion', {
+        api_base: 'https://fusion-proxy.example.com/v1',
+        api_base_openai: 'https://fusion-proxy.example.com/v1',
+        api_base_anthropic: 'https://fusion-proxy.example.com/anthropic',
+    });
     if (!glm || !ds) throw new Error('provider seeding failed: ' + JSON.stringify({ glm, ds }));
 
     const rule = (body) => api('/api/v1/rule', { method: 'POST', body: JSON.stringify(body) });
@@ -78,8 +93,8 @@ async function seed() {
     await rule({
         scenario: SCENARIO, request_model: 'claude-sonnet-4-6', description: 'Sonnet with smart routing', active: true,
         services: [
-            { provider: glm, model: 'glm-4.6', weight: 1, active: true },
-            { provider: ds, model: 'deepseek-chat', weight: 1, active: true },
+            { provider: glm,    model: 'glm-4.6',      weight: 1, active: true },
+            { provider: ds,     model: 'deepseek-chat', weight: 1, active: true },
         ],
         smart_enabled: true,
         smart_routing: [{
@@ -89,10 +104,10 @@ async function seed() {
         }],
     });
     await rule({
-        scenario: SCENARIO, request_model: 'claude-haiku-4-5', description: 'Haiku to Deepseek', active: true,
-        services: [{ provider: ds, model: 'deepseek-chat', weight: 1, active: true }],
+        scenario: SCENARIO, request_model: 'claude-haiku-4-5', description: 'Haiku via fusion proxy', active: true,
+        services: [{ provider: fusion || ds, model: 'claude-haiku-4-5', weight: 1, active: true }],
     });
-    console.log('seeded providers + 3 rules (incl. one smart-routing)');
+    console.log('seeded providers + 3 rules (incl. one smart-routing, one fusion)');
 }
 
 async function shoot(browser, mode) {
@@ -106,15 +121,9 @@ async function shoot(browser, mode) {
     await page.goto(`${FE}/agent/${SCENARIO}`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForTimeout(2500);
 
-    // Default view is "Unified Model" (a single built-in rule). Switch to
-    // "Separate Model" to render the per-rule routing graphs, confirming the dialog.
-    try {
-        await page.getByText('Separate Model', { exact: true }).first().click({ timeout: 8000 });
-        await page.waitForTimeout(600);
-        await page.getByRole('button', { name: /^Confirm$/ }).first().click({ timeout: 6000 });
-    } catch (e) {
-        console.log('[mode switch]', e.message.slice(0, 100));
-    }
+    // The UnifiedRoutingGraph shows an EntryNode with inline Direct/Smart toggle.
+    // No "Separate Model" dialog needed — rules render directly on the page.
+    // Allow extra time for the real API data to load and React to settle.
     await page.waitForTimeout(4000);
 
     await page.screenshot({ path: `/tmp/scenario-routing-${mode}.png`, fullPage: true });

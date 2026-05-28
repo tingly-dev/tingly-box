@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "@ant-design/x-markdown": "^2.7.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@lobehub/icons-static-svg": "^1.90.0",
     "@mui/icons-material": "^7.3.11",
     "@mui/material": "^7.3.11",

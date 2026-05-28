@@ -1,4 +1,4 @@
-import {Delete as DeleteIcon,} from '@/components/icons';
+import { Delete as DeleteIcon, KeyboardArrowUp, KeyboardArrowDown } from '@/components/icons';
 import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography,} from '@mui/material';
 import NodeTooltip from './NodeTooltip.tsx';
 import { alpha } from '@mui/material/styles';
@@ -24,6 +24,8 @@ export interface SmartNodeProps {
     active: boolean;
     onEdit: () => void;
     onDelete: () => void;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
 }
 
 export const SmartOpNode: React.FC<SmartNodeProps> = ({
@@ -32,6 +34,8 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                                           active,
                                                           onEdit,
                                                           onDelete,
+                                                          onMoveUp,
+                                                          onMoveDown,
                                                       }) => {
     const {t} = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -214,11 +218,36 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
 
                 {/* Action Buttons - visible on hover */}
                 <ActionButtonsBox className="action-buttons">
+                    {onMoveUp && (
+                        <NodeTooltip title="Move up" placement="bottom">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                                aria-label="Move smart rule up"
+                            >
+                                <KeyboardArrowUp sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    )}
+                    {onMoveDown && (
+                        <NodeTooltip title="Move down" placement="bottom">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                                aria-label="Move smart rule down"
+                            >
+                                <KeyboardArrowDown sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    )}
                     <NodeTooltip title={t('rule.smart.deleteTooltip')} placement="bottom">
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
                             sx={{p: 0.5, backgroundColor: 'background.paper'}}
+                            aria-label={t('rule.smart.deleteTooltip')}
                         >
                             <DeleteIcon sx={{fontSize: '1rem', color: 'error.main'}}/>
                         </IconButton>

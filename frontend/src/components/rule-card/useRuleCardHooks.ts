@@ -451,6 +451,21 @@ export function useSmartRoutingHandlers({
         }
     }, [configRecord, setConfigRecord, autoSave, showNotification]);
 
+    const handleMoveSmartRule = useCallback(async (ruleUuid: string, direction: 'up' | 'down') => {
+        if (!configRecord) return;
+        const rules = [...(configRecord.smartRouting || [])];
+        const idx = rules.findIndex((r) => r.uuid === ruleUuid);
+        if (idx === -1) return;
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (targetIdx < 0 || targetIdx >= rules.length) return;
+        [rules[idx], rules[targetIdx]] = [rules[targetIdx], rules[idx]];
+        const updated: ConfigRecord = { ...configRecord, smartRouting: rules };
+        const previousRecord = { ...configRecord };
+        setConfigRecord(updated);
+        const success = await autoSave(updated);
+        if (!success) setConfigRecord(previousRecord);
+    }, [configRecord, setConfigRecord, autoSave]);
+
     return {
         dialogState: {
             open: smartRuleDialogOpen,
@@ -465,6 +480,7 @@ export function useSmartRoutingHandlers({
             handleAddServiceToSmartRule,
             handleDeleteServiceFromSmartRule,
             handleDeleteDefaultProvider,
+            handleMoveSmartRule,
         },
     };
 }

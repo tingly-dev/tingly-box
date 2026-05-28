@@ -10,8 +10,7 @@ import {
     useSmartRoutingHandlers,
 } from '@/components/rule-card/useRuleCardHooks';
 import { RuleCardDeleteDialog, RuleFlagEditDialog } from '@/components/rule-card/dialogs';
-import RoutingGraph from '@/components/RoutingGraph';
-import SmartRoutingGraph from '@/components/SmartRoutingGraph';
+import UnifiedRoutingGraph from '@/components/UnifiedRoutingGraph';
 import SmartRuleEditDialog from '@/components/SmartRuleEditDialog';
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RuleExtensionsCard from '@/components/rule-card/RuleExtensionsCard';
@@ -226,8 +225,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
     }, [rule.uuid, onRuleDelete, showNotification]);
 
-    const isSmartMode = rule.smart_enabled;
-
     const handleOpenFlagEditor = useCallback(() => {
         if (!configRecord) return;
         const currentFlags = formatRuleFlags(configRecord.flags);
@@ -314,55 +311,30 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     return (
         <>
-            {isSmartMode ? (
-                <SmartRoutingGraph
-                    record={configRecord}
-                    providers={providers}
-                    active={configRecord.active}
-                    saving={saving}
-                    collapsible={collapsible}
-                    allowToggleRule={allowToggleRule}
-                    expanded={expanded}
-                    onToggleExpanded={handleToggleExpanded}
-                    extraActions={extraActions}
-                    extensionsCard={extensionsCard}
-                    onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
-                    onAddSmartRule={smartHandlers.handleAddSmartRule}
-                    onEditSmartRule={smartHandlers.handleEditSmartRule}
-                    onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
-                    onAddServiceToSmartRule={smartHandlers.handleAddServiceToSmartRule}
-                    onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
-                    onAddDefaultProvider={handleAddProviderButtonClick}
-                    onDeleteDefaultProvider={smartHandlers.handleDeleteDefaultProvider}
-                    onProviderNodeClick={handleProviderNodeClick}
-                    onProviderPriorityChange={handleProviderPriorityChange}
-                    onSwitchRoutingMode={handleRoutingModeSwitch}
-                />
-            ) : (
-                <RoutingGraph
-                    record={configRecord}
-                    recordUuid={configRecord.uuid}
-                    providers={providers}
-                    saving={saving}
-                    expanded={expanded}
-                    collapsible={collapsible}
-                    allowToggleRule={allowToggleRule}
-                    onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
-                    onDeleteProvider={handleDeleteProvider}
-                    onProviderPriorityChange={handleProviderPriorityChange}
-                    onToggleExpanded={handleToggleExpanded}
-                    onProviderNodeClick={handleProviderNodeClick}
-                    onAddProviderButtonClick={handleAddProviderButtonClick}
-                    extraActions={extraActions}
-                    extensionsCard={extensionsCard}
-                    onAddSmartRule={smartHandlers.handleAddSmartRule}
-                    onEditSmartRule={smartHandlers.handleEditSmartRule}
-                    onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
-                    onAddServiceToSmartRule={handleAddServiceToSmartRuleByUuid}
-                    onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
-                    onSwitchRoutingMode={handleRoutingModeSwitch}
-                />
-            )}
+            <UnifiedRoutingGraph
+                mode="auto"
+                record={configRecord}
+                providers={providers}
+                active={configRecord.active}
+                saving={saving}
+                collapsible={collapsible}
+                expanded={expanded}
+                onToggleExpanded={handleToggleExpanded}
+                extraActions={extraActions}
+                extensionsCard={extensionsCard}
+                onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
+                onProviderNodeClick={handleProviderNodeClick}
+                onProviderPriorityChange={handleProviderPriorityChange}
+                onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
+                onAddProvider={handleAddProviderButtonClick}
+                onAddSmartRule={smartHandlers.handleAddSmartRule}
+                onEditSmartRule={smartHandlers.handleEditSmartRule}
+                onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
+                onMoveSmartRule={smartHandlers.handleMoveSmartRule}
+                onAddServiceToSmartRule={handleAddServiceToSmartRuleByUuid}
+                onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
+                onSwitchRoutingMode={handleRoutingModeSwitch}
+            />
 
             {/* Delete Confirmation Dialog */}
             <RuleCardDeleteDialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={confirmDeleteRule} />
