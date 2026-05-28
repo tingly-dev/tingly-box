@@ -168,16 +168,6 @@ func handleOpenAIToAnthropicBetaStream(
 		}
 
 		choice := chunk.Choices[0]
-
-		// Check if usage is present - use same logic as stream counter
-		hasValidUsage := chunk.JSON.Usage.Valid()
-		hasNonZeroUsage := chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0
-		hasUsage := hasValidUsage || hasNonZeroUsage
-
-		logrus.WithContext(c.Request.Context()).Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q, has_usage=%v (Valid=%v, NonZero=%v)",
-			chunkCount, len(chunk.Choices),
-			choice.Delta.Content, choice.FinishReason, hasUsage, hasValidUsage, hasNonZeroUsage)
-
 		delta := choice.Delta
 
 		// Check for server_tool_use at chunk level (not delta level)

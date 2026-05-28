@@ -166,11 +166,10 @@ func handleOpenAIToAnthropicStreamResponse(
 		chunkCount++
 		chunk := stream.Current()
 
-		logrus.WithContext(c.Request.Context()).Debugf("[Stream] Got chunk #%d: len(choices)=%d", chunkCount, len(chunk.Choices))
-
-		// Skip empty chunks (no choices)
+		// Skip empty chunks (no choices).
+		// The trailing usage-only chunk (choices:[], usage:{...}) lands here
+		// when stream_options.include_usage=true.
 		if len(chunk.Choices) == 0 {
-			// Token counter will handle usage tracking if present in chunk
 			if tokenCounter != nil {
 				_, _, _ = tokenCounter.ConsumeOpenAIChunk(&chunk)
 				inputTokens, outputTokens := tokenCounter.GetCounts()
@@ -185,20 +184,6 @@ func handleOpenAIToAnthropicStreamResponse(
 		}
 
 		choice := chunk.Choices[0]
-
-		// Check if usage is present - use same logic as stream counter
-		hasValidUsage := chunk.JSON.Usage.Valid()
-		hasNonZeroUsage := chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0
-		hasUsage := hasValidUsage || hasNonZeroUsage
-
-		logrus.WithContext(c.Request.Context()).Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q, has_usage=%v (Valid=%v, NonZero=%v)",
-			chunkCount, len(chunk.Choices),
-			choice.Delta.Content, choice.FinishReason, hasUsage, hasValidUsage, hasNonZeroUsage)
-
-		// Log first few chunks in detail for debugging
-		if chunkCount <= 5 || choice.FinishReason != "" {
-			logrus.WithContext(c.Request.Context()).Debugf("Full chunk #%d: %v", chunkCount, chunk)
-		}
 
 		delta := choice.Delta
 

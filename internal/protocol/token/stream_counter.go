@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go/v3"
-	"github.com/sirupsen/logrus"
 	"github.com/tiktoken-go/tokenizer"
 )
 
@@ -78,22 +77,12 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Process usage if provided in the chunk (usually only in the final chunk)
-	// Check if Usage is present by checking:
-	// 1. The JSON field is valid (status > invalid)
-	// 2. OR the usage field has non-zero values (SDK bug workaround)
-	// The SDK's Valid() method incorrectly returns false for some valid usage fields
-	hasValidUsage := chunk.JSON.Usage.Valid()
-	hasNonZeroUsage := chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0
-
-	logrus.Debugf("[StreamTokenCounter] Usage check: Valid()=%v, hasNonZeroValues=%v, PromptTokens=%d, CompletionTokens=%d",
-		hasValidUsage, hasNonZeroUsage, chunk.Usage.PromptTokens, chunk.Usage.CompletionTokens)
-
-	if hasValidUsage || hasNonZeroUsage {
+	// Process usage if provided in the chunk (usually only the trailing
+	// usage-only chunk when stream_options.include_usage=true). The SDK's
+	// Valid() check misses some legitimate cases, so we also accept any
+	// non-zero prompt/completion count as evidence that usage is present.
+	if chunk.JSON.Usage.Valid() || chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
 		usage := chunk.Usage
-		logrus.Debugf("[StreamTokenCounter] Chunk contains usage field - PromptTokens=%d, CompletionTokens=%d",
-			usage.PromptTokens, usage.CompletionTokens)
-
 		if usage.PromptTokens > 0 {
 			c.inputTokens = int(usage.PromptTokens)
 		}
