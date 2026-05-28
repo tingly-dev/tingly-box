@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -502,6 +503,7 @@ func (h *KimiHook) BeforeToken(body map[string]string, header http.Header) error
 	header.Set("X-Msh-Version", "1.10.6")
 	header.Set("X-Msh-Device-Name", KimiDeviceName())
 	header.Set("X-Msh-Device-Model", KimiDeviceModel())
+	header.Set("X-Msh-Os-Version", KimiOsVersion())
 	return nil
 }
 
@@ -597,4 +599,24 @@ func KimiDeviceModel() string {
 		goos = "Windows"
 	}
 	return goos + " " + runtime.GOARCH
+}
+
+// KimiOsVersion returns the OS version string for the X-Msh-Os-Version header,
+// mirroring Python's platform.version() used by kimi-cli.
+func KimiOsVersion() string {
+	switch runtime.GOOS {
+	case "linux":
+		if data, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
+			return strings.TrimSpace(string(data))
+		}
+	case "darwin":
+		if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	case "windows":
+		if out, err := exec.Command("cmd", "/c", "ver").Output(); err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	}
+	return runtime.GOOS
 }

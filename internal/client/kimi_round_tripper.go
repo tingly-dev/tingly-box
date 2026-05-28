@@ -32,6 +32,7 @@ type kimiRoundTripper struct {
 	deviceID    string
 	deviceName  string
 	deviceModel string
+	osVersion   string
 }
 
 func newKimiRoundTripper(inner http.RoundTripper, provider *typ.Provider) *kimiRoundTripper {
@@ -44,6 +45,7 @@ func newKimiRoundTripper(inner http.RoundTripper, provider *typ.Provider) *kimiR
 		deviceID:     deviceID,
 		deviceName:   oauth.KimiDeviceName(),
 		deviceModel:  oauth.KimiDeviceModel(),
+		osVersion:    oauth.KimiOsVersion(),
 	}
 }
 
@@ -53,6 +55,7 @@ func (t *kimiRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	req.Header.Set("X-Msh-Version", kimiCLIVersion)
 	req.Header.Set("X-Msh-Device-Name", t.deviceName)
 	req.Header.Set("X-Msh-Device-Model", t.deviceModel)
+	req.Header.Set("X-Msh-Os-Version", t.osVersion)
 	if t.deviceID != "" {
 		req.Header.Set("X-Msh-Device-Id", t.deviceID)
 	}
