@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/pkg/browser"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -341,32 +342,66 @@ type BannerConfig struct {
 // printBanner prints the server access banner
 func printBanner(cfg BannerConfig) {
 	if !cfg.EnableUI {
-		// Resolve host for display
 		resolvedHost := network.ResolveHost(cfg.Host)
 		fmt.Printf("API endpoint: http://%s:%d/v1/chat/completions\n", resolvedHost, cfg.Port)
 		return
 	}
 
-	// Show all access URLs when UI is enabled
-	fmt.Println("\n┌────────────────────────────────────────────────────────────────────┐")
-	fmt.Println("                         Access Information                            ")
-	fmt.Println("├────────────────────────────────────────────────────────────────────┤")
-	if cfg.GlobalConfig.HasUserToken() {
-		fmt.Printf("  Web UI:       http://localhost:%d/login/%s\n", cfg.Port, cfg.GlobalConfig.GetUserToken())
-	} else {
-		fmt.Printf("  Web UI:       http://localhost:%d/\n", cfg.Port)
-	}
-	fmt.Printf("  OpenAI API:   http://localhost:%d/tingly/openai/v1/chat/completions\n", cfg.Port)
-	fmt.Printf("  Anthropic API: http://localhost:%d/tingly/anthropic/v1/messages\n", cfg.Port)
+	const (
+		primary   = lipgloss.Color("#3B82F6")
+		success   = lipgloss.Color("#06B6D4")
+		muted     = lipgloss.Color("#64748B")
+		highlight = lipgloss.Color("#60A5FA")
+	)
 
-	// Show login token for easy copy
-	if cfg.GlobalConfig.HasUserToken() {
-		fmt.Printf("\n  Login Token:  %s\n", cfg.GlobalConfig.GetUserToken())
+	labelStyle := lipgloss.NewStyle().Foreground(muted).Width(14).Align(lipgloss.Right)
+	urlStyle := lipgloss.NewStyle().Foreground(success)
+	tokenStyle := lipgloss.NewStyle().Foreground(highlight)
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(primary)
+
+	var lines []string
+	addLine := func(label, value string, valueStyle lipgloss.Style) {
+		lines = append(lines, fmt.Sprintf("%s  %s", labelStyle.Render(label), valueStyle.Render(value)))
 	}
-	fmt.Println("└────────────────────────────────────────────────────────────────────┘")
+
+	if cfg.GlobalConfig.HasUserToken() {
+		addLine("Web UI", fmt.Sprintf("http://localhost:%d/login/%s", cfg.Port, cfg.GlobalConfig.GetUserToken()), urlStyle)
+	} else {
+		addLine("Web UI", fmt.Sprintf("http://localhost:%d/", cfg.Port), urlStyle)
+	}
+	addLine("OpenAI API", fmt.Sprintf("http://localhost:%d/tingly/openai/v1/chat/completions", cfg.Port), urlStyle)
+	addLine("Anthropic API", fmt.Sprintf("http://localhost:%d/tingly/anthropic/v1/messages", cfg.Port), urlStyle)
+
+	if cfg.GlobalConfig.HasUserToken() {
+		lines = append(lines, "")
+		addLine("Login Token", cfg.GlobalConfig.GetUserToken(), tokenStyle)
+	}
+
+	// Build title with product name and version
+	titleText := titleStyle.Render(fmt.Sprintf("Tingly Box - %s — Access Information", BuildVersion))
+
+	// Compute visual width for centering the title
+	maxWidth := lipgloss.Width(titleText)
+	for _, line := range lines {
+		if w := lipgloss.Width(line); w > maxWidth {
+			maxWidth = w
+		}
+	}
+
+	title := lipgloss.PlaceHorizontal(maxWidth, lipgloss.Center, titleText)
+	allLines := append([]string{title, ""}, lines...)
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(primary).
+		Padding(1, 2)
+
+	fmt.Println()
+	fmt.Println(box.Render(strings.Join(allLines, "\n")))
+	fmt.Println()
 
 	if cfg.IsDaemon {
-		fmt.Println("\nServer is running in background. Use 'tingly-box stop' to stop.")
+		fmt.Println("Server is running in background. Use 'tingly-box stop' to stop.")
 	}
 }
 
