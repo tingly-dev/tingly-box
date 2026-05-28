@@ -30,3 +30,22 @@ func RegisterDefaults(r *Registry) {
 		}))
 	}
 }
+
+// RegisterStreamTestMocks registers the opt-in stream-test fixtures
+// (virtual-stream-test, virtual-stream-test-tool) into r. These advertise
+// deterministic, fully-populated usage (prompt / completion / cached input /
+// reasoning) so streaming converters can be exercised end-to-end without a
+// real upstream. Intentionally separate from RegisterDefaults so production
+// registries stay clean.
+func RegisterStreamTestMocks(r *Registry) {
+	for _, spec := range vmodel.StreamTestMockSpecs() {
+		_ = r.Register(NewMockModel(&MockModelConfig{
+			ID:       spec.ID,
+			Name:     spec.Name,
+			Content:  spec.Content,
+			ToolCall: spec.ToolCall,
+			Delay:    spec.Delay,
+			Usage:    spec.Usage,
+		}))
+	}
+}

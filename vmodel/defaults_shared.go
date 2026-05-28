@@ -2,6 +2,19 @@ package vmodel
 
 import "time"
 
+// MockUsage carries deterministic token-usage values that a mock model
+// emits over its streaming wire format. All fields are optional; a zero
+// value means "do not advertise this dimension". Used so streaming
+// converters / observers can be tested for completeness (cache and
+// reasoning tokens, not just plain prompt/completion).
+type MockUsage struct {
+	PromptTokens             int64 // input_tokens / prompt_tokens
+	CompletionTokens         int64 // output_tokens / completion_tokens
+	CachedInputTokens        int64 // OpenAI prompt_tokens_details.cached_tokens / Anthropic cache_read_input_tokens
+	CacheCreationInputTokens int64 // Anthropic cache_creation_input_tokens (no OpenAI analogue)
+	ReasoningTokens          int64 // OpenAI completion_tokens_details.reasoning_tokens
+}
+
 // SharedMockSpec describes a built-in mock that is identical across
 // protocols (anthropic + openai). Each protocol's RegisterDefaults converts
 // a SharedMockSpec into its own protocol-specific MockModelConfig.
@@ -17,6 +30,7 @@ type SharedMockSpec struct {
 	Content  string          // static text response (ignored if ToolCall is set)
 	ToolCall *ToolCallConfig // if non-nil, this is a tool model
 	Delay    time.Duration
+	Usage    *MockUsage // optional explicit usage to advertise in the stream
 }
 
 // SharedDefaultMocks returns the mocks registered by BOTH the Anthropic and
@@ -69,6 +83,39 @@ func SharedDefaultMocks() []SharedMockSpec {
 				Arguments: map[string]interface{}{"query": "latest AI developments"},
 			},
 			Delay: 50 * time.Millisecond,
+		},
+	}
+}
+
+// StreamTestMockSpecs returns deterministic stream-test fixtures (static +
+// tool variants) that advertise the full usage shape — prompt, completion,
+// cached input, cache-creation input, and reasoning tokens. These are
+// opt-in (NOT in SharedDefaultMocks): consumers wire them into their own
+// registry via RegisterStreamTestMocks helpers in the per-protocol
+// sub-packages.
+func StreamTestMockSpecs() []SharedMockSpec {
+	usage := &MockUsage{
+		PromptTokens:             42,
+		CompletionTokens:         17,
+		CachedInputTokens:        11,
+		CacheCreationInputTokens: 5,
+		ReasoningTokens:          9,
+	}
+	return []SharedMockSpec{
+		{
+			ID:      "virtual-stream-test",
+			Name:    "Virtual Stream Test",
+			Content: "Stream test response for usage coverage.",
+			Usage:   usage,
+		},
+		{
+			ID:   "virtual-stream-test-tool",
+			Name: "Virtual Stream Test (Tool)",
+			ToolCall: &ToolCallConfig{
+				Name:      "stream_test_tool",
+				Arguments: map[string]interface{}{"ok": true},
+			},
+			Usage: usage,
 		},
 	}
 }

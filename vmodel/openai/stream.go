@@ -18,6 +18,12 @@ type ToolEvent struct {
 	ToolCall VToolCall
 }
 
+// UsageEvent carries explicit token usage that the model wants the wire
+// stream to advertise (typically just before DoneEvent).
+type UsageEvent struct {
+	Usage vmodel.MockUsage
+}
+
 // DoneEvent signals end of stream with finish reason.
 type DoneEvent struct {
 	FinishReason string

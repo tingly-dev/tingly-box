@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/token"
+	"github.com/tingly-dev/tingly-box/vmodel"
 
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
@@ -212,6 +213,9 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 			time.Sleep(d)
 		}
 
+		var explicitUsage *vmodel.MockUsage
+		var stopReason string
+
 		err := vm.HandleAnthropicStream(req, func(ev any) {
 			switch e := ev.(type) {
 			case anthropicvm.StreamStartEvent:
@@ -243,9 +247,40 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 					},
 				})
 				fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", data)
+			case anthropicvm.UsageEvent:
+				u := e.Usage
+				explicitUsage = &u
 			case anthropicvm.DoneEvent:
-				data, _ := json.Marshal(AnthropicStreamEvent{Type: "message_stop"})
-				fmt.Fprintf(w, "event: message_stop\ndata: %s\n\n", data)
+				stopReason = e.StopReason
+				// Emit message_delta with stop_reason + usage (Anthropic
+				// places terminal usage on message_delta, not message_stop).
+				deltaPayload := map[string]interface{}{
+					"type": "message_delta",
+					"delta": map[string]interface{}{
+						"stop_reason":   stopReason,
+						"stop_sequence": nil,
+					},
+				}
+				usageMap := map[string]interface{}{}
+				if explicitUsage != nil {
+					usageMap["input_tokens"] = explicitUsage.PromptTokens
+					usageMap["output_tokens"] = explicitUsage.CompletionTokens
+					if explicitUsage.CachedInputTokens > 0 {
+						usageMap["cache_read_input_tokens"] = explicitUsage.CachedInputTokens
+					}
+					if explicitUsage.CacheCreationInputTokens > 0 {
+						usageMap["cache_creation_input_tokens"] = explicitUsage.CacheCreationInputTokens
+					}
+					if explicitUsage.ReasoningTokens > 0 {
+						usageMap["reasoning_tokens"] = explicitUsage.ReasoningTokens
+					}
+				}
+				deltaPayload["usage"] = usageMap
+				data, _ := json.Marshal(deltaPayload)
+				fmt.Fprintf(w, "event: message_delta\ndata: %s\n\n", data)
+
+				stopData, _ := json.Marshal(AnthropicStreamEvent{Type: "message_stop"})
+				fmt.Fprintf(w, "event: message_stop\ndata: %s\n\n", stopData)
 			}
 			c.Writer.Flush()
 		})
@@ -324,6 +359,8 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 
 		chunkIndex := 0
 		var finishReason string
+		var completionText string
+		var explicitUsage *vmodel.MockUsage
 
 		err := vm.HandleOpenAIChatStream(req, func(ev any) {
 			select {
@@ -335,6 +372,7 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 			switch e := ev.(type) {
 			case openaivm.DeltaEvent:
 				chunkIndex = e.Index + 1
+				completionText += e.Content
 				data, _ := json.Marshal(ChatCompletionStreamResponse{
 					ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
 					Created: time.Now().Unix(),
@@ -365,6 +403,9 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 					})
 					c.SSEvent("", string(data))
 				}
+			case openaivm.UsageEvent:
+				u := e.Usage
+				explicitUsage = &u
 			case openaivm.DoneEvent:
 				finishReason = e.FinishReason
 				data, _ := json.Marshal(ChatCompletionStreamResponse{
@@ -383,6 +424,43 @@ func (h *Handler) handleOpenAIStreaming(c *gin.Context, req *ChatCompletionReque
 				"type":    "api_error",
 			}})
 			return false
+		}
+
+		// Mirror real OpenAI: when stream_options.include_usage=true (or the
+		// mock advertised an explicit UsageEvent), emit a trailing usage-only
+		// chunk (choices:[], usage:{...}) after the finish_reason chunk and
+		// before [DONE]. Explicit MockUsage takes precedence so tests get
+		// deterministic, fully-populated values (including cached prompt
+		// tokens and reasoning tokens).
+		if req.StreamOptions.IncludeUsage.Value || explicitUsage != nil {
+			usage := openai.CompletionUsage{}
+			if explicitUsage != nil {
+				usage.PromptTokens = explicitUsage.PromptTokens
+				usage.CompletionTokens = explicitUsage.CompletionTokens
+				usage.TotalTokens = explicitUsage.PromptTokens + explicitUsage.CompletionTokens
+				if explicitUsage.CachedInputTokens > 0 {
+					usage.PromptTokensDetails.CachedTokens = explicitUsage.CachedInputTokens
+				}
+				if explicitUsage.ReasoningTokens > 0 {
+					usage.CompletionTokensDetails.ReasoningTokens = explicitUsage.ReasoningTokens
+				}
+			} else {
+				promptTokens := token.EstimateMessagesTokens(req.Messages)
+				completionTokens := token.EstimateTokensString(completionText)
+				usage.PromptTokens = int64(promptTokens)
+				usage.CompletionTokens = int64(completionTokens)
+				usage.TotalTokens = int64(promptTokens + completionTokens)
+			}
+			usageChunk := ChatCompletionStreamResponse{
+				ID:      fmt.Sprintf("chatcmpl-virtual-%d", time.Now().Unix()),
+				Created: time.Now().Unix(),
+				Model:   req.Model,
+				Choices: []StreamChoice{},
+				Usage:   usage,
+			}
+			data, _ := json.Marshal(usageChunk)
+			c.SSEvent("", string(data))
+			c.Writer.Flush()
 		}
 
 		c.SSEvent("", "[DONE]")
