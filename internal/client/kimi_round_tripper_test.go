@@ -84,7 +84,7 @@ func TestNormalizeRequest(t *testing.T) {
 		{
 			name:     "keep assistant message with tool calls and add reasoning_content",
 			input:    `{"model":"k2","messages":[{"role":"assistant","content":"","tool_calls":[{"id":"123","function":{"name":"test"}}]},{"role":"user","content":"hi"}]}`,
-			expected: `{"model":"k2","messages":[{"role":"assistant","content":"","tool_calls":[{"id":"123","function":{"name":"test"}}],"reasoning_content":"[reasoning unavailable]"},{"role":"user","content":"hi"}]}`,
+			expected: `{"model":"k2","messages":[{"role":"assistant","content":"","tool_calls":[{"id":"123","function":{"name":"test"}}],"reasoning_content":""},{"role":"user","content":"hi"}]}`,
 		},
 		{
 			name:     "invalid json - return as is",
@@ -121,17 +121,17 @@ func TestNormalizeToolMessages_FixToolCallID(t *testing.T) {
 		{
 			name:     "fix call_id to tool_call_id (keeps both fields)",
 			input:    `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1"}]},{"role":"tool","call_id":"tc1","content":"result"}]}`,
-			expected: `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1"}],"reasoning_content":"[reasoning unavailable]"},{"role":"tool","call_id":"tc1","tool_call_id":"tc1","content":"result"}]}`,
+			expected: `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1"}],"reasoning_content":""},{"role":"tool","call_id":"tc1","tool_call_id":"tc1","content":"result"}]}`,
 		},
 		{
 			name:     "infer missing tool_call_id from single pending",
 			input:    `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1"}]},{"role":"tool","content":"result"}]}`,
-			expected: `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1"}],"reasoning_content":"[reasoning unavailable]"},{"role":"tool","tool_call_id":"tc1","content":"result"}]}`,
+			expected: `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1"}],"reasoning_content":""},{"role":"tool","tool_call_id":"tc1","content":"result"}]}`,
 		},
 		{
 			name:     "add reasoning_content to assistant with tool calls",
 			input:    `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1","function":{"name":"test"}}]}]}`,
-			expected: `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1","function":{"name":"test"}}],"reasoning_content":"[reasoning unavailable]"}]}`,
+			expected: `{"model":"k2","messages":[{"role":"assistant","tool_calls":[{"id":"tc1","function":{"name":"test"}}],"reasoning_content":""}]}`,
 		},
 	}
 
