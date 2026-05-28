@@ -11,7 +11,7 @@ import {
 } from '@/components/rule-card/useRuleCardHooks';
 import { RuleCardDeleteDialog, RuleFlagEditDialog } from '@/components/rule-card/dialogs';
 import UnifiedRoutingGraph from '@/components/UnifiedRoutingGraph';
-import SmartRuleEditDialog from '@/components/SmartRuleEditDialog';
+import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialog';
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RuleExtensionsCard from '@/components/rule-card/RuleExtensionsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
@@ -362,12 +362,13 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onSave={handleSaveCatalogFlags}
             />
 
-            {/* Smart Rule Edit Dialog */}
-            <SmartRuleEditDialog
+            {/* Smart Rules Catalog Dialog */}
+            <SmartRuleCatalogDialog
                 open={smartDialogState.open}
-                smartRouting={smartDialogState.editingRule}
-                onSave={smartHandlers.handleSaveSmartRule}
-                onCancel={smartHandlers.handleCancelSmartRuleEdit}
+                smartRouting={configRecord.smartRouting || []}
+                initialRuleId={smartDialogState.initialRuleId}
+                onClose={smartHandlers.handleCloseCatalog}
+                onSave={smartHandlers.handleSaveSmartCatalog}
             />
         </>
     );

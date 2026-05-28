@@ -5,7 +5,7 @@ import type { ConfigRecord, Rule, SmartRouting } from '@/components/RoutingGraph
 import {
     ruleToConfigRecord,
     isConfigRecordReadyForSave,
-    cloneSmartRouting,
+
     createEmptySmartRouting,
     exportRuleWithProviders,
     exportRuleAsJsonlToClipboard,
@@ -51,7 +51,7 @@ export interface SmartRoutingHandlersProps {
 
 export interface SmartRoutingDialogState {
     open: boolean;
-    editingRule: SmartRouting | null;
+    initialRuleId?: string;
 }
 
 // ============================================================================
@@ -320,7 +320,7 @@ export function useSmartRoutingHandlers({
     showNotification,
 }: SmartRoutingHandlersProps) {
     const [smartRuleDialogOpen, setSmartRuleDialogOpen] = useState(false);
-    const [editingSmartRule, setEditingSmartRule] = useState<SmartRouting | null>(null);
+    const [initialRuleId, setInitialRuleId] = useState<string | undefined>();
 
     const handleAddSmartRule = useCallback(async () => {
         if (!configRecord) return;
@@ -335,31 +335,26 @@ export function useSmartRoutingHandlers({
         setConfigRecord(updated);
 
         const success = await autoSave(updated);
-        if (!success) {
+        if (success) {
+            // Open catalog with the new rule selected so user can configure it immediately.
+            setInitialRuleId(newSmartRouting.uuid);
+            setSmartRuleDialogOpen(true);
+        } else {
             setConfigRecord(previousRecord);
         }
     }, [configRecord, setConfigRecord, autoSave]);
 
-    const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
+    const handleEditSmartRule = useCallback((ruleUuid: string) => {
+        setInitialRuleId(ruleUuid);
+        setSmartRuleDialogOpen(true);
+    }, []);
+
+    const handleSaveSmartCatalog = useCallback(async (updatedRouting: SmartRouting[]) => {
         if (!configRecord) return;
-
-        const smartRule = (configRecord.smartRouting || []).find((r) => r.uuid === ruleUuid);
-        if (smartRule) {
-            setEditingSmartRule(cloneSmartRouting(smartRule));
-            setSmartRuleDialogOpen(true);
-        }
-    }, [configRecord]);
-
-    const handleSaveSmartRule = useCallback(async (updatedRule: SmartRouting) => {
-        if (!configRecord) return;
-
-        const updatedSmartRouting = (configRecord.smartRouting || []).map((r) =>
-            r.uuid === updatedRule.uuid ? updatedRule : r
-        );
 
         const updated: ConfigRecord = {
             ...configRecord,
-            smartRouting: updatedSmartRouting,
+            smartRouting: updatedRouting,
         };
 
         const previousRecord = { ...configRecord };
@@ -370,13 +365,13 @@ export function useSmartRoutingHandlers({
             setConfigRecord(previousRecord);
         } else {
             setSmartRuleDialogOpen(false);
-            showNotification('Smart rule updated successfully', 'success');
+            showNotification('Smart rules saved successfully', 'success');
         }
     }, [configRecord, setConfigRecord, autoSave, showNotification]);
 
-    const handleCancelSmartRuleEdit = useCallback(() => {
+    const handleCloseCatalog = useCallback(() => {
         setSmartRuleDialogOpen(false);
-        setEditingSmartRule(null);
+        setInitialRuleId(undefined);
     }, []);
 
     const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
@@ -469,13 +464,13 @@ export function useSmartRoutingHandlers({
     return {
         dialogState: {
             open: smartRuleDialogOpen,
-            editingRule: editingSmartRule,
+            initialRuleId,
         },
         handlers: {
             handleAddSmartRule,
             handleEditSmartRule,
-            handleSaveSmartRule,
-            handleCancelSmartRuleEdit,
+            handleSaveSmartCatalog,
+            handleCloseCatalog,
             handleDeleteSmartRule,
             handleAddServiceToSmartRule,
             handleDeleteServiceFromSmartRule,
