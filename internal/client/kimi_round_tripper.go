@@ -400,5 +400,5 @@ func fallbackAssistantReasoning(msg gjson.Result, hasLatest bool, latest string)
 		}
 	}
 
-	return ""
+	return "[reasoning unavailable]"
 }

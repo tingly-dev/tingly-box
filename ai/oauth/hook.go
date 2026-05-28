@@ -498,8 +498,8 @@ func (h *KimiHook) BeforeAuth(params map[string]string) error {
 }
 
 func (h *KimiHook) BeforeToken(body map[string]string, header http.Header) error {
-	header.Set("X-Msh-Platform", "kimi cli")
-	header.Set("X-Msh-Version", "1.0.0")
+	header.Set("X-Msh-Platform", "kimi_cli")
+	header.Set("X-Msh-Version", "1.10.6")
 	header.Set("X-Msh-Device-Name", KimiDeviceName())
 	header.Set("X-Msh-Device-Model", KimiDeviceModel())
 	return nil
