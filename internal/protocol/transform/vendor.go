@@ -175,7 +175,8 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 		return nil
 	}
 
-	if strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai") {
+	switch {
+	case strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai"):
 		// Apply Anthropic model-specific transforms
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(model))
 
@@ -183,6 +184,26 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
 
 		ctx.Request = req
+	case strings.Contains(t.ProviderURL, "api.deepseek.com"):
+		// DeepSeek's Anthropic-compatible endpoint requires every assistant
+		// message to carry at least one thinking block. Inject an empty one
+		// when missing — mirrors the reasoning_content fill in
+		// applyDeepSeekTransform for the OpenAI Chat path.
+		for i := range req.Messages {
+			if string(req.Messages[i].Role) != "assistant" {
+				continue
+			}
+			found := false
+			for _, b := range req.Messages[i].Content {
+				if b.OfThinking != nil {
+					found = true
+					break
+				}
+			}
+			if !found {
+				req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewThinkingBlock("", ""))
+			}
+		}
 	}
 
 	return nil
@@ -198,7 +219,8 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 		return nil
 	}
 
-	if strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai") {
+	switch {
+	case strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai"):
 		// Apply Anthropic model-specific transforms
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(model))
 
@@ -206,6 +228,22 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
 
 		ctx.Request = req
+	case strings.Contains(t.ProviderURL, "api.deepseek.com"):
+		for i := range req.Messages {
+			if string(req.Messages[i].Role) != "assistant" {
+				continue
+			}
+			found := false
+			for _, b := range req.Messages[i].Content {
+				if b.OfThinking != nil {
+					found = true
+					break
+				}
+			}
+			if !found {
+				req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewBetaThinkingBlock("", ""))
+			}
+		}
 	}
 
 	return nil
