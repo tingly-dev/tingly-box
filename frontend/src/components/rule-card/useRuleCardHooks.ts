@@ -123,6 +123,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         use_max_tokens: newConfigRecord.flags?.useMaxTokens || false,
                         openai_endpoint_override: newConfigRecord.flags?.openaiEndpointOverride || '',
                         block_tools: newConfigRecord.flags?.blockTools || '',
+                        thinking_effort: newConfigRecord.flags?.thinkingEffort || '',
                     },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)

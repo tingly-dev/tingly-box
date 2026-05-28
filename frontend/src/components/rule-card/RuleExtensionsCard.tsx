@@ -78,13 +78,12 @@ const flagStringValue = (flags: RuleFlags | undefined, key: string): string => {
             return flags.openaiEndpointOverride || '';
         case 'block_tools':
             return flags.blockTools || '';
+        case 'thinking_effort':
+            return flags.thinkingEffort || '';
         default:
             return '';
     }
 };
-
-// Enum default that should be treated as "unset" (registry's first option).
-const ENUM_DEFAULT_VALUE = 'auto';
 
 /**
  * RuleExtensionsCard renders a compact card displaying the rule's enabled
@@ -102,7 +101,9 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
         if (spec.type === 'bool') return flagBoolValue(flags, spec.key);
         if (spec.type === 'enum') {
             const v = flagStringValue(flags, spec.key);
-            return v !== '' && v !== ENUM_DEFAULT_VALUE;
+            // The first registry option is the inactive/default value.
+            const inactive = spec.options?.[0]?.value ?? '';
+            return v !== '' && v !== inactive;
         }
         return flagStringValue(flags, spec.key) !== '';
     });
