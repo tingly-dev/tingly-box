@@ -185,15 +185,23 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 
 		ctx.Request = req
 	case strings.Contains(t.ProviderURL, "api.deepseek.com"):
-		for _, m := range req.Messages {
+		// DeepSeek's Anthropic-compatible endpoint requires every assistant
+		// message to carry at least one thinking block. Inject an empty one
+		// when missing — mirrors the reasoning_content fill in
+		// applyDeepSeekTransform for the OpenAI Chat path.
+		for i := range req.Messages {
+			if string(req.Messages[i].Role) != "assistant" {
+				continue
+			}
 			found := false
-			for _, b := range m.Content {
+			for _, b := range req.Messages[i].Content {
 				if b.OfThinking != nil {
 					found = true
+					break
 				}
 			}
 			if !found {
-				m.Content = append(m.Content, anthropic.NewThinkingBlock("", ""))
+				req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewThinkingBlock("", ""))
 			}
 		}
 	}
@@ -221,15 +229,19 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 
 		ctx.Request = req
 	case strings.Contains(t.ProviderURL, "api.deepseek.com"):
-		for _, m := range req.Messages {
+		for i := range req.Messages {
+			if string(req.Messages[i].Role) != "assistant" {
+				continue
+			}
 			found := false
-			for _, b := range m.Content {
+			for _, b := range req.Messages[i].Content {
 				if b.OfThinking != nil {
 					found = true
+					break
 				}
 			}
 			if !found {
-				m.Content = append(m.Content, anthropic.NewBetaThinkingBlock("", ""))
+				req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewBetaThinkingBlock("", ""))
 			}
 		}
 	}
