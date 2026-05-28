@@ -238,7 +238,10 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	// === Dispatch via transform chain ===
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = responseModel
-	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
+	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+		func(p *typ.Provider, _ string) {
+			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
+		})
 }
 
 // nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.

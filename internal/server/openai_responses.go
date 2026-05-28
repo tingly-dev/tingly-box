@@ -236,8 +236,11 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	}
 
-	// Use unified dispatch
-	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, nil)
+	// Use unified dispatch with mid-request failover (non-streaming only).
+	s.dispatchWithPriorityFailover(c, rule, provider, string(req.Model),
+		func(p *typ.Provider, _ string) {
+			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
+		})
 }
 
 // buildResponsesPayloadFromChat converts a Chat completion response to Responses API format
