@@ -584,7 +584,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				"text": textDelta.Delta,
 			}, flusher)
 			lastOutputItemType = "text"
-			logrus.WithContext(c.Request.Context()).Debugf("Processing Responses API event #%d: type=%s", eventCount, textDelta.Delta)
 		case "response.output_text.done", "response.content_part.done":
 			if state.textBlockIndex != -1 {
 				senders.SendContentBlockStop(state, state.textBlockIndex, flusher)
@@ -600,8 +599,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
-			preview := reasoningDelta.Delta
-			logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 			senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 				"type":     deltaTypeThinkingDelta,
 				"thinking": reasoningDelta.Delta,
@@ -677,8 +674,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 					senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
-				preview := reasoningDelta.Delta
-				logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 					"type":     deltaTypeThinkingDelta,
 					"thinking": reasoningDelta.Delta,
@@ -905,26 +900,10 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				state.reasoningSummaryBlockIndex = -1
 			}
 
-		case "response.audio.delta":
-			audioDelta := currentEvent.AsResponseAudioDelta()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio delta: sequence=%d, len=%d", audioDelta.SequenceNumber, len(audioDelta.Delta))
-
-		case "response.audio.done":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio done")
-
-		case "response.audio.transcript.delta":
-			transcriptDelta := currentEvent.AsResponseAudioTranscriptDelta()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio transcript delta: sequence=%d, len=%d", transcriptDelta.SequenceNumber, len(transcriptDelta.Delta))
-
-		case "response.audio.transcript.done":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio transcript done")
-
-		case "response.code_interpreter_call_code.delta":
-			codeDelta := currentEvent.AsResponseCodeInterpreterCallCodeDelta()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter code delta: len=%d", len(codeDelta.Delta))
-
-		case "response.code_interpreter_call_code.done":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter code done")
+		case "response.audio.delta", "response.audio.done",
+			"response.audio.transcript.delta", "response.audio.transcript.done",
+			"response.code_interpreter_call_code.delta", "response.code_interpreter_call_code.done":
+			// Pass-through events not converted to Anthropic blocks; ignore silently.
 
 		case "response.code_interpreter_call.in_progress":
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter in progress")

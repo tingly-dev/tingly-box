@@ -201,8 +201,6 @@ func handleOpenAIToAnthropicBetaStream(
 					// Extract thinking content (handle different types)
 					thinkingText := extractString(v)
 					if thinkingText != "" {
-						preview := thinkingText
-						logrus.WithContext(c.Request.Context()).Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
 						// Send content_block_delta with thinking_delta
 						ensureMessageStart()
 						sendContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
