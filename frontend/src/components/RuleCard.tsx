@@ -362,13 +362,12 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onSave={handleSaveCatalogFlags}
             />
 
-            {/* Smart Rules Catalog Dialog */}
+            {/* Smart Rule Edit Dialog (catalog-style: conditions sidebar + detail pane) */}
             <SmartRuleCatalogDialog
                 open={smartDialogState.open}
-                smartRouting={configRecord.smartRouting || []}
-                initialRuleId={smartDialogState.initialRuleId}
-                onClose={smartHandlers.handleCloseCatalog}
-                onSave={smartHandlers.handleSaveSmartCatalog}
+                smartRouting={smartDialogState.editingRule}
+                onClose={smartHandlers.handleCancelSmartRuleEdit}
+                onSave={smartHandlers.handleSaveSmartRule}
             />
         </>
     );

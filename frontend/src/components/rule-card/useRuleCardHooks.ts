@@ -5,7 +5,7 @@ import type { ConfigRecord, Rule, SmartRouting } from '@/components/RoutingGraph
 import {
     ruleToConfigRecord,
     isConfigRecordReadyForSave,
-
+    cloneSmartRouting,
     createEmptySmartRouting,
     exportRuleWithProviders,
     exportRuleAsJsonlToClipboard,
@@ -51,7 +51,7 @@ export interface SmartRoutingHandlersProps {
 
 export interface SmartRoutingDialogState {
     open: boolean;
-    initialRuleId?: string;
+    editingRule: SmartRouting | null;
 }
 
 // ============================================================================
@@ -320,7 +320,7 @@ export function useSmartRoutingHandlers({
     showNotification,
 }: SmartRoutingHandlersProps) {
     const [smartRuleDialogOpen, setSmartRuleDialogOpen] = useState(false);
-    const [initialRuleId, setInitialRuleId] = useState<string | undefined>();
+    const [editingSmartRule, setEditingSmartRule] = useState<SmartRouting | null>(null);
 
     const handleAddSmartRule = useCallback(async () => {
         if (!configRecord) return;
@@ -336,8 +336,8 @@ export function useSmartRoutingHandlers({
 
         const success = await autoSave(updated);
         if (success) {
-            // Open catalog with the new rule selected so user can configure it immediately.
-            setInitialRuleId(newSmartRouting.uuid);
+            // Open the editor on the freshly created rule so the user can configure it.
+            setEditingSmartRule(cloneSmartRouting(newSmartRouting));
             setSmartRuleDialogOpen(true);
         } else {
             setConfigRecord(previousRecord);
@@ -345,18 +345,22 @@ export function useSmartRoutingHandlers({
     }, [configRecord, setConfigRecord, autoSave]);
 
     const handleEditSmartRule = useCallback((ruleUuid: string) => {
-        setInitialRuleId(ruleUuid);
-        setSmartRuleDialogOpen(true);
-    }, []);
+        if (!configRecord) return;
+        const rule = (configRecord.smartRouting || []).find((r) => r.uuid === ruleUuid);
+        if (rule) {
+            setEditingSmartRule(cloneSmartRouting(rule));
+            setSmartRuleDialogOpen(true);
+        }
+    }, [configRecord]);
 
-    const handleSaveSmartCatalog = useCallback(async (updatedRouting: SmartRouting[]) => {
+    const handleSaveSmartRule = useCallback(async (updatedRule: SmartRouting) => {
         if (!configRecord) return;
 
-        const updated: ConfigRecord = {
-            ...configRecord,
-            smartRouting: updatedRouting,
-        };
+        const updatedSmartRouting = (configRecord.smartRouting || []).map((r) =>
+            r.uuid === updatedRule.uuid ? updatedRule : r,
+        );
 
+        const updated: ConfigRecord = { ...configRecord, smartRouting: updatedSmartRouting };
         const previousRecord = { ...configRecord };
         setConfigRecord(updated);
 
@@ -365,13 +369,13 @@ export function useSmartRoutingHandlers({
             setConfigRecord(previousRecord);
         } else {
             setSmartRuleDialogOpen(false);
-            showNotification('Smart rules saved successfully', 'success');
+            showNotification('Smart rule updated successfully', 'success');
         }
     }, [configRecord, setConfigRecord, autoSave, showNotification]);
 
-    const handleCloseCatalog = useCallback(() => {
+    const handleCancelSmartRuleEdit = useCallback(() => {
         setSmartRuleDialogOpen(false);
-        setInitialRuleId(undefined);
+        setEditingSmartRule(null);
     }, []);
 
     const handleDeleteSmartRule = useCallback(async (ruleUuid: string) => {
@@ -464,13 +468,13 @@ export function useSmartRoutingHandlers({
     return {
         dialogState: {
             open: smartRuleDialogOpen,
-            initialRuleId,
+            editingRule: editingSmartRule,
         },
         handlers: {
             handleAddSmartRule,
             handleEditSmartRule,
-            handleSaveSmartCatalog,
-            handleCloseCatalog,
+            handleSaveSmartRule,
+            handleCancelSmartRuleEdit,
             handleDeleteSmartRule,
             handleAddServiceToSmartRule,
             handleDeleteServiceFromSmartRule,
