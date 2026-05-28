@@ -395,6 +395,14 @@ func handleOpenAIToAnthropicBetaStream(
 		stopReason := mapOpenAIFinishReasonToAnthropicBeta(pendingFinishReason)
 		sendMessageDelta(c, state, stopReason, flusher)
 		sendMessageStop(c, messageID, responseModel, state, stopReason, flusher)
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"model":            responseModel,
+			"input_tokens":     state.inputTokens,
+			"output_tokens":    state.outputTokens,
+			"cache_tokens":     state.cacheTokens,
+			"reasoning_tokens": state.reasoningTokens,
+			"stop_reason":      stopReason,
+		}).Info("OpenAI->Anthropic beta stream usage")
 	}
 	if hookErr != nil {
 		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), hookErr

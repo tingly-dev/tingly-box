@@ -119,6 +119,19 @@ func TestAnthropicStreamAssembler_SetUsage(t *testing.T) {
 	assert.Equal(t, int64(50), assembler.usageData.OutputTokens)
 }
 
+func TestAnthropicStreamAssembler_SetUsageFull_CarriesCacheRead(t *testing.T) {
+	assembler := NewAnthropicStreamAssembler()
+	assembler.SetUsageFull(42, 17, 11)
+	assembler.msgID = "msg_cache"
+	assembler.blocks[0] = anthropic.ContentBlockUnion{Type: "text", Text: "ok"}
+
+	result := assembler.Finish("model", 0, 0)
+	require.NotNil(t, result)
+	assert.Equal(t, int64(42), result.Usage.InputTokens)
+	assert.Equal(t, int64(17), result.Usage.OutputTokens)
+	assert.Equal(t, int64(11), result.Usage.CacheReadInputTokens, "cache_read must survive into assembled response")
+}
+
 func TestAnthropicStreamAssembler_Finish_WithUsageFromAssembler(t *testing.T) {
 	assembler := NewAnthropicStreamAssembler()
 

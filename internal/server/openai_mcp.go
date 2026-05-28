@@ -105,7 +105,7 @@ func (s *Server) streamOpenAIChatToAnthropicBetaWithMCP(
 		}
 		s.trackUsageWithTokenUsage(c, usage, nil)
 		if streamRec != nil {
-			streamRec.Finish(responseModel, usage.InputTokens, usage.OutputTokens)
+			streamRec.Finish(responseModel, usage)
 			streamRec.RecordResponse(provider, actualModel)
 		}
 		return

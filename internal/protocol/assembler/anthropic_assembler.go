@@ -188,6 +188,15 @@ func (a *AnthropicStreamAssembler) SetUsage(inputTokens, outputTokens int) {
 	}
 }
 
+// SetUsageFull sets the usage data including cache tokens.
+func (a *AnthropicStreamAssembler) SetUsageFull(inputTokens, outputTokens, cacheReadTokens int) {
+	a.usageData = &anthropic.Usage{
+		InputTokens:          int64(inputTokens),
+		OutputTokens:         int64(outputTokens),
+		CacheReadInputTokens: int64(cacheReadTokens),
+	}
+}
+
 // Finish assembles the final response and returns it as anthropic.Message
 func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputTokens int) *anthropic.Message {
 	if a == nil || a.msgID == "" {
@@ -215,6 +224,16 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 		usage = &anthropic.Usage{
 			InputTokens:  int64(inputTokens),
 			OutputTokens: int64(outputTokens),
+		}
+	} else {
+		// Keep any in-stream usage (incl. cache_read) but let explicit
+		// totals from Finish override input/output if they're larger
+		// (handles the post-finish_reason usage chunk path).
+		if int64(inputTokens) > usage.InputTokens {
+			usage.InputTokens = int64(inputTokens)
+		}
+		if int64(outputTokens) > usage.OutputTokens {
+			usage.OutputTokens = int64(outputTokens)
 		}
 	}
 

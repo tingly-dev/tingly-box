@@ -190,18 +190,19 @@ func (s *Server) trackUsageWithTokenUsage(c *gin.Context, usage *protocol.TokenU
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"provider":      provider.Name,
-		"model":         model,
-		"scenario":      scenario,
-		"input_tokens":  usage.InputTokens,
-		"output_tokens": usage.OutputTokens,
-		"cache_tokens":  usage.CacheInputTokens,
-		"system_tokens": usage.SystemTokens,
-		"total_tokens":  usage.TotalTokens(),
-		"status":        status,
-		"streamed":      streamed,
-		"latency_ms":    latencyMs,
-	}).Trace("trackUsageWithTokenUsage: recording token usage")
+		"provider":         provider.Name,
+		"model":            model,
+		"scenario":         scenario,
+		"input_tokens":     usage.InputTokens,
+		"output_tokens":    usage.OutputTokens,
+		"cache_tokens":     usage.CacheInputTokens,
+		"reasoning_tokens": usage.ReasoningTokens,
+		"system_tokens":    usage.SystemTokens,
+		"total_tokens":     usage.TotalTokens(),
+		"status":           status,
+		"streamed":         streamed,
+		"latency_ms":       latencyMs,
+	}).Debug("trackUsage: token usage recorded")
 
 	// Detect cache hit from usage data and set in context
 	cacheHit := detectCacheHit(usage)
