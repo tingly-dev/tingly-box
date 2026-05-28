@@ -26,6 +26,8 @@ type StreamTokenCounter struct {
 	outputTokens         int
 	upstreamInputTokens  int64
 	upstreamOutputTokens int64
+	upstreamCacheTokens  int64 // prompt_tokens_details.cached_tokens
+	upstreamReasoning    int64 // completion_tokens_details.reasoning_tokens
 }
 
 // NewStreamTokenCounter creates a new streaming token counter.
@@ -75,9 +77,11 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Process usage if provided in the chunk (usually only in the final chunk)
-	// Check if Usage is present by checking if the JSON field is valid
-	if chunk.JSON.Usage.Valid() {
+	// Process usage if provided in the chunk (usually only the trailing
+	// usage-only chunk when stream_options.include_usage=true). The SDK's
+	// Valid() check misses some legitimate cases, so we also accept any
+	// non-zero prompt/completion count as evidence that usage is present.
+	if chunk.JSON.Usage.Valid() || chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
 		usage := chunk.Usage
 		if usage.PromptTokens > 0 {
 			c.inputTokens = int(usage.PromptTokens)
@@ -90,6 +94,12 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 		}
 		if chunk.Usage.CompletionTokens > 0 {
 			c.upstreamOutputTokens = chunk.Usage.CompletionTokens
+		}
+		if chunk.Usage.PromptTokensDetails.CachedTokens > 0 {
+			c.upstreamCacheTokens = chunk.Usage.PromptTokensDetails.CachedTokens
+		}
+		if chunk.Usage.CompletionTokensDetails.ReasoningTokens > 0 {
+			c.upstreamReasoning = chunk.Usage.CompletionTokensDetails.ReasoningTokens
 		}
 		return int(c.upstreamInputTokens), int(c.upstreamOutputTokens), nil
 	}
@@ -147,6 +157,14 @@ func (c *StreamTokenCounter) GetCounts() (inputTokens, outputTokens int) {
 		o = int(c.upstreamOutputTokens)
 	}
 	return i, o
+}
+
+// GetUpstreamDetails returns cache and reasoning token counts harvested
+// from upstream usage chunks (zero if upstream did not advertise them).
+func (c *StreamTokenCounter) GetUpstreamDetails() (cacheTokens, reasoningTokens int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return int(c.upstreamCacheTokens), int(c.upstreamReasoning)
 }
 
 // SetInputTokens sets the input token count.

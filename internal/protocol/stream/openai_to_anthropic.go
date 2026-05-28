@@ -141,8 +141,13 @@ func handleOpenAIToAnthropicStreamResponse(
 		messageStarted = true
 	}
 
-	// Process the stream with context cancellation checking
-	chunkCount := 0
+	// Process the stream with context cancellation checking.
+	// Note: when stream_options.include_usage=true, OpenAI sends a final
+	// usage-only chunk (choices:[], usage:{...}) AFTER the finish_reason chunk.
+	// We must keep draining the stream after seeing finish_reason so the
+	// upstream usage isn't silently dropped.
+	pendingFinishReason := ""
+	finishSeen := false
 	StreamLoop(c, func(w io.Writer) bool {
 		// Check context cancellation first
 		select {
@@ -157,14 +162,12 @@ func handleOpenAIToAnthropicStreamResponse(
 			return false
 		}
 
-		chunkCount++
 		chunk := stream.Current()
 
-		logrus.WithContext(c.Request.Context()).Debugf("[Stream] Got chunk #%d: len(choices)=%d", chunkCount, len(chunk.Choices))
-
-		// Skip empty chunks (no choices)
+		// Skip empty chunks (no choices).
+		// The trailing usage-only chunk (choices:[], usage:{...}) lands here
+		// when stream_options.include_usage=true.
 		if len(chunk.Choices) == 0 {
-			// Token counter will handle usage tracking if present in chunk
 			if tokenCounter != nil {
 				_, _, _ = tokenCounter.ConsumeOpenAIChunk(&chunk)
 				inputTokens, outputTokens := tokenCounter.GetCounts()
@@ -179,15 +182,6 @@ func handleOpenAIToAnthropicStreamResponse(
 		}
 
 		choice := chunk.Choices[0]
-
-		logrus.WithContext(c.Request.Context()).Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
-			chunkCount, len(chunk.Choices),
-			choice.Delta.Content, choice.FinishReason)
-
-		// Log first few chunks in detail for debugging
-		if chunkCount <= 5 || choice.FinishReason != "" {
-			logrus.WithContext(c.Request.Context()).Debugf("Full chunk #%d: %v", chunkCount, chunk)
-		}
 
 		delta := choice.Delta
 
@@ -354,14 +348,13 @@ func handleOpenAIToAnthropicStreamResponse(
 			}
 		}
 
-		// Handle finish_reason (last chunk for this choice)
+		// Handle finish_reason (last chunk for this choice).
+		// Keep the loop alive so the trailing usage-only chunk (sent when
+		// stream_options.include_usage=true) is still consumed; the final
+		// Anthropic events are emitted after the loop.
 		if choice.FinishReason != "" {
-			// Get final token counts from counter
-			if tokenCounter != nil {
-				inputTokens, outputTokens := tokenCounter.GetCounts()
-				state.inputTokens = int64(inputTokens)
-				state.outputTokens = int64(outputTokens)
-			}
+			pendingFinishReason = choice.FinishReason
+			finishSeen = true
 			if hooks != nil && hooks.OnToolCallsFinal != nil && len(state.pendingToolCalls) > 0 {
 				toolCalls := make([]OpenAIToAnthropicToolCall, 0, len(state.pendingToolCalls))
 				for _, tc := range state.pendingToolCalls {
@@ -376,19 +369,43 @@ func handleOpenAIToAnthropicStreamResponse(
 					return false
 				}
 			}
-
 			if !messageStarted && errors.Is(hookErr, ErrMCPStreamContinue) {
 				return false
 			}
-			ensureMessageStart()
-			sendStopEvents(c, state, flusher)
-			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
-			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropic(choice.FinishReason), flusher)
-			return false
 		}
 
 		return true
 	})
+
+	// Emit the terminal Anthropic events using the final tallied usage
+	// (which may have been updated by a post-finish_reason usage chunk).
+	if finishSeen && hookErr == nil {
+		if tokenCounter != nil {
+			inputTokens, outputTokens := tokenCounter.GetCounts()
+			state.inputTokens = int64(inputTokens)
+			state.outputTokens = int64(outputTokens)
+			cacheTokens, reasoningTokens := tokenCounter.GetUpstreamDetails()
+			if cacheTokens > 0 {
+				state.cacheTokens = int64(cacheTokens)
+			}
+			if reasoningTokens > 0 {
+				state.reasoningTokens = int64(reasoningTokens)
+			}
+		}
+		ensureMessageStart()
+		sendStopEvents(c, state, flusher)
+		stopReason := mapOpenAIFinishReasonToAnthropic(pendingFinishReason)
+		sendMessageDelta(c, state, stopReason, flusher)
+		sendMessageStop(c, messageID, responseModel, state, stopReason, flusher)
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"model":            responseModel,
+			"input_tokens":     state.inputTokens,
+			"output_tokens":    state.outputTokens,
+			"cache_tokens":     state.cacheTokens,
+			"reasoning_tokens": state.reasoningTokens,
+			"stop_reason":      stopReason,
+		}).Info("OpenAI->Anthropic stream usage")
+	}
 	if hookErr != nil {
 		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), hookErr
 	}
@@ -525,9 +542,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 	senders.SendMessageStart(messageStartEvent, flusher)
 
 	// Process the stream
-	eventCount := 0
 	for stream.Next() {
-		eventCount++
 		currentEvent := stream.Current()
 
 		switch currentEvent.Type {
@@ -565,7 +580,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				"text": textDelta.Delta,
 			}, flusher)
 			lastOutputItemType = "text"
-			logrus.WithContext(c.Request.Context()).Debugf("Processing Responses API event #%d: type=%s", eventCount, textDelta.Delta)
 		case "response.output_text.done", "response.content_part.done":
 			if state.textBlockIndex != -1 {
 				senders.SendContentBlockStop(state, state.textBlockIndex, flusher)
@@ -581,8 +595,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 				senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 			}
-			preview := reasoningDelta.Delta
-			logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 			senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 				"type":     deltaTypeThinkingDelta,
 				"thinking": reasoningDelta.Delta,
@@ -647,7 +659,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.output_item.added":
 			itemAdded := currentEvent.AsResponseOutputItemAdded()
-			logrus.WithContext(c.Request.Context()).Debugf("item type: %s", itemAdded.Item.Type)
 			switch itemAdded.Item.Type {
 			case "reasoning":
 				reasoningDelta := currentEvent.AsResponseReasoningTextDelta()
@@ -658,8 +669,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 					logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Initializing thinking block at index %d", state.thinkingBlockIndex)
 					senders.SendContentBlockStart(state.thinkingBlockIndex, blockTypeThinking, map[string]interface{}{"thinking": ""}, flusher)
 				}
-				preview := reasoningDelta.Delta
-				logrus.WithContext(c.Request.Context()).Debugf("[Thinking][ResponsesAPI] Sending thinking_delta: len=%d, preview=%q", len(reasoningDelta.Delta), preview)
 				senders.SendContentBlockDelta(state.thinkingBlockIndex, map[string]interface{}{
 					"type":     deltaTypeThinkingDelta,
 					"thinking": reasoningDelta.Delta,
@@ -848,10 +857,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 
 		case "response.output_text.annotation.added":
-			annotationAdded := currentEvent.AsResponseOutputTextAnnotationAdded()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Text annotation added: index=%d, citation_type=%s",
-				annotationAdded.OutputIndex,
-				annotationAdded.Annotation)
+			// Per-annotation event; pass through silently.
 
 		case "response.text.done":
 			// Finalize text content - already handled by content_part.done for output_text type
@@ -886,26 +892,10 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 				state.reasoningSummaryBlockIndex = -1
 			}
 
-		case "response.audio.delta":
-			audioDelta := currentEvent.AsResponseAudioDelta()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio delta: sequence=%d, len=%d", audioDelta.SequenceNumber, len(audioDelta.Delta))
-
-		case "response.audio.done":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio done")
-
-		case "response.audio.transcript.delta":
-			transcriptDelta := currentEvent.AsResponseAudioTranscriptDelta()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio transcript delta: sequence=%d, len=%d", transcriptDelta.SequenceNumber, len(transcriptDelta.Delta))
-
-		case "response.audio.transcript.done":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Audio transcript done")
-
-		case "response.code_interpreter_call_code.delta":
-			codeDelta := currentEvent.AsResponseCodeInterpreterCallCodeDelta()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter code delta: len=%d", len(codeDelta.Delta))
-
-		case "response.code_interpreter_call_code.done":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter code done")
+		case "response.audio.delta", "response.audio.done",
+			"response.audio.transcript.delta", "response.audio.transcript.done",
+			"response.code_interpreter_call_code.delta", "response.code_interpreter_call_code.done":
+			// Pass-through events not converted to Anthropic blocks; ignore silently.
 
 		case "response.code_interpreter_call.in_progress":
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Code interpreter in progress")
@@ -920,7 +910,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search in progress")
 
 		case "response.file_search_call.searching":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search searching: query=%s", currentEvent.RawJSON())
+			// Status event; query payload elided to keep logs small.
 
 		case "response.file_search_call.completed":
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search completed")
@@ -1085,9 +1075,6 @@ func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream *openaistream.S
 			if state.cacheTokens > 0 {
 				msg.Usage.CacheReadInputTokens = state.cacheTokens
 			}
-
-			bs, _ := json.Marshal(msg)
-			logrus.WithContext(c.Request.Context()).Debugf("Assemble response: %s", string(bs))
 
 			// Send result
 			c.JSON(200, msg)

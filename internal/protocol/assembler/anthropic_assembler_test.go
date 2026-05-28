@@ -6,6 +6,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 func TestNewAnthropicStreamAssembler(t *testing.T) {
@@ -117,6 +119,23 @@ func TestAnthropicStreamAssembler_SetUsage(t *testing.T) {
 	require.NotNil(t, assembler.usageData)
 	assert.Equal(t, int64(100), assembler.usageData.InputTokens)
 	assert.Equal(t, int64(50), assembler.usageData.OutputTokens)
+}
+
+func TestAnthropicStreamAssembler_SetUsageFromTokenUsage_CarriesCacheRead(t *testing.T) {
+	assembler := NewAnthropicStreamAssembler()
+	assembler.SetUsageFromTokenUsage(&ai.TokenUsage{
+		InputTokens:      42,
+		OutputTokens:     17,
+		CacheInputTokens: 11,
+	})
+	assembler.msgID = "msg_cache"
+	assembler.blocks[0] = anthropic.ContentBlockUnion{Type: "text", Text: "ok"}
+
+	result := assembler.Finish("model", 0, 0)
+	require.NotNil(t, result)
+	assert.Equal(t, int64(42), result.Usage.InputTokens)
+	assert.Equal(t, int64(17), result.Usage.OutputTokens)
+	assert.Equal(t, int64(11), result.Usage.CacheReadInputTokens, "cache_read must survive into assembled response")
 }
 
 func TestAnthropicStreamAssembler_Finish_WithUsageFromAssembler(t *testing.T) {

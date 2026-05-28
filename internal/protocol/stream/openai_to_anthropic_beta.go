@@ -126,8 +126,13 @@ func handleOpenAIToAnthropicBetaStream(
 		messageStarted = true
 	}
 
-	// Process the stream with context cancellation checking
-	chunkCount := 0
+	// Process the stream with context cancellation checking.
+	// Note: when stream_options.include_usage=true, OpenAI sends a final
+	// usage-only chunk (choices:[], usage:{...}) AFTER the finish_reason chunk.
+	// We must keep draining the stream after seeing finish_reason so the
+	// upstream usage isn't silently dropped.
+	pendingFinishReason := ""
+	finishSeen := false
 	StreamLoop(c, func(w io.Writer) bool {
 		// Check context cancellation first
 		select {
@@ -142,7 +147,6 @@ func handleOpenAIToAnthropicBetaStream(
 			return false
 		}
 
-		chunkCount++
 		chunk := stream.Current()
 
 		// Skip empty chunks (no choices)
@@ -162,11 +166,6 @@ func handleOpenAIToAnthropicBetaStream(
 		}
 
 		choice := chunk.Choices[0]
-
-		logrus.WithContext(c.Request.Context()).Debugf("Processing chunk #%d: len(choices)=%d, content=%q, finish_reason=%q",
-			chunkCount, len(chunk.Choices),
-			choice.Delta.Content, choice.FinishReason)
-
 		delta := choice.Delta
 
 		// Check for server_tool_use at chunk level (not delta level)
@@ -200,8 +199,6 @@ func handleOpenAIToAnthropicBetaStream(
 					// Extract thinking content (handle different types)
 					thinkingText := extractString(v)
 					if thinkingText != "" {
-						preview := thinkingText
-						logrus.WithContext(c.Request.Context()).Debugf("[Thinking] Sending thinking_delta: len=%d, preview=%q", len(thinkingText), preview)
 						// Send content_block_delta with thinking_delta
 						ensureMessageStart()
 						sendContentBlockDelta(c, state.thinkingBlockIndex, map[string]interface{}{
@@ -335,14 +332,13 @@ func handleOpenAIToAnthropicBetaStream(
 			}
 		}
 
-		// Handle finish_reason (last chunk for this choice)
+		// Handle finish_reason (last chunk for this choice).
+		// Keep the loop alive so the trailing usage-only chunk (sent when
+		// stream_options.include_usage=true) is still consumed; the final
+		// Anthropic events are emitted after the loop.
 		if choice.FinishReason != "" {
-			// Get final token counts from counter
-			if tokenCounter != nil {
-				inputTokens, outputTokens := tokenCounter.GetCounts()
-				state.inputTokens = int64(inputTokens)
-				state.outputTokens = int64(outputTokens)
-			}
+			pendingFinishReason = choice.FinishReason
+			finishSeen = true
 			if hooks != nil && hooks.OnToolCallsFinal != nil && len(state.pendingToolCalls) > 0 {
 				toolCalls := make([]OpenAIToAnthropicToolCall, 0, len(state.pendingToolCalls))
 				for _, tc := range state.pendingToolCalls {
@@ -357,19 +353,43 @@ func handleOpenAIToAnthropicBetaStream(
 					return false
 				}
 			}
-
 			if !messageStarted && errors.Is(hookErr, ErrMCPStreamContinue) {
 				return false
 			}
-			ensureMessageStart()
-			sendStopEvents(c, state, flusher)
-			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
-			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
-			return false
 		}
 
 		return true
 	})
+
+	// Emit the terminal Anthropic events using the final tallied usage
+	// (which may have been updated by a post-finish_reason usage chunk).
+	if finishSeen && hookErr == nil {
+		if tokenCounter != nil {
+			inputTokens, outputTokens := tokenCounter.GetCounts()
+			state.inputTokens = int64(inputTokens)
+			state.outputTokens = int64(outputTokens)
+			cacheTokens, reasoningTokens := tokenCounter.GetUpstreamDetails()
+			if cacheTokens > 0 {
+				state.cacheTokens = int64(cacheTokens)
+			}
+			if reasoningTokens > 0 {
+				state.reasoningTokens = int64(reasoningTokens)
+			}
+		}
+		ensureMessageStart()
+		sendStopEvents(c, state, flusher)
+		stopReason := mapOpenAIFinishReasonToAnthropicBeta(pendingFinishReason)
+		sendMessageDelta(c, state, stopReason, flusher)
+		sendMessageStop(c, messageID, responseModel, state, stopReason, flusher)
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"model":            responseModel,
+			"input_tokens":     state.inputTokens,
+			"output_tokens":    state.outputTokens,
+			"cache_tokens":     state.cacheTokens,
+			"reasoning_tokens": state.reasoningTokens,
+			"stop_reason":      stopReason,
+		}).Info("OpenAI->Anthropic beta stream usage")
+	}
 	if hookErr != nil {
 		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), hookErr
 	}
@@ -509,9 +529,6 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 			if state.cacheTokens > 0 {
 				msg.Usage.CacheReadInputTokens = state.cacheTokens
 			}
-
-			bs, _ := json.Marshal(msg)
-			logrus.WithContext(c.Request.Context()).Debugf("Assemble response: %s", string(bs))
 
 			// Send result
 			c.JSON(200, msg)

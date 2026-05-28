@@ -235,7 +235,7 @@ func (s *Server) streamResponsesToAnthropicBeta(c *gin.Context, proxyModel strin
 
 	// Finish recording and assemble response
 	if streamRec != nil {
-		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
+		streamRec.Finish(proxyModel, usage)
 		streamRec.RecordResponse(provider, actualModel)
 	}
 
@@ -288,7 +288,7 @@ func (s *Server) assembleResponsesToAnthropicBeta(c *gin.Context, proxyModel str
 
 	// Finish recording and assemble response
 	if streamRec != nil {
-		streamRec.Finish(proxyModel, usage.InputTokens, usage.OutputTokens)
+		streamRec.Finish(proxyModel, usage)
 		streamRec.RecordResponse(provider, actualModel)
 	}
 

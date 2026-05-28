@@ -487,11 +487,6 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 		}
 
 		evt := stream.Current()
-
-		if chunkCount < 3 {
-			logrus.WithContext(c.Request.Context()).Debugf("[ChatGPT] SSE chunk #%d: %s", chunkCount+1, evt.RawJSON())
-		}
-
 		chunkCount++
 
 		// Extract content from the response event
