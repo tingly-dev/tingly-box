@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/imagegen"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
@@ -130,6 +132,129 @@ func (c *CodexClient) ImagesGenerate(ctx context.Context, req openai.ImageGenera
 
 	// Parse streaming response
 	return c.parseImageGenerationStream(ctx, stream)
+}
+
+// ImagesEdit edits or inpaints images using the Responses API image_generation
+// tool with action:"edit". The source image(s) are injected as input_image
+// content parts; the mask (if present) is passed in the tool's input_image_mask
+// field. This matches the ChatGPT backend's edit flow, which does not support
+// the standard POST /images/edits endpoint.
+func (c *CodexClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams) (*openai.ImagesResponse, error) {
+	logrus.WithContext(ctx).Debugf("[Codex] Using Responses API for image edit, model: %s", req.Model)
+	normalized, err := imagegen.RequestFromOpenAIEdit(&req)
+	if err != nil {
+		return nil, fmt.Errorf("[Codex] reading edit params: %w", err)
+	}
+	responsesReq, err := c.buildImageEditResponsesRequest(normalized)
+	if err != nil {
+		return nil, err
+	}
+	stream := c.OpenAIClient.ResponsesNewStreaming(ctx, responsesReq)
+	return c.parseImageGenerationStream(ctx, stream)
+}
+
+// buildImageEditResponsesRequest converts a normalized edit Request into a
+// Responses API request with the image_generation tool set to action:"edit".
+func (c *CodexClient) buildImageEditResponsesRequest(req *imagegen.Request) (responses.ResponseNewParams, error) {
+	params := responses.ResponseNewParams{
+		Model: openai.ImageModel(req.Model),
+	}
+	params.Store = param.NewOpt(false)
+	params.Instructions = param.NewOpt(defaultInstructions)
+	params.ParallelToolCalls = param.NewOpt(false)
+	params.Include = []responses.ResponseIncludable{responses.ResponseIncludable(reasoningMarker)}
+
+	// Build the user message content: source images first, then the prompt.
+	var contentItems responses.ResponseInputMessageContentListParam
+
+	for i, img := range req.Images {
+		dataURI, err := imageInputToDataURI(img)
+		if err != nil {
+			return params, fmt.Errorf("[Codex] encoding source image[%d]: %w", i, err)
+		}
+		inputImage := &responses.ResponseInputImageParam{}
+		inputImage.ImageURL = param.NewOpt(dataURI)
+		inputImage.Detail = responses.ResponseInputImageDetailAuto
+		contentItems = append(contentItems, responses.ResponseInputContentUnionParam{
+			OfInputImage: inputImage,
+		})
+	}
+
+	// Add the edit prompt as text.
+	contentItems = append(contentItems, responses.ResponseInputContentParamOfInputText(req.Prompt))
+
+	inputItem := responses.ResponseInputItemUnionParam{
+		OfMessage: &responses.EasyInputMessageParam{
+			Type:    responses.EasyInputMessageTypeMessage,
+			Role:    responses.EasyInputMessageRoleUser,
+			Content: responses.EasyInputMessageContentUnionParam{OfInputItemContentList: contentItems},
+		},
+	}
+	params.Input = responses.ResponseNewParamsInputUnion{
+		OfInputItemList: responses.ResponseInputParam{inputItem},
+	}
+
+	// Build the image_generation tool with action:"edit".
+	quality := normalizeCodexQuality(req.Quality)
+	outputFormat := req.OutputFormat
+	if outputFormat == "" {
+		outputFormat = "png"
+	}
+
+	toolParam := &responses.ToolImageGenerationParam{
+		Type:          "image_generation",
+		Action:        "edit",
+		Size:          req.Size,
+		Quality:       quality,
+		OutputFormat:  outputFormat,
+		InputFidelity: req.InputFidelity,
+		Moderation:    req.Moderation,
+	}
+
+	// Pass the mask via the tool's input_image_mask field (base64 data URI).
+	if req.Mask != nil {
+		maskURI, err := imageInputToDataURI(*req.Mask)
+		if err != nil {
+			return params, fmt.Errorf("[Codex] encoding mask: %w", err)
+		}
+		toolParam.InputImageMask = responses.ToolImageGenerationInputImageMaskParam{
+			ImageURL: param.NewOpt(maskURI),
+		}
+	}
+
+	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}
+	params.SetExtraFields(map[string]interface{}{"stream": true})
+	return params, nil
+}
+
+// imageInputToDataURI converts an ImageInput to a base64 data URI suitable for
+// the Responses API input_image content part.
+func imageInputToDataURI(img imagegen.ImageInput) (string, error) {
+	if img.URL != "" && len(img.Data) == 0 {
+		// Already a data: or https: URI.
+		return img.URL, nil
+	}
+	mime := img.MimeType
+	if mime == "" {
+		mime = "image/png"
+	}
+	encoded := base64.StdEncoding.EncodeToString(img.Data)
+	return "data:" + mime + ";base64," + encoded, nil
+}
+
+// normalizeCodexQuality maps OpenAI generation quality names to Responses API
+// quality names expected by the image_generation tool.
+func normalizeCodexQuality(q string) string {
+	switch q {
+	case "standard":
+		return "medium"
+	case "hd":
+		return "high"
+	case "":
+		return "auto"
+	default:
+		return q
+	}
 }
 
 // applyCodexDefaultsToParams applies Codex-specific defaults to a ResponseNewParams struct.
@@ -383,34 +508,18 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 	inputItems := responses.ResponseInputParam{inputItem}
 	params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: inputItems}
 
-	// Determine quality
-	quality := "auto"
-	if req.Quality != "" {
-		qualityStr := string(req.Quality)
-		if qualityStr == "standard" {
-			quality = "medium"
-		} else if qualityStr == "hd" {
-			quality = "high"
-		} else {
-			quality = qualityStr
-		}
-	}
+	quality := normalizeCodexQuality(string(req.Quality))
 
-	// Determine output format
 	outputFormat := "png"
 	if req.ResponseFormat != "" {
 		outputFormat = string(req.ResponseFormat)
 	}
 
-	// Build image_generation tool
 	toolParam := &responses.ToolImageGenerationParam{
 		Type:         "image_generation",
 		Size:         string(req.Size),
 		Quality:      quality,
 		OutputFormat: outputFormat,
-		//Action:       "auto",
-		//Background:   "auto",
-		//Moderation:   "auto",
 	}
 
 	params.Tools = []responses.ToolUnionParam{{OfImageGeneration: toolParam}}

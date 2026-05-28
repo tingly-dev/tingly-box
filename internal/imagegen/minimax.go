@@ -22,6 +22,7 @@ import (
 //
 // Reference: https://platform.minimax.io/docs/guides/image-generation
 type minimaxClient struct {
+	UnsupportedEdit
 	provider    *typ.Provider
 	httpClient  *http.Client
 	endpointURL string

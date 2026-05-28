@@ -29,6 +29,7 @@ import (
 //
 // Reference: https://www.alibabacloud.com/help/en/model-studio/text-to-image
 type dashscopeClient struct {
+	UnsupportedEdit
 	provider     *typ.Provider
 	httpClient   *http.Client
 	submitURL    string

@@ -112,6 +112,9 @@ func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 	// (POST /responses with the image_generation tool) is exposed in parallel via
 	// the same scenario, with the caller choosing which surface to use.
 	group.POST("/images/generations", s.getModelAuthMiddleware(), s.HandleOpenAIImageGeneration)
+	// Image editing endpoint (OpenAI compatible, multipart/form-data).
+	// Codex rides the Responses API image_generation tool with action:"edit".
+	group.POST("/images/edits", s.getModelAuthMiddleware(), s.HandleOpenAIImageEdit)
 
 	// Models endpoint (routed by scenario: openai -> OpenAIListModels, anthropic/claude_code -> AnthropicListModels)
 	group.GET("/models", s.getModelAuthMiddleware(), s.ListModelsByScenario)

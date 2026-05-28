@@ -72,6 +72,24 @@ func ForwardOpenAIImageGeneration(fc *ForwardContext, wrapper client.OpenAIClien
 	return resp, cancel, err
 }
 
+// ForwardOpenAIImageEdit sends an image editing / inpainting request. Vendor
+// fragmentation is handled inside the client wrapper — OpenAI-compatible
+// providers go through the SDK directly, and Codex rides the Responses API.
+func ForwardOpenAIImageEdit(fc *ForwardContext, wrapper client.OpenAIClientInterface, req *openai.ImageEditParams) (*openai.ImagesResponse, context.CancelFunc, error) {
+	if wrapper == nil {
+		return nil, nil, fmt.Errorf("failed to get OpenAI client for provider: %s", fc.Provider.Name)
+	}
+
+	ctx, cancel := fc.PrepareContext(req)
+
+	logrus.Infof("provider: %s, model: %s (image edit)", fc.Provider.Name, req.Model)
+
+	resp, err := wrapper.ImagesEdit(ctx, *req)
+	fc.Complete(ctx, resp, err)
+
+	return resp, cancel, err
+}
+
 // ForwardOpenAIChatStream sends a streaming OpenAI chat completion request.
 // IMPORTANT: All transformations (protocol conversion + vendor-specific) should
 // be applied by the transform chain BEFORE calling this function.

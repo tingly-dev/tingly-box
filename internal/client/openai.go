@@ -31,6 +31,7 @@ type OpenAIClientInterface interface {
 	ChatCompletionsNew(ctx context.Context, req openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
 	ChatCompletionsNewStreaming(ctx context.Context, req openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
 	ImagesGenerate(ctx context.Context, req openai.ImageGenerateParams) (*openai.ImagesResponse, error)
+	ImagesEdit(ctx context.Context, req openai.ImageEditParams) (*openai.ImagesResponse, error)
 	ResponsesNew(ctx context.Context, req responses.ResponseNewParams) (*responses.Response, error)
 	ResponsesNewStreaming(ctx context.Context, req responses.ResponseNewParams) *ssestream.Stream[responses.ResponseStreamEventUnion]
 	EmbeddingsNew(ctx context.Context, req openai.EmbeddingNewParams) (*openai.CreateEmbeddingResponse, error)
@@ -171,6 +172,31 @@ func (c *OpenAIClient) ImagesGenerate(ctx context.Context, req openai.ImageGener
 		return resp.ToOpenAI(), nil
 	default:
 		return c.client.Images.Generate(ctx, req)
+	}
+}
+
+// ImagesEdit sends an image editing / inpainting request. OpenAI-compatible
+// providers are served directly through the SDK. DashScope and MiniMax do not
+// expose an edit endpoint; requests to those vendors return ErrEditUnsupported.
+func (c *OpenAIClient) ImagesEdit(ctx context.Context, req openai.ImageEditParams) (*openai.ImagesResponse, error) {
+	switch imagegen.DetectVendor(c.provider) {
+	case imagegen.VendorDashScope, imagegen.VendorMinimax:
+		adapter, err := imagegen.New(c.provider, string(req.Model))
+		if err != nil {
+			return nil, err
+		}
+		defer adapter.Close()
+		normalized, err := imagegen.RequestFromOpenAIEdit(&req)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := adapter.Edit(ctx, normalized)
+		if err != nil {
+			return nil, err
+		}
+		return resp.ToOpenAI(), nil
+	default:
+		return c.client.Images.Edit(ctx, req)
 	}
 }
 
