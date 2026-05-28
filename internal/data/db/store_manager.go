@@ -124,7 +124,7 @@ func NewStoreManagerWithConfig(config StoreManagerConfig) (*StoreManager, error)
 		return nil, err
 	}
 
-	logrus.Info("StoreManager: All stores initialized successfully")
+	logrus.Debugf("StoreManager: All stores initialized successfully")
 	return sm, nil
 }
 
@@ -337,7 +337,6 @@ func (sm *StoreManager) ImBotSettings() *ImBotSettingsStore {
 	defer sm.mu.RUnlock()
 	return sm.imbotSettingsStore
 }
-
 
 // Model returns the ModelStore (thread-safe).
 // Returns nil if the store is not initialized or after Close() has been called.

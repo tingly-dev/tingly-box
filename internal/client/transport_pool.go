@@ -494,5 +494,5 @@ func (tp *TransportPool) StartCleanupTask(interval, ttl time.Duration) {
 			tp.cleanupExpiredTransports(ttl)
 		}
 	}()
-	logrus.Infof("Started transport pool cleanup task with interval: %v, TTL: %v", interval, ttl)
+	logrus.Debugf("Started transport pool cleanup task with interval: %v, TTL: %v", interval, ttl)
 }
