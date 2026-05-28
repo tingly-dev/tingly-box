@@ -5,6 +5,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 // AnthropicStreamAssembler assembles Anthropic streaming responses
@@ -180,7 +182,9 @@ func (a *AnthropicStreamAssembler) handleContentBlockDeltaBeta(blockIndex int, d
 	a.blocks[blockIndex] = block
 }
 
-// SetUsage sets the usage data
+// SetUsage sets the usage data from raw input/output counts.
+// Prefer SetUsageFromTokenUsage when you have an *ai.TokenUsage in hand —
+// it carries cache and reasoning fields the bare counts cannot.
 func (a *AnthropicStreamAssembler) SetUsage(inputTokens, outputTokens int) {
 	a.usageData = &anthropic.Usage{
 		InputTokens:  int64(inputTokens),
@@ -188,12 +192,18 @@ func (a *AnthropicStreamAssembler) SetUsage(inputTokens, outputTokens int) {
 	}
 }
 
-// SetUsageFull sets the usage data including cache tokens.
-func (a *AnthropicStreamAssembler) SetUsageFull(inputTokens, outputTokens, cacheReadTokens int) {
+// SetUsageFromTokenUsage sets the assembled response usage from the canonical
+// ai.TokenUsage type. Cache-read input tokens are mapped to
+// anthropic.Usage.CacheReadInputTokens; reasoning_tokens has no Anthropic
+// analogue (extended-thinking tokens are billed inside output_tokens).
+func (a *AnthropicStreamAssembler) SetUsageFromTokenUsage(u *ai.TokenUsage) {
+	if u == nil {
+		return
+	}
 	a.usageData = &anthropic.Usage{
-		InputTokens:          int64(inputTokens),
-		OutputTokens:         int64(outputTokens),
-		CacheReadInputTokens: int64(cacheReadTokens),
+		InputTokens:          int64(u.InputTokens),
+		OutputTokens:         int64(u.OutputTokens),
+		CacheReadInputTokens: int64(u.CacheInputTokens),
 	}
 }
 

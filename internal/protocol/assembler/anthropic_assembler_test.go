@@ -6,6 +6,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/ai"
 )
 
 func TestNewAnthropicStreamAssembler(t *testing.T) {
@@ -119,9 +121,13 @@ func TestAnthropicStreamAssembler_SetUsage(t *testing.T) {
 	assert.Equal(t, int64(50), assembler.usageData.OutputTokens)
 }
 
-func TestAnthropicStreamAssembler_SetUsageFull_CarriesCacheRead(t *testing.T) {
+func TestAnthropicStreamAssembler_SetUsageFromTokenUsage_CarriesCacheRead(t *testing.T) {
 	assembler := NewAnthropicStreamAssembler()
-	assembler.SetUsageFull(42, 17, 11)
+	assembler.SetUsageFromTokenUsage(&ai.TokenUsage{
+		InputTokens:      42,
+		OutputTokens:     17,
+		CacheInputTokens: 11,
+	})
 	assembler.msgID = "msg_cache"
 	assembler.blocks[0] = anthropic.ContentBlockUnion{Type: "text", Text: "ok"}
 

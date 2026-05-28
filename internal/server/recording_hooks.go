@@ -52,21 +52,25 @@ func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage) {
 	if sr == nil {
 		return
 	}
-	inputTokens, outputTokens, cacheReadTokens := 0, 0, 0
+	// Fall back to in-stream usage when the converter didn't return one
+	// (e.g. early errors before message_delta usage was tallied).
+	if usage == nil || (usage.InputTokens == 0 && usage.OutputTokens == 0) {
+		if sr.hasUsage {
+			usage = &protocol.TokenUsage{
+				InputTokens:      sr.inputTokens,
+				OutputTokens:     sr.outputTokens,
+				CacheInputTokens: sr.cacheReadTokens,
+			}
+		}
+	}
+	if usage != nil {
+		sr.assembler.SetUsageFromTokenUsage(usage)
+	}
+	var inputTokens, outputTokens, cacheReadTokens int
 	if usage != nil {
 		inputTokens = usage.InputTokens
 		outputTokens = usage.OutputTokens
 		cacheReadTokens = usage.CacheInputTokens
-	}
-	if inputTokens == 0 && outputTokens == 0 && sr.hasUsage {
-		inputTokens = sr.inputTokens
-		outputTokens = sr.outputTokens
-		if cacheReadTokens == 0 {
-			cacheReadTokens = sr.cacheReadTokens
-		}
-	}
-	if cacheReadTokens > 0 {
-		sr.assembler.SetUsageFull(inputTokens, outputTokens, cacheReadTokens)
 	}
 	assembled := sr.assembler.Finish(model, inputTokens, outputTokens)
 	if assembled != nil {
