@@ -175,7 +175,8 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 		return nil
 	}
 
-	if strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai") {
+	switch {
+	case strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai"):
 		// Apply Anthropic model-specific transforms
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(model))
 
@@ -183,6 +184,18 @@ func (t *VendorTransform) applyAnthropicV1Vendor(ctx *TransformContext, req *ant
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
 
 		ctx.Request = req
+	case strings.Contains(t.ProviderURL, "api.deepseek.com"):
+		for _, m := range req.Messages {
+			found := false
+			for _, b := range m.Content {
+				if b.OfThinking != nil {
+					found = true
+				}
+			}
+			if !found {
+				m.Content = append(m.Content, anthropic.NewThinkingBlock("", ""))
+			}
+		}
 	}
 
 	return nil
@@ -198,7 +211,8 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 		return nil
 	}
 
-	if strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai") {
+	switch {
+	case strings.Contains(t.ProviderURL, "api.anthropic.com") || strings.Contains(t.ProviderURL, "claude.ai"):
 		// Apply Anthropic model-specific transforms
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(model))
 
@@ -206,6 +220,18 @@ func (t *VendorTransform) applyAnthropicBetaVendor(ctx *TransformContext, req *a
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
 
 		ctx.Request = req
+	case strings.Contains(t.ProviderURL, "api.deepseek.com"):
+		for _, m := range req.Messages {
+			found := false
+			for _, b := range m.Content {
+				if b.OfThinking != nil {
+					found = true
+				}
+			}
+			if !found {
+				m.Content = append(m.Content, anthropic.NewBetaThinkingBlock("", ""))
+			}
+		}
 	}
 
 	return nil
