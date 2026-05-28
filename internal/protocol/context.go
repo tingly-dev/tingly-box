@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -164,12 +163,21 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 
 	var processErr error
 
-	// Use gin.Stream for proper streaming handling
-	c.Stream(func(w io.Writer) bool {
-		// Check context cancellation first
+	// Manual stream loop instead of gin's c.Stream: gin flushes after every
+	// step, and its Flush() calls WriteHeaderNow() — so a step that produced
+	// nothing (e.g. the stream failed before the first event) would lock in a
+	// 200, blocking the handler's post-loop error path from setting a
+	// retryable 5xx. We flush only after an event was actually handled.
+	flusher := c.Writer.(http.Flusher)
+	clientGone := c.Writer.CloseNotify()
+streamLoop:
+	for {
+		// Check cancellation (client disconnect or request context).
 		select {
+		case <-clientGone:
+			break streamLoop
 		case <-c.Request.Context().Done():
-			return false
+			break streamLoop
 		default:
 		}
 
@@ -177,17 +185,24 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 		cont, err, event := nextFunc()
 		if err != nil {
 			processErr = err
-			return false
+			break streamLoop
 		}
 		if !cont {
-			return false
+			break streamLoop
+		}
+
+		// First real chunk: signal the failover gate (when one is wrapping
+		// c.Writer) to flush buffered output and switch to pass-through.
+		// Opportunistic assert keeps protocol free of any server dependency.
+		if cm, ok := c.Writer.(interface{ CommitFirstChunk() }); ok {
+			cm.CommitFirstChunk()
 		}
 
 		// Call OnStreamEvent hooks first
 		for _, hook := range hc.OnStreamEventHooks {
 			if hookErr := hook(event); hookErr != nil {
 				processErr = hookErr
-				return false
+				break streamLoop
 			}
 		}
 
@@ -205,12 +220,12 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 		if handleFunc != nil {
 			if handleErr := handleFunc(event); handleErr != nil {
 				processErr = handleErr
-				return false
+				break streamLoop
 			}
 		}
 
-		return true
-	})
+		flusher.Flush()
+	}
 
 	// Call OnStreamError hooks if there was an error
 	if processErr != nil {
