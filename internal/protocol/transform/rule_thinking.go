@@ -85,11 +85,22 @@ func disableThinking(req interface{}) {
 // enableThinking turns thinking on with the matching budget / effort. As with
 // disable, it also clears any stray `thinking` extension on OpenAI requests
 // so the typed field is the single source of truth.
+//
+// For Anthropic requests: max_tokens is a hard operator limit and must not be
+// raised. Anthropic enforces budget_tokens <= max_tokens, so if the requested
+// budget exceeds the current max_tokens the budget is capped at max_tokens
+// (floor 1024) rather than overriding the operator's limit.
 func enableThinking(req interface{}, effort string, budget int64) {
 	switch r := req.(type) {
 	case *anthropic.MessageNewParams:
+		if r.MaxTokens > 0 && budget > r.MaxTokens {
+			budget = max(1024, r.MaxTokens)
+		}
 		r.Thinking = anthropic.ThinkingConfigParamOfEnabled(budget)
 	case *anthropic.BetaMessageNewParams:
+		if r.MaxTokens > 0 && budget > r.MaxTokens {
+			budget = max(1024, r.MaxTokens)
+		}
 		r.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budget)
 	case *openai.ChatCompletionNewParams:
 		r.ReasoningEffort = openaiReasoningEffort(effort)

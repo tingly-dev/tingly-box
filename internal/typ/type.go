@@ -223,13 +223,17 @@ type ScenarioConfig struct {
 	Extensions map[string]interface{} `json:"extensions,omitempty" yaml:"extensions,omitempty"` // Reserved for future extensions
 }
 
-// GetDefaultFlags returns default flags for a scenario
+// GetDefaultFlags returns the effective flags for a scenario.
+// If no routing mode (Unified/Separate/Smart) is explicitly set, Unified
+// defaults to true so callers that depend on exactly one mode being active
+// always see a consistent value. All other flags are returned as stored.
 func (sc *ScenarioConfig) GetDefaultFlags() ScenarioFlags {
 	if sc.Flags.Unified || sc.Flags.Separate || sc.Flags.Smart {
 		return sc.Flags
 	}
-	// Default to unified if no flag is set
-	return ScenarioFlags{Unified: true}
+	result := sc.Flags
+	result.Unified = true
+	return result
 }
 
 // AuthType represents the authentication type for a provider

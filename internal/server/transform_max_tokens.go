@@ -44,8 +44,15 @@ func (t *MaxTokensTransform) applyAnthropicV1(req *anthropic.MessageNewParams) {
 	if req.MaxTokens > maxAllowed {
 		req.MaxTokens = maxAllowed
 	}
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > maxAllowed {
-		req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+		if *thinkBudget > maxAllowed {
+			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+		}
+		// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
+		// operator limit — cap the budget rather than raising the limit.
+		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
+			req.Thinking = anthropic.ThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
+		}
 	}
 }
 
@@ -57,7 +64,14 @@ func (t *MaxTokensTransform) applyAnthropicBeta(req *anthropic.BetaMessageNewPar
 	if req.MaxTokens > maxAllowed {
 		req.MaxTokens = maxAllowed
 	}
-	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil && *thinkBudget > maxAllowed {
-		req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+	if thinkBudget := req.Thinking.GetBudgetTokens(); thinkBudget != nil {
+		if *thinkBudget > maxAllowed {
+			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, int64(t.MaxAllowed/10)))
+		}
+		// Anthropic enforces budget_tokens <= max_tokens. max_tokens is a hard
+		// operator limit — cap the budget rather than raising the limit.
+		if budget := req.Thinking.GetBudgetTokens(); budget != nil && *budget > req.MaxTokens {
+			req.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(max(1024, req.MaxTokens))
+		}
 	}
 }

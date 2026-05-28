@@ -123,6 +123,91 @@ func TestRuleThinkingTransform_ResponsesEffort(t *testing.T) {
 	}
 }
 
+func TestRuleThinkingTransform_AnthropicBetaBudget(t *testing.T) {
+	req := &anthropic.BetaMessageNewParams{}
+	ctx := &TransformContext{Request: req}
+
+	if err := NewRuleThinkingTransform(typ.ThinkingEffortHigh).Apply(ctx); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if req.Thinking.OfEnabled == nil {
+		t.Fatalf("expected thinking enabled, got %#v", req.Thinking)
+	}
+	if got := req.Thinking.OfEnabled.BudgetTokens; got != typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh] {
+		t.Errorf("budget = %d, want %d", got, typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh])
+	}
+}
+
+func TestRuleThinkingTransform_AnthropicBetaOffDisables(t *testing.T) {
+	req := &anthropic.BetaMessageNewParams{
+		Thinking: anthropic.BetaThinkingConfigParamOfEnabled(20480),
+	}
+	ctx := &TransformContext{Request: req}
+
+	if err := NewRuleThinkingTransform(typ.ThinkingEffortOff).Apply(ctx); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if req.Thinking.OfDisabled == nil {
+		t.Fatalf("expected OfDisabled, got %#v", req.Thinking)
+	}
+	if req.Thinking.OfEnabled != nil {
+		t.Errorf("expected OfEnabled cleared, got %#v", req.Thinking.OfEnabled)
+	}
+}
+
+func TestRuleThinkingTransform_ResponsesOff(t *testing.T) {
+	req := &responses.ResponseNewParams{}
+	req.Reasoning.Effort = shared.ReasoningEffortMedium
+	ctx := &TransformContext{Request: req}
+
+	if err := NewRuleThinkingTransform(typ.ThinkingEffortOff).Apply(ctx); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if req.Reasoning.Effort != "" {
+		t.Errorf("reasoning.effort = %q, want empty", req.Reasoning.Effort)
+	}
+}
+
+func TestRuleThinkingTransform_AnthropicCapsBudgetToMaxTokens(t *testing.T) {
+	budget := typ.ThinkingBudgetMapping[typ.ThinkingEffortHigh]
+	req := &anthropic.MessageNewParams{}
+	req.MaxTokens = budget / 2 // smaller than the budget
+	ctx := &TransformContext{Request: req}
+
+	if err := NewRuleThinkingTransform(typ.ThinkingEffortHigh).Apply(ctx); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	// max_tokens must not be raised (hard operator limit)
+	if req.MaxTokens != budget/2 {
+		t.Errorf("max_tokens changed from %d to %d — must not be raised", budget/2, req.MaxTokens)
+	}
+	// budget must be capped at max_tokens so Anthropic doesn't reject
+	if got := req.Thinking.OfEnabled; got == nil {
+		t.Fatalf("expected thinking enabled")
+	} else if got.BudgetTokens > req.MaxTokens {
+		t.Errorf("budget_tokens %d exceeds max_tokens %d", got.BudgetTokens, req.MaxTokens)
+	}
+}
+
+func TestRuleThinkingTransform_AnthropicDoesNotReduceBudgetWhenMaxTokensSufficient(t *testing.T) {
+	budget := typ.ThinkingBudgetMapping[typ.ThinkingEffortLow]
+	req := &anthropic.MessageNewParams{}
+	req.MaxTokens = budget * 4 // already larger than budget
+	ctx := &TransformContext{Request: req}
+
+	if err := NewRuleThinkingTransform(typ.ThinkingEffortLow).Apply(ctx); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if req.MaxTokens != budget*4 {
+		t.Errorf("max_tokens = %d, should not have changed from %d", req.MaxTokens, budget*4)
+	}
+	if got := req.Thinking.OfEnabled; got == nil {
+		t.Fatalf("expected thinking enabled")
+	} else if got.BudgetTokens != budget {
+		t.Errorf("budget = %d, want %d", got.BudgetTokens, budget)
+	}
+}
+
 func TestRuleThinkingTransform_DefaultIsNoop(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		ReasoningEffort: shared.ReasoningEffortMedium,
