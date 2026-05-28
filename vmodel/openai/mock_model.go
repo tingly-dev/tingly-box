@@ -27,6 +27,10 @@ type MockModelConfig struct {
 	// DoneEvent so streaming consumers can be exercised against a
 	// deterministic, fully-populated usage shape.
 	Usage *vmodel.MockUsage
+
+	// Error, when non-nil, makes this mock simulate a failure. See
+	// vmodel.ErrorInjection for the two supported stages.
+	Error *vmodel.ErrorInjection
 }
 
 // MockModel is an OpenAI-Chat-only mock virtual model.
@@ -68,6 +72,9 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 	}
 }
 
+// ErrorInjection implements vmodel.ErrorInjectingModel.
+func (m *MockModel) ErrorInjection() *vmodel.ErrorInjection { return m.cfg.Error }
+
 func (m *MockModel) streamChunks() []string {
 	if len(m.cfg.StreamChunks) > 0 {
 		return m.cfg.StreamChunks
@@ -107,14 +114,26 @@ func (m *MockModel) HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionReq
 	}
 	chunks := m.streamChunks()
 	perChunk := vmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
-	vmodel.EmitChunks(chunks, perChunk, func(i int, chunk string) {
+	gate := vmodel.NewEmitGate(vmodel.MidStreamCutoff(m))
+	if vmodel.EmitChunksGated(chunks, perChunk, gate, func(i int, chunk string) {
 		emit(DeltaEvent{Index: i, Content: chunk})
-	})
+	}) {
+		return nil
+	}
 	for i, tc := range resp.ToolCalls {
+		if !gate.Allow() {
+			return nil
+		}
 		emit(ToolEvent{Index: i, ToolCall: tc})
 	}
 	if m.cfg.Usage != nil {
+		if !gate.Allow() {
+			return nil
+		}
 		emit(UsageEvent{Usage: *m.cfg.Usage})
+	}
+	if !gate.Allow() {
+		return nil
 	}
 	emit(DoneEvent{FinishReason: resp.FinishReason})
 	return nil

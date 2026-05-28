@@ -43,19 +43,33 @@ type DoneEvent struct {
 // DefaultStream is a stream adapter for batch-only Anthropic models.
 // It calls HandleAnthropic, chunks text content via token.SplitIntoChunks,
 // and emits typed stream events. Batch-only models should delegate here.
+//
+// If the model implements vmodel.ErrorInjectingModel with a mid-stream
+// injection, this loop stops after the configured event count and returns
+// without emitting DoneEvent. The virtualserver handler then applies the
+// configured break mode (TCP close or SSE error event).
 func DefaultStream(vm VirtualModel, req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
 	resp, err := vm.HandleAnthropic(req)
 	if err != nil {
 		return err
 	}
+	gate := vmodel.NewEmitGate(vmodel.MidStreamCutoff(vm))
+	if !gate.Allow() {
+		return nil
+	}
 	emit(StreamStartEvent{MsgID: "msg_virtual", Model: ""})
 	for i, blk := range resp.Content {
 		if blk.OfText != nil {
 			chunks := token.SplitIntoChunks(blk.OfText.Text)
-			vmodel.EmitChunks(chunks, vmodel.DefaultStreamChunkDelay, func(_ int, chunk string) {
+			if vmodel.EmitChunksGated(chunks, vmodel.DefaultStreamChunkDelay, gate, func(_ int, chunk string) {
 				emit(TextDeltaEvent{Index: i, Text: chunk})
-			})
+			}) {
+				return nil
+			}
 		} else if blk.OfToolUse != nil {
+			if !gate.Allow() {
+				return nil
+			}
 			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
 			emit(ToolUseEvent{
 				Index: i,
@@ -64,6 +78,9 @@ func DefaultStream(vm VirtualModel, req *protocol.AnthropicBetaMessagesRequest, 
 				Input: inputJSON,
 			})
 		}
+	}
+	if !gate.Allow() {
+		return nil
 	}
 	emit(DoneEvent{StopReason: string(resp.StopReason)})
 	return nil

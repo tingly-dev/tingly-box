@@ -28,6 +28,10 @@ type MockModelConfig struct {
 	// Usage, when set, is emitted as a UsageEvent immediately before
 	// DoneEvent (rendered by virtualserver inside message_delta.usage).
 	Usage *vmodel.MockUsage
+
+	// Error, when non-nil, makes this mock simulate a failure. See
+	// vmodel.ErrorInjection for the two supported stages.
+	Error *vmodel.ErrorInjection
 }
 
 // MockModel is an Anthropic-only mock virtual model. It returns a fixed
@@ -70,6 +74,9 @@ func NewMockModel(cfg *MockModelConfig) *MockModel {
 		cfg: cfg,
 	}
 }
+
+// ErrorInjection implements vmodel.ErrorInjectingModel.
+func (m *MockModel) ErrorInjection() *vmodel.ErrorInjection { return m.cfg.Error }
 
 func (m *MockModel) streamChunks() []string {
 	if len(m.cfg.StreamChunks) > 0 {
@@ -119,15 +126,24 @@ func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesReq
 	if err != nil {
 		return err
 	}
+	gate := vmodel.NewEmitGate(vmodel.MidStreamCutoff(m))
+	if !gate.Allow() {
+		return nil
+	}
 	emit(StreamStartEvent{MsgID: "msg_virtual", Model: m.cfg.ID})
 	chunks := m.streamChunks()
 	perChunk := vmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
 	for i, blk := range resp.Content {
 		if blk.OfText != nil {
-			vmodel.EmitChunks(chunks, perChunk, func(_ int, chunk string) {
+			if vmodel.EmitChunksGated(chunks, perChunk, gate, func(_ int, chunk string) {
 				emit(TextDeltaEvent{Index: i, Text: chunk})
-			})
+			}) {
+				return nil
+			}
 		} else if blk.OfToolUse != nil {
+			if !gate.Allow() {
+				return nil
+			}
 			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
 			emit(ToolUseEvent{
 				Index: i,
@@ -138,7 +154,13 @@ func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesReq
 		}
 	}
 	if m.cfg.Usage != nil {
+		if !gate.Allow() {
+			return nil
+		}
 		emit(UsageEvent{Usage: *m.cfg.Usage})
+	}
+	if !gate.Allow() {
+		return nil
 	}
 	emit(DoneEvent{StopReason: string(resp.StopReason)})
 	return nil

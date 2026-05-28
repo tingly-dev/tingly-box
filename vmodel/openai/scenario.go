@@ -18,6 +18,11 @@ type MockScenario struct {
 	Content      string
 	ToolCalls    []VToolCall
 	FinishReason string // defaults to "stop" (or "tool_calls" if ToolCalls non-empty)
+
+	// Error, when non-nil, makes the scenario simulate a failure instead of
+	// returning a normal response. See vmodel.ErrorInjection for the two
+	// supported stages (pre-content vs mid-stream).
+	Error *vmodel.ErrorInjection
 }
 
 type scenarioModel struct {
@@ -26,6 +31,7 @@ type scenarioModel struct {
 	content      string
 	toolCalls    []VToolCall
 	finishReason string
+	errInjection *vmodel.ErrorInjection
 }
 
 // NewMockFromScenario creates an OpenAI Chat VirtualModel from a MockScenario.
@@ -54,8 +60,12 @@ func NewMockFromScenario(s *MockScenario) VirtualModel {
 		content:      s.Content,
 		toolCalls:    s.ToolCalls,
 		finishReason: finish,
+		errInjection: s.Error,
 	}
 }
+
+// ErrorInjection implements vmodel.ErrorInjectingModel.
+func (m *scenarioModel) ErrorInjection() *vmodel.ErrorInjection { return m.errInjection }
 
 func (m *scenarioModel) streamChunks() []string {
 	if len(m.chunks) > 0 {

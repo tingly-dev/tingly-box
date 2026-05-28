@@ -21,14 +21,20 @@ type MockScenario struct {
 	Content    string
 	ToolCall   *vmodel.ToolCallConfig
 	StopReason string // defaults to "stop" (or "tool_use" if ToolCall is set)
+
+	// Error, when non-nil, makes the scenario simulate a failure instead of
+	// returning a normal response. See vmodel.ErrorInjection for the two
+	// supported stages (pre-content vs mid-stream).
+	Error *vmodel.ErrorInjection
 }
 
 type scenarioModel struct {
 	vmodel.BaseMockModel
-	chunks     []string
-	content    string
-	toolCall   *vmodel.ToolCallConfig
-	stopReason string
+	chunks       []string
+	content      string
+	toolCall     *vmodel.ToolCallConfig
+	stopReason   string
+	errInjection *vmodel.ErrorInjection
 }
 
 // NewMockFromScenario creates an Anthropic VirtualModel from a MockScenario.
@@ -53,12 +59,16 @@ func NewMockFromScenario(s *MockScenario) VirtualModel {
 			Type:        typ,
 			Delay:       s.Delay,
 		},
-		chunks:     s.StreamChunks,
-		content:    s.Content,
-		toolCall:   s.ToolCall,
-		stopReason: stop,
+		chunks:       s.StreamChunks,
+		content:      s.Content,
+		toolCall:     s.ToolCall,
+		stopReason:   stop,
+		errInjection: s.Error,
 	}
 }
+
+// ErrorInjection implements vmodel.ErrorInjectingModel.
+func (m *scenarioModel) ErrorInjection() *vmodel.ErrorInjection { return m.errInjection }
 
 func (m *scenarioModel) streamChunks() []string {
 	if len(m.chunks) > 0 {
