@@ -28,6 +28,13 @@ type ToolUseEvent struct {
 	Input json.RawMessage
 }
 
+// UsageEvent carries explicit token usage that the model wants the wire
+// stream to advertise (typically just before DoneEvent — emitted by
+// virtualserver inside message_delta.usage).
+type UsageEvent struct {
+	Usage vmodel.MockUsage
+}
+
 // DoneEvent signals end of stream with stop reason.
 type DoneEvent struct {
 	StopReason string

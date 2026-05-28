@@ -24,6 +24,10 @@ type MockModelConfig struct {
 
 	// tool-type: if set, the response includes a tool_use block.
 	ToolCall *vmodel.ToolCallConfig
+
+	// Usage, when set, is emitted as a UsageEvent immediately before
+	// DoneEvent (rendered by virtualserver inside message_delta.usage).
+	Usage *vmodel.MockUsage
 }
 
 // MockModel is an Anthropic-only mock virtual model. It returns a fixed
@@ -132,6 +136,9 @@ func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesReq
 				Input: inputJSON,
 			})
 		}
+	}
+	if m.cfg.Usage != nil {
+		emit(UsageEvent{Usage: *m.cfg.Usage})
 	}
 	emit(DoneEvent{StopReason: string(resp.StopReason)})
 	return nil

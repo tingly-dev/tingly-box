@@ -22,6 +22,11 @@ type MockModelConfig struct {
 
 	// tool-type: if set, the response includes tool calls.
 	ToolCall *vmodel.ToolCallConfig
+
+	// Usage, when set, is emitted as a UsageEvent immediately before
+	// DoneEvent so streaming consumers can be exercised against a
+	// deterministic, fully-populated usage shape.
+	Usage *vmodel.MockUsage
 }
 
 // MockModel is an OpenAI-Chat-only mock virtual model.
@@ -107,6 +112,9 @@ func (m *MockModel) HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionReq
 	})
 	for i, tc := range resp.ToolCalls {
 		emit(ToolEvent{Index: i, ToolCall: tc})
+	}
+	if m.cfg.Usage != nil {
+		emit(UsageEvent{Usage: *m.cfg.Usage})
 	}
 	emit(DoneEvent{FinishReason: resp.FinishReason})
 	return nil
