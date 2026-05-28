@@ -85,7 +85,9 @@ func TestRuleFlagRegistry_TypesAreValid(t *testing.T) {
 }
 
 // TestRuleFlagRegistry_EnumOptions asserts that every FlagTypeEnum spec
-// declares at least two options with non-empty Value and Label.
+// declares at least two options with non-empty Labels. The first option's
+// Value may be empty (it acts as the inactive/"By Client" sentinel that
+// `omitempty` hides on the wire); subsequent options must carry a value.
 func TestRuleFlagRegistry_EnumOptions(t *testing.T) {
 	for _, spec := range RuleFlagRegistry() {
 		if spec.Type != FlagTypeEnum {
@@ -96,8 +98,8 @@ func TestRuleFlagRegistry_EnumOptions(t *testing.T) {
 		}
 		seen := map[string]bool{}
 		for i, opt := range spec.Options {
-			if opt.Value == "" {
-				t.Errorf("enum flag %q option %d has empty Value", spec.Key, i)
+			if opt.Value == "" && i != 0 {
+				t.Errorf("enum flag %q option %d has empty Value (only the first option may be empty as the inactive sentinel)", spec.Key, i)
 			}
 			if opt.Label == "" {
 				t.Errorf("enum flag %q option %d has empty Label", spec.Key, i)

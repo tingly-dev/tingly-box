@@ -61,6 +61,9 @@ func ruleExtraTransforms(flags typ.RuleFlags) []transform.Transform {
 			flags.UseMaxTokens,
 		))
 	}
+	if flags.ThinkingEffort != typ.ThinkingEffortDefault {
+		extras = append(extras, transform.NewRuleThinkingTransform(flags.ThinkingEffort))
+	}
 	return extras
 }
 

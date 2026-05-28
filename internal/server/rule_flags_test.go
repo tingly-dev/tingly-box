@@ -190,6 +190,27 @@ func TestRuleExtraTransforms_UseMaxTokens(t *testing.T) {
 	}
 }
 
+func TestRuleExtraTransforms_ThinkingEffort(t *testing.T) {
+	got := ruleExtraTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 transform, got %d", len(got))
+	}
+	tf, ok := got[0].(*transform.RuleThinkingTransform)
+	if !ok {
+		t.Fatalf("expected *transform.RuleThinkingTransform, got %T", got[0])
+	}
+	if tf.Effort != typ.ThinkingEffortHigh {
+		t.Errorf("effort not propagated: got %q, want %q", tf.Effort, typ.ThinkingEffortHigh)
+	}
+}
+
+func TestRuleExtraTransforms_ThinkingEffortEmpty_NoTransform(t *testing.T) {
+	got := ruleExtraTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault})
+	if got != nil {
+		t.Errorf("empty thinking effort should add no transform, got %d", len(got))
+	}
+}
+
 func TestRuleExtraTransforms_CursorCompatAlone_NoTransform(t *testing.T) {
 	// CursorCompat is a pre-Base flag — it must not surface in the post-Base
 	// extras list. This is the safety net for the rule-flag-to-transform
