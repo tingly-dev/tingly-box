@@ -335,17 +335,20 @@ export function useSmartRoutingHandlers({
         setConfigRecord(updated);
 
         const success = await autoSave(updated);
-        if (!success) {
+        if (success) {
+            // Open the editor on the freshly created rule so the user can configure it.
+            setEditingSmartRule(cloneSmartRouting(newSmartRouting));
+            setSmartRuleDialogOpen(true);
+        } else {
             setConfigRecord(previousRecord);
         }
     }, [configRecord, setConfigRecord, autoSave]);
 
-    const handleEditSmartRule = useCallback(async (ruleUuid: string) => {
+    const handleEditSmartRule = useCallback((ruleUuid: string) => {
         if (!configRecord) return;
-
-        const smartRule = (configRecord.smartRouting || []).find((r) => r.uuid === ruleUuid);
-        if (smartRule) {
-            setEditingSmartRule(cloneSmartRouting(smartRule));
+        const rule = (configRecord.smartRouting || []).find((r) => r.uuid === ruleUuid);
+        if (rule) {
+            setEditingSmartRule(cloneSmartRouting(rule));
             setSmartRuleDialogOpen(true);
         }
     }, [configRecord]);
@@ -354,14 +357,10 @@ export function useSmartRoutingHandlers({
         if (!configRecord) return;
 
         const updatedSmartRouting = (configRecord.smartRouting || []).map((r) =>
-            r.uuid === updatedRule.uuid ? updatedRule : r
+            r.uuid === updatedRule.uuid ? updatedRule : r,
         );
 
-        const updated: ConfigRecord = {
-            ...configRecord,
-            smartRouting: updatedSmartRouting,
-        };
-
+        const updated: ConfigRecord = { ...configRecord, smartRouting: updatedSmartRouting };
         const previousRecord = { ...configRecord };
         setConfigRecord(updated);
 
