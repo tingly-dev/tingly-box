@@ -612,6 +612,6 @@ func KimiOsVersion() string {
 	case "windows":
 		return "10.0.22631"
 	default: // linux and others
-		return "5.15.0"
+		return "6.8.0"
 	}
 }
