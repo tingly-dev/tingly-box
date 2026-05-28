@@ -70,10 +70,12 @@ func disableThinking(req interface{}) {
 		r.Thinking = anthropic.ThinkingConfigParamUnion{
 			OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
 		}
+		r.OutputConfig.Effort = ""
 	case *anthropic.BetaMessageNewParams:
 		r.Thinking = anthropic.BetaThinkingConfigParamUnion{
 			OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{},
 		}
+		r.OutputConfig.Effort = ""
 	case *openai.ChatCompletionNewParams:
 		r.ReasoningEffort = ""
 		stripOpenAIThinkingExtra(r)
