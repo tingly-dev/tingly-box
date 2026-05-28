@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -89,6 +90,79 @@ func TestOpenAIToAnthropicStream_VModelUsage(t *testing.T) {
 	// Sanity: standard SSE envelope still in place.
 	assert.Contains(t, body, "event:message_start")
 	assert.Contains(t, body, "event:message_stop")
+}
+
+// TestOpenAIToAnthropicStream_VModelFullUsage exercises the full usage
+// shape — prompt, completion, cached input, reasoning — by wiring the
+// stream-test mock (virtual-stream-test) which advertises explicit
+// MockUsage values. Asserts those values flow into the Anthropic
+// message_delta.usage block.
+func TestOpenAIToAnthropicStream_VModelFullUsage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Custom service so we can opt into the stream-test mocks without
+	// polluting the production defaults set.
+	svc := virtualserver.NewService()
+	openaivm.RegisterStreamTestMocks(svc.GetOpenAIRegistry())
+
+	engine := gin.New()
+	svc.SetupOpenAIRoutes(engine.Group("/virtual/openai"))
+	upstream := httptest.NewServer(engine)
+	defer upstream.Close()
+
+	client := openai.NewClient(
+		openaiOption.WithAPIKey("test-key"),
+		openaiOption.WithBaseURL(upstream.URL+"/virtual/openai/v1/"),
+	)
+
+	for _, modelID := range []string{"virtual-stream-test", "virtual-stream-test-tool"} {
+		modelID := modelID
+		t.Run(modelID, func(t *testing.T) {
+			stream := client.Chat.Completions.NewStreaming(context.Background(), openai.ChatCompletionNewParams{
+				Model: modelID,
+				Messages: []openai.ChatCompletionMessageParamUnion{
+					openai.UserMessage("Hello, world!"),
+				},
+				StreamOptions: openai.ChatCompletionStreamOptionsParam{
+					IncludeUsage: param.Opt[bool]{Value: true},
+				},
+			})
+
+			w := &closeNotifyRecorder{httptest.NewRecorder()}
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/messages", nil)
+
+			usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, modelID)
+			require.NoError(t, err)
+			require.NotNil(t, usage)
+
+			body := w.Body.String()
+			events := splitSSEEventsByType(body)
+
+			msgDeltaRaw, ok := events[eventTypeMessageDelta]
+			require.True(t, ok, "should emit message_delta")
+
+			var msgDelta map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(msgDeltaRaw), &msgDelta))
+			usageBlock, _ := msgDelta["usage"].(map[string]interface{})
+			require.NotNil(t, usageBlock)
+
+			// MockUsage from StreamTestMockSpecs: prompt=42 completion=17 cached=11 reasoning=9
+			assert.EqualValues(t, 17, usageBlock["output_tokens"], "output_tokens from explicit MockUsage.CompletionTokens")
+			assert.EqualValues(t, 11, usageBlock["cache_read_input_tokens"], "cache_read_input_tokens from prompt_tokens_details.cached_tokens")
+
+			assert.Equal(t, 42, usage.InputTokens)
+			assert.Equal(t, 17, usage.OutputTokens)
+			assert.Equal(t, 11, usage.CacheInputTokens)
+			assert.Equal(t, 9, usage.ReasoningTokens)
+
+			// tool variant should map finish_reason=tool_calls to stop_reason=tool_use
+			if modelID == "virtual-stream-test-tool" {
+				delta := msgDelta["delta"].(map[string]interface{})
+				assert.Equal(t, "tool_use", delta["stop_reason"])
+			}
+		})
+	}
 }
 
 // splitSSEEventsByType returns a map from event name to the LAST data payload

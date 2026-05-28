@@ -27,6 +27,8 @@ type StreamTokenCounter struct {
 	outputTokens         int
 	upstreamInputTokens  int64
 	upstreamOutputTokens int64
+	upstreamCacheTokens  int64 // prompt_tokens_details.cached_tokens
+	upstreamReasoning    int64 // completion_tokens_details.reasoning_tokens
 }
 
 // NewStreamTokenCounter creates a new streaming token counter.
@@ -104,6 +106,12 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 		if chunk.Usage.CompletionTokens > 0 {
 			c.upstreamOutputTokens = chunk.Usage.CompletionTokens
 		}
+		if chunk.Usage.PromptTokensDetails.CachedTokens > 0 {
+			c.upstreamCacheTokens = chunk.Usage.PromptTokensDetails.CachedTokens
+		}
+		if chunk.Usage.CompletionTokensDetails.ReasoningTokens > 0 {
+			c.upstreamReasoning = chunk.Usage.CompletionTokensDetails.ReasoningTokens
+		}
 		return int(c.upstreamInputTokens), int(c.upstreamOutputTokens), nil
 	}
 
@@ -160,6 +168,14 @@ func (c *StreamTokenCounter) GetCounts() (inputTokens, outputTokens int) {
 		o = int(c.upstreamOutputTokens)
 	}
 	return i, o
+}
+
+// GetUpstreamDetails returns cache and reasoning token counts harvested
+// from upstream usage chunks (zero if upstream did not advertise them).
+func (c *StreamTokenCounter) GetUpstreamDetails() (cacheTokens, reasoningTokens int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return int(c.upstreamCacheTokens), int(c.upstreamReasoning)
 }
 
 // SetInputTokens sets the input token count.

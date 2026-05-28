@@ -382,6 +382,13 @@ func handleOpenAIToAnthropicBetaStream(
 			inputTokens, outputTokens := tokenCounter.GetCounts()
 			state.inputTokens = int64(inputTokens)
 			state.outputTokens = int64(outputTokens)
+			cacheTokens, reasoningTokens := tokenCounter.GetUpstreamDetails()
+			if cacheTokens > 0 {
+				state.cacheTokens = int64(cacheTokens)
+			}
+			if reasoningTokens > 0 {
+				state.reasoningTokens = int64(reasoningTokens)
+			}
 		}
 		ensureMessageStart()
 		sendStopEvents(c, state, flusher)
