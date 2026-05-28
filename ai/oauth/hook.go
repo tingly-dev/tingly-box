@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -601,22 +600,18 @@ func KimiDeviceModel() string {
 	return goos + " " + runtime.GOARCH
 }
 
-// KimiOsVersion returns the OS version string for the X-Msh-Os-Version header,
-// mirroring Python's platform.version() used by kimi-cli.
+// KimiOsVersion returns a representative OS version string for the X-Msh-Os-Version header.
+// Values mirror typical platform.version() output from kimi-cli:
+//   - Linux   → Ubuntu 22.04 LTS default kernel
+//   - macOS   → macOS Sonoma 14.6.1
+//   - Windows → Windows 11 23H2
 func KimiOsVersion() string {
 	switch runtime.GOOS {
-	case "linux":
-		if data, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
-			return strings.TrimSpace(string(data))
-		}
 	case "darwin":
-		if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
-			return strings.TrimSpace(string(out))
-		}
+		return "14.6.1"
 	case "windows":
-		if out, err := exec.Command("cmd", "/c", "ver").Output(); err == nil {
-			return strings.TrimSpace(string(out))
-		}
+		return "10.0.22631"
+	default: // linux and others
+		return "5.15.0"
 	}
-	return runtime.GOOS
 }
