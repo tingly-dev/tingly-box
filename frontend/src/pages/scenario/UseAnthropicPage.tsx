@@ -33,6 +33,7 @@ const UseAnthropicPageContent: React.FC = () => {
                         baseUrlPath="/tingly/anthropic"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
+                        scenario={scenario}
                     />
                 </UnifiedCard>
                 <TemplatePage

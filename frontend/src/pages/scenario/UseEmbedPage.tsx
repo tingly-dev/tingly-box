@@ -33,6 +33,7 @@ const UseEmbedPageContent: React.FC = () => {
                         baseUrlPath="/tingly/embed"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
+                        scenario={scenario}
                     />
                 </UnifiedCard>
                 <TemplatePage

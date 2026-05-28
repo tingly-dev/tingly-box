@@ -34,6 +34,7 @@ const UseAgentPageContent: React.FC = () => {
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
                         compact={true}
+                        scenario={scenario}
                     />
                 </UnifiedCard>
 
