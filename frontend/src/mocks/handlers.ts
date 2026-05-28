@@ -229,6 +229,34 @@ const mockV1Rules: Record<string, any[]> = {
     ],
     claude_code: [
         {
+            // Unified-mode rule fetched by GET /api/v1/rule/built-in-cc.
+            // Demonstrates smart routing in the default ("Unified Model") view.
+            uuid: 'built-in-cc',
+            scenario: 'claude_code',
+            request_model: 'claude-sonnet-4-6',
+            response_model: '',
+            active: true,
+            description: 'Unified Claude Code routing (smart)',
+            services: [
+                { uuid: 'svc-cc-builtin-default', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true },
+            ],
+            smart_enabled: true,
+            smart_routing: [
+                {
+                    uuid: 'smart-cc-builtin-sub',
+                    description: 'Subagent → Deepseek',
+                    ops: [{ uuid: 'op-cc-bi-sub', position: 'agent.claude_code', operation: 'equals', value: 'subagent' }],
+                    services: [{ uuid: 'svc-sm-cc-bi-sub', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true }],
+                },
+                {
+                    uuid: 'smart-cc-builtin-cmp',
+                    description: 'Compact → GLM',
+                    ops: [{ uuid: 'op-cc-bi-cmp', position: 'agent.claude_code', operation: 'equals', value: 'compact' }],
+                    services: [{ uuid: 'svc-sm-cc-bi-cmp', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+                },
+            ],
+        },
+        {
             uuid: 'mock-rule-cc-smart',
             scenario: 'claude_code',
             request_model: 'claude-sonnet-4-6',
@@ -1190,6 +1218,55 @@ export const handlers = [
         }
         const rules = scenario ? (mockV1Rules[scenario] ?? []) : []
         return HttpResponse.json({ success: true, data: rules })
+    }),
+
+    // Scenario config (per-scenario UI prefs incl. unified vs. separate mode)
+    http.get('/api/v1/scenario/:scenario', ({ params }) => {
+        const { scenario } = params as { scenario: string }
+        return HttpResponse.json({
+            success: true,
+            data: { scenario, config_mode: 'unified' },
+        })
+    }),
+
+    http.post('/api/v1/scenario/:scenario', async ({ params, request }) => {
+        const { scenario } = params as { scenario: string }
+        const body = await request.json() as any
+        return HttpResponse.json({ success: true, data: { scenario, ...body } })
+    }),
+
+    http.get('/api/v1/rule/:uuid', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        for (const rules of Object.values(mockV1Rules)) {
+            const rule = rules.find((r) => r.uuid === uuid)
+            if (rule) return HttpResponse.json({ success: true, data: rule })
+        }
+        return HttpResponse.json({ success: false, error: 'Rule not found' }, { status: 404 })
+    }),
+
+    http.post('/api/v1/rule/:uuid', async ({ params, request }) => {
+        const { uuid } = params as { uuid: string }
+        const body = await request.json() as any
+        for (const rules of Object.values(mockV1Rules)) {
+            const idx = rules.findIndex((r) => r.uuid === uuid)
+            if (idx >= 0) {
+                rules[idx] = { ...rules[idx], ...body }
+                return HttpResponse.json({ success: true, data: rules[idx] })
+            }
+        }
+        return HttpResponse.json({ success: false, error: 'Rule not found' }, { status: 404 })
+    }),
+
+    http.delete('/api/v1/rule/:uuid', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        for (const rules of Object.values(mockV1Rules)) {
+            const idx = rules.findIndex((r) => r.uuid === uuid)
+            if (idx >= 0) {
+                rules.splice(idx, 1)
+                return HttpResponse.json({ success: true })
+            }
+        }
+        return HttpResponse.json({ success: false, error: 'Rule not found' }, { status: 404 })
     }),
 
     // ============================================
