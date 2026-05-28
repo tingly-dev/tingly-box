@@ -160,6 +160,73 @@ func TestRoundTrip_ErrorPassthrough(t *testing.T) {
 	assert.NotEqual(t, 200, result.HTTPStatus)
 }
 
+// AnthropicBeta → OpenAIResponses is the path where the streaming
+// first-event prime lives (see internal/protocol/stream/prime.go).
+// The happy-path test exercises prime + replay wrapper end-to-end:
+// the gateway forces the upstream's first SSE event, hands a wrapped
+// iterator off to the handler, and the handler converts the rest of
+// the Responses-API events into Anthropic Messages SSE frames.
+func TestRoundTrip_AnthropicBeta_To_OpenAIResponses_Streaming(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.StreamingTextScenario())
+
+	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.StreamingTextScenario(), true)
+
+	require.Equal(t, 200, result.HTTPStatus)
+	assert.NotEmpty(t, result.StreamEvents)
+	assert.Contains(t, result.Content, "Paris")
+}
+
+// Pre-stream prime failure: ErrorScenario's streaming branch returns
+// `data: {"error":...}` as the first SSE line. The SDK's Stream errors
+// out on its first Next() call (gjson "error" key detection). Priming
+// surfaces that as a non-2xx — the buffered failover writer
+// captures it, and since there's only one service in the rule the
+// captured error commits as the terminal reply. The client sees a
+// real 500 with a JSON error body, not a 200 with a malformed SSE
+// stream that includes an upstream error event.
+func TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.ErrorScenario())
+
+	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeOpenAIResponses, pt.ErrorScenario(), true)
+
+	// The HTTP status must reflect the upstream failure rather than
+	// silently 200-with-error-event. 500 is what SendStreamingError
+	// emits, which isRetryableStatus accepts; if either side flips to
+	// 200 the buffered writer's promotion logic broke.
+	assert.Equal(t, 500, result.HTTPStatus,
+		"pre-stream prime failure must surface as a 5xx, not a 200 SSE")
+	// Parsed assistant content should be empty — no real upstream
+	// content ever streamed, so the handler had nothing to convert.
+	assert.Empty(t, result.Content,
+		"no assistant content should be assembled from a prime-failed stream")
+}
+
+// Anthropic-native passthrough: client and provider both speak Anthropic,
+// so the request flows through HandleAnthropicBeta (ProcessStream over the
+// Anthropic SDK stream). A pre-content upstream error must surface as a
+// retryable 5xx, not a 200 SSE error event — the in-line !Written guard in
+// the passthrough converter + ProcessStream's no-empty-flush. This is the
+// common multi-Anthropic-account failover shape.
+func TestRoundTrip_StreamingPreContentFailure_AnthropicNative(t *testing.T) {
+	env := pt.NewTestEnv(t)
+	defer env.Close()
+
+	env.SetupRoute(protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, pt.ErrorScenario())
+
+	result := env.SendAs(t, protocol.TypeAnthropicBeta, protocol.TypeAnthropicBeta, pt.ErrorScenario(), true)
+
+	assert.Equal(t, 500, result.HTTPStatus,
+		"Anthropic-native pre-content failure must surface as a 5xx, not a 200 SSE")
+	assert.Empty(t, result.Content,
+		"no assistant content should be assembled from a failed pre-content stream")
+}
+
 func TestRoundTrip_AllSources_TextScenario_NonStreaming(t *testing.T) {
 	sources := []protocol.APIType{
 		protocol.TypeAnthropicV1,
