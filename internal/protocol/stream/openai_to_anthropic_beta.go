@@ -532,9 +532,6 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream
 				msg.Usage.CacheReadInputTokens = state.cacheTokens
 			}
 
-			bs, _ := json.Marshal(msg)
-			logrus.WithContext(c.Request.Context()).Debugf("Assemble response: %s", string(bs))
-
 			// Send result
 			c.JSON(200, msg)
 			flusher.Flush()

@@ -663,7 +663,6 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 
 		case "response.output_item.added":
 			itemAdded := currentEvent.AsResponseOutputItemAdded()
-			logrus.WithContext(c.Request.Context()).Debugf("item type: %s", itemAdded.Item.Type)
 			switch itemAdded.Item.Type {
 			case "reasoning":
 				reasoningDelta := currentEvent.AsResponseReasoningTextDelta()
@@ -862,10 +861,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 
 		case "response.output_text.annotation.added":
-			annotationAdded := currentEvent.AsResponseOutputTextAnnotationAdded()
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Text annotation added: index=%d, citation_type=%s",
-				annotationAdded.OutputIndex,
-				annotationAdded.Annotation)
+			// Per-annotation event; pass through silently.
 
 		case "response.text.done":
 			// Finalize text content - already handled by content_part.done for output_text type
@@ -918,7 +914,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search in progress")
 
 		case "response.file_search_call.searching":
-			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search searching: query=%s", currentEvent.RawJSON())
+			// Status event; query payload elided to keep logs small.
 
 		case "response.file_search_call.completed":
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] File search completed")
@@ -1083,9 +1079,6 @@ func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream *openaistream.S
 			if state.cacheTokens > 0 {
 				msg.Usage.CacheReadInputTokens = state.cacheTokens
 			}
-
-			bs, _ := json.Marshal(msg)
-			logrus.WithContext(c.Request.Context()).Debugf("Assemble response: %s", string(bs))
 
 			// Send result
 			c.JSON(200, msg)
