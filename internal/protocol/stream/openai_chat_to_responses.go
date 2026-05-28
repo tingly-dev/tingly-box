@@ -236,6 +236,14 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("Chat to Responses stream error: %v", err)
 
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier,
+		// instead of a 200 SSE error event.
+		if !c.Writer.Written() {
+			SendStreamingError(c, err)
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
+		}
+
 		errorEvent := responsesStreamErrorEvent{
 			Type:           "error",
 			SequenceNumber: nextSequenceNumber(state),

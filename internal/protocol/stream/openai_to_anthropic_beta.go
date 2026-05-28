@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
-	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -402,6 +401,15 @@ func handleOpenAIToAnthropicBetaStream(
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
+		// Nothing has reached the client yet (no message_start emitted), so the
+		// stream failed before any content. Surface it as a retryable HTTP error
+		// instead of a 200 SSE error event, so mid-request failover can fall
+		// through to the next priority tier. Once content is flowing the SSE
+		// error event is the only honest option.
+		if !messageStarted {
+			SendStreamingError(c, err)
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
+		}
 		errorEvent := map[string]interface{}{
 			"type": "error",
 			"error": map[string]interface{}{
@@ -419,9 +427,13 @@ func handleOpenAIToAnthropicBetaStream(
 // HandleResponsesToAnthropicBetaStream processes OpenAI Responses API streaming events and converts them to Anthropic beta format.
 // This is a thin wrapper that uses the shared core logic with beta event senders.
 // Returns UsageStat containing token usage information for tracking.
-func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
 	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
+			// message_start is the first SSE byte for this stream; priming
+			// already confirmed the upstream works, so open the failover gate
+			// before writing so the client sees output immediately.
+			CommitFirstChunk(c)
 			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 		},
 		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
@@ -448,7 +460,7 @@ func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream *openaistream.S
 	})
 }
 
-func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
 	blocks := make(map[int]*anthropic.BetaContentBlockUnion)
 
 	msg := anthropic.BetaMessage{

@@ -29,7 +29,11 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 				return false, streamResp.Err(), nil
 			}
 			if !streamResp.Next() {
-				return false, nil, nil
+				// Surface an error that the SDK only set during this Next()
+				// (e.g. an in-band SSE error event or a pre-content upstream
+				// failure) so the handler can emit a retryable status instead
+				// of a clean finish.
+				return false, streamResp.Err(), nil
 			}
 			// Current() returns a value, but we need a pointer for modification
 			evt := streamResp.Current()
@@ -107,6 +111,13 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 		}
 
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier,
+		// instead of a 200 SSE error event.
+		if !hc.GinContext.Writer.Written() {
+			SendStreamingError(hc.GinContext, err)
+			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+		}
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 	}
@@ -132,7 +143,11 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 				return false, streamResp.Err(), nil
 			}
 			if !streamResp.Next() {
-				return false, nil, nil
+				// Surface an error that the SDK only set during this Next()
+				// (e.g. an in-band SSE error event or a pre-content upstream
+				// failure) so the handler can emit a retryable status instead
+				// of a clean finish.
+				return false, streamResp.Err(), nil
 			}
 			// Current() returns a value, but we need a pointer for modification
 			evt := streamResp.Current()
@@ -198,6 +213,13 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 		}
 
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier,
+		// instead of a 200 SSE error event.
+		if !hc.GinContext.Writer.Written() {
+			SendStreamingError(hc.GinContext, err)
+			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+		}
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
 		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
 	}

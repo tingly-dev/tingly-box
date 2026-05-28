@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	responsesstream "github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
@@ -46,7 +45,7 @@ type responsesToChatToolCall struct {
 // Returns TokenUsage containing token usage information for tracking.
 func HandleResponsesToOpenAIChatStream(
 	hc *protocol.HandleContext,
-	stream *responsesstream.Stream[responses.ResponseStreamEventUnion],
+	stream ResponsesStreamIter,
 	responseModel string,
 ) (*protocol.TokenUsage, error) {
 	c := hc.GinContext
@@ -230,6 +229,11 @@ func HandleResponsesToOpenAIChatStream(
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("Responses to Chat stream error: %v", err)
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier.
+		if !c.Writer.Written() {
+			SendStreamingError(c, err)
+		}
 		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 	}
 

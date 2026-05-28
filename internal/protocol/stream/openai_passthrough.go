@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
-	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -62,7 +61,10 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 				return false, streamResp.Err(), nil
 			}
 			if !streamResp.Next() {
-				return false, nil, nil
+				// Surface an error the SDK only set during this Next() (in-band
+				// SSE error / pre-content failure) so the handler can emit a
+				// retryable status instead of a clean finish.
+				return false, streamResp.Err(), nil
 			}
 			chunk := streamResp.Current()
 			return true, nil, &chunk
@@ -246,6 +248,14 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 			outputTokens = token.EstimateOutputTokens(contentBuilder.String())
 		}
 
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier,
+		// instead of a 200 SSE error event.
+		if !c.Writer.Written() {
+			SendStreamingError(c, err)
+			return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), err
+		}
+
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
 				"message": err.Error(),
@@ -309,7 +319,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 
 // HandleOpenAIResponsesStream handles OpenAI Responses API streaming response.
 // Returns (UsageStat, error)
-func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	// Set SSE headers for Responses API (different from Chat Completions)
@@ -401,6 +411,13 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 		}
 
 		logrus.WithContext(c.Request.Context()).Errorf("Responses stream error: %v", err)
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier,
+		// instead of a 200 SSE error event.
+		if !c.Writer.Written() {
+			SendStreamingError(c, err)
+			return protocol.NewTokenUsageFull(int(inputTokens), int(outputTokens), int(cacheTokens), int(reasoningTokens)), err
+		}
 		errorChunk := map[string]interface{}{
 			"error": map[string]interface{}{
 				"message": err.Error(),
@@ -434,7 +451,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream *openaistrea
 // and transforms it to Anthropic message format.
 // This is used for ChatGPT backend API providers when the original request was in Anthropic format.
 // Returns (TokenUsage, error)
-func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
 	defer stream.Close()
 
 	logrus.WithContext(c.Request.Context()).Debug("[ChatGPT] Starting OpenAI Responses to Anthropic streaming handler")
@@ -525,6 +542,11 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream *openaistream
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.WithContext(c.Request.Context()).Debug("[ChatGPT] Stream canceled by client")
 			return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), nil
+		}
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier.
+		if !c.Writer.Written() {
+			SendStreamingError(c, err)
 		}
 		return protocol.NewTokenUsageFull(inputTokens, outputTokens, cacheTokens, reasoningTokens), fmt.Errorf("stream error: %w", err)
 	}

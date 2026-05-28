@@ -122,6 +122,15 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 
 	// Check for stream errors
 	if err := stream.Err(); err != nil {
+		// Pre-content failure: nothing reached the client yet (not a cancel
+		// or normal EOF). Surface a retryable 5xx instead of synthesizing a
+		// completion event, so mid-request failover can try the next tier.
+		if !c.Writer.Written() && !errors.Is(err, context.Canceled) && !errors.Is(err, io.EOF) {
+			logrus.WithContext(c.Request.Context()).Errorf("Anthropic to Responses pre-stream error: %v", err)
+			SendStreamingError(c, err)
+			return protocol.ZeroTokenUsage(), err
+		}
+
 		// Only send completion event if not already sent
 		if !completedSent && !state.finished {
 			// Send completion event for all errors including context.Canceled

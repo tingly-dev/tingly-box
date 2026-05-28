@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	openaistream "github.com/openai/openai-go/v3/packages/ssestream"
-	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -418,6 +417,15 @@ func handleOpenAIToAnthropicStreamResponse(
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
+		// Nothing has reached the client yet (no message_start emitted), so the
+		// stream failed before any content. Surface it as a retryable HTTP error
+		// instead of a 200 SSE error event, so mid-request failover can fall
+		// through to the next priority tier. Once content is flowing the SSE
+		// error event is the only honest option.
+		if !messageStarted {
+			SendStreamingError(c, err)
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
+		}
 		errorEvent := map[string]interface{}{
 			"type": "error",
 			"error": map[string]interface{}{
@@ -438,9 +446,13 @@ func handleOpenAIToAnthropicStreamResponse(
 // HandleResponsesToAnthropicV1Stream processes OpenAI Responses API streaming events and converts them to Anthropic v1 format.
 // This is a thin wrapper that uses the shared core logic with v1 event senders.
 // Returns UsageStat containing token usage information for tracking.
-func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
 	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
 		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
+			// message_start is the first SSE byte for this stream; priming
+			// already confirmed the upstream works, so open the failover gate
+			// before writing so the client sees output immediately.
+			CommitFirstChunk(c)
 			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
 		},
 		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
@@ -470,7 +482,7 @@ func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream *openaistream.Str
 // handlerResponsesToAnthropicStream is the shared core logic for processing OpenAI Responses API streams
 // and converting them to Anthropic format (v1 or beta depending on the senders provided).
 // Returns UsageStat containing token usage information for tracking.
-func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
+func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIter, responseModel string, senders responsesAPIEventSenders) (*protocol.TokenUsage, error) {
 	logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Starting Responses API to Anthropic streaming response handler, model=%s", responseModel)
 	defer func() {
 		if r := recover(); r != nil {
@@ -994,7 +1006,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 }
 
-func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream *openaistream.Stream[responses.ResponseStreamEventUnion], responseModel string) (*protocol.TokenUsage, error) {
+func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
 	blocks := make(map[int]*anthropic.ContentBlockUnion)
 
 	msg := anthropic.Message{

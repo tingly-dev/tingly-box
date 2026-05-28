@@ -338,6 +338,13 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 			return inputTokens, outputTokens, nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
+		// Stream failed before any content reached the client: surface a
+		// retryable 5xx so mid-request failover can try the next tier,
+		// instead of a 200 SSE error event.
+		if !c.Writer.Written() {
+			SendStreamingError(c, err)
+			return inputTokens, outputTokens, fmt.Errorf("anthropic stream error: %w", err)
+		}
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
 		// Return the error so TB's usage tracking can detect and report health status
 		return inputTokens, outputTokens, fmt.Errorf("anthropic stream error: %w", err)
