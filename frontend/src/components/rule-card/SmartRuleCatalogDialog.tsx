@@ -239,6 +239,17 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
         return counts;
     }, [ops]);
 
+    const invalidByCategory = useMemo(() => {
+        const invalid: Record<string, boolean> = {};
+        ops.forEach((op) => {
+            if (!isOpValid(op)) {
+                const cat = positionMeta(op.position)?.category || '';
+                invalid[cat] = true;
+            }
+        });
+        return invalid;
+    }, [ops]);
+
     const currentCategoryPositions = useMemo(
         () => POSITION_OPTIONS.filter((p) => p.category === activeCategory),
         [activeCategory],
@@ -259,6 +270,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                     px: 3,
                     py: 1.5,
                     borderTop: 1,
+                    borderBottom: ops.length === 0 ? 1 : 0,
                     borderColor: 'divider',
                     bgcolor: 'action.hover',
                 }}
@@ -363,7 +375,7 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                     <Chip
                                         size="small"
                                         label={count}
-                                        color="primary"
+                                        color={invalidByCategory[cat] ? 'warning' : 'primary'}
                                         variant="filled"
                                         sx={{ height: 18, fontSize: '0.65rem' }}
                                     />
@@ -398,15 +410,26 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                 {pos.label}
                                             </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                                {pos.description}
-                                            </Typography>
+                                            <Tooltip title={pos.description} placement="top-start" disableHoverListener={pos.description.length <= 60}>
+                                                <Typography
+                                                    variant="caption"
+                                                    color="text.secondary"
+                                                    sx={{
+                                                        display: '-webkit-box',
+                                                        WebkitLineClamp: 2,
+                                                        WebkitBoxOrient: 'vertical',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    {pos.description}
+                                                </Typography>
+                                            </Tooltip>
                                         </Box>
                                         <Button
                                             size="small"
                                             startIcon={<AddIcon />}
                                             onClick={() => handleAddOpForPosition(pos.value)}
-                                            variant="outlined"
+                                            variant={posOps.length > 0 ? 'text' : 'outlined'}
                                             sx={{ flexShrink: 0 }}
                                         >
                                             Add
@@ -417,7 +440,6 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                     {posOps.length > 0 && (
                                         <Stack spacing={1} sx={{ mt: 1.5 }}>
                                             {posOps.map((op) => {
-                                                const globalIdx = ops.indexOf(op);
                                                 const valid = isOpValid(op);
                                                 return (
                                                     <Box
@@ -432,14 +454,6 @@ export const SmartRuleCatalogDialog: React.FC<SmartRuleCatalogDialogProps> = ({
                                                     >
                                                         <Stack direction="row" alignItems="flex-start" spacing={1}>
                                                             <Box sx={{ flexGrow: 1 }}>
-                                                                <Typography
-                                                                    variant="caption"
-                                                                    color="text.disabled"
-                                                                    sx={{ display: 'block', mb: 0.75, fontStyle: 'italic' }}
-                                                                >
-                                                                    Condition {globalIdx + 1}
-                                                                </Typography>
-
                                                                 {/* Operation chips */}
                                                                 {opOpts.length > 0 && (
                                                                     <Stack
