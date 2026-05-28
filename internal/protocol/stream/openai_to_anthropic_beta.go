@@ -131,7 +131,6 @@ func handleOpenAIToAnthropicBetaStream(
 	// usage-only chunk (choices:[], usage:{...}) AFTER the finish_reason chunk.
 	// We must keep draining the stream after seeing finish_reason so the
 	// upstream usage isn't silently dropped.
-	chunkCount := 0
 	pendingFinishReason := ""
 	finishSeen := false
 	StreamLoop(c, func(w io.Writer) bool {
@@ -148,7 +147,6 @@ func handleOpenAIToAnthropicBetaStream(
 			return false
 		}
 
-		chunkCount++
 		chunk := stream.Current()
 
 		// Skip empty chunks (no choices)

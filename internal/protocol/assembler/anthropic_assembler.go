@@ -55,8 +55,9 @@ func (a *AnthropicStreamAssembler) RecordV1Event(event *anthropic.MessageStreamE
 		a.stopSeq = event.Delta.StopSequence
 		if event.Usage.InputTokens > 0 || event.Usage.OutputTokens > 0 {
 			a.usageData = &anthropic.Usage{
-				InputTokens:  event.Usage.InputTokens,
-				OutputTokens: event.Usage.OutputTokens,
+				InputTokens:          event.Usage.InputTokens,
+				OutputTokens:         event.Usage.OutputTokens,
+				CacheReadInputTokens: event.Usage.CacheReadInputTokens,
 			}
 		}
 	}
@@ -82,8 +83,9 @@ func (a *AnthropicStreamAssembler) RecordV1BetaEvent(event *anthropic.BetaRawMes
 		a.stopSeq = event.Delta.StopSequence
 		if event.Usage.InputTokens > 0 || event.Usage.OutputTokens > 0 {
 			a.usageData = &anthropic.Usage{
-				InputTokens:  event.Usage.InputTokens,
-				OutputTokens: event.Usage.OutputTokens,
+				InputTokens:          event.Usage.InputTokens,
+				OutputTokens:         event.Usage.OutputTokens,
+				CacheReadInputTokens: event.Usage.CacheReadInputTokens,
 			}
 		}
 	}
@@ -228,22 +230,13 @@ func (a *AnthropicStreamAssembler) Finish(model string, inputTokens, outputToken
 	}
 	stopSeq := a.stopSeq
 
-	// Build usage
+	// Build usage. Prefer values set via SetUsage*; fall back to the
+	// caller-supplied counts only when nothing was tracked in-stream.
 	usage := a.usageData
 	if usage == nil {
 		usage = &anthropic.Usage{
 			InputTokens:  int64(inputTokens),
 			OutputTokens: int64(outputTokens),
-		}
-	} else {
-		// Keep any in-stream usage (incl. cache_read) but let explicit
-		// totals from Finish override input/output if they're larger
-		// (handles the post-finish_reason usage chunk path).
-		if int64(inputTokens) > usage.InputTokens {
-			usage.InputTokens = int64(inputTokens)
-		}
-		if int64(outputTokens) > usage.OutputTokens {
-			usage.OutputTokens = int64(outputTokens)
 		}
 	}
 

@@ -146,7 +146,6 @@ func handleOpenAIToAnthropicStreamResponse(
 	// usage-only chunk (choices:[], usage:{...}) AFTER the finish_reason chunk.
 	// We must keep draining the stream after seeing finish_reason so the
 	// upstream usage isn't silently dropped.
-	chunkCount := 0
 	pendingFinishReason := ""
 	finishSeen := false
 	StreamLoop(c, func(w io.Writer) bool {
@@ -163,7 +162,6 @@ func handleOpenAIToAnthropicStreamResponse(
 			return false
 		}
 
-		chunkCount++
 		chunk := stream.Current()
 
 		// Skip empty chunks (no choices).
@@ -544,9 +542,7 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream *openaistream.Stre
 	senders.SendMessageStart(messageStartEvent, flusher)
 
 	// Process the stream
-	eventCount := 0
 	for stream.Next() {
-		eventCount++
 		currentEvent := stream.Current()
 
 		switch currentEvent.Type {

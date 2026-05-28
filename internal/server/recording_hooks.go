@@ -46,51 +46,43 @@ func newStreamRecorder(recorder *ProtocolRecorder) *streamRecorder {
 
 // Finish carries the converter's final TokenUsage into the assembler so the
 // recorded response has the full shape (input/output + cache_read).
-// usage may be nil; in that case any in-stream usage harvested via
+// When usage is nil or empty, any in-stream usage harvested via
 // RecordRawMapEvent is used as a fallback.
 func (sr *streamRecorder) Finish(model string, usage *protocol.TokenUsage) {
 	if sr == nil {
 		return
 	}
-	// Fall back to in-stream usage when the converter didn't return one
-	// (e.g. early errors before message_delta usage was tallied).
-	if usage == nil || (usage.InputTokens == 0 && usage.OutputTokens == 0) {
-		if sr.hasUsage {
-			usage = &protocol.TokenUsage{
-				InputTokens:      sr.inputTokens,
-				OutputTokens:     sr.outputTokens,
-				CacheInputTokens: sr.cacheReadTokens,
-			}
+	if (usage == nil || (usage.InputTokens == 0 && usage.OutputTokens == 0)) && sr.hasUsage {
+		usage = &protocol.TokenUsage{
+			InputTokens:      sr.inputTokens,
+			OutputTokens:     sr.outputTokens,
+			CacheInputTokens: sr.cacheReadTokens,
 		}
 	}
-	if usage != nil {
-		sr.assembler.SetUsageFromTokenUsage(usage)
+	if usage == nil {
+		usage = &protocol.TokenUsage{}
 	}
-	var inputTokens, outputTokens, cacheReadTokens int
-	if usage != nil {
-		inputTokens = usage.InputTokens
-		outputTokens = usage.OutputTokens
-		cacheReadTokens = usage.CacheInputTokens
-	}
-	assembled := sr.assembler.Finish(model, inputTokens, outputTokens)
-	if assembled != nil {
+	sr.assembler.SetUsageFromTokenUsage(usage)
+
+	if assembled := sr.assembler.Finish(model, usage.InputTokens, usage.OutputTokens); assembled != nil {
 		sr.recorder.SetAssembledResponse(assembled)
 		return
 	}
-	if len(sr.recorder.streamChunks) > 0 {
-		fallback := baseMessageMap(model, sr.recorder.startTime)
-		fallback["stop_reason"] = sr.recorder.c.Query("stop_reason")
-		usageMap := map[string]interface{}{
-			"input_tokens":  inputTokens,
-			"output_tokens": outputTokens,
-		}
-		if cacheReadTokens > 0 {
-			usageMap["cache_read_input_tokens"] = cacheReadTokens
-		}
-		fallback["usage"] = usageMap
-		sr.recorder.SetAssembledResponse(fallback)
-		logrus.Debugf("obs: streamRecorder using fallback response, chunks=%d", len(sr.recorder.streamChunks))
+	if len(sr.recorder.streamChunks) == 0 {
+		return
 	}
+	fallback := baseMessageMap(model, sr.recorder.startTime)
+	fallback["stop_reason"] = sr.recorder.c.Query("stop_reason")
+	usageMap := map[string]interface{}{
+		"input_tokens":  usage.InputTokens,
+		"output_tokens": usage.OutputTokens,
+	}
+	if usage.CacheInputTokens > 0 {
+		usageMap["cache_read_input_tokens"] = usage.CacheInputTokens
+	}
+	fallback["usage"] = usageMap
+	sr.recorder.SetAssembledResponse(fallback)
+	logrus.Debugf("obs: streamRecorder using fallback response, chunks=%d", len(sr.recorder.streamChunks))
 }
 
 func (sr *streamRecorder) RecordError(err error) {
