@@ -126,8 +126,14 @@ func handleOpenAIToAnthropicBetaStream(
 		messageStarted = true
 	}
 
-	// Process the stream with context cancellation checking
+	// Process the stream with context cancellation checking.
+	// Note: when stream_options.include_usage=true, OpenAI sends a final
+	// usage-only chunk (choices:[], usage:{...}) AFTER the finish_reason chunk.
+	// We must keep draining the stream after seeing finish_reason so the
+	// upstream usage isn't silently dropped.
 	chunkCount := 0
+	pendingFinishReason := ""
+	finishSeen := false
 	StreamLoop(c, func(w io.Writer) bool {
 		// Check context cancellation first
 		select {
@@ -340,14 +346,13 @@ func handleOpenAIToAnthropicBetaStream(
 			}
 		}
 
-		// Handle finish_reason (last chunk for this choice)
+		// Handle finish_reason (last chunk for this choice).
+		// Keep the loop alive so the trailing usage-only chunk (sent when
+		// stream_options.include_usage=true) is still consumed; the final
+		// Anthropic events are emitted after the loop.
 		if choice.FinishReason != "" {
-			// Get final token counts from counter
-			if tokenCounter != nil {
-				inputTokens, outputTokens := tokenCounter.GetCounts()
-				state.inputTokens = int64(inputTokens)
-				state.outputTokens = int64(outputTokens)
-			}
+			pendingFinishReason = choice.FinishReason
+			finishSeen = true
 			if hooks != nil && hooks.OnToolCallsFinal != nil && len(state.pendingToolCalls) > 0 {
 				toolCalls := make([]OpenAIToAnthropicToolCall, 0, len(state.pendingToolCalls))
 				for _, tc := range state.pendingToolCalls {
@@ -362,19 +367,28 @@ func handleOpenAIToAnthropicBetaStream(
 					return false
 				}
 			}
-
 			if !messageStarted && errors.Is(hookErr, ErrMCPStreamContinue) {
 				return false
 			}
-			ensureMessageStart()
-			sendStopEvents(c, state, flusher)
-			sendMessageDelta(c, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
-			sendMessageStop(c, messageID, responseModel, state, mapOpenAIFinishReasonToAnthropicBeta(choice.FinishReason), flusher)
-			return false
 		}
 
 		return true
 	})
+
+	// Emit the terminal Anthropic events using the final tallied usage
+	// (which may have been updated by a post-finish_reason usage chunk).
+	if finishSeen && hookErr == nil {
+		if tokenCounter != nil {
+			inputTokens, outputTokens := tokenCounter.GetCounts()
+			state.inputTokens = int64(inputTokens)
+			state.outputTokens = int64(outputTokens)
+		}
+		ensureMessageStart()
+		sendStopEvents(c, state, flusher)
+		stopReason := mapOpenAIFinishReasonToAnthropicBeta(pendingFinishReason)
+		sendMessageDelta(c, state, stopReason, flusher)
+		sendMessageStop(c, messageID, responseModel, state, stopReason, flusher)
+	}
 	if hookErr != nil {
 		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), hookErr
 	}
