@@ -6,6 +6,7 @@ import {
     CardContent,
     CircularProgress,
     FormControl,
+    IconButton,
     InputLabel,
     MenuItem,
     Select,
@@ -13,11 +14,12 @@ import {
     Tab,
     Tabs,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { tablerMui } from '@/components/icons';
-import { IconPhoto, IconPhotoEdit, IconUpload, IconX } from '@tabler/icons-react';
+import { IconPhoto, IconPhotoEdit, IconPlus, IconUpload, IconX } from '@tabler/icons-react';
 import { api } from '@/services/api';
 import { getOpenAIClient } from '@/services/openaiClient';
 import { getApiBaseUrl } from '@/utils/protocol';
@@ -30,8 +32,10 @@ const PhotoIcon = tablerMui(IconPhoto);
 const PhotoEditIcon = tablerMui(IconPhotoEdit);
 const UploadIcon = tablerMui(IconUpload);
 const CloseIcon = tablerMui(IconX);
+const PlusIcon = tablerMui(IconPlus);
 
 const IMAGE_SCENARIO = 'imagegen';
+const MAX_SOURCE_IMAGES = 4;
 
 type Mode = 'generate' | 'edit';
 type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
@@ -55,6 +59,16 @@ interface ImageFile {
     preview: string; // data URL
 }
 
+const readImageFile = (file: File): Promise<ImageFile> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve({ file, preview: e.target?.result as string });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+
+// ── Single-image upload box (used for the mask) ──────────────────────────────
+
 const ImageUploadBox: React.FC<{
     value: ImageFile | null;
     onChange: (img: ImageFile | null) => void;
@@ -64,19 +78,9 @@ const ImageUploadBox: React.FC<{
 }> = ({ value, onChange, label, optional, accept = 'image/png,image/jpeg,image/webp' }) => {
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const handleFiles = (files: FileList | null) => {
+    const handleFiles = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
-        const file = files[0];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            onChange({ file, preview: e.target?.result as string });
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        handleFiles(e.dataTransfer.files);
+        onChange(await readImageFile(files[0]));
     };
 
     return (
@@ -86,7 +90,7 @@ const ImageUploadBox: React.FC<{
             </Typography>
             <Box
                 onClick={() => !value && inputRef.current?.click()}
-                onDrop={handleDrop}
+                onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
                 onDragOver={(e) => e.preventDefault()}
                 sx={{
                     border: '1px dashed',
@@ -103,69 +107,143 @@ const ImageUploadBox: React.FC<{
                     bgcolor: 'action.hover',
                     '&:hover': value ? {} : { bgcolor: 'action.selected' },
                     transition: 'background-color 0.15s',
-                    position: 'relative',
-                    overflow: 'hidden',
                 }}
             >
                 {value ? (
                     <>
-                        <Box
-                            component="img"
-                            src={value.preview}
-                            sx={{ height: 64, width: 64, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
-                        />
+                        <Box component="img" src={value.preview}
+                            sx={{ height: 64, width: 64, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }} />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" noWrap title={value.file.name}>
-                                {value.file.name}
-                            </Typography>
+                            <Typography variant="body2" noWrap title={value.file.name}>{value.file.name}</Typography>
                             <Typography variant="caption" color="text.secondary">
                                 {(value.file.size / 1024).toFixed(0)} KB
                             </Typography>
                         </Box>
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => inputRef.current?.click()}
-                                sx={{ minWidth: 0, px: 1 }}
-                            >
+                        <Stack direction="row" spacing={0.5}>
+                            <Button size="small" variant="outlined" onClick={() => inputRef.current?.click()} sx={{ minWidth: 0, px: 1 }}>
                                 <UploadIcon fontSize="small" />
                             </Button>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                color="error"
-                                onClick={() => onChange(null)}
-                                sx={{ minWidth: 0, px: 1 }}
-                            >
+                            <Button size="small" variant="outlined" color="error" onClick={() => onChange(null)} sx={{ minWidth: 0, px: 1 }}>
                                 <CloseIcon fontSize="small" />
                             </Button>
-                        </Box>
+                        </Stack>
                     </>
                 ) : (
                     <>
                         <UploadIcon fontSize="medium" color="disabled" />
-                        <Typography variant="body2" color="text.secondary" align="center">
-                            Click or drop image here
-                        </Typography>
-                        <Typography variant="caption" color="text.disabled">
-                            PNG · JPEG · WebP
-                        </Typography>
+                        <Typography variant="body2" color="text.secondary" align="center">Click or drop image</Typography>
+                        <Typography variant="caption" color="text.disabled">PNG · JPEG · WebP</Typography>
                     </>
                 )}
-                <input
-                    ref={inputRef}
-                    type="file"
-                    accept={accept}
-                    style={{ display: 'none' }}
+                <input ref={inputRef} type="file" accept={accept} style={{ display: 'none' }}
                     onChange={(e) => handleFiles(e.target.files)}
-                    // reset value so re-selecting same file triggers onChange
-                    onClick={(e) => { (e.target as HTMLInputElement).value = ''; }}
-                />
+                    onClick={(e) => { (e.target as HTMLInputElement).value = ''; }} />
             </Box>
         </Box>
     );
 };
+
+// ── Multi-image strip (source images, up to MAX_SOURCE_IMAGES) ───────────────
+
+const SourceImagesStrip: React.FC<{
+    images: ImageFile[];
+    onChange: (imgs: ImageFile[]) => void;
+    max?: number;
+}> = ({ images, onChange, max = MAX_SOURCE_IMAGES }) => {
+    const addRef = useRef<HTMLInputElement>(null);
+
+    const handleAdd = async (files: FileList | null) => {
+        if (!files || files.length === 0) return;
+        const slots = max - images.length;
+        const picked = Array.from(files).slice(0, slots);
+        const loaded = await Promise.all(picked.map(readImageFile));
+        onChange([...images, ...loaded]);
+    };
+
+    const remove = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+
+    const canAdd = images.length < max;
+
+    return (
+        <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                {`Source Images (${images.length} / ${max})`}
+            </Typography>
+            <Stack direction="row" spacing={1} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+                {images.map((img, idx) => (
+                    <Box key={idx} sx={{ position: 'relative', width: 80, flexShrink: 0 }}>
+                        <Box
+                            component="img"
+                            src={img.preview}
+                            title={img.file.name}
+                            sx={{
+                                width: 80, height: 80,
+                                objectFit: 'cover',
+                                borderRadius: 1,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                display: 'block',
+                            }}
+                        />
+                        <Tooltip title="Remove">
+                            <IconButton
+                                size="small"
+                                onClick={() => remove(idx)}
+                                sx={{
+                                    position: 'absolute', top: -6, right: -6,
+                                    bgcolor: 'background.paper',
+                                    border: '1px solid', borderColor: 'divider',
+                                    p: 0.25,
+                                    '&:hover': { bgcolor: 'error.main', color: 'error.contrastText', borderColor: 'error.main' },
+                                }}
+                            >
+                                <CloseIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                        </Tooltip>
+                        <Typography variant="caption" color="text.secondary" noWrap
+                            sx={{ display: 'block', maxWidth: 80, mt: 0.25, fontSize: 10 }}
+                            title={img.file.name}>
+                            {img.file.name}
+                        </Typography>
+                    </Box>
+                ))}
+
+                {canAdd && (
+                    <Tooltip title={`Add image (${max - images.length} remaining)`}>
+                        <Box
+                            onClick={() => addRef.current?.click()}
+                            onDrop={(e) => { e.preventDefault(); handleAdd(e.dataTransfer.files); }}
+                            onDragOver={(e) => e.preventDefault()}
+                            sx={{
+                                width: 80, height: 80,
+                                border: '1px dashed', borderColor: 'divider',
+                                borderRadius: 1,
+                                display: 'flex', flexDirection: 'column',
+                                alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', gap: 0.5,
+                                bgcolor: 'action.hover',
+                                '&:hover': { bgcolor: 'action.selected' },
+                                transition: 'background-color 0.15s',
+                                flexShrink: 0,
+                            }}
+                        >
+                            <PlusIcon fontSize="medium" color="disabled" />
+                            <Typography variant="caption" color="text.disabled" align="center" sx={{ lineHeight: 1.2 }}>
+                                Add
+                            </Typography>
+                        </Box>
+                    </Tooltip>
+                )}
+
+                <input ref={addRef} type="file" accept="image/png,image/jpeg,image/webp"
+                    multiple style={{ display: 'none' }}
+                    onChange={(e) => handleAdd(e.target.files)}
+                    onClick={(e) => { (e.target as HTMLInputElement).value = ''; }} />
+            </Stack>
+        </Box>
+    );
+};
+
 
 const PlaygroundPage: React.FC = () => {
     const { t } = useTranslation();
@@ -184,7 +262,7 @@ const PlaygroundPage: React.FC = () => {
     const [loadingModels, setLoadingModels] = useState(false);
 
     // Edit mode
-    const [sourceImage, setSourceImage] = useState<ImageFile | null>(null);
+    const [sourceImages, setSourceImages] = useState<ImageFile[]>([]);
     const [maskImage, setMaskImage] = useState<ImageFile | null>(null);
 
     useEffect(() => {
@@ -227,7 +305,7 @@ const PlaygroundPage: React.FC = () => {
     }, [prompt, model, count, size, quality, showNotification]);
 
     const handleEdit = useCallback(async () => {
-        if (!prompt.trim() || !model || !sourceImage) return;
+        if (!prompt.trim() || !model || sourceImages.length === 0) return;
         setSending(true);
         setResults([]);
         try {
@@ -242,7 +320,11 @@ const PlaygroundPage: React.FC = () => {
             form.append('quality', quality);
             if (count > 1) form.append('n', String(count));
             if (inputFidelity !== 'auto') form.append('input_fidelity', inputFidelity);
-            form.append('image', sourceImage.file, sourceImage.file.name);
+            // All source images share the same field name; the backend reads
+            // them as a multi-file array via form.File["image"].
+            for (const img of sourceImages) {
+                form.append('image', img.file, img.file.name);
+            }
             if (maskImage) {
                 form.append('mask', maskImage.file, maskImage.file.name);
             }
@@ -266,13 +348,22 @@ const PlaygroundPage: React.FC = () => {
         } finally {
             setSending(false);
         }
-    }, [prompt, model, count, size, quality, inputFidelity, sourceImage, maskImage, showNotification]);
+    }, [prompt, model, count, size, quality, inputFidelity, sourceImages, maskImage, showNotification]);
 
     const canSubmit = useMemo(() => {
         if (!model || !prompt.trim() || sending) return false;
-        if (mode === 'edit' && !sourceImage) return false;
+        if (mode === 'edit' && sourceImages.length === 0) return false;
         return true;
-    }, [model, prompt, sending, mode, sourceImage]);
+    }, [model, prompt, sending, mode, sourceImages]);
+
+    const handleModeChange = useCallback((_: unknown, v: Mode) => {
+        setMode(v);
+        setResults([]);
+        if (v === 'generate') {
+            setSourceImages([]);
+            setMaskImage(null);
+        }
+    }, []);
 
     const noModels = useMemo(() => models.length === 0, [models]);
 
@@ -296,7 +387,7 @@ const PlaygroundPage: React.FC = () => {
 
                         <Tabs
                             value={mode}
-                            onChange={(_, v) => { setMode(v); setResults([]); }}
+                            onChange={handleModeChange}
                             sx={{ borderBottom: 1, borderColor: 'divider' }}
                         >
                             <Tab
@@ -400,25 +491,17 @@ const PlaygroundPage: React.FC = () => {
                             )}
                         </Stack>
 
-                        {/* Edit mode: image uploads */}
+                        {/* Edit mode: source images (multi) + mask */}
                         {mode === 'edit' && (
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                <Box sx={{ flex: 1 }}>
-                                    <ImageUploadBox
-                                        value={sourceImage}
-                                        onChange={setSourceImage}
-                                        label={t('playground.sourceImage', { defaultValue: 'Source Image' })}
-                                    />
-                                </Box>
-                                <Box sx={{ flex: 1 }}>
-                                    <ImageUploadBox
-                                        value={maskImage}
-                                        onChange={setMaskImage}
-                                        label={t('playground.maskImage', { defaultValue: 'Mask (inpaint region)' })}
-                                        optional
-                                        accept="image/png"
-                                    />
-                                </Box>
+                            <Stack spacing={2}>
+                                <SourceImagesStrip images={sourceImages} onChange={setSourceImages} />
+                                <ImageUploadBox
+                                    value={maskImage}
+                                    onChange={setMaskImage}
+                                    label={t('playground.maskImage', { defaultValue: 'Mask (inpaint region)' })}
+                                    optional
+                                    accept="image/png"
+                                />
                             </Stack>
                         )}
 
