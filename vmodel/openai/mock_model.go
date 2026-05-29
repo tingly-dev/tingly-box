@@ -114,26 +114,14 @@ func (m *MockModel) HandleOpenAIChatStream(req *protocol.OpenAIChatCompletionReq
 	}
 	chunks := m.streamChunks()
 	perChunk := vmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
-	gate := vmodel.NewEmitGate(vmodel.MidStreamCutoff(m))
-	if vmodel.EmitChunksGated(chunks, perChunk, gate, func(i int, chunk string) {
+	vmodel.EmitChunks(chunks, perChunk, func(i int, chunk string) {
 		emit(DeltaEvent{Index: i, Content: chunk})
-	}) {
-		return nil
-	}
+	})
 	for i, tc := range resp.ToolCalls {
-		if !gate.Allow() {
-			return nil
-		}
 		emit(ToolEvent{Index: i, ToolCall: tc})
 	}
 	if m.cfg.Usage != nil {
-		if !gate.Allow() {
-			return nil
-		}
 		emit(UsageEvent{Usage: *m.cfg.Usage})
-	}
-	if !gate.Allow() {
-		return nil
 	}
 	emit(DoneEvent{FinishReason: resp.FinishReason})
 	return nil

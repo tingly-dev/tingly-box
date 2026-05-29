@@ -126,24 +126,15 @@ func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesReq
 	if err != nil {
 		return err
 	}
-	gate := vmodel.NewEmitGate(vmodel.MidStreamCutoff(m))
-	if !gate.Allow() {
-		return nil
-	}
 	emit(StreamStartEvent{MsgID: "msg_virtual", Model: m.cfg.ID})
 	chunks := m.streamChunks()
 	perChunk := vmodel.ResolveChunkDelay(m.cfg.Delay, len(chunks))
 	for i, blk := range resp.Content {
 		if blk.OfText != nil {
-			if vmodel.EmitChunksGated(chunks, perChunk, gate, func(_ int, chunk string) {
+			vmodel.EmitChunks(chunks, perChunk, func(_ int, chunk string) {
 				emit(TextDeltaEvent{Index: i, Text: chunk})
-			}) {
-				return nil
-			}
+			})
 		} else if blk.OfToolUse != nil {
-			if !gate.Allow() {
-				return nil
-			}
 			inputJSON, _ := json.Marshal(blk.OfToolUse.Input)
 			emit(ToolUseEvent{
 				Index: i,
@@ -154,13 +145,7 @@ func (m *MockModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesReq
 		}
 	}
 	if m.cfg.Usage != nil {
-		if !gate.Allow() {
-			return nil
-		}
 		emit(UsageEvent{Usage: *m.cfg.Usage})
-	}
-	if !gate.Allow() {
-		return nil
 	}
 	emit(DoneEvent{StopReason: string(resp.StopReason)})
 	return nil

@@ -1,6 +1,5 @@
 package vmodel
 
-import "time"
 
 // ErrorStage selects when in the request lifecycle a mock model's error
 // injection fires.
@@ -70,21 +69,6 @@ type ErrorInjection struct {
 	MidStreamMode MidStreamMode
 }
 
-// MidStreamCutoff returns the event count after which a stream should stop
-// emitting, or -1 if no mid-stream injection is configured. It examines the
-// model via the optional ErrorInjectingModel interface.
-func MidStreamCutoff(vm any) int {
-	if ei, ok := vm.(ErrorInjectingModel); ok {
-		if e := ei.ErrorInjection(); e != nil && e.Stage == ErrorStageMidStream {
-			if e.AfterEvents <= 0 {
-				return 1
-			}
-			return e.AfterEvents
-		}
-	}
-	return -1
-}
-
 // ExtractErrorInjection reports the model's error injection configuration,
 // or nil if the model does not implement ErrorInjectingModel or has none set.
 func ExtractErrorInjection(vm any) *ErrorInjection {
@@ -135,19 +119,3 @@ func (g *EmitGate) Tripped() bool {
 	return g.cutoff > 0 && g.n >= g.cutoff
 }
 
-// EmitChunksGated is the gated version of EmitChunks. It iterates chunks but
-// stops as soon as gate.Allow() returns false, returning whether the gate
-// tripped. Sleeps only before chunks the gate admits, so an early trip
-// returns promptly.
-func EmitChunksGated(chunks []string, perChunkDelay time.Duration, gate *EmitGate, emit func(index int, chunk string)) bool {
-	for i, chunk := range chunks {
-		if !gate.Allow() {
-			return true
-		}
-		if perChunkDelay > 0 {
-			time.Sleep(perChunkDelay)
-		}
-		emit(i, chunk)
-	}
-	return gate.Tripped()
-}

@@ -42,36 +42,6 @@ func TestEmitGate_AllowAndTrip(t *testing.T) {
 	}
 }
 
-func TestEmitChunksGated_EarlyTrip(t *testing.T) {
-	g := NewEmitGate(2)
-	chunks := []string{"a", "b", "c", "d"}
-	var emitted []string
-	tripped := EmitChunksGated(chunks, 0, g, func(_ int, c string) {
-		emitted = append(emitted, c)
-	})
-	if !tripped {
-		t.Fatalf("expected gate to trip")
-	}
-	if len(emitted) != 2 || emitted[0] != "a" || emitted[1] != "b" {
-		t.Fatalf("expected exactly [a b], got %v", emitted)
-	}
-}
-
-func TestEmitChunksGated_NoTrip(t *testing.T) {
-	g := NewEmitGate(0)
-	chunks := []string{"x", "y"}
-	var emitted []string
-	tripped := EmitChunksGated(chunks, 0, g, func(_ int, c string) {
-		emitted = append(emitted, c)
-	})
-	if tripped {
-		t.Fatalf("disabled gate should not trip")
-	}
-	if len(emitted) != 2 {
-		t.Fatalf("expected all chunks emitted, got %v", emitted)
-	}
-}
-
 type stubModel struct {
 	ei *ErrorInjection
 }
@@ -93,25 +63,3 @@ func TestExtractErrorInjection(t *testing.T) {
 	}
 }
 
-func TestMidStreamCutoff(t *testing.T) {
-	cases := []struct {
-		name string
-		vm   any
-		want int
-	}{
-		{"non-implementer", &nonModel{}, -1},
-		{"nil injection", &stubModel{ei: nil}, -1},
-		{"pre-content injection", &stubModel{ei: &ErrorInjection{Stage: ErrorStagePreContent}}, -1},
-		{"mid-stream default", &stubModel{ei: &ErrorInjection{Stage: ErrorStageMidStream}}, 1},
-		{"mid-stream zero events", &stubModel{ei: &ErrorInjection{Stage: ErrorStageMidStream, AfterEvents: 0}}, 1},
-		{"mid-stream negative events", &stubModel{ei: &ErrorInjection{Stage: ErrorStageMidStream, AfterEvents: -3}}, 1},
-		{"mid-stream explicit cutoff", &stubModel{ei: &ErrorInjection{Stage: ErrorStageMidStream, AfterEvents: 4}}, 4},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := MidStreamCutoff(tc.vm); got != tc.want {
-				t.Fatalf("MidStreamCutoff = %d, want %d", got, tc.want)
-			}
-		})
-	}
-}
