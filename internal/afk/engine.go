@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
@@ -173,8 +174,18 @@ func (e *Engine) Run(
 
 	var finalText string
 
+	logrus.WithFields(logrus.Fields{
+		"model":         e.model,
+		"history_msgs":  len(history),
+		"prompt_len":    len(userText),
+		"tools":         len(e.tools),
+		"maxIterations": e.maxIterations,
+		"stream_text":   e.streamText,
+	}).Debug("afk engine: run start")
+
 	for i := 0; i < e.maxIterations; i++ {
 		if err := ctx.Err(); err != nil {
+			logrus.WithError(err).WithField("iteration", i).Debug("afk engine: context cancelled")
 			return messages, finalText, err
 		}
 
@@ -188,8 +199,18 @@ func (e *Engine) Run(
 		}
 
 		toolUses := toolUseBlocks(msg)
+		logrus.WithFields(logrus.Fields{
+			"iteration": i,
+			"turn_text": len(turnText),
+			"tool_uses": len(toolUses),
+		}).Debug("afk engine: iteration result")
+
 		if len(toolUses) == 0 {
 			// No tools requested — this is the final answer.
+			logrus.WithFields(logrus.Fields{
+				"iterations": i + 1,
+				"final_len":  len(finalText),
+			}).Debug("afk engine: run complete (final answer)")
 			return messages, finalText, nil
 		}
 
@@ -197,8 +218,15 @@ func (e *Engine) Run(
 		messages = append(messages, anthropic.NewUserMessage(results...))
 	}
 
-	logrus.WithField("maxIterations", e.maxIterations).
-		Warn("anthropic engine: hit max iterations without a final answer")
+	// Loop exhausted while still requesting tools. If no text was ever produced
+	// the caller (and user) would otherwise see nothing despite many tool calls,
+	// so log loudly with enough context to debug.
+	logrus.WithFields(logrus.Fields{
+		"model":         e.model,
+		"maxIterations": e.maxIterations,
+		"final_len":     len(finalText),
+		"had_text":      finalText != "",
+	}).Warn("afk engine: hit max iterations without a tool-free final answer")
 	return messages, finalText, nil
 }
 
@@ -227,27 +255,40 @@ func (e *Engine) streamTurn(
 
 	stream := e.client.Messages.NewStreaming(ctx, params)
 	msg := anthropic.Message{}
-	var turnText string
 
 	for stream.Next() {
 		event := stream.Current()
+		// Let the SDK accumulate the canonical Message (text concatenated into
+		// content blocks, tool_use inputs assembled). We never hand-roll text
+		// aggregation — we read it back from the accumulated message below.
 		if err := msg.Accumulate(event); err != nil {
-			return msg, turnText, fmt.Errorf("accumulate stream event: %w", err)
+			return msg, "", fmt.Errorf("accumulate stream event: %w", err)
 		}
-		if delta, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok {
-			if delta.Delta.Text != "" {
-				turnText += delta.Delta.Text
-				// Streaming mode: fan out each fragment as it arrives.
-				// Aggregated mode (default): hold until the turn completes.
-				if sink != nil && e.streamText {
-					sink.OnText(delta.Delta.Text)
-				}
+		// Streaming mode only: fan out each text fragment as it arrives. This is
+		// a UI concern, independent of aggregation, so it reads the delta
+		// directly rather than the accumulator.
+		if sink != nil && e.streamText {
+			if delta, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok && delta.Delta.Text != "" {
+				sink.OnText(delta.Delta.Text)
 			}
 		}
 	}
 	if err := stream.Err(); err != nil {
-		return msg, turnText, fmt.Errorf("model stream error: %w", err)
+		return msg, "", fmt.Errorf("model stream error: %w", err)
 	}
+
+	// Pull the turn's text from the SDK-accumulated message (not a hand-built
+	// string), so text/tool_use ordering and block boundaries come from the SDK.
+	turnText := messageText(msg)
+
+	logrus.WithFields(logrus.Fields{
+		"model":       e.model,
+		"stop_reason": msg.StopReason,
+		"text_len":    len(turnText),
+		"text_blocks": countBlocks(msg, "text"),
+		"tool_uses":   len(toolUseBlocks(msg)),
+	}).Debug("afk engine: assistant turn complete")
+
 	// Aggregated mode: emit the whole turn's text once, after the stream ends.
 	if sink != nil && !e.streamText && turnText != "" {
 		sink.OnText(turnText)
@@ -281,16 +322,25 @@ func (e *Engine) dispatchTools(
 func (e *Engine) callTool(ctx context.Context, tu anthropic.ToolUseBlock) (string, bool) {
 	tool, ok := e.toolByName[tu.Name]
 	if !ok {
+		logrus.WithField("tool", tu.Name).Warn("afk engine: unknown tool requested")
 		return fmt.Sprintf("Error: unknown tool %q", tu.Name), true
 	}
+	logrus.WithFields(logrus.Fields{
+		"tool":  tu.Name,
+		"input": string(tu.Input),
+	}).Debug("afk engine: tool call")
 	out, err := tool.Call(ctx, tu.Input)
 	if err != nil {
-		logrus.WithError(err).WithField("tool", tu.Name).Warn("anthropic engine: tool call failed")
+		logrus.WithError(err).WithField("tool", tu.Name).Warn("afk engine: tool call failed")
 		if out == "" {
 			out = fmt.Sprintf("Error: %v", err)
 		}
 		return out, true
 	}
+	logrus.WithFields(logrus.Fields{
+		"tool":       tu.Name,
+		"result_len": len(out),
+	}).Debug("afk engine: tool result")
 	return out, false
 }
 
@@ -303,4 +353,30 @@ func toolUseBlocks(msg anthropic.Message) []anthropic.ToolUseBlock {
 		}
 	}
 	return blocks
+}
+
+// messageText concatenates the text of all text blocks in an SDK-accumulated
+// message. This is the canonical way to read a turn's text — the SDK has
+// already assembled the deltas into the blocks — so callers never hand-roll
+// string concatenation from the raw stream.
+func messageText(msg anthropic.Message) string {
+	var b strings.Builder
+	for _, block := range msg.Content {
+		if t, ok := block.AsAny().(anthropic.TextBlock); ok {
+			b.WriteString(t.Text)
+		}
+	}
+	return b.String()
+}
+
+// countBlocks returns how many content blocks of the given type the message has.
+// Used for diagnostic logging.
+func countBlocks(msg anthropic.Message, blockType string) int {
+	n := 0
+	for _, block := range msg.Content {
+		if block.Type == blockType {
+			n++
+		}
+	}
+	return n
 }

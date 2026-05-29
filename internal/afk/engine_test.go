@@ -254,11 +254,17 @@ func TestEngineRun_MaxIterations(t *testing.T) {
 	require.NoError(t, err)
 
 	sink := &recordingSink{}
-	_, _, err = eng.Run(context.Background(), nil, "loop forever", sink)
+	_, finalText, err := eng.Run(context.Background(), nil, "loop forever", sink)
 	require.NoError(t, err, "Run should return cleanly (with a warning) when max iterations is hit")
 
 	// Exactly MaxIterations model calls were made — no infinite loop.
 	assert.Equal(t, int32(2), atomic.LoadInt32(&reqCount))
+	// Tool-only run: no assistant text was ever produced. This is the
+	// "many tool calls, no message" scenario — finalText is empty and the sink
+	// saw tool calls but no text. The loud WARN log lives in Run.
+	assert.Empty(t, finalText, "a tool-only run produces no final text")
+	assert.Empty(t, sink.textFrags, "no OnText should fire when the model only calls tools")
+	assert.Equal(t, []string{"loop_tool", "loop_tool"}, sink.toolCalls)
 }
 
 func TestNewEngine_Validation(t *testing.T) {

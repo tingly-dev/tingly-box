@@ -159,14 +159,25 @@ func (a *TinglyBoxAgent) createApprovalCallback(config *AgentConfig) func(contex
 
 // engineSink adapts the engine's StreamSink to the smart-guide StreamHandler,
 // forwarding assistant text and tool activity as the map-shaped messages the
-// bot streaming layer already understands.
+// bot streaming layer already understands. It also counts what it forwarded so
+// ExecuteWithHandler can log (and diagnose) tool-only runs.
 type engineSink struct {
-	handler   StreamHandler
-	iteration int
+	handler      StreamHandler
+	iteration    int
+	textMessages int
+	toolCalls    int
 }
 
 func (s *engineSink) OnText(delta string) {
-	if s.handler == nil || delta == "" {
+	if delta == "" {
+		return
+	}
+	s.textMessages++
+	logrus.WithFields(logrus.Fields{
+		"iteration": s.iteration,
+		"text_len":  len(delta),
+	}).Debug("SmartGuide sink: assistant text")
+	if s.handler == nil {
 		return
 	}
 	s.handler.OnMessage(map[string]interface{}{
@@ -178,6 +189,11 @@ func (s *engineSink) OnText(delta string) {
 
 func (s *engineSink) OnToolCall(name string, input json.RawMessage) {
 	s.iteration++
+	s.toolCalls++
+	logrus.WithFields(logrus.Fields{
+		"iteration": s.iteration,
+		"tool":      name,
+	}).Debug("SmartGuide sink: tool call")
 	if s.handler == nil {
 		return
 	}
@@ -189,6 +205,11 @@ func (s *engineSink) OnToolCall(name string, input json.RawMessage) {
 }
 
 func (s *engineSink) OnToolResult(name string, result string, isErr bool) {
+	logrus.WithFields(logrus.Fields{
+		"tool":       name,
+		"is_error":   isErr,
+		"result_len": len(result),
+	}).Debug("SmartGuide sink: tool result")
 	if s.handler == nil {
 		return
 	}
@@ -259,10 +280,21 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 		})
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"duration_ms": duration.Milliseconds(),
-		"session_id":  toolCtx.SessionID,
-	}).Info("SmartGuide execution completed")
+	logEntry := logrus.WithFields(logrus.Fields{
+		"duration_ms":   duration.Milliseconds(),
+		"session_id":    toolCtx.SessionID,
+		"final_len":     len(finalText),
+		"history_msgs":  len(messages),
+		"messages_sent": sink.textMessages,
+		"tool_calls":    sink.toolCalls,
+	})
+	// A run that produced tool calls but no final text leaves the user with no
+	// visible reply — surface it at WARN so it is greppable, not buried.
+	if finalText == "" {
+		logEntry.Warn("SmartGuide execution completed with NO assistant text (tool calls only)")
+	} else {
+		logEntry.Info("SmartGuide execution completed")
+	}
 	return result, nil
 }
 
