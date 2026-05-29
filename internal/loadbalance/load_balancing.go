@@ -22,7 +22,16 @@ type Service struct {
 // ServiceID returns a unique string identifier for the service (provider:model).
 // Deprecated: use GetServiceID() for the typed form.
 func (s *Service) ServiceID() string {
-	return fmt.Sprintf("%s:%s", s.Provider, s.Model)
+	return FormatServiceID(s.Provider, s.Model)
+}
+
+// FormatServiceID formats a (providerUUID, model) pair into the canonical
+// "provider:model" string used as the breaker key and exclusion map key
+// throughout the gateway. Sites that don't have a full *Service in hand
+// (the failover orchestrator, the recorder, usage tracking) call this
+// directly so all paths agree on the same key shape.
+func FormatServiceID(providerUUID, model string) string {
+	return fmt.Sprintf("%s:%s", providerUUID, model)
 }
 
 // GetServiceID returns the typed service identifier.

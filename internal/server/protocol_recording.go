@@ -60,15 +60,24 @@ type ProtocolRecorder struct {
 	mode         obs.RecordMode
 }
 
+// SetActiveService re-binds the recorder to a new provider/model. The
+// failover orchestrator calls this between attempts so a subsequent
+// RecordError attributes the failure to the right service rather than
+// to whichever service the recorder was last bound to.
+func (sr *ProtocolRecorder) SetActiveService(provider *typ.Provider, model string) {
+	if sr == nil {
+		return
+	}
+	sr.bindProvider(provider, model, "")
+}
+
 // breakerServiceID returns the loadbalance service identifier for the
-// active provider+model, or "" if either is unknown. The ID format must
-// match Service.ServiceID() so circuit-breaker lookups line up with the
-// keys used by the priority tactic.
+// active provider+model, or "" if either is unknown.
 func (sr *ProtocolRecorder) breakerServiceID() string {
 	if sr == nil || sr.providerUUID == "" || sr.model == "" {
 		return ""
 	}
-	return sr.providerUUID + ":" + sr.model
+	return loadbalance.FormatServiceID(sr.providerUUID, sr.model)
 }
 
 // EnsureProtocolRecorder returns a ProtocolRecorder for the given scenario,

@@ -3,13 +3,13 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/otel/tracker"
@@ -435,7 +435,7 @@ func (s *Server) reportHealthStatus(provider *typ.Provider, model string, err er
 		return
 	}
 
-	serviceID := fmt.Sprintf("%s:%s", provider.UUID, model)
+	serviceID := loadbalance.FormatServiceID(provider.UUID, model)
 
 	logrus.WithFields(logrus.Fields{
 		"provider":   provider.Name,

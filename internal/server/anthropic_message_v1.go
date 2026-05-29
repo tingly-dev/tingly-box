@@ -95,7 +95,11 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = proxyModel
 
-	s.dispatchChainResult(c, reqCtx, rule, provider, isStreaming, recorder)
+	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
+		func(p *typ.Provider, _ string) {
+			retryProvider := s.resolveProviderForClient(p, protocol.APIStyleAnthropic)
+			s.dispatchChainResult(c, reqCtx, rule, retryProvider, isStreaming, recorder)
+		})
 }
 
 // nonstreamResponsesToAnthropic handles non-streaming Responses API request for v1
@@ -188,9 +192,16 @@ func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, a
 		return
 	}
 
-	// Handle the streaming response
-	// Use the dedicated stream handler to convert Responses API to Anthropic v1 format
-	usage, err := stream.HandleResponsesToAnthropicV1Stream(c, streamResp, proxyModel)
+	// Prime the stream: SDK streams are lazy, real upstream errors only
+	// surface on first Next(). Forcing it here lets failover retry
+	// before any byte hits the wire.
+	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
+	if primeErr != nil {
+		s.handlePreStreamFailure(c, primeErr, streamRec)
+		return
+	}
+
+	usage, err := stream.HandleResponsesToAnthropicV1Stream(c, primedStream, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {
@@ -233,17 +244,17 @@ func (s *Server) assembleResponsesToAnthropic(c *gin.Context, proxyModel string,
 		defer cancel()
 	}
 	if err != nil {
-		s.trackUsageFromContext(c, 0, 0, err)
-		stream.SendStreamingError(c, err)
-		if streamRec != nil {
-			streamRec.RecordError(err)
-		}
+		s.handlePreStreamFailure(c, err, streamRec)
 		return
 	}
 
-	// Handle the streaming response
-	// Use the dedicated stream handler to convert Responses API to Anthropic beta format
-	usage, err := stream.HandleResponsesToAnthropicV1Assembly(c, streamResp, proxyModel)
+	primedStream, primeErr := stream.PrimeResponsesStream(streamResp)
+	if primeErr != nil {
+		s.handlePreStreamFailure(c, primeErr, streamRec)
+		return
+	}
+
+	usage, err := stream.HandleResponsesToAnthropicV1Assembly(c, primedStream, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {

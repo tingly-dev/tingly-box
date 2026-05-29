@@ -758,11 +758,13 @@ func (s *Server) streamResponsesToChat(c *gin.Context, reqCtx *transform.Transfo
 		defer cancel()
 	}
 	if err != nil {
-		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		s.handlePreStreamFailure(c, err, recorder)
+		return
+	}
+
+	primedStream, primeErr := stream.PrimeResponsesStream(responsesStream)
+	if primeErr != nil {
+		s.handlePreStreamFailure(c, primeErr, recorder)
 		return
 	}
 
@@ -775,7 +777,7 @@ func (s *Server) streamResponsesToChat(c *gin.Context, reqCtx *transform.Transfo
 		}
 		return nil
 	})
-	usage, err := stream.HandleResponsesToOpenAIChatStream(hc, responsesStream, responseModel)
+	usage, err := stream.HandleResponsesToOpenAIChatStream(hc, primedStream, responseModel)
 	s.trackUsageWithTokenUsage(c, usage, err)
 	if recorder != nil {
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
@@ -890,12 +892,13 @@ func (s *Server) streamOpenAIResponses(c *gin.Context, reqCtx *transform.Transfo
 		defer cancel()
 	}
 	if err != nil {
-		// Track error with no usage
-		s.trackUsageFromContext(c, 0, 0, err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
-		if recorder != nil {
-			recorder.RecordError(err)
-		}
+		s.handlePreStreamFailure(c, err, recorder)
+		return
+	}
+
+	primedStream, primeErr := stream.PrimeResponsesStream(respStream)
+	if primeErr != nil {
+		s.handlePreStreamFailure(c, primeErr, recorder)
 		return
 	}
 
@@ -909,7 +912,7 @@ func (s *Server) streamOpenAIResponses(c *gin.Context, reqCtx *transform.Transfo
 		}
 		return nil
 	})
-	usage, err := stream.HandleOpenAIResponsesStream(hc, respStream, responseModel)
+	usage, err := stream.HandleOpenAIResponsesStream(hc, primedStream, responseModel)
 
 	// Track usage from stream handler
 	s.trackUsageWithTokenUsage(c, usage, err)
