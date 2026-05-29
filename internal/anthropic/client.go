@@ -7,8 +7,10 @@ import (
 
 // newClient builds an Anthropic SDK client pointed at the tingly-box gateway.
 //
-// The gateway authenticates with an x-api-key header (Anthropic's native auth),
-// so WithAPIKey is correct here rather than WithAuthToken.
+// option.WithAPIKey sets the X-Api-Key header (SDK option/requestoption.go), and
+// the gateway's ModelAuthMiddleware accepts both Authorization and X-Api-Key
+// (internal/server/middleware/auth.go), so WithAPIKey authenticates correctly.
+// Do not "fix" this to WithAuthToken.
 func newClient(baseURL, apiKey string) anthropic.Client {
 	return anthropic.NewClient(
 		option.WithBaseURL(baseURL),

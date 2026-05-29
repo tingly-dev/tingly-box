@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-agentscope/pkg/message"
-	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/smart_guide"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -37,8 +36,8 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	// Get current bot settings (dynamic lookup for latest config)
 	botSetting := e.deps.GetBotSettingOrCache()
 
-	// 1. Load messages from session store
-	var messages []*message.Msg
+	// 1. Load conversation history (native Anthropic params) from session store
+	var messages []anthropic.MessageParam
 	if e.deps.TBSessionStore != nil {
 		msgs, err := e.deps.TBSessionStore.Load(req.HCtx.ChatID)
 		if err != nil {
@@ -198,15 +197,10 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 		completionCallback: completionCallback,
 	}
 
-	// 9. Save user message to session before execution
-	if e.deps.TBSessionStore != nil {
-		userMsg := message.NewMsg("user", req.Text, types.RoleUser)
-		if err := e.deps.TBSessionStore.AddMessage(req.HCtx.ChatID, userMsg); err != nil {
-			logrus.WithError(err).Warn("Failed to save user message to session")
-		}
-	}
-
-	// 10. Execute
+	// 9. Execute
+	// (History persistence happens after the run in the completion callback,
+	// which saves the agent's full updated history — user + assistant +
+	// tool turns — as native Anthropic params.)
 	startTime := time.Now()
 
 	result, err := agent.ExecuteWithHandler(ctx, req.Text, toolCtx, messageTracker)
