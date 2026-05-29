@@ -2,6 +2,7 @@ package smart_guide
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -70,6 +71,15 @@ func writeFile(t *testing.T, dir, name, content string) string {
 	return path
 }
 
+// sendFileArgs marshals SendFileParams into the json.RawMessage the new
+// Tool.Call signature expects.
+func sendFileArgs(t *testing.T, p SendFileParams) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(p)
+	require.NoError(t, err)
+	return data
+}
+
 // makeSendFileTool creates a SendFileTool with a mock executor and toolCtx.
 func makeSendFileTool(
 	executor *ToolExecutor,
@@ -86,6 +96,12 @@ func TestSendFileTool_Name(t *testing.T) {
 func TestSendFileTool_DescriptionMentionsFilePath(t *testing.T) {
 	tool := makeSendFileTool(NewToolExecutor(nil), &ToolContext{})
 	assert.Contains(t, strings.ToLower(tool.Description()), "file")
+}
+
+func TestSendFileTool_InvalidJSON(t *testing.T) {
+	tool := makeSendFileTool(NewToolExecutor(nil), &ToolContext{})
+	_, err := tool.Call(context.Background(), json.RawMessage(`{not json`))
+	assert.Error(t, err)
 }
 
 func TestSendFileTool_HappyPath_InProjectPath(t *testing.T) {
@@ -106,13 +122,12 @@ func TestSendFileTool_HappyPath_InProjectPath(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: filePath, Caption: "Here you go"})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: filePath, Caption: "Here you go"}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
 
 	assert.Equal(t, filePath, sentPath)
 	assert.Equal(t, "Here you go", sentCaption)
-	assert.Contains(t, text, "sent")
+	assert.Contains(t, out, "sent")
 }
 
 func TestSendFileTool_HappyPath_RelativePath(t *testing.T) {
@@ -132,9 +147,8 @@ func TestSendFileTool_HappyPath_RelativePath(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: "output.csv"})
+	_, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: "output.csv"}))
 	require.NoError(t, err)
-	_ = extractTextFromResponse(resp)
 
 	// Relative path should be resolved to absolute
 	assert.Equal(t, filepath.Join(projectDir, "output.csv"), sentPath)
@@ -157,10 +171,10 @@ func TestSendFileTool_HappyPath_ImageDetected(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: filePath})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: filePath}))
 	require.NoError(t, err)
-	_ = extractTextFromResponse(resp)
 	assert.Equal(t, filePath, sentPath)
+	assert.Contains(t, out, "image")
 }
 
 func TestSendFileTool_FileNotFound(t *testing.T) {
@@ -177,10 +191,9 @@ func TestSendFileTool_FileNotFound(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: filepath.Join(projectDir, "does_not_exist.txt")})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: filepath.Join(projectDir, "does_not_exist.txt")}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, strings.ToLower(text), "error")
+	assert.Contains(t, strings.ToLower(out), "error")
 }
 
 func TestSendFileTool_PathIsDirectory(t *testing.T) {
@@ -197,11 +210,10 @@ func TestSendFileTool_PathIsDirectory(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: projectDir})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: projectDir}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, strings.ToLower(text), "error")
-	assert.NotContains(t, text, "✅") // should NOT show success checkmark
+	assert.Contains(t, strings.ToLower(out), "error")
+	assert.NotContains(t, out, "✅") // should NOT show success checkmark
 }
 
 func TestSendFileTool_EmptyFilePath(t *testing.T) {
@@ -210,15 +222,14 @@ func TestSendFileTool_EmptyFilePath(t *testing.T) {
 
 	toolCtx := &ToolContext{
 		ProjectPath: projectDir,
-		SendFile: func(ctx context.Context, path, caption string) error { return nil },
+		SendFile:    func(ctx context.Context, path, caption string) error { return nil },
 	}
 	executor := NewToolExecutor(nil)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: ""})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: ""}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, strings.ToLower(text), "error")
+	assert.Contains(t, strings.ToLower(out), "error")
 }
 
 func TestSendFileTool_FileTooLarge(t *testing.T) {
@@ -228,17 +239,16 @@ func TestSendFileTool_FileTooLarge(t *testing.T) {
 
 	toolCtx := &ToolContext{
 		ProjectPath: projectDir,
-		SendFile: func(ctx context.Context, path, caption string) error { return nil },
+		SendFile:    func(ctx context.Context, path, caption string) error { return nil },
 	}
 	executor := NewToolExecutor(nil)
 	executor.SetWorkingDirectory(projectDir)
 
 	// Create tool with a very small size limit for testing
 	tool := NewSendFileToolWithLimit(executor, toolCtx, 3) // 3 bytes max
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: filePath})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: filePath}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, strings.ToLower(text), "too large")
+	assert.Contains(t, strings.ToLower(out), "too large")
 }
 
 func TestSendFileTool_CrossPath_ApprovalGranted(t *testing.T) {
@@ -266,13 +276,12 @@ func TestSendFileTool_CrossPath_ApprovalGranted(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: outsideFile})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: outsideFile}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
 
 	assert.True(t, approvalCalled, "approval should be requested for cross-path file")
 	assert.Equal(t, outsideFile, sentPath)
-	assert.Contains(t, text, "sent")
+	assert.Contains(t, out, "sent")
 }
 
 func TestSendFileTool_CrossPath_ApprovalDenied(t *testing.T) {
@@ -297,12 +306,11 @@ func TestSendFileTool_CrossPath_ApprovalDenied(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: outsideFile})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: outsideFile}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
 
 	assert.False(t, sendCalled, "SendFile should not be called when approval is denied")
-	assert.Contains(t, strings.ToLower(text), "denied")
+	assert.Contains(t, strings.ToLower(out), "denied")
 }
 
 func TestSendFileTool_CrossPath_NoApprovalCallback(t *testing.T) {
@@ -325,12 +333,11 @@ func TestSendFileTool_CrossPath_NoApprovalCallback(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: outsideFile})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: outsideFile}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
 
 	assert.False(t, sendCalled)
-	assert.Contains(t, strings.ToLower(text), "error")
+	assert.Contains(t, strings.ToLower(out), "error")
 }
 
 func TestSendFileTool_CrossPath_ApprovalPromptContainsPath(t *testing.T) {
@@ -352,7 +359,7 @@ func TestSendFileTool_CrossPath_ApprovalPromptContainsPath(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	_, err := tool.Call(ctx, SendFileParams{FilePath: outsideFile})
+	_, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: outsideFile}))
 	require.NoError(t, err)
 
 	// Approval prompt should mention the file path
@@ -372,10 +379,9 @@ func TestSendFileTool_NoSendFileCallback(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: filePath})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: filePath}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, strings.ToLower(text), "error")
+	assert.Contains(t, strings.ToLower(out), "error")
 }
 
 func TestSendFileTool_SendFileCallbackError(t *testing.T) {
@@ -393,9 +399,8 @@ func TestSendFileTool_SendFileCallbackError(t *testing.T) {
 	executor.SetWorkingDirectory(projectDir)
 	tool := makeSendFileTool(executor, toolCtx)
 
-	resp, err := tool.Call(ctx, SendFileParams{FilePath: filePath})
+	out, err := tool.Call(ctx, sendFileArgs(t, SendFileParams{FilePath: filePath}))
 	require.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, strings.ToLower(text), "error")
-	assert.Contains(t, text, "platform upload failed")
+	assert.Contains(t, strings.ToLower(out), "error")
+	assert.Contains(t, out, "platform upload failed")
 }
