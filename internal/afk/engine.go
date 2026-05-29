@@ -44,9 +44,13 @@ type Tool interface {
 // StreamSink receives incremental updates as the loop runs. All methods are
 // optional in spirit — a nil StreamSink disables streaming entirely, and the
 // engine never assumes any method has side effects it depends on.
+//
+// Whether OnText is called per-fragment or once per turn with the aggregated
+// text is controlled by Config.StreamText (default: aggregated). See that field.
 type StreamSink interface {
-	// OnText is called with assistant text as it streams in. It may be called
-	// many times per turn with partial fragments.
+	// OnText is called with assistant text. By default (aggregated mode) it is
+	// called once per assistant turn with the full text; in streaming mode it
+	// is called many times per turn with partial fragments.
 	OnText(delta string)
 	// OnToolCall is called when the model invokes a tool, before execution.
 	OnToolCall(name string, input json.RawMessage)
@@ -63,6 +67,7 @@ type Engine struct {
 	maxTokens     int64
 	temperature   *float64
 	maxIterations int
+	streamText    bool
 	tools         []Tool
 	toolByName    map[string]Tool
 	toolParams    []anthropic.ToolUnionParam
@@ -83,6 +88,16 @@ type Config struct {
 	Temperature *float64
 	// MaxIterations caps tool-use rounds; defaults to 20 when zero.
 	MaxIterations int
+	// StreamText controls how assistant text reaches the StreamSink.
+	//
+	// Default (false): aggregated — the engine buffers each assistant turn's
+	// text and calls StreamSink.OnText once, with the complete turn text. This
+	// is the safe default while consumers don't yet handle incremental output.
+	//
+	// true: streaming — OnText is called per text fragment as it arrives. The
+	// engine always consumes the model's HTTP stream either way; this flag only
+	// changes the granularity of the OnText fan-out to the sink.
+	StreamText bool
 	// Tools are the callable tools exposed to the model.
 	Tools []Tool
 }
@@ -114,6 +129,7 @@ func NewEngine(cfg Config) (*Engine, error) {
 		maxTokens:     maxTokens,
 		temperature:   cfg.Temperature,
 		maxIterations: maxIter,
+		streamText:    cfg.StreamText,
 		toolByName:    make(map[string]Tool, len(cfg.Tools)),
 	}
 	for _, t := range cfg.Tools {
@@ -221,7 +237,9 @@ func (e *Engine) streamTurn(
 		if delta, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok {
 			if delta.Delta.Text != "" {
 				turnText += delta.Delta.Text
-				if sink != nil {
+				// Streaming mode: fan out each fragment as it arrives.
+				// Aggregated mode (default): hold until the turn completes.
+				if sink != nil && e.streamText {
 					sink.OnText(delta.Delta.Text)
 				}
 			}
@@ -229,6 +247,10 @@ func (e *Engine) streamTurn(
 	}
 	if err := stream.Err(); err != nil {
 		return msg, turnText, fmt.Errorf("model stream error: %w", err)
+	}
+	// Aggregated mode: emit the whole turn's text once, after the stream ends.
+	if sink != nil && !e.streamText && turnText != "" {
+		sink.OnText(turnText)
 	}
 	return msg, turnText, nil
 }
