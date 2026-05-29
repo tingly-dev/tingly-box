@@ -1,4 +1,4 @@
-package anthropic
+package afk
 
 import (
 	"context"
@@ -114,7 +114,7 @@ type fakeTool struct {
 }
 
 func (f *fakeTool) Name() string        { return f.name }
-func (f *fakeTool) Description() string  { return "a fake tool for testing" }
+func (f *fakeTool) Description() string { return "a fake tool for testing" }
 func (f *fakeTool) Schema() (map[string]any, []string) {
 	return map[string]any{
 		"city": map[string]any{"type": "string"},

@@ -1,7 +1,7 @@
 package smart_guide
 
 import (
-	tbanthropic "github.com/tingly-dev/tingly-box/internal/anthropic"
+	"github.com/tingly-dev/tingly-box/internal/afk"
 )
 
 // BuildTools assembles the Smart Guide toolset for the ReAct engine.
@@ -15,8 +15,8 @@ func BuildTools(
 	getStatusFunc func(chatID string) (*StatusInfo, error),
 	updateProjectFunc func(chatID string, projectPath string) error,
 	toolCtx *ToolContext,
-) []tbanthropic.Tool {
-	tools := []tbanthropic.Tool{
+) []afk.Tool {
+	tools := []afk.Tool{
 		NewBashTool(executor, DefaultBashAllowlist),
 		NewGetStatusTool(executor, chatID, getStatusFunc),
 		NewChangeDirTool(executor, chatID, updateProjectFunc),

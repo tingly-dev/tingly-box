@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	tbanthropic "github.com/tingly-dev/tingly-box/internal/anthropic"
+	"github.com/tingly-dev/tingly-box/internal/afk"
 )
 
 // maxFileOpSize is the maximum file/content size (10MB) these tools will handle,
@@ -279,7 +279,7 @@ func (t *EditFileTool) Call(ctx context.Context, rawInput json.RawMessage) (stri
 
 // Compile-time assertions that each tool implements the engine Tool interface.
 var (
-	_ tbanthropic.Tool = (*ReadFileTool)(nil)
-	_ tbanthropic.Tool = (*WriteFileTool)(nil)
-	_ tbanthropic.Tool = (*EditFileTool)(nil)
+	_ afk.Tool = (*ReadFileTool)(nil)
+	_ afk.Tool = (*WriteFileTool)(nil)
+	_ afk.Tool = (*EditFileTool)(nil)
 )

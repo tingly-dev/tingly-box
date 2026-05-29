@@ -106,7 +106,8 @@ owns history as `[]anthropic.MessageParam`; the store persists it verbatim.
 
 ## Files (as shipped)
 
-- New engine package `internal/anthropic/`: `engine.go` (ReAct loop + `Tool`
+- New engine package `internal/afk/` (Agent Framework Kit / Away From Keyboard):
+  `engine.go` (ReAct loop + `Tool`
   and `StreamSink` interfaces), `client.go` (gateway client), `engine_test.go`.
   Lives in the **root module** (not agentboot) so it can use the SDK v1.45 APIs
   wired by the root `replace`; agentboot pins an older SDK without that replace.

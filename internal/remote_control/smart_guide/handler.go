@@ -16,7 +16,7 @@ type CompletionResult struct {
 
 // StreamHandler receives streaming output and the completion signal from
 // ExecuteWithHandler. The smart-guide agent runs an in-house ReAct loop on the
-// Anthropic SDK (internal/anthropic.Engine), not agentboot's process pipeline,
+// Anthropic SDK (internal/afk.Engine), not agentboot's process pipeline,
 // so it streams intermediate messages as plain maps via OnMessage and reports
 // the final outcome via OnComplete.
 type StreamHandler interface {

@@ -1,5 +1,6 @@
-// Package anthropic provides a small, reusable ReAct agent loop built directly
-// on the official Anthropic SDK (github.com/anthropics/anthropic-sdk-go).
+// Package afk (Agent Framework Kit / Away From Keyboard) provides a small,
+// reusable ReAct agent loop built directly on the official Anthropic SDK
+// (github.com/anthropics/anthropic-sdk-go).
 //
 // It is anthropic-first by design: messages are the SDK's native
 // anthropic.MessageParam, there is no provider-compat layer, and tool calls are
@@ -11,7 +12,7 @@
 // This package deliberately lives in the root module (not agentboot) because it
 // relies on Anthropic SDK v1.45 APIs that are wired in via the root go.mod
 // replace directive; agentboot pins an older SDK without that replace.
-package anthropic
+package afk
 
 import (
 	"context"
