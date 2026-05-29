@@ -338,3 +338,107 @@ func TestExecuteWithHandler_HistoryContinuity(t *testing.T) {
 	require.Len(t, hist, 4)
 	assert.Equal(t, "second", agent.LastAssistantText())
 }
+
+// turnScript describes one assistant turn the multiTurnModel should produce:
+// optional leading text, plus an optional tool call. A turn with a tool call is
+// not the final turn; a turn without one ends the exchange.
+type turnScript struct {
+	text     string
+	toolName string
+	toolArgs map[string]any
+}
+
+// multiTurnModel emits a scripted sequence of assistant turns, advancing one
+// turn each time it is asked to generate (it counts the tool_result blocks in
+// the request history to know which turn it is on). This reproduces the real
+// Claude shape where intermediate turns carry BOTH text and a tool_use.
+type multiTurnModel struct {
+	anthropicvm.VirtualModel
+	id    string
+	turns []turnScript
+}
+
+func newMultiTurnModel(id string, turns ...turnScript) *multiTurnModel {
+	base := anthropicvm.NewMockModel(&anthropicvm.MockModelConfig{ID: id, Name: id})
+	return &multiTurnModel{VirtualModel: base, id: id, turns: turns}
+}
+
+func (m *multiTurnModel) turnIndex(req *protocol.AnthropicBetaMessagesRequest) int {
+	n := 0
+	for _, msg := range req.Messages {
+		for _, block := range msg.Content {
+			if block.OfToolResult != nil {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func (m *multiTurnModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesRequest) (anthropicvm.VModelResponse, error) {
+	idx := m.turnIndex(req)
+	if idx >= len(m.turns) {
+		idx = len(m.turns) - 1
+	}
+	ts := m.turns[idx]
+	var content []sdk.BetaContentBlockParamUnion
+	if ts.text != "" {
+		content = append(content, sdk.BetaContentBlockParamUnion{OfText: &sdk.BetaTextBlockParam{Text: ts.text}})
+	}
+	stop := sdk.BetaStopReasonEndTurn
+	if ts.toolName != "" {
+		in, _ := json.Marshal(ts.toolArgs)
+		content = append(content, sdk.BetaContentBlockParamUnion{OfToolUse: &sdk.BetaToolUseBlockParam{
+			ID: "toolu_mt", Name: ts.toolName, Input: json.RawMessage(in),
+		}})
+		stop = sdk.BetaStopReasonToolUse
+	}
+	return anthropicvm.VModelResponse{Content: content, StopReason: stop}, nil
+}
+
+func (m *multiTurnModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessagesRequest, emit func(any)) error {
+	resp, err := m.HandleAnthropic(req)
+	if err != nil {
+		return err
+	}
+	emit(anthropicvm.StreamStartEvent{MsgID: "msg_mt", Model: m.id})
+	for i, blk := range resp.Content {
+		switch {
+		case blk.OfText != nil:
+			emit(anthropicvm.TextDeltaEvent{Index: i, Text: blk.OfText.Text})
+		case blk.OfToolUse != nil:
+			in, _ := json.Marshal(blk.OfToolUse.Input)
+			emit(anthropicvm.ToolUseEvent{Index: i, ID: blk.OfToolUse.ID, Name: blk.OfToolUse.Name, Input: in})
+		}
+	}
+	emit(anthropicvm.DoneEvent{StopReason: string(resp.StopReason)})
+	return nil
+}
+
+// TestExecuteWithHandler_MultiTurnTextNotLost is the regression for "messages
+// get lost": a real exchange where the intermediate turn carries BOTH text and
+// a tool call, then a final text turn. Every assistant text segment must reach
+// the handler — none may be dropped just because the turn also called a tool.
+func TestExecuteWithHandler_MultiTurnTextNotLost(t *testing.T) {
+	const model = "multi-turn"
+	mt := newMultiTurnModel(model,
+		turnScript{text: "Let me check that for you.", toolName: "lookup", toolArgs: map[string]any{"q": "x"}},
+		turnScript{text: "All done — here is the answer."},
+	)
+	baseURL := newVModelServer(t, mt)
+
+	tool := &recordingTool{name: "lookup"}
+	agent := newTestAgent(t, baseURL, model, &AgentConfig{ChatID: "mt1"})
+	rebuildEngineWithTools(t, agent, baseURL, model, tool)
+
+	handler := &recordingHandler{}
+	_, err := agent.ExecuteWithHandler(context.Background(), "do a thing", &ToolContext{ChatID: "mt1"}, handler)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, tool.called, "tool should have run once")
+	// BOTH text segments must have been delivered — the intermediate turn's
+	// text must not be swallowed by the tool-call handling.
+	joined := handler.joinedText()
+	assert.Contains(t, joined, "Let me check that for you.", "intermediate-turn text was lost")
+	assert.Contains(t, joined, "All done — here is the answer.", "final-turn text was lost")
+}
