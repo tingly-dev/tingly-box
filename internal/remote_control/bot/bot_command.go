@@ -115,7 +115,7 @@ func (h *BotHandler) handleClearCommand(hCtx HandlerContext) {
 	switch currentAgent {
 	case agentTinglyBox:
 		if h.tbSessionStore != nil {
-			if err := h.tbSessionStore.ClearMessages(hCtx.ChatID); err != nil {
+			if err := h.tbSessionStore.Delete(hCtx.ChatID); err != nil {
 				logrus.WithError(err).Error("Failed to clear SmartGuide session")
 				h.SendText(hCtx, "⚠️ Failed to clear SmartGuide session.")
 				return

@@ -92,27 +92,36 @@ The tool *registration wrappers* (`tools_register.go`, the agentscope
 `tool.Toolkit` types in `tools_bash.go`/`tools_send_file.go`) are replaced by
 plain schema definitions + dispatch; the executor logic stays.
 
-### 4. Message type + session store
-- Replace agentscope `message.Msg` with a local `StoredMessage` (role + content
-  blocks: text / tool_use / tool_result) and converters to/from
-  `anthropic.MessageParam`.
-- `session_store.go`: persist `[]StoredMessage` as JSON (stable schema we own).
-- `agent_smart_guide.go` lines using `message.NewMsg` / `types.RoleUser`
-  (imports at 10-11, use at 203) switch to the local type.
-- **Migration:** pre-launch, no production `@tb` histories of value — accept a
-  one-time reset of stored `@tb` sessions (or write a tiny converter if needed).
+### 4. Session store — native params (no neutral type)
+Per the anthropic-first decision, there is **no `StoredMessage`**. The engine
+owns history as `[]anthropic.MessageParam`; the store persists it verbatim.
+- `session_store.go`: `Save/Load/Delete(chatID, []anthropic.MessageParam)`,
+  one JSON file per chat. Verified to round-trip byte-for-byte through
+  `encoding/json`. Replaces the old incremental `AddMessage/ClearMessages`.
+- The completion callback snapshots `agent.History()` and `Save`s the whole
+  thing after each run; the executor `Load`s it before the run. The old
+  pre-execution user-message append is gone.
+- **Migration:** pre-launch, old agentscope-format `*-smartguide` session files
+  are simply ignored (new filename `*-smartguide.json`); no converter needed.
 
-## Files
+## Files (as shipped)
 
-- New: `react_loop.go` (loop), `tools_schema.go` (schemas + dispatcher),
-  `tools_file.go` (read/write/edit), `message.go` (StoredMessage + converters).
-- Rewrite: `agent.go` (TinglyBoxAgent wraps the new loop, keeps public methods),
-  `session_store.go`, `tools_register.go`.
-- Keep mostly as-is: `tools_bash.go` / `tools_send_file.go` executor logic
-  (strip agentscope toolkit types), `config.go`, `prompts.go`, `prompts/`.
-- Touch: `bot/agent_smart_guide.go`, `bot/bot_agent.go` (drop agentscope imports;
-  swap message type).
-- `go.mod` / `go.sum`.
+- New engine package `internal/anthropic/`: `engine.go` (ReAct loop + `Tool`
+  and `StreamSink` interfaces), `client.go` (gateway client), `engine_test.go`.
+  Lives in the **root module** (not agentboot) so it can use the SDK v1.45 APIs
+  wired by the root `replace`; agentboot pins an older SDK without that replace.
+- New: `smart_guide/tools_file.go` (native read/write/edit).
+- Rewrite: `smart_guide/agent.go` (TinglyBoxAgent drives the engine; keeps public
+  methods, adds `History()` / `LastAssistantText()`), `session_store.go`,
+  `tools_register.go` (now `BuildTools() []anthropic.Tool`), `tools_bash.go`
+  (native `sh -c` exec; tools implement the engine `Tool` interface),
+  `tools_send_file.go` (engine `Tool` signature).
+- Deleted: `smart_guide/tools_handoff.go` (agentscope-typed, unregistered).
+- Touch: `bot/agent_smart_guide.go`, `bot/bot_agent.go`, `bot/bot_command.go`
+  (drop agentscope imports; native params; store `Save/Delete`).
+- Keep as-is: `config.go`, `prompts.go`, `prompts/`, `handoff.go`, `tools.go`
+  (`ToolExecutor` had no agentscope coupling).
+- `go.mod` / `go.sum`: drop `tingly-agentscope`.
 
 ## Phases
 
