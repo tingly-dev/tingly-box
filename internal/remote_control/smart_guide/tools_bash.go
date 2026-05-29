@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -41,10 +42,10 @@ func NewBashTool(executor *ToolExecutor, allowlist []string) *BashTool {
 	return &BashTool{Executor: executor, AllowedCommands: allowlist}
 }
 
-func (t *BashTool) Name() string { return "bash" }
-
-func (t *BashTool) Description() string {
-	return `Execute bash commands for file system operations and git.
+func (t *BashTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name: "bash",
+		Description: anthropic.String(`Execute bash commands for file system operations and git.
 
 Allowed commands: ls, pwd, cat, mkdir, cp, mv, git, curl, wget, and more.
 Supports command chaining with &&, ||, |, ;.
@@ -53,17 +54,17 @@ Examples:
 - List files: ls -la
 - Show current directory: pwd
 - Clone repository: git clone https://github.com/user/repo.git
-- Change directory temporarily: cd /path/to/dir && ls`
-}
-
-func (t *BashTool) Schema() (map[string]any, []string) {
-	props := map[string]any{
-		"command": map[string]any{
-			"type":        "string",
-			"description": "The bash command to execute (e.g., 'ls -la', 'git status').",
+- Change directory temporarily: cd /path/to/dir && ls`),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"command": map[string]any{
+					"type":        "string",
+					"description": "The bash command to execute (e.g., 'ls -la', 'git status').",
+				},
+			},
+			Required: []string{"command"},
 		},
 	}
-	return props, []string{"command"}
 }
 
 type bashParams struct {
@@ -234,14 +235,12 @@ func NewGetStatusTool(executor *ToolExecutor, chatID string, getStatusFunc func(
 	return &GetStatusTool{executor: executor, chatID: chatID, getStatusFunc: getStatusFunc}
 }
 
-func (t *GetStatusTool) Name() string { return "get_status" }
-
-func (t *GetStatusTool) Description() string {
-	return "Get the current bot status including agent, session, project path, and working directory."
-}
-
-func (t *GetStatusTool) Schema() (map[string]any, []string) {
-	return map[string]any{}, nil
+func (t *GetStatusTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name:        "get_status",
+		Description: anthropic.String("Get the current bot status including agent, session, project path, and working directory."),
+		InputSchema: anthropic.BetaToolInputSchemaParam{},
+	}
 }
 
 func (t *GetStatusTool) Call(ctx context.Context, rawInput json.RawMessage) (string, error) {
@@ -282,20 +281,20 @@ func NewChangeDirTool(executor *ToolExecutor, chatID string, updateProjectFunc f
 	return &ChangeDirTool{executor: executor, chatID: chatID, updateProjectFunc: updateProjectFunc}
 }
 
-func (t *ChangeDirTool) Name() string { return "change_workdir" }
-
-func (t *ChangeDirTool) Description() string {
-	return "Change the bound project directory. This updates both the current working directory and the persisted project path."
-}
-
-func (t *ChangeDirTool) Schema() (map[string]any, []string) {
-	props := map[string]any{
-		"path": map[string]any{
-			"type":        "string",
-			"description": "The directory path to change to (absolute or relative to current directory).",
+func (t *ChangeDirTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name:        "change_workdir",
+		Description: anthropic.String("Change the bound project directory. This updates both the current working directory and the persisted project path."),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "The directory path to change to (absolute or relative to current directory).",
+				},
+			},
+			Required: []string{"path"},
 		},
 	}
-	return props, []string{"path"}
 }
 
 type changeDirParams struct {

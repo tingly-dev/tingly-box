@@ -90,12 +90,12 @@ func makeSendFileTool(
 
 func TestSendFileTool_Name(t *testing.T) {
 	tool := makeSendFileTool(NewToolExecutor(nil), &ToolContext{})
-	assert.Equal(t, "send_file", tool.Name())
+	assert.Equal(t, "send_file", tool.Param().Name)
 }
 
 func TestSendFileTool_DescriptionMentionsFilePath(t *testing.T) {
 	tool := makeSendFileTool(NewToolExecutor(nil), &ToolContext{})
-	assert.Contains(t, strings.ToLower(tool.Description()), "file")
+	assert.Contains(t, strings.ToLower(tool.Param().Description.Value), "file")
 }
 
 func TestSendFileTool_InvalidJSON(t *testing.T) {

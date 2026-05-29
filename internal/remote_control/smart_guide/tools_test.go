@@ -27,17 +27,17 @@ func TestNewBashTool(t *testing.T) {
 	bashTool := NewBashTool(executor, allowlist)
 
 	assert.NotNil(t, bashTool)
-	assert.Equal(t, "bash", bashTool.Name())
-	assert.Contains(t, bashTool.Description(), "bash")
+	assert.Equal(t, "bash", bashTool.Param().Name)
+	assert.Contains(t, bashTool.Param().Description.Value, "bash")
 }
 
 func TestBashTool_NameDescription(t *testing.T) {
 	executor := NewToolExecutor([]string{})
 	bashTool := NewBashTool(executor, []string{})
 
-	assert.Equal(t, "bash", bashTool.Name())
-	assert.Contains(t, bashTool.Description(), "Execute bash commands")
-	assert.Contains(t, bashTool.Description(), "Allowed commands")
+	assert.Equal(t, "bash", bashTool.Param().Name)
+	assert.Contains(t, bashTool.Param().Description.Value, "Execute bash commands")
+	assert.Contains(t, bashTool.Param().Description.Value, "Allowed commands")
 }
 
 func TestBashTool_Call(t *testing.T) {
@@ -100,8 +100,8 @@ func TestNewGetStatusTool(t *testing.T) {
 	getStatusTool := NewGetStatusTool(executor, "chat-1", getStatusFunc)
 
 	assert.NotNil(t, getStatusTool)
-	assert.Equal(t, "get_status", getStatusTool.Name())
-	assert.Contains(t, getStatusTool.Description(), "Get the current bot status")
+	assert.Equal(t, "get_status", getStatusTool.Param().Name)
+	assert.Contains(t, getStatusTool.Param().Description.Value, "Get the current bot status")
 }
 
 func TestGetStatusTool_Call(t *testing.T) {
@@ -156,8 +156,8 @@ func TestNewChangeDirTool(t *testing.T) {
 	changeDirTool := NewChangeDirTool(executor, "", updateProjectFunc)
 
 	assert.NotNil(t, changeDirTool)
-	assert.Equal(t, "change_workdir", changeDirTool.Name())
-	assert.Contains(t, changeDirTool.Description(), "Change the bound project directory")
+	assert.Equal(t, "change_workdir", changeDirTool.Param().Name)
+	assert.Contains(t, changeDirTool.Param().Description.Value, "Change the bound project directory")
 }
 
 func TestChangeDirTool_Call(t *testing.T) {
@@ -234,7 +234,7 @@ func TestBuildTools(t *testing.T) {
 
 	names := make([]string, 0, len(tools))
 	for _, tl := range tools {
-		names = append(names, tl.Name())
+		names = append(names, tl.Param().Name)
 	}
 	assert.Contains(t, names, "bash")
 	assert.Contains(t, names, "get_status")
@@ -249,7 +249,7 @@ func TestBuildTools(t *testing.T) {
 	withSend := BuildTools(executor, "test-chat", getStatusFunc, updateProjectFunc, toolCtx)
 	sendNames := make([]string, 0, len(withSend))
 	for _, tl := range withSend {
-		sendNames = append(sendNames, tl.Name())
+		sendNames = append(sendNames, tl.Param().Name)
 	}
 	assert.Contains(t, sendNames, "send_file")
 }

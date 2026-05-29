@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // SendFileMaxSize is the default maximum file size for outbound file sends (50MB).
@@ -65,29 +67,11 @@ func NewSendFileToolWithLimit(executor *ToolExecutor, toolCtx *ToolContext, maxS
 	}
 }
 
-// Name returns the tool name.
-func (t *SendFileTool) Name() string {
-	return "send_file"
-}
-
-// Schema returns the JSON-schema properties and required fields.
-func (t *SendFileTool) Schema() (map[string]any, []string) {
-	props := map[string]any{
-		"file_path": map[string]any{
-			"type":        "string",
-			"description": "Path to the local file to send (absolute or relative to working directory).",
-		},
-		"caption": map[string]any{
-			"type":        "string",
-			"description": "Optional caption or message to accompany the file.",
-		},
-	}
-	return props, []string{"file_path"}
-}
-
-// Description returns the tool description.
-func (t *SendFileTool) Description() string {
-	return `Send a local file to the user via the messaging platform.
+// Param describes the send_file tool to the model.
+func (t *SendFileTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name: "send_file",
+		Description: anthropic.String(`Send a local file to the user via the messaging platform.
 
 The file path can be absolute or relative to the current working directory.
 Files inside the project path are sent directly. Files outside require explicit user approval.
@@ -95,7 +79,21 @@ Files inside the project path are sent directly. Files outside require explicit 
 Examples:
 - Send a report: file_path="output/report.pdf", caption="Here is your analysis"
 - Send a chart: file_path="chart.png"
-- Send an archive: file_path="/tmp/export.zip", caption="Exported data"`
+- Send an archive: file_path="/tmp/export.zip", caption="Exported data"`),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"file_path": map[string]any{
+					"type":        "string",
+					"description": "Path to the local file to send (absolute or relative to working directory).",
+				},
+				"caption": map[string]any{
+					"type":        "string",
+					"description": "Optional caption or message to accompany the file.",
+				},
+			},
+			Required: []string{"file_path"},
+		},
+	}
 }
 
 // Call executes the send_file tool.
