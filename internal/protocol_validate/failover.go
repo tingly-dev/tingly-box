@@ -9,172 +9,82 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
+	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
+	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
-// FailoverRoute is the handle returned by SetupFailoverRoute. It carries the
-// gateway-facing model name (use with SendWithModel) and the primary tier's
-// per-request call counter so tests can assert how many attempts hit the
-// failing upstream before falloff to the success tier.
+// Built-in failing mock IDs registered by vmodel.RegisterErrorMocks. Tests
+// pass one of these as the primary tier to drive a deterministic failure
+// without writing handler scaffolding.
+const (
+	FailMockPreContent429 = "virtual-fail-precontent-429"
+	FailMockPreContent500 = "virtual-fail-precontent-500"
+	FailMockMidStreamCut  = "virtual-fail-midstream-close"
+	FailMockMidStreamErr  = "virtual-fail-midstream-event"
+)
+
+// FailoverRoute is the handle returned by SetupFailoverRoute / SetupBothFailingRoute.
+// ModelName is the gateway-facing model (pass to SendWithModel).
+// PrimaryCallCount tracks how often the primary tier was hit. FallbackCallCount
+// is non-nil only when both tiers run through vmodel mock servers (i.e.
+// SetupBothFailingRoute); otherwise it is nil and tests must rely on content
+// discrimination for fallback assertions.
 type FailoverRoute struct {
-	ModelName        string
-	PrimaryCallCount *atomic.Int64
-	primaryServer    *httptest.Server
+	ModelName         string
+	PrimaryCallCount  *atomic.Int64
+	FallbackCallCount *atomic.Int64 // nil when fallback is env.virtual
 }
 
-// Close shuts down the primary fail server.
-func (r *FailoverRoute) Close() {
-	if r.primaryServer != nil {
-		r.primaryServer.Close()
-	}
-}
-
-// SetupFailoverRoute registers a two-tier priority failover rule:
-//   - Primary (priority=10) is a fresh httptest.Server that always responds
-//     with failStatus and a minimal JSON error body. No SSE, no body content
-//     content beyond the JSON error.
-//   - Fallback (priority=5) is env.virtual with successScenario registered.
+// SetupFailoverRoute wires a two-tier priority rule using vmodel's
+// pre-registered error mocks for the primary tier. Both tiers run inside
+// httptest servers; the primary always trips the named injection
+// (RegisterErrorMocks IDs above), the fallback serves successScenario via
+// env.virtual.
 //
-// The gateway dispatches under TacticPriority, so the primary is tried first.
-// A retryable failStatus (429/5xx) triggers gate.Discard() + fallback retry.
-//
-// Returns a FailoverRoute with ModelName (pass to SendWithModel) and a counter
-// pointing at the primary handler's atomic call count.
+// The orchestrator dispatches under TacticPriority; the primary is tried
+// first; pre-content failures are retryable; mid-stream failures commit the
+// gate (no retry). This is the single helper that covers all failover-test
+// shapes: 429/500 pre-content, mid-stream close, mid-stream event.
 func (env *TestEnv) SetupFailoverRoute(
 	t *testing.T,
 	source, target protocol.APIType,
 	successScenario Scenario,
-	failStatus int,
+	primaryFailModel string,
 ) FailoverRoute {
 	t.Helper()
 
 	env.virtual.RegisterScenario(successScenario.toVirtualServerScenario())
 
 	modelSuffix := successScenario.Name
-	if target == protocol.TypeOpenAIResponses {
+	switch target {
+	case protocol.TypeOpenAIResponses:
 		modelSuffix = successScenario.Name + "-codex"
-	} else if target == protocol.TypeOpenAIChat {
+	case protocol.TypeOpenAIChat:
 		modelSuffix = successScenario.Name + "-chat"
 	}
-	providerModel := fmt.Sprintf("virtual-model-%s", modelSuffix)
-	requestModel := fmt.Sprintf("fo-%s-to-%s-%s-%d", source, target, successScenario.Name, failStatus)
-
-	var counter atomic.Int64
-	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		counter.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(failStatus)
-		_, _ = fmt.Fprintf(w, `{"error":{"message":"simulated upstream %d","type":"upstream_error","code":"failover_test"}}`, failStatus)
-	}))
-	t.Cleanup(primaryServer.Close)
+	fallbackProviderModel := fmt.Sprintf("virtual-model-%s", modelSuffix)
+	requestModel := fmt.Sprintf("fo-%s-to-%s-%s-%s", source, target, successScenario.Name, primaryFailModel)
 
 	apiStyle := targetToAPIStyle(target)
+	primaryServer, primaryCount := startFailingProvider(t)
 
-	primaryUUID := fmt.Sprintf("virtual-primary-%s-%d", successScenario.Name, failStatus)
 	primaryAPIBase := primaryServer.URL
-	if apiStyle == protocol.APIStyleOpenAI {
-		primaryAPIBase = primaryServer.URL + "/v1"
-	}
-	_ = env.appConfig.AddProvider(&typ.Provider{
-		UUID:     primaryUUID,
-		Name:     primaryUUID,
-		APIBase:  primaryAPIBase,
-		APIStyle: apiStyle,
-		Token:    "primary-token",
-		Enabled:  true,
-		Timeout:  int64(constant.DefaultRequestTimeout),
-	})
-
-	fallbackUUID := fmt.Sprintf("virtual-fallback-%s-%d", successScenario.Name, failStatus)
 	fallbackAPIBase := env.virtual.URL()
 	if apiStyle == protocol.APIStyleOpenAI {
+		primaryAPIBase = primaryServer.URL + "/v1"
 		fallbackAPIBase = env.virtual.URL() + "/v1"
 	}
-	_ = env.appConfig.AddProvider(&typ.Provider{
-		UUID:     fallbackUUID,
-		Name:     fallbackUUID,
-		APIBase:  fallbackAPIBase,
-		APIStyle: apiStyle,
-		Token:    "fallback-token",
-		Enabled:  true,
-		Timeout:  int64(constant.DefaultRequestTimeout),
-	})
 
-	rule := typ.Rule{
-		UUID:          requestModel,
-		Scenario:      sourceToRuleScenario(source),
-		RequestModel:  requestModel,
-		ResponseModel: providerModel,
-		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: providerModel, Weight: 1, Active: true, Priority: 10, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: providerModel, Weight: 1, Active: true, Priority: 5, TimeWindow: 300},
-		},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticPriority,
-			Params: &typ.PriorityParams{WithinTierTactic: loadbalance.TacticRandom},
-		},
-		Active: true,
-	}
-	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
-
-	return FailoverRoute{
-		ModelName:        requestModel,
-		PrimaryCallCount: &counter,
-		primaryServer:    primaryServer,
-	}
-}
-
-// CustomFailoverRoute lets a test wire arbitrary http.Handlers as both tiers of
-// a priority rule. Used for mid-stream-failure and all-tiers-fail tests where
-// the canned SetupFailoverRoute behavior doesn't fit.
-type CustomFailoverRoute struct {
-	ModelName        string
-	PrimaryCallCount *atomic.Int64
-	FallbackCallCount *atomic.Int64
-}
-
-// SetupCustomFailoverRoute registers a two-tier priority rule with caller-
-// supplied http.Handlers. Both handlers are wrapped to increment a counter
-// each call. Both servers receive cleanup via t.Cleanup.
-func (env *TestEnv) SetupCustomFailoverRoute(
-	t *testing.T,
-	source, target protocol.APIType,
-	primaryHandler, fallbackHandler http.Handler,
-	scenarioName string,
-) CustomFailoverRoute {
-	t.Helper()
-
-	var primaryCount, fallbackCount atomic.Int64
-
-	primaryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		primaryCount.Add(1)
-		primaryHandler.ServeHTTP(w, r)
-	}))
-	t.Cleanup(primaryServer.Close)
-
-	fallbackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fallbackCount.Add(1)
-		fallbackHandler.ServeHTTP(w, r)
-	}))
-	t.Cleanup(fallbackServer.Close)
-
-	apiStyle := targetToAPIStyle(target)
-	providerModel := fmt.Sprintf("virtual-model-%s", scenarioName)
-	requestModel := fmt.Sprintf("fo-custom-%s-to-%s-%s", source, target, scenarioName)
-
-	primaryAPIBase := primaryServer.URL
-	fallbackAPIBase := fallbackServer.URL
-	if apiStyle == protocol.APIStyleOpenAI {
-		primaryAPIBase = primaryServer.URL + "/v1"
-		fallbackAPIBase = fallbackServer.URL + "/v1"
-	}
-
-	primaryUUID := "virtual-custom-primary-" + scenarioName
-	fallbackUUID := "virtual-custom-fallback-" + scenarioName
+	primaryUUID := fmt.Sprintf("virtual-primary-%s-%s", successScenario.Name, primaryFailModel)
+	fallbackUUID := fmt.Sprintf("virtual-fallback-%s-%s", successScenario.Name, primaryFailModel)
 
 	_ = env.appConfig.AddProvider(&typ.Provider{
 		UUID: primaryUUID, Name: primaryUUID, APIBase: primaryAPIBase, APIStyle: apiStyle,
@@ -189,10 +99,10 @@ func (env *TestEnv) SetupCustomFailoverRoute(
 		UUID:          requestModel,
 		Scenario:      sourceToRuleScenario(source),
 		RequestModel:  requestModel,
-		ResponseModel: providerModel,
+		ResponseModel: fallbackProviderModel,
 		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: providerModel, Weight: 1, Active: true, Priority: 10, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: providerModel, Weight: 1, Active: true, Priority: 5, TimeWindow: 300},
+			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Priority: 10, TimeWindow: 300},
+			{Provider: fallbackUUID, Model: fallbackProviderModel, Weight: 1, Active: true, Priority: 5, TimeWindow: 300},
 		},
 		LBTactic: typ.Tactic{
 			Type:   loadbalance.TacticPriority,
@@ -202,11 +112,94 @@ func (env *TestEnv) SetupCustomFailoverRoute(
 	}
 	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 
-	return CustomFailoverRoute{
-		ModelName:         requestModel,
-		PrimaryCallCount:  &primaryCount,
-		FallbackCallCount: &fallbackCount,
+	return FailoverRoute{
+		ModelName:        requestModel,
+		PrimaryCallCount: primaryCount,
 	}
+}
+
+// SetupBothFailingRoute wires a two-tier rule where BOTH tiers trip the same
+// pre-content injection. Used for the all-tiers-fail test: client must see a
+// non-200 once the orchestrator exhausts its budget.
+func (env *TestEnv) SetupBothFailingRoute(
+	t *testing.T,
+	source, target protocol.APIType,
+	failModel string,
+) FailoverRoute {
+	t.Helper()
+
+	apiStyle := targetToAPIStyle(target)
+	primaryServer, primaryCount := startFailingProvider(t)
+	fallbackServer, fallbackCount := startFailingProvider(t)
+
+	primaryAPIBase := primaryServer.URL
+	fallbackAPIBase := fallbackServer.URL
+	if apiStyle == protocol.APIStyleOpenAI {
+		primaryAPIBase = primaryServer.URL + "/v1"
+		fallbackAPIBase = fallbackServer.URL + "/v1"
+	}
+
+	primaryUUID := "virtual-both-fail-primary-" + failModel
+	fallbackUUID := "virtual-both-fail-fallback-" + failModel
+	requestModel := "fo-both-fail-" + failModel
+
+	_ = env.appConfig.AddProvider(&typ.Provider{
+		UUID: primaryUUID, Name: primaryUUID, APIBase: primaryAPIBase, APIStyle: apiStyle,
+		Token: "primary-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+	})
+	_ = env.appConfig.AddProvider(&typ.Provider{
+		UUID: fallbackUUID, Name: fallbackUUID, APIBase: fallbackAPIBase, APIStyle: apiStyle,
+		Token: "fallback-token", Enabled: true, Timeout: int64(constant.DefaultRequestTimeout),
+	})
+
+	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(typ.Rule{
+		UUID:          requestModel,
+		Scenario:      sourceToRuleScenario(source),
+		RequestModel:  requestModel,
+		ResponseModel: failModel,
+		Services: []*loadbalance.Service{
+			{Provider: primaryUUID, Model: failModel, Weight: 1, Active: true, Priority: 10, TimeWindow: 300},
+			{Provider: fallbackUUID, Model: failModel, Weight: 1, Active: true, Priority: 5, TimeWindow: 300},
+		},
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticPriority,
+			Params: &typ.PriorityParams{WithinTierTactic: loadbalance.TacticRandom},
+		},
+		Active: true,
+	})
+
+	return FailoverRoute{
+		ModelName:         requestModel,
+		PrimaryCallCount:  primaryCount,
+		FallbackCallCount: fallbackCount,
+	}
+}
+
+// startFailingProvider spins up a vmodel-backed httptest.Server with both
+// per-protocol registries populated by RegisterErrorMocks, wrapped with a
+// per-request counter. Caller selects the desired failure shape via the
+// Service.Model field on the rule (e.g. virtual-fail-precontent-429). Both
+// registries are populated, so the same server serves either OpenAI Chat or
+// Anthropic Messages depending on the route the gateway picks.
+func startFailingProvider(t *testing.T) (*httptest.Server, *atomic.Int64) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	svc := virtualserver.NewService()
+	openaivm.RegisterErrorMocks(svc.GetOpenAIRegistry())
+	anthropicvm.RegisterErrorMocks(svc.GetAnthropicRegistry())
+
+	var count atomic.Int64
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		count.Add(1)
+		c.Next()
+	})
+	svc.SetupRoutes(engine.Group("/v1"))
+
+	srv := httptest.NewServer(engine)
+	t.Cleanup(srv.Close)
+	return srv, &count
 }
 
 // SendWithModel sends a request using an explicit model name (bypassing the

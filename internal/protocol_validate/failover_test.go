@@ -4,8 +4,6 @@
 package protocol_validate_test
 
 import (
-	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +20,7 @@ func TestFailover_Nonstream_429_RetriesAndSucceeds(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
 
-	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.TextScenario(), http.StatusTooManyRequests)
+	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.TextScenario(), pt.FailMockPreContent429)
 
 	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, false)
 
@@ -31,13 +29,12 @@ func TestFailover_Nonstream_429_RetriesAndSucceeds(t *testing.T) {
 	assert.NotEmpty(t, result.Content, "fallback must produce real content")
 }
 
-// TestFailover_Nonstream_500_RetriesAndSucceeds is the symmetric 5xx case;
-// retryableUpstreamStatuses includes 500 so this exercises the same path.
+// TestFailover_Nonstream_500_RetriesAndSucceeds is the symmetric 5xx case.
 func TestFailover_Nonstream_500_RetriesAndSucceeds(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
 
-	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.TextScenario(), http.StatusInternalServerError)
+	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.TextScenario(), pt.FailMockPreContent500)
 
 	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, false)
 
@@ -56,7 +53,7 @@ func TestFailover_Stream_PreContent_429_RetriesAndSucceeds(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
 
-	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.StreamingTextScenario(), http.StatusTooManyRequests)
+	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.StreamingTextScenario(), pt.FailMockPreContent429)
 
 	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, true)
 
@@ -66,13 +63,12 @@ func TestFailover_Stream_PreContent_429_RetriesAndSucceeds(t *testing.T) {
 }
 
 // TestFailover_Stream_PreContent_500_RetriesAndSucceeds — same shape but
-// against a 500. 500 is in retryableUpstreamStatuses specifically because
-// SendStreamingError emits 500 for pre-stream errors.
+// against a 500.
 func TestFailover_Stream_PreContent_500_RetriesAndSucceeds(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
 
-	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.StreamingTextScenario(), http.StatusInternalServerError)
+	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.StreamingTextScenario(), pt.FailMockPreContent500)
 
 	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, true)
 
@@ -89,13 +85,7 @@ func TestFailover_AllTiersFail_ClientSeesLastError(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
 
-	failHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = fmt.Fprint(w, `{"error":{"message":"all tiers down","type":"upstream_error","code":"failover_test"}}`)
-	})
-
-	route := env.SetupCustomFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, failHandler, failHandler, "all-fail")
+	route := env.SetupBothFailingRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.FailMockPreContent429)
 
 	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, false)
 
@@ -106,55 +96,28 @@ func TestFailover_AllTiersFail_ClientSeesLastError(t *testing.T) {
 
 // TestFailover_MidStream_NoRetry_GateCommitted is the critical safety guarantee:
 // once CommitFirstChunk has flushed the first real chunk to the wire, retry is
-// impossible. The primary sends one valid SSE delta, flushes, then hijacks and
-// closes the TCP connection. The gateway has already passed the first chunk
-// through — gate.Committed() is true. The orchestrator must observe this and
-// NOT retry the fallback.
+// impossible. The primary emits a real chunk then closes the connection mid
+// stream (vmodel's virtual-fail-midstream-close mock). The gateway has already
+// passed the first chunk through — gate.Committed() is true. The orchestrator
+// must observe this and NOT retry the fallback. We verify by content
+// discrimination: the primary mock's content is fixed and distinct from the
+// fallback scenario's content.
 func TestFailover_MidStream_NoRetry_GateCommitted(t *testing.T) {
 	env := pt.NewTestEnv(t)
 	defer env.Close()
 
-	midstreamFailHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.WriteHeader(http.StatusOK)
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			return
-		}
-		_, _ = fmt.Fprint(w,
-			"data: {\"id\":\"chatcmpl-x\",\"object\":\"chat.completion.chunk\","+
-				"\"created\":1,\"model\":\"gpt-4o\","+
-				"\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":null}]}\n\n")
-		flusher.Flush()
-		hj, ok := w.(http.Hijacker)
-		if !ok {
-			return
-		}
-		conn, _, err := hj.Hijack()
-		if err != nil {
-			return
-		}
-		_ = conn.Close()
-	})
-
-	// Fallback handler — should NOT be invoked because the gate committed
-	// on the primary's first chunk.
-	fallbackHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "data: {\"id\":\"FALLBACK\",\"choices\":[]}\n\n")
-		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
-	})
-
-	route := env.SetupCustomFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, midstreamFailHandler, fallbackHandler, "mid-stream")
+	route := env.SetupFailoverRoute(t, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, pt.StreamingTextScenario(), pt.FailMockMidStreamCut)
 
 	result := env.SendWithModel(t, protocol.TypeOpenAIChat, route.ModelName, true)
 
 	require.Equal(t, 200, result.HTTPStatus, "first chunk committed → client sees 200")
 	assert.Equal(t, int64(1), route.PrimaryCallCount.Load(), "primary attempted once")
-	assert.Equal(t, int64(0), route.FallbackCallCount.Load(), "fallback MUST NOT be retried after gate commit")
-	assert.NotEmpty(t, result.StreamEvents, "client must have received the committed first chunk")
+	require.NotEmpty(t, result.StreamEvents, "client must have received the committed first chunk")
+	// Primary mock's content starts with "hello world" (see vmodel.ErrorMockSpecs).
+	// Fallback's StreamingTextScenario emits a different known string. If the
+	// client received primary's content, fallback was not retried — gate stayed
+	// committed.
+	assert.Contains(t, result.Content, "hello world", "client must see primary's truncated content, not fallback's")
 }
 
 // TestFailover_SingleService_Bypass — single-service rules bypass the gate
