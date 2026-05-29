@@ -20,6 +20,15 @@ type TextDeltaEvent struct {
 	Text  string
 }
 
+// ThinkingDeltaEvent carries an extended-thinking content chunk. The
+// virtualserver renders it as a thinking content block (content_block_start of
+// type "thinking" followed by thinking_delta), which the official SDK
+// accumulates into a ThinkingBlock.
+type ThinkingDeltaEvent struct {
+	Index    int
+	Thinking string
+}
+
 // ToolUseEvent carries a complete tool_use block.
 type ToolUseEvent struct {
 	Index int
