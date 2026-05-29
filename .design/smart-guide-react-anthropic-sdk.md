@@ -14,6 +14,19 @@ hand-rolled ReAct loop on the **official** `github.com/anthropics/anthropic-sdk-
 change; the bot-layer contract is preserved so behavior, session semantics, and
 UX are unchanged.
 
+## Anthropic-first simplifications (decided)
+
+We are anthropic-first, so **skip all provider-compat layers**:
+- No provider abstraction, no OpenAI/Gemini format conversion.
+- Session store persists **native `anthropic.MessageParam`** directly (via the
+  SDK's `Message.ToParam()` and `Message.Accumulate(event)`), instead of a
+  neutral `StoredMessage` type. This supersedes "section 4" below.
+- Local SDK is `tingly-dev/anthropic-sdk-go` **v1.45.0** (submodule under
+  `libs/anthropic-sdk-go`, wired via the existing `replace` in root `go.mod`;
+  the `v1.37.0` require line is overridden by the replace). Confirmed APIs:
+  `Messages.NewStreaming`, `(*Message).Accumulate`, `Message.ToParam`,
+  `MessageParam`, `ToolUnionParam`, `ToolParam`, `ToolResultBlock`.
+
 ## Constraints / invariants (do not change)
 
 - Public surface of `internal/remote_control/smart_guide/` stays compatible:
