@@ -343,6 +343,7 @@ func TestExecuteWithHandler_HistoryContinuity(t *testing.T) {
 // optional leading text, plus an optional tool call. A turn with a tool call is
 // not the final turn; a turn without one ends the exchange.
 type turnScript struct {
+	thinking string
 	text     string
 	toolName string
 	toolArgs map[string]any
@@ -382,6 +383,9 @@ func (m *multiTurnModel) HandleAnthropic(req *protocol.AnthropicBetaMessagesRequ
 	}
 	ts := m.turns[idx]
 	var content []sdk.BetaContentBlockParamUnion
+	if ts.thinking != "" {
+		content = append(content, sdk.BetaContentBlockParamUnion{OfThinking: &sdk.BetaThinkingBlockParam{Thinking: ts.thinking}})
+	}
 	if ts.text != "" {
 		content = append(content, sdk.BetaContentBlockParamUnion{OfText: &sdk.BetaTextBlockParam{Text: ts.text}})
 	}
@@ -404,6 +408,8 @@ func (m *multiTurnModel) HandleAnthropicStream(req *protocol.AnthropicBetaMessag
 	emit(anthropicvm.StreamStartEvent{MsgID: "msg_mt", Model: m.id})
 	for i, blk := range resp.Content {
 		switch {
+		case blk.OfThinking != nil:
+			emit(anthropicvm.ThinkingDeltaEvent{Index: i, Thinking: blk.OfThinking.Thinking})
 		case blk.OfText != nil:
 			emit(anthropicvm.TextDeltaEvent{Index: i, Text: blk.OfText.Text})
 		case blk.OfToolUse != nil:
@@ -441,4 +447,35 @@ func TestExecuteWithHandler_MultiTurnTextNotLost(t *testing.T) {
 	joined := handler.joinedText()
 	assert.Contains(t, joined, "Let me check that for you.", "intermediate-turn text was lost")
 	assert.Contains(t, joined, "All done — here is the answer.", "final-turn text was lost")
+}
+
+// TestExecuteWithHandler_ThinkingSurfacesWhenNoText is the end-to-end test for
+// the thinking fallback: when a turn produces only a thinking block (no text)
+// the user must still see something. Here the intermediate turn is thinking +
+// tool, and the final turn is thinking only — neither has a text block, so
+// without the fallback the user would receive nothing at all.
+func TestExecuteWithHandler_ThinkingSurfacesWhenNoText(t *testing.T) {
+	const model = "thinking-only"
+	mt := newMultiTurnModel(model,
+		turnScript{thinking: "I should look this up first.", toolName: "lookup", toolArgs: map[string]any{"q": "x"}},
+		turnScript{thinking: "Based on the result, the answer is 42."},
+	)
+	baseURL := newVModelServer(t, mt)
+
+	tool := &recordingTool{name: "lookup"}
+	agent := newTestAgent(t, baseURL, model, &AgentConfig{ChatID: "think1"})
+	rebuildEngineWithTools(t, agent, baseURL, model, tool)
+
+	handler := &recordingHandler{}
+	res, err := agent.ExecuteWithHandler(context.Background(), "answer me", &ToolContext{ChatID: "think1"}, handler)
+	require.NoError(t, err)
+	assert.True(t, res.IsSuccess())
+	assert.Equal(t, 1, tool.called, "tool should have run once")
+
+	// Both turns' thinking surfaced to the user even though neither had text.
+	joined := handler.joinedText()
+	assert.Contains(t, joined, "I should look this up first.", "intermediate thinking was lost")
+	assert.Contains(t, joined, "Based on the result, the answer is 42.", "final thinking was lost")
+	// The final response is the thinking fallback, not empty.
+	assert.Contains(t, res.Output, "the answer is 42")
 }
