@@ -1537,6 +1537,7 @@ export const handlers = [
                 status: isError ? 'error' : 'success',
                 error_code: isError ? 'rate_limit_exceeded' : '',
                 latency_ms: latency,
+                ttft_ms: (m.streamed && !isError) ? Math.round(latency * (0.05 + Math.random() * 0.15)) : 0,
                 streamed: m.streamed && !isError,
             }
         }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())

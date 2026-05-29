@@ -54,6 +54,7 @@ export interface UsageRecord {
     status: string;
     error_code?: string;
     latency_ms: number;
+    ttft_ms?: number;
     streamed: boolean;
 }
 
@@ -196,21 +197,40 @@ function HistoTooltip({ active, payload, label }: any) {
 function LatencyHistogram({ records }: { records: UsageRecord[] }) {
     const theme = useTheme();
     const chartStyles = getThemeChartStyles(theme);
+    const [metric, setMetric] = useState<'latency' | 'ttft'>('latency');
+
+    const getValue = (r: UsageRecord) => metric === 'latency' ? r.latency_ms : (r.ttft_ms ?? 0);
+    // TTFT is only meaningful for streamed requests
+    const pool = metric === 'ttft' ? records.filter(r => r.streamed && (r.ttft_ms ?? 0) > 0) : records;
 
     const histData = LATENCY_BUCKETS.map(b => ({
         label: b.label,
-        success: records.filter(r => r.latency_ms >= b.min && r.latency_ms < b.max && r.status === 'success').length,
-        error:   records.filter(r => r.latency_ms >= b.min && r.latency_ms < b.max && r.status !== 'success').length,
+        success: pool.filter(r => getValue(r) >= b.min && getValue(r) < b.max && r.status === 'success').length,
+        error:   pool.filter(r => getValue(r) >= b.min && getValue(r) < b.max && r.status !== 'success').length,
     }));
 
-    const hasData = records.length > 0;
+    const hasData = pool.length > 0;
 
     return (
         <Paper elevation={0} sx={{ p: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, backgroundColor: 'background.paper', boxShadow: 'none' }}>
-            <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', mb: 2 }}>Latency Distribution</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                    {metric === 'latency' ? 'Latency' : 'TTFT'} Distribution
+                </Typography>
+                <ToggleButtonGroup
+                    value={metric} exclusive size="small"
+                    onChange={(_, v) => v && setMetric(v)}
+                    sx={{ '& .MuiToggleButton-root': { px: 1.25, py: 0.25, fontSize: '0.7rem', textTransform: 'none' } }}
+                >
+                    <ToggleButton value="latency">Latency</ToggleButton>
+                    <ToggleButton value="ttft">TTFT</ToggleButton>
+                </ToggleButtonGroup>
+            </Box>
             {!hasData ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 140 }}>
-                    <Typography variant="caption" color="text.disabled">No data</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 140, gap: 0.5 }}>
+                    <Typography variant="caption" color="text.disabled">
+                        {metric === 'ttft' ? 'No TTFT data — backend field not yet exposed' : 'No data'}
+                    </Typography>
                 </Box>
             ) : (
                 <ResponsiveContainer width="100%" height={140}>
@@ -299,6 +319,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                             <TableCell align="right">Output</TableCell>
                             <TableCell align="right">Cache</TableCell>
                             <TableCell align="right">Latency</TableCell>
+                            <TableCell align="right">TTFT</TableCell>
                             <TableCell align="center">Status</TableCell>
                             <TableCell align="center">Stream</TableCell>
                         </TableRow>
@@ -306,7 +327,7 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                     <TableBody>
                         {records.length === 0 && !loading ? (
                             <TableRow>
-                                <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                                <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
                                     <Typography variant="body2" color="text.secondary">No requests found</Typography>
                                     <Typography variant="caption" color="text.disabled">Try changing the status filter</Typography>
                                 </TableCell>
@@ -362,6 +383,13 @@ function RequestTable({ records, total, page, rowsPerPage, statusFilter, loading
                                 <TableCell align="right">
                                     <Typography sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: r.latency_ms > 0 ? getLatencyColor(r.latency_ms, theme) : 'text.disabled' }}>
                                         {r.latency_ms > 0 ? fmtLatency(r.latency_ms) : '-'}
+                                    </Typography>
+                                </TableCell>
+
+                                {/* TTFT */}
+                                <TableCell align="right">
+                                    <Typography sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: (r.ttft_ms ?? 0) > 0 ? getLatencyColor(r.ttft_ms!, theme) : 'text.disabled' }}>
+                                        {(r.ttft_ms ?? 0) > 0 ? fmtLatency(r.ttft_ms!) : '-'}
                                     </Typography>
                                 </TableCell>
 
