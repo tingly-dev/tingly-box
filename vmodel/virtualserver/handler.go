@@ -235,7 +235,10 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 		// accumulator rejects a delta that arrives without a preceding start.
 		startedBlocks := map[int]bool{}
 		var startOrder []int
-		startTextBlock := func(index int) {
+		// startBlock emits a content_block_start for a text/thinking block once
+		// per index; the given content_block payload seeds the block (e.g. empty
+		// text or empty thinking) before its deltas arrive.
+		startBlock := func(index int, contentBlock map[string]interface{}) {
 			if startedBlocks[index] {
 				return
 			}
@@ -244,9 +247,15 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 			data, _ := json.Marshal(map[string]interface{}{
 				"type":          "content_block_start",
 				"index":         index,
-				"content_block": map[string]interface{}{"type": "text", "text": ""},
+				"content_block": contentBlock,
 			})
 			fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", data)
+		}
+		startTextBlock := func(index int) {
+			startBlock(index, map[string]interface{}{"type": "text", "text": ""})
+		}
+		startThinkingBlock := func(index int) {
+			startBlock(index, map[string]interface{}{"type": "thinking", "thinking": ""})
 		}
 		stopAllBlocks := func() {
 			for _, index := range startOrder {
@@ -285,6 +294,14 @@ func (h *Handler) handleAnthropicStreaming(c *gin.Context, req *AnthropicMessage
 					Type:  "content_block_delta",
 					Index: e.Index,
 					Delta: &AnthropicDelta{Type: "text_delta", Text: e.Text},
+				})
+				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
+			case anthropicvm.ThinkingDeltaEvent:
+				startThinkingBlock(e.Index)
+				data, _ := json.Marshal(AnthropicStreamEvent{
+					Type:  "content_block_delta",
+					Index: e.Index,
+					Delta: &AnthropicDelta{Type: "thinking_delta", Thinking: e.Thinking},
 				})
 				fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
 			case anthropicvm.ToolUseEvent:

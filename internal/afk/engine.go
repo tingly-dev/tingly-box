@@ -281,12 +281,26 @@ func (e *Engine) streamTurn(
 	// string), so text/tool_use ordering and block boundaries come from the SDK.
 	turnText := messageText(msg)
 
+	// Fall back to the thinking text when a turn produced no visible text. With
+	// extended thinking the model may put its only prose in a thinking block and
+	// then go straight to a tool call (or end); without this fallback the user
+	// would see nothing at all. Real text always wins over thinking.
+	usedThinking := false
+	if turnText == "" {
+		if think := messageThinking(msg); think != "" {
+			turnText = think
+			usedThinking = true
+		}
+	}
+
 	logrus.WithFields(logrus.Fields{
-		"model":       e.model,
-		"stop_reason": msg.StopReason,
-		"text_len":    len(turnText),
-		"text_blocks": countBlocks(msg, "text"),
-		"tool_uses":   len(toolUseBlocks(msg)),
+		"model":           e.model,
+		"stop_reason":     msg.StopReason,
+		"text_len":        len(turnText),
+		"text_blocks":     countBlocks(msg, "text"),
+		"thinking_blocks": countBlocks(msg, "thinking"),
+		"used_thinking":   usedThinking,
+		"tool_uses":       len(toolUseBlocks(msg)),
 	}).Debug("afk engine: assistant turn complete")
 
 	// Aggregated mode: emit the whole turn's text once, after the stream ends.
@@ -384,6 +398,20 @@ func messageText(msg anthropic.Message) string {
 	for _, block := range msg.Content {
 		if block.Type == "text" {
 			b.WriteString(block.Text)
+		}
+	}
+	return b.String()
+}
+
+// messageThinking concatenates the thinking text of all thinking blocks in an
+// SDK-accumulated message. Read from the union's .Thinking field directly, for
+// the same reason as messageText: AsAny().(ThinkingBlock) reparses the block's
+// original JSON and would miss delta-accumulated thinking text.
+func messageThinking(msg anthropic.Message) string {
+	var b strings.Builder
+	for _, block := range msg.Content {
+		if block.Type == "thinking" {
+			b.WriteString(block.Thinking)
 		}
 	}
 	return b.String()
