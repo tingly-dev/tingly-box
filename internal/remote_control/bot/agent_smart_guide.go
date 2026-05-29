@@ -36,8 +36,8 @@ func (e *SmartGuideExecutor) Execute(ctx context.Context, req PreparedRequest) (
 	// Get current bot settings (dynamic lookup for latest config)
 	botSetting := e.deps.GetBotSettingOrCache()
 
-	// 1. Load conversation history (native Anthropic params) from session store
-	var messages []anthropic.MessageParam
+	// 1. Load conversation history (native Anthropic beta params) from session store
+	var messages []anthropic.BetaMessageParam
 	if e.deps.TBSessionStore != nil {
 		msgs, err := e.deps.TBSessionStore.Load(req.HCtx.ChatID)
 		if err != nil {

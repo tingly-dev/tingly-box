@@ -40,7 +40,7 @@ func (s *SessionStore) path(chatID string) string {
 // Load returns the stored history for a chat, or an empty slice if none exists.
 // A corrupt or unreadable file is treated as empty (logged, not fatal) so a
 // single bad session never blocks the user.
-func (s *SessionStore) Load(chatID string) ([]anthropic.MessageParam, error) {
+func (s *SessionStore) Load(chatID string) ([]anthropic.BetaMessageParam, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -56,7 +56,7 @@ func (s *SessionStore) Load(chatID string) ([]anthropic.MessageParam, error) {
 		return nil, nil
 	}
 
-	var msgs []anthropic.MessageParam
+	var msgs []anthropic.BetaMessageParam
 	if err := json.Unmarshal(data, &msgs); err != nil {
 		logrus.WithError(err).WithField("chatID", chatID).Warn("SmartGuide session deserialize failed, treating as empty")
 		return nil, nil
@@ -65,7 +65,7 @@ func (s *SessionStore) Load(chatID string) ([]anthropic.MessageParam, error) {
 }
 
 // Save overwrites the stored history for a chat.
-func (s *SessionStore) Save(chatID string, messages []anthropic.MessageParam) error {
+func (s *SessionStore) Save(chatID string, messages []anthropic.BetaMessageParam) error {
 	if s == nil {
 		return nil
 	}

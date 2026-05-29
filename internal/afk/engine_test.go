@@ -152,8 +152,8 @@ func TestEngineRun_PlainText(t *testing.T) {
 
 	// user message + 1 assistant message
 	require.Len(t, msgs, 2)
-	assert.Equal(t, anthropic.MessageParamRoleUser, msgs[0].Role)
-	assert.Equal(t, anthropic.MessageParamRoleAssistant, msgs[1].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleUser, msgs[0].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, msgs[1].Role)
 }
 
 // TestEngineRun_PlainText_Streaming covers the opt-in StreamText mode where each
@@ -224,12 +224,12 @@ func TestEngineRun_ToolCall(t *testing.T) {
 
 	// messages: user, assistant(tool_use), user(tool_result), assistant(text)
 	require.Len(t, msgs, 4)
-	assert.Equal(t, anthropic.MessageParamRoleUser, msgs[0].Role)
-	assert.Equal(t, anthropic.MessageParamRoleAssistant, msgs[1].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleUser, msgs[0].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, msgs[1].Role)
 	require.NotNil(t, msgs[1].Content[0].OfToolUse, "second message should carry a tool_use block")
-	assert.Equal(t, anthropic.MessageParamRoleUser, msgs[2].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleUser, msgs[2].Role)
 	require.NotNil(t, msgs[2].Content[0].OfToolResult, "third message should carry a tool_result block")
-	assert.Equal(t, anthropic.MessageParamRoleAssistant, msgs[3].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, msgs[3].Role)
 	require.NotNil(t, msgs[3].Content[0].OfText, "fourth message should carry a text block")
 }
 
