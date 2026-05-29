@@ -177,6 +177,14 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 	}
 
+	// When thinking is disabled, drop any clear_thinking_20251015 context-management
+	// edit. Anthropic rejects that edit unless thinking is enabled or adaptive
+	// ("clear_thinking_20251015 requires `thinking` to be enabled or adaptive"), and
+	// newer Claude Code clients send it alongside requests where we force thinking off.
+	if req.Thinking.OfDisabled != nil {
+		stripBetaClearThinkingEdit(req)
+	}
+
 	// Remap tool names to Claude Code TitleCase equivalents to avoid Anthropic fingerprinting
 	reverseMap := remapBetaToolNames(req.Tools)
 
@@ -337,6 +345,26 @@ func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, t
 
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages", true), nil
+}
+
+// stripBetaClearThinkingEdit removes any clear_thinking_20251015 context-management
+// edit from the request. The Anthropic API rejects this edit type when thinking is not
+// enabled or adaptive, so it must be dropped whenever thinking is disabled — otherwise
+// Claude Code OAuth traffic that ships the edit (while we force thinking off) fails with
+// "clear_thinking_20251015 requires `thinking` to be enabled or adaptive".
+func stripBetaClearThinkingEdit(req *anthropic.BetaMessageNewParams) {
+	edits := req.ContextManagement.Edits
+	if len(edits) == 0 {
+		return
+	}
+	filtered := make([]anthropic.BetaContextManagementConfigEditUnionParam, 0, len(edits))
+	for _, edit := range edits {
+		if edit.OfClearThinking20251015 != nil {
+			continue
+		}
+		filtered = append(filtered, edit)
+	}
+	req.ContextManagement.Edits = filtered
 }
 
 // remapToolNames renames OfTool tools in-place using oauthToolRenameMap.

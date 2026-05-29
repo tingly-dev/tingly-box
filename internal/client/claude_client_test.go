@@ -319,6 +319,58 @@ func TestGuardBeta_PreservesExistingThinking(t *testing.T) {
 	assert.NotNil(t, base)
 }
 
+func TestGuardBeta_StripsClearThinkingEditWhenThinkingDisabled(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	req := &anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model("claude-sonnet-4-6"),
+		MaxTokens: 512,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+	}
+	req.Metadata.UserID = param.NewOpt(userID)
+	// Thinking unset → GuardBeta forces it disabled. The clear_thinking edit must be dropped
+	// to avoid "clear_thinking_20251015 requires `thinking` to be enabled or adaptive".
+	req.ContextManagement.Edits = []anthropic.BetaContextManagementConfigEditUnionParam{
+		{OfClearToolUses20250919: &anthropic.BetaClearToolUses20250919EditParam{}},
+		{OfClearThinking20251015: &anthropic.BetaClearThinking20251015EditParam{}},
+	}
+
+	base, _ := c.GuardBeta(context.Background(), req)
+	assert.NotNil(t, req.Thinking.OfDisabled)
+	require.Len(t, req.ContextManagement.Edits, 1, "clear_thinking edit should be removed")
+	assert.NotNil(t, req.ContextManagement.Edits[0].OfClearToolUses20250919, "other edits must be preserved")
+	assert.NotNil(t, base)
+}
+
+func TestGuardBeta_KeepsClearThinkingEditWhenThinkingEnabled(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	req := &anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model("claude-sonnet-4-6"),
+		MaxTokens: 512,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+	}
+	req.Metadata.UserID = param.NewOpt(userID)
+	req.Thinking = anthropic.BetaThinkingConfigParamUnion{
+		OfEnabled: &anthropic.BetaThinkingConfigEnabledParam{BudgetTokens: 500},
+	}
+	req.ContextManagement.Edits = []anthropic.BetaContextManagementConfigEditUnionParam{
+		{OfClearThinking20251015: &anthropic.BetaClearThinking20251015EditParam{}},
+	}
+
+	base, _ := c.GuardBeta(context.Background(), req)
+	assert.NotNil(t, req.Thinking.OfEnabled)
+	require.Len(t, req.ContextManagement.Edits, 1, "clear_thinking edit must be kept when thinking is enabled")
+	assert.NotNil(t, req.ContextManagement.Edits[0].OfClearThinking20251015)
+	assert.NotNil(t, base)
+}
+
 // ===================================================================
 // Guard — tool remapping
 // ===================================================================
