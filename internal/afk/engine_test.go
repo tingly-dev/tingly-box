@@ -146,13 +146,40 @@ func TestEngineRun_PlainText(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "Hello, world!", finalText)
-	assert.Equal(t, "Hello, world!", sink.joinedText(), "concatenated stream fragments should equal final text")
-	assert.Equal(t, frags, sink.textFrags, "each fragment should arrive as its own OnText call")
+	assert.Equal(t, "Hello, world!", sink.joinedText(), "aggregated text should equal final text")
+	// Default (aggregated) mode: the whole turn arrives as a single OnText call.
+	assert.Equal(t, []string{"Hello, world!"}, sink.textFrags, "aggregated mode should emit one OnText per turn")
 
 	// user message + 1 assistant message
 	require.Len(t, msgs, 2)
 	assert.Equal(t, anthropic.MessageParamRoleUser, msgs[0].Role)
 	assert.Equal(t, anthropic.MessageParamRoleAssistant, msgs[1].Role)
+}
+
+// TestEngineRun_PlainText_Streaming covers the opt-in StreamText mode where each
+// text fragment is delivered as its own OnText call.
+func TestEngineRun_PlainText_Streaming(t *testing.T) {
+	frags := []string{"Hello", ", ", "world!"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeSSE(t, w, textResponse(frags...))
+	}))
+	defer srv.Close()
+
+	eng, err := NewEngine(Config{
+		BaseURL:    srv.URL,
+		APIKey:     "dummy-key",
+		Model:      "dummy-model",
+		StreamText: true,
+	})
+	require.NoError(t, err)
+
+	sink := &recordingSink{}
+	_, finalText, err := eng.Run(context.Background(), nil, "hi there", sink)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Hello, world!", finalText)
+	assert.Equal(t, "Hello, world!", sink.joinedText(), "concatenated stream fragments should equal final text")
+	assert.Equal(t, frags, sink.textFrags, "streaming mode should emit each fragment as its own OnText call")
 }
 
 func TestEngineRun_ToolCall(t *testing.T) {
