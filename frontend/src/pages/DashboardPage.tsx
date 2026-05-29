@@ -27,7 +27,7 @@ import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
 const PaidIcon = tablerMui(IconCoin);
 const StreamIcon = tablerMui(IconActivity);
 const CachedIcon = tablerMui(IconReload);
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsTable } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestScatterChart } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
@@ -120,11 +120,7 @@ export default function DashboardPage() {
     // By-request view state
     const [viewMode, setViewMode] = useState<'summary' | 'requests'>('summary');
     const [records, setRecords] = useState<UsageRecord[]>([]);
-    const [recordsTotal, setRecordsTotal] = useState(0);
-    const [recordsPage, setRecordsPage] = useState(0);
-    const [recordsLimit, setRecordsLimit] = useState(50);
     const [recordsLoading, setRecordsLoading] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error'>('all');
     const [recordsTimeParams, setRecordsTimeParams] = useState<{ start_time: string; end_time: string } | null>(null);
 
     const buildTimeParams = useCallback((provider: string, range: TimeRange) => {
@@ -189,9 +185,6 @@ export default function DashboardPage() {
     const loadRecords = useCallback(async (
         timeParams: { start_time: string; end_time: string } | null,
         provider: string,
-        status: 'all' | 'success' | 'error',
-        page: number,
-        limit: number,
     ) => {
         if (!timeParams) return;
         setRecordsLoading(true);
@@ -199,13 +192,11 @@ export default function DashboardPage() {
             const result = await api.getUsageRecords({
                 ...timeParams,
                 ...(provider !== 'all' ? { provider } : {}),
-                ...(status !== 'all' ? { status } : {}),
-                limit,
-                offset: page * limit,
+                limit: 500,
+                offset: 0,
             });
             if (result?.data) {
                 setRecords(result.data);
-                setRecordsTotal(result.meta?.total ?? 0);
             }
         } catch (error) {
             console.error('Failed to load records:', error);
@@ -225,31 +216,24 @@ export default function DashboardPage() {
         }
     }, [isHourlyRange]);
 
-    // Load records when entering requests view
+    // Load records when entering requests view or time/provider changes
     useEffect(() => {
         if (viewMode === 'requests') {
-            setRecordsPage(0);
-            loadRecords(recordsTimeParams, selectedProvider, statusFilter, 0, recordsLimit);
+            loadRecords(recordsTimeParams, selectedProvider);
         }
-    }, [viewMode, recordsTimeParams, selectedProvider, statusFilter, recordsLimit, loadRecords]);
-
-    useEffect(() => {
-        if (viewMode === 'requests') {
-            loadRecords(recordsTimeParams, selectedProvider, statusFilter, recordsPage, recordsLimit);
-        }
-    }, [recordsPage]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [viewMode, recordsTimeParams, selectedProvider, loadRecords]);
 
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(() => {
                 loadData(selectedProvider, timeRange);
                 if (viewMode === 'requests') {
-                    loadRecords(recordsTimeParams, selectedProvider, statusFilter, recordsPage, recordsLimit);
+                    loadRecords(recordsTimeParams, selectedProvider);
                 }
             }, 60000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, loadData, selectedProvider, timeRange, viewMode, loadRecords, recordsTimeParams, statusFilter, recordsPage, recordsLimit]);
+    }, [autoRefresh, loadData, selectedProvider, timeRange, viewMode, loadRecords, recordsTimeParams]);
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -478,29 +462,13 @@ export default function DashboardPage() {
                                 <DailyTokenHistoryChart data={timeSeries} />
                             )
                         ) : (
-                            <RequestsTable
-                                records={records}
-                                total={recordsTotal}
-                                page={recordsPage}
-                                rowsPerPage={recordsLimit}
-                                statusFilter={statusFilter}
-                                loading={recordsLoading}
-                                onPageChange={(p) => setRecordsPage(p)}
-                                onRowsPerPageChange={(limit) => {
-                                    setRecordsLimit(limit);
-                                    setRecordsPage(0);
-                                }}
-                                onStatusFilterChange={(s) => {
-                                    setStatusFilter(s);
-                                    setRecordsPage(0);
-                                }}
-                            />
+                            <RequestScatterChart records={records} loading={recordsLoading} />
                         )}
                     </Box>
                 </Box>
 
                 {/* Right Column (20%) - Token Usage List */}
-                <Box sx={{ flex: { xs: 1, md: 3, lg: 2 }, display: viewMode === 'requests' ? 'none' : undefined }}>
+                <Box sx={{ flex: { xs: 1, md: 3, lg: 2 } }}>
                     <Paper
                         elevation={0}
                         sx={{
@@ -651,8 +619,8 @@ export default function DashboardPage() {
                 </Box>
             </Box>
 
-            {/* Stats Table - hidden in requests view */}
-            {viewMode !== 'requests' && <ServiceStatsTable stats={stats} />}
+            {/* Stats Table */}
+            <ServiceStatsTable stats={stats} />
         </Box>
     );
 }
