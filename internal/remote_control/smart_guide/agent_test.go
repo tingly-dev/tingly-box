@@ -114,9 +114,9 @@ func TestNewTinglyBoxAgentWithSession_SeedsHistory(t *testing.T) {
 		APIKey:           "test-api-key",
 		Model:            "claude-sonnet-4-6",
 	}
-	history := []anthropic.MessageParam{
-		anthropic.NewUserMessage(anthropic.NewTextBlock("hello")),
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock("hi there")),
+	history := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hello")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hi there")}},
 	}
 	agent, err := NewTinglyBoxAgentWithSession(cfg, history)
 	require.NoError(t, err)
@@ -221,9 +221,9 @@ func TestSessionStore_SaveLoadRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got)
 
-	messages := []anthropic.MessageParam{
-		anthropic.NewUserMessage(anthropic.NewTextBlock("what is 2+2?")),
-		anthropic.NewAssistantMessage(anthropic.NewTextBlock("4")),
+	messages := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("what is 2+2?")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("4")}},
 	}
 	require.NoError(t, store.Save("chat-1", messages))
 
@@ -240,8 +240,8 @@ func TestSessionStore_SaveLoadRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, string(wantJSON), string(gotJSON), "stored history should round-trip losslessly")
 
-	assert.Equal(t, anthropic.MessageParamRoleUser, loaded[0].Role)
-	assert.Equal(t, anthropic.MessageParamRoleAssistant, loaded[1].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleUser, loaded[0].Role)
+	assert.Equal(t, anthropic.BetaMessageParamRoleAssistant, loaded[1].Role)
 }
 
 func TestSessionStore_Delete(t *testing.T) {
@@ -249,8 +249,8 @@ func TestSessionStore_Delete(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, store)
 
-	messages := []anthropic.MessageParam{
-		anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+	messages := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi")),
 	}
 	require.NoError(t, store.Save("chat-2", messages))
 

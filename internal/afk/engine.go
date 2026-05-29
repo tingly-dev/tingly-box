@@ -3,11 +3,11 @@
 // (github.com/anthropics/anthropic-sdk-go).
 //
 // It is anthropic-first by design: messages are the SDK's native
-// anthropic.MessageParam, there is no provider-compat layer, and tool calls are
-// dispatched through a simple Tool interface. The loop streams assistant text
-// to a StreamSink as it is produced, executes tool_use blocks, feeds the
-// results back, and repeats until the model stops requesting tools or the
-// iteration budget is exhausted.
+// anthropic.BetaMessageParam, there is no provider-compat layer, and tool
+// calls are dispatched through a simple Tool interface. The loop streams
+// assistant text to a StreamSink as it is produced, executes tool_use blocks,
+// feeds the results back, and repeats until the model stops requesting tools
+// or the iteration budget is exhausted.
 //
 // This package deliberately lives in the root module (not agentboot) because it
 // relies on Anthropic SDK v1.45 APIs that are wired in via the root go.mod
@@ -71,7 +71,7 @@ type Engine struct {
 	streamText    bool
 	tools         []Tool
 	toolByName    map[string]Tool
-	toolParams    []anthropic.ToolUnionParam
+	toolParams    []anthropic.BetaToolUnionParam
 }
 
 // Config configures an Engine.
@@ -142,35 +142,35 @@ func NewEngine(cfg Config) (*Engine, error) {
 // registerTool adds a tool to the engine's dispatch table and param list.
 func (e *Engine) registerTool(t Tool) {
 	props, required := t.Schema()
-	schema := anthropic.ToolInputSchemaParam{Required: required}
+	schema := anthropic.BetaToolInputSchemaParam{Required: required}
 	if props != nil {
 		schema.Properties = props
 	}
-	param := anthropic.ToolParam{
+	param := anthropic.BetaToolParam{
 		Name:        t.Name(),
 		Description: anthropic.String(t.Description()),
 		InputSchema: schema,
 	}
 	e.tools = append(e.tools, t)
 	e.toolByName[t.Name()] = t
-	e.toolParams = append(e.toolParams, anthropic.ToolUnionParam{OfTool: &param})
+	e.toolParams = append(e.toolParams, anthropic.BetaToolUnionParam{OfTool: &param})
 }
 
 // Run executes the ReAct loop. It appends the user prompt to history, then
 // streams/executes until the model produces a final answer (no tool_use) or the
 // iteration budget is reached.
 //
-// history is the prior conversation as native SDK message params (may be empty).
-// It returns the full updated message slice (history + this exchange) so the
-// caller can persist it, plus the final assistant text.
+// history is the prior conversation as native SDK beta message params (may be
+// empty). It returns the full updated message slice (history + this exchange)
+// so the caller can persist it, plus the final assistant text.
 func (e *Engine) Run(
 	ctx context.Context,
-	history []anthropic.MessageParam,
+	history []anthropic.BetaMessageParam,
 	userText string,
 	sink StreamSink,
-) ([]anthropic.MessageParam, string, error) {
-	messages := append([]anthropic.MessageParam(nil), history...)
-	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(userText)))
+) ([]anthropic.BetaMessageParam, string, error) {
+	messages := append([]anthropic.BetaMessageParam(nil), history...)
+	messages = append(messages, anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(userText)))
 
 	var finalText string
 
@@ -215,7 +215,7 @@ func (e *Engine) Run(
 		}
 
 		results := e.dispatchTools(ctx, toolUses, sink)
-		messages = append(messages, anthropic.NewUserMessage(results...))
+		messages = append(messages, anthropic.NewBetaUserMessage(results...))
 	}
 
 	// Loop exhausted while still requesting tools. If no text was ever produced
@@ -230,21 +230,22 @@ func (e *Engine) Run(
 	return messages, finalText, nil
 }
 
-// streamTurn runs one model call, streaming text to the sink and accumulating
-// the full assistant Message (text + tool_use blocks). It returns the
-// accumulated message and the concatenated text of this turn.
+// streamTurn runs one model call via the Beta Messages API, streaming text to
+// the sink and accumulating the full assistant BetaMessage (text + tool_use
+// blocks). It returns the accumulated message and the concatenated text of this
+// turn.
 func (e *Engine) streamTurn(
 	ctx context.Context,
-	messages []anthropic.MessageParam,
+	messages []anthropic.BetaMessageParam,
 	sink StreamSink,
-) (anthropic.Message, string, error) {
-	params := anthropic.MessageNewParams{
+) (anthropic.BetaMessage, string, error) {
+	params := anthropic.BetaMessageNewParams{
 		Model:     anthropic.Model(e.model),
 		MaxTokens: e.maxTokens,
 		Messages:  messages,
 	}
 	if e.system != "" {
-		params.System = []anthropic.TextBlockParam{{Text: e.system}}
+		params.System = []anthropic.BetaTextBlockParam{{Text: e.system}}
 	}
 	if e.temperature != nil {
 		params.Temperature = anthropic.Float(*e.temperature)
@@ -253,14 +254,14 @@ func (e *Engine) streamTurn(
 		params.Tools = e.toolParams
 	}
 
-	stream := e.client.Messages.NewStreaming(ctx, params)
-	msg := anthropic.Message{}
+	stream := e.client.Beta.Messages.NewStreaming(ctx, params)
+	msg := anthropic.BetaMessage{}
 
 	for stream.Next() {
 		event := stream.Current()
-		// Let the SDK accumulate the canonical Message (text concatenated into
-		// content blocks, tool_use inputs assembled). We never hand-roll text
-		// aggregation — we read it back from the accumulated message below.
+		// Let the SDK accumulate the canonical BetaMessage (text concatenated
+		// into content blocks, tool_use inputs assembled). We never hand-roll
+		// text aggregation — we read it back from the accumulated message below.
 		if err := msg.Accumulate(event); err != nil {
 			return msg, "", fmt.Errorf("accumulate stream event: %w", err)
 		}
@@ -268,7 +269,7 @@ func (e *Engine) streamTurn(
 		// a UI concern, independent of aggregation, so it reads the delta
 		// directly rather than the accumulator.
 		if sink != nil && e.streamText {
-			if delta, ok := event.AsAny().(anthropic.ContentBlockDeltaEvent); ok && delta.Delta.Text != "" {
+			if delta, ok := event.AsAny().(anthropic.BetaRawContentBlockDeltaEvent); ok && delta.Delta.Text != "" {
 				sink.OnText(delta.Delta.Text)
 			}
 		}
@@ -316,8 +317,8 @@ func (e *Engine) dispatchTools(
 	ctx context.Context,
 	toolUses []toolUse,
 	sink StreamSink,
-) []anthropic.ContentBlockParamUnion {
-	results := make([]anthropic.ContentBlockParamUnion, 0, len(toolUses))
+) []anthropic.BetaContentBlockParamUnion {
+	results := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 	for _, tu := range toolUses {
 		if sink != nil {
 			sink.OnToolCall(tu.Name, tu.Input)
@@ -326,7 +327,7 @@ func (e *Engine) dispatchTools(
 		if sink != nil {
 			sink.OnToolResult(tu.Name, out, isErr)
 		}
-		results = append(results, anthropic.NewToolResultBlock(tu.ID, out, isErr))
+		results = append(results, anthropic.NewBetaToolResultBlock(tu.ID, out, isErr))
 	}
 	return results
 }
@@ -366,14 +367,14 @@ type toolUse struct {
 }
 
 // toolUseBlocks extracts tool_use invocations from an accumulated assistant
-// message.
+// BetaMessage.
 //
 // Like messageText, this reads the union's fields directly (block.ID/Name/Input)
-// rather than block.AsAny().(ToolUseBlock): on a stream-accumulated message the
-// tool input arrives as input_json_delta appended onto the union's .Input
+// rather than block.AsAny().(BetaToolUseBlock): on a stream-accumulated message
+// the tool input arrives as input_json_delta appended onto the union's .Input
 // field, while AsToolUse() reparses the block's original JSON (input "{}").
 // Going through AsToolUse would therefore drop streamed tool arguments.
-func toolUseBlocks(msg anthropic.Message) []toolUse {
+func toolUseBlocks(msg anthropic.BetaMessage) []toolUse {
 	var blocks []toolUse
 	for _, block := range msg.Content {
 		if block.Type == "tool_use" {
@@ -384,16 +385,16 @@ func toolUseBlocks(msg anthropic.Message) []toolUse {
 }
 
 // messageText concatenates the text of all text blocks in an SDK-accumulated
-// message. This is the canonical way to read a turn's text — the SDK has
+// BetaMessage. This is the canonical way to read a turn's text — the SDK has
 // already assembled the deltas into the blocks.
 //
 // IMPORTANT: read the union's .Text field directly, filtered by block .Type.
-// Do NOT go through block.AsAny().(TextBlock): on a *stream-accumulated*
+// Do NOT go through block.AsAny().(BetaTextBlock): on a *stream-accumulated*
 // message AsText() reparses the block's original JSON (whose text was ""),
 // while streamed text deltas are appended onto the union's .Text field. So
-// AsAny().(TextBlock).Text is empty even though the text is present — using it
-// silently drops every streamed assistant message.
-func messageText(msg anthropic.Message) string {
+// AsAny().(BetaTextBlock).Text is empty even though the text is present —
+// using it silently drops every streamed assistant message.
+func messageText(msg anthropic.BetaMessage) string {
 	var b strings.Builder
 	for _, block := range msg.Content {
 		if block.Type == "text" {
@@ -404,10 +405,10 @@ func messageText(msg anthropic.Message) string {
 }
 
 // messageThinking concatenates the thinking text of all thinking blocks in an
-// SDK-accumulated message. Read from the union's .Thinking field directly, for
-// the same reason as messageText: AsAny().(ThinkingBlock) reparses the block's
-// original JSON and would miss delta-accumulated thinking text.
-func messageThinking(msg anthropic.Message) string {
+// SDK-accumulated BetaMessage. Read from the union's .Thinking field directly,
+// for the same reason as messageText: AsAny().(BetaThinkingBlock) reparses the
+// block's original JSON and would miss delta-accumulated thinking text.
+func messageThinking(msg anthropic.BetaMessage) string {
 	var b strings.Builder
 	for _, block := range msg.Content {
 		if block.Type == "thinking" {
@@ -419,7 +420,7 @@ func messageThinking(msg anthropic.Message) string {
 
 // countBlocks returns how many content blocks of the given type the message has.
 // Used for diagnostic logging.
-func countBlocks(msg anthropic.Message, blockType string) int {
+func countBlocks(msg anthropic.BetaMessage, blockType string) int {
 	n := 0
 	for _, block := range msg.Content {
 		if block.Type == blockType {

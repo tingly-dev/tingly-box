@@ -237,8 +237,8 @@ func TestExecuteWithHandler_PlainText(t *testing.T) {
 	// History: user + assistant.
 	hist := agent.History()
 	require.Len(t, hist, 2)
-	assert.Equal(t, sdk.MessageParamRoleUser, hist[0].Role)
-	assert.Equal(t, sdk.MessageParamRoleAssistant, hist[1].Role)
+	assert.Equal(t, sdk.BetaMessageParamRoleUser, hist[0].Role)
+	assert.Equal(t, sdk.BetaMessageParamRoleAssistant, hist[1].Role)
 	assert.Equal(t, "Hello from smart guide", agent.LastAssistantText())
 }
 
@@ -305,10 +305,10 @@ func TestExecuteWithHandler_ToolRoundTrip(t *testing.T) {
 	// History: user, assistant(tool_use), user(tool_result), assistant(text).
 	hist := agent.History()
 	require.Len(t, hist, 4)
-	assert.Equal(t, sdk.MessageParamRoleUser, hist[0].Role)
-	assert.Equal(t, sdk.MessageParamRoleAssistant, hist[1].Role)
-	assert.Equal(t, sdk.MessageParamRoleUser, hist[2].Role)
-	assert.Equal(t, sdk.MessageParamRoleAssistant, hist[3].Role)
+	assert.Equal(t, sdk.BetaMessageParamRoleUser, hist[0].Role)
+	assert.Equal(t, sdk.BetaMessageParamRoleAssistant, hist[1].Role)
+	assert.Equal(t, sdk.BetaMessageParamRoleUser, hist[2].Role)
+	assert.Equal(t, sdk.BetaMessageParamRoleAssistant, hist[3].Role)
 }
 
 // TestExecuteWithHandler_HistoryContinuity verifies that history seeded via
@@ -321,9 +321,9 @@ func TestExecuteWithHandler_HistoryContinuity(t *testing.T) {
 	})
 	baseURL := newVModelServer(t, static)
 
-	seed := []sdk.MessageParam{
-		sdk.NewUserMessage(sdk.NewTextBlock("first question")),
-		sdk.NewAssistantMessage(sdk.NewTextBlock("first answer")),
+	seed := []sdk.BetaMessageParam{
+		sdk.NewBetaUserMessage(sdk.NewBetaTextBlock("first question")),
+		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("first answer")}},
 	}
 	cfg := &AgentConfig{ChatID: "c3", BaseURL: baseURL, APIKey: "k", Model: model}
 	agent, err := NewTinglyBoxAgentWithSession(cfg, seed)

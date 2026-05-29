@@ -29,9 +29,9 @@ type TinglyBoxAgent struct {
 	config   *SmartGuideConfig
 	executor *ToolExecutor
 
-	// history is the conversation as native Anthropic message params, loaded
-	// from the session store and updated after each run.
-	history []anthropic.MessageParam
+	// history is the conversation as native Anthropic beta message params,
+	// loaded from the session store and updated after each run.
+	history []anthropic.BetaMessageParam
 }
 
 // AgentConfig holds the configuration for creating a TinglyBoxAgent.
@@ -119,8 +119,8 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 }
 
 // NewTinglyBoxAgentWithSession creates a Smart Guide agent seeded with prior
-// conversation history (native Anthropic message params from the session store).
-func NewTinglyBoxAgentWithSession(config *AgentConfig, history []anthropic.MessageParam) (*TinglyBoxAgent, error) {
+// conversation history (native Anthropic beta message params from the session store).
+func NewTinglyBoxAgentWithSession(config *AgentConfig, history []anthropic.BetaMessageParam) (*TinglyBoxAgent, error) {
 	tb, err := NewTinglyBoxAgent(config)
 	if err != nil {
 		return nil, err
@@ -298,8 +298,8 @@ func (a *TinglyBoxAgent) ExecuteWithHandler(
 	return result, nil
 }
 
-// History returns the agent's current conversation history (native params).
-func (a *TinglyBoxAgent) History() []anthropic.MessageParam {
+// History returns the agent's current conversation history (native beta params).
+func (a *TinglyBoxAgent) History() []anthropic.BetaMessageParam {
 	return a.history
 }
 
@@ -308,7 +308,7 @@ func (a *TinglyBoxAgent) History() []anthropic.MessageParam {
 func (a *TinglyBoxAgent) LastAssistantText() string {
 	for i := len(a.history) - 1; i >= 0; i-- {
 		m := a.history[i]
-		if m.Role != anthropic.MessageParamRoleAssistant {
+		if m.Role != anthropic.BetaMessageParamRoleAssistant {
 			continue
 		}
 		var text string
