@@ -1,4 +1,4 @@
-package anthropic
+package afk
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"

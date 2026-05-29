@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/agentboot"
-	tbanthropic "github.com/tingly-dev/tingly-box/internal/anthropic"
+	"github.com/tingly-dev/tingly-box/internal/afk"
 )
 
 // AgentType constants. Defined here (not in agentboot core) so Smart Guide can
@@ -22,10 +22,10 @@ const (
 )
 
 // TinglyBoxAgent is the Smart Guide agent (@tb). It runs an in-house ReAct loop
-// (internal/anthropic.Engine) on the official Anthropic SDK, replacing the
-// former tingly-agentscope runtime.
+// (internal/afk.Engine) on the official Anthropic SDK, replacing the former
+// tingly-agentscope runtime.
 type TinglyBoxAgent struct {
-	engine   *tbanthropic.Engine
+	engine   *afk.Engine
 	config   *SmartGuideConfig
 	executor *ToolExecutor
 
@@ -96,7 +96,7 @@ func NewTinglyBoxAgent(config *AgentConfig) (*TinglyBoxAgent, error) {
 
 	tools := BuildTools(executor, config.ChatID, config.GetStatusFunc, config.UpdateProjectFunc, config.ToolCtx)
 
-	engine, err := tbanthropic.NewEngine(tbanthropic.Config{
+	engine, err := afk.NewEngine(afk.Config{
 		BaseURL:       config.BaseURL,
 		APIKey:        config.APIKey,
 		Model:         config.Model,
@@ -193,9 +193,9 @@ func (s *engineSink) OnToolResult(name string, result string, isErr bool) {
 		return
 	}
 	s.handler.OnMessage(map[string]interface{}{
-		"type":    "tool_result",
-		"name":    name,
-		"result":  result,
+		"type":     "tool_result",
+		"name":     name,
+		"result":   result,
 		"is_error": isErr,
 	})
 }
