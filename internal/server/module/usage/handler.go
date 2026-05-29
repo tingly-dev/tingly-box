@@ -219,6 +219,7 @@ func (h *Handler) GetRecords(c *gin.Context) {
 			Status:           r.Status,
 			ErrorCode:        r.ErrorCode,
 			LatencyMs:        r.LatencyMs,
+			TTFTMs:           r.TTFTMs,
 			Streamed:         r.Streamed,
 		}
 	}
