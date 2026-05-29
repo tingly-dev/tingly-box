@@ -123,8 +123,10 @@ func newVModelServer(t *testing.T, models ...anthropicvm.VirtualModel) string {
 }
 
 // recordingHandler captures the map-shaped messages and completion signal that
-// the engineSink/ExecuteWithHandler emit.
+// the engineSink/ExecuteWithHandler emit, and logs each event via t.Log so the
+// full interaction is visible when running with -v.
 type recordingHandler struct {
+	t           *testing.T
 	mu          sync.Mutex
 	texts       []string
 	toolCalls   []string
@@ -141,17 +143,30 @@ func (h *recordingHandler) OnMessage(msg any) error {
 		return nil
 	}
 	switch m["type"] {
+	case "status":
+		if h.t != nil {
+			h.t.Logf("[status] %v", m["message"])
+		}
 	case "assistant":
 		if s, ok := m["message"].(string); ok {
 			h.texts = append(h.texts, s)
+			if h.t != nil {
+				h.t.Logf("[assistant] %s", s)
+			}
 		}
 	case "tool_use":
 		if s, ok := m["name"].(string); ok {
 			h.toolCalls = append(h.toolCalls, s)
+			if h.t != nil {
+				h.t.Logf("[tool_use]  %s  input=%v", s, m["input"])
+			}
 		}
 	case "tool_result":
 		if s, ok := m["name"].(string); ok {
 			h.toolResults = append(h.toolResults, s)
+			if h.t != nil {
+				h.t.Logf("[tool_result] %s  isErr=%v  result=%v", s, m["is_error"], m["result"])
+			}
 		}
 	}
 	return nil
@@ -161,12 +176,18 @@ func (h *recordingHandler) OnError(err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.errs = append(h.errs, err)
+	if h.t != nil {
+		h.t.Logf("[error] %v", err)
+	}
 }
 
 func (h *recordingHandler) OnComplete(result *CompletionResult) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.completed = result
+	if h.t != nil {
+		h.t.Logf("[complete] success=%v  duration=%dms", result.Success, result.DurationMS)
+	}
 }
 
 func (h *recordingHandler) joinedText() string {
@@ -220,7 +241,7 @@ func TestExecuteWithHandler_PlainText(t *testing.T) {
 	baseURL := newVModelServer(t, static)
 
 	agent := newTestAgent(t, baseURL, model, &AgentConfig{ChatID: "c1"})
-	handler := &recordingHandler{}
+	handler := &recordingHandler{t: t}
 	toolCtx := &ToolContext{ChatID: "c1", SessionID: "c1"}
 
 	res, err := agent.ExecuteWithHandler(context.Background(), "hi", toolCtx, handler)
@@ -287,7 +308,7 @@ func TestExecuteWithHandler_ToolRoundTrip(t *testing.T) {
 	agent := newTestAgent(t, baseURL, model, &AgentConfig{ChatID: "c2"})
 	rebuildEngineWithTools(t, agent, baseURL, model, tool)
 
-	handler := &recordingHandler{}
+	handler := &recordingHandler{t: t}
 	toolCtx := &ToolContext{ChatID: "c2", SessionID: "c2"}
 
 	res, err := agent.ExecuteWithHandler(context.Background(), "what's the weather", toolCtx, handler)
@@ -333,7 +354,7 @@ func TestExecuteWithHandler_HistoryContinuity(t *testing.T) {
 	agent, err := NewTinglyBoxAgentWithSession(cfg, seed)
 	require.NoError(t, err)
 
-	handler := &recordingHandler{}
+	handler := &recordingHandler{t: t}
 	_, err = agent.ExecuteWithHandler(context.Background(), "second question", &ToolContext{ChatID: "c3"}, handler)
 	require.NoError(t, err)
 
@@ -441,7 +462,7 @@ func TestExecuteWithHandler_MultiTurnTextNotLost(t *testing.T) {
 	agent := newTestAgent(t, baseURL, model, &AgentConfig{ChatID: "mt1"})
 	rebuildEngineWithTools(t, agent, baseURL, model, tool)
 
-	handler := &recordingHandler{}
+	handler := &recordingHandler{t: t}
 	_, err := agent.ExecuteWithHandler(context.Background(), "do a thing", &ToolContext{ChatID: "mt1"}, handler)
 	require.NoError(t, err)
 
@@ -470,7 +491,7 @@ func TestExecuteWithHandler_ThinkingSurfacesWhenNoText(t *testing.T) {
 	agent := newTestAgent(t, baseURL, model, &AgentConfig{ChatID: "think1"})
 	rebuildEngineWithTools(t, agent, baseURL, model, tool)
 
-	handler := &recordingHandler{}
+	handler := &recordingHandler{t: t}
 	res, err := agent.ExecuteWithHandler(context.Background(), "answer me", &ToolContext{ChatID: "think1"}, handler)
 	require.NoError(t, err)
 	assert.True(t, res.IsSuccess())
