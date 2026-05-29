@@ -152,9 +152,22 @@ type toolEventFields struct {
 
 // toolFieldsFromNestedMap reads tool fields from a map message whose fields
 // may live either at the top level or nested under a "data" sub-object.
+// It accepts both "tool_name" (Claude-Code path) and "name" (smart-guide
+// engineSink path) so both agents render correctly.
+// "input" may arrive as a map[string]interface{} or as a raw JSON string;
+// both are handled so briefInputHint can extract command/path hints.
 func toolFieldsFromNestedMap(m map[string]interface{}) toolEventFields {
 	name, _ := mapNestedField[string](m, "tool_name")
+	if name == "" {
+		name, _ = mapNestedField[string](m, "name")
+	}
 	input, _ := mapNestedField[map[string]interface{}](m, "input")
+	if input == nil {
+		// engineSink serialises input as a JSON string; try to decode it.
+		if s, _ := mapNestedField[string](m, "input"); s != "" {
+			_ = json.Unmarshal([]byte(s), &input)
+		}
+	}
 	isError, _ := mapNestedField[bool](m, "is_error")
 	return toolEventFields{Name: name, Input: input, IsError: isError}
 }
