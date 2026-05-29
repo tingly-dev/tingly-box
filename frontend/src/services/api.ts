@@ -913,6 +913,40 @@ export const api = {
         }
     },
 
+    getUsageRecords: async (params: {
+        start_time?: string;
+        end_time?: string;
+        provider?: string;
+        model?: string;
+        scenario?: string;
+        status?: string;
+        limit?: number;
+        offset?: number;
+    } = {}): Promise<any> => {
+        try {
+            const client = await getClient();
+            const headers = await getAuthHeaders();
+            const response = await client.GET('/api/v1/usage/records', {
+                headers,
+                params: {
+                    query: {
+                        start_time: params.start_time,
+                        end_time: params.end_time,
+                        provider: params.provider,
+                        model: params.model,
+                        scenario: params.scenario,
+                        status: params.status as any,
+                        limit: params.limit,
+                        offset: params.offset,
+                    }
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            return {success: false, error: error.message};
+        }
+    },
+
     // ============================================
     // OAuth API
     // ============================================
