@@ -39,9 +39,13 @@ export interface ClaudeCodePrefs {
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC?: string;
     DISABLE_AUTOUPDATER?: string;
     USE_BUILTIN_RIPGREP?: string;
+
+    NO_PROXY?: string;
+    no_proxy?: string;
 }
 
 type PrefsKey = keyof ClaudeCodePrefs;
+type VisiblePrefsKey = Exclude<PrefsKey, 'NO_PROXY' | 'no_proxy'>;
 type Group = 'model' | 'limits' | 'switches';
 type Kind = 'model' | 'int' | 'bool';
 type Lang = 'zh' | 'en';
@@ -51,7 +55,7 @@ type Lang = 'zh' | 'en';
 // FIELDS_TEXT_EN below (TS will flag the missing keys).
 
 interface FieldStruct {
-    envName: PrefsKey;
+    envName: VisiblePrefsKey;
     group: Group;
     kind: Kind;
     unit?: string;
@@ -93,7 +97,7 @@ interface FieldText {
     placeholder?: string;
 }
 
-type FieldTextMap = Record<PrefsKey, FieldText>;
+type FieldTextMap = Record<VisiblePrefsKey, FieldText>;
 
 const FIELDS_TEXT_ZH: FieldTextMap = {
     ANTHROPIC_MODEL: {
@@ -372,6 +376,7 @@ const useLang = (): Lang => {
 // not as a separate prefs field. The UI just toggles the trailing [1m].
 
 const ONE_M_SUFFIX = '[1m]';
+const LOCAL_NO_PROXY = 'localhost,127.0.0.1,::1';
 const has1M = (v: string | undefined) => !!v && v.endsWith(ONE_M_SUFFIX);
 const with1M = (v: string | undefined, on: boolean): string => {
     const base = (v || '').replace(/\[1m\]$/, '');
@@ -411,6 +416,8 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
         DISABLE_TELEMETRY: '1',
         DISABLE_ERROR_REPORTING: '1',
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        NO_PROXY: LOCAL_NO_PROXY,
+        no_proxy: LOCAL_NO_PROXY,
     };
 };
 
@@ -429,7 +436,21 @@ export const prefsToEnvPreview = (
     }
     out.ANTHROPIC_BASE_URL = baseURL.replace(/\/$/, '') + '/tingly/claude_code';
     out.ANTHROPIC_AUTH_TOKEN = token;
+    out.NO_PROXY = appendNoProxyEntries(out.NO_PROXY, LOCAL_NO_PROXY);
+    out.no_proxy = appendNoProxyEntries(out.no_proxy, LOCAL_NO_PROXY);
     return out;
+};
+
+const appendNoProxyEntries = (current: string | undefined, required: string): string => {
+    const parts: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of `${current || ''},${required}`.split(',')) {
+        const part = raw.trim();
+        if (!part || seen.has(part)) continue;
+        seen.add(part);
+        parts.push(part);
+    }
+    return parts.join(',');
 };
 
 // ── Field row (3-column, single line) ──────────────────────────────────

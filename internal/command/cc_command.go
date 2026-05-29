@@ -354,6 +354,8 @@ func generateCCEnv(baseURL, apiKey, scenarioPath string, unified bool, isProfile
 		"API_TIMEOUT_MS":                           "3000000",
 		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/" + scenarioPath,
 		"ANTHROPIC_AUTH_TOKEN":                     apiKey,
+		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
+		"no_proxy":                                 "localhost,127.0.0.1,::1",
 	}
 
 	if unified {

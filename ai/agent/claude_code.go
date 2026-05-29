@@ -59,6 +59,8 @@ func (p *ClaudeCodeParams) BuildEnv() map[string]string {
 		"API_TIMEOUT_MS":                           "3000000",
 		"ANTHROPIC_BASE_URL":                       p.BaseURL,
 		"ANTHROPIC_AUTH_TOKEN":                     p.APIKey,
+		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
+		"no_proxy":                                 "localhost,127.0.0.1,::1",
 	}
 
 	// Model configuration

@@ -42,6 +42,7 @@ type ClaudeCodePrefs struct {
 	HTTPProxy  string `json:"HTTP_PROXY,omitempty"`
 	HTTPSProxy string `json:"HTTPS_PROXY,omitempty"`
 	NoProxy    string `json:"NO_PROXY,omitempty"`
+	NoProxyLC  string `json:"no_proxy,omitempty"`
 
 	// Extra is an escape hatch for env vars not modeled above. Merged in
 	// after marshaling; values here override the typed fields if keys collide.
@@ -65,6 +66,7 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	}
 	env["ANTHROPIC_BASE_URL"] = strings.TrimRight(baseURL, "/") + "/tingly/claude_code"
 	env["ANTHROPIC_AUTH_TOKEN"] = apiKey
+	ensureLocalNoProxy(env)
 	return env, nil
 }
 
@@ -78,6 +80,8 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		DisableTelemetry:                     "1",
 		DisableErrorReporting:                "1",
 		ClaudeCodeDisableNonessentialTraffic: "1",
+		NoProxy:                              localNoProxy,
+		NoProxyLC:                            localNoProxy,
 	}
 	if unified {
 		p.AnthropicModel = "tingly/cc"
@@ -93,4 +97,35 @@ func DefaultClaudeCodePrefs(unified bool) ClaudeCodePrefs {
 		p.ClaudeCodeSubagentModel = "tingly/cc-subagent"
 	}
 	return p
+}
+
+const localNoProxy = "localhost,127.0.0.1,::1"
+
+func ensureLocalNoProxy(env map[string]string) {
+	env["NO_PROXY"] = appendNoProxyEntries(env["NO_PROXY"], localNoProxy)
+	env["no_proxy"] = appendNoProxyEntries(env["no_proxy"], localNoProxy)
+}
+
+func appendNoProxyEntries(current, required string) string {
+	seen := make(map[string]bool)
+	parts := make([]string, 0)
+	for _, part := range strings.Split(current, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if !seen[part] {
+			parts = append(parts, part)
+			seen[part] = true
+		}
+	}
+	for _, part := range strings.Split(required, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" || seen[part] {
+			continue
+		}
+		parts = append(parts, part)
+		seen[part] = true
+	}
+	return strings.Join(parts, ",")
 }

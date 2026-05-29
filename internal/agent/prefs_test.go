@@ -36,17 +36,20 @@ func TestClaudeCodePrefs_ToEnv_OmitsEmpty(t *testing.T) {
 }
 
 // Empty prefs must still produce a usable env — the server-injected base
-// URL and auth token are non-negotiable for Claude Code to function at all.
-func TestClaudeCodePrefs_ToEnv_EmptyOnlyInjectsServerKeys(t *testing.T) {
+// URL and auth token are non-negotiable, and localhost must bypass proxies
+// so Claude Code can reach the local tingly-box listener.
+func TestClaudeCodePrefs_ToEnv_EmptyInjectsServerKeysAndNoProxy(t *testing.T) {
 	env, err := ClaudeCodePrefs{}.ToEnv("http://localhost:12580", "tok")
 	if err != nil {
 		t.Fatalf("ToEnv: %v", err)
 	}
-	if len(env) != 2 {
-		t.Errorf("expected exactly 2 server-injected keys, got %d: %v", len(env), env)
+	if len(env) != 4 {
+		t.Errorf("expected exactly 4 server-injected keys, got %d: %v", len(env), env)
 	}
 	mustEq(t, env, "ANTHROPIC_BASE_URL", "http://localhost:12580/tingly/claude_code")
 	mustEq(t, env, "ANTHROPIC_AUTH_TOKEN", "tok")
+	mustEq(t, env, "NO_PROXY", "localhost,127.0.0.1,::1")
+	mustEq(t, env, "no_proxy", "localhost,127.0.0.1,::1")
 }
 
 // A fully-populated prefs should emit every typed env key. Catches future
@@ -73,7 +76,8 @@ func TestClaudeCodePrefs_ToEnv_FullForm(t *testing.T) {
 		UseBuiltinRipgrep:                    "1",
 		HTTPProxy:                            "http://proxy:8080",
 		HTTPSProxy:                           "http://proxy:8443",
-		NoProxy:                              "localhost",
+		NoProxy:                              "internal.local",
+		NoProxyLC:                            "lower.internal",
 	}
 	env, err := p.ToEnv("http://localhost", "tok")
 	if err != nil {
@@ -102,6 +106,7 @@ func TestClaudeCodePrefs_ToEnv_FullForm(t *testing.T) {
 		"HTTP_PROXY",
 		"HTTPS_PROXY",
 		"NO_PROXY",
+		"no_proxy",
 		"ANTHROPIC_BASE_URL",
 		"ANTHROPIC_AUTH_TOKEN",
 	}
@@ -113,6 +118,21 @@ func TestClaudeCodePrefs_ToEnv_FullForm(t *testing.T) {
 	if len(env) != len(wantKeys) {
 		t.Errorf("env has %d keys, want %d. extra: %v", len(env), len(wantKeys), diffKeys(env, wantKeys))
 	}
+	mustEq(t, env, "NO_PROXY", "internal.local,localhost,127.0.0.1,::1")
+	mustEq(t, env, "no_proxy", "lower.internal,localhost,127.0.0.1,::1")
+}
+
+func TestClaudeCodePrefs_ToEnv_NoProxyDeduplicatesLocalEntries(t *testing.T) {
+	p := ClaudeCodePrefs{
+		NoProxy:   "localhost,corp.internal,127.0.0.1",
+		NoProxyLC: "::1,corp.internal",
+	}
+	env, err := p.ToEnv("http://localhost:12580", "tok")
+	if err != nil {
+		t.Fatalf("ToEnv: %v", err)
+	}
+	mustEq(t, env, "NO_PROXY", "localhost,corp.internal,127.0.0.1,::1")
+	mustEq(t, env, "no_proxy", "::1,corp.internal,localhost,127.0.0.1")
 }
 
 func TestClaudeCodePrefs_ToEnv_StripsTrailingSlashOnBaseURL(t *testing.T) {
@@ -272,6 +292,8 @@ func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
 		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
+		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
+		"no_proxy":                                 "localhost,127.0.0.1,::1",
 	}
 	assertEnvMapsEqual(t, want, env)
 }
@@ -293,6 +315,8 @@ func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
 		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
+		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
+		"no_proxy":                                 "localhost,127.0.0.1,::1",
 	}
 	assertEnvMapsEqual(t, want, env)
 }
