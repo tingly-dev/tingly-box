@@ -78,7 +78,7 @@ docker run -d \
 ### Integration Guide
 
 <details>
-<summary><strong>Agent Integration - Claude Code / OpenCode / Codex / Xcode / VSCode / OpenClaw</strong></summary>
+<summary><strong>Agent Integration - Claude Code / Claude Desktop / OpenCode / Codex / Xcode / VSCode / OpenClaw</strong></summary>
 
 - Claude Code (support 1-click config)
 - OpenCode (support 1-click config)
