@@ -19,7 +19,8 @@ vmodel/
 ├── registry.go         // GenericRegistry[T] — shared thread-safe registry
 ├── base_mock.go        // BaseMockModel — shared identity/metadata methods
 ├── stream.go           // ResolveChunkDelay, EmitChunks — shared stream helpers
-├── defaults_shared.go  // SharedDefaultMocks() — configs shared by both protocols
+├── defaults_shared.go  // SharedDefaultMocks() + ErrorMockSpecs() — shared specs
+├── error_injection.go  // ErrorInjection, ErrorInjectingModel, EmitGate
 ├── README.md
 ├── anthropic/          // Anthropic-protocol models + Registry alias
 ├── openai/             // OpenAI Chat-protocol models + Registry alias
@@ -57,6 +58,19 @@ scenario-specific stubs) **must not** be added to `RegisterDefaults`. Tests
 that need bespoke synthetic models should construct their own
 `GenericRegistry[T]` (the way `server_validate` does for `Scenario`) and
 register fixtures there — keeping the production defaults clean.
+
+**Opt-in fixture sets.** Two named registration helpers ship alongside
+`RegisterDefaults` for callers that want pre-built fixtures without polluting
+the production endpoint:
+
+| Helper | What it registers | When to call |
+|--------|-------------------|--------------|
+| `RegisterStreamTestMocks(reg)` | `virtual-stream-test`, `virtual-stream-test-tool` — advertise the full usage shape (prompt / completion / cached / cache-creation / reasoning) | Streaming-converter tests that need deterministic usage emission |
+| `RegisterErrorMocks(reg)`      | `virtual-fail-precontent-{429,500}`, `virtual-fail-midstream-{close,event}` — always fail per the configured stage | Failover / resilience tests that need a deterministic broken upstream |
+
+Both helpers live in each per-protocol sub-package (`anthropic.Register…` and
+`openai.Register…`), source their specs from the root `defaults_shared.go`, and
+are kept out of `RegisterDefaults` so production registries stay clean.
 
 ## Design
 
@@ -274,6 +288,79 @@ wire-format SSE frames expected by each protocol.
 `DefaultStream` in each sub-package converts a non-streaming `Handle*`
 response into a stream event sequence using the shared `EmitChunks` helper,
 so static and tool mocks get streaming for free.
+
+## Error injection
+
+A small facility lets a mock simulate an upstream failure without writing a
+custom handler. It is **opt-in per model** — set `MockModelConfig.Error` (or
+`MockScenario.Error`) to an `ErrorInjection`, and the virtual server handler
+honors it. Models with no `Error` field set behave exactly as before.
+
+```go
+type ErrorInjection struct {
+    Stage ErrorStage // ErrorStagePreContent or ErrorStageMidStream
+
+    // Pre-content fields
+    Status  int    // HTTP status (defaults to 500)
+    Message string // rendered into the protocol-specific error envelope
+    Type    string // defaults to "api_error"
+
+    // Mid-stream fields
+    AfterEvents   int           // emit N real events first (default 1)
+    MidStreamMode MidStreamMode // ConnectionClose (TCP hijack) or ErrorEvent (SSE error frame)
+}
+```
+
+The two stages correspond to two **distinct gateway paths** (and are exactly
+the cases the priority-routing `firstChunkGate` must handle differently):
+
+| Stage | Wire behavior | What it exercises |
+|-------|---------------|-------------------|
+| `ErrorStagePreContent` | Handler returns `Status` + protocol-shaped error envelope before any streaming starts. No SSE frames. | Gate stays buffered → retryable; failover MUST retry. |
+| `ErrorStageMidStream`  | Handler writes 200 + headers + `AfterEvents` real chunks, then either hijacks and closes the TCP connection or emits a final SSE error frame. | Gate already committed → bytes on the wire; failover MUST NOT retry. |
+
+### Architecture: model declares, handler enforces
+
+Mock stream loops are kept **gate-free**: `DefaultStream` and
+`MockModel.Handle*Stream` simply emit every event they would normally emit.
+The virtualserver handler owns the mid-stream cutoff:
+
+1. Before invoking `Handle*Stream`, the handler asks the model whether it
+   implements `ErrorInjectingModel` and configures an injection.
+2. If a mid-stream injection is configured, the handler wraps the model's
+   `emit` callback in a counting gate. After `AfterEvents` events have been
+   admitted, subsequent events (including terminal `DoneEvent` /
+   `UsageEvent`) are silently dropped.
+3. Once the model's stream loop returns, the handler applies the configured
+   `MidStreamMode` (`hijackAndClose` or `applyMidStreamBreak*`).
+
+For pre-content injection there's no gate — the handler short-circuits with
+`writePreContentError{OpenAI,Anthropic}` before dispatching to the model at
+all.
+
+This split keeps the failure-injection surface narrow (one small facility,
+isolated to the handler) and leaves the common mock path uncluttered.
+
+### Pre-registered fail mocks
+
+`vmodel.ErrorMockSpecs()` defines four well-known broken upstreams. Register
+them into either per-protocol registry with the opt-in helper:
+
+```go
+openai.RegisterErrorMocks(svc.GetOpenAIRegistry())
+anthropic.RegisterErrorMocks(svc.GetAnthropicRegistry())
+```
+
+| Model ID | Behavior |
+|----------|----------|
+| `virtual-fail-precontent-429`  | HTTP 429 + `rate_limit_error` envelope (retryable) |
+| `virtual-fail-precontent-500`  | HTTP 500 + `api_error` envelope (retryable) |
+| `virtual-fail-midstream-close` | One real chunk then TCP close (not retryable) |
+| `virtual-fail-midstream-event` | One real chunk then SSE error frame (not retryable) |
+
+Failover e2e tests (`internal/protocol_validate`) use these directly via
+`SetupFailoverRoute(... primaryFailModel: pt.FailMockPreContent429)` instead
+of standing up ad-hoc `httptest.Server` instances.
 
 ## Benchmarking (`benchmark/`)
 
