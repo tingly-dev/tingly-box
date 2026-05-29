@@ -371,6 +371,75 @@ func TestGuardBeta_KeepsClearThinkingEditWhenThinkingEnabled(t *testing.T) {
 	assert.NotNil(t, base)
 }
 
+func TestGuardBeta_KeepsClearThinkingEditWhenEffortSet(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	req := &anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model("claude-opus-4-7"),
+		MaxTokens: 512,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+	}
+	req.Metadata.UserID = param.NewOpt(userID)
+	// Effort-based adaptive thinking, no thinking union (newer models). GuardBeta must
+	// not force-disable thinking nor strip the clear_thinking edit.
+	req.OutputConfig.Effort = anthropic.BetaOutputConfigEffortMedium
+	req.ContextManagement.Edits = []anthropic.BetaContextManagementConfigEditUnionParam{
+		{OfClearThinking20251015: &anthropic.BetaClearThinking20251015EditParam{}},
+	}
+
+	base, _ := c.GuardBeta(context.Background(), req)
+	assert.Nil(t, req.Thinking.OfDisabled, "effort-based thinking must not be force-disabled")
+	require.Len(t, req.ContextManagement.Edits, 1, "clear_thinking edit must be kept when effort is set")
+	assert.NotNil(t, req.ContextManagement.Edits[0].OfClearThinking20251015)
+	assert.NotNil(t, base)
+}
+
+func TestGuardBeta_StripsClearThinkingWhenDisabledOverridesEffort(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	req := &anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model("claude-opus-4-7"),
+		MaxTokens: 512,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+	}
+	req.Metadata.UserID = param.NewOpt(userID)
+	// Contradictory input: explicit disabled wins, so the edit must still be dropped.
+	req.OutputConfig.Effort = anthropic.BetaOutputConfigEffortMedium
+	req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+	req.ContextManagement.Edits = []anthropic.BetaContextManagementConfigEditUnionParam{
+		{OfClearThinking20251015: &anthropic.BetaClearThinking20251015EditParam{}},
+	}
+
+	base, _ := c.GuardBeta(context.Background(), req)
+	require.Empty(t, req.ContextManagement.Edits, "explicit disabled must drop clear_thinking even when effort is set")
+	assert.NotNil(t, base)
+}
+
+func TestGuard_DoesNotDisableThinkingWhenEffortSet(t *testing.T) {
+	provider := newOAuthProvider()
+	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
+	require.NoError(t, err)
+
+	userID := `{"device_id":"dev1","account_uuid":"acc1","session_id":"550e8400-e29b-41d4-a716-446655440000"}`
+	req := &anthropic.MessageNewParams{
+		Model:     anthropic.Model("claude-opus-4-7"),
+		MaxTokens: 512,
+		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("hi"))},
+	}
+	req.Metadata.UserID = param.NewOpt(userID)
+	req.OutputConfig.Effort = anthropic.OutputConfigEffortMedium
+
+	base, _ := c.Guard(context.Background(), req)
+	assert.Nil(t, req.Thinking.OfDisabled, "effort-based thinking must not be force-disabled")
+	assert.NotNil(t, base)
+}
+
 // ===================================================================
 // Guard — tool remapping
 // ===================================================================

@@ -140,9 +140,13 @@ func (c *ClaudeClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
 }
 
 func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) (*AnthropicClient, map[string]string) {
-	// Apply thinking transformation for Claude Code OAuth
-	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
-		// Clear thinking field
+	// Apply thinking transformation for Claude Code OAuth. Thinking can be expressed
+	// either through the thinking union (enabled/adaptive/disabled) or through
+	// output_config.effort (the effort-based adaptive thinking used by newer models).
+	// Only default to disabled when the client specified neither, otherwise we would
+	// silently turn off effort-based thinking the client explicitly requested.
+	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
+	if !thinkingSet && req.OutputConfig.Effort == "" {
 		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 	}
 
@@ -171,17 +175,25 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 }
 
 func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) (*AnthropicClient, map[string]string) {
-	// Apply thinking transformation for Claude Code OAuth
-	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
-		// Clear thinking field
+	// Apply thinking transformation for Claude Code OAuth. Thinking can be expressed
+	// either through the thinking union (enabled/adaptive/disabled) or through
+	// output_config.effort (the effort-based adaptive thinking used by newer models).
+	// Only default to disabled when the client specified neither, otherwise we would
+	// silently turn off effort-based thinking the client explicitly requested.
+	effortSet := req.OutputConfig.Effort != ""
+	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
+	if !thinkingSet && !effortSet {
 		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
 	}
 
-	// When thinking is disabled, drop any clear_thinking_20251015 context-management
-	// edit. Anthropic rejects that edit unless thinking is enabled or adaptive
-	// ("clear_thinking_20251015 requires `thinking` to be enabled or adaptive"), and
-	// newer Claude Code clients send it alongside requests where we force thinking off.
-	if req.Thinking.OfDisabled != nil {
+	// clear_thinking_20251015 is only valid when thinking is enabled or adaptive;
+	// effort-based thinking counts as adaptive. An explicit disabled config wins even
+	// if effort is also present. Drop the edit otherwise, since Anthropic rejects it
+	// with "clear_thinking_20251015 requires `thinking` to be enabled or adaptive" —
+	// which is what newer Claude Code clients hit when we force thinking off.
+	thinkingActive := req.Thinking.OfDisabled == nil &&
+		(req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || effortSet)
+	if !thinkingActive {
 		stripBetaClearThinkingEdit(req)
 	}
 
