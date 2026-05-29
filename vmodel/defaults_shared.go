@@ -30,7 +30,8 @@ type SharedMockSpec struct {
 	Content  string          // static text response (ignored if ToolCall is set)
 	ToolCall *ToolCallConfig // if non-nil, this is a tool model
 	Delay    time.Duration
-	Usage    *MockUsage // optional explicit usage to advertise in the stream
+	Usage    *MockUsage      // optional explicit usage to advertise in the stream
+	Error    *ErrorInjection // optional synthetic failure for error-injection mocks
 }
 
 // SharedDefaultMocks returns the mocks registered by BOTH the Anthropic and
@@ -116,6 +117,68 @@ func StreamTestMockSpecs() []SharedMockSpec {
 				Arguments: map[string]interface{}{"ok": true},
 			},
 			Usage: usage,
+		},
+	}
+}
+
+// ErrorMockSpecs returns opt-in fixtures that always fail. They exist so a
+// consumer (priority-routing failover tests, gateway integration tests, demos)
+// can register a "broken upstream" mock by name instead of standing up an
+// ad-hoc httptest.Server. Each spec covers one of the two failover-relevant
+// stages:
+//
+//   - virtual-fail-precontent-429 / -500: pre-content failures the failover
+//     orchestrator MUST retry (gate stays buffered, retryable status).
+//   - virtual-fail-midstream-close / -event: mid-stream failures the
+//     orchestrator MUST NOT retry (gate committed, bytes on the wire).
+//
+// Like StreamTestMockSpecs, these are intentionally NOT in SharedDefaultMocks
+// so production registries stay clean — register via RegisterErrorMocks.
+func ErrorMockSpecs() []SharedMockSpec {
+	return []SharedMockSpec{
+		{
+			ID:      "virtual-fail-precontent-429",
+			Name:    "Virtual Fail (Pre-Content 429)",
+			Content: "unreachable",
+			Error: &ErrorInjection{
+				Stage:   ErrorStagePreContent,
+				Status:  429,
+				Message: "simulated rate limit",
+				Type:    "rate_limit_error",
+			},
+		},
+		{
+			ID:      "virtual-fail-precontent-500",
+			Name:    "Virtual Fail (Pre-Content 500)",
+			Content: "unreachable",
+			Error: &ErrorInjection{
+				Stage:   ErrorStagePreContent,
+				Status:  500,
+				Message: "simulated upstream error",
+				Type:    "api_error",
+			},
+		},
+		{
+			ID:      "virtual-fail-midstream-close",
+			Name:    "Virtual Fail (Mid-Stream Connection Close)",
+			Content: "hello world this stream will be truncated",
+			Error: &ErrorInjection{
+				Stage:         ErrorStageMidStream,
+				AfterEvents:   1,
+				MidStreamMode: MidStreamModeConnectionClose,
+			},
+		},
+		{
+			ID:      "virtual-fail-midstream-event",
+			Name:    "Virtual Fail (Mid-Stream Error Event)",
+			Content: "hello world this stream will end with an error",
+			Error: &ErrorInjection{
+				Stage:         ErrorStageMidStream,
+				AfterEvents:   1,
+				MidStreamMode: MidStreamModeErrorEvent,
+				Message:       "simulated mid-stream error",
+				Type:          "api_error",
+			},
 		},
 	}
 }

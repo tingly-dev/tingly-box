@@ -246,6 +246,119 @@ func TestErrorInjection_MidStream_Anthropic_ErrorEvent(t *testing.T) {
 	require.NotContains(t, body, "event: message_stop")
 }
 
+// TestRegisterErrorMocks_OpenAI verifies that the opt-in registration helper
+// wires all four error-injection variants into the OpenAI registry, and that
+// each one trips its configured behavior end-to-end.
+func TestRegisterErrorMocks_OpenAI(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := virtualserver.NewService()
+	openaivm.RegisterErrorMocks(svc.GetOpenAIRegistry())
+	engine := gin.New()
+	svc.SetupRoutes(engine.Group("/v1"))
+	srv := httptest.NewServer(engine)
+	t.Cleanup(srv.Close)
+
+	t.Run("precontent-429", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/chat/completions", map[string]any{
+			"model":    "virtual-fail-precontent-429",
+			"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	})
+
+	t.Run("precontent-500", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/chat/completions", map[string]any{
+			"model":    "virtual-fail-precontent-500",
+			"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("midstream-close", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/chat/completions", map[string]any{
+			"model":    "virtual-fail-midstream-close",
+			"stream":   true,
+			"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		b, _ := io.ReadAll(resp.Body)
+		body := string(b)
+		require.NotContains(t, body, "[DONE]")
+		require.NotContains(t, body, `"error"`)
+	})
+
+	t.Run("midstream-event", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/chat/completions", map[string]any{
+			"model":    "virtual-fail-midstream-event",
+			"stream":   true,
+			"messages": []map[string]string{{"role": "user", "content": "hi"}},
+		})
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		b, _ := io.ReadAll(resp.Body)
+		body := string(b)
+		require.Contains(t, body, `"message":"simulated mid-stream error"`)
+		require.NotContains(t, body, "[DONE]")
+	})
+}
+
+// TestRegisterErrorMocks_Anthropic mirrors the OpenAI variant for the
+// Anthropic registry.
+func TestRegisterErrorMocks_Anthropic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := virtualserver.NewService()
+	anthropicvm.RegisterErrorMocks(svc.GetAnthropicRegistry())
+	engine := gin.New()
+	svc.SetupRoutes(engine.Group("/v1"))
+	srv := httptest.NewServer(engine)
+	t.Cleanup(srv.Close)
+
+	body := func(model string, stream bool) map[string]any {
+		return map[string]any{
+			"model":      model,
+			"stream":     stream,
+			"max_tokens": 16,
+			"messages":   []map[string]string{{"role": "user", "content": "hi"}},
+		}
+	}
+
+	t.Run("precontent-429", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-precontent-429", false))
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	})
+
+	t.Run("precontent-500", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-precontent-500", false))
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("midstream-close", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-midstream-close", true))
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		b, _ := io.ReadAll(resp.Body)
+		txt := string(b)
+		require.NotContains(t, txt, "event: message_stop")
+		require.NotContains(t, txt, "event: error")
+	})
+
+	t.Run("midstream-event", func(t *testing.T) {
+		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-midstream-event", true))
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		b, _ := io.ReadAll(resp.Body)
+		txt := string(b)
+		require.Contains(t, txt, "event: error")
+		require.Contains(t, txt, `"message":"simulated mid-stream error"`)
+		require.NotContains(t, txt, "event: message_stop")
+	})
+}
+
 // TestErrorInjection_MidStream_Anthropic_ConnectionClose verifies that the
 // Anthropic streaming path also supports TCP-level close.
 func TestErrorInjection_MidStream_Anthropic_ConnectionClose(t *testing.T) {
