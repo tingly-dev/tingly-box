@@ -121,6 +121,7 @@ type UsageRecordResponse struct {
 	Status           string `json:"status" example:"success"`
 	ErrorCode        string `json:"error_code,omitempty"`
 	LatencyMs        int    `json:"latency_ms" example:"1200"`
+	TTFTMs           int    `json:"ttft_ms" example:"180"`
 	Streamed         bool   `json:"streamed" example:"true"`
 }
 

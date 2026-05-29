@@ -27,8 +27,9 @@ import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
 const PaidIcon = tablerMui(IconCoin);
 const StreamIcon = tablerMui(IconActivity);
 const CachedIcon = tablerMui(IconReload);
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav } from '@/components/dashboard';
-import type { TimeSeriesData, AggregatedStat } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView } from '@/components/dashboard';
+import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
+import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
 import { switchControlLabelStyle } from '@/styles/toggleStyles';
 import api from '../services/api';
@@ -106,6 +107,8 @@ export default function DashboardPage() {
         ? (urlTimeRange as TimeRange)
         : '7d';
 
+    const isHourlyRange = timeRange === 'today' || timeRange === 'yesterday';
+
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(false);
@@ -114,42 +117,44 @@ export default function DashboardPage() {
     const [providers, setProviders] = useState<Provider[]>([]);
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
 
+    // By-request view state
+    const [viewMode, setViewMode] = useState<'summary' | 'requests'>('summary');
+    const [records, setRecords] = useState<UsageRecord[]>([]);
+    const [recordsLoading, setRecordsLoading] = useState(false);
+    const [recordsTimeParams, setRecordsTimeParams] = useState<{ start_time: string; end_time: string } | null>(null);
+
+    const buildTimeParams = useCallback((provider: string, range: TimeRange) => {
+        const now = new Date();
+        const config = TIME_RANGE_CONFIG[range];
+        const todayStart = getLocalMidnight(now);
+        const startTime = new Date(todayStart);
+        let endTime: Date;
+
+        if (range === 'today') {
+            endTime = now;
+        } else if (range === 'yesterday') {
+            startTime.setDate(startTime.getDate() - 1);
+            endTime = new Date(todayStart);
+        } else {
+            startTime.setDate(startTime.getDate() - (config.days - 1));
+            endTime = new Date(todayStart);
+            endTime.setDate(endTime.getDate() + 1);
+        }
+
+        const params: Record<string, string> = {
+            start_time: toLocalISOString(startTime),
+            end_time: toLocalISOString(endTime),
+        };
+        if (provider && provider !== 'all') {
+            params.provider = provider;
+        }
+        return params;
+    }, []);
+
     const loadData = useCallback(async (provider: string, range: TimeRange) => {
         try {
-            // Build query params based on time range
-            const now = new Date();
             const config = TIME_RANGE_CONFIG[range];
-
-            // Calculate start time based on today 00:00:00 LOCAL time
-            // For multi-day mode, start from (config.days - 1) days ago at 00:00:00
-            // For 'today' mode, start from today 00:00:00
-            const todayStart = getLocalMidnight(now);
-
-            const startTime = new Date(todayStart);
-            let endTime: Date;
-
-            if (range === 'today') {
-                // For today: from today 00:00:00 to now
-                endTime = now;
-            } else if (range === 'yesterday') {
-                // For yesterday: from yesterday 00:00:00 to today 00:00:00
-                startTime.setDate(startTime.getDate() - 1);
-                endTime = new Date(todayStart);
-            } else {
-                // For multi-day mode: from (N-1) days ago 00:00:00 to tomorrow 00:00:00
-                // This ensures we get complete data for today
-                startTime.setDate(startTime.getDate() - (config.days - 1));
-                endTime = new Date(todayStart);
-                endTime.setDate(endTime.getDate() + 1); // Next day at 00:00:00
-            }
-
-            const params: Record<string, string> = {
-                start_time: toLocalISOString(startTime),
-                end_time: toLocalISOString(endTime),
-            };
-            if (provider && provider !== 'all') {
-                params.provider = provider;
-            }
+            const params = buildTimeParams(provider, range);
 
             const [statsResult, timeSeriesResult, providersResult] = await Promise.all([
                 api.getUsageStats({ ...params, group_by: 'model', limit: 100 }),
@@ -166,11 +171,37 @@ export default function DashboardPage() {
             if (providersResult?.success && providersResult?.data) {
                 setProviders(providersResult.data);
             }
+
+            // Store time params for records loading
+            setRecordsTimeParams({ start_time: params.start_time, end_time: params.end_time });
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);
+        }
+    }, [buildTimeParams]);
+
+    const loadRecords = useCallback(async (
+        timeParams: { start_time: string; end_time: string } | null,
+        provider: string,
+    ) => {
+        if (!timeParams) return;
+        setRecordsLoading(true);
+        try {
+            const result = await api.getUsageRecords({
+                ...timeParams,
+                ...(provider !== 'all' ? { provider } : {}),
+                limit: 500,
+                offset: 0,
+            });
+            if (result?.data) {
+                setRecords(result.data);
+            }
+        } catch (error) {
+            console.error('Failed to load records:', error);
+        } finally {
+            setRecordsLoading(false);
         }
     }, []);
 
@@ -178,14 +209,31 @@ export default function DashboardPage() {
         loadData(selectedProvider, timeRange);
     }, [loadData, selectedProvider, timeRange]);
 
+    // Reset view mode when switching away from hourly ranges
+    useEffect(() => {
+        if (!isHourlyRange) {
+            setViewMode('summary');
+        }
+    }, [isHourlyRange]);
+
+    // Load records when entering requests view or time/provider changes
+    useEffect(() => {
+        if (viewMode === 'requests') {
+            loadRecords(recordsTimeParams, selectedProvider);
+        }
+    }, [viewMode, recordsTimeParams, selectedProvider, loadRecords]);
+
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(() => {
                 loadData(selectedProvider, timeRange);
+                if (viewMode === 'requests') {
+                    loadRecords(recordsTimeParams, selectedProvider);
+                }
             }, 60000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, loadData, selectedProvider, timeRange]);
+    }, [autoRefresh, loadData, selectedProvider, timeRange, viewMode, loadRecords, recordsTimeParams]);
 
     const handleRefresh = () => {
         setRefreshing(true);
@@ -383,12 +431,38 @@ export default function DashboardPage() {
                         </Grid>
                     </Grid>
 
-                    {/* Time Series Chart - Full Width */}
-                    <Box sx={{ display: 'flex' }}>
-                        {timeRange === 'today' || timeRange === 'yesterday' ? (
-                            <HourlyTokenHistoryChart data={timeSeries} />
+                    {/* Chart / Requests toggle */}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {isHourlyRange && (
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <ToggleButtonGroup
+                                    value={viewMode}
+                                    exclusive
+                                    onChange={(_, v) => v && setViewMode(v)}
+                                    size="small"
+                                    sx={{
+                                        '& .MuiToggleButton-root': {
+                                            px: 1.75,
+                                            py: 0.375,
+                                            fontSize: '0.78rem',
+                                            textTransform: 'none',
+                                        },
+                                    }}
+                                >
+                                    <ToggleButton value="summary">Summary</ToggleButton>
+                                    <ToggleButton value="requests">By Request</ToggleButton>
+                                </ToggleButtonGroup>
+                            </Box>
+                        )}
+
+                        {viewMode === 'summary' ? (
+                            timeRange === 'today' || timeRange === 'yesterday' ? (
+                                <HourlyTokenHistoryChart data={timeSeries} />
+                            ) : (
+                                <DailyTokenHistoryChart data={timeSeries} />
+                            )
                         ) : (
-                            <DailyTokenHistoryChart data={timeSeries} />
+                            <RequestsView records={records} loading={recordsLoading} />
                         )}
                     </Box>
                 </Box>
