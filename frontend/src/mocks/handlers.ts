@@ -1492,6 +1492,65 @@ export const handlers = [
         return HttpResponse.json({ success: true, data })
     }),
 
+    http.get('/api/v1/usage/records', ({ request }) => {
+        const url = new URL(request.url)
+        const limit = parseInt(url.searchParams.get('limit') || '500')
+        const offset = parseInt(url.searchParams.get('offset') || '0')
+        const statusFilter = url.searchParams.get('status') || ''
+
+        const models = [
+            { provider_name: 'Anthropic', model: 'claude-sonnet-4-5', scenario: 'claude_code', streamed: true },
+            { provider_name: 'Anthropic', model: 'claude-opus-4-5',   scenario: 'claude_code', streamed: true },
+            { provider_name: 'OpenAI',    model: 'gpt-4o',            scenario: 'openai',      streamed: true },
+            { provider_name: 'OpenAI',    model: 'gpt-4o-mini',       scenario: 'openai',      streamed: false },
+            { provider_name: 'OpenRouter', model: 'deepseek/deepseek-r1', scenario: 'agent',   streamed: true },
+        ]
+
+        const now = Date.now()
+        const dayStart = new Date()
+        dayStart.setHours(0, 0, 0, 0)
+
+        const total = 120
+        const all = Array.from({ length: total }, (_, i) => {
+            const m = models[i % models.length]
+            const isError = i % 20 === 0
+            const input = Math.round(800 + Math.random() * 4000)
+            const output = Math.round(200 + Math.random() * 1500)
+            const cache = m.provider_name === 'Anthropic' ? Math.round(Math.random() * 800) : 0
+            const latency = Math.round(
+                m.model.includes('opus') ? 1500 + Math.random() * 3000
+                : m.model.includes('mini') ? 200 + Math.random() * 600
+                : 600 + Math.random() * 1800
+            )
+            const ts = new Date(dayStart.getTime() + Math.random() * (now - dayStart.getTime()))
+            return {
+                id: i + 1,
+                provider_uuid: `mock-provider-${m.provider_name.toLowerCase()}`,
+                provider_name: m.provider_name,
+                model: m.model,
+                scenario: m.scenario,
+                timestamp: ts.toISOString(),
+                input_tokens: input,
+                output_tokens: output,
+                total_tokens: input + output + cache,
+                cache_input_tokens: cache,
+                status: isError ? 'error' : 'success',
+                error_code: isError ? 'rate_limit_exceeded' : '',
+                latency_ms: latency,
+                streamed: m.streamed && !isError,
+            }
+        }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+        const filtered = statusFilter ? all.filter(r => r.status === statusFilter) : all
+        const page = filtered.slice(offset, offset + limit)
+
+        return HttpResponse.json({
+            success: true,
+            meta: { total: filtered.length, limit, offset },
+            data: page,
+        })
+    }),
+
     // ============================================
     // ImBot Settings API (v1)
     // ============================================
