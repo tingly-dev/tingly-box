@@ -27,7 +27,7 @@ import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
 const PaidIcon = tablerMui(IconCoin);
 const StreamIcon = tablerMui(IconActivity);
 const CachedIcon = tablerMui(IconReload);
-import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestScatterChart } from '@/components/dashboard';
+import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
 import PageHeader from '@/components/PageHeader';
@@ -462,7 +462,7 @@ export default function DashboardPage() {
                                 <DailyTokenHistoryChart data={timeSeries} />
                             )
                         ) : (
-                            <RequestScatterChart records={records} loading={recordsLoading} />
+                            <RequestsView records={records} loading={recordsLoading} />
                         )}
                     </Box>
                 </Box>

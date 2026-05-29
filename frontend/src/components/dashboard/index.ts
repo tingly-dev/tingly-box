@@ -8,6 +8,6 @@ export { default as RequestErrorChart } from './RequestErrorChart';
 export { default as TokenHeatmap } from './TokenHeatmap';
 export type { DailyUsage, HeatmapMetrics } from './TokenHeatmap';
 export { default as AgentQuickNav } from './AgentQuickNav';
-export { default as RequestScatterChart } from './RequestScatterChart';
-export type { UsageRecord } from './RequestScatterChart';
+export { default as RequestsView } from './RequestsView';
+export type { UsageRecord } from './RequestsView';
 
