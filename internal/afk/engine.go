@@ -26,16 +26,14 @@ import (
 
 // Tool is a single callable tool exposed to the model.
 //
-// Name/Description/Schema describe the tool to the model; Call executes it. The
-// raw JSON input from the model is passed through unmodified so each tool owns
-// its own argument decoding.
+// Param describes the tool to the model (name, description, input schema) as a
+// native BetaToolParam — no conversion layer. Call executes it; the raw JSON
+// input from the model is passed through unmodified so each tool owns its own
+// argument decoding.
 type Tool interface {
-	Name() string
-	Description() string
-	// Schema returns the JSON-schema "properties" object and the list of
-	// required property names. Returning a nil properties map declares a tool
-	// with no input.
-	Schema() (properties map[string]any, required []string)
+	// Param returns the full BetaToolParam sent to the model. Name is also used
+	// as the dispatch key when routing tool_use blocks back to this tool.
+	Param() anthropic.BetaToolParam
 	// Call executes the tool with the raw JSON arguments produced by the model
 	// and returns the textual result. A non-nil error is reported back to the
 	// model as an error tool_result (the loop itself does not abort).
@@ -141,19 +139,10 @@ func NewEngine(cfg Config) (*Engine, error) {
 
 // registerTool adds a tool to the engine's dispatch table and param list.
 func (e *Engine) registerTool(t Tool) {
-	props, required := t.Schema()
-	schema := anthropic.BetaToolInputSchemaParam{Required: required}
-	if props != nil {
-		schema.Properties = props
-	}
-	param := anthropic.BetaToolParam{
-		Name:        t.Name(),
-		Description: anthropic.String(t.Description()),
-		InputSchema: schema,
-	}
+	p := t.Param()
 	e.tools = append(e.tools, t)
-	e.toolByName[t.Name()] = t
-	e.toolParams = append(e.toolParams, anthropic.BetaToolUnionParam{OfTool: &param})
+	e.toolByName[p.Name] = t
+	e.toolParams = append(e.toolParams, anthropic.BetaToolUnionParam{OfTool: &p})
 }
 
 // Run executes the ReAct loop. It appends the user prompt to history, then

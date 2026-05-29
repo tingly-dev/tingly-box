@@ -113,12 +113,17 @@ type fakeTool struct {
 	lastArgs json.RawMessage
 }
 
-func (f *fakeTool) Name() string        { return f.name }
-func (f *fakeTool) Description() string { return "a fake tool for testing" }
-func (f *fakeTool) Schema() (map[string]any, []string) {
-	return map[string]any{
-		"city": map[string]any{"type": "string"},
-	}, []string{"city"}
+func (f *fakeTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name:        f.name,
+		Description: anthropic.String("a fake tool for testing"),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"city": map[string]any{"type": "string"},
+			},
+			Required: []string{"city"},
+		},
+	}
 }
 
 func (f *fakeTool) Call(ctx context.Context, rawInput json.RawMessage) (string, error) {

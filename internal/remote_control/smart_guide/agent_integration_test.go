@@ -250,12 +250,16 @@ type recordingTool struct {
 	gotArg string
 }
 
-func (r *recordingTool) Name() string        { return r.name }
-func (r *recordingTool) Description() string { return "test tool" }
-func (r *recordingTool) Schema() (map[string]any, []string) {
-	return map[string]any{
-		"q": map[string]any{"type": "string", "description": "query"},
-	}, nil
+func (r *recordingTool) Param() sdk.BetaToolParam {
+	return sdk.BetaToolParam{
+		Name:        r.name,
+		Description: sdk.String("test tool"),
+		InputSchema: sdk.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"q": map[string]any{"type": "string", "description": "query"},
+			},
+		},
+	}
 }
 func (r *recordingTool) Call(_ context.Context, raw json.RawMessage) (string, error) {
 	r.called++

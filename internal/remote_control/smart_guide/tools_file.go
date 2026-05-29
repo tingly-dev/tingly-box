@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/tingly-dev/tingly-box/internal/afk"
 )
 
@@ -29,29 +30,28 @@ func NewReadFileTool(executor *ToolExecutor) *ReadFileTool {
 	return &ReadFileTool{executor: executor}
 }
 
-func (t *ReadFileTool) Name() string { return "read" }
-
-func (t *ReadFileTool) Description() string {
-	return "Read the contents of a file. Optionally provide a 1-based offset and a " +
-		"line limit to read only a slice of the file. Files larger than 10MB are rejected."
-}
-
-func (t *ReadFileTool) Schema() (map[string]any, []string) {
-	props := map[string]any{
-		"path": map[string]any{
-			"type":        "string",
-			"description": "Path to the file to read (absolute, or relative to the current working directory).",
-		},
-		"offset": map[string]any{
-			"type":        "integer",
-			"description": "Optional 1-based line number to start reading from.",
-		},
-		"limit": map[string]any{
-			"type":        "integer",
-			"description": "Optional maximum number of lines to read starting at offset.",
+func (t *ReadFileTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name:        "read",
+		Description: anthropic.String("Read the contents of a file. Optionally provide a 1-based offset and a line limit to read only a slice of the file. Files larger than 10MB are rejected."),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "Path to the file to read (absolute, or relative to the current working directory).",
+				},
+				"offset": map[string]any{
+					"type":        "integer",
+					"description": "Optional 1-based line number to start reading from.",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"description": "Optional maximum number of lines to read starting at offset.",
+				},
+			},
+			Required: []string{"path"},
 		},
 	}
-	return props, []string{"path"}
 }
 
 type readFileParams struct {
@@ -129,25 +129,24 @@ func NewWriteFileTool(executor *ToolExecutor) *WriteFileTool {
 	return &WriteFileTool{executor: executor}
 }
 
-func (t *WriteFileTool) Name() string { return "write" }
-
-func (t *WriteFileTool) Description() string {
-	return "Write content to a file, overwriting it if it exists and creating parent " +
-		"directories as needed. Content larger than 10MB is rejected."
-}
-
-func (t *WriteFileTool) Schema() (map[string]any, []string) {
-	props := map[string]any{
-		"path": map[string]any{
-			"type":        "string",
-			"description": "Path to the file to write (absolute, or relative to the current working directory).",
-		},
-		"content": map[string]any{
-			"type":        "string",
-			"description": "The full content to write to the file.",
+func (t *WriteFileTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name:        "write",
+		Description: anthropic.String("Write content to a file, overwriting it if it exists and creating parent directories as needed. Content larger than 10MB is rejected."),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "Path to the file to write (absolute, or relative to the current working directory).",
+				},
+				"content": map[string]any{
+					"type":        "string",
+					"description": "The full content to write to the file.",
+				},
+			},
+			Required: []string{"path", "content"},
 		},
 	}
-	return props, []string{"path", "content"}
 }
 
 type writeFileParams struct {
@@ -196,29 +195,28 @@ func NewEditFileTool(executor *ToolExecutor) *EditFileTool {
 	return &EditFileTool{executor: executor}
 }
 
-func (t *EditFileTool) Name() string { return "edit" }
-
-func (t *EditFileTool) Description() string {
-	return "Edit a file by replacing an exact occurrence of old_text with new_text. " +
-		"old_text must appear exactly once in the file, otherwise the edit is rejected."
-}
-
-func (t *EditFileTool) Schema() (map[string]any, []string) {
-	props := map[string]any{
-		"path": map[string]any{
-			"type":        "string",
-			"description": "Path to the file to edit (absolute, or relative to the current working directory).",
-		},
-		"old_text": map[string]any{
-			"type":        "string",
-			"description": "The exact text to find. It must appear exactly once in the file.",
-		},
-		"new_text": map[string]any{
-			"type":        "string",
-			"description": "The replacement text.",
+func (t *EditFileTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name:        "edit",
+		Description: anthropic.String("Edit a file by replacing an exact occurrence of old_text with new_text. old_text must appear exactly once in the file, otherwise the edit is rejected."),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "Path to the file to edit (absolute, or relative to the current working directory).",
+				},
+				"old_text": map[string]any{
+					"type":        "string",
+					"description": "The exact text to find. It must appear exactly once in the file.",
+				},
+				"new_text": map[string]any{
+					"type":        "string",
+					"description": "The replacement text.",
+				},
+			},
+			Required: []string{"path", "old_text", "new_text"},
 		},
 	}
-	return props, []string{"path", "old_text", "new_text"}
 }
 
 type editFileParams struct {
