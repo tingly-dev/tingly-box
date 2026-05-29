@@ -198,7 +198,14 @@ func (e *Engine) Run(
 			finalText = turnText
 		}
 
-		toolUses := toolUseBlocks(msg)
+		// Collect tool_use blocks from the SDK-native content slice.
+		var toolUses []anthropic.BetaContentBlockUnion
+		for _, block := range msg.Content {
+			if block.Type == "tool_use" {
+				toolUses = append(toolUses, block)
+			}
+		}
+
 		logrus.WithFields(logrus.Fields{
 			"iteration": i,
 			"turn_text": len(turnText),
@@ -231,9 +238,9 @@ func (e *Engine) Run(
 }
 
 // streamTurn runs one model call via the Beta Messages API, streaming text to
-// the sink and accumulating the full assistant BetaMessage (text + tool_use
-// blocks). It returns the accumulated message and the concatenated text of this
-// turn.
+// the sink and accumulating the full assistant BetaMessage. It returns the
+// accumulated message and the concatenated text (or thinking, as fallback) of
+// this turn.
 func (e *Engine) streamTurn(
 	ctx context.Context,
 	messages []anthropic.BetaMessageParam,
@@ -278,17 +285,30 @@ func (e *Engine) streamTurn(
 		return msg, "", fmt.Errorf("model stream error: %w", err)
 	}
 
-	// Pull the turn's text from the SDK-accumulated message (not a hand-built
-	// string), so text/tool_use ordering and block boundaries come from the SDK.
-	turnText := messageText(msg)
+	// Scan the SDK-accumulated content blocks once: collect text, thinking,
+	// and per-type counts for the diagnostic log below.
+	var textB, thinkB strings.Builder
+	var nText, nThinking, nToolUse int
+	for _, block := range msg.Content {
+		switch block.Type {
+		case "text":
+			textB.WriteString(block.Text)
+			nText++
+		case "thinking":
+			thinkB.WriteString(block.Thinking)
+			nThinking++
+		case "tool_use":
+			nToolUse++
+		}
+	}
 
-	// Fall back to the thinking text when a turn produced no visible text. With
-	// extended thinking the model may put its only prose in a thinking block and
-	// then go straight to a tool call (or end); without this fallback the user
-	// would see nothing at all. Real text always wins over thinking.
+	// Real text wins over thinking. Fall back to thinking only when the turn
+	// produced no visible text — e.g. extended-thinking-only turns where the
+	// model writes its reasoning in a thinking block then calls a tool.
+	turnText := textB.String()
 	usedThinking := false
 	if turnText == "" {
-		if think := messageThinking(msg); think != "" {
+		if think := thinkB.String(); think != "" {
 			turnText = think
 			usedThinking = true
 		}
@@ -298,10 +318,10 @@ func (e *Engine) streamTurn(
 		"model":           e.model,
 		"stop_reason":     msg.StopReason,
 		"text_len":        len(turnText),
-		"text_blocks":     countBlocks(msg, "text"),
-		"thinking_blocks": countBlocks(msg, "thinking"),
+		"text_blocks":     nText,
+		"thinking_blocks": nThinking,
 		"used_thinking":   usedThinking,
-		"tool_uses":       len(toolUseBlocks(msg)),
+		"tool_uses":       nToolUse,
 	}).Debug("afk engine: assistant turn complete")
 
 	// Aggregated mode: emit the whole turn's text once, after the stream ends.
@@ -311,11 +331,11 @@ func (e *Engine) streamTurn(
 	return msg, turnText, nil
 }
 
-// dispatchTools executes every tool_use block and returns the corresponding
-// tool_result content blocks, in order.
+// dispatchTools executes every tool_use block (SDK BetaContentBlockUnion) and
+// returns the corresponding tool_result content blocks, in order.
 func (e *Engine) dispatchTools(
 	ctx context.Context,
-	toolUses []toolUse,
+	toolUses []anthropic.BetaContentBlockUnion,
 	sink StreamSink,
 ) []anthropic.BetaContentBlockParamUnion {
 	results := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
@@ -334,7 +354,7 @@ func (e *Engine) dispatchTools(
 
 // callTool resolves and invokes a single tool, converting a Go error or unknown
 // tool name into an error result string (the loop continues either way).
-func (e *Engine) callTool(ctx context.Context, tu toolUse) (string, bool) {
+func (e *Engine) callTool(ctx context.Context, tu anthropic.BetaContentBlockUnion) (string, bool) {
 	tool, ok := e.toolByName[tu.Name]
 	if !ok {
 		logrus.WithField("tool", tu.Name).Warn("afk engine: unknown tool requested")
@@ -357,75 +377,4 @@ func (e *Engine) callTool(ctx context.Context, tu toolUse) (string, bool) {
 		"result_len": len(out),
 	}).Debug("afk engine: tool result")
 	return out, false
-}
-
-// toolUse is a tool invocation extracted from an accumulated message.
-type toolUse struct {
-	ID    string
-	Name  string
-	Input json.RawMessage
-}
-
-// toolUseBlocks extracts tool_use invocations from an accumulated assistant
-// BetaMessage.
-//
-// Like messageText, this reads the union's fields directly (block.ID/Name/Input)
-// rather than block.AsAny().(BetaToolUseBlock): on a stream-accumulated message
-// the tool input arrives as input_json_delta appended onto the union's .Input
-// field, while AsToolUse() reparses the block's original JSON (input "{}").
-// Going through AsToolUse would therefore drop streamed tool arguments.
-func toolUseBlocks(msg anthropic.BetaMessage) []toolUse {
-	var blocks []toolUse
-	for _, block := range msg.Content {
-		if block.Type == "tool_use" {
-			blocks = append(blocks, toolUse{ID: block.ID, Name: block.Name, Input: block.Input})
-		}
-	}
-	return blocks
-}
-
-// messageText concatenates the text of all text blocks in an SDK-accumulated
-// BetaMessage. This is the canonical way to read a turn's text — the SDK has
-// already assembled the deltas into the blocks.
-//
-// IMPORTANT: read the union's .Text field directly, filtered by block .Type.
-// Do NOT go through block.AsAny().(BetaTextBlock): on a *stream-accumulated*
-// message AsText() reparses the block's original JSON (whose text was ""),
-// while streamed text deltas are appended onto the union's .Text field. So
-// AsAny().(BetaTextBlock).Text is empty even though the text is present —
-// using it silently drops every streamed assistant message.
-func messageText(msg anthropic.BetaMessage) string {
-	var b strings.Builder
-	for _, block := range msg.Content {
-		if block.Type == "text" {
-			b.WriteString(block.Text)
-		}
-	}
-	return b.String()
-}
-
-// messageThinking concatenates the thinking text of all thinking blocks in an
-// SDK-accumulated BetaMessage. Read from the union's .Thinking field directly,
-// for the same reason as messageText: AsAny().(BetaThinkingBlock) reparses the
-// block's original JSON and would miss delta-accumulated thinking text.
-func messageThinking(msg anthropic.BetaMessage) string {
-	var b strings.Builder
-	for _, block := range msg.Content {
-		if block.Type == "thinking" {
-			b.WriteString(block.Thinking)
-		}
-	}
-	return b.String()
-}
-
-// countBlocks returns how many content blocks of the given type the message has.
-// Used for diagnostic logging.
-func countBlocks(msg anthropic.BetaMessage, blockType string) int {
-	n := 0
-	for _, block := range msg.Content {
-		if block.Type == blockType {
-			n++
-		}
-	}
-	return n
 }
