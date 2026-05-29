@@ -300,7 +300,7 @@ func (e *Engine) streamTurn(
 // tool_result content blocks, in order.
 func (e *Engine) dispatchTools(
 	ctx context.Context,
-	toolUses []anthropic.ToolUseBlock,
+	toolUses []toolUse,
 	sink StreamSink,
 ) []anthropic.ContentBlockParamUnion {
 	results := make([]anthropic.ContentBlockParamUnion, 0, len(toolUses))
@@ -319,7 +319,7 @@ func (e *Engine) dispatchTools(
 
 // callTool resolves and invokes a single tool, converting a Go error or unknown
 // tool name into an error result string (the loop continues either way).
-func (e *Engine) callTool(ctx context.Context, tu anthropic.ToolUseBlock) (string, bool) {
+func (e *Engine) callTool(ctx context.Context, tu toolUse) (string, bool) {
 	tool, ok := e.toolByName[tu.Name]
 	if !ok {
 		logrus.WithField("tool", tu.Name).Warn("afk engine: unknown tool requested")
@@ -344,12 +344,26 @@ func (e *Engine) callTool(ctx context.Context, tu anthropic.ToolUseBlock) (strin
 	return out, false
 }
 
-// toolUseBlocks extracts tool_use blocks from an accumulated assistant message.
-func toolUseBlocks(msg anthropic.Message) []anthropic.ToolUseBlock {
-	var blocks []anthropic.ToolUseBlock
+// toolUse is a tool invocation extracted from an accumulated message.
+type toolUse struct {
+	ID    string
+	Name  string
+	Input json.RawMessage
+}
+
+// toolUseBlocks extracts tool_use invocations from an accumulated assistant
+// message.
+//
+// Like messageText, this reads the union's fields directly (block.ID/Name/Input)
+// rather than block.AsAny().(ToolUseBlock): on a stream-accumulated message the
+// tool input arrives as input_json_delta appended onto the union's .Input
+// field, while AsToolUse() reparses the block's original JSON (input "{}").
+// Going through AsToolUse would therefore drop streamed tool arguments.
+func toolUseBlocks(msg anthropic.Message) []toolUse {
+	var blocks []toolUse
 	for _, block := range msg.Content {
-		if tu, ok := block.AsAny().(anthropic.ToolUseBlock); ok {
-			blocks = append(blocks, tu)
+		if block.Type == "tool_use" {
+			blocks = append(blocks, toolUse{ID: block.ID, Name: block.Name, Input: block.Input})
 		}
 	}
 	return blocks
@@ -357,13 +371,19 @@ func toolUseBlocks(msg anthropic.Message) []anthropic.ToolUseBlock {
 
 // messageText concatenates the text of all text blocks in an SDK-accumulated
 // message. This is the canonical way to read a turn's text — the SDK has
-// already assembled the deltas into the blocks — so callers never hand-roll
-// string concatenation from the raw stream.
+// already assembled the deltas into the blocks.
+//
+// IMPORTANT: read the union's .Text field directly, filtered by block .Type.
+// Do NOT go through block.AsAny().(TextBlock): on a *stream-accumulated*
+// message AsText() reparses the block's original JSON (whose text was ""),
+// while streamed text deltas are appended onto the union's .Text field. So
+// AsAny().(TextBlock).Text is empty even though the text is present — using it
+// silently drops every streamed assistant message.
 func messageText(msg anthropic.Message) string {
 	var b strings.Builder
 	for _, block := range msg.Content {
-		if t, ok := block.AsAny().(anthropic.TextBlock); ok {
-			b.WriteString(t.Text)
+		if block.Type == "text" {
+			b.WriteString(block.Text)
 		}
 	}
 	return b.String()

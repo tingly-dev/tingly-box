@@ -283,3 +283,59 @@ func TestNewEngine_Validation(t *testing.T) {
 	_, err := NewEngine(Config{BaseURL: "http://x", APIKey: "k", Model: "m"})
 	assert.NoError(t, err, "fully populated config should succeed")
 }
+
+// textThenStreamedToolResponse builds an SSE stream for an assistant turn that
+// emits leading text AND a tool_use whose input arrives via input_json_delta
+// (the real streaming shape, where the tool block's start carries empty input).
+// This is the regression fixture for the "messages get lost" bug: reading text
+// via AsAny().(TextBlock) or tool input via AsToolUse() yields empty values on a
+// stream-accumulated message, because those reparse the block's original JSON
+// rather than the delta-accumulated union fields.
+func textThenStreamedToolResponse(text, toolID, toolName, inputJSON string) string {
+	w := &sseWriter{}
+	w.event("message_start", `{"type":"message_start","message":{"id":"msg_mix","type":"message","role":"assistant","model":"test","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}`)
+	// Text block (index 0): start + delta + stop.
+	w.event("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)
+	td, _ := json.Marshal(text)
+	w.event("content_block_delta", fmt.Sprintf(`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":%s}}`, td))
+	w.event("content_block_stop", `{"type":"content_block_stop","index":0}`)
+	// Tool block (index 1): start with empty input, then streamed input_json_delta.
+	w.event("content_block_start", fmt.Sprintf(`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":%q,"name":%q,"input":{}}}`, toolID, toolName))
+	pj, _ := json.Marshal(inputJSON)
+	w.event("content_block_delta", fmt.Sprintf(`{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":%s}}`, pj))
+	w.event("content_block_stop", `{"type":"content_block_stop","index":1}`)
+	w.event("message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":5}}`)
+	w.event("message_stop", `{"type":"message_stop"}`)
+	return w.String()
+}
+
+// TestEngineRun_TextAndStreamedToolNotLost is the regression for messages being
+// dropped when a turn carries both text and a streamed tool call. The text must
+// reach the sink/finalText and the tool must receive the streamed input.
+func TestEngineRun_TextAndStreamedToolNotLost(t *testing.T) {
+	tool := &fakeTool{name: "lookup", result: "done"}
+
+	var reqCount int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&reqCount, 1) == 1 {
+			writeSSE(t, w, textThenStreamedToolResponse("Let me look that up.", "toolu_1", "lookup", `{"city":"Paris"}`))
+			return
+		}
+		writeSSE(t, w, textResponse("Here is the answer."))
+	}))
+	defer srv.Close()
+
+	eng, err := NewEngine(Config{BaseURL: srv.URL, APIKey: "k", Model: "m", Tools: []Tool{tool}})
+	require.NoError(t, err)
+
+	sink := &recordingSink{}
+	_, finalText, err := eng.Run(context.Background(), nil, "look up Paris", sink)
+	require.NoError(t, err)
+
+	// Intermediate-turn text must not be lost.
+	assert.Contains(t, sink.joinedText(), "Let me look that up.", "intermediate text was dropped")
+	assert.Contains(t, sink.joinedText(), "Here is the answer.", "final text was dropped")
+	assert.Equal(t, "Here is the answer.", finalText)
+	// Streamed tool input must have reached the tool (not empty {}).
+	assert.JSONEq(t, `{"city":"Paris"}`, string(tool.lastArgs), "streamed tool input was lost")
+}
