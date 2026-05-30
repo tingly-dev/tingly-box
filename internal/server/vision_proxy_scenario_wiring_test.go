@@ -84,9 +84,9 @@ func firstImagePresent(req *anthropic.BetaMessageNewParams) bool {
 	return false
 }
 
-// TestApplyScenarioVisionProxy_ReplacesImage is the end-to-end wiring check:
-// a scenario with vision_proxy_service configured must cause applyScenarioVisionProxy
-// to run the processor and replace the image block with the stub description.
+// TestApplyScenarioVisionProxy_ReplacesImage is the wiring check: a scenario
+// with vision_proxy_service configured must cause applyScenarioVisionProxy to
+// run the processor and replace the image block with the stub description.
 func TestApplyScenarioVisionProxy_ReplacesImage(t *testing.T) {
 	ext := map[string]interface{}{
 		config.VisionProxyServiceKey: map[string]interface{}{
