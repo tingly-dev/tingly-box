@@ -481,26 +481,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 {renderDefaultProviders()}
                                             </Box>
                                         ) : (
-                                            /* Direct Mode: Default node + Providers */
-                                            <Box sx={{
-                                                flex: 1,
-                                                display: 'flex',
-                                                alignItems: 'flex-start',
-                                                flexDirection: 'column',
-                                                gap: 1.5,
-                                            }}>
-                                                <GraphRow>
-                                                    <NodeContainer>
-                                                        <ServiceEntryNode
-                                                            providersCount={record.providers.length}
-                                                            active={active}
-                                                        />
-                                                    </NodeContainer>
-                                                    <ArrowNode direction="forward" />
-                                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-                                                        {renderProviderList()}
-                                                    </Box>
-                                                </GraphRow>
+                                            /* Direct Mode: providers inline */
+                                            <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 1.5, alignItems: 'center' }}>
+                                                {renderProviderList()}
                                             </Box>
                                         )}
                                     </GraphRow>
