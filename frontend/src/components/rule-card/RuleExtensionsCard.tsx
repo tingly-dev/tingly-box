@@ -1,5 +1,5 @@
-import { Add as AddIcon, Extension as ExtensionIcon } from '@/components/icons';
-import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
+import { Add as AddIcon, Close as CloseIcon, Extension as ExtensionIcon } from '@/components/icons';
+import { Box, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
 import {
@@ -171,7 +171,7 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                     onClick={(e) => e.stopPropagation()}
                     onDoubleClick={(e) => e.stopPropagation()}
                 >
-                    <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                    <Stack gap={0.4}>
                         {enabled.map((spec) => {
                             const isString = spec.type === 'string';
                             const isEnum = spec.type === 'enum';
@@ -181,47 +181,66 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                                 const opt = (spec.options || []).find((o) => o.value === stringVal);
                                 if (opt) displayVal = opt.label;
                             }
-                            const label = (isString || isEnum) && displayVal
-                                ? `${spec.label}: ${displayVal}`
-                                : spec.label;
-                            const title = (isString || isEnum) && stringVal
+                            const tooltipTitle = (isString || isEnum) && stringVal
                                 ? `${spec.description}\nValue: ${displayVal}`
                                 : spec.description;
                             return (
-                                <Tooltip key={spec.key} title={title}>
-                                    <Chip
-                                        size="small"
-                                        label={label}
-                                        variant="outlined"
-                                        onDelete={
-                                            spec.type === 'bool' && onToggleFlag
-                                                ? (e: React.MouseEvent) => {
-                                                    // Don't let the X bubble into the
-                                                    // card-level "open catalog" handler.
-                                                    e.stopPropagation();
-                                                    onToggleFlag(spec.key);
-                                                }
-                                                : undefined
-                                        }
+                                <Tooltip key={spec.key} title={tooltipTitle} placement="left">
+                                    <Box
                                         sx={(theme) => ({
-                                            maxWidth: '100%',
-                                            height: 20,
-                                            fontSize: '0.65rem',
-                                            borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.55 : 0.48),
-                                            color: getRouteGraphActiveColor(theme),
-                                            backgroundColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.08 : 0.035),
-                                            '& .MuiChip-label': {
-                                                px: 0.75,
-                                            },
-                                            '& .MuiChip-deleteIcon': {
-                                                color: alpha(getRouteGraphActiveColor(theme), 0.72),
-                                                fontSize: 15,
-                                                '&:hover': {
-                                                    color: getRouteGraphActiveColor(theme),
-                                                },
-                                            },
+                                            width: '100%',
+                                            px: 0.75,
+                                            py: 0.35,
+                                            borderRadius: 0.75,
+                                            border: '1px solid',
+                                            borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.28 : 0.18),
+                                            backgroundColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.07 : 0.03),
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0.5,
+                                            overflow: 'hidden',
+                                            minHeight: 22,
                                         })}
-                                    />
+                                    >
+                                        <Typography
+                                            component="span"
+                                            sx={(theme) => ({
+                                                fontSize: '0.6rem',
+                                                fontWeight: 700,
+                                                color: getRouteGraphActiveColor(theme),
+                                                flexShrink: 0,
+                                                lineHeight: 1,
+                                            })}
+                                        >
+                                            {spec.label}
+                                        </Typography>
+                                        {displayVal && (
+                                            <Typography
+                                                component="span"
+                                                sx={{
+                                                    fontSize: '0.6rem',
+                                                    fontWeight: 500,
+                                                    color: 'text.primary',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap',
+                                                    flexGrow: 1,
+                                                    lineHeight: 1,
+                                                }}
+                                            >
+                                                : {displayVal}
+                                            </Typography>
+                                        )}
+                                        {spec.type === 'bool' && onToggleFlag && (
+                                            <IconButton
+                                                size="small"
+                                                onClick={(e) => { e.stopPropagation(); onToggleFlag(spec.key); }}
+                                                sx={{ p: 0, ml: 'auto', flexShrink: 0, color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+                                            >
+                                                <CloseIcon sx={{ fontSize: '0.7rem' }} />
+                                            </IconButton>
+                                        )}
+                                    </Box>
                                 </Tooltip>
                             );
                         })}
