@@ -19,6 +19,7 @@ import {
 } from '@/components/icons';
 import { isWildcardModelName } from '@/components/rule-card/utils';
 import { notify } from '@/utils/notify';
+import { fontMono } from '@/theme/fonts';
 
 // Styled components - compact for graph use
 const HEADER_PADDING_X = 40;
@@ -63,7 +64,7 @@ const ModelNameText = styled(Typography)(({ theme }) => ({
     fontSize: '0.875rem',
     color: theme.palette.text.primary,
     letterSpacing: '-0.01em',
-    fontFamily: 'monospace',
+    fontFamily: fontMono,
 }));
 
 // Main component props

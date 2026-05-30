@@ -8,6 +8,7 @@ import type {SmartRouting, SmartOp} from '../RoutingGraphTypes.ts';
 import {
     ActionButtonsBox,
     getRouteGraphActiveColor,
+    NODE_LAYER_STYLES,
     StyledSmartNodePrimary,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
@@ -161,10 +162,8 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                     <Typography
                         variant="body2"
                         sx={{
-                            fontWeight: 600,
+                            ...NODE_LAYER_STYLES.typography,
                             color: 'text.primary',
-                            fontSize: '0.85rem',
-                            lineHeight: 1.15,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',

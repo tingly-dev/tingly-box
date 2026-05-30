@@ -1,7 +1,8 @@
 import type { ThemeOptions } from '@mui/material/styles';
+import { fontSans } from './fonts';
 
 export const baseTypography = (textPrimary: string, textSecondary: string, textDisabled: string): ThemeOptions['typography'] => ({
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica", "Arial", sans-serif',
+  fontFamily: fontSans,
   h1: { fontSize: '2rem', lineHeight: 1.2, fontWeight: 650, color: textPrimary },
   h2: { fontSize: '1.625rem', lineHeight: 1.25, fontWeight: 650, color: textPrimary },
   h3: { fontSize: '1.375rem', lineHeight: 1.3, fontWeight: 650, color: textPrimary },
