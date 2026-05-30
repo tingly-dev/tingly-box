@@ -237,11 +237,14 @@ jobs:
               LDFLAGS_EXT="-linkmode external -extldflags \"-static\""
             fi
           elif [ "${{ matrix.goos }}" == "windows" ] && [ "${{ matrix.goarch }}" == "arm64" ]; then
-            # Cross-compile Windows on ARM (e.g. Snapdragon) via zig
+            # Cross-compile Windows on ARM (e.g. Snapdragon) via zig.
+            # Link statically so the bare .exe carries no mingw runtime DLL
+            # dependency (libwinpthread/libssp), matching the linux-arm64 leg.
             CC="zig cc -target aarch64-windows-gnu"
             CXX="zig c++ -target aarch64-windows-gnu"
             export CC CXX
             BUILD_TAGS="-tags 'sqlite_omit_load_extension'"
+            LDFLAGS_EXT="-linkmode external -extldflags \"-static\""
           fi
 
           # Build with optimizations
