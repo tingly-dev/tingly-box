@@ -65,7 +65,36 @@ func (p ClaudeCodePrefs) ToEnv(baseURL, apiKey string) (map[string]string, error
 	}
 	env["ANTHROPIC_BASE_URL"] = strings.TrimRight(baseURL, "/") + "/tingly/claude_code"
 	env["ANTHROPIC_AUTH_TOKEN"] = apiKey
+
+	// If ANTHROPIC_BASE_URL points at localhost the user's system proxy must not
+	// intercept those calls — a proxy cannot reach loopback and will 502 every
+	// request. Append localhost/127.0.0.1 to NO_PROXY (preserving any existing
+	// entries the user may have set via the Extra or typed field).
+	noProxy := env["NO_PROXY"]
+	noProxy = appendNoProxy(noProxy, "localhost", "127.0.0.1", "::1")
+	env["NO_PROXY"] = noProxy
+
 	return env, nil
+}
+
+// appendNoProxy adds hosts to a NO_PROXY value, skipping duplicates.
+func appendNoProxy(current string, hosts ...string) string {
+	existing := make(map[string]bool)
+	if current != "" {
+		for _, h := range strings.Split(current, ",") {
+			existing[strings.TrimSpace(h)] = true
+		}
+	}
+	for _, h := range hosts {
+		if !existing[h] {
+			if current != "" {
+				current += ","
+			}
+			current += h
+			existing[h] = true
+		}
+	}
+	return current
 }
 
 // DefaultClaudeCodePrefs returns tb's canonical defaults for the given

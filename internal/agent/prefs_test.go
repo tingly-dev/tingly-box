@@ -42,11 +42,16 @@ func TestClaudeCodePrefs_ToEnv_EmptyOnlyInjectsServerKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ToEnv: %v", err)
 	}
-	if len(env) != 2 {
-		t.Errorf("expected exactly 2 server-injected keys, got %d: %v", len(env), env)
+	// ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, and NO_PROXY are always
+	// injected (NO_PROXY bypasses any system proxy for the loopback gateway).
+	if len(env) != 3 {
+		t.Errorf("expected exactly 3 server-injected keys, got %d: %v", len(env), env)
 	}
 	mustEq(t, env, "ANTHROPIC_BASE_URL", "http://localhost:12580/tingly/claude_code")
 	mustEq(t, env, "ANTHROPIC_AUTH_TOKEN", "tok")
+	if env["NO_PROXY"] == "" {
+		t.Error("NO_PROXY must not be empty — loopback gateway must bypass system proxy")
+	}
 }
 
 // A fully-populated prefs should emit every typed env key. Catches future
@@ -272,6 +277,7 @@ func TestDefaultClaudeCodePrefs_Unified(t *testing.T) {
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
 		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
+		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
 	}
 	assertEnvMapsEqual(t, want, env)
 }
@@ -293,6 +299,7 @@ func TestDefaultClaudeCodePrefs_Separate(t *testing.T) {
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 		"ANTHROPIC_BASE_URL":                       "http://localhost:12580/tingly/claude_code",
 		"ANTHROPIC_AUTH_TOKEN":                     "test-token",
+		"NO_PROXY":                                 "localhost,127.0.0.1,::1",
 	}
 	assertEnvMapsEqual(t, want, env)
 }
