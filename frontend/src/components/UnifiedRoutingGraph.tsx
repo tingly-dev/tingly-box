@@ -317,7 +317,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                     />
                                 </NodeContainer>
 
-                                <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
+                                <ArrowNode direction="forward" />
 
                                 {rule.services && rule.services.length > 0 ? (
                                     <Box sx={{
@@ -420,7 +420,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     />
                 </NodeContainer>
 
-                <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
+                <ArrowNode direction="forward" />
 
                 <Box sx={{
                     display: 'flex',
@@ -477,7 +477,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
                                         {/* Arrow - height matches EntryNode so it stays centered under flex-start */}
                                         <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 72 }}>
-                                            <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
+                                            <ArrowNode direction="forward" />
                                         </Box>
 
                                         {/* Smart Routing Section (conditional) */}
@@ -508,7 +508,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                             active={active}
                                                         />
                                                     </NodeContainer>
-                                                    <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
+                                                    <ArrowNode direction="forward" />
                                                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
                                                         {renderProviderList()}
                                                     </Box>
