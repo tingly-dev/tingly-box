@@ -368,7 +368,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 ) : null}
 
                 {/* Add Smart Rule Button */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 0.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 2 }}>
                     <Button
                         variant="outlined"
                         startIcon={<AddIcon />}
