@@ -8,7 +8,7 @@ import (
 
 // updateAffinityMessageID updates the affinity entry with the latest message ID
 func (s *Server) updateAffinityMessageID(c *gin.Context, rule *typ.Rule, messageID string) {
-	if !rule.SmartAffinity || messageID == "" {
+	if !rule.AffinityEnabled() || messageID == "" {
 		return
 	}
 

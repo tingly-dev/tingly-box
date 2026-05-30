@@ -136,8 +136,9 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 	var selectedService *loadbalance.Service
 	var err error
 
-	// Affinity: check if we have a locked service for this session
-	if rule.SmartEnabled && rule.SmartAffinity && sessionID != "" {
+	// Affinity: check if we have a locked service for this session.
+	// Affinity is a load-balancing concern, independent of smart routing.
+	if rule.AffinityEnabled() && sessionID != "" {
 		if entry, ok := s.affinityStore.Get(rule.UUID, sessionID); ok {
 			// Verify the locked provider still exists and is enabled
 			provider, err := c.GetProviderByUUID(entry.Service.Provider)
@@ -172,11 +173,15 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 							logrus.Infof("[smart_routing] using smart routed service: %s -> %s", provider.Name, selectedService.Model)
 
 							// Lock the service for this session if affinity is enabled
-							if rule.SmartAffinity && sessionID != "" {
+							if rule.AffinityEnabled() && sessionID != "" {
+								ttl := rule.AffinityTTL()
+								if ttl == 0 {
+									ttl = s.affinityStore.ttl
+								}
 								s.affinityStore.Set(rule.UUID, sessionID, &routing.AffinityEntry{
 									Service:   selectedService,
 									LockedAt:  time.Now(),
-									ExpiresAt: time.Now().Add(s.affinityStore.ttl),
+									ExpiresAt: time.Now().Add(ttl),
 								})
 								logrus.Infof("[affinity] locked service %s -> %s for session %s", provider.Name, selectedService.Model, sessionID)
 							}

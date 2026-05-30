@@ -60,16 +60,40 @@ func TestAffinity_AffinityDisabled(t *testing.T) {
 }
 
 func TestAffinity_SmartDisabled(t *testing.T) {
+	// Affinity is a load-balancing concern, independent of smart routing.
+	// A locked session must still be honored even when SmartEnabled is false.
 	store := newMockAffinityStore()
+	svc := testService("provider-a", "gpt-4", true)
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = false
+	rule.SmartAffinity = true
 
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
 
-	_, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.False(t, handled, "should pass when smart disabled")
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled, "affinity should apply even when smart routing is disabled")
+	require.Equal(t, "provider-a", result.Service.Provider)
+}
+
+func TestAffinity_SessionAffinityFlag(t *testing.T) {
+	// The new Flags.SessionAffinity (int seconds) enables affinity on its own,
+	// with no smart routing involved.
+	store := newMockAffinityStore()
+	svc := testService("provider-a", "gpt-4", true)
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
+
+	rule := testRule("rule-1", "gpt-4", nil)
+	rule.Flags.SessionAffinity = 3600 // 1 hour
+
+	stage := NewAffinityStage(store, "global")
+	ctx := testContext(rule, "session-1")
+
+	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
+	require.True(t, handled, "Flags.SessionAffinity should enable affinity")
+	require.Equal(t, "gpt-4", result.Service.Model)
 }
 
 func TestAffinity_EmptySession(t *testing.T) {

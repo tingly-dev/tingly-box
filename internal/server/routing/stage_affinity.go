@@ -28,8 +28,10 @@ func (s *AffinityStage) Name() string {
 func (s *AffinityStage) Evaluate(ctx *SelectionContext, state *selectionState) (*SelectionResult, bool) {
 	rule := ctx.Rule
 
-	// Skip if affinity not enabled
-	if !rule.SmartEnabled || !rule.SmartAffinity || ctx.SessionID.IsEmpty() {
+	// Skip if affinity not enabled. Affinity is a load-balancing concern and
+	// is independent of smart routing — it applies whenever a session can be
+	// identified, regardless of rule.SmartEnabled.
+	if !rule.AffinityEnabled() || ctx.SessionID.IsEmpty() {
 		return nil, false
 	}
 

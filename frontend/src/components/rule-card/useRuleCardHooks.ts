@@ -124,6 +124,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         openai_endpoint_override: newConfigRecord.flags?.openaiEndpointOverride || '',
                         block_tools: newConfigRecord.flags?.blockTools || '',
                         thinking_effort: newConfigRecord.flags?.thinkingEffort || '',
+                        session_affinity: newConfigRecord.flags?.sessionAffinity || 0,
                     },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)
