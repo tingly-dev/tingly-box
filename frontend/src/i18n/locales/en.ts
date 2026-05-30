@@ -399,7 +399,8 @@ export default {
       "untitledRule": "Untitled Smart Rule",
       "noOperation": "No Operation",
       "noValue": "No value",
-      "deleteTooltip": "Delete smart rule"
+      "deleteTooltip": "Delete smart rule",
+      "unconditional": "Unconditional"
     }
   },
   "system": {

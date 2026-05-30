@@ -172,7 +172,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 lineHeight: 1.3,
                             }}
                         >
-                            {t('rule.smart.unconditional', { defaultValue: '无条件，跳过' })}
+                            {t('rule.smart.unconditional', { defaultValue: 'Unconditional' })}
                         </Typography>
                     </Box>
                 ) : (

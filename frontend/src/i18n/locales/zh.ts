@@ -400,7 +400,8 @@ export default {
       "untitledRule": "未命名的智能规则",
       "noOperation": "无操作",
       "noValue": "无值",
-      "deleteTooltip": "删除智能规则"
+      "deleteTooltip": "删除智能规则",
+      "unconditional": "无条件，跳过"
     }
   },
   "system": {
