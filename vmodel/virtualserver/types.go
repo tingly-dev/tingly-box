@@ -88,5 +88,6 @@ type AnthropicStreamEvent struct {
 type AnthropicDelta struct {
 	Type       string `json:"type,omitempty"`
 	Text       string `json:"text,omitempty"`
+	Thinking   string `json:"thinking,omitempty"`
 	StopReason string `json:"stop_reason,omitempty"`
 }
