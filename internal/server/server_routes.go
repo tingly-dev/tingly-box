@@ -79,11 +79,16 @@ func (s *Server) UseAIEndpoints() {
 	scenario := s.engine.Group("/tingly/:scenario")
 	scenario.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenario)
+	// Claude Code v2.1+ sends HEAD <ANTHROPIC_BASE_URL> as a connectivity
+	// check before making any API call. Respond 200 so CC doesn't treat the
+	// missing route as a server error and spiral into api_retry storms.
+	scenario.HEAD("", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	// scenario v1 routes with middleware
 	scenarioV1 := s.engine.Group("/tingly/:scenario/v1")
 	scenarioV1.Use(s.contextMiddleware)
 	s.SetupMixinEndpoints(scenarioV1)
+	scenarioV1.HEAD("", func(c *gin.Context) { c.Status(http.StatusOK) })
 }
 
 func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
