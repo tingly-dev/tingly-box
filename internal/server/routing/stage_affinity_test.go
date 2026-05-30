@@ -79,14 +79,14 @@ func TestAffinity_SmartDisabled(t *testing.T) {
 }
 
 func TestAffinity_SessionAffinityFlag(t *testing.T) {
-	// The new Flags.SessionAffinity flag enables affinity on its own, with no
-	// smart routing involved.
+	// The new Flags.SessionAffinity (int seconds) enables affinity on its own,
+	// with no smart routing involved.
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
 	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
 
 	rule := testRule("rule-1", "gpt-4", nil)
-	rule.Flags.SessionAffinity = true
+	rule.Flags.SessionAffinity = 3600 // 1 hour
 
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")

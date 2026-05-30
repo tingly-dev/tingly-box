@@ -47,7 +47,7 @@ func TestSelect_GlobalAffinity_Hit(t *testing.T) {
 	}
 
 	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{lockedSvc, otherSvc})
-	rule.Flags.SessionAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	sel := NewServiceSelector(cfg, store, lb)
 	result, err := sel.Select(testContext(rule, "session-1"))

@@ -66,11 +66,26 @@ const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.useMaxCompletionTokens;
         case 'use_max_tokens':
             return !!flags.useMaxTokens;
-        case 'session_affinity':
-            return !!flags.sessionAffinity;
         default:
             return false;
     }
+};
+
+const flagIntValue = (flags: RuleFlags | undefined, key: string): number => {
+    if (!flags) return 0;
+    switch (key) {
+        case 'session_affinity':
+            return flags.sessionAffinity ?? 0;
+        default:
+            return 0;
+    }
+};
+
+const formatSeconds = (s: number): string => {
+    if (s <= 0) return '0s';
+    if (s % 3600 === 0) return `${s / 3600}h`;
+    if (s % 60 === 0) return `${s / 60}m`;
+    return `${s}s`;
 };
 
 const flagStringValue = (flags: RuleFlags | undefined, key: string): string => {
@@ -103,9 +118,9 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
 }) => {
     const enabled = (registry || []).filter((spec) => {
         if (spec.type === 'bool') return flagBoolValue(flags, spec.key);
+        if (spec.type === 'int') return flagIntValue(flags, spec.key) > 0;
         if (spec.type === 'enum') {
             const v = flagStringValue(flags, spec.key);
-            // The first registry option is the inactive/default value.
             const inactive = spec.options?.[0]?.value ?? '';
             return v !== '' && v !== inactive;
         }
@@ -189,7 +204,7 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                                 ? `${spec.description}\nValue: ${displayVal}`
                                 : spec.description;
                             return (
-                                <Tooltip key={spec.key} title={tooltipTitle} placement="left">
+                                <Tooltip key={spec.key} title={spec.type === 'int' ? `${spec.description}\nValue: ${formatSeconds(flagIntValue(flags, spec.key))}` : tooltipTitle} placement="left">
                                     <Box
                                         sx={(theme) => ({
                                             width: '100%',
@@ -218,7 +233,7 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                                         >
                                             {spec.label}
                                         </Typography>
-                                        {displayVal && (
+                                        {(displayVal || spec.type === 'int') && (
                                             <Typography
                                                 component="span"
                                                 sx={{
@@ -232,7 +247,7 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                                                     lineHeight: 1,
                                                 }}
                                             >
-                                                : {displayVal}
+                                                : {spec.type === 'int' ? formatSeconds(flagIntValue(flags, spec.key)) : displayVal}
                                             </Typography>
                                         )}
                                         {spec.type === 'bool' && onToggleFlag && (

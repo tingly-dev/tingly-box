@@ -261,10 +261,15 @@ func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionRe
 		return
 	}
 
+	ttl := ctx.Rule.AffinityTTL()
+	if ttl == 0 {
+		// Legacy SmartAffinity bool — use a sensible default.
+		ttl = 2 * time.Hour
+	}
 	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID.String(), &AffinityEntry{
 		Service:   result.Service,
 		LockedAt:  time.Now(),
-		ExpiresAt: time.Now().Add(2 * time.Hour), // TODO: make configurable
+		ExpiresAt: time.Now().Add(ttl),
 	})
 	logrus.Infof("[affinity] locked service %s -> %s for session %s",
 		result.Provider.Name, result.Service.Model, ctx.SessionID.String())

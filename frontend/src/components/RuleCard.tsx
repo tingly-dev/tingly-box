@@ -271,9 +271,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             case 'use_max_completion_tokens':
                 next = { ...next, useMaxCompletionTokens: !current.useMaxCompletionTokens };
                 break;
-            case 'session_affinity':
-                next = { ...next, sessionAffinity: !current.sessionAffinity };
-                break;
             default:
                 return;
         }

@@ -7,6 +7,9 @@ const (
 	FlagTypeBool   FlagValueType = "bool"
 	FlagTypeString FlagValueType = "string"
 	FlagTypeEnum   FlagValueType = "enum"
+	// FlagTypeInt is a non-negative integer value. The UI renders a numeric
+	// text field. Zero is treated as inactive (equivalent to omitempty).
+	FlagTypeInt FlagValueType = "int"
 )
 
 // FlagCategory groups flags for presentation in the UI.
@@ -138,9 +141,10 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "session_affinity",
 			Label:       "Session affinity",
-			Description: "Pin a client session to the service it first landed on, so follow-up requests in the same session keep hitting that service until the affinity entry expires. Works with any load-balancing tactic and does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP (in that order).",
-			Type:        FlagTypeBool,
+			Description: "TTL in seconds for session-to-service pinning. Once a session lands on a service, follow-up requests in the same session keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP.",
+			Type:        FlagTypeInt,
 			Category:    FlagCategoryRouting,
+			Placeholder: "e.g. 3600",
 		},
 	}
 }

@@ -51,10 +51,27 @@ const flagToBool = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.useMaxCompletionTokens;
         case 'use_max_tokens':
             return !!flags.useMaxTokens;
-        case 'session_affinity':
-            return !!flags.sessionAffinity;
         default:
             return false;
+    }
+};
+
+const flagToInt = (flags: RuleFlags | undefined, key: string): number => {
+    if (!flags) return 0;
+    switch (key) {
+        case 'session_affinity':
+            return flags.sessionAffinity ?? 0;
+        default:
+            return 0;
+    }
+};
+
+const setInt = (flags: RuleFlags, key: string, value: number): RuleFlags => {
+    switch (key) {
+        case 'session_affinity':
+            return { ...flags, sessionAffinity: value };
+        default:
+            return flags;
     }
 };
 
@@ -116,6 +133,7 @@ const enumDefault = (spec: FlagSpec): string => spec.options?.[0]?.value ?? '';
 
 const isFlagActive = (spec: FlagSpec, flags: RuleFlags): boolean => {
     if (spec.type === 'bool') return flagToBool(flags, spec.key);
+    if (spec.type === 'int') return flagToInt(flags, spec.key) > 0;
     const v = flagToString(flags, spec.key);
     if (spec.type === 'enum') return v !== '' && v !== enumDefault(spec);
     return v !== '';
@@ -123,6 +141,7 @@ const isFlagActive = (spec: FlagSpec, flags: RuleFlags): boolean => {
 
 const resetFlag = (flags: RuleFlags, spec: FlagSpec): RuleFlags => {
     if (spec.type === 'bool') return setBool(flags, spec.key, false);
+    if (spec.type === 'int') return setInt(flags, spec.key, 0);
     return setString(flags, spec.key, '');
 };
 
@@ -202,6 +221,11 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
 
     const handleStringChange = (key: string, value: string) => {
         setDraft((d) => setString(d, key, value));
+    };
+
+    const handleIntChange = (key: string, value: string) => {
+        const n = parseInt(value, 10);
+        setDraft((d) => setInt(d, key, isNaN(n) || n < 0 ? 0 : n));
     };
 
     const jumpToFlag = (spec: FlagSpec) => {
@@ -405,6 +429,18 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                         placeholder={spec.placeholder}
                                                         value={flagToString(draft, spec.key)}
                                                         onChange={(e) => handleStringChange(spec.key, e.target.value)}
+                                                        sx={{ mt: 1 }}
+                                                    />
+                                                )}
+                                                {spec.type === 'int' && (
+                                                    <TextField
+                                                        fullWidth
+                                                        size="small"
+                                                        type="number"
+                                                        placeholder={spec.placeholder}
+                                                        value={flagToInt(draft, spec.key) || ''}
+                                                        slotProps={{ htmlInput: { min: 0 } }}
+                                                        onChange={(e) => handleIntChange(spec.key, e.target.value)}
                                                         sx={{ mt: 1 }}
                                                     />
                                                 )}

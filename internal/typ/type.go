@@ -2,6 +2,7 @@ package typ
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -206,12 +207,12 @@ type RuleFlags struct {
 	// ("max" collapses to "high" for OpenAI which has no "max").
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
-	// SessionAffinity pins a client session to the service it first landed on,
-	// so subsequent requests in the same session keep hitting that service
-	// until the affinity entry expires. This is a load-balancing concern and
-	// works independently of smart routing. Supersedes the legacy top-level
-	// Rule.SmartAffinity field.
-	SessionAffinity bool `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
+	// SessionAffinity pins a client session to the service it first landed on.
+	// The value is the TTL in seconds (0 = disabled). Subsequent requests in
+	// the same session keep hitting that service until the affinity entry
+	// expires. This is a load-balancing concern and works independently of
+	// smart routing. Supersedes the legacy top-level Rule.SmartAffinity field.
+	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
 }
 
 // ProfileMeta stores metadata for a scenario profile.
@@ -503,10 +504,21 @@ type Rule struct {
 
 // AffinityEnabled reports whether session affinity should be applied for this
 // rule. Affinity is a load-balancing concern, independent of smart routing.
-// It honors the new Flags.SessionAffinity and the deprecated top-level
-// SmartAffinity field so pre-existing configs keep working.
+// It honors the new Flags.SessionAffinity (seconds > 0) and the deprecated
+// top-level SmartAffinity field so pre-existing configs keep working.
 func (r *Rule) AffinityEnabled() bool {
-	return r.Flags.SessionAffinity || r.SmartAffinity
+	return r.Flags.SessionAffinity > 0 || r.SmartAffinity
+}
+
+// AffinityTTL returns the session-affinity TTL for this rule. When the new
+// Flags.SessionAffinity is set, its value (in seconds) is used directly.
+// For legacy rules that use the top-level SmartAffinity bool, the caller
+// should fall back to its own default TTL (e.g. the store's defaultAffinityTTL).
+func (r *Rule) AffinityTTL() time.Duration {
+	if r.Flags.SessionAffinity > 0 {
+		return time.Duration(r.Flags.SessionAffinity) * time.Second
+	}
+	return 0 // caller falls back to store default
 }
 
 // ToJSON implementation

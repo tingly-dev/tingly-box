@@ -70,6 +70,7 @@ func TestRuleFlagRegistry_TypesAreValid(t *testing.T) {
 		FlagTypeBool:   true,
 		FlagTypeString: true,
 		FlagTypeEnum:   true,
+		FlagTypeInt:    true,
 	}
 	for _, spec := range RuleFlagRegistry() {
 		if !allowed[spec.Type] {

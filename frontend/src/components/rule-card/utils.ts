@@ -75,7 +75,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             openaiEndpointOverride: rule.flags?.openai_endpoint_override || '',
             blockTools: rule.flags?.block_tools || '',
             thinkingEffort: rule.flags?.thinking_effort || '',
-            sessionAffinity: rule.flags?.session_affinity || false,
+            sessionAffinity: rule.flags?.session_affinity || 0,
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -257,12 +257,13 @@ export function formatRuleFlags(flags?: RuleFlags): string {
     if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) {
         entries.push(`thinking_effort=${flags.thinkingEffort}`);
     }
-    if (flags.sessionAffinity) entries.push('session_affinity=true');
+    if (flags.sessionAffinity) entries.push(`session_affinity=${flags.sessionAffinity}`);
     return entries.join(',');
 }
 
 const STRING_FLAG_KEYS = new Set(['custom_user_agent', 'block_tools']);
 const ENUM_FLAG_KEYS = new Set(Object.keys(ENUM_FLAG_VALUES));
+const INT_FLAG_KEYS = new Set(['session_affinity']);
 
 export function parseRuleFlags(input: string): { flags: RuleFlags; error?: string } {
     const flags: RuleFlags = {
@@ -275,7 +276,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         openaiEndpointOverride: '',
         blockTools: '',
         thinkingEffort: '',
-        sessionAffinity: false,
+        sessionAffinity: 0,
     };
 
     const trimmed = input.trim();
@@ -304,6 +305,15 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
                     flags.blockTools = rawValue;
                     break;
             }
+            continue;
+        }
+
+        if (INT_FLAG_KEYS.has(rawKey)) {
+            const n = parseInt(rawValue, 10);
+            if (isNaN(n) || n < 0) {
+                return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use a non-negative integer (seconds).` };
+            }
+            if (rawKey === 'session_affinity') flags.sessionAffinity = n;
             continue;
         }
 
@@ -374,7 +384,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) n++;
     if (flags.blockTools && flags.blockTools.trim() !== '') n++;
     if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) n++;
-    if (flags.sessionAffinity) n++;
+    if (flags.sessionAffinity && flags.sessionAffinity > 0) n++;
     return n;
 }
 

@@ -174,10 +174,14 @@ func (s *Server) DetermineProviderAndModelWithScenario(scenario typ.RuleScenario
 
 							// Lock the service for this session if affinity is enabled
 							if rule.AffinityEnabled() && sessionID != "" {
+								ttl := rule.AffinityTTL()
+								if ttl == 0 {
+									ttl = s.affinityStore.ttl
+								}
 								s.affinityStore.Set(rule.UUID, sessionID, &routing.AffinityEntry{
 									Service:   selectedService,
 									LockedAt:  time.Now(),
-									ExpiresAt: time.Now().Add(s.affinityStore.ttl),
+									ExpiresAt: time.Now().Add(ttl),
 								})
 								logrus.Infof("[affinity] locked service %s -> %s for session %s", provider.Name, selectedService.Model, sessionID)
 							}
