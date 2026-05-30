@@ -11,7 +11,6 @@ import {
     IconButton,
     Stack,
     Tooltip,
-    Typography,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
@@ -366,21 +365,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             </GraphRow>
                         </React.Fragment>
                     ))
-                ) : (
-                    <Box sx={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'flex-start',
-                        py: 4
-                    }}>
-                        <Typography variant="body2" color="text.secondary">
-                            No smart rules configured.
-                        </Typography>
-                    </Box>
-                )}
+                ) : null}
 
                 {/* Add Smart Rule Button */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 0.5 }}>
                     <Button
                         variant="outlined"
                         startIcon={<AddIcon />}
