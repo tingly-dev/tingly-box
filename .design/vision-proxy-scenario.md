@@ -215,7 +215,7 @@ type VisionProxyService struct {
 
 | 元素 | 实现 |
 |------|------|
-| 单一 Vision Proxy 控件 | `renderVisionProxyButton`：一个按钮，标签即所选模型（未配则 `Vision Proxy: Off`，灰色；配了则 `Vision Proxy: <model>`，蓝色高亮，tooltip 显示完整 `provider / model`）。点击直接弹 `ModelSelectDialog`——**选模型即启用**，dialog 里的"清除选择"即关闭 |
+| 单一 Vision Proxy 控件 | `renderVisionProxyButton`：一个按钮，标签即所选模型（未配则 `Vision Proxy: Off`，灰色；配了则 `Vision Proxy: <model>`，蓝色高亮，tooltip 显示完整 `provider / model`）。点击先弹**下拉**（与 Thinking/Record 等同范式）：`Off`（直接清空=关闭）/ `On — <model>`（进 `ModelSelectDialog` 选/改模型）。**选模型即启用**，`Off` 一键关闭、无需打开大弹窗 |
 | 持久化 | 选中/清除经 `getScenarioConfig` / `setScenarioConfig` 写 `Extensions["vision_proxy_service"]`；启用与否由该 service 是否存在驱动，**不调任何 flag 端点** |
 | 类型定义 | `frontend/src/types` 里 `ScenarioConfig.extensions` 增加 `vision_proxy_service?: { provider: string; model: string }` 的形状提示 |
 

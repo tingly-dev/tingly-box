@@ -240,21 +240,23 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     };
 
     // Vision Proxy: a single control that unifies "enable" and "pick a model".
-    // Off = no service configured; clicking opens the model picker. Choosing a
-    // model IS turning it on, and the label then shows that model.
+    // Clicking opens a dropdown (consistent with the sibling plugin buttons):
+    //   Off  -> clear the configured service (disable)
+    //   On   -> open the model picker; choosing a model is the enabled state
+    // The button label shows the chosen model (or "Off").
     const renderVisionProxyButton = () => {
         const isUpdating = updating.vision_proxy_service || false;
         const isEnabled = !!visionService;
         const label = isEnabled ? visionService!.model : 'Off';
         const tooltip = isEnabled
-            ? `Vision Proxy: images described by ${providerNameFor(visionService!.provider)} / ${visionService!.model}. Click to change or turn off.`
-            : 'Vision Proxy: pick a vision-capable model to describe images so text-only downstreams can read them';
+            ? `Vision Proxy: images described by ${providerNameFor(visionService!.provider)} / ${visionService!.model}`
+            : 'Vision Proxy: describe images via a vision-capable model so text-only downstreams can read them';
         return (
             <Tooltip title={tooltip} placement="right" arrow>
                 <Button
                     size="small"
                     variant="outlined"
-                    onClick={() => !isUpdating && setVisionPickerOpen(true)}
+                    onClick={(e) => !isUpdating && handleMenuOpen('vision_proxy', e)}
                     disabled={isUpdating}
                     endIcon={<IconChevronDown size={18} />}
                     sx={{
@@ -435,6 +437,35 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                     </Menu>
                 );
             })}
+
+            {/* Vision Proxy Menu: Off / On(->model picker) */}
+            <Menu
+                anchorEl={menuAnchor['vision_proxy']}
+                open={Boolean(menuAnchor['vision_proxy'])}
+                onClose={() => handleMenuClose('vision_proxy')}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+                <MenuItem
+                    selected={!visionService}
+                    onClick={() => { handleMenuClose('vision_proxy'); if (visionService) persistVisionService(null); }}
+                >
+                    <ListItemText primary="Off" primaryTypographyProps={{ variant: 'body2' }} />
+                    {!visionService && <IconCheck size={16} />}
+                </MenuItem>
+                <MenuItem
+                    selected={!!visionService}
+                    onClick={() => { handleMenuClose('vision_proxy'); setVisionPickerOpen(true); }}
+                >
+                    <ListItemText
+                        primary={visionService ? `On — ${visionService.model}` : 'On — pick a model…'}
+                        secondary={visionService ? providerNameFor(visionService.provider) : 'Choose a vision-capable model'}
+                        primaryTypographyProps={{ variant: 'body2' }}
+                        secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                    {!!visionService && <IconCheck size={16} />}
+                </MenuItem>
+            </Menu>
 
             {/* Vision Proxy Service Picker */}
             <Dialog
