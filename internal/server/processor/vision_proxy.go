@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -104,21 +105,44 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 // describe calls the vision client when available, returning the marker text
 // for the image's replacement block. Empty / errored responses become the
 // fail-strip marker; success becomes "[image: <desc>]".
+//
+// Each call emits one structured log line carrying the activated service
+// (vision_provider + vision_model) and the outcome (description preview or
+// error), tagged source=vision_proxy and bound to the parent request via
+// logrus.WithContext(ctx) so aggregation by request id picks it up
+// alongside other model-request logs.
 func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance.Service, mediaType, b64, remoteURL string) string {
 	if usable == nil || p.Client == nil {
+		logrus.WithContext(ctx).WithField("source", "vision_proxy").
+			Warn("vision proxy: no usable service or client; stripping image")
 		return imageUnavailableText
 	}
+	log := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"source":          "vision_proxy",
+		"vision_provider": usable.Provider,
+		"vision_model":    usable.Model,
+		"media_type":      mediaType,
+	})
 	desc, err := p.Client.Describe(ctx, usable, mediaType, b64, remoteURL)
 	if err != nil {
-		if p.Logger != nil {
-			p.Logger.Debugf("[vision_proxy] describe failed: %v", err)
-		}
+		log.WithError(err).Warn("vision proxy: describe failed; stripping image")
 		return imageUnavailableText
 	}
 	if strings.TrimSpace(desc) == "" {
+		log.Warn("vision proxy: empty description; stripping image")
 		return imageUnavailableText
 	}
+	log.WithField("description", truncateForLog(desc, 200)).Info("vision proxy: image described")
 	return "Here is an [image] with message and is parsed into description [image: " + desc + "]"
+}
+
+// truncateForLog clips long descriptions so a noisy upstream cannot blow up
+// the log line. The "…(+N)" suffix records how much was elided.
+func truncateForLog(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + fmt.Sprintf("…(+%d)", len(s)-max)
 }
 
 // processBeta walks Beta messages and replaces every image content block
