@@ -7,15 +7,15 @@ import {
     getRouteGraphBorderColor,
     graphNodeBaseHoverStyles,
     graphNodeHoverStyles,
-    SMALL_NODE_STYLES,
+    MODEL_NODE_STYLES,
 } from '@/components/nodes/styles';
 import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
 
 // Matches the route graph node footprint so this feels like a pinned tool node,
 // not a smaller floating card. Content overflow scrolls inside the body.
 const CARD_STYLES = {
-    width: SMALL_NODE_STYLES.width,
-    minHeight: SMALL_NODE_STYLES.height,
+    width: MODEL_NODE_STYLES.width,
+    minHeight: MODEL_NODE_STYLES.height,
     padding: 8,
 } as const;
 
