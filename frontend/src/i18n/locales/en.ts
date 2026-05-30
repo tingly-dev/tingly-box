@@ -400,7 +400,7 @@ export default {
       "noOperation": "No Operation",
       "noValue": "No value",
       "deleteTooltip": "Delete smart rule",
-      "unconditional": "Unconditional"
+      "unconditional": "No conditions — always routes"
     }
   },
   "system": {
