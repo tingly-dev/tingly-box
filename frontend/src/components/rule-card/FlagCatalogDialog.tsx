@@ -21,6 +21,7 @@ import {
     Close as CloseIcon,
     Extension as ExtensionIcon,
     Input as InputIcon,
+    Link as LinkIcon,
     Outbound as OutboundIcon,
     Psychology as PsychologyIcon,
     Terminal as TerminalIcon,
@@ -50,6 +51,8 @@ const flagToBool = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.useMaxCompletionTokens;
         case 'use_max_tokens':
             return !!flags.useMaxTokens;
+        case 'session_affinity':
+            return !!flags.sessionAffinity;
         default:
             return false;
     }
@@ -83,6 +86,8 @@ const setBool = (flags: RuleFlags, key: string, value: boolean): RuleFlags => {
             return { ...flags, useMaxCompletionTokens: value };
         case 'use_max_tokens':
             return { ...flags, useMaxTokens: value };
+        case 'session_affinity':
+            return { ...flags, sessionAffinity: value };
         default:
             return flags;
     }
@@ -134,6 +139,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     response: { label: 'Response', icon: <OutboundIcon fontSize="small" /> },
     request: { label: 'Request', icon: <InputIcon fontSize="small" /> },
     reasoning: { label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
+    routing: { label: 'Routing', icon: <LinkIcon fontSize="small" /> },
 };
 
 const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] || {

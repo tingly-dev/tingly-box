@@ -64,6 +64,10 @@ const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.skipUsage;
         case 'use_max_completion_tokens':
             return !!flags.useMaxCompletionTokens;
+        case 'use_max_tokens':
+            return !!flags.useMaxTokens;
+        case 'session_affinity':
+            return !!flags.sessionAffinity;
         default:
             return false;
     }

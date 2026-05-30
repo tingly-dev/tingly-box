@@ -27,6 +27,9 @@ const (
 	FlagCategoryRequest FlagCategory = "request"
 	// FlagCategoryReasoning — extended-thinking / reasoning-effort controls.
 	FlagCategoryReasoning FlagCategory = "reasoning"
+	// FlagCategoryRouting — routing / load-balancing behavior (session
+	// affinity, etc) that decides which upstream service a request lands on.
+	FlagCategoryRouting FlagCategory = "routing"
 )
 
 // FlagOption is one selectable value for a FlagTypeEnum spec.
@@ -131,6 +134,13 @@ func RuleFlagRegistry() []FlagSpec {
 				{Value: "high", Label: "High (~20K tokens)"},
 				{Value: "max", Label: "Max (~32K tokens)"},
 			},
+		},
+		{
+			Key:         "session_affinity",
+			Label:       "Session affinity",
+			Description: "Pin a client session to the service it first landed on, so follow-up requests in the same session keep hitting that service until the affinity entry expires. Works with any load-balancing tactic and does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP (in that order).",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryRouting,
 		},
 	}
 }

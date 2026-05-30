@@ -75,6 +75,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             openaiEndpointOverride: rule.flags?.openai_endpoint_override || '',
             blockTools: rule.flags?.block_tools || '',
             thinkingEffort: rule.flags?.thinking_effort || '',
+            sessionAffinity: rule.flags?.session_affinity || false,
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -256,6 +257,7 @@ export function formatRuleFlags(flags?: RuleFlags): string {
     if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) {
         entries.push(`thinking_effort=${flags.thinkingEffort}`);
     }
+    if (flags.sessionAffinity) entries.push('session_affinity=true');
     return entries.join(',');
 }
 
@@ -273,6 +275,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         openaiEndpointOverride: '',
         blockTools: '',
         thinkingEffort: '',
+        sessionAffinity: false,
     };
 
     const trimmed = input.trim();
@@ -347,6 +350,9 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             case 'use_max_tokens':
                 flags.useMaxTokens = parsedValue;
                 break;
+            case 'session_affinity':
+                flags.sessionAffinity = parsedValue;
+                break;
             default:
                 return { flags, error: `Unknown flag "${rawKey}".` };
         }
@@ -368,6 +374,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) n++;
     if (flags.blockTools && flags.blockTools.trim() !== '') n++;
     if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) n++;
+    if (flags.sessionAffinity) n++;
     return n;
 }
 

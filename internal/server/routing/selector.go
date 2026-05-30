@@ -231,15 +231,18 @@ func (s *ServiceSelector) Select(ctx *SelectionContext) (*SelectionResult, error
 
 // selectPipeline picks the appropriate pre-built pipeline based on rule configuration.
 func (s *ServiceSelector) selectPipeline(rule *typ.Rule) []SelectionStage {
-	logrus.Debugf("[selector] selectPipeline for rule %s: SmartAffinity=%v, SmartEnabled=%v, SmartRouting count=%d",
-		rule.RequestModel, rule.SmartAffinity, rule.SmartEnabled, len(rule.SmartRouting))
-	if !rule.SmartAffinity {
+	logrus.Debugf("[selector] selectPipeline for rule %s: AffinityEnabled=%v, SmartEnabled=%v, SmartRouting count=%d",
+		rule.RequestModel, rule.AffinityEnabled(), rule.SmartEnabled, len(rule.SmartRouting))
+	if !rule.AffinityEnabled() {
 		return s.pipelines[pipelineModeNoAffinity]
 	}
 
-	// Default to global affinity scope.
-	// TODO: Read from rule.AffinityScope when field is added.
-	return s.pipelines[pipelineModeSmartAffinity]
+	// Use global affinity scope: the affinity stage runs first and reads the
+	// ruleUUID:sessionID key that postProcess writes. The smart_rule-scoped
+	// pipeline can't read here because affinity is evaluated before smart
+	// routing (MatchedSmartRuleIndex is still unset), so it would never pin.
+	// TODO: Read from rule.AffinityScope when per-smart-rule scoping lands.
+	return s.pipelines[pipelineModeGlobalAffinity]
 }
 
 // getHealthFilter returns the health filter from the load balancer
@@ -254,7 +257,7 @@ func (s *ServiceSelector) getHealthFilter() *typ.HealthFilter {
 // Locks affinity whenever affinity is enabled and the source is not "affinity"
 // (i.e., don't re-lock an already-locked entry).
 func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionResult) {
-	if result.Source == "affinity" || !ctx.Rule.SmartAffinity || ctx.SessionID.IsEmpty() {
+	if result.Source == "affinity" || !ctx.Rule.AffinityEnabled() || ctx.SessionID.IsEmpty() {
 		return
 	}
 

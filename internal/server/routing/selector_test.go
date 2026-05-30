@@ -31,14 +31,29 @@ func TestSelect_NoAffinity_FallsToLoadBalancer(t *testing.T) {
 }
 
 func TestSelect_GlobalAffinity_Hit(t *testing.T) {
-	// ServiceSelector.selectPipeline currently has a TODO to read
-	// rule.AffinityScope and always returns pipelineModeSmartAffinity for
-	// SmartAffinity=true. The smart_rule-scope AffinityStage runs before
-	// SmartRoutingStage and short-circuits when MatchedSmartRuleIndex < 0,
-	// so the global-affinity path is not reachable through Select() today.
-	// Direct stage-level coverage lives in stage_affinity_test.go
-	// (TestAffinity_LockedSession).
-	t.Skip("global affinity pipeline not selected by current selectPipeline")
+	// With affinity enabled, selectPipeline picks the global-affinity pipeline
+	// whose AffinityStage reads the ruleUUID:sessionID key written on lock.
+	// A locked session must short-circuit to the locked service.
+	lockedSvc := testService("provider-a", "gpt-4", true)
+	otherSvc := testService("provider-b", "claude-3", true)
+	lb := &mockLoadBalancer{service: otherSvc} // LB would pick a different service
+	store := newMockAffinityStore()
+	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(lockedSvc))
+	cfg := &mockConfig{
+		providers: map[string]*typ.Provider{
+			"provider-a": testProvider("provider-a", "ProviderA", true),
+			"provider-b": testProvider("provider-b", "ProviderB", true),
+		},
+	}
+
+	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{lockedSvc, otherSvc})
+	rule.Flags.SessionAffinity = true
+
+	sel := NewServiceSelector(cfg, store, lb)
+	result, err := sel.Select(testContext(rule, "session-1"))
+	require.NoError(t, err)
+	require.Equal(t, "affinity", result.Source)
+	require.Equal(t, "provider-a", result.Service.Provider)
 }
 
 func TestSelect_GlobalAffinity_Miss_SmartHit(t *testing.T) {

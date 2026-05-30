@@ -61,6 +61,7 @@ export interface RuleFlags {
     openaiEndpointOverride?: string;
     blockTools?: string;
     thinkingEffort?: string;
+    sessionAffinity?: boolean;
 }
 
 export interface RuleFlagsApi {
@@ -73,6 +74,7 @@ export interface RuleFlagsApi {
     openai_endpoint_override?: string;
     block_tools?: string;
     thinking_effort?: string;
+    session_affinity?: boolean;
 }
 
 export type FlagValueType = 'bool' | 'string' | 'enum';
