@@ -417,7 +417,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <SmartDefaultNode
                         providersCount={record.providers.length}
                         active={active}
-                        onAddProvider={onAddProvider ?? (() => {})}
                     />
                 </NodeContainer>
 
@@ -494,9 +493,26 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 {renderDefaultProviders()}
                                             </Box>
                                         ) : (
-                                            /* Direct Mode: Providers only */
-                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-                                                {renderProviderList()}
+                                            /* Direct Mode: Default node + Providers */
+                                            <Box sx={{
+                                                flex: 1,
+                                                display: 'flex',
+                                                alignItems: 'flex-start',
+                                                flexDirection: 'column',
+                                                gap: 1.5,
+                                            }}>
+                                                <GraphRow>
+                                                    <NodeContainer>
+                                                        <SmartDefaultNode
+                                                            providersCount={record.providers.length}
+                                                            active={active}
+                                                        />
+                                                    </NodeContainer>
+                                                    <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
+                                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+                                                        {renderProviderList()}
+                                                    </Box>
+                                                </GraphRow>
                                             </Box>
                                         )}
                                     </GraphRow>
