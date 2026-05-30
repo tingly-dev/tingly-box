@@ -140,9 +140,13 @@ func (c *ClaudeClient) ProbeModelsEndpoint(ctx context.Context) ProbeResult {
 }
 
 func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParams) (*AnthropicClient, map[string]string) {
-	// Apply thinking transformation for Claude Code OAuth
-	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
-		// Clear thinking field
+	// Apply thinking transformation for Claude Code OAuth. Thinking can be expressed
+	// either through the thinking union (enabled/adaptive/disabled) or through
+	// output_config.effort (the effort-based adaptive thinking used by newer models).
+	// Only default to disabled when the client specified neither, otherwise we would
+	// silently turn off effort-based thinking the client explicitly requested.
+	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
+	if !thinkingSet && req.OutputConfig.Effort == "" {
 		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
 	}
 
@@ -171,10 +175,26 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 }
 
 func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessageNewParams) (*AnthropicClient, map[string]string) {
-	// Apply thinking transformation for Claude Code OAuth
-	if req.Thinking.OfEnabled == nil && req.Thinking.OfAdaptive == nil && req.Thinking.OfDisabled == nil {
-		// Clear thinking field
+	// Apply thinking transformation for Claude Code OAuth. Thinking can be expressed
+	// either through the thinking union (enabled/adaptive/disabled) or through
+	// output_config.effort (the effort-based adaptive thinking used by newer models).
+	// Only default to disabled when the client specified neither, otherwise we would
+	// silently turn off effort-based thinking the client explicitly requested.
+	effortSet := req.OutputConfig.Effort != ""
+	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
+	if !thinkingSet && !effortSet {
 		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+	}
+
+	// clear_thinking_20251015 is only valid when thinking is enabled or adaptive;
+	// effort-based thinking counts as adaptive. An explicit disabled config wins even
+	// if effort is also present. Drop the edit otherwise, since Anthropic rejects it
+	// with "clear_thinking_20251015 requires `thinking` to be enabled or adaptive" —
+	// which is what newer Claude Code clients hit when we force thinking off.
+	thinkingActive := req.Thinking.OfDisabled == nil &&
+		(req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || effortSet)
+	if !thinkingActive {
+		stripBetaClearThinkingEdit(req)
 	}
 
 	// Remap tool names to Claude Code TitleCase equivalents to avoid Anthropic fingerprinting
@@ -337,6 +357,26 @@ func (c *ClaudeClient) ProbeStream(ctx context.Context, model, message string, t
 
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.AnthropicClient.provider.APIBase+"/v1/messages", true), nil
+}
+
+// stripBetaClearThinkingEdit removes any clear_thinking_20251015 context-management
+// edit from the request. The Anthropic API rejects this edit type when thinking is not
+// enabled or adaptive, so it must be dropped whenever thinking is disabled — otherwise
+// Claude Code OAuth traffic that ships the edit (while we force thinking off) fails with
+// "clear_thinking_20251015 requires `thinking` to be enabled or adaptive".
+func stripBetaClearThinkingEdit(req *anthropic.BetaMessageNewParams) {
+	edits := req.ContextManagement.Edits
+	if len(edits) == 0 {
+		return
+	}
+	filtered := make([]anthropic.BetaContextManagementConfigEditUnionParam, 0, len(edits))
+	for _, edit := range edits {
+		if edit.OfClearThinking20251015 != nil {
+			continue
+		}
+		filtered = append(filtered, edit)
+	}
+	req.ContextManagement.Edits = filtered
 }
 
 // remapToolNames renames OfTool tools in-place using oauthToolRenameMap.
