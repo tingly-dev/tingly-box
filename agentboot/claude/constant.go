@@ -51,8 +51,12 @@ const (
 	SDKTaskProgressMessage       = "task_progress"
 	SDKFilesPersistedMessage     = "files_persisted"
 	SDKToolUseSummaryMessage     = "tool_use_summary"
-	SDKRateLimitMessage          = "rate_limit"
-	SDKPromptSuggestionMessage   = "prompt_suggestion"
+	// SDKRateLimitEvent is the top-level type emitted by CC v2.1+ when the
+	// upstream rate-limit state changes. The old name was "rate_limit" but the
+	// actual wire value observed in v2.1.157 is "rate_limit_event".
+	SDKRateLimitEvent          = "rate_limit_event"
+	SDKPromptSuggestionMessage = "prompt_suggestion"
+	SDKPostTurnSummaryMessage  = "post_turn_summary"
 )
 
 const SDKControlPrefix = "control_"

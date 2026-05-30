@@ -103,6 +103,20 @@ func (a *MessageAccumulator) AddEvent(event common.Event) ([]Message, bool, bool
 			a.messages = append(a.messages, msg)
 			newMessages = append(newMessages, msg)
 		}
+
+	case SDKRateLimitEvent,
+		SDKHookStartedMessage, SDKHookProgressMessage, SDKHookResponseMessage,
+		SDKPostTurnSummaryMessage,
+		SDKPartialAssistantMessage, SDKCompactBoundaryMessage,
+		SDKStatusMessage, SDKLocalCommandOutputMessage,
+		SDKToolProgressMessage, SDKAuthStatusMessage,
+		SDKFilesPersistedMessage, SDKToolUseSummaryMessage,
+		SDKPromptSuggestionMessage, SDKTaskProgressMessage,
+		SDKUserMessageReplayMessage:
+		// Infrastructure / housekeeping events emitted by the CLI that carry no
+		// user-facing content. Consume them here so they don't fall through to
+		// the default and produce spurious log noise. Their raw JSON is still
+		// logged at the runner level for diagnostics.
 	}
 
 	return newMessages, hasResult, resultSuccess
