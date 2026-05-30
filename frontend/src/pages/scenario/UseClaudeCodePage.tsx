@@ -86,9 +86,15 @@ const UseClaudeCodePageContent: React.FC = () => {
 
         setConfirmDialogOpen(false);
         try {
+            // Preserve the rest of the scenario config (esp. extensions like
+            // vision_proxy_service) — SetScenarioConfig replaces the whole
+            // record, so a partial payload would silently wipe other settings.
+            const current = (await api.getScenarioConfig(SCENARIO))?.data || {};
             const config = {
+                ...current,
                 scenario: SCENARIO,
                 flags: {
+                    ...(current.flags || {}),
                     unified: pendingMode === 'unified',
                     separate: pendingMode === 'separate',
                     smart: false,
