@@ -8,9 +8,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-agentscope/pkg/memory"
-	"github.com/tingly-dev/tingly-agentscope/pkg/message"
-	"github.com/tingly-dev/tingly-agentscope/pkg/types"
 	"github.com/tingly-dev/tingly-box/agentboot"
 	"github.com/tingly-dev/tingly-box/imbot"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
@@ -73,28 +70,17 @@ func (w *messageTrackingWrapper) GetOutput() string {
 
 // OnComplete handles the smart-guide completion signal.
 func (c *SmartGuideCompletionCallback) OnComplete(result *smart_guide.CompletionResult) {
-	// Get response text from the agent's memory
+	// Capture the final assistant text from the agent's history.
 	responseText := ""
 	if result.Success {
-		// Try to get the last assistant message from agent memory
-		if mem := c.agent.GetMemory(); mem != nil {
-			if hist, ok := mem.(*memory.History); ok {
-				messages := hist.GetMessages()
-				for i := len(messages) - 1; i >= 0; i-- {
-					if messages[i].Role == "assistant" {
-						responseText = messages[i].GetTextContent()
-						break
-					}
-				}
-			}
-		}
+		responseText = c.agent.LastAssistantText()
 	}
 
-	// Save assistant message to session (for conversation history)
-	if c.tbSessionStore != nil && responseText != "" {
-		assistantMsg := message.NewMsg("assistant", responseText, types.RoleAssistant)
-		if err := c.tbSessionStore.AddMessage(c.hCtx.ChatID, assistantMsg); err != nil {
-			logrus.WithError(err).Warn("Failed to save assistant message to session")
+	// Persist the agent's full updated history (user + assistant + tool turns)
+	// as native Anthropic params. The engine owns history; we snapshot it here.
+	if c.tbSessionStore != nil {
+		if err := c.tbSessionStore.Save(c.hCtx.ChatID, c.agent.History()); err != nil {
+			logrus.WithError(err).Warn("Failed to save SmartGuide session history")
 		}
 	}
 

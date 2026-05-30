@@ -2,27 +2,23 @@ package smart_guide
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/tingly-dev/tingly-agentscope/pkg/message"
-	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
+	"github.com/stretchr/testify/require"
 )
 
-func extractTextFromResponse(resp *tool.ToolResponse) string {
-	if resp == nil || len(resp.Content) == 0 {
-		return ""
-	}
-	var result string
-	for _, block := range resp.Content {
-		if tb, ok := block.(*message.TextBlock); ok {
-			result += tb.Text
-		}
-	}
-	return result
+// rawArgs marshals a map of tool arguments into the json.RawMessage the new
+// Tool.Call signature expects.
+func rawArgs(t *testing.T, args map[string]any) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(args)
+	require.NoError(t, err)
+	return data
 }
 
 func TestNewBashTool(t *testing.T) {
@@ -31,114 +27,99 @@ func TestNewBashTool(t *testing.T) {
 	bashTool := NewBashTool(executor, allowlist)
 
 	assert.NotNil(t, bashTool)
-	assert.Equal(t, "bash", bashTool.Name())
-	assert.Contains(t, bashTool.Description(), "bash")
+	assert.Equal(t, "bash", bashTool.Param().Name)
+	assert.Contains(t, bashTool.Param().Description.Value, "bash")
 }
 
 func TestBashTool_NameDescription(t *testing.T) {
 	executor := NewToolExecutor([]string{})
 	bashTool := NewBashTool(executor, []string{})
 
-	assert.Equal(t, "bash", bashTool.Name())
-	assert.Contains(t, bashTool.Description(), "Execute bash commands")
+	assert.Equal(t, "bash", bashTool.Param().Name)
+	assert.Contains(t, bashTool.Param().Description.Value, "Execute bash commands")
+	assert.Contains(t, bashTool.Param().Description.Value, "Allowed commands")
 }
-
-// Parameters() method removed in tool refactoring - tools now use typed params
-// See RegisterTools() for the new registration pattern
 
 func TestBashTool_Call(t *testing.T) {
 	ctx := context.Background()
-	executor := NewToolExecutor([]string{"ls", "echo", "pwd", "cd"})       // Allow cd in executor
-	bashTool := NewBashTool(executor, []string{"ls", "echo", "pwd", "cd"}) // Also allow cd in tool to test cd-specific logic
+	executor := NewToolExecutor([]string{"ls", "echo", "pwd", "cd"})
+	bashTool := NewBashTool(executor, []string{"ls", "echo", "pwd", "cd"})
 
-	// Test valid command
-	resp, err := bashTool.Call(ctx, BashParams{Command: "echo hello"})
+	// Valid command
+	out, err := bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "echo hello"}))
 	assert.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, text, "(cwd:")
-	assert.Contains(t, text, "hello\n")
+	assert.Contains(t, out, "(cwd:")
+	assert.Contains(t, out, "hello")
 
-	// Test command not in tool's allowlist (but might be in executor's - tool's takes precedence)
-	resp, err = bashTool.Call(ctx, BashParams{Command: "cat /etc/hosts"})
-	assert.NoError(t, err) // No error from Call, but should be an error message in text
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: command 'cat' is not allowed")
-
-	// Test empty command
-	resp, err = bashTool.Call(ctx, BashParams{Command: ""})
+	// Command not in tool's allowlist
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "cat /etc/hosts"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: 'command' parameter is required")
+	assert.Contains(t, out, "Error: command 'cat' is not allowed")
 
-	// Test 'cd' command is now allowed when using shell chaining
-	resp, err = bashTool.Call(ctx, BashParams{Command: "cd /tmp && pwd"})
+	// Empty command
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": ""}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "/tmp")
+	assert.Contains(t, out, "Error: 'command' parameter is required")
 
-	// Test command with arguments
-	resp, err = bashTool.Call(ctx, BashParams{Command: "echo arg1 arg2"})
+	// cd with shell chaining
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "cd /tmp && pwd"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "arg1 arg2")
+	assert.Contains(t, out, "/tmp")
 
-	// Test command with non-existent executable
-	// Since we have a specific allowlist, non-existent commands will be caught by the allowlist check
-	// To properly test "command not found", we need a command that exists but will fail
-	resp, err = bashTool.Call(ctx, BashParams{Command: "ls /nonexistentpath12345"})
-	assert.NoError(t, err) // Still no error, but should report command not found
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "No such file or directory")
+	// Command with arguments
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "echo arg1 arg2"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "arg1 arg2")
 
-	// Test with a working directory set in the executor
+	// Command that exists but fails
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "ls /nonexistentpath12345"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "No such file or directory")
+
+	// Working directory set in the executor
 	tempDir := t.TempDir()
 	executor.SetWorkingDirectory(tempDir)
-	resp, err = bashTool.Call(ctx, BashParams{Command: "pwd"})
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "pwd"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, tempDir)
+	assert.Contains(t, out, tempDir)
+}
+
+func TestBashTool_InvalidJSON(t *testing.T) {
+	ctx := context.Background()
+	bashTool := NewBashTool(NewToolExecutor([]string{"echo"}), []string{"echo"})
+
+	_, err := bashTool.Call(ctx, json.RawMessage(`{not json`))
+	assert.Error(t, err)
 }
 
 func TestNewGetStatusTool(t *testing.T) {
 	executor := NewToolExecutor([]string{})
 	getStatusFunc := func(chatID string) (*StatusInfo, error) {
-		return &StatusInfo{
-			CurrentAgent: "test_agent",
-		}, nil
+		return &StatusInfo{CurrentAgent: "test_agent"}, nil
 	}
-	getStatusTool := NewGetStatusTool(executor, getStatusFunc)
+	getStatusTool := NewGetStatusTool(executor, "chat-1", getStatusFunc)
 
 	assert.NotNil(t, getStatusTool)
-	assert.Equal(t, "get_status", getStatusTool.Name())
+	assert.Equal(t, "get_status", getStatusTool.Param().Name)
+	assert.Contains(t, getStatusTool.Param().Description.Value, "Get the current bot status")
 }
-
-func TestGetStatusTool_NameDescription(t *testing.T) {
-	executor := NewToolExecutor([]string{})
-	getStatusTool := NewGetStatusTool(executor, nil)
-
-	assert.Equal(t, "get_status", getStatusTool.Name())
-	assert.Contains(t, getStatusTool.Description(), "Get the current bot status")
-}
-
-// Parameters() method removed in tool refactoring - tools now use typed params
 
 func TestGetStatusTool_Call(t *testing.T) {
 	ctx := context.Background()
 	executor := NewToolExecutor([]string{})
 
-	// Test with nil getStatusFunc
-	getStatusTool := NewGetStatusTool(executor, nil)
-	resp, err := getStatusTool.Call(ctx, GetStatusParams{})
+	// Nil getStatusFunc
+	getStatusTool := NewGetStatusTool(executor, "test-chat", nil)
+	out, err := getStatusTool.Call(ctx, json.RawMessage(`{}`))
 	assert.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, text, "Current working directory:")
+	assert.Contains(t, out, "Current working directory:")
 
-	// Test with a mock getStatusFunc
+	// Mock getStatusFunc — chatID is injected from config, not input.
 	mockStatus := &StatusInfo{
 		CurrentAgent:   "mock-agent",
 		SessionID:      "mock-session",
 		ProjectPath:    "/mock/project",
-		WorkingDir:     "/should/be/overwritten", // This should be overwritten by executor's CWD
+		WorkingDir:     "/should/be/overwritten",
 		HasRunningTask: true,
 		Whitelisted:    false,
 	}
@@ -148,27 +129,25 @@ func TestGetStatusTool_Call(t *testing.T) {
 	}
 
 	testCwd := t.TempDir()
-	executor.SetWorkingDirectory(testCwd) // Set executor's CWD
-	getStatusTool = NewGetStatusTool(executor, mockGetStatusFunc)
+	executor.SetWorkingDirectory(testCwd)
+	getStatusTool = NewGetStatusTool(executor, "test-chat", mockGetStatusFunc)
 
-	resp, err = getStatusTool.Call(ctx, GetStatusParams{ChatID: "test-chat"})
+	out, err = getStatusTool.Call(ctx, json.RawMessage(`{}`))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Agent: mock-agent")
-	assert.Contains(t, text, "Session: mock-session")
-	assert.Contains(t, text, "Project: /mock/project")
-	assert.Contains(t, text, "Working Directory: "+testCwd) // Should use executor's CWD
-	assert.Contains(t, text, "Whitelisted: false")
+	assert.Contains(t, out, "Agent: mock-agent")
+	assert.Contains(t, out, "Session: mock-session")
+	assert.Contains(t, out, "Project: /mock/project")
+	assert.Contains(t, out, "Working Directory: "+testCwd)
+	assert.Contains(t, out, "Whitelisted: false")
 
-	// Test getStatusFunc returning an error
+	// getStatusFunc returning an error
 	errorGetStatusFunc := func(chatID string) (*StatusInfo, error) {
 		return nil, errors.New("test error")
 	}
-	getStatusTool = NewGetStatusTool(executor, errorGetStatusFunc)
-	resp, err = getStatusTool.Call(ctx, GetStatusParams{ChatID: "test-chat"})
+	getStatusTool = NewGetStatusTool(executor, "test-chat", errorGetStatusFunc)
+	out, err = getStatusTool.Call(ctx, json.RawMessage(`{}`))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error getting status: test error")
+	assert.Contains(t, out, "Error getting status: test error")
 }
 
 func TestNewChangeDirTool(t *testing.T) {
@@ -177,32 +156,21 @@ func TestNewChangeDirTool(t *testing.T) {
 	changeDirTool := NewChangeDirTool(executor, "", updateProjectFunc)
 
 	assert.NotNil(t, changeDirTool)
-	assert.Equal(t, "change_workdir", changeDirTool.Name())
+	assert.Equal(t, "change_workdir", changeDirTool.Param().Name)
+	assert.Contains(t, changeDirTool.Param().Description.Value, "Change the bound project directory")
 }
-
-func TestChangeDirTool_NameDescription(t *testing.T) {
-	executor := NewToolExecutor([]string{})
-	changeDirTool := NewChangeDirTool(executor, "", nil)
-
-	assert.Equal(t, "change_workdir", changeDirTool.Name())
-	assert.Contains(t, changeDirTool.Description(), "Change the bound project directory")
-}
-
-// Parameters() method removed in tool refactoring - tools now use typed params
 
 func TestChangeDirTool_Call(t *testing.T) {
 	ctx := context.Background()
-	executor := NewToolExecutor([]string{"ls"}) // Add ls to executor allowlist for directory listing
+	executor := NewToolExecutor([]string{"ls"})
 
-	// Create temporary directories for testing
 	rootTempDir := t.TempDir()
 	subDir1 := filepath.Join(rootTempDir, "sub1")
 	subDir2 := filepath.Join(rootTempDir, "sub2")
-	_ = os.Mkdir(subDir1, 0755)
-	_ = os.Mkdir(subDir2, 0755)
-	_ = os.WriteFile(filepath.Join(subDir1, "file1.txt"), []byte(""), 0644)
+	require.NoError(t, os.Mkdir(subDir1, 0755))
+	require.NoError(t, os.Mkdir(subDir2, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(subDir1, "file1.txt"), []byte(""), 0644))
 
-	// Mock updateProjectFunc
 	var updatedChatID, updatedProjectPath string
 	mockUpdateProjectFunc := func(chatID string, projectPath string) error {
 		updatedChatID = chatID
@@ -211,184 +179,231 @@ func TestChangeDirTool_Call(t *testing.T) {
 	}
 	changeDirTool := NewChangeDirTool(executor, "chat123", mockUpdateProjectFunc)
 
-	// Test changing to an absolute path
-	resp, err := changeDirTool.Call(ctx, ChangeDirParams{Path: subDir1})
+	// Absolute path
+	out, err := changeDirTool.Call(ctx, rawArgs(t, map[string]any{"path": subDir1}))
 	assert.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, text, "Changed directory to:")
-	assert.Contains(t, text, subDir1)
-	assert.Contains(t, text, "file1.txt")
+	assert.Contains(t, out, "Changed directory to:")
+	assert.Contains(t, out, subDir1)
+	assert.Contains(t, out, "file1.txt")
 	assert.Equal(t, subDir1, executor.GetWorkingDirectory())
 	assert.Equal(t, "chat123", updatedChatID)
 	assert.Equal(t, subDir1, updatedProjectPath)
 
-	// Test changing to a relative path
-	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: "../sub2"})
+	// Relative path
+	out, err = changeDirTool.Call(ctx, rawArgs(t, map[string]any{"path": "../sub2"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Changed directory to:")
-	assert.Contains(t, text, subDir2)
+	assert.Contains(t, out, "Changed directory to:")
+	assert.Contains(t, out, subDir2)
 	assert.Equal(t, subDir2, executor.GetWorkingDirectory())
-	assert.Equal(t, "chat123", updatedChatID)
-	assert.Equal(t, subDir2, updatedProjectPath)
 
-	// Test with empty path
-	resp, err = changeDirTool.Call(ctx, ChangeDirParams{})
+	// Empty path
+	out, err = changeDirTool.Call(ctx, rawArgs(t, map[string]any{}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: 'path' parameter is required")
+	assert.Contains(t, out, "Error: 'path' parameter is required")
 
-	// Test with non-existent path
-	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: "/nonexistent/dir"})
+	// Non-existent path
+	out, err = changeDirTool.Call(ctx, rawArgs(t, map[string]any{"path": "/nonexistent/dir"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error:")
+	assert.Contains(t, out, "Error:")
 
-	// Test with a file path (not a directory)
+	// File path (not a directory)
 	testFile := filepath.Join(rootTempDir, "test.txt")
-	_ = os.WriteFile(testFile, []byte(""), 0644)
-	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: testFile})
+	require.NoError(t, os.WriteFile(testFile, []byte(""), 0644))
+	out, err = changeDirTool.Call(ctx, rawArgs(t, map[string]any{"path": testFile}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "is not a directory")
+	assert.Contains(t, out, "is not a directory")
 
-	// Test updateProjectFunc error
+	// updateProjectFunc error
 	errorUpdateProjectFunc := func(chatID string, projectPath string) error {
 		return errors.New("persistence error")
 	}
 	changeDirTool = NewChangeDirTool(executor, "chat123", errorUpdateProjectFunc)
-	resp, err = changeDirTool.Call(ctx, ChangeDirParams{Path: subDir1})
+	out, err = changeDirTool.Call(ctx, rawArgs(t, map[string]any{"path": subDir1}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Warning: directory changed but persistence failed")
-	assert.Contains(t, text, subDir1)
+	assert.Contains(t, out, "Warning: directory changed but persistence failed")
+	assert.Contains(t, out, subDir1)
 }
 
-func TestRegisterTools(t *testing.T) {
-	toolkit := tool.NewToolkit()
+func TestBuildTools(t *testing.T) {
 	executor := NewToolExecutor(DefaultBashAllowlist)
 	getStatusFunc := func(chatID string) (*StatusInfo, error) { return nil, nil }
 	updateProjectFunc := func(chatID string, projectPath string) error { return nil }
 
-	err := RegisterTools(toolkit, executor, "test-chat", getStatusFunc, updateProjectFunc, nil)
-	assert.NoError(t, err)
+	tools := BuildTools(executor, "test-chat", getStatusFunc, updateProjectFunc, nil)
+	assert.GreaterOrEqual(t, len(tools), 3, "Should build at least 3 tools")
 
-	// Verify schemas are registered (tools should be available)
-	schemas := toolkit.GetSchemas()
-	assert.True(t, len(schemas) >= 3, "Should have at least 3 tools registered")
-
-	// Check that expected tools are in schemas
-	toolNames := make([]string, 0, len(schemas))
-	for _, schema := range schemas {
-		if schema.Function.Name != "" {
-			toolNames = append(toolNames, schema.Function.Name)
-		}
+	names := make([]string, 0, len(tools))
+	for _, tl := range tools {
+		names = append(names, tl.Param().Name)
 	}
-	assert.Contains(t, toolNames, "bash")
-	assert.Contains(t, toolNames, "get_status")
-	assert.Contains(t, toolNames, "change_workdir")
+	assert.Contains(t, names, "bash")
+	assert.Contains(t, names, "get_status")
+	assert.Contains(t, names, "change_workdir")
+
+	// send_file is only registered when a SendFile callback is available.
+	assert.NotContains(t, names, "send_file")
+
+	toolCtx := &ToolContext{
+		SendFile: func(ctx context.Context, path, caption string) error { return nil },
+	}
+	withSend := BuildTools(executor, "test-chat", getStatusFunc, updateProjectFunc, toolCtx)
+	sendNames := make([]string, 0, len(withSend))
+	for _, tl := range withSend {
+		sendNames = append(sendNames, tl.Param().Name)
+	}
+	assert.Contains(t, sendNames, "send_file")
 }
 
 func TestToolExecutor_ApprovalCallback(t *testing.T) {
 	ctx := context.Background()
-	executor := NewToolExecutor([]string{"ls", "echo"}) // Limited allowlist
+	executor := NewToolExecutor([]string{"ls", "echo"})
 	bashTool := NewBashTool(executor, []string{"ls", "echo"})
 
-	// Test 1: Command in allowlist - no approval needed
-	resp, err := bashTool.Call(ctx, BashParams{Command: "ls ."})
+	// Command in allowlist - no approval needed
+	out, err := bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "ls ."}))
 	assert.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, text, "tools_test.go")
+	assert.Contains(t, out, "tools_test.go")
 
-	// Test 2: Command not in allowlist, no callback - should error
-	resp, err = bashTool.Call(ctx, BashParams{Command: "cat /etc/hosts"})
-	assert.NoError(t, err) // Call doesn't return error, error is in response text
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: command 'cat' is not allowed")
+	// Command not in allowlist, no callback - error
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "cat /etc/hosts"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "Error: command 'cat' is not allowed")
 
-	// Test 3: Command not in allowlist, with approval callback - approved
+	// Command not in allowlist, with approval callback - approved
 	approvalCalled := false
 	approvedCommand := ""
 	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
 		approvalCalled = true
 		approvedCommand = req.Command
-		return true, nil // Approve
+		return true, nil
 	})
 
-	// Use 'pwd' which is NOT in the allowlist but should work everywhere
-	resp, err = bashTool.Call(ctx, BashParams{Command: "pwd"})
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "pwd"}))
 	assert.NoError(t, err)
 	assert.True(t, approvalCalled, "Approval callback should have been called")
 	assert.Equal(t, "pwd", approvedCommand)
-	// The command should execute successfully after approval
-	text = extractTextFromResponse(resp)
-	assert.NotContains(t, text, "Error: command 'pwd' was not approved")
+	assert.NotContains(t, out, "Error: command 'pwd' was not approved")
 
-	// Test 4: Command not in allowlist, with approval callback - denied
+	// Denied
 	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
-		return false, nil // Deny
+		return false, nil
 	})
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "date"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "Error: command 'date' was not approved")
 
-	resp, err = bashTool.Call(ctx, BashParams{Command: "date"})
-	assert.NoError(t, err) // Call doesn't return error, error is in response text
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: command 'date' was not approved")
-
-	// Test 5: Approval callback returns error
+	// Approval callback returns error
 	executor.SetApprovalCallback(func(ctx context.Context, req ApprovalRequest) (bool, error) {
 		return false, errors.New("approval service unavailable")
 	})
-
-	resp, err = bashTool.Call(ctx, BashParams{Command: "whoami"})
-	assert.NoError(t, err) // Call doesn't return error, error is in response text
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, "Error: approval request failed")
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "whoami"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "Error: approval request failed")
 }
 
 func TestBashTool_DirectoryTracking(t *testing.T) {
 	ctx := context.Background()
 
-	// Create a temporary directory structure
 	rootTempDir := t.TempDir()
 	subDir1 := filepath.Join(rootTempDir, "sub1")
 	subDir2 := filepath.Join(rootTempDir, "sub2")
-	assert.NoError(t, os.Mkdir(subDir1, 0755))
-	assert.NoError(t, os.Mkdir(subDir2, 0755))
+	require.NoError(t, os.Mkdir(subDir1, 0755))
+	require.NoError(t, os.Mkdir(subDir2, 0755))
 
-	// Create executor and set initial directory
-	// Empty allowlist means allow all (for testing convenience)
+	// Empty allowlist means allow all.
 	executor := NewToolExecutor([]string{})
 	executor.SetWorkingDirectory(rootTempDir)
-
-	// Create bash tool with empty allowlist (allows all commands)
 	bashTool := NewBashTool(executor, []string{})
 
-	// Test 1: Initial directory
-	assert.Equal(t, rootTempDir, executor.GetWorkingDirectory(), "Initial directory should be rootTempDir")
+	assert.Equal(t, rootTempDir, executor.GetWorkingDirectory())
 
-	// Test 2: Execute cd command - should update executor's working directory
-	resp, err := bashTool.Call(ctx, BashParams{Command: "cd sub1 && pwd"})
+	// cd should update the executor's working directory.
+	out, err := bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "cd sub1 && pwd"}))
 	assert.NoError(t, err)
-	text := extractTextFromResponse(resp)
-	assert.Contains(t, text, subDir1, "Response should show new directory")
-	assert.Equal(t, subDir1, executor.GetWorkingDirectory(), "Executor's working directory should be updated")
+	assert.Contains(t, out, subDir1)
+	assert.Equal(t, subDir1, executor.GetWorkingDirectory())
 
-	// Test 3: Execute another command in the new directory
-	resp, err = bashTool.Call(ctx, BashParams{Command: "pwd"})
+	// pwd in the new directory.
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "pwd"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, subDir1, "pwd should show we're still in sub1")
+	assert.Contains(t, out, subDir1)
 
-	// Test 4: Change directory again
-	resp, err = bashTool.Call(ctx, BashParams{Command: "cd ../sub2 && pwd"})
+	// Change directory again.
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "cd ../sub2 && pwd"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Contains(t, text, subDir2, "Response should show sub2 directory")
-	assert.Equal(t, subDir2, executor.GetWorkingDirectory(), "Executor's working directory should be sub2")
+	assert.Contains(t, out, subDir2)
+	assert.Equal(t, subDir2, executor.GetWorkingDirectory())
 
-	// Test 5: Chain multiple commands with cd
-	resp, err = bashTool.Call(ctx, BashParams{Command: "cd .. && cd sub1 && ls"})
+	// Chained cd commands.
+	_, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "cd .. && cd sub1 && ls"}))
 	assert.NoError(t, err)
-	text = extractTextFromResponse(resp)
-	assert.Equal(t, subDir1, executor.GetWorkingDirectory(), "Should end up in sub1")
+	assert.Equal(t, subDir1, executor.GetWorkingDirectory())
+}
+
+func TestBashTool_ComplexCommands(t *testing.T) {
+	executor := NewToolExecutor([]string{"echo", "sh", "cat"})
+	bashTool := NewBashTool(executor, []string{"echo", "sh", "cat"})
+	ctx := context.Background()
+
+	out, err := bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "echo 'hello world'"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "hello world")
+
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "echo 'test' | cat"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "test")
+
+	out, err = bashTool.Call(ctx, rawArgs(t, map[string]any{"command": "echo 'redirect test' > /dev/null && echo 'success'"}))
+	assert.NoError(t, err)
+	assert.Contains(t, out, "success")
+}
+
+// ============================================================================
+// ToolExecutor unit tests (still-existing public surface)
+// ============================================================================
+
+func TestToolExecutor_SetWorkingDirectory(t *testing.T) {
+	executor := NewToolExecutor([]string{})
+
+	assert.Equal(t, "", executor.GetWorkingDirectory())
+	executor.SetWorkingDirectory("/tmp/test")
+	assert.Equal(t, "/tmp/test", executor.GetWorkingDirectory())
+	executor.SetWorkingDirectory("/home/user")
+	assert.Equal(t, "/home/user", executor.GetWorkingDirectory())
+}
+
+func TestToolExecutor_ResolvePath(t *testing.T) {
+	executor := NewToolExecutor([]string{})
+
+	assert.Equal(t, "/absolute/path", executor.ResolvePath("/absolute/path"))
+
+	executor.SetWorkingDirectory("")
+	assert.NotEqual(t, "relative/path", executor.ResolvePath("relative/path"))
+
+	executor.SetWorkingDirectory("/home/user")
+	assert.Equal(t, "/home/user/project", executor.ResolvePath("project"))
+}
+
+func TestToolExecutor_GetAllowedCommands(t *testing.T) {
+	executor := NewToolExecutor([]string{"ls", "pwd", "git"})
+	commands := executor.GetAllowedCommands()
+
+	assert.Len(t, commands, 3)
+	assert.Contains(t, commands, "ls")
+	assert.Contains(t, commands, "pwd")
+	assert.Contains(t, commands, "git")
+}
+
+func TestToolExecutor_ExecuteBash_AllowedCommand(t *testing.T) {
+	executor := NewToolExecutor([]string{"echo", "pwd"})
+	output, err := executor.ExecuteBash(context.Background(), "echo", "hello")
+	assert.NoError(t, err)
+	assert.Contains(t, output, "hello")
+}
+
+func TestToolExecutor_ExecuteBash_NotAllowedCommand(t *testing.T) {
+	executor := NewToolExecutor([]string{"echo"})
+	_, err := executor.ExecuteBash(context.Background(), "rm", "-rf", "/")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not allowed")
 }

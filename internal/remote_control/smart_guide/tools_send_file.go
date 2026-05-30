@@ -2,12 +2,13 @@ package smart_guide
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/tingly-dev/tingly-agentscope/pkg/tool"
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // SendFileMaxSize is the default maximum file size for outbound file sends (50MB).
@@ -37,8 +38,8 @@ func DetectMediaType(path string) string {
 
 // SendFileParams defines the parameters for the send_file tool.
 type SendFileParams struct {
-	FilePath string `json:"file_path" jsonschema:"description=Path to the local file to send (absolute or relative to working directory)"`
-	Caption  string `json:"caption,omitempty" jsonschema:"description=Optional caption or message to accompany the file"`
+	FilePath string `json:"file_path"`
+	Caption  string `json:"caption,omitempty"`
 }
 
 // SendFileTool sends a local file to the user via the IM bot.
@@ -66,14 +67,11 @@ func NewSendFileToolWithLimit(executor *ToolExecutor, toolCtx *ToolContext, maxS
 	}
 }
 
-// Name returns the tool name.
-func (t *SendFileTool) Name() string {
-	return "send_file"
-}
-
-// Description returns the tool description.
-func (t *SendFileTool) Description() string {
-	return `Send a local file to the user via the messaging platform.
+// Param describes the send_file tool to the model.
+func (t *SendFileTool) Param() anthropic.BetaToolParam {
+	return anthropic.BetaToolParam{
+		Name: "send_file",
+		Description: anthropic.String(`Send a local file to the user via the messaging platform.
 
 The file path can be absolute or relative to the current working directory.
 Files inside the project path are sent directly. Files outside require explicit user approval.
@@ -81,19 +79,38 @@ Files inside the project path are sent directly. Files outside require explicit 
 Examples:
 - Send a report: file_path="output/report.pdf", caption="Here is your analysis"
 - Send a chart: file_path="chart.png"
-- Send an archive: file_path="/tmp/export.zip", caption="Exported data"`
+- Send an archive: file_path="/tmp/export.zip", caption="Exported data"`),
+		InputSchema: anthropic.BetaToolInputSchemaParam{
+			Properties: map[string]any{
+				"file_path": map[string]any{
+					"type":        "string",
+					"description": "Path to the local file to send (absolute or relative to working directory).",
+				},
+				"caption": map[string]any{
+					"type":        "string",
+					"description": "Optional caption or message to accompany the file.",
+				},
+			},
+			Required: []string{"file_path"},
+		},
+	}
 }
 
 // Call executes the send_file tool.
-func (t *SendFileTool) Call(ctx context.Context, params SendFileParams) (*tool.ToolResponse, error) {
+func (t *SendFileTool) Call(ctx context.Context, rawInput json.RawMessage) (string, error) {
+	var params SendFileParams
+	if err := json.Unmarshal(rawInput, &params); err != nil {
+		return "", fmt.Errorf("send_file: invalid arguments: %w", err)
+	}
+
 	// 1. Validate file_path is provided
 	if params.FilePath == "" {
-		return tool.TextResponse("Error: 'file_path' parameter is required"), nil
+		return "Error: 'file_path' parameter is required", nil
 	}
 
 	// 2. Check SendFile callback is available
 	if t.toolCtx == nil || t.toolCtx.SendFile == nil {
-		return tool.TextResponse("Error: file sending is not available in this context"), nil
+		return "Error: file sending is not available in this context", nil
 	}
 
 	// 3. Resolve to absolute path
@@ -102,17 +119,17 @@ func (t *SendFileTool) Call(ctx context.Context, params SendFileParams) (*tool.T
 	// 4. Stat the file
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return tool.TextResponse(fmt.Sprintf("Error: cannot access file '%s': %v", absPath, err)), nil
+		return fmt.Sprintf("Error: cannot access file '%s': %v", absPath, err), nil
 	}
 
 	// 5. Must be a regular file
 	if !info.Mode().IsRegular() {
-		return tool.TextResponse(fmt.Sprintf("Error: '%s' is not a regular file (directories cannot be sent)", absPath)), nil
+		return fmt.Sprintf("Error: '%s' is not a regular file (directories cannot be sent)", absPath), nil
 	}
 
 	// 6. Check size
 	if info.Size() > t.maxSize {
-		return tool.TextResponse(fmt.Sprintf("Error: file too large (%d bytes, max %d bytes)", info.Size(), t.maxSize)), nil
+		return fmt.Sprintf("Error: file too large (%d bytes, max %d bytes)", info.Size(), t.maxSize), nil
 	}
 
 	// 7. Security check: if file is outside project path, require user approval
@@ -124,20 +141,20 @@ func (t *SendFileTool) Call(ctx context.Context, params SendFileParams) (*tool.T
 	if projectPath != "" && !isUnderPath(absPath, projectPath) {
 		approved, err := t.requestCrossPathApproval(ctx, absPath, info.Size())
 		if err != nil {
-			return tool.TextResponse(fmt.Sprintf("Error: approval request failed: %v", err)), nil
+			return fmt.Sprintf("Error: approval request failed: %v", err), nil
 		}
 		if !approved {
-			return tool.TextResponse(fmt.Sprintf("Error: sending file '%s' was denied by user (file is outside project path)", absPath)), nil
+			return fmt.Sprintf("Error: sending file '%s' was denied by user (file is outside project path)", absPath), nil
 		}
 	}
 
 	// 8. Send the file
 	if err := t.toolCtx.SendFile(ctx, absPath, params.Caption); err != nil {
-		return tool.TextResponse(fmt.Sprintf("Error: failed to send file: %v", err)), nil
+		return fmt.Sprintf("Error: failed to send file: %v", err), nil
 	}
 
 	mediaType := DetectMediaType(absPath)
-	return tool.TextResponse(fmt.Sprintf("✅ File sent successfully: %s (%s, %d bytes)", filepath.Base(absPath), mediaType, info.Size())), nil
+	return fmt.Sprintf("✅ File sent successfully: %s (%s, %d bytes)", filepath.Base(absPath), mediaType, info.Size()), nil
 }
 
 // requestCrossPathApproval requests user approval for sending a file outside the project path.
