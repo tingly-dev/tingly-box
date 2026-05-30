@@ -1,27 +1,30 @@
 import { Delete as DeleteIcon, KeyboardArrowUp, KeyboardArrowDown } from '@/components/icons';
-import {Box, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography,} from '@mui/material';
+import {
+    Box,
+    Divider,
+    IconButton,
+    ListItemIcon,
+    ListItemText,
+    Menu,
+    MenuItem,
+    Stack,
+    Typography,
+} from '@mui/material';
 import NodeTooltip from './NodeTooltip.tsx';
 import { alpha } from '@mui/material/styles';
-import React, {useState} from 'react';
-import {useTranslation} from 'react-i18next';
-import type {SmartRouting, SmartOp} from '../RoutingGraphTypes.ts';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { SmartRouting, SmartOp } from '../RoutingGraphTypes.ts';
 import {
     ActionButtonsBox,
     getRouteGraphActiveColor,
-    NODE_LAYER_STYLES,
     StyledSmartNodePrimary,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 
-// Smart node internal dimensions
-const SMART_NODE_INTERNAL_STYLES = {
-    contentHeight: 62,
-    fieldHeight: 31,
-} as const;
-
 export interface SmartNodeProps {
     smartRouting: SmartRouting;
-    index?: number; // Frontend-generated index for numbering
+    index?: number;
     active: boolean;
     onEdit: () => void;
     onDelete: () => void;
@@ -29,249 +32,243 @@ export interface SmartNodeProps {
     onMoveDown?: () => void;
 }
 
+// Full tooltip text for a single op.
+const opTooltip = (op: SmartOp): string => {
+    const val = op.value ? `: ${op.value}` : '';
+    return `${op.position} · ${op.operation}${val}`;
+};
+
 export const SmartOpNode: React.FC<SmartNodeProps> = ({
-                                                          smartRouting,
-                                                          index,
-                                                          active,
-                                                          onEdit,
-                                                          onDelete,
-                                                          onMoveUp,
-                                                          onMoveDown,
-                                                      }) => {
-    const {t} = useTranslation();
+    smartRouting,
+    index,
+    active,
+    onEdit,
+    onDelete,
+    onMoveUp,
+    onMoveDown,
+}) => {
+    const { t } = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(anchorEl);
+    const ops: SmartOp[] = smartRouting.ops ?? [];
 
-    const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-        event.stopPropagation();
-        setAnchorEl(event.currentTarget);
+    const handleDeleteClick = (e: React.MouseEvent<HTMLElement>) => {
+        e.stopPropagation();
+        setAnchorEl(e.currentTarget);
     };
 
-    const handleMenuClose = () => {
-        setAnchorEl(null);
-    };
+    const handleMenuClose = () => setAnchorEl(null);
 
-    const handleDelete = () => {
+    const handleConfirmDelete = () => {
         handleMenuClose();
         onDelete();
     };
 
-    const handleNodeClick = () => {
-        onEdit();
-    };
-
-    const firstOp = smartRouting.ops?.[0];
-
-    // Format single op display: e.g., "model: contains" or "user: regex"
-    const getOpDisplay = (op: SmartOp | undefined): string => {
-        if (!op) return t('rule.smart.noOperation');
-        const opLabel = op.operation || 'unknown';
-        return `[${op.position}] [${opLabel}]`;
-    };
-
-    // Get value for second line - truncated if too long
-    const getOpValue = (op: SmartOp | undefined): string => {
-        if (!op?.value) return '';
-        return op.value;
-    };
-
-    // Truncate value for display (max 20 chars)
-    const getTruncatedValue = (op: SmartOp | undefined): string => {
-        const value = getOpValue(op);
-        if (value.length > 20) {
-            return value.slice(0, 20) + '...';
-        }
-        return value;
-    };
-
-    // Full display for single op (includes operation and value)
-    const getOpDisplayFull = (op: SmartOp | undefined): string => {
-        if (!op) return t('rule.smart.noOperation');
-        const opLabel = op.operation || 'unknown';
-        const valueStr = op.value ? `: ${op.value}` : '';
-        return `[${op.position}] [${opLabel}]${valueStr}`;
-    };
-
-    // Summary for multi-op display - shows count and first op
-    const getMultiOpSummary = (): string => {
-        const ops = smartRouting.ops || [];
-        if (ops.length === 0) return t('rule.smart.noOperation');
-
-        if (ops.length === 1) {
-            return getOpDisplay(ops[0]);
-        }
-
-        // For multiple ops, show count and first op
-        return `${ops.length} conditions (AND)`;
-    };
-
-    // Full tooltip for multi-op - shows all ops with AND logic
-    const getMultiOpDisplayFull = (): string => {
-        const ops = smartRouting.ops || [];
-        if (ops.length === 0) return t('rule.smart.noOperation');
-
-        const opStrings = ops.map(op => getOpDisplayFull(op));
-        if (ops.length === 1) {
-            return opStrings[0];
-        }
-
-        // Join with AND
-        return `If ${opStrings.join(' AND ')}`;
-    };
-
     return (
         <StyledSmartNodeWrapper>
-            <StyledSmartNodePrimary active={active} onClick={handleNodeClick}>
-                {/* Index Badge */}
-                {index !== undefined && (
+            <StyledSmartNodePrimary active={active} onClick={onEdit}>
+
+                {/* ── Header ── */}
+                <Stack direction="row" alignItems="center" gap={0.5} sx={{ width: '100%', flexShrink: 0 }}>
+                    {/* Inline index badge */}
+                    {index !== undefined && (
+                        <Box
+                            sx={{
+                                width: 18,
+                                height: 18,
+                                borderRadius: '50%',
+                                backgroundColor: 'primary.main',
+                                color: 'primary.contrastText',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.6rem',
+                                fontWeight: 700,
+                                flexShrink: 0,
+                                lineHeight: 1,
+                            }}
+                        >
+                            {index + 1}
+                        </Box>
+                    )}
+
+                    <Typography
+                        sx={{
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            flexGrow: 1,
+                            lineHeight: 1,
+                            letterSpacing: '0.04em',
+                        }}
+                    >
+                        IF
+                    </Typography>
+
+                    {/* Action buttons — revealed on hover via .action-buttons class */}
+                    <Stack
+                        direction="row"
+                        className="action-buttons"
+                        sx={{ opacity: 0, transition: 'opacity 0.2s', gap: 0.25 }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {onMoveUp && (
+                            <NodeTooltip title={t('common.moveUp', { defaultValue: 'Move up' })} placement="top">
+                                <IconButton
+                                    size="small"
+                                    onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+                                    sx={{ p: 0.25, backgroundColor: 'background.paper' }}
+                                    aria-label="Move smart rule up"
+                                >
+                                    <KeyboardArrowUp sx={{ fontSize: '0.875rem' }} />
+                                </IconButton>
+                            </NodeTooltip>
+                        )}
+                        {onMoveDown && (
+                            <NodeTooltip title={t('common.moveDown', { defaultValue: 'Move down' })} placement="top">
+                                <IconButton
+                                    size="small"
+                                    onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+                                    sx={{ p: 0.25, backgroundColor: 'background.paper' }}
+                                    aria-label="Move smart rule down"
+                                >
+                                    <KeyboardArrowDown sx={{ fontSize: '0.875rem' }} />
+                                </IconButton>
+                            </NodeTooltip>
+                        )}
+                        <NodeTooltip title={t('rule.smart.deleteTooltip')} placement="top">
+                            <IconButton
+                                size="small"
+                                onClick={handleDeleteClick}
+                                sx={{ p: 0.25, backgroundColor: 'background.paper' }}
+                                aria-label={t('rule.smart.deleteTooltip')}
+                            >
+                                <DeleteIcon sx={{ fontSize: '0.875rem', color: 'error.main' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    </Stack>
+                </Stack>
+
+                <Divider sx={{ width: '100%', my: 0.5 }} />
+
+                {/* ── Body ── */}
+                {ops.length === 0 ? (
+                    /* Unconditional — no conditions means this branch always fires */
                     <Box
                         sx={{
-                            position: 'absolute',
-                            top: -8,
-                            left: -8,
-                            backgroundColor: 'primary.main',
-                            color: 'primary.contrastText',
-                            borderRadius: '50%',
-                            width: 24,
-                            height: 24,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold',
-                            boxShadow: 1,
-                            zIndex: 1,
+                            flexGrow: 1,
+                            py: 0.5,
                         }}
                     >
-                        {index + 1}
-                    </Box>
-                )}
-                {/* Content */}
-                <Box
-                    sx={{
-                        width: '100%',
-                        height: SMART_NODE_INTERNAL_STYLES.contentHeight,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        gap: 0.75,
-                    }}
-                >
-                    {/* Value display - the truncated value is a subset of the summary
-                        below, so it shares the single tooltip on the summary box. */}
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            ...NODE_LAYER_STYLES.typography,
-                            color: 'text.primary',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
-                        {getTruncatedValue(firstOp) || t('rule.smart.noValue')}
-                    </Typography>
-
-                    {/* Summary Info */}
-                    <Box
-                        sx={{
-                            width: '100%',
-                        }}
-                    >
-                        <NodeTooltip title={getMultiOpDisplayFull()} placement="top">
-                            <Box
-                                sx={(theme) => ({
-                                    width: '100%',
-                                    height: SMART_NODE_INTERNAL_STYLES.fieldHeight,
-                                    px: 1,
-                                    border: '1px solid',
-                                    borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.34 : 0.22),
-                                    borderRadius: 1,
-                                    backgroundColor: 'background.paper',
-                                    transition: 'border-color 0.16s ease, background-color 0.16s ease',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    overflow: 'hidden',
-                                })}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontSize: '0.8rem',
-                                        color: 'text.secondary',
-                                        fontWeight: 500,
-                                        lineHeight: 1,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        width: '100%',
-                                    }}
-                                >
-                                    {getMultiOpSummary()}
-                                </Typography>
-                            </Box>
-                        </NodeTooltip>
-                    </Box>
-                </Box>
-
-                {/* Action Buttons - visible on hover */}
-                <ActionButtonsBox className="action-buttons">
-                    {onMoveUp && (
-                        <NodeTooltip title="Move up" placement="bottom">
-                            <IconButton
-                                size="small"
-                                onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
-                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
-                                aria-label="Move smart rule up"
-                            >
-                                <KeyboardArrowUp sx={{ fontSize: '1rem' }} />
-                            </IconButton>
-                        </NodeTooltip>
-                    )}
-                    {onMoveDown && (
-                        <NodeTooltip title="Move down" placement="bottom">
-                            <IconButton
-                                size="small"
-                                onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
-                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
-                                aria-label="Move smart rule down"
-                            >
-                                <KeyboardArrowDown sx={{ fontSize: '1rem' }} />
-                            </IconButton>
-                        </NodeTooltip>
-                    )}
-                    <NodeTooltip title={t('rule.smart.deleteTooltip')} placement="bottom">
-                        <IconButton
-                            size="small"
-                            onClick={handleMenuClick}
-                            sx={{p: 0.5, backgroundColor: 'background.paper'}}
-                            aria-label={t('rule.smart.deleteTooltip')}
+                        <Typography
+                            sx={{
+                                fontSize: '0.65rem',
+                                color: 'text.disabled',
+                                fontStyle: 'italic',
+                                textAlign: 'center',
+                                lineHeight: 1.3,
+                            }}
                         >
-                            <DeleteIcon sx={{fontSize: '1rem', color: 'error.main'}}/>
-                        </IconButton>
-                    </NodeTooltip>
-                </ActionButtonsBox>
+                            {t('rule.smart.unconditional', { defaultValue: '无条件，跳过' })}
+                        </Typography>
+                    </Box>
+                ) : (
+                    <Stack gap={0.4} sx={{ width: '100%' }}>
+                        {ops.map((op) => (
+                            <NodeTooltip key={op.uuid} title={opTooltip(op)} placement="right">
+                                <Box
+                                    sx={(theme) => ({
+                                        width: '100%',
+                                        px: 0.75,
+                                        py: 0.35,
+                                        borderRadius: 0.75,
+                                        border: '1px solid',
+                                        borderColor: alpha(
+                                            getRouteGraphActiveColor(theme),
+                                            theme.palette.mode === 'dark' ? 0.28 : 0.18,
+                                        ),
+                                        backgroundColor: alpha(
+                                            getRouteGraphActiveColor(theme),
+                                            theme.palette.mode === 'dark' ? 0.07 : 0.03,
+                                        ),
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0.5,
+                                        overflow: 'hidden',
+                                        minHeight: 22,
+                                    })}
+                                >
+                                    {/* position — accent label */}
+                                    <Typography
+                                        component="span"
+                                        sx={(theme) => ({
+                                            fontSize: '0.6rem',
+                                            fontWeight: 700,
+                                            color: getRouteGraphActiveColor(theme),
+                                            flexShrink: 0,
+                                            lineHeight: 1,
+                                        })}
+                                    >
+                                        {op.position}
+                                    </Typography>
+
+                                    {/* operation — muted */}
+                                    <Typography
+                                        component="span"
+                                        sx={{
+                                            fontSize: '0.6rem',
+                                            color: 'text.disabled',
+                                            flexShrink: 0,
+                                            lineHeight: 1,
+                                        }}
+                                    >
+                                        · {op.operation}
+                                    </Typography>
+
+                                    {/* value — primary, truncated */}
+                                    {op.value && (
+                                        <Typography
+                                            component="span"
+                                            sx={{
+                                                fontSize: '0.6rem',
+                                                fontWeight: 500,
+                                                color: 'text.primary',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                flexGrow: 1,
+                                                lineHeight: 1,
+                                            }}
+                                        >
+                                            : {op.value}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </NodeTooltip>
+                        ))}
+                    </Stack>
+                )}
             </StyledSmartNodePrimary>
 
-            {/* Delete Confirmation Menu */}
+            {/* Delete confirmation menu */}
             <Menu
                 anchorEl={anchorEl}
                 open={menuOpen}
                 onClose={handleMenuClose}
                 onClick={(e) => e.stopPropagation()}
-                transformOrigin={{horizontal: 'right', vertical: 'top'}}
-                anchorOrigin={{horizontal: 'right', vertical: 'bottom'}}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
-                <MenuItem onClick={handleDelete} disabled={!active}>
+                <MenuItem onClick={handleConfirmDelete} disabled={!active}>
                     <ListItemIcon>
                         <DeleteIcon />
                     </ListItemIcon>
-                    <ListItemText>
-                        {t('rule.menu.deleteSmartRule')}
-                    </ListItemText>
+                    <ListItemText>{t('rule.menu.deleteSmartRule')}</ListItemText>
                 </MenuItem>
-                <MenuItem onClick={handleMenuClose} sx={{color: 'text.secondary'}}>
+                <MenuItem onClick={handleMenuClose} sx={{ color: 'text.secondary' }}>
                     <ListItemText>{t('common.cancel')}</ListItemText>
                 </MenuItem>
             </Menu>

@@ -169,20 +169,19 @@ export const StyledSmartNodeWrapper = styled(Box)(({ theme }: { theme: Theme }) 
     '&:hover .action-buttons': { opacity: 1 },
 }));
 
-// Base smart node styles
+// Base smart node styles — dashed border + flexible height to fit op-tag rows.
 const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: Theme }) => ({
     display: 'flex',
     flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
     padding: smartNode.padding,
     borderRadius: theme.shape.borderRadius,
-    border: '1px solid',
+    border: '1px dashed',
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
-    textAlign: 'center' as const,
     width: smartNode.width,
-    height: smartNode.height,
+    minHeight: smartNode.height,
     boxShadow: 'none',
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease, transform 0.18s ease',
     position: 'relative' as const,
