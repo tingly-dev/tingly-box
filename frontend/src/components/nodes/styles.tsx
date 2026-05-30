@@ -177,7 +177,7 @@ const baseSmartNodeStyles = ({ active, theme }: { active: boolean; theme: Theme 
     justifyContent: 'flex-start',
     padding: smartNode.padding,
     borderRadius: theme.shape.borderRadius,
-    border: '1px dashed',
+    border: '1px solid',
     borderColor: getRouteGraphBorderColor(theme),
     backgroundColor: 'background.paper',
     width: smartNode.width,
