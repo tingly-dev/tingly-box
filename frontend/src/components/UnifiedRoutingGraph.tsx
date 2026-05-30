@@ -22,7 +22,7 @@ import {
     NodeContainer,
     ProviderNode,
     SmartOpNode,
-    SmartDefaultNode,
+    ServiceEntryNode,
 } from '@/components/nodes';
 import { EntryNode } from '@/components/nodes';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
@@ -414,7 +414,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return (
             <GraphRow>
                 <NodeContainer>
-                    <SmartDefaultNode
+                    <ServiceEntryNode
                         providersCount={record.providers.length}
                         active={active}
                     />
@@ -503,7 +503,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                             }}>
                                                 <GraphRow>
                                                     <NodeContainer>
-                                                        <SmartDefaultNode
+                                                        <ServiceEntryNode
                                                             providersCount={record.providers.length}
                                                             active={active}
                                                         />

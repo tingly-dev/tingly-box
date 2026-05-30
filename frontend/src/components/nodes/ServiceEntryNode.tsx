@@ -8,12 +8,12 @@ import {
     StyledSmartNodeWrapper,
 } from './styles.tsx';
 
-export interface DefaultNodeProps {
+export interface ServiceEntryNodeProps {
     providersCount: number;
     active: boolean;
 }
 
-export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({ providersCount, active }) => {
+export const ServiceEntryNode: React.FC<ServiceEntryNodeProps> = ({ providersCount, active }) => {
     return (
         <StyledSmartNodeWrapper>
             <Box
@@ -41,4 +41,4 @@ export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({ providersCount, a
     );
 };
 
-export default SmartDefaultNode;
+export default ServiceEntryNode;
