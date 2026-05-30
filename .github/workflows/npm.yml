@@ -369,17 +369,19 @@ jobs:
             exit 0
           fi
 
-          MARKER="<!-- NPX_PUBLISH_INFO -->"
+          START="<!-- NPX_PUBLISH_INFO:START -->"
+          END="<!-- NPX_PUBLISH_INFO:END -->"
 
-          # Reuse the existing version release; strip any previously appended
-          # NPX block so re-runs stay idempotent (no duplicated sections).
+          # Reuse the existing version release. Strip only THIS block (bounded by
+          # START/END) so re-runs stay idempotent and never clobber a sibling
+          # block (e.g. the GUI section) appended elsewhere in the body.
           CURRENT_BODY="$(gh release view "$RELEASE_TAG" --repo "$REPO" --json body -q .body 2>/dev/null || echo "")"
-          BASE_BODY="${CURRENT_BODY%%${MARKER}*}"
+          BASE_BODY="$(printf '%s' "$CURRENT_BODY" | sed "/$START/,/$END/d")"
 
           {
             printf '%s\n' "$BASE_BODY"
+            echo "$START"
             cat << NOTES_EOF
-          ${MARKER}
           ## 📦 NPX Packages - $VERSION
 
           ### 🚀 Installation
@@ -419,6 +421,7 @@ jobs:
             if [ "$PUBLISHED_BUNDLE" = 'true' ]; then
               echo "- 📦 [Bundle on npm](https://www.npmjs.com/package/tingly-box-bundle/v/$VERSION)"
             fi
+            echo "$END"
           } > npx_release_notes.md
 
           echo "Updating release $RELEASE_TAG notes..."
@@ -453,7 +456,9 @@ jobs:
 
   # Publish GUI NPX package
   publish-gui:
-    needs: setup
+    # Depend on create-release so the two jobs never edit the same release body
+    # concurrently (avoids a lost-update race on the shared release notes).
+    needs: [setup, create-release]
     name: Publish GUI Package
     runs-on: ubuntu-latest
     environment: production
@@ -543,17 +548,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          MARKER="<!-- NPX_PUBLISH_INFO_GUI -->"
+          START="<!-- NPX_PUBLISH_INFO_GUI:START -->"
+          END="<!-- NPX_PUBLISH_INFO_GUI:END -->"
 
-          # Reuse the existing version release; strip any previously appended
-          # GUI block so re-runs stay idempotent.
+          # Reuse the existing version release. Strip only THIS block (bounded by
+          # START/END) so re-runs stay idempotent and never clobber the CLI block.
           CURRENT_BODY="$(gh release view "$RELEASE_TAG" --repo "$REPO" --json body -q .body 2>/dev/null || echo "")"
-          BASE_BODY="${CURRENT_BODY%%${MARKER}*}"
+          BASE_BODY="$(printf '%s' "$CURRENT_BODY" | sed "/$START/,/$END/d")"
 
           {
             printf '%s\n' "$BASE_BODY"
+            echo "$START"
             cat << EOF
-          ${MARKER}
           ## 📦 NPX Package - $VERSION ($PKG_TYPE)
 
           ### 🚀 Installation
@@ -569,6 +575,7 @@ jobs:
           ### 🔗 Links
           - 📦 [View on npm](https://www.npmjs.com/package/$PKG_NAME/v/$VERSION)
           EOF
+            echo "$END"
           } > npx_release_notes.md
 
           echo "Updating release $RELEASE_TAG notes with $PKG_TYPE info..."
