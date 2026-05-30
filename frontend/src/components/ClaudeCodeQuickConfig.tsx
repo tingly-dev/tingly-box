@@ -39,11 +39,15 @@ export interface ClaudeCodePrefs {
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC?: string;
     DISABLE_AUTOUPDATER?: string;
     USE_BUILTIN_RIPGREP?: string;
+
+    HTTP_PROXY?: string;
+    HTTPS_PROXY?: string;
+    NO_PROXY?: string;
 }
 
 type PrefsKey = keyof ClaudeCodePrefs;
-type Group = 'model' | 'limits' | 'switches';
-type Kind = 'model' | 'int' | 'bool';
+type Group = 'model' | 'limits' | 'switches' | 'network';
+type Kind = 'model' | 'int' | 'text' | 'bool';
 type Lang = 'zh' | 'en';
 
 // ── Field structure (language-agnostic) ────────────────────────────────
@@ -79,6 +83,10 @@ const FIELD_STRUCT: FieldStruct[] = [
     { envName: 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', group: 'switches', kind: 'bool' },
     { envName: 'DISABLE_AUTOUPDATER', group: 'switches', kind: 'bool' },
     { envName: 'USE_BUILTIN_RIPGREP', group: 'switches', kind: 'bool' },
+    // Network proxy
+    { envName: 'HTTP_PROXY', group: 'network', kind: 'text' },
+    { envName: 'HTTPS_PROXY', group: 'network', kind: 'text' },
+    { envName: 'NO_PROXY', group: 'network', kind: 'text' },
 ];
 
 // ── Localized text bundles ─────────────────────────────────────────────
@@ -199,6 +207,24 @@ const FIELDS_TEXT_ZH: FieldTextMap = {
         purpose: 'Claude Code 自带的 ripgrep 优先于系统 PATH',
         tooltip: '官方默认开启。仅在需要用系统自定义 ripgrep 时关闭。',
     },
+    HTTP_PROXY: {
+        label: 'HTTP 代理',
+        purpose: 'Claude Code 发出 HTTP 请求时使用的代理地址',
+        tooltip: '格式：http://host:port。留空则继承系统代理设置。注意：系统代理不会自动排除 localhost，可能导致向本地网关发起的请求被代理拦截而 502。',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    HTTPS_PROXY: {
+        label: 'HTTPS 代理',
+        purpose: 'Claude Code 发出 HTTPS 请求时使用的代理地址',
+        tooltip: '格式：http://host:port 或 https://host:port。留空则继承系统代理设置。',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    NO_PROXY: {
+        label: '代理排除列表',
+        purpose: '不走代理的主机/域名列表',
+        tooltip: '逗号分隔，如 "localhost,127.0.0.1,::1"。tb 启动时会自动把 localhost/127.0.0.1/::1 追加进来，即使此处留空也会生效。建议留空（由 tb 自动管理），仅在需要额外排除内网域名时填写。',
+        placeholder: 'localhost,127.0.0.1,::1',
+    },
 };
 
 const FIELDS_TEXT_EN: FieldTextMap = {
@@ -305,6 +331,24 @@ const FIELDS_TEXT_EN: FieldTextMap = {
         purpose: "Prefer Claude Code's bundled ripgrep over system PATH",
         tooltip: "On by default. Disable only if you need to use a custom system ripgrep.",
     },
+    HTTP_PROXY: {
+        label: 'HTTP proxy',
+        purpose: 'Proxy used for outbound HTTP requests from Claude Code',
+        tooltip: 'Format: http://host:port. Leave blank to inherit system proxy settings. Note: system proxies do not automatically bypass localhost, which can cause 502s when proxying requests to the local tb gateway.',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    HTTPS_PROXY: {
+        label: 'HTTPS proxy',
+        purpose: 'Proxy used for outbound HTTPS requests from Claude Code',
+        tooltip: 'Format: http://host:port or https://host:port. Leave blank to inherit system proxy settings.',
+        placeholder: 'http://proxy.example.com:8080',
+    },
+    NO_PROXY: {
+        label: 'No-proxy list',
+        purpose: 'Comma-separated hosts that bypass the proxy',
+        tooltip: 'e.g. "localhost,127.0.0.1,::1". tb automatically appends localhost/127.0.0.1/::1 at startup even if left blank. Leave blank to let tb manage it automatically; only set this if you need to bypass additional internal hosts.',
+        placeholder: 'localhost,127.0.0.1,::1',
+    },
 };
 
 interface SectionText { title: string; hint: string }
@@ -323,6 +367,10 @@ const SECTION_TEXT_ZH: SectionTextMap = {
         title: '隐私与行为',
         hint: '开启 = 设置为 "1"；关闭 = 不写入。',
     },
+    network: {
+        title: '网络代理',
+        hint: '留空 = 不写入。tb 始终自动将 localhost/127.0.0.1/::1 追加到 NO_PROXY，无需手动设置。',
+    },
 };
 
 const SECTION_TEXT_EN: SectionTextMap = {
@@ -337,6 +385,10 @@ const SECTION_TEXT_EN: SectionTextMap = {
     switches: {
         title: 'Privacy & behavior',
         hint: 'On = set to "1"; Off = not written.',
+    },
+    network: {
+        title: 'Network proxy',
+        hint: 'Blank = not written. tb always appends localhost/127.0.0.1/::1 to NO_PROXY automatically — no manual entry needed.',
     },
 };
 
@@ -417,6 +469,19 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
 // ── Materialize prefs to the env map the backend will write ────────────
 // Mirrors internal/agent/prefs.go ToEnv(): strip empties, inject the
 // server-resolved base URL + auth token.
+// appendNoProxy mirrors the Go appendNoProxy helper in internal/agent/prefs.go.
+const appendNoProxy = (current: string, ...hosts: string[]): string => {
+    const existing = new Set(current ? current.split(',').map(h => h.trim()) : []);
+    let result = current;
+    for (const h of hosts) {
+        if (!existing.has(h)) {
+            result = result ? result + ',' + h : h;
+            existing.add(h);
+        }
+    }
+    return result;
+};
+
 export const prefsToEnvPreview = (
     prefs: ClaudeCodePrefs,
     baseURL: string,
@@ -429,6 +494,8 @@ export const prefsToEnvPreview = (
     }
     out.ANTHROPIC_BASE_URL = baseURL.replace(/\/$/, '') + '/tingly/claude_code';
     out.ANTHROPIC_AUTH_TOKEN = token;
+    // Mirror Go's ToEnv(): always ensure localhost entries are in NO_PROXY
+    out.NO_PROXY = appendNoProxy(out.NO_PROXY ?? '', 'localhost', '127.0.0.1', '::1');
     return out;
 };
 
@@ -502,7 +569,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                         onChange={(_, c) => setValue(c ? '1' : '')}
                     />
                 )}
-                {(field.kind === 'int' || field.kind === 'model') && (
+                {(field.kind === 'int' || field.kind === 'text' || field.kind === 'model') && (
                     <TextField
                         size="small"
                         value={field.kind === 'model' ? value.replace(/\[1m\]$/, '') : value}
@@ -511,7 +578,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                             setValue(field.kind === 'model' && has1M(value) ? next + ONE_M_SUFFIX : next);
                         }}
                         placeholder={text.placeholder}
-                        sx={{ width: field.kind === 'model' ? 280 : 180 }}
+                        sx={{ width: field.kind === 'model' ? 280 : field.kind === 'text' ? 320 : 180 }}
                         InputProps={{
                             endAdornment: field.unit
                                 ? <InputAdornment position="end"><Typography variant="caption" color="text.disabled">{field.unit}</Typography></InputAdornment>
@@ -604,6 +671,7 @@ const ClaudeCodeQuickConfig: React.FC<QuickConfigPanelProps> = ({
             <Section group="model" lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <Section group="limits" lang={lang} prefs={prefs} setPrefs={setPrefs} />
             <Section group="switches" lang={lang} prefs={prefs} setPrefs={setPrefs} />
+            <Section group="network" lang={lang} prefs={prefs} setPrefs={setPrefs} />
         </Box>
     );
 };
