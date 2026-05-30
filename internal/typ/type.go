@@ -162,6 +162,13 @@ type ScenarioFlags struct {
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
 	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
+
+	// VisionProxy enables the scenario-level vision proxy: when a request in
+	// this scenario carries an image, the configured vision service (stored in
+	// ScenarioConfig.Extensions["vision_proxy_service"]) describes it and the
+	// request continues downstream with image blocks replaced by text.
+	// Independent of smart routing's proxy_vision op.
+	VisionProxy bool `json:"vision_proxy,omitempty" yaml:"vision_proxy,omitempty"`
 }
 
 // RuleFlags represents per-rule feature flags.
