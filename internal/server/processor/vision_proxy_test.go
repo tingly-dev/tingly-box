@@ -245,7 +245,8 @@ func openaiUserMessageWithImage(text, imageB64 string) openai.ChatCompletionMess
 }
 
 // countImages returns the number of remaining image blocks across all
-// supported request shapes; -1 for unsupported.
+// supported request shapes; -1 for unsupported. Images inside tool_result
+// blocks count too — that path is part of the proxy contract.
 func countImages(req any) int {
 	switch r := req.(type) {
 	case *anthropic.BetaMessageNewParams:
@@ -254,6 +255,13 @@ func countImages(req any) int {
 			for _, b := range m.Content {
 				if b.OfImage != nil {
 					n++
+				}
+				if b.OfToolResult != nil {
+					for _, inner := range b.OfToolResult.Content {
+						if inner.OfImage != nil {
+							n++
+						}
+					}
 				}
 			}
 		}
@@ -264,6 +272,13 @@ func countImages(req any) int {
 			for _, b := range m.Content {
 				if b.OfImage != nil {
 					n++
+				}
+				if b.OfToolResult != nil {
+					for _, inner := range b.OfToolResult.Content {
+						if inner.OfImage != nil {
+							n++
+						}
+					}
 				}
 			}
 		}
@@ -294,6 +309,13 @@ func collectText(req any) string {
 				if b.OfText != nil {
 					out += b.OfText.Text + "\n"
 				}
+				if b.OfToolResult != nil {
+					for _, inner := range b.OfToolResult.Content {
+						if inner.OfText != nil {
+							out += inner.OfText.Text + "\n"
+						}
+					}
+				}
 			}
 		}
 	case *anthropic.MessageNewParams:
@@ -301,6 +323,13 @@ func collectText(req any) string {
 			for _, b := range m.Content {
 				if b.OfText != nil {
 					out += b.OfText.Text + "\n"
+				}
+				if b.OfToolResult != nil {
+					for _, inner := range b.OfToolResult.Content {
+						if inner.OfText != nil {
+							out += inner.OfText.Text + "\n"
+						}
+					}
 				}
 			}
 		}

@@ -125,35 +125,52 @@ func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance
 // with a text block. Images in messages PRIOR to the last one are stripped
 // with a fixed historical marker (no vision call). Images in the LAST
 // message are sent to the vision upstream for description.
+//
+// Image blocks appear in two places: as a top-level content block, or
+// nested inside a tool_result block's Content. Both are handled — tool
+// results from image-returning tools (screenshots, read-image, etc.) are
+// a common image source in Claude Code traffic.
 func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.BetaMessageNewParams, usable *loadbalance.Service) {
 	if len(req.Messages) == 0 {
 		return
 	}
 	lastIdx := len(req.Messages) - 1
-	historicalBlock := anthropic.BetaContentBlockParamUnion{
-		OfText: &anthropic.BetaTextBlockParam{Text: imageHistoricalText},
+	for mi := range req.Messages {
+		p.walkBetaContent(ctx, req.Messages[mi].Content, usable, mi == lastIdx)
 	}
-	for mi := 0; mi < lastIdx; mi++ {
-		blocks := req.Messages[mi].Content
-		for bi := range blocks {
-			if blocks[bi].OfImage == nil {
-				continue
-			}
-			blocks[bi] = historicalBlock
-		}
-	}
-	blocks := req.Messages[lastIdx].Content
+}
+
+// walkBetaContent rewrites image blocks in one message's content slice.
+// isLast selects between describing via the vision upstream and stripping
+// with the historical marker.
+func (p *VisionProxyProcessor) walkBetaContent(ctx context.Context, blocks []anthropic.BetaContentBlockParamUnion, usable *loadbalance.Service, isLast bool) {
 	for bi := range blocks {
-		img := blocks[bi].OfImage
-		if img == nil {
+		if blocks[bi].OfImage != nil {
+			blocks[bi] = anthropic.BetaContentBlockParamUnion{
+				OfText: &anthropic.BetaTextBlockParam{Text: p.betaReplacementText(ctx, blocks[bi].OfImage, usable, isLast)},
+			}
 			continue
 		}
-		mediaType, b64, remoteURL := extractBetaImageSource(img)
-		text := p.describe(ctx, usable, mediaType, b64, remoteURL)
-		blocks[bi] = anthropic.BetaContentBlockParamUnion{
-			OfText: &anthropic.BetaTextBlockParam{Text: text},
+		if tr := blocks[bi].OfToolResult; tr != nil {
+			inner := tr.Content
+			for ii := range inner {
+				if inner[ii].OfImage == nil {
+					continue
+				}
+				inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
+					OfText: &anthropic.BetaTextBlockParam{Text: p.betaReplacementText(ctx, inner[ii].OfImage, usable, isLast)},
+				}
+			}
 		}
 	}
+}
+
+func (p *VisionProxyProcessor) betaReplacementText(ctx context.Context, img *anthropic.BetaImageBlockParam, usable *loadbalance.Service, isLast bool) string {
+	if !isLast {
+		return imageHistoricalText
+	}
+	mediaType, b64, remoteURL := extractBetaImageSource(img)
+	return p.describe(ctx, usable, mediaType, b64, remoteURL)
 }
 
 func (p *VisionProxyProcessor) processV1(ctx context.Context, req *anthropic.MessageNewParams, usable *loadbalance.Service) {
@@ -161,30 +178,39 @@ func (p *VisionProxyProcessor) processV1(ctx context.Context, req *anthropic.Mes
 		return
 	}
 	lastIdx := len(req.Messages) - 1
-	historicalBlock := anthropic.ContentBlockParamUnion{
-		OfText: &anthropic.TextBlockParam{Text: imageHistoricalText},
+	for mi := range req.Messages {
+		p.walkV1Content(ctx, req.Messages[mi].Content, usable, mi == lastIdx)
 	}
-	for mi := 0; mi < lastIdx; mi++ {
-		blocks := req.Messages[mi].Content
-		for bi := range blocks {
-			if blocks[bi].OfImage == nil {
-				continue
-			}
-			blocks[bi] = historicalBlock
-		}
-	}
-	blocks := req.Messages[lastIdx].Content
+}
+
+func (p *VisionProxyProcessor) walkV1Content(ctx context.Context, blocks []anthropic.ContentBlockParamUnion, usable *loadbalance.Service, isLast bool) {
 	for bi := range blocks {
-		img := blocks[bi].OfImage
-		if img == nil {
+		if blocks[bi].OfImage != nil {
+			blocks[bi] = anthropic.ContentBlockParamUnion{
+				OfText: &anthropic.TextBlockParam{Text: p.v1ReplacementText(ctx, blocks[bi].OfImage, usable, isLast)},
+			}
 			continue
 		}
-		mediaType, b64, remoteURL := extractV1ImageSource(img)
-		text := p.describe(ctx, usable, mediaType, b64, remoteURL)
-		blocks[bi] = anthropic.ContentBlockParamUnion{
-			OfText: &anthropic.TextBlockParam{Text: text},
+		if tr := blocks[bi].OfToolResult; tr != nil {
+			inner := tr.Content
+			for ii := range inner {
+				if inner[ii].OfImage == nil {
+					continue
+				}
+				inner[ii] = anthropic.ToolResultBlockParamContentUnion{
+					OfText: &anthropic.TextBlockParam{Text: p.v1ReplacementText(ctx, inner[ii].OfImage, usable, isLast)},
+				}
+			}
 		}
 	}
+}
+
+func (p *VisionProxyProcessor) v1ReplacementText(ctx context.Context, img *anthropic.ImageBlockParam, usable *loadbalance.Service, isLast bool) string {
+	if !isLast {
+		return imageHistoricalText
+	}
+	mediaType, b64, remoteURL := extractV1ImageSource(img)
+	return p.describe(ctx, usable, mediaType, b64, remoteURL)
 }
 
 func (p *VisionProxyProcessor) processOpenAI(ctx context.Context, req *openai.ChatCompletionNewParams, usable *loadbalance.Service) {
