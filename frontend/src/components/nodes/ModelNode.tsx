@@ -199,7 +199,7 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                             <NodeTooltip title="Matches any model (wildcard)" placement="top">
                                 <Chip
                                     label={
-                                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                                        <Typography variant="body2" sx={NODE_LAYER_STYLES.typography}>
                                             {value}
                                         </Typography>
                                     }

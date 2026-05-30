@@ -7,6 +7,7 @@ import { alpha } from '@mui/material/styles';
 import React from 'react';
 import {
     getRouteGraphActiveColor,
+    NODE_LAYER_STYLES,
     SMART_NODE_STYLES,
     StyledSmartNodeWrapper,
 } from './styles.tsx';
@@ -57,14 +58,7 @@ export const SmartDefaultNode: React.FC<DefaultNodeProps> = ({
                     },
                 })}
             >
-                <Typography
-                    variant="body2"
-                    sx={{
-                        fontSize: '0.85rem',
-                        fontWeight: 500,
-                        textTransform: 'none',
-                    }}
-                >
+                <Typography variant="body2" sx={NODE_LAYER_STYLES.typography}>
                     Default
                 </Typography>
             </Button>
