@@ -253,10 +253,81 @@ type VisionProxyService struct {
 | 层 | 用例 |
 |----|------|
 | `parseVisionProxyService` 单测 | nil/缺键/结构错/缺 provider/缺 model/空串 → nil（即关闭）；provider+model 齐备 → 返回 active service（启用） |
-| `applyScenarioVisionProxy` | 无 service → no-op；有 service + 有图 → 图片块被替换为文本 |
+| `applyScenarioVisionProxy` 集成测试 | 无 service → no-op；有 service + 有图 → 图片块被替换；profile 场景 `claude_code:p1` 配的 service 能被 helper 找到（独立于 base `claude_code`） |
 | 去重 | 场景级处理后 `HasImage == false`，smart routing `proxy_vision` 不再触发；`vision_proxy_applied` 标记 short-circuit |
 | 三种请求形态 | Beta / V1 Anthropic、OpenAI ChatCompletion 各覆盖（复用 `vision_proxy_test.go` 的夹具） |
+| **嵌套 image**（tool_result） | Beta + V1 各一例：tool_result 内嵌的 image 在最后一条消息会被描述、在历史消息只打 marker（不调 vision）|
 | 场景隔离 | `claude_code` 配 service A、`codex` 配 service B，各自请求用各自的 service |
 | 配置往返 | `SetScenarioConfig` 存 `vision_proxy_service` → `GetScenarioConfig` 读回结构一致 |
+
+---
+
+## 9. 实现中踩过的几个坑（决策来源）
+
+以下几条不是改动清单，而是**为什么这么写**的注解，避免后来人不读
+commit history 就推翻这些选择。
+
+### 9.1 `tool_result` 内嵌的 image 必须下钻处理
+
+`processBeta` / `processV1` 早期版本只看顶层 content block 的 `OfImage`。
+Claude Code 大量场景的图片其实来自工具返回（screenshot / read-image /
+许多 MCP 视觉工具），落在 `OfToolResult.Content[i].OfImage` 这一层。
+顶层遍历完全看不到这些 image，于是「钩子触发了、配置取到了、处理器跑了，
+图却一张没换」——表面看就是「没生效」。
+
+修复方式：每条消息的 content 交给一个 walker，先看顶层 `OfImage`，再
+**下钻 `OfToolResult.Content`**。两条路径共用 latest-vs-historical 策略：
+- 最后一条消息里的 image → 走 vision 上游描述
+- 历史消息里的 image → 直接打 `imageHistoricalText` marker，**不调** vision
+
+OpenAI 协议的 tool role message 内容是字符串、不含 image，OpenAI 这条
+路径不需要这样处理。
+
+### 9.2 partial `ScenarioConfig` 写入会清空 `Extensions`
+
+后端 `SetScenarioConfig` 是**整体替换** `c.Scenarios[i] = config`。前端
+任何地方如果 POST `{scenario, flags}` 而没带 `extensions`，就会把已配
+的 `vision_proxy_service` 一并抹掉，表现是「配过又没了」。
+
+约定：**所有 `setScenarioConfig` 调用前必须先 GET-merge**：
+
+```ts
+const current = (await api.getScenarioConfig(SCENARIO))?.data || {};
+const config = { ...current, scenario: SCENARIO, flags: { ...current.flags, ... } };
+await api.setScenarioConfig(SCENARIO, config);
+```
+
+本 PR 修了 `UseClaudeCodePage.confirmModeChange`。其它场景页面的同类
+模式切换/写配置代码若有 partial 写入，需要同样处理。或在后端 handler
+里改成 partial merge（当前未做）。
+
+### 9.3 日志写 `source` 字段会破坏聚合
+
+`pkg/obs/multi_logger.go` 的 `WriteEntry` 路由策略是：
+1. 若 entry 有显式 `source` 字段 → 用该 source（**跳过** request_id 自动注入）
+2. 否则若 ctx 里有 request_id → 路由到 `model_request`，并自动注入 `request_id` 字段
+
+vision proxy 早期版本带了 `source=vision_proxy`，走分支 1，于是 ctx 里
+明明有 request_id，日志却拿不到关联键；同时 `MemorySinkConfig` 也没注册
+`vision_proxy` 这个 source，前端日志页那一栏根本看不到。
+
+修复方式：**不要覆盖 `source`**。用 `logrus.WithContext(ctx)` 把 ctx
+传下去，让框架走分支 2 自动注入 request_id；身份标记改用一个普通字段
+`component=vision_proxy`，不参与 source 路由。
+
+> 一般原则：业务子系统的日志**不应该**自己设置 `source`。除非确实需要
+> 路由到独立的 sink（并同时在 `MemorySinkConfig` 里注册），否则保留缺
+> 省路由是稳妥做法。
+
+### 9.4 ctx 的传递
+
+`applyScenarioVisionProxy` 从 `c.Request.Context()` 取 ctx 传给
+`ProcessorContext.Ctx`，processor 再传给 `describe(ctx, ...)`，最终到
+`logrus.WithContext(ctx)`。这条链路无任何 `context.Background()` 截断，
+所以中间件早期注入的 `request_id`（见
+`internal/server/middleware/multi_mode_memory_log.go`）自然贯穿。
+
+如果未来要拆分协程/异步执行 describe，**务必显式 propagate ctx**，否
+则日志会脱离同请求聚合。
 </content>
 </invoke>
