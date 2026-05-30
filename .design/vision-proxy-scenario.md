@@ -42,17 +42,31 @@ Rule → 启用 Smart Routing → 新建 Smart Rule → 加 proxy_vision op → 
 
 ---
 
-## 2. 三条路径的职责划分
+## 2. 路径职责与 smart routing op 的去留
 
-引入场景级开关后，系统中存在两条触发视觉代理的路径，**职责互不重叠**：
-
-| 粒度 | 入口 | 视觉服务来源 | 适用 |
+| 粒度 | 入口 | 视觉服务来源 | 状态 |
 |------|------|------|------|
-| **场景级**（本设计，主推） | 场景 plugin 的 `vision_proxy` 开关 | 该场景配置的 `vision_proxy_service` | 大多数人：一键开启 |
-| **规则级 / 条件级**（保留） | smart routing 的 `proxy_vision` op | 该 smart rule 的 `Services` 池 | 高级：按条件、按规则精配 |
+| **场景级**（本设计） | 场景 plugin 的 `vision_proxy` 开关 | `ScenarioConfig.Extensions["vision_proxy_service"]` | 唯一对用户透出的入口 |
+| smart routing `proxy_vision` op | smart rule 的 `Services` 池 | 同上 | **deprecated**：后端保留，前端不再透出 |
 
 > **全局方案被否决**：视觉服务应分场景而非全局，因为不同场景（编码助手
 > vs 通用对话）对视觉模型的成本/质量取舍不同。
+>
+> **smart routing 路径为何 deprecated**：proxy_vision op 本身不携带条件
+> 维度（其"匹配条件"就是隐式的 `HasImage`），独自存在时与场景级开关在
+> 表达力上**完全等价**。它唯一多出的能力是和同一 smart rule 内其他 op
+> AND 组合形成"带条件的 vision proxy"，但实际业务里几乎找不到真实
+> 用例。同时，smart rule 的 `Services` 字段在普通 op 里意味着"下游候
+> 选"，在 proxy_vision op 里意味着"上游视觉描述器"——同字段反义,正是
+> 我们要消除的认知负担来源。
+>
+> **处置**：
+> - **本 PR**：前端 `SmartRuleCatalogDialog` 的 `POSITION_OPTIONS` 中
+>   `proxy_vision` 已注释，新建 smart rule 时不再可选；`OPERATION_OPTIONS`
+>   保留 label 表项以便已存配置渲染。后端 processor 注册不动，已存配置
+>   照常工作。
+> - **后续**：观察一段时间无人受影响后，可移除后端 op 注册、清理类型
+>   union、彻底删除处理器对应分支。
 
 ---
 
