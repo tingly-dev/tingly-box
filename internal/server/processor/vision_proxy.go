@@ -45,7 +45,6 @@ type providerResolver interface {
 type VisionProxyProcessor struct {
 	Client   visionClient
 	Resolver providerResolver
-	Logger   *logrus.Logger
 }
 
 const imageUnavailableText = "[image: (description unavailable)]"
@@ -102,18 +101,15 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 	return nil
 }
 
-// describe calls the vision client when available, returning the marker text
-// for the image's replacement block. Empty / errored responses become the
-// fail-strip marker; success becomes "[image: <desc>]".
+// describe calls the vision client when available and returns the
+// replacement text for the image block. Failures (no service, upstream
+// error, empty response) collapse to the fail-strip marker so the
+// downstream text-only model never sees an unsupported content block.
 //
-// Each call emits one structured log line carrying the activated service
-// (vision_provider + vision_model) and the outcome (description preview or
-// error). It does NOT set a "source" field: MultiLogger only auto-routes
-// an entry to the model_request sink (and stamps request_id from the ctx)
-// when no explicit source is present, so leaving source unset is exactly
-// what makes this line aggregate with the parent request's other model
-// logs. The component=vision_proxy field identifies the origin without
-// hijacking the source routing.
+// Logging deliberately uses no "source" field — that would push the
+// entry down MultiLogger's explicit-source branch and skip the
+// request_id auto-injection that drives per-request log aggregation.
+// See .design/vision-proxy-scenario.md §9.3.
 func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance.Service, mediaType, b64, remoteURL string) string {
 	base := logrus.WithContext(ctx).WithField("component", "vision_proxy")
 	if usable == nil || p.Client == nil {
@@ -147,15 +143,12 @@ func truncateForLog(s string, max int) string {
 	return s[:max] + fmt.Sprintf("…(+%d)", len(s)-max)
 }
 
-// processBeta walks Beta messages and replaces every image content block
-// with a text block. Images in messages PRIOR to the last one are stripped
-// with a fixed historical marker (no vision call). Images in the LAST
-// message are sent to the vision upstream for description.
-//
-// Image blocks appear in two places: as a top-level content block, or
-// nested inside a tool_result block's Content. Both are handled — tool
-// results from image-returning tools (screenshots, read-image, etc.) are
-// a common image source in Claude Code traffic.
+// processBeta replaces every image block in every message with a text
+// block: described via the vision upstream for the latest message,
+// stripped with imageHistoricalText for earlier ones. Image blocks
+// occur both at the top level and nested inside tool_result.Content
+// (see .design/vision-proxy-scenario.md §9.1) — walkBetaContent handles
+// both shapes.
 func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.BetaMessageNewParams, usable *loadbalance.Service) {
 	if len(req.Messages) == 0 {
 		return
@@ -166,9 +159,6 @@ func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.B
 	}
 }
 
-// walkBetaContent rewrites image blocks in one message's content slice.
-// isLast selects between describing via the vision upstream and stripping
-// with the historical marker.
 func (p *VisionProxyProcessor) walkBetaContent(ctx context.Context, blocks []anthropic.BetaContentBlockParamUnion, usable *loadbalance.Service, isLast bool) {
 	for bi := range blocks {
 		if blocks[bi].OfImage != nil {

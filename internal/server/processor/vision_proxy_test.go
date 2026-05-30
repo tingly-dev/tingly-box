@@ -8,7 +8,6 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -103,7 +102,6 @@ func mkProcessor(t *testing.T, vc visionClient, providers ...*typ.Provider) *Vis
 	return &VisionProxyProcessor{
 		Client:   vc,
 		Resolver: newFakeProviderResolver(providers...),
-		Logger:   logrus.New(),
 	}
 }
 

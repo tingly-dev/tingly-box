@@ -9,35 +9,19 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// visionProxyAppliedKey marks (on the gin context) that the scenario-level
-// vision proxy already ran for this request, so a second handler entry or a
-// later code path does not describe the same images twice.
 const visionProxyAppliedKey = "vision_proxy_applied"
 
-// applyScenarioVisionProxy runs the scenario-level vision proxy plugin: when
-// the scenario has a vision service configured (Extensions["vision_proxy_service"]),
-// it reuses VisionProxyProcessor to replace image content blocks in
-// typedRequest with text descriptions (latest message described via the
-// configured vision upstream; historical images stripped with a marker).
-//
-// A configured service IS the enabled state — there is no separate flag.
-//
-// It must be called BEFORE service selection so that smart routing's
-// proxy_vision op (which matches on RequestContext.HasImage) naturally
-// becomes a no-op once images have been replaced — keeping the two paths
-// from describing the same request twice.
-//
-// typedRequest is the typed request struct (e.g. *anthropic.BetaMessageNewParams,
-// *anthropic.MessageNewParams, *openai.ChatCompletionNewParams). Unknown
-// shapes are left untouched by the processor.
+// applyScenarioVisionProxy is the scenario-level entry point for the vision
+// proxy plugin. It must run BEFORE service selection so smart routing's
+// proxy_vision op (matched on HasImage) becomes a no-op once images have
+// been replaced. See .design/vision-proxy-scenario.md.
 func (s *Server) applyScenarioVisionProxy(c *gin.Context, scenarioType typ.RuleScenario, typedRequest any) {
 	if s.visionProxyProcessor == nil || typedRequest == nil {
 		return
 	}
-	if applied, _ := c.Get(visionProxyAppliedKey); applied == true {
+	if c.GetBool(visionProxyAppliedKey) {
 		return
 	}
-
 	cfg := s.config.GetScenarioConfig(scenarioType)
 	if cfg == nil {
 		return
@@ -46,7 +30,6 @@ func (s *Server) applyScenarioVisionProxy(c *gin.Context, scenarioType typ.RuleS
 	if svc == nil {
 		return
 	}
-
 	c.Set(visionProxyAppliedKey, true)
 	_ = s.visionProxyProcessor.Process(&smartrouting.ProcessorContext{
 		Ctx:      c.Request.Context(),
@@ -55,11 +38,9 @@ func (s *Server) applyScenarioVisionProxy(c *gin.Context, scenarioType typ.RuleS
 	})
 }
 
-// parseVisionProxyService reads the configured vision service (provider +
-// model) from a scenario's Extensions map. The value is stored as a nested
-// object under VisionProxyServiceKey; after JSON/YAML unmarshal it is a
-// map[string]interface{}. Returns nil when absent or malformed (provider and
-// model are both required), in which case the proxy is skipped.
+// parseVisionProxyService returns nil when the configured service is
+// absent or malformed (missing provider or model) — both states mean
+// "vision proxy off" to the caller.
 func parseVisionProxyService(extensions map[string]interface{}) *loadbalance.Service {
 	if extensions == nil {
 		return nil

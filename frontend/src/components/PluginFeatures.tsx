@@ -38,9 +38,7 @@ interface PluginFeatureConfig {
 const PLUGIN_FEATURES: PluginFeatureConfig[] = [
     { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context' },
     { key: 'clean_header', label: 'Clean Header', description: 'Remove Claude Code billing header from system messages', scenarios: ['claude_code'] as const },
-    // Vision Proxy is NOT a generic On/Off feature — it's a single control whose
-    // value is the chosen vision model (picking a model is the "on" state). See
-    // renderVisionProxyButton below.
+    // Vision Proxy is not in this list — see renderVisionProxyButton.
     // { key: 'anthropic_beta', label: 'Beta', description: 'Enable Anthropic beta features (e.g. extended thinking)', scenarios: ['claude_code'] as const },
 ];
 
@@ -239,11 +237,9 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         );
     };
 
-    // Vision Proxy: a single control that unifies "enable" and "pick a model".
-    // Clicking opens a dropdown (consistent with the sibling plugin buttons):
-    //   Off  -> clear the configured service (disable)
-    //   On   -> open the model picker; choosing a model is the enabled state
-    // The button label shows the chosen model (or "Off").
+    // Custom button instead of a PLUGIN_FEATURES entry: enable and model
+    // pick are the same act here (picking a model IS the on state), so the
+    // generic On/Off toggle would add a redundant control.
     const renderVisionProxyButton = () => {
         const isUpdating = updating.vision_proxy_service || false;
         const isEnabled = !!visionService;

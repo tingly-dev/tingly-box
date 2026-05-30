@@ -86,9 +86,8 @@ const UseClaudeCodePageContent: React.FC = () => {
 
         setConfirmDialogOpen(false);
         try {
-            // Preserve the rest of the scenario config (esp. extensions like
-            // vision_proxy_service) — SetScenarioConfig replaces the whole
-            // record, so a partial payload would silently wipe other settings.
+            // GET-merge: SetScenarioConfig replaces the record wholesale,
+            // so a partial payload silently wipes extensions (e.g. vision_proxy_service).
             const current = (await api.getScenarioConfig(SCENARIO))?.data || {};
             const config = {
                 ...current,

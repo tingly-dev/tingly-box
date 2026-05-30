@@ -155,9 +155,6 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		return
 	}
 
-	// Scenario-level vision proxy plugin (must run before service selection
-	// so smart routing's proxy_vision op naturally no-ops if images were
-	// already replaced).
 	s.applyScenarioVisionProxy(c, scenarioType, reqParams)
 
 	// Select service using routing pipeline

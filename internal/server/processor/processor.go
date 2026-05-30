@@ -19,7 +19,6 @@ func RegisterAll(pool *client.ClientPool, resolver providerResolver, logger *log
 	visionProc := &VisionProxyProcessor{
 		Client:   NewPoolVisionClient(pool, resolver, logger),
 		Resolver: resolver,
-		Logger:   logger,
 	}
 	smartrouting.RegisterProcessor(
 		smartrouting.PositionProxyVision,
