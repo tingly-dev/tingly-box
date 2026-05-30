@@ -38,7 +38,9 @@ interface PluginFeatureConfig {
 const PLUGIN_FEATURES: PluginFeatureConfig[] = [
     { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context' },
     { key: 'clean_header', label: 'Clean Header', description: 'Remove Claude Code billing header from system messages', scenarios: ['claude_code'] as const },
-    { key: 'vision_proxy', label: 'Vision Proxy', description: 'Describe images via a vision-capable model so text-only downstreams can read them' },
+    // Vision Proxy is NOT a generic On/Off feature — it's a single control whose
+    // value is the chosen vision model (picking a model is the "on" state). See
+    // renderVisionProxyButton below.
     // { key: 'anthropic_beta', label: 'Beta', description: 'Enable Anthropic beta features (e.g. extended thinking)', scenarios: ['claude_code'] as const },
 ];
 
@@ -237,27 +239,42 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         );
     };
 
-    const renderVisionServicePicker = () => {
-        const isUpdatingPicker = updating.vision_proxy_service || false;
-        const label = visionService
-            ? `${providerNameFor(visionService.provider)} / ${visionService.model}`
-            : 'Select vision model…';
+    // Vision Proxy: a single control that unifies "enable" and "pick a model".
+    // Off = no service configured; clicking opens the model picker. Choosing a
+    // model IS turning it on, and the label then shows that model.
+    const renderVisionProxyButton = () => {
+        const isUpdating = updating.vision_proxy_service || false;
+        const isEnabled = !!visionService;
+        const label = isEnabled ? visionService!.model : 'Off';
+        const tooltip = isEnabled
+            ? `Vision Proxy: images described by ${providerNameFor(visionService!.provider)} / ${visionService!.model}. Click to change or turn off.`
+            : 'Vision Proxy: pick a vision-capable model to describe images so text-only downstreams can read them';
         return (
-            <Tooltip title="Provider + model used to describe images. Required when Vision Proxy is on." placement="right" arrow>
+            <Tooltip title={tooltip} placement="right" arrow>
                 <Button
                     size="small"
                     variant="outlined"
-                    onClick={() => !isUpdatingPicker && setVisionPickerOpen(true)}
-                    disabled={isUpdatingPicker}
+                    onClick={() => !isUpdating && setVisionPickerOpen(true)}
+                    disabled={isUpdating}
+                    endIcon={<IconChevronDown size={18} />}
                     sx={{
+                        minWidth: 100,
+                        maxWidth: 260,
                         textTransform: 'none',
                         whiteSpace: 'nowrap',
-                        borderColor: visionService ? 'divider' : 'warning.main',
-                        color: visionService ? 'text.primary' : 'warning.main',
-                        opacity: isUpdatingPicker ? 0.6 : 1,
+                        '& .MuiButton-endIcon': { flexShrink: 0 },
+                        bgcolor: isEnabled ? 'primary.main' : 'transparent',
+                        color: isEnabled ? 'primary.contrastText' : 'text.primary',
+                        fontWeight: isEnabled ? 600 : 400,
+                        border: isEnabled ? 'none' : '1px solid',
+                        borderColor: 'divider',
+                        opacity: isUpdating ? 0.6 : 1,
+                        '&:hover': { bgcolor: isEnabled ? 'primary.dark' : 'action.selected' },
                     }}
                 >
-                    {label}
+                    <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        Vision Proxy: {label}
+                    </Box>
                 </Button>
             </Tooltip>
         );
@@ -269,32 +286,29 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                 const isEnabled = features[feature.key] || false;
                 const isUpdating = updating[feature.key] || false;
                 return (
-                    <React.Fragment key={feature.key}>
-                        <Tooltip title={`${feature.label}: ${feature.description} (${isEnabled ? 'On' : 'Off'})`} placement="right" arrow>
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={(e) => !isUpdating && handleMenuOpen(feature.key, e)}
-                                disabled={isUpdating}
-                                endIcon={<IconChevronDown size={18} />}
-                                sx={{
-                                    minWidth: 100,
-                                    textTransform: 'none',
-                                    whiteSpace: 'nowrap',
-                                    bgcolor: isEnabled ? 'primary.main' : 'transparent',
-                                    color: isEnabled ? 'primary.contrastText' : 'text.primary',
-                                    fontWeight: isEnabled ? 600 : 400,
-                                    border: isEnabled ? 'none' : '1px solid',
-                                    borderColor: 'divider',
-                                    opacity: isUpdating ? 0.6 : 1,
-                                    '&:hover': { bgcolor: isEnabled ? 'primary.dark' : 'action.selected' },
-                                }}
-                            >
-                                {feature.label}: {isEnabled ? 'On' : 'Off'}
-                            </Button>
-                        </Tooltip>
-                        {feature.key === 'vision_proxy' && isEnabled && renderVisionServicePicker()}
-                    </React.Fragment>
+                    <Tooltip key={feature.key} title={`${feature.label}: ${feature.description} (${isEnabled ? 'On' : 'Off'})`} placement="right" arrow>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={(e) => !isUpdating && handleMenuOpen(feature.key, e)}
+                            disabled={isUpdating}
+                            endIcon={<IconChevronDown size={18} />}
+                            sx={{
+                                minWidth: 100,
+                                textTransform: 'none',
+                                whiteSpace: 'nowrap',
+                                bgcolor: isEnabled ? 'primary.main' : 'transparent',
+                                color: isEnabled ? 'primary.contrastText' : 'text.primary',
+                                fontWeight: isEnabled ? 600 : 400,
+                                border: isEnabled ? 'none' : '1px solid',
+                                borderColor: 'divider',
+                                opacity: isUpdating ? 0.6 : 1,
+                                '&:hover': { bgcolor: isEnabled ? 'primary.dark' : 'action.selected' },
+                            }}
+                        >
+                            {feature.label}: {isEnabled ? 'On' : 'Off'}
+                        </Button>
+                    </Tooltip>
                 );
             })}
         </>
@@ -357,6 +371,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1 }}>
                                 {renderEffortButton()}
                                 {renderPluginButtons()}
+                                {renderVisionProxyButton()}
                                 {renderRecordV2Button()}
                             </Box>
                         ),

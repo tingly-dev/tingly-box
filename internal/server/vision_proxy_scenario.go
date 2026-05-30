@@ -15,10 +15,12 @@ import (
 const visionProxyAppliedKey = "vision_proxy_applied"
 
 // applyScenarioVisionProxy runs the scenario-level vision proxy plugin: when
-// the scenario has the vision_proxy flag enabled and a vision service
-// configured, it reuses VisionProxyProcessor to replace image content blocks
-// in typedRequest with text descriptions (latest message described via the
+// the scenario has a vision service configured (Extensions["vision_proxy_service"]),
+// it reuses VisionProxyProcessor to replace image content blocks in
+// typedRequest with text descriptions (latest message described via the
 // configured vision upstream; historical images stripped with a marker).
+//
+// A configured service IS the enabled state — there is no separate flag.
 //
 // It must be called BEFORE service selection so that smart routing's
 // proxy_vision op (which matches on RequestContext.HasImage) naturally
@@ -37,7 +39,7 @@ func (s *Server) applyScenarioVisionProxy(c *gin.Context, scenarioType typ.RuleS
 	}
 
 	cfg := s.config.GetScenarioConfig(scenarioType)
-	if cfg == nil || !cfg.Flags.VisionProxy {
+	if cfg == nil {
 		return
 	}
 	svc := parseVisionProxyService(cfg.Extensions)
