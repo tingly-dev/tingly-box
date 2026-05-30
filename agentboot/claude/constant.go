@@ -61,6 +61,13 @@ const SDKControlPrefix = "control_"
 const (
 	SystemSubtypeInit          = "init"
 	SystemSubtypeTaskCompleted = "task_completed"
+	// SystemSubtypeAPIRetry is emitted by the Claude Code CLI when an upstream
+	// API call fails with a retryable error (overload, rate limit, transient
+	// network) and the CLI automatically retries. Surfacing it tells the user
+	// why the agent appears to stall instead of leaving a silent gap.
+	SystemSubtypeAPIRetry = "api_retry"
+	// SystemSubtypeRateLimit is emitted when the CLI is rate limited upstream.
+	SystemSubtypeRateLimit = "rate_limit"
 )
 
 // assistant message error

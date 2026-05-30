@@ -81,3 +81,24 @@ func getBool(m map[string]interface{}, key string) bool {
 	}
 	return false
 }
+
+// intFromMap returns the first non-zero int found under any of keys. It exists
+// for forward-compatible fields whose spelling varies across CLI versions.
+func intFromMap(m map[string]interface{}, keys ...string) int {
+	for _, k := range keys {
+		if v := getInt(m, k); v != 0 {
+			return v
+		}
+	}
+	return 0
+}
+
+// stringFromMap returns the first non-empty string found under any of keys.
+func stringFromMap(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v := getString(m, k); v != "" {
+			return v
+		}
+	}
+	return ""
+}

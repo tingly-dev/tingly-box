@@ -33,6 +33,22 @@ type SystemMessage struct {
 	TaskID      string `json:"task_id,omitempty"`
 	TaskType    string `json:"task_type,omitempty"`
 	ToolUseID   string `json:"tool_use_id,omitempty"`
+
+	// Retry / rate-limit fields (populated when SubType is api_retry/rate_limit).
+	// The CLI's exact field spelling has shifted across versions, so the typed
+	// fields below are best-effort; the retry* accessors fall back to Raw.
+	Attempt    int    `json:"attempt,omitempty"`
+	MaxRetries int    `json:"max_retries,omitempty"`
+	DelayMS    int64  `json:"delay_ms,omitempty"`
+	Error      string `json:"error,omitempty"`
+	Message    string `json:"message,omitempty"`
+
+	// Raw preserves the full decoded payload. The typed fields above only
+	// capture the names known at compile time; Raw keeps everything else so
+	// forward-compatible fields (notably the retry metadata, whose names vary
+	// by CLI version) survive for formatting and logging. Populated by
+	// parseSystemMessage; nil for messages built in code.
+	Raw map[string]interface{} `json:"-"`
 }
 
 // GetType implements Message
@@ -45,9 +61,44 @@ func (m *SystemMessage) GetTimestamp() time.Time {
 	return m.Timestamp
 }
 
-// GetRawData implements Message
+// GetRawData implements Message. When the message was decoded from the wire it
+// returns the full original payload (so unknown fields are not lost); otherwise
+// it falls back to marshalling the typed struct.
 func (m *SystemMessage) GetRawData() map[string]interface{} {
+	if m.Raw != nil {
+		return m.Raw
+	}
 	return marshalToMap(m)
+}
+
+// retryAttempt returns the retry attempt number for an api_retry/rate_limit
+// notice, checking the typed field first and then Raw under the spellings the
+// CLI has used (snake_case and camelCase).
+func (m *SystemMessage) retryAttempt() int {
+	if m.Attempt > 0 {
+		return m.Attempt
+	}
+	return intFromMap(m.Raw, "attempt", "retry", "retries", "retryCount", "retry_count")
+}
+
+// retryDelayMS returns the delay before the next attempt, in milliseconds.
+func (m *SystemMessage) retryDelayMS() int64 {
+	if m.DelayMS > 0 {
+		return m.DelayMS
+	}
+	return int64(intFromMap(m.Raw, "delay_ms", "delayMs", "delayMS", "retry_after_ms", "retryAfterMs"))
+}
+
+// retryReason returns a human-readable reason for the retry, if the CLI
+// included one.
+func (m *SystemMessage) retryReason() string {
+	if m.Error != "" {
+		return m.Error
+	}
+	if m.Message != "" {
+		return m.Message
+	}
+	return stringFromMap(m.Raw, "error", "message", "reason", "errorType", "error_type")
 }
 
 // AssistantMessage represents assistant messages with content blocks

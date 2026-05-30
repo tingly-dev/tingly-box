@@ -136,10 +136,43 @@ func (f *TextFormatter) formatSystem(m *SystemMessage) string {
 			b.WriteString(m.Timestamp.Format("2006-01-02 15:04:05"))
 		}
 		return b.String()
+	case SystemSubtypeAPIRetry:
+		return f.formatRetryNotice(m, "Retrying API request")
+	case SystemSubtypeRateLimit:
+		return f.formatRetryNotice(m, "Rate limited, waiting")
 	default:
 		logrus.Debugf("system message, subtype: %s", m.SubType)
 		return ""
 	}
+}
+
+// formatRetryNotice renders an api_retry/rate_limit system notice. The CLI
+// emits these while an upstream call is being retried; surfacing them tells the
+// user why the agent is pausing instead of leaving a silent gap. lead is the
+// human-readable action ("Retrying API request", "Rate limited, waiting").
+func (f *TextFormatter) formatRetryNotice(m *SystemMessage, lead string) string {
+	var b strings.Builder
+	b.WriteString("[RETRY] ")
+	b.WriteString(lead)
+	if n := m.retryAttempt(); n > 0 {
+		fmt.Fprintf(&b, " (attempt %d)", n)
+	}
+	if d := m.retryDelayMS(); d > 0 {
+		fmt.Fprintf(&b, ", retry in %s", formatRetryDelay(d))
+	}
+	if reason := m.retryReason(); reason != "" {
+		b.WriteString(": ")
+		b.WriteString(reason)
+	}
+	return b.String()
+}
+
+// formatRetryDelay renders a millisecond delay as a compact human string.
+func formatRetryDelay(ms int64) string {
+	if ms < 1000 {
+		return fmt.Sprintf("%dms", ms)
+	}
+	return fmt.Sprintf("%.1fs", float64(ms)/1000)
 }
 
 func (f *TextFormatter) formatTaskStarted(m *SystemMessage) string {

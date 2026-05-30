@@ -47,6 +47,54 @@ func TestTextFormatter_FormatSystemMessage(t *testing.T) {
 	}
 }
 
+func TestTextFormatter_FormatAPIRetry(t *testing.T) {
+	formatter := NewTextFormatter()
+
+	// Typed fields populated (e.g. decoded into the struct directly).
+	typed := &SystemMessage{
+		Type:    SDKSystemMessage,
+		SubType: SystemSubtypeAPIRetry,
+		Attempt: 2,
+		DelayMS: 1500,
+		Error:   "Overloaded",
+	}
+	out := formatter.Format(typed)
+	if out == "" {
+		t.Fatal("Expected non-empty output for api_retry system message")
+	}
+	for _, want := range []string{"[RETRY]", "attempt 2", "1.5s", "Overloaded"} {
+		if !contains(out, want) {
+			t.Errorf("Expected %q in output: %s", want, out)
+		}
+	}
+
+	// Fields only present in Raw under a camelCase spelling the struct does not
+	// declare: the accessors must still find them.
+	rawOnly := &SystemMessage{
+		Type:    SDKSystemMessage,
+		SubType: SystemSubtypeAPIRetry,
+		Raw: map[string]interface{}{
+			"type":    "system",
+			"subtype": "api_retry",
+			"retry":   float64(3),
+			"delayMs": float64(800),
+			"message": "rate_limit_error",
+		},
+	}
+	out = formatter.Format(rawOnly)
+	for _, want := range []string{"attempt 3", "800ms", "rate_limit_error"} {
+		if !contains(out, want) {
+			t.Errorf("Expected %q in output from Raw fallback: %s", want, out)
+		}
+	}
+
+	// rate_limit subtype renders with its own lead text.
+	rl := &SystemMessage{Type: SDKSystemMessage, SubType: SystemSubtypeRateLimit}
+	if out := formatter.Format(rl); !contains(out, "Rate limited") {
+		t.Errorf("Expected rate-limit lead in output: %s", out)
+	}
+}
+
 func TestTextFormatter_FormatAssistantMessage(t *testing.T) {
 	formatter := NewTextFormatter()
 	formatter.SetShowToolDetails(true)

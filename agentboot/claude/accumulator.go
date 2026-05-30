@@ -196,6 +196,13 @@ func (a *MessageAccumulator) parseSystemMessage(event common.Event) *SystemMessa
 	if err := unmarshalEvent(event, &msg); err != nil {
 		return nil
 	}
+	// Preserve the full payload so forward-compatible fields (notably the
+	// api_retry/rate_limit metadata, whose names vary by CLI version) survive
+	// for formatting and logging instead of being stripped to the typed fields.
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(event.Raw), &raw); err == nil {
+		msg.Raw = raw
+	}
 	if msg.SessionID != "" {
 		a.sessionID = msg.SessionID
 	}

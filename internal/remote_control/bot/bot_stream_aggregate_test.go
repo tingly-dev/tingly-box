@@ -179,6 +179,41 @@ func TestStreamingHandler_QuietSuppressedMessageStillFlushesBuffer(t *testing.T)
 	assert.Contains(t, sent[0], "2 tool call(s)")
 }
 
+func TestStreamingHandler_QuietSurfacesAPIRetry(t *testing.T) {
+	bot := &captureBot{}
+	meta := &ResponseMeta{}
+	h := newStreamingMessageHandler(bot, "chat-1", "reply-1", false, meta)
+
+	// An ordinary system message stays suppressed in quiet mode.
+	require.NoError(t, h.OnMessage(&claude.SystemMessage{
+		Type:      claude.SDKSystemMessage,
+		SubType:   claude.SystemSubtypeInit,
+		SessionID: "s-1",
+	}))
+	assert.Empty(t, bot.snapshot(), "init system message should stay quiet")
+
+	// An api_retry notice must reach the user even in quiet mode, so the agent
+	// does not appear to silently stall while the upstream is retried.
+	require.NoError(t, h.OnMessage(&claude.SystemMessage{
+		Type:    claude.SDKSystemMessage,
+		SubType: claude.SystemSubtypeAPIRetry,
+		Attempt: 1,
+		Error:   "Overloaded",
+	}))
+
+	sent := bot.snapshot()
+	require.Len(t, sent, 1, "api_retry should surface in quiet mode")
+	assert.Contains(t, sent[0], "RETRY")
+	assert.Contains(t, sent[0], "Overloaded")
+}
+
+func TestIsRetryNotice(t *testing.T) {
+	assert.True(t, isRetryNotice(&claude.SystemMessage{SubType: claude.SystemSubtypeAPIRetry}))
+	assert.True(t, isRetryNotice(&claude.SystemMessage{SubType: claude.SystemSubtypeRateLimit}))
+	assert.False(t, isRetryNotice(&claude.SystemMessage{SubType: claude.SystemSubtypeInit}))
+	assert.False(t, isRetryNotice(assistantText("hi")))
+}
+
 // --- Map-path handler tests (handleMapMessage). This is the production path
 // for the smart-guide agent, which streams status/assistant frames as plain
 // maps; tool aggregation must work here too, not only on the claude stream.

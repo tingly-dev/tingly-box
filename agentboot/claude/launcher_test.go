@@ -32,6 +32,38 @@ func TestLauncherType(t *testing.T) {
 	assert.Equal(t, agentboot.AgentTypeClaude, launcher.Type())
 }
 
+// TestMessageAccumulator_APIRetryPreservesRaw verifies that an api_retry system
+// message keeps its retry metadata (which the typed struct does not declare by
+// name) in Raw, so GetRawData reports the full payload and the retry accessors
+// can read it.
+func TestMessageAccumulator_APIRetryPreservesRaw(t *testing.T) {
+	accumulator := NewMessageAccumulator()
+
+	raw := `{"type":"system","subtype":"api_retry","session_id":"s-1","attempt":2,"delayMs":1200,"error":"Overloaded"}`
+	ev := common.Event{
+		Type:      SDKSystemMessage,
+		Raw:       raw,
+		Timestamp: time.Now(),
+	}
+	messages, _, _ := accumulator.AddEvent(ev)
+	require.Len(t, messages, 1)
+
+	sm, ok := messages[0].(*SystemMessage)
+	require.True(t, ok, "should be SystemMessage")
+	assert.Equal(t, SystemSubtypeAPIRetry, sm.SubType)
+
+	// GetRawData must expose the original payload, including fields the struct
+	// does not declare (delayMs in camelCase).
+	data := sm.GetRawData()
+	assert.Equal(t, "api_retry", data["subtype"])
+	assert.Contains(t, data, "delayMs")
+
+	// Accessors resolve both typed and Raw-only spellings.
+	assert.Equal(t, 2, sm.retryAttempt())
+	assert.Equal(t, int64(1200), sm.retryDelayMS())
+	assert.Equal(t, "Overloaded", sm.retryReason())
+}
+
 // TestMessageAccumulator tests the message accumulator
 func TestMessageAccumulator(t *testing.T) {
 	accumulator := NewMessageAccumulator()
