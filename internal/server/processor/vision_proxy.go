@@ -13,6 +13,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
+	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
 
 // visionClient is the small dependency VisionProxyProcessor needs to describe
@@ -108,17 +109,23 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 //
 // Each call emits one structured log line carrying the activated service
 // (vision_provider + vision_model) and the outcome (description preview or
-// error), tagged source=vision_proxy and bound to the parent request via
-// logrus.WithContext(ctx) so aggregation by request id picks it up
-// alongside other model-request logs.
+// error). Two binding mechanisms keep the line aggregatable with the
+// parent request's model log:
+//   - logrus.WithContext(ctx) carries the ctx through to MultiLoggerHook.
+//   - We also explicitly stamp the request_id field from the same ctx,
+//     because MultiLogger only auto-injects request_id on entries that do
+//     NOT carry an explicit source; with source=vision_proxy the
+//     auto-injection branch is skipped, so we do it ourselves.
 func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance.Service, mediaType, b64, remoteURL string) string {
+	base := logrus.WithContext(ctx).WithField("source", "vision_proxy")
+	if rid := obs.RequestIDFromContext(ctx); rid != "" {
+		base = base.WithField("request_id", rid)
+	}
 	if usable == nil || p.Client == nil {
-		logrus.WithContext(ctx).WithField("source", "vision_proxy").
-			Warn("vision proxy: no usable service or client; stripping image")
+		base.Warn("vision proxy: no usable service or client; stripping image")
 		return imageUnavailableText
 	}
-	log := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"source":          "vision_proxy",
+	log := base.WithFields(logrus.Fields{
 		"vision_provider": usable.Provider,
 		"vision_model":    usable.Model,
 		"media_type":      mediaType,
