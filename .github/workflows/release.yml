@@ -128,6 +128,12 @@ jobs:
             suffix: windows-amd64
             exe: .exe
             runs-on: windows-latest
+          - goos: windows
+            goarch: arm64
+            suffix: windows-arm64
+            exe: .exe
+            runs-on: ubuntu-22.04
+            cross_compile: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -177,7 +183,7 @@ jobs:
           sudo apt-get install -y -qq musl-tools musl-dev  || echo "done"
 
       - name: Install zig (for arm64 cross-compilation)
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        if: matrix.cross_compile == true
         run: |
           wget -q https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
           tar -xf zig-linux-x86_64-0.13.0.tar.xz
@@ -230,6 +236,12 @@ jobs:
               BUILD_TAGS="-tags 'sqlite_omit_load_extension'"
               LDFLAGS_EXT="-linkmode external -extldflags \"-static\""
             fi
+          elif [ "${{ matrix.goos }}" == "windows" ] && [ "${{ matrix.goarch }}" == "arm64" ]; then
+            # Cross-compile Windows on ARM (e.g. Snapdragon) via zig
+            CC="zig cc -target aarch64-windows-gnu"
+            CXX="zig c++ -target aarch64-windows-gnu"
+            export CC CXX
+            BUILD_TAGS="-tags 'sqlite_omit_load_extension'"
           fi
 
           # Build with optimizations
@@ -245,7 +257,7 @@ jobs:
           [ "${{ matrix.goos }}" != "windows" ] && chmod +x ./dist/tingly-box${{ matrix.exe }} || true
 
       - name: Install UPX 5.1.1
-        if: matrix.goos != 'darwin'
+        if: matrix.goos != 'darwin' && !(matrix.goos == 'windows' && matrix.goarch == 'arm64')
         shell: bash
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
@@ -258,7 +270,7 @@ jobs:
           fi
 
       - name: Compress binary with UPX
-        if: matrix.goos != 'darwin'
+        if: matrix.goos != 'darwin' && !(matrix.goos == 'windows' && matrix.goarch == 'arm64')
         shell: bash
         run: |
           if command -v upx &> /dev/null || [ -f "./upx-5.1.1-amd64_linux/upx" ]; then
