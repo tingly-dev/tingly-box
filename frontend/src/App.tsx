@@ -1,4 +1,5 @@
 import { Events } from '@/bindings';
+import { fontMono } from '@/theme/fonts';
 import { ContentCopy, Error as ErrorIcon, GitHub, AppRegistration as NPM, Refresh, UpgradeOutlined } from '@/components/icons';
 import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, Paper, Stack, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -66,8 +67,6 @@ import WeComPage from './pages/remote-control/WeComPage';
 import QQPage from './pages/remote-control/QQPage';
 import DiscordPage from './pages/remote-control/DiscordPage';
 import SlackPage from './pages/remote-control/SlackPage';
-import MCPCustom from './pages/mcp/MCPCustom';
-import MCPBuiltin from './pages/mcp/MCPBuiltin';
 import MCPLocalMode from './pages/mcp/MCPLocalMode';
 import MCPRegisteredServers from './pages/mcp/MCPRegisteredServers';
 import ServerToolPage from './pages/servertool/ServerToolPage';
@@ -201,7 +200,7 @@ const AppDialogs = () => {
                                 <Typography
                                     variant="body2"
                                     sx={{
-                                        fontFamily: '"Fira Code", "Monaco", "Consolas", monospace',
+                                        fontFamily: fontMono,
                                         color: 'text.primary',
                                         fontSize: '0.875rem',
                                         pr: 4,
@@ -362,35 +361,18 @@ function AppContent() {
                     <Route path="/agent/embed" element={<UseEmbedPage />} />
                     <Route path="/agent/imagegen" element={<UseImageGenPage />} />
                     <Route path="/agent/playground" element={<PlaygroundPage />} />
-                    {/* Legacy redirects */}
-                    <Route path="/use-openai" element={<Navigate to="/agent/openai" replace />} />
-                    <Route path="/use-anthropic" element={<Navigate to="/agent/anthropic" replace />} />
-                    <Route path="/use-codex" element={<Navigate to="/agent/codex" replace />} />
-                    <Route path="/use-claude-code" element={<Navigate to="/agent/claude_code" replace />} />
-                    <Route path="/use-claude-code/profile/:profileId" element={<Navigate to="/agent/claude_code" replace />} />
-                    <Route path="/use-agent" element={<Navigate to="/agent/agent" replace />} />
-                    <Route path="/use-opencode" element={<Navigate to="/agent/opencode" replace />} />
-                    <Route path="/use-xcode" element={<Navigate to="/agent/xcode" replace />} />
-                    <Route path="/use-vscode" element={<Navigate to="/agent/vscode" replace />} />
                     {/* Credential routes - new unified page */}
                     <Route path="/credentials" element={<CredentialPage />} />
                     {/* Provider List page - must come before :tab wildcard */}
                     <Route path="/credentials/providers" element={<ProviderListPage />} />
                     {/* Virtual Models page - peer of Model Key and Sharing */}
                     <Route path="/credentials/virtual-models" element={<VirtualModelsPage />} />
-                    {/* Legacy redirects for backward compatibility */}
-                    <Route path="/api-keys" element={<Navigate to="/credentials" replace />} />
-                    <Route path="/oauth" element={<Navigate to="/credentials" replace />} />
                     {/* Other routes */}
                     <Route path="/system" element={<System />} />
                     <Route path="/access-control" element={<AccessControl />} />
                     <Route path="/tingly-box-token" element={<APITokensPage />} />
                     <Route path="/system/logs" element={<LogsPage />} />
                     <Route path="/system/experimental" element={<ExperimentalPage />} />
-                    {/* Legacy redirects for backward compatibility */}
-                    <Route path="/system/http-logs" element={<Navigate to="/system/logs" replace />} />
-                    <Route path="/system/system-logs" element={<Navigate to="/system/logs" replace />} />
-                    <Route path="/logs" element={<Navigate to="/system/logs" replace />} />
                     {/* Dashboard routes with time range */}
                     <Route path="/dashboard" element={<Navigate to="/dashboard/7d" replace />} />
                     <Route path="/dashboard/:timeRange" element={<DashboardPage />} />
@@ -427,10 +409,7 @@ function AppContent() {
                     <Route path="/guardrails/history" element={<GuardrailsHistoryPage />} />
                     {/* MCP Settings */}
                     <Route path="/mcp/sources" element={<MCPRegisteredServers />} />
-                    <Route path="/mcp/builtin" element={<Navigate to="/mcp/sources" replace />} />
-                    <Route path="/mcp/custom" element={<Navigate to="/mcp/sources" replace />} />
                     <Route path="/mcp/local-mode" element={<MCPLocalMode />} />
-                    <Route path="/mcp/clients" element={<Navigate to="/mcp/local-mode" replace />} />
                     <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
                     {/* Tools */}
                     <Route path="/tools/servertool" element={<ServerToolPage />} />
@@ -445,8 +424,6 @@ function AppContent() {
                     <Route path="/zen/anthropic" element={<ZenAnthropicPage />} />
                     <Route path="/zen/agent" element={<ZenAgentPage />} />
                     <Route path="/zen" element={<Navigate to="/zen/claude_code" replace />} />
-                    {/* Legacy zen redirects */}
-                    <Route path="/zen/claude-code" element={<Navigate to="/zen/claude_code" replace />} />
                     {/* Catch-all redirect for unknown routes */}
                     <Route path="*" element={<Navigate to="/agent" replace />} />
                 </Route>

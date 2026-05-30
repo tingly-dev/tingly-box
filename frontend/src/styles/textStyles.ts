@@ -1,11 +1,9 @@
 import { type SxProps, type Theme } from '@mui/material/styles';
+import { fontMono } from '@/theme/fonts';
 
-/**
- * Shared styles for clickable monospace text that displays URLs, tokens, or commands.
- * Used across configuration cards and pages for copyable text elements.
- */
+// Shared style for clickable monospace text (URLs, tokens, commands).
 export const copyableTextStyle: SxProps<Theme> = {
-    fontFamily: 'monospace',
+    fontFamily: fontMono,
     color: 'primary.main',
     cursor: 'pointer',
     '&:hover': {
