@@ -132,6 +132,10 @@ type Server struct {
 	// routing selector for service selection pipeline
 	routingSelector *routing.SimpleSelector
 
+	// vision proxy processor, reused by the scenario-level vision proxy plugin
+	// (also registered into the smart-routing registry for the proxy_vision op)
+	visionProxyProcessor *processor.VisionProxyProcessor
+
 	// OTel meter setup for unified token tracking
 	meterSetup   *pkgotel.MeterSetup
 	tokenTracker *tracker.TokenTracker
@@ -402,7 +406,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Register op-level processors (vision proxy, etc.) into the smart-routing
 	// registry. Idempotent — safe across config reloads.
-	processor.RegisterAll(server.clientPool, server.config, logrus.StandardLogger())
+	server.visionProxyProcessor = processor.RegisterAll(server.clientPool, server.config, logrus.StandardLogger())
 
 	// Start affinity store background GC
 	affinityStore.StartGC()

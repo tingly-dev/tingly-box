@@ -155,6 +155,8 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		return
 	}
 
+	s.applyScenarioVisionProxy(c, scenarioType, reqParams)
+
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, reqParams)
 	if err != nil {

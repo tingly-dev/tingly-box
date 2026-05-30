@@ -86,9 +86,14 @@ const UseClaudeCodePageContent: React.FC = () => {
 
         setConfirmDialogOpen(false);
         try {
+            // GET-merge: SetScenarioConfig replaces the record wholesale,
+            // so a partial payload silently wipes extensions (e.g. vision_proxy_service).
+            const current = (await api.getScenarioConfig(SCENARIO))?.data || {};
             const config = {
+                ...current,
                 scenario: SCENARIO,
                 flags: {
+                    ...(current.flags || {}),
                     unified: pendingMode === 'unified',
                     separate: pendingMode === 'separate',
                     smart: false,

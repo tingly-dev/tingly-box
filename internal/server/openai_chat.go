@@ -117,6 +117,8 @@ func (s *Server) HandleOpenAIChatCompletions(c *gin.Context) {
 		return
 	}
 
+	s.applyScenarioVisionProxy(c, scenarioType, &req.ChatCompletionNewParams)
+
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, &req.ChatCompletionNewParams)
 	if err != nil {
