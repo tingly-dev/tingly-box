@@ -475,8 +475,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                             />
                                         </Box>
 
-                                        {/* Arrow - visual flow indication */}
-                                        <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 48 }}>
+                                        {/* Arrow - height matches EntryNode so it stays centered under flex-start */}
+                                        <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 72 }}>
                                             <ArrowNode direction="forward" flowing={false} flowSpeed={1.} />
                                         </Box>
 
