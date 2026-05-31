@@ -496,9 +496,14 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
-	// Parse response directly into Token
+	// Read response body so we can both decode it and log it on failure.
+	rawBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading token response: %w", err)
+	}
+
 	token := &Token{}
-	if err := json.NewDecoder(resp.Body).Decode(token); err != nil {
+	if err := json.Unmarshal(rawBody, token); err != nil {
 		return nil, fmt.Errorf("data decode: %w: %v", ErrTokenExchangeFailed, err)
 	}
 
@@ -526,7 +531,18 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
 		}
 	} else if config.Type == ai.IssuerCodex {
-		logrus.Warnf("[OAuth] Codex provider token has no ID token (id_token field is empty)")
+		// Log the actual response fields so we can tell whether OpenAI omitted
+		// id_token entirely or returned it under a different key.
+		var raw map[string]json.RawMessage
+		if jsonErr := json.Unmarshal(rawBody, &raw); jsonErr == nil {
+			fields := make([]string, 0, len(raw))
+			for k := range raw {
+				fields = append(fields, k)
+			}
+			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response fields: %v", fields)
+		} else {
+			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; could not inspect response: %v", jsonErr)
+		}
 	}
 
 	// Call provider's after-token hook to fetch additional metadata
