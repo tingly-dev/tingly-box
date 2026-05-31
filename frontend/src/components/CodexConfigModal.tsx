@@ -20,6 +20,7 @@ type AuthMode = 'apikey' | 'chatgpt';
 interface CodexOAuthProviderOption {
     uuid: string;
     name: string;
+    email?: string;
 }
 
 interface ApplyCodexConfigResponse {
@@ -99,7 +100,11 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
                 const list: any[] = Array.isArray(resp?.data) ? resp.data : [];
                 const codexOAuth = list
                     .filter((p) => p?.auth_type === 'oauth' && (p?.oauth_detail?.issuer === 'codex' || p?.oauth_detail?.provider_type === 'codex'))
-                    .map((p) => ({ uuid: p.uuid, name: p.name }));
+                    .map((p) => ({
+                        uuid: p.uuid,
+                        name: p.name,
+                        email: p?.oauth_detail?.extra_fields?.email,
+                    }));
                 setCodexOAuthProviders(codexOAuth);
                 setSelectedOAuthProvider((prev) => prev || codexOAuth[0]?.uuid || '');
             } catch {
@@ -309,7 +314,9 @@ EOF`;
                                             : 'Select a Codex OAuth provider'}
                                     </MenuItem>
                                     {codexOAuthProviders.map((p) => (
-                                        <MenuItem key={p.uuid} value={p.uuid}>{p.name}</MenuItem>
+                                        <MenuItem key={p.uuid} value={p.uuid}>
+                                            {p.email ? `${p.name} (${p.email})` : p.name}
+                                        </MenuItem>
                                     ))}
                                 </Select>
                             </FormControl>
