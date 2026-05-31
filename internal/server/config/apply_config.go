@@ -1178,7 +1178,7 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 			"supports_parallel_tool_calls":     true,
 			"effective_context_window_percent": 100,
 			"experimental_supported_tools":     []string{},
-			"input_modalities":                 []string{"text"},
+			"input_modalities":                 []string{"text", "image"},
 			"apply_patch_tool_type":            "freeform",
 		})
 	}
