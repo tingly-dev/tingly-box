@@ -5,7 +5,7 @@ services:
   tingly-box:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker.build.Dockerfile
     container_name: tingly-box
     ports:
       - "8080:8080"
@@ -32,7 +32,7 @@ services:
   tingly-box-dev:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker.build.Dockerfile
     container_name: tingly-box-dev
     ports:
       - "8080:8080"
