@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -121,17 +122,15 @@ func (hc *HandleContext) SetupSSEHeaders() {
 
 // ProcessStream provides a generic framework for processing streaming responses.
 // It handles context cancellation, error checking, and event processing.
+// Internally delegates loop infrastructure to RunLoop.
 //
 // nextFunc should return (true, nil, event) to continue, (false, nil, nil) to stop,
 // or (false, err, nil) on error.
 // handleFunc is called for each event after OnStreamEventHooks are invoked.
-// It can be used to send the event to the client.
 func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}), handleFunc func(interface{}) error) error {
 	c := hc.GinContext
 
-	// Check if streaming is supported
-	_, ok := c.Writer.(http.Flusher)
-	if !ok {
+	if _, ok := c.Writer.(http.Flusher); !ok {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Streaming not supported by this connection",
@@ -144,61 +143,40 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 
 	var processErr error
 
-	// Manual stream loop instead of gin's c.Stream: gin flushes after every
-	// step, and its Flush() calls WriteHeaderNow() — so a step that produced
-	// nothing (e.g. the stream failed before the first event) would lock in a
-	// 200, blocking the handler's post-loop error path from setting a
-	// retryable 5xx. We flush only after an event was actually handled.
-	flusher := c.Writer.(http.Flusher)
-	clientGone := c.Writer.CloseNotify()
-streamLoop:
-	for {
-		// Check cancellation (client disconnect or request context).
+	RunLoop(c, func(_ io.Writer) bool {
+		// RunLoop only watches clientGone; also check request context here.
 		select {
-		case <-clientGone:
-			break streamLoop
 		case <-c.Request.Context().Done():
-			break streamLoop
+			return false
 		default:
 		}
 
-		// Get next event
 		cont, err, event := nextFunc()
 		if err != nil {
 			processErr = err
-			break streamLoop
+			return false
 		}
 		if !cont {
-			break streamLoop
+			return false
 		}
 
-		// First real chunk: signal the failover gate (when one is wrapping
-		// c.Writer) to flush buffered output and switch to pass-through.
-		// Opportunistic assert keeps protocol free of any server dependency.
-		if cm, ok := c.Writer.(interface{ CommitFirstChunk() }); ok {
-			cm.CommitFirstChunk()
-		}
-
-		// Call OnStreamEvent hooks first
 		for _, hook := range hc.OnStreamEventHooks {
 			if hookErr := hook(event); hookErr != nil {
 				processErr = hookErr
-				break streamLoop
+				return false
 			}
 		}
 
-		// Call the provided handler function (e.g., to send to client)
 		if handleFunc != nil {
 			if handleErr := handleFunc(event); handleErr != nil {
 				processErr = handleErr
-				break streamLoop
+				return false
 			}
 		}
 
-		flusher.Flush()
-	}
+		return true
+	})
 
-	// Call OnStreamError hooks if there was an error
 	if processErr != nil {
 		for _, hook := range hc.OnStreamErrorHooks {
 			hook(processErr)
@@ -206,12 +184,30 @@ streamLoop:
 		return processErr
 	}
 
-	// Call OnStreamComplete hooks on success
 	for _, hook := range hc.OnStreamCompleteHooks {
 		hook()
 	}
 
 	return nil
+}
+
+// DispatchStreamEvent calls all OnStreamEvent hooks with the given event.
+// Used by raw-byte stream handlers that own their own loop but still want
+// to participate in the hook chain (e.g. for TTFT tracking).
+func (hc *HandleContext) DispatchStreamEvent(event interface{}) error {
+	for _, hook := range hc.OnStreamEventHooks {
+		if err := hook(event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DispatchStreamError calls all OnStreamError hooks.
+func (hc *HandleContext) DispatchStreamError(err error) {
+	for _, hook := range hc.OnStreamErrorHooks {
+		hook(err)
+	}
 }
 
 // CallOnStreamComplete calls all OnStreamComplete hooks.
