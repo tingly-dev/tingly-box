@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	anthropicvm "github.com/tingly-dev/tingly-box/vmodel/anthropic"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
@@ -55,7 +56,7 @@ func TestAnthropicToOpenAIStream_VModelFullUsage(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			c.Request, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/chat/completions", nil)
 
-			input, output, err := AnthropicToOpenAIStream(c, nil, stream, modelID, false)
+			input, output, err := AnthropicToOpenAIStream(protocol.NewHandleContext(c, modelID), nil, stream, modelID, false)
 			require.NoError(t, err)
 			// Anthropic input_tokens=42, cache_creation=5 → stored as 42+5=47 (non-cache-read total)
 			assert.Equal(t, 47, input, "InputTokens should be input_tokens + cache_creation_input_tokens")

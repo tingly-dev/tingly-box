@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	openaivm "github.com/tingly-dev/tingly-box/vmodel/openai"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
@@ -54,7 +55,7 @@ func TestOpenAIToAnthropicStream_VModelUsage(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/messages", nil)
 
-	usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, "virtual-gpt-4")
+	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, "virtual-gpt-4"), nil, stream, "virtual-gpt-4")
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 
@@ -132,7 +133,7 @@ func TestOpenAIToAnthropicStream_VModelFullUsage(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			c.Request, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/messages", nil)
 
-			usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, modelID)
+			usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, modelID), nil, stream, modelID)
 			require.NoError(t, err)
 			require.NotNil(t, usage)
 

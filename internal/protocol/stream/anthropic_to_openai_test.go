@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 )
 
@@ -57,7 +58,7 @@ func TestHandleAnthropicToOpenAIStreamResponse(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// Run the handler
-	_, _, err := AnthropicToOpenAIStream(c, nil, stream, model, false)
+	_, _, err := AnthropicToOpenAIStream(protocol.NewHandleContext(c, model), nil, stream, model, false)
 	require.NoError(t, err)
 
 	// Verify the response
@@ -119,7 +120,7 @@ func TestAnthropicToOpenAIStream_RealFormatUsage(t *testing.T) {
 	decoder := newFakeAnthropicDecoder(events)
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](decoder, nil)
 
-	inputTokens, outputTokens, err := AnthropicToOpenAIStream(c, nil, stream, "claude-3-5-sonnet", false)
+	inputTokens, outputTokens, err := AnthropicToOpenAIStream(protocol.NewHandleContext(c, "claude-3-5-sonnet"), nil, stream, "claude-3-5-sonnet", false)
 	require.NoError(t, err)
 
 	// Returned counts must be correct
@@ -175,7 +176,7 @@ func TestAnthropicToOpenAIStream_NonStandardDelta(t *testing.T) {
 	decoder := newFakeAnthropicDecoder(events)
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](decoder, nil)
 
-	inputTokens, outputTokens, err := AnthropicToOpenAIStream(c, nil, stream, "custom-model", false)
+	inputTokens, outputTokens, err := AnthropicToOpenAIStream(protocol.NewHandleContext(c, "custom-model"), nil, stream, "custom-model", false)
 	require.NoError(t, err)
 
 	assert.Equal(t, 40, inputTokens)

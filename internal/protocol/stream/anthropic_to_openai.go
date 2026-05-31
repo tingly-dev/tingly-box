@@ -16,6 +16,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
@@ -32,11 +33,12 @@ type AnthropicToOpenAIMCPHooks struct {
 
 // AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format
 // Returns inputTokens, outputTokens, and error for usage tracking
-func AnthropicToOpenAIStream(c *gin.Context, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
-	return AnthropicToOpenAIStreamWithMCPHooks(c, req, stream, responseModel, disableStreamUsage, nil)
+func AnthropicToOpenAIStream(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
+	return AnthropicToOpenAIStreamWithMCPHooks(hc, req, stream, responseModel, disableStreamUsage, nil)
 }
 
-func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (int, int, error) {
+func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (int, int, error) {
+	c := hc.GinContext
 	logrus.WithContext(c.Request.Context()).Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -98,6 +100,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 		}
 
 		event := stream.Current()
+		_ = hc.DispatchStreamEvent(&event)
 
 		// Handle different event types
 		switch event.Type {
@@ -308,6 +311,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 		return in, out, hookErr
 	}
 	if finished {
+		hc.CallOnStreamComplete()
 		return in, out, nil
 	}
 
@@ -327,13 +331,15 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 		// Stream failed before any content reached the client: surface a
 		// retryable 5xx so mid-request failover can try the next tier,
 		// instead of a 200 SSE error event.
+		streamErr := fmt.Errorf("anthropic stream error: %w", err)
+		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
-			return in, out, fmt.Errorf("anthropic stream error: %w", err)
+			return in, out, streamErr
 		}
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
 		// Return the error so TB's usage tracking can detect and report health status
-		return in, out, fmt.Errorf("anthropic stream error: %w", err)
+		return in, out, streamErr
 	}
 
 	return in, out, nil

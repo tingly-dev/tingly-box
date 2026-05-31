@@ -48,7 +48,8 @@ type pendingToolCallResponse struct {
 
 // HandleOpenAIChatToResponsesStream converts OpenAI Chat Completions streaming to Responses API format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
+func HandleOpenAIChatToResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
+	c := hc.GinContext
 	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI Chat to Responses streaming conversion handler")
 	defer func() {
 		if r := recover(); r != nil {
@@ -116,6 +117,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		}
 
 		chunk := stream.Current()
+		_ = hc.DispatchStreamEvent(&chunk)
 
 		// Send response.created on first meaningful chunk
 		if !state.hasSentCreated {
@@ -246,10 +248,12 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		// retryable 5xx so mid-request failover can try the next tier,
 		// instead of a 200 SSE error event.
 		if !c.Writer.Written() {
+			hc.DispatchStreamError(err)
 			SendStreamingError(c, err)
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 		}
 
+		hc.DispatchStreamError(err)
 		errorEvent := wire.ResponsesStreamErrorEvent{
 			Type:           "error",
 			SequenceNumber: nextSequenceNumber(state),
@@ -279,6 +283,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		OpenAISSEDone(c)
 	}
 
+	hc.CallOnStreamComplete()
 	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
 }
 
