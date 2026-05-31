@@ -324,7 +324,7 @@ func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, ori
 	}
 
 	// Return modified response
-	c.JSON(http.StatusOK, responseMap)
+	sendNonStreamModelResponse(c, responseMap)
 }
 
 // streamOpenAIChat handles streaming chat completion requests.
@@ -353,6 +353,7 @@ func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, origin
 	// Create handle context and handle stream
 	hc := protocol.NewHandleContext(c, responseModel)
 	hc.DisableStreamUsage = disableStreamUsage
+	attachVisionStreamInjector(c, hc)
 
 	// Record TTFT when the first streaming chunk arrives
 	firstTokenRecorded := false

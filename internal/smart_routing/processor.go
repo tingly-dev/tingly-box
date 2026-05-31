@@ -21,13 +21,21 @@ type OpProcessor interface {
 // request struct (e.g. *anthropic.BetaMessageNewParams) and may be mutated
 // in place. Services is the matched rule's Services slice — the processor's
 // upstream candidate pool, NOT the downstream selection set.
+//
+// Descriptions is a slot for processors that produce user-visible text
+// alongside their request-side mutations — VisionProxyProcessor appends the
+// raw description string for each successfully described image so the
+// outer handler can stash it on gin.Context and surface it in the response
+// via outputinjector. Field name is intentionally generic to leave room for
+// future text-injection processors (whole-message, tool-output, etc.).
 type ProcessorContext struct {
-	Ctx       context.Context
-	Request   any
-	ReqCtx    *RequestContext
-	RuleIndex int
-	OpUUID    string
-	Services  []*loadbalance.Service
+	Ctx          context.Context
+	Request      any
+	ReqCtx       *RequestContext
+	RuleIndex    int
+	OpUUID       string
+	Services     []*loadbalance.Service
+	Descriptions []string
 }
 
 var (

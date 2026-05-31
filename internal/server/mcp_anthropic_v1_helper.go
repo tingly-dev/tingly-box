@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
@@ -337,7 +336,7 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 	}
 
 	// Return response
-	c.JSON(http.StatusOK, response)
+	sendNonStreamModelResponse(c, response)
 }
 
 // dispatchGenericAnthropicV1Stream handles A→A streaming with generic interceptor
@@ -373,6 +372,7 @@ func (s *Server) dispatchGenericAnthropicV1Stream(
 
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
+	attachVisionStreamInjector(c, hc)
 
 	// Add TTFT tracking
 	firstTokenRecorded := false
@@ -448,7 +448,7 @@ func (s *Server) dispatchGenericOpenAIChatNonStream(
 	s.updateAffinityMessageID(c, rule, string(response.ID))
 
 	// Return response (OpenAI format)
-	c.JSON(http.StatusOK, response)
+	sendNonStreamModelResponse(c, response)
 }
 
 // dispatchGenericOpenAIChatStream handles O→O streaming with generic interceptor
@@ -484,6 +484,7 @@ func (s *Server) dispatchGenericOpenAIChatStream(
 
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
+	attachVisionStreamInjector(c, hc)
 
 	// Add TTFT tracking
 	firstTokenRecorded := false
@@ -549,7 +550,7 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 	}
 
 	// Return response
-	c.JSON(http.StatusOK, response)
+	sendNonStreamModelResponse(c, response)
 }
 
 // dispatchGenericAnthropicBetaStream handles Aβ→Aβ streaming with generic interceptor
@@ -585,6 +586,7 @@ func (s *Server) dispatchGenericAnthropicBetaStream(
 
 	// Create HandleContext for streaming
 	hc := protocol.NewHandleContext(c, responseModel)
+	attachVisionStreamInjector(c, hc)
 
 	// Add TTFT tracking
 	firstTokenRecorded := false

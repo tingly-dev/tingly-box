@@ -63,6 +63,12 @@ const imageHistoricalText = "[image: (omitted from history)]"
 // block. On any failure (no usable service, vision client error, empty
 // upstream response) the image is still removed so a downstream text-only
 // model does not choke on an unsupported content block.
+//
+// Successfully described images also append their raw description (the
+// upstream model's output, before being wrapped into the request-side text
+// block) to pctx.Descriptions. The outer handler picks these up and feeds
+// them to outputinjector so the descriptions become visible on the response
+// side too — see internal/server/vision_proxy.go's applyVisionProxy.
 func (p *VisionProxyProcessor) Process(pctx *smartrouting.ProcessorContext) error {
 	if pctx == nil || pctx.Request == nil {
 		return nil
@@ -75,11 +81,11 @@ func (p *VisionProxyProcessor) Process(pctx *smartrouting.ProcessorContext) erro
 
 	switch req := pctx.Request.(type) {
 	case *anthropic.BetaMessageNewParams:
-		p.processBeta(ctx, req, usable)
+		p.processBeta(ctx, req, usable, &pctx.Descriptions)
 	case *anthropic.MessageNewParams:
-		p.processV1(ctx, req, usable)
+		p.processV1(ctx, req, usable, &pctx.Descriptions)
 	case *openai.ChatCompletionNewParams:
-		p.processOpenAI(ctx, req, usable)
+		p.processOpenAI(ctx, req, usable, &pctx.Descriptions)
 	default:
 		// Unknown request shape — leave it alone.
 	}
@@ -110,11 +116,17 @@ func (p *VisionProxyProcessor) pickUsableService(services []*loadbalance.Service
 // entry down MultiLogger's explicit-source branch and skip the
 // request_id auto-injection that drives per-request log aggregation.
 // See .design/vision-proxy-scenario.md §9.3.
-func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance.Service, mediaType, b64, remoteURL string) string {
+// describe returns (request-side replacement text, raw description) for an
+// image. The replacement is what goes back into the request's text block
+// (downstream sees this); the raw description is the upstream model's plain
+// output, used for response-side injection. On failure the replacement is
+// the fail-strip marker and the raw description is "" — both meaning
+// "nothing to surface in the response".
+func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance.Service, mediaType, b64, remoteURL string) (replacement, rawDesc string) {
 	base := logrus.WithContext(ctx).WithField("component", "vision_proxy")
 	if usable == nil || p.Client == nil {
 		base.Warn("vision proxy: no usable service or client; stripping image")
-		return imageUnavailableText
+		return imageUnavailableText, ""
 	}
 	log := base.WithFields(logrus.Fields{
 		"vision_provider": usable.Provider,
@@ -124,14 +136,14 @@ func (p *VisionProxyProcessor) describe(ctx context.Context, usable *loadbalance
 	desc, err := p.Client.Describe(ctx, usable, mediaType, b64, remoteURL)
 	if err != nil {
 		log.WithError(err).Warn("vision proxy: describe failed; stripping image")
-		return imageUnavailableText
+		return imageUnavailableText, ""
 	}
 	if strings.TrimSpace(desc) == "" {
 		log.Warn("vision proxy: empty description; stripping image")
-		return imageUnavailableText
+		return imageUnavailableText, ""
 	}
 	log.WithField("description", truncateForLog(desc, 200)).Info("vision proxy: image described")
-	return "Here is an [image] with message and is parsed into description [image: " + desc + "]"
+	return "Here is an [image] with message and is parsed into description [image: " + desc + "]", desc
 }
 
 // truncateForLog clips long descriptions so a noisy upstream cannot blow up
@@ -149,21 +161,33 @@ func truncateForLog(s string, max int) string {
 // occur both at the top level and nested inside tool_result.Content
 // (see .design/vision-proxy-scenario.md §9.1) — walkBetaContent handles
 // both shapes.
-func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.BetaMessageNewParams, usable *loadbalance.Service) {
+// recordDesc appends a non-empty raw description to the sink so the
+// outer handler can forward them via outputinjector. Centralized so the
+// nil-sink case (legacy callers / unit tests) is handled in one place.
+func recordDesc(sink *[]string, desc string) {
+	if sink == nil || desc == "" {
+		return
+	}
+	*sink = append(*sink, desc)
+}
+
+func (p *VisionProxyProcessor) processBeta(ctx context.Context, req *anthropic.BetaMessageNewParams, usable *loadbalance.Service, sink *[]string) {
 	if len(req.Messages) == 0 {
 		return
 	}
 	lastIdx := len(req.Messages) - 1
 	for mi := range req.Messages {
-		p.walkBetaContent(ctx, req.Messages[mi].Content, usable, mi == lastIdx)
+		p.walkBetaContent(ctx, req.Messages[mi].Content, usable, mi == lastIdx, sink)
 	}
 }
 
-func (p *VisionProxyProcessor) walkBetaContent(ctx context.Context, blocks []anthropic.BetaContentBlockParamUnion, usable *loadbalance.Service, isLast bool) {
+func (p *VisionProxyProcessor) walkBetaContent(ctx context.Context, blocks []anthropic.BetaContentBlockParamUnion, usable *loadbalance.Service, isLast bool, sink *[]string) {
 	for bi := range blocks {
 		if blocks[bi].OfImage != nil {
+			text, desc := p.betaReplacementText(ctx, blocks[bi].OfImage, usable, isLast)
+			recordDesc(sink, desc)
 			blocks[bi] = anthropic.BetaContentBlockParamUnion{
-				OfText: &anthropic.BetaTextBlockParam{Text: p.betaReplacementText(ctx, blocks[bi].OfImage, usable, isLast)},
+				OfText: &anthropic.BetaTextBlockParam{Text: text},
 			}
 			continue
 		}
@@ -173,37 +197,41 @@ func (p *VisionProxyProcessor) walkBetaContent(ctx context.Context, blocks []ant
 				if inner[ii].OfImage == nil {
 					continue
 				}
+				text, desc := p.betaReplacementText(ctx, inner[ii].OfImage, usable, isLast)
+				recordDesc(sink, desc)
 				inner[ii] = anthropic.BetaToolResultBlockParamContentUnion{
-					OfText: &anthropic.BetaTextBlockParam{Text: p.betaReplacementText(ctx, inner[ii].OfImage, usable, isLast)},
+					OfText: &anthropic.BetaTextBlockParam{Text: text},
 				}
 			}
 		}
 	}
 }
 
-func (p *VisionProxyProcessor) betaReplacementText(ctx context.Context, img *anthropic.BetaImageBlockParam, usable *loadbalance.Service, isLast bool) string {
+func (p *VisionProxyProcessor) betaReplacementText(ctx context.Context, img *anthropic.BetaImageBlockParam, usable *loadbalance.Service, isLast bool) (replacement, rawDesc string) {
 	if !isLast {
-		return imageHistoricalText
+		return imageHistoricalText, ""
 	}
 	mediaType, b64, remoteURL := extractBetaImageSource(img)
 	return p.describe(ctx, usable, mediaType, b64, remoteURL)
 }
 
-func (p *VisionProxyProcessor) processV1(ctx context.Context, req *anthropic.MessageNewParams, usable *loadbalance.Service) {
+func (p *VisionProxyProcessor) processV1(ctx context.Context, req *anthropic.MessageNewParams, usable *loadbalance.Service, sink *[]string) {
 	if len(req.Messages) == 0 {
 		return
 	}
 	lastIdx := len(req.Messages) - 1
 	for mi := range req.Messages {
-		p.walkV1Content(ctx, req.Messages[mi].Content, usable, mi == lastIdx)
+		p.walkV1Content(ctx, req.Messages[mi].Content, usable, mi == lastIdx, sink)
 	}
 }
 
-func (p *VisionProxyProcessor) walkV1Content(ctx context.Context, blocks []anthropic.ContentBlockParamUnion, usable *loadbalance.Service, isLast bool) {
+func (p *VisionProxyProcessor) walkV1Content(ctx context.Context, blocks []anthropic.ContentBlockParamUnion, usable *loadbalance.Service, isLast bool, sink *[]string) {
 	for bi := range blocks {
 		if blocks[bi].OfImage != nil {
+			text, desc := p.v1ReplacementText(ctx, blocks[bi].OfImage, usable, isLast)
+			recordDesc(sink, desc)
 			blocks[bi] = anthropic.ContentBlockParamUnion{
-				OfText: &anthropic.TextBlockParam{Text: p.v1ReplacementText(ctx, blocks[bi].OfImage, usable, isLast)},
+				OfText: &anthropic.TextBlockParam{Text: text},
 			}
 			continue
 		}
@@ -213,23 +241,25 @@ func (p *VisionProxyProcessor) walkV1Content(ctx context.Context, blocks []anthr
 				if inner[ii].OfImage == nil {
 					continue
 				}
+				text, desc := p.v1ReplacementText(ctx, inner[ii].OfImage, usable, isLast)
+				recordDesc(sink, desc)
 				inner[ii] = anthropic.ToolResultBlockParamContentUnion{
-					OfText: &anthropic.TextBlockParam{Text: p.v1ReplacementText(ctx, inner[ii].OfImage, usable, isLast)},
+					OfText: &anthropic.TextBlockParam{Text: text},
 				}
 			}
 		}
 	}
 }
 
-func (p *VisionProxyProcessor) v1ReplacementText(ctx context.Context, img *anthropic.ImageBlockParam, usable *loadbalance.Service, isLast bool) string {
+func (p *VisionProxyProcessor) v1ReplacementText(ctx context.Context, img *anthropic.ImageBlockParam, usable *loadbalance.Service, isLast bool) (replacement, rawDesc string) {
 	if !isLast {
-		return imageHistoricalText
+		return imageHistoricalText, ""
 	}
 	mediaType, b64, remoteURL := extractV1ImageSource(img)
 	return p.describe(ctx, usable, mediaType, b64, remoteURL)
 }
 
-func (p *VisionProxyProcessor) processOpenAI(ctx context.Context, req *openai.ChatCompletionNewParams, usable *loadbalance.Service) {
+func (p *VisionProxyProcessor) processOpenAI(ctx context.Context, req *openai.ChatCompletionNewParams, usable *loadbalance.Service, sink *[]string) {
 	if len(req.Messages) == 0 {
 		return
 	}
@@ -261,7 +291,8 @@ func (p *VisionProxyProcessor) processOpenAI(ctx context.Context, req *openai.Ch
 			continue
 		}
 		mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(ip.ImageURL.URL)
-		text := p.describe(ctx, usable, mediaType, b64, remoteURL)
+		text, desc := p.describe(ctx, usable, mediaType, b64, remoteURL)
+		recordDesc(sink, desc)
 		parts[pi] = openai.ChatCompletionContentPartUnionParam{
 			OfText: &openai.ChatCompletionContentPartTextParam{Text: text},
 		}

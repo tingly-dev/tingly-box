@@ -31,6 +31,20 @@ type HandleContext struct {
 	OnStreamErrorHooks     []func(err error)
 	OnStreamAssembledHooks []func(*anthropic.Message)
 
+	// OnStreamRawEventHooks is the byte-path equivalent of OnStreamEventHooks
+	// for stream paths that operate on raw SSE bytes instead of typed events
+	// (currently: OpenAI Responses via StreamLoop). Each hook receives the
+	// event type and the raw JSON bytes and returns the (possibly modified)
+	// bytes; returning a non-nil error aborts the stream.
+	OnStreamRawEventHooks []func(eventType string, eventRaw []byte) ([]byte, error)
+
+	// OnNonStreamResponseHooks fires once for non-streaming responses, just
+	// before c.JSON writes the body. Each hook may mutate resp in place
+	// (typically the same typed struct or map the handler is about to send).
+	// Companion of OnStreamRawEventHooks for the non-stream half; used by
+	// output injectors to prepend content to the first text slot.
+	OnNonStreamResponseHooks []func(resp any)
+
 	// streamAssembler accumulates Anthropic stream events into a final
 	// message. Created lazily by WithOnStreamAssembled; nil disables assembly.
 	streamAssembler *assembler.AnthropicStreamAssembler
@@ -100,6 +114,51 @@ type GuardrailsBufferedEvent struct {
 func (hc *HandleContext) WithOnStreamEvent(hook func(interface{}) error) *HandleContext {
 	hc.OnStreamEventHooks = append(hc.OnStreamEventHooks, hook)
 	return hc
+}
+
+// WithOnStreamRawEvent adds a hook for the raw-bytes stream path. The hook
+// receives the event type and the raw JSON bytes and returns the (possibly
+// modified) bytes; multiple hooks chain and are applied in order.
+//
+// Mutation paths use this chain rather than OnStreamEventHooks because most
+// passthrough handlers send evt.RawJSON() / pre-marshaled chunk bytes — so
+// changes to typed event struct fields would not reach the wire. Use
+// WithOnStreamEvent for read-only side effects (recording, accumulation).
+func (hc *HandleContext) WithOnStreamRawEvent(hook func(eventType string, eventRaw []byte) ([]byte, error)) *HandleContext {
+	hc.OnStreamRawEventHooks = append(hc.OnStreamRawEventHooks, hook)
+	return hc
+}
+
+// WithOnNonStreamResponse adds a hook fired once per non-streaming response
+// just before c.JSON writes the body. Hooks may mutate resp in place.
+func (hc *HandleContext) WithOnNonStreamResponse(hook func(resp any)) *HandleContext {
+	hc.OnNonStreamResponseHooks = append(hc.OnNonStreamResponseHooks, hook)
+	return hc
+}
+
+// RunNonStreamResponseHooks calls every registered non-stream response hook
+// in order, threading the same resp through each. Safe to call when no hooks
+// are registered.
+func (hc *HandleContext) RunNonStreamResponseHooks(resp any) {
+	for _, hook := range hc.OnNonStreamResponseHooks {
+		hook(resp)
+	}
+}
+
+// RunStreamRawEventHooks applies the registered raw-event hooks in order,
+// threading the (possibly modified) bytes through each. Safe to call when
+// no hooks are registered — returns the input unchanged with no allocation.
+// Returns the first error a hook raised, in which case eventRaw is the value
+// going INTO the failed hook (so callers may decide to send-as-is or abort).
+func (hc *HandleContext) RunStreamRawEventHooks(eventType string, eventRaw []byte) ([]byte, error) {
+	for _, hook := range hc.OnStreamRawEventHooks {
+		modified, err := hook(eventType, eventRaw)
+		if err != nil {
+			return eventRaw, err
+		}
+		eventRaw = modified
+	}
+	return eventRaw, nil
 }
 
 // WithOnStreamComplete adds a hook that is called when stream completes successfully.

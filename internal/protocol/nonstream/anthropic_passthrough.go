@@ -16,6 +16,7 @@ func HandleAnthropicV1NonStream(hc *protocol.HandleContext, resp *anthropic.Mess
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
 
+	hc.RunNonStreamResponseHooks(resp)
 	hc.GinContext.JSON(http.StatusOK, resp)
 	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }
@@ -29,6 +30,7 @@ func HandleAnthropicV1BetaNonStream(hc *protocol.HandleContext, resp *anthropic.
 
 	resp.Model = anthropic.Model(hc.ResponseModel)
 
+	hc.RunNonStreamResponseHooks(resp)
 	hc.GinContext.JSON(http.StatusOK, resp)
 	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
 }

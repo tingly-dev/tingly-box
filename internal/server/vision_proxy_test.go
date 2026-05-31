@@ -241,6 +241,65 @@ func TestApplyVisionProxy_ProfiledScenario(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// applyVisionProxy stashes descriptions; injector helpers read them back
+// ---------------------------------------------------------------------------
+
+func TestApplyVisionProxy_StashesDescriptions(t *testing.T) {
+	s := visionTestServer("claude_code", scenarioVisionExt("p-scn", "scenario-model"))
+	c := newVisionTestGinCtx()
+	req := betaReqWithImage()
+
+	s.applyVisionProxy(c, "claude_code", &typ.Rule{}, req)
+
+	v, ok := c.Get(VisionDescriptionsKey)
+	if !ok {
+		t.Fatal("descriptions not stashed on gin.Context")
+	}
+	descs := v.([]string)
+	if len(descs) != 1 {
+		t.Fatalf("want 1 description, got %d: %v", len(descs), descs)
+	}
+	// stub echoes "desc via <model>"; scenario model wins here.
+	if !strings.Contains(descs[0], "scenario-model") {
+		t.Fatalf("description should reference the scenario model, got %q", descs[0])
+	}
+}
+
+func TestApplyVisionProxy_NoServiceNoStash(t *testing.T) {
+	s := visionTestServer("claude_code", map[string]interface{}{})
+	c := newVisionTestGinCtx()
+	s.applyVisionProxy(c, "claude_code", &typ.Rule{}, betaReqWithImage())
+	if _, ok := c.Get(VisionDescriptionsKey); ok {
+		t.Fatal("must not stash descriptions when no vision service is configured")
+	}
+}
+
+func TestNewVisionOutputInjector(t *testing.T) {
+	// Active: descriptions present -> non-nil injector that prepends once.
+	c := newVisionTestGinCtx()
+	c.Set(VisionDescriptionsKey, []string{"a cat", "a dog"})
+	inj := newVisionOutputInjector(c)
+	if inj == nil {
+		t.Fatal("expected non-nil injector when descriptions present")
+	}
+	if got := inj.PrefixText(); got != "[Vision: a cat; a dog]\n\n" {
+		t.Fatalf("unexpected prefix: %q", got)
+	}
+
+	// Inactive: no key -> nil injector (callers use nil-safe helpers).
+	if newVisionOutputInjector(newVisionTestGinCtx()) != nil {
+		t.Fatal("expected nil injector when no descriptions stashed")
+	}
+
+	// Empty slice -> nil injector.
+	c2 := newVisionTestGinCtx()
+	c2.Set(VisionDescriptionsKey, []string{})
+	if newVisionOutputInjector(c2) != nil {
+		t.Fatal("expected nil injector for empty descriptions")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // parseScenarioVisionService — Extensions decoding
 // ---------------------------------------------------------------------------
 

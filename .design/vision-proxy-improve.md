@@ -24,289 +24,200 @@
 
 ---
 
-## 2. 现状关键事实(调研所得)
+## 2. 现状关键事实(决定实现形态)
 
-### 2.1 两条流出口
+### 2.1 所有协议的流出口都发「原始字节」,不是 typed 字段
 
-| 协议 | 流出口 | 当前 hook 能力 |
+| 协议 | 流出口 | 实际发送的内容 |
 |------|------|------|
-| Anthropic v1 | `HandleAnthropic` → `ProcessStream` | ✅ `OnStreamEventHooks`(typed event) |
-| Anthropic Beta | `HandleAnthropicBeta` → `ProcessStream` | ✅ `OnStreamEventHooks`(typed event) |
-| OpenAI Chat | `HandleOpenAIChatStream` → `StreamLoop` | ❌ 无 hook |
-| OpenAI Responses | `HandleOpenAIResponsesStream` → `StreamLoop` | ❌ 无 hook |
+| Anthropic v1 | `HandleAnthropic` → `ProcessStream` | `evt.RawJSON()`(原始 JSON) |
+| Anthropic Beta | `HandleAnthropicBeta` → `ProcessStream` | `evt.RawJSON()` |
+| OpenAI Chat | `HandleOpenAIChatStream` → `ProcessStream` | `json.Marshal(chunkMap)` |
+| OpenAI Responses | `HandleOpenAIResponsesStream` → `StreamLoop` | `eventRaw`(gjson/sjson 处理的 raw) |
 
-`StreamLoop`(`internal/protocol/stream/loop.go`)和 `ProcessStream`
-(`internal/protocol/context.go`)都通过 `CommitFirstChunk()` 与 failover
-gate 协作,但只有 `ProcessStream` 在事件经过时给出 hook。
+**关键**:`ProcessStream` 虽有 `OnStreamEventHooks`(typed event),但
+passthrough handler 最终发的是 `evt.RawJSON()` / marshaled bytes —— **改
+typed event 的字段不会反映到 wire**。所以注入必须在「即将写出的字节」上
+做,而不是 typed event 上。
+
+→ 结论:注入统一走**字节 hook**,对 4 协议对称。typed `OnStreamEventHooks`
+保留给只读副作用(recording、TTFT、accumulation),不背改写责任。
 
 ### 2.2 非流式
 
-四种协议非流式都是 `hc.GinContext.JSON(http.StatusOK, resp)`,在 JSON
-化**之前**对 response 结构做就地修改即可。无现成 hook,但也无需新机制。
+四种协议非流式都是 `hc.GinContext.JSON(resp)`,在 JSON 化**之前**对
+response 结构(struct 或 map)就地修改即可。
 
-### 2.3 vision proxy 当前状态
+### 2.3 起点
 
 - `applyVisionProxy`(`internal/server/vision_proxy.go`)在 `SelectService`
-  之前跑,把请求里的 image block **原地改写**成 text。
-- 描述只进了"发给下游的请求"和日志;**不进响应**。
+  之前跑,原地改写 image block 成 text。
+- 描述只进了请求和日志;**不进响应**。
 - `ProcessorContext` 没有回传描述列表的字段。
 
 ---
 
-## 3. 设计
+## 3. 实现
 
-### 3.1 统一 hook 抽象 —— `StreamLoop` 补齐 hook 能力
+### 3.1 协议层:两条 hook 链(`HandleContext`)
 
-让 `StreamLoop` 接受一个可选的 per-step transform 回调,签名与
-`ProcessStream` 的 hook 对齐(都是"事件经过时被调",返回 error 则中断)。
-
-```go
-// internal/protocol/stream/loop.go
-type StepFunc func(w io.Writer) bool
-
-type StreamLoopOption func(*streamLoopOptions)
-
-type streamLoopOptions struct {
-    onEvent func(eventBytes []byte) ([]byte, error)
-}
-
-// WithOnEvent runs once per emitted event, allowing the bytes to be
-// rewritten in place. Returning a non-nil error stops the loop.
-func WithOnEvent(fn func([]byte) ([]byte, error)) StreamLoopOption { ... }
-
-func StreamLoop(c *gin.Context, step StepFunc, opts ...StreamLoopOption) bool {
-    // ... 现有逻辑 ...
-    // 在 step(w) 之后 / Flush 之前,把刚写出的字节交给 onEvent 重写
-}
-```
-
-> StreamLoop 内 step 直接写 `w io.Writer`,要拿到刚写出的字节做改写,
-> 有两种实现选项:
-> - **(a)** step 写到一个内部 `bytes.Buffer`,onEvent 改完后再 flush 到真
->   writer。语义清晰,但每事件多一次拷贝。
-> - **(b)** 暴露一个 "send raw bytes" 接口替代 step 的 `Write`,内部
->   先经过 onEvent 再落到底层 writer。改 API 形态。
->
-> 倾向 **(a)** —— vision 描述前置场景下 onEvent 几乎总是返回原样
-> (只在第一个 text 事件改一次),拷贝代价可接受。
-
-`ProcessStream` 已有 `OnStreamEventHooks`,**不动**。两条路径的 hook
-形态有差异(typed event vs raw bytes),由 `ResponseInjector`(§3.2)各自
-适配。
-
-### 3.2 `ResponseInjector` —— 协议无关的承接对象
-
-抽象一个对象,**每个协议一个实现**,内部维护"已注入"状态:
+`internal/protocol/context.go` 加两条与现有 `OnStreamEventHooks` 平行的链:
 
 ```go
-// internal/server/responseinjector/injector.go (新包)
-type Injector interface {
-    // OnAnthropicEvent rewrites a typed Anthropic event in place.
-    // Returns true if the event was modified (caller may re-marshal).
-    OnAnthropicEvent(event any) bool
-
-    // OnOpenAIEventBytes rewrites raw SSE event bytes (OpenAI path uses
-    // StreamLoop with byte hooks).
-    OnOpenAIEventBytes(eventBytes []byte) ([]byte, bool)
-
-    // OnNonStreamResponse rewrites a fully-formed response before JSON
-    // serialization. resp is one of: *openai.ChatCompletion, *responses.Response,
-    // *anthropic.Message, *anthropic.BetaMessage.
-    OnNonStreamResponse(resp any) bool
-}
+// 流式:在「即将写出的字节」上改写
+OnStreamRawEventHooks []func(eventType string, eventRaw []byte) ([]byte, error)
+// 非流式:在 c.JSON 之前改写 resp(struct 或 map)
+OnNonStreamResponseHooks []func(resp any)
 ```
 
-> 三个方法对应:Anthropic typed event 流、OpenAI byte 流、所有非流。
-> 实际实现可能用一个内部状态机 +「protocol kind」字段统一,但接口
-> 上分三个方法更清楚。
+配套方法:`WithOnStreamRawEvent` / `WithOnNonStreamResponse` 注册,
+`RunStreamRawEventHooks` / `RunNonStreamResponseHooks` 执行。现有
+`OnStreamEventHooks` **不动**(Guardrails / MCP / Recording 零冲击)。
 
-#### 3.2.1 Vision 描述注入实现
+### 3.2 协议层:四个 send 点调用 raw hook
+
+每个流式 handler 在写出前把字节交给 `RunStreamRawEventHooks`:
+
+- `anthropic_passthrough.go`(v1 + Beta):组装出 `outBytes`(含 message_start
+  的 model 改写)后,过 raw hooks,再 `SSEvent`。
+- `openai_passthrough.go` Chat:`json.Marshal(chunkMap)` 后过 raw hooks,
+  再 `OpenAISSE`。
+- `openai_passthrough.go` Responses:`eventRaw` 过 raw hooks,再
+  `OpenAIResponsesEvent`。
+
+非流式 send 点(`nonstream/*.go`)在 `c.JSON` 前调
+`RunNonStreamResponseHooks(resp)`。
+
+### 3.3 协议层:`outputinjector` 包(协议无关)
+
+`internal/protocol/outputinjector/injector.go`:
 
 ```go
-// internal/server/responseinjector/vision_text_prefix.go
-type VisionTextPrefix struct {
-    descriptions []string
-    injected     bool
+type OutputInjector interface {
+    PrefixText() string  // 首次返回前缀,之后返回 ""
 }
 
-func NewVisionTextPrefix(descs []string) *VisionTextPrefix { ... }
+// 一次 attach 注册两条链上的 hook,覆盖 4 协议流式 + 4 协议非流式
+func AttachToHandleContext(hc *protocol.HandleContext, inj OutputInjector)
 
-// prefixText returns the "[Vision: a; b]\n\n" string once; "" thereafter.
-func (v *VisionTextPrefix) prefixText() string {
-    if v.injected || len(v.descriptions) == 0 {
-        return ""
-    }
-    v.injected = true
-    return "[Vision: " + strings.Join(v.descriptions, "; ") + "]\n\n"
-}
+// 非流式响应改写(也被 Attach 内部用)
+func PrependToNonStreamResponse(inj OutputInjector, resp any) bool
 ```
 
-各协议方法用 `prefixText()`:
-- **Anthropic event**:看到第一个 `ContentBlockDeltaEvent` 且其 delta
-  是 text → 在 delta.text 前 prepend。
-- **OpenAI Chat 流字节**:解析 SSE 行的 JSON,看到第一个
-  `choices[0].delta.content` 非空 → prepend。用 `sjson.SetBytes` 改字段。
-- **OpenAI Responses 流字节**:同样按 SSE event 解析,找到第一个
-  `response.output[i].content[j].text` 类型的 delta → prepend。
-- **非流响应**:在 `Content[]` / `choices[0].message.content` /
-  `Output[i].Content[j].Text` 第一个 text 位置 prepend;若数组里没有
-  text(纯 tool_use)→ §4.4 兜底。
+`prependToStreamEvent`(内部)按 `eventType` 路由,用 `gjson/sjson` 在
+字节上改对应字段:
 
-### 3.3 注入器的生命周期
+| eventType | 改写字段 | 协议 |
+|-----------|---------|------|
+| `content_block_delta`(delta.type==text_delta) | `delta.text` | Anthropic v1/Beta |
+| `chat.completion.chunk`(choices.0.delta.content 非空) | `choices.0.delta.content` | OpenAI Chat |
+| `response.output_text.delta`(delta 非空) | `delta` | OpenAI Responses |
 
-#### (a) Processor 收集描述
+非 text-bearing 的事件原样透传,且**不消费** `PrefixText()`(injected 标志
+不被翻转),保证前缀落到真正的第一段文本上。
 
-`describe()` 返回描述时,**额外**把成功结果追加到一份列表(失败和
-historical marker 不进列表)。列表通过 `ProcessorContext` 回传:
+`PrependToNonStreamResponse` 按 resp 具体类型(`*anthropic.Message` /
+`*anthropic.BetaMessage` / `*openai.ChatCompletion` / `map`(Chat passthrough)
+/ `*responses.Response`)找第一个 text 块前置。
 
-```go
-// internal/smart_routing/processor.go
-type ProcessorContext struct {
-    // ... 现有字段 ...
-    Descriptions []string  // collected by processors that produce user-visible text
-}
-```
+> **接口只有 `PrefixText()`**:协议层不理解「描述是什么、怎么拼」,业务
+> 收敛到一个字符串。injector 自己用 bool 字段保证只前置一次。与 Guardrails
+> 的分层(`guardrails/mutate` 通用改写 + `server/guardrails_runtime` 业务挂载)
+> 同型。
 
-> 字段命名故意泛化(`Descriptions`),为未来的整 message / tool 注入留口
-> ——同一个字段可以承载"vision 给出的视觉描述",未来扩展时可能演化
-> 成 `[]InjectionContent` 这种带类型的形态;现在 string 够用。
+### 3.4 业务层:`server/output.VisionTextPrefix`
 
-`processBeta` / `processV1` / `processOpenAI` 在 latest 消息每张图调
-`describe` 成功时,把描述 append 到 `pctx.Descriptions`。
+`internal/server/output/vision_text_prefix.go` 实现 `OutputInjector`:
+持有 `descs []string` + `injected bool`,`PrefixText()` 首次返回
+`"[Vision: a; b]\n\n"`,之后返回 `""`。
 
-#### (b) Helper stash 到 gin.Context
+### 3.5 数据流(Processor → gin.Context → Handler)
 
-`applyVisionProxy`(`internal/server/vision_proxy.go`)Process 完成后:
+- `internal/smart_routing/processor.go`:`ProcessorContext` 加
+  `Descriptions []string`(命名泛化,留口给未来 injection 类型)。
+- `internal/server/processor/vision_proxy.go`:`describe(...)` 改返回
+  `(replacement, rawDesc string)` —— 成功时 rawDesc 是上游原始描述,失败
+  为 `""`。walker 链多带一个 `sink *[]string`,成功描述经 `recordDesc`
+  追加(`""` 不进)。
+- `internal/server/vision_proxy.go`:`applyVisionProxy` 用本地
+  `ProcessorContext` 收集 `Descriptions`,非空时
+  `c.Set(VisionDescriptionsKey, descs)`。
 
-```go
-if len(pctx.Descriptions) > 0 {
-    c.Set(VisionDescriptionsKey, pctx.Descriptions)
-}
-```
+### 3.6 集成层:handler 接入
 
-常量 `VisionDescriptionsKey = "vision_descriptions"`。
+- **流式**:每个构造 `HandleContext` 的点调
+  `attachVisionStreamInjector(c, hc)`(server/vision_proxy.go 的薄封装,
+  内部 `newVisionOutputInjector(c)` + `outputinjector.AttachToHandleContext`)。
+  覆盖 8 个 `NewHandleContext` 站点(openai_chat、anthropic_message_beta、
+  protocol_dispatch ×3、mcp_anthropic_v1_helper ×3)。
+- **非流式**:模型响应的 `c.JSON(http.StatusOK, resp)` 统一换成
+  `sendNonStreamModelResponse(c, resp)`(先
+  `prependVisionToNonStreamResponse` 再 `c.JSON`)。16 个站点。
 
-#### (c) Handler 安装注入器
-
-每条 handler 路径 dispatch 进入响应前判断:
-
-```go
-if descsAny, ok := c.Get(VisionDescriptionsKey); ok {
-    injector := responseinjector.NewVisionTextPrefix(descsAny.([]string))
-    // Anthropic: hc.WithOnStreamEvent(func(e any) error {
-    //     injector.OnAnthropicEvent(e); return nil
-    // })
-    // OpenAI:   pass stream.WithOnEvent(injector.OnOpenAIEventBytes) into HandleOpenAI...Stream
-    // Non-stream: in the response massaging block, call injector.OnNonStreamResponse(resp)
-}
-```
-
-具体接入点(只 4 个 handler 文件,而非分散的 8 个):
-
-| 文件 | 流式接入 | 非流式接入 |
-|------|------|------|
-| `internal/server/anthropic_message_v1.go` | ProcessStream hook | 非流响应处理处 |
-| `internal/server/anthropic_message_beta.go` | ProcessStream hook | 非流响应处理处 |
-| `internal/server/openai_chat.go` | 传 StreamLoop opt | `responseMap` 写出前 |
-| `internal/server/openai_responses.go` | 传 StreamLoop opt | response struct JSON 化前 |
-
-### 3.4 顺序与 failover
-
-`firstChunkGate`(byte 缓冲)和 `ResponseInjector`(内容感知)分层不冲突:
-
-```
-upstream stream
-   ↓ (typed events / raw bytes)
-ResponseInjector  ← 这层做内容前置
-   ↓
-StreamLoop / ProcessStream  ← 调 CommitFirstChunk()
-   ↓
-firstChunkGate  ← 字节缓冲
-   ↓
-gin.ResponseWriter → client
-```
-
-如果在第一个 text 事件抵达**之前** failover 切换(上游 5xx),injector
-本来就还没注入(没看到 text),切到下一个上游后正常生效。如果已经
-注入并 commit,failover 不会再切换。无新冲突。
+`newVisionOutputInjector(c)` 在 key 缺失 / descs 空时返回 nil,所有
+helper 都 nil-safe → **vision proxy 未启用时零开销**。
 
 ---
 
 ## 4. 边界
 
-### 4.1 vision proxy 未启用
-
-`c.Get(VisionDescriptionsKey)` 返回 (nil, false) → 不创建 injector →
-现有路径零改动、零开销。
-
-### 4.2 下游回应纯 tool_use 无 text
-
-模型直接发 tool_use 没有任何 text content。injector 等不到"第一个 text
-事件"。**第一版接受不注入**——描述仍在请求里给下游看过了,只是客户端
-没收到 `[Vision: ...]` 前缀。Follow-up 可考虑在 tool_use 之前注入一个
-独立 text block(Anthropic 协议允许;OpenAI 中 content + tool_calls 可
-共存)。
-
-### 4.3 多张图 / 历史图
-
-- latest 消息里的每张成功描述都进 `pctx.Descriptions`,前缀里用 `; `
-  拼接,形如 `[Vision: a red apple; a screenshot of a terminal]`。
-- 历史消息的图不调上游(只打 marker),**不进**列表——它们对当前轮
-  不是新信息,前置会吵。
-
-### 4.4 描述包含特殊字符
-
-描述里若含 `[`、`]`、换行,如实拼进前缀。客户端是文本消费方,基本
-不会出问题。Markdown 转义不属于本 PR 责任。
-
-### 4.5 OpenAI Responses 流的 SSE 解析复杂度
-
-调研显示该路径是 raw JSON event(用 gjson/sjson 处理)。injector 的
-`OnOpenAIEventBytes` 内部用 `sjson.SetBytes` 改字段,不需要完整 SDK
-反序列化。可以接受。
+- **vision proxy 未启用**:`c.Get(VisionDescriptionsKey)` miss → injector
+  nil → 流式不接 hook、非流式 no-op。
+- **下游纯 tool_use 无 text**:没有 text-bearing 事件 → `PrefixText()` 不
+  被消费 → 不注入。描述仍在请求里给下游看过了,只是客户端没收到
+  `[Vision:]` 前缀。**第一版接受**,follow-up 可考虑独立 text block。
+- **历史消息里的图**:不调上游、不进 `Descriptions`(对当前轮不是新信息)。
+- **failover 重试**:`firstChunkGate` 在 injector 下游;若上游在第一个
+  text 事件之前 5xx 切换,injector 还没注入,切到下一个上游正常生效。
+- **raw hook err 传播**:与 `OnStreamEventHooks` 对齐 —— hook 返回 err 时
+  中断流并记日志。注入场景不应 err,但机制对称。
 
 ---
 
 ## 5. 后端改动清单
 
-| 文件 | 改动 |
-|------|------|
-| `internal/protocol/stream/loop.go` | 加 `StreamLoopOption` / `WithOnEvent`,内部缓冲一拷贝并交 hook 改写 |
-| `internal/protocol/stream/loop_test.go` | 单测:hook 看到每事件,改写生效,无 hook 时零开销路径不变 |
-| `internal/server/responseinjector/` (新包) | `Injector` 接口 + `VisionTextPrefix` 实现 |
-| `internal/server/responseinjector/*_test.go` | 单测:首次注入、后续 no-op、空 descriptions no-op、各协议事件识别 |
-| `internal/smart_routing/processor.go` | `ProcessorContext` 加 `Descriptions []string` |
-| `internal/server/processor/vision_proxy.go` | `describe` 成功时把描述 append 到 ctx 上(需要从 ProcessorContext 拿到容器——signature 加一个 `*[]string` 或改 describe 返回 (text, success bool)) |
-| `internal/server/vision_proxy.go` | Process 完后 `c.Set(VisionDescriptionsKey, pctx.Descriptions)`;新增常量导出 |
-| `internal/server/anthropic_message_v1.go` / `anthropic_message_beta.go` | 流式注册 ProcessStream hook;非流式响应处理处调 injector |
-| `internal/server/openai_chat.go` / `openai_responses.go` | 传 `stream.WithOnEvent` 给 StreamLoop;非流式响应 map / struct 改写处调 injector |
+**新增**
+- `internal/protocol/outputinjector/injector.go` + `injector_test.go`
+- `internal/server/output/vision_text_prefix.go` + `_test.go`
 
-不增加新依赖(`sjson` 项目已用)。
+**修改**
+- `internal/protocol/context.go` —— 两条 hook 链 + 方法
+- `internal/protocol/stream/{anthropic,openai}_passthrough.go` —— send 前调
+  raw hook
+- `internal/protocol/nonstream/{anthropic,openai}_passthrough.go` —— JSON 前
+  调非流 hook
+- `internal/smart_routing/processor.go` —— `ProcessorContext.Descriptions`
+- `internal/server/processor/vision_proxy.go` —— describe 双返回值,walker
+  收集
+- `internal/server/vision_proxy.go` —— `VisionDescriptionsKey`、
+  `newVisionOutputInjector` / `attachVisionStreamInjector` /
+  `prependVisionToNonStreamResponse` / `sendNonStreamModelResponse`
+- handler:`openai_chat.go`、`anthropic_message_beta.go`、
+  `protocol_dispatch.go`、`mcp_anthropic_v1_helper.go` —— attach + 非流式
+  改用 `sendNonStreamModelResponse`
 
----
-
-## 6. 测试矩阵
-
-| 用例 | 期望 |
-|----|------|
-| `VisionTextPrefix.prefixText` | 首次返回 `[Vision: ...]\n\n`,后续返回 `""` |
-| Anthropic ContentBlockDelta 改写 | 第一个 text delta 被前置;text 事件之外的事件原样;后续 text delta 原样 |
-| OpenAI Chat SSE 字节改写 | 第一个 `delta.content` 非空 chunk 被前置;后续原样;非 content chunk 原样 |
-| OpenAI Responses SSE 字节改写 | 第一个 text-bearing output delta 被前置 |
-| 非流 Anthropic Message | `Content[0]` 若是 text → 前置;若不是 text → 不前置(§4.2) |
-| 非流 OpenAI Chat | `choices[0].message.content` 前置 |
-| 端到端 Anthropic Beta | stub 流给出 text delta → 客户端 SSE 第一个 text 事件含前缀 |
-| 端到端 OpenAI Chat | 同上 |
-| vision proxy 关闭 | 无 descriptions → injector 不安装 → 流原样,零开销 |
-| 多张图 | 多个成功描述 → 前缀里以 `; ` 拼接,只前置一次 |
+**依赖**:`tidwall/gjson`、`tidwall/sjson`(已在依赖)。
 
 ---
 
-## 7. 不做
+## 6. 测试
+
+- `outputinjector/injector_test.go`:三协议 stream 事件路由(text-delta /
+  非 text / 无 content)、只注入一次、`AttachToHandleContext` 两链注册、
+  `PrependToNonStreamResponse` 五种 resp 类型 + tool-only 不注入 + nil 安全。
+- `server/output/vision_text_prefix_test.go`:首次前缀/再调空、单描述/多描述
+  拼接、空 descs、nil 接收者。
+- `server/processor/vision_proxy_test.go`:`Descriptions` 按序收集、失败不
+  收集。
+- `server/vision_proxy_test.go`:`applyVisionProxy` 有/无 service 的 stash
+  行为、`newVisionOutputInjector` 三态。
+
+---
+
+## 7. 不做(本 PR 范围外)
 
 - 多图 describe 并发(下个 PR)
-- 描述结果 LRU 缓存(下个 PR)
-- 远景的"整 message 注入" / "tool 注入"——本 PR 抽象留口,实现等
-  用例落地再说
+- 描述结果缓存(下个 PR)
+- 远景的「整 message 注入」/「tool 注入」——抽象留口,实现等用例落地
 - describe 失败重试 / 超时控制
 - 视觉描述计入 usage

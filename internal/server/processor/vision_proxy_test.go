@@ -364,6 +364,39 @@ func TestVisionProxy_AnthropicBeta_SuccessReplacesImageWithDescription(t *testin
 	require.Contains(t, collectText(req), "a red apple on a white plate", "description spliced into text")
 }
 
+// TestVisionProxy_CollectsDescriptions verifies that successful descriptions
+// are collected onto pctx.Descriptions (the slot the outer handler reads to
+// surface the descriptions on the response side). Two images -> two raw
+// descriptions, in order.
+func TestVisionProxy_CollectsDescriptions(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("first description", "second description")
+	p := mkProcessor(t, fake, prov)
+
+	req := betaReqWithImages("compare", tinyPNGBase64, tinyPNGBase64)
+	pctx := mkPctx(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	require.Equal(t, []string{"first description", "second description"}, pctx.Descriptions,
+		"raw descriptions collected in order")
+}
+
+// TestVisionProxy_FailedDescribeNotCollected verifies that a failed describe
+// (empty/errored upstream) leaves the request stripped but contributes NO
+// entry to pctx.Descriptions — nothing user-visible to surface.
+func TestVisionProxy_FailedDescribeNotCollected(t *testing.T) {
+	prov := mkProvider("anthropic-vision")
+	fake := newFakeVisionClient("") // empty description => fail-strip path
+	p := mkProcessor(t, fake, prov)
+
+	req := betaReqWithImages("describe", tinyPNGBase64)
+	pctx := mkPctx(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	require.Equal(t, 0, countImages(req), "image still stripped on failure")
+	require.Empty(t, pctx.Descriptions, "failed describe contributes no description")
+}
+
 func TestVisionProxy_AnthropicV1_Success(t *testing.T) {
 	prov := mkProvider("anthropic-v1")
 	fake := newFakeVisionClient("a blue sky")

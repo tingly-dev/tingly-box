@@ -281,7 +281,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 			recorder.SetAssembledResponse(anthropicResp)
 			recorder.RecordResponse(provider, reqCtx.RequestModel)
 		}
-		c.JSON(http.StatusOK, openaiResp)
+		sendNonStreamModelResponse(c, openaiResp)
 	}
 }
 
@@ -386,7 +386,7 @@ func (s *Server) passthroughAnthropicBeta(
 			recorder.SetAssembledResponse(anthropicResp)
 			recorder.RecordResponse(provider, reqCtx.RequestModel)
 		}
-		c.JSON(http.StatusOK, anthropicResp)
+		sendNonStreamModelResponse(c, anthropicResp)
 	}
 }
 
@@ -608,7 +608,7 @@ func (s *Server) dispatchGoogle(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			sendNonStreamModelResponse(c, anthropicResp)
 		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
@@ -616,7 +616,7 @@ func (s *Server) dispatchGoogle(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			sendNonStreamModelResponse(c, anthropicResp)
 		}
 	}
 }
@@ -733,7 +733,7 @@ func (s *Server) dispatchOpenAIChat(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			sendNonStreamModelResponse(c, anthropicResp)
 		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, anthropicResp.ID)
@@ -741,7 +741,7 @@ func (s *Server) dispatchOpenAIChat(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			sendNonStreamModelResponse(c, anthropicResp)
 		}
 	}
 }
@@ -769,6 +769,7 @@ func (s *Server) streamResponsesToChat(c *gin.Context, reqCtx *transform.Transfo
 	}
 
 	hc := protocol.NewHandleContext(c, responseModel)
+	attachVisionStreamInjector(c, hc)
 	firstTokenRecorded := false
 	hc.WithOnStreamEvent(func(_ interface{}) error {
 		if !firstTokenRecorded {
@@ -815,7 +816,7 @@ func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.Tran
 		recorder.SetAssembledResponse(chatResp)
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
-	c.JSON(http.StatusOK, chatResp)
+	sendNonStreamModelResponse(c, chatResp)
 }
 
 // nonstreamOpenAIResponses handles Responses API passthrough (non-streaming)
@@ -865,7 +866,7 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 				recorder.SetAssembledResponse(response)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, responseMap)
+			sendNonStreamModelResponse(c, responseMap)
 			return
 		}
 	}
@@ -875,7 +876,7 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
 	// Return response as-is
-	c.JSON(http.StatusOK, response)
+	sendNonStreamModelResponse(c, response)
 }
 
 // streamOpenAIResponses handles Responses API passthrough (streaming)
@@ -904,6 +905,7 @@ func (s *Server) streamOpenAIResponses(c *gin.Context, reqCtx *transform.Transfo
 
 	// Handle the streaming response
 	hc := protocol.NewHandleContext(c, responseModel)
+	attachVisionStreamInjector(c, hc)
 	firstTokenRecorded := false
 	hc.WithOnStreamEvent(func(_ interface{}) error {
 		if !firstTokenRecorded {
@@ -939,7 +941,7 @@ func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transfor
 	outputTokens := chatResp.Usage.CompletionTokens
 	cacheTokens := chatResp.Usage.PromptTokensDetails.CachedTokens
 	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
-	c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, reqCtx.RequestModel))
+	sendNonStreamModelResponse(c, buildResponsesPayloadFromChat(chatResp, responseModel, reqCtx.RequestModel))
 }
 
 // streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)
@@ -992,7 +994,7 @@ func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *tra
 
 	cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
 	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), cacheTokens), nil)
-	c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropicBeta(anthropicResp, responseModel, reqCtx.RequestModel))
+	sendNonStreamModelResponse(c, buildResponsesPayloadFromAnthropicBeta(anthropicResp, responseModel, reqCtx.RequestModel))
 }
 
 // streamAnthropicBetaFromResponses handles a Responses-shaped client
@@ -1020,6 +1022,7 @@ func (s *Server) streamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transf
 	}
 
 	hc := protocol.NewHandleContext(c, responseModel)
+	attachVisionStreamInjector(c, hc)
 	firstTokenRecorded := false
 	hc.WithOnStreamEvent(func(_ interface{}) error {
 		if !firstTokenRecorded {

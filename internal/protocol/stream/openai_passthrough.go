@@ -236,8 +236,21 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 				chunkMap["obfuscation"] = obfuscationValue
 			}
 
-			// Send the chunk
-			OpenAISSE(c, chunkMap)
+			// Send the chunk. Marshal first so raw-event hooks (output
+			// injectors, etc.) can rewrite the bytes before they hit the wire
+			// — typed mutation on chunk fields would be invisible here since
+			// the wire form is the JSON of chunkMap, not the SDK struct.
+			chunkBytes, err := json.Marshal(chunkMap)
+			if err != nil {
+				logrus.WithContext(c.Request.Context()).WithError(err).Error("failed to marshal chat completion chunk")
+				return err
+			}
+			if modified, hookErr := hc.RunStreamRawEventHooks("chat.completion.chunk", chunkBytes); hookErr != nil {
+				return hookErr
+			} else {
+				chunkBytes = modified
+			}
+			OpenAISSE(c, chunkBytes)
 			return nil
 		},
 	)
@@ -398,6 +411,15 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 					eventRaw = modified
 				}
 			}
+		}
+
+		// Raw-bytes hooks (output injectors, etc.) get to rewrite the event
+		// before it leaves the process.
+		if modified, err := hc.RunStreamRawEventHooks(eventType, []byte(eventRaw)); err != nil {
+			logrus.WithContext(c.Request.Context()).WithError(err).Error("OnStreamRawEvent hook failed; aborting stream")
+			return false
+		} else {
+			eventRaw = string(modified)
 		}
 
 		OpenAIResponsesEvent(c, eventType, eventRaw)

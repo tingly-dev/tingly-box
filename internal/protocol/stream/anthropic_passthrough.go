@@ -78,8 +78,10 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 				}
 			}
 
-			// For message_start events, modify the model in the raw JSON
-			// to preserve the original API response structure
+			// Compose the bytes that will go on the wire (handles the
+			// message_start model rewrite), then let raw-event hooks
+			// (output injectors, etc.) rewrite once more before send.
+			var outBytes []byte
 			if evt.Type == "message_start" {
 				var eventMap map[string]json.RawMessage
 				if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
@@ -88,14 +90,19 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 						msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
 						eventMap["message"], _ = json.Marshal(msgMap)
 					}
-					modified, _ := json.Marshal(eventMap)
-					hc.GinContext.SSEvent(evt.Type, string(modified))
+					outBytes, _ = json.Marshal(eventMap)
 				} else {
-					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+					outBytes = []byte(evt.RawJSON())
 				}
 			} else {
-				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				outBytes = []byte(evt.RawJSON())
 			}
+			if modified, hookErr := hc.RunStreamRawEventHooks(string(evt.Type), outBytes); hookErr != nil {
+				return hookErr
+			} else {
+				outBytes = modified
+			}
+			hc.GinContext.SSEvent(string(evt.Type), string(outBytes))
 			hc.GinContext.Writer.Flush()
 			return nil
 		},
@@ -180,8 +187,10 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 				}
 			}
 
-			// For message_start events, modify the model in the raw JSON
-			// to preserve the original API response structure
+			// Compose the bytes that will go on the wire (handles the
+			// message_start model rewrite), then let raw-event hooks
+			// (output injectors, etc.) rewrite once more before send.
+			var outBytes []byte
 			if evt.Type == "message_start" {
 				var eventMap map[string]json.RawMessage
 				if err := json.Unmarshal([]byte(evt.RawJSON()), &eventMap); err == nil {
@@ -190,14 +199,19 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 						msgMap["model"] = json.RawMessage(`"` + hc.ResponseModel + `"`)
 						eventMap["message"], _ = json.Marshal(msgMap)
 					}
-					modified, _ := json.Marshal(eventMap)
-					hc.GinContext.SSEvent(evt.Type, string(modified))
+					outBytes, _ = json.Marshal(eventMap)
 				} else {
-					hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+					outBytes = []byte(evt.RawJSON())
 				}
 			} else {
-				hc.GinContext.SSEvent(evt.Type, evt.RawJSON())
+				outBytes = []byte(evt.RawJSON())
 			}
+			if modified, hookErr := hc.RunStreamRawEventHooks(string(evt.Type), outBytes); hookErr != nil {
+				return hookErr
+			} else {
+				outBytes = modified
+			}
+			hc.GinContext.SSEvent(string(evt.Type), string(outBytes))
 			hc.GinContext.Writer.Flush()
 			return nil
 		},

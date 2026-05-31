@@ -109,6 +109,7 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 // handleAnthropicStreamResponseV1Beta processes the Anthropic beta streaming response and sends it to the client
 func (s *Server) handleAnthropicStreamResponseV1Beta(c *gin.Context, req *anthropic.BetaMessageNewParams, streamResp *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], respModel string, provider *typ.Provider, recorder *ProtocolRecorder) {
 	hc := protocol.NewHandleContext(c, respModel)
+	attachVisionStreamInjector(c, hc)
 	actualModel := string(req.Model)
 
 	// Record TTFT when the first streaming chunk arrives
@@ -190,7 +191,7 @@ func (s *Server) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel st
 		recorder.SetAssembledResponse(anthropicResp)
 		recorder.RecordResponse(provider, actualModel)
 	}
-	c.JSON(http.StatusOK, anthropicResp)
+	sendNonStreamModelResponse(c, anthropicResp)
 
 }
 

@@ -160,7 +160,7 @@ func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string
 		recorder.SetAssembledResponse(anthropicResp)
 		recorder.RecordResponse(provider, actualModel)
 	}
-	c.JSON(http.StatusOK, anthropicResp)
+	sendNonStreamModelResponse(c, anthropicResp)
 }
 
 // streamResponsesToAnthropic handles streaming Responses API request for v1
