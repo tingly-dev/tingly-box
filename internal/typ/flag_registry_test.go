@@ -67,10 +67,11 @@ func TestRuleFlagRegistry_KeysMatchStructFields(t *testing.T) {
 // render it.
 func TestRuleFlagRegistry_TypesAreValid(t *testing.T) {
 	allowed := map[FlagValueType]bool{
-		FlagTypeBool:   true,
-		FlagTypeString: true,
-		FlagTypeEnum:   true,
-		FlagTypeInt:    true,
+		FlagTypeBool:       true,
+		FlagTypeString:     true,
+		FlagTypeEnum:       true,
+		FlagTypeInt:        true,
+		FlagTypeServiceRef: true,
 	}
 	for _, spec := range RuleFlagRegistry() {
 		if !allowed[spec.Type] {
@@ -132,5 +133,61 @@ func TestRuleFlagRegistry_JSONRoundTrip(t *testing.T) {
 		if decoded[i].Key != specs[i].Key {
 			t.Errorf("index %d key mismatch: %q != %q", i, decoded[i].Key, specs[i].Key)
 		}
+	}
+}
+
+// TestRuleFlagRegistry_VisionProxyServiceRef pins the vision_proxy_service
+// flag to the service_ref type so the frontend keeps rendering it as a model
+// picker (not a text field).
+func TestRuleFlagRegistry_VisionProxyServiceRef(t *testing.T) {
+	var found *FlagSpec
+	for i, s := range RuleFlagRegistry() {
+		if s.Key == "vision_proxy_service" {
+			found = &RuleFlagRegistry()[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("vision_proxy_service missing from registry")
+	}
+	if found.Type != FlagTypeServiceRef {
+		t.Fatalf("vision_proxy_service type = %q, want %q", found.Type, FlagTypeServiceRef)
+	}
+}
+
+// TestRuleFlags_VisionProxyService_JSONRoundTrip guards the wire shape of the
+// rule-level vision proxy service: a configured {provider, model} survives a
+// marshal/unmarshal cycle, and an unset pointer stays absent (omitempty).
+func TestRuleFlags_VisionProxyService_JSONRoundTrip(t *testing.T) {
+	flags := RuleFlags{VisionProxyService: &VisionProxyService{Provider: "p-uuid", Model: "claude-3-5-sonnet"}}
+	raw, err := json.Marshal(flags)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"vision_proxy_service"`) ||
+		!strings.Contains(string(raw), `"p-uuid"`) ||
+		!strings.Contains(string(raw), `"claude-3-5-sonnet"`) {
+		t.Fatalf("marshaled flags missing fields: %s", raw)
+	}
+
+	var back RuleFlags
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if back.VisionProxyService == nil {
+		t.Fatal("VisionProxyService lost on round-trip")
+	}
+	if back.VisionProxyService.Provider != "p-uuid" || back.VisionProxyService.Model != "claude-3-5-sonnet" {
+		t.Fatalf("round-trip mismatch: %+v", back.VisionProxyService)
+	}
+
+	// Unset pointer must be omitted entirely (omitempty), so an empty rule
+	// stays "vision proxy off".
+	empty, err := json.Marshal(RuleFlags{})
+	if err != nil {
+		t.Fatalf("marshal empty: %v", err)
+	}
+	if strings.Contains(string(empty), "vision_proxy_service") {
+		t.Fatalf("unset VisionProxyService should be omitted, got: %s", empty)
 	}
 }
