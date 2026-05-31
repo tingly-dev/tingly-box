@@ -4,22 +4,30 @@ import {
     Button,
     Card,
     CardContent,
+    Chip,
     CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     FormControl,
     IconButton,
     InputLabel,
     MenuItem,
     Select,
+    Slider,
     Stack,
     Tab,
     Tabs,
     TextField,
+    ToggleButton,
+    ToggleButtonGroup,
     Tooltip,
     Typography,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { tablerMui } from '@/components/icons';
-import { IconPhoto, IconPhotoEdit, IconPlus, IconUpload, IconX } from '@tabler/icons-react';
+import { IconBrush, IconEraser, IconPhoto, IconPhotoEdit, IconPlus, IconUpload, IconX } from '@tabler/icons-react';
 import { api } from '@/services/api';
 import { getOpenAIClient } from '@/services/openaiClient';
 import { getApiBaseUrl } from '@/utils/protocol';
@@ -33,6 +41,8 @@ const PhotoEditIcon = tablerMui(IconPhotoEdit);
 const UploadIcon = tablerMui(IconUpload);
 const CloseIcon = tablerMui(IconX);
 const PlusIcon = tablerMui(IconPlus);
+const BrushIcon = tablerMui(IconBrush);
+const EraserIcon = tablerMui(IconEraser);
 
 const IMAGE_SCENARIO = 'imagegen';
 const MAX_SOURCE_IMAGES = 4;
@@ -245,6 +255,241 @@ const SourceImagesStrip: React.FC<{
 };
 
 
+// ── Canvas-based mask editor ─────────────────────────────────────────────────
+
+type MaskTool = 'brush' | 'eraser';
+
+const MaskEditorDialog: React.FC<{
+    open: boolean;
+    sourceImage: ImageFile | null;
+    onClose: () => void;
+    onApply: (mask: File) => void;
+}> = ({ open, sourceImage, onClose, onApply }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const imgRef = useRef<HTMLImageElement>(null);
+    const [brushSize, setBrushSize] = useState(28);
+    const [tool, setTool] = useState<MaskTool>('brush');
+    const isDrawing = useRef(false);
+    const lastPos = useRef<{ x: number; y: number } | null>(null);
+
+    // Initialize canvas when dialog opens or source image changes.
+    useEffect(() => {
+        if (!open) return;
+        const canvas = canvasRef.current;
+        const img = imgRef.current;
+        if (!canvas || !img) return;
+
+        const init = () => {
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
+        };
+
+        if (img.complete && img.naturalWidth > 0) {
+            init();
+        } else {
+            img.addEventListener('load', init, { once: true });
+        }
+    }, [open, sourceImage]);
+
+    const canvasCoords = (e: React.PointerEvent): { x: number; y: number } => {
+        const canvas = canvasRef.current!;
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (e.clientX - rect.left) * (canvas.width / rect.width),
+            y: (e.clientY - rect.top) * (canvas.height / rect.height),
+        };
+    };
+
+    const paint = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number, currentTool: MaskTool) => {
+        ctx.save();
+        if (currentTool === 'brush') {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = 'rgba(220, 70, 70, 0.65)';
+        } else {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = 'rgba(0,0,0,1)';
+        }
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    };
+
+    // Interpolate circles between two points for smooth strokes.
+    const stroke = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d')!;
+        // brushSize is in display-pixel space; scale to canvas pixel space.
+        const rect = canvas.getBoundingClientRect();
+        const scale = canvas.width / rect.width;
+        const r = (brushSize / 2) * scale;
+        const dist = Math.hypot(to.x - from.x, to.y - from.y);
+        const steps = Math.max(1, Math.ceil(dist / (r * 0.4)));
+        for (let i = 0; i <= steps; i++) {
+            paint(ctx, from.x + (to.x - from.x) * (i / steps), from.y + (to.y - from.y) * (i / steps), r, tool);
+        }
+    };
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        isDrawing.current = true;
+        canvasRef.current?.setPointerCapture(e.pointerId);
+        const pos = canvasCoords(e);
+        lastPos.current = pos;
+        stroke(pos, pos);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDrawing.current) return;
+        const pos = canvasCoords(e);
+        stroke(lastPos.current ?? pos, pos);
+        lastPos.current = pos;
+    };
+
+    const handlePointerUp = () => {
+        isDrawing.current = false;
+        lastPos.current = null;
+    };
+
+    const handleClear = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
+    };
+
+    // Convert the painted overlay (any non-zero alpha = edit region) into a
+    // standard black-and-white mask PNG: painted pixels → white, rest → black.
+    const handleApply = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const { width: w, height: h } = canvas;
+        const src = canvas.getContext('2d')!.getImageData(0, 0, w, h);
+
+        const out = document.createElement('canvas');
+        out.width = w;
+        out.height = h;
+        const outCtx = out.getContext('2d')!;
+        const outData = outCtx.createImageData(w, h);
+        for (let i = 0; i < src.data.length; i += 4) {
+            const painted = src.data[i + 3] > 0;
+            outData.data[i] = painted ? 255 : 0;
+            outData.data[i + 1] = painted ? 255 : 0;
+            outData.data[i + 2] = painted ? 255 : 0;
+            outData.data[i + 3] = 255;
+        }
+        outCtx.putImageData(outData, 0, 0);
+        out.toBlob((blob) => {
+            if (!blob) return;
+            onApply(new File([blob], 'mask.png', { type: 'image/png' }));
+        }, 'image/png');
+    };
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { height: '90vh' } }}>
+            <DialogTitle sx={{ pb: 1 }}>Draw Mask</DialogTitle>
+            <DialogContent dividers sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5, overflow: 'hidden' }}>
+                {/* Toolbar */}
+                <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                    <ToggleButtonGroup
+                        value={tool}
+                        exclusive
+                        onChange={(_, v) => v && setTool(v)}
+                        size="small"
+                    >
+                        <ToggleButton value="brush">
+                            <Tooltip title="Brush (paint edit region)">
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <BrushIcon fontSize="small" />
+                                </Box>
+                            </Tooltip>
+                        </ToggleButton>
+                        <ToggleButton value="eraser">
+                            <Tooltip title="Eraser">
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <EraserIcon fontSize="small" />
+                                </Box>
+                            </Tooltip>
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 200 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                            Size {brushSize}px
+                        </Typography>
+                        <Slider
+                            value={brushSize}
+                            min={4}
+                            max={120}
+                            step={2}
+                            size="small"
+                            onChange={(_, v) => setBrushSize(v as number)}
+                            sx={{ minWidth: 120 }}
+                        />
+                    </Box>
+
+                    <Button size="small" variant="outlined" color="error" onClick={handleClear}>
+                        Clear
+                    </Button>
+
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                        Paint the region the AI should edit (red overlay)
+                    </Typography>
+                </Stack>
+
+                {/* Canvas over source image */}
+                <Box
+                    sx={{
+                        position: 'relative',
+                        flex: 1,
+                        overflow: 'auto',
+                        bgcolor: 'background.default',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                    }}
+                >
+                    {sourceImage && (
+                        <>
+                            <Box
+                                ref={imgRef}
+                                component="img"
+                                src={sourceImage.preview}
+                                draggable={false}
+                                sx={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none' }}
+                            />
+                            <Box
+                                ref={canvasRef}
+                                component="canvas"
+                                onPointerDown={handlePointerDown}
+                                onPointerMove={handlePointerMove}
+                                onPointerUp={handlePointerUp}
+                                onPointerLeave={handlePointerUp}
+                                sx={{
+                                    position: 'absolute',
+                                    top: 0, left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    cursor: tool === 'brush' ? 'crosshair' : 'cell',
+                                    touchAction: 'none',
+                                }}
+                            />
+                        </>
+                    )}
+                </Box>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={onClose}>Cancel</Button>
+                <Button variant="contained" onClick={handleApply}>Apply Mask</Button>
+            </DialogActions>
+        </Dialog>
+    );
+};
+
+// ── Playground page ──────────────────────────────────────────────────────────
+
 const PlaygroundPage: React.FC = () => {
     const { t } = useTranslation();
     const { notification, showNotification } = useFunctionPanelData();
@@ -264,6 +509,7 @@ const PlaygroundPage: React.FC = () => {
     // Edit mode
     const [sourceImages, setSourceImages] = useState<ImageFile[]>([]);
     const [maskImage, setMaskImage] = useState<ImageFile | null>(null);
+    const [maskEditorOpen, setMaskEditorOpen] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -495,13 +741,46 @@ const PlaygroundPage: React.FC = () => {
                         {mode === 'edit' && (
                             <Stack spacing={2}>
                                 <SourceImagesStrip images={sourceImages} onChange={setSourceImages} />
-                                <ImageUploadBox
-                                    value={maskImage}
-                                    onChange={setMaskImage}
-                                    label={t('playground.maskImage', { defaultValue: 'Mask (inpaint region)' })}
-                                    optional
-                                    accept="image/png"
-                                />
+
+                                {/* Mask row */}
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                                        {t('playground.maskImage', { defaultValue: 'Mask (inpaint region)' })}
+                                        <span style={{ opacity: 0.6 }}> (optional)</span>
+                                    </Typography>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            startIcon={<BrushIcon fontSize="small" />}
+                                            disabled={sourceImages.length === 0}
+                                            onClick={() => setMaskEditorOpen(true)}
+                                        >
+                                            {maskImage ? 'Re-draw Mask' : 'Draw Mask'}
+                                        </Button>
+                                        {maskImage && (
+                                            <>
+                                                <Chip
+                                                    size="small"
+                                                    label="mask.png"
+                                                    onDelete={() => setMaskImage(null)}
+                                                    sx={{ maxWidth: 160 }}
+                                                />
+                                                <Box
+                                                    component="img"
+                                                    src={maskImage.preview}
+                                                    title="Mask preview"
+                                                    sx={{ height: 32, width: 32, objectFit: 'cover', borderRadius: 0.5, border: '1px solid', borderColor: 'divider' }}
+                                                />
+                                            </>
+                                        )}
+                                        {sourceImages.length === 0 && (
+                                            <Typography variant="caption" color="text.disabled">
+                                                Upload a source image first
+                                            </Typography>
+                                        )}
+                                    </Stack>
+                                </Box>
                             </Stack>
                         )}
 
@@ -571,6 +850,17 @@ const PlaygroundPage: React.FC = () => {
                     </Stack>
                 </UnifiedCard>
             </CardGrid>
+            <MaskEditorDialog
+                open={maskEditorOpen}
+                sourceImage={sourceImages[0] ?? null}
+                onClose={() => setMaskEditorOpen(false)}
+                onApply={(file) => {
+                    readImageFile(file).then((img) => {
+                        setMaskImage(img);
+                        setMaskEditorOpen(false);
+                    });
+                }}
+            />
         </PageLayout>
     );
 };
