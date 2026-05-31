@@ -144,6 +144,16 @@ func (o *OAuthDetail) IsExpired() bool {
 	return time.Now().Add(5 * time.Minute).After(expiryTime) // Consider expired if within 5 minutes
 }
 
+// GetExtraFieldString returns a string value from ExtraFields by key.
+// Returns "" if the key is absent or the value is not a string.
+func (o *OAuthDetail) GetExtraFieldString(key string) string {
+	if o == nil || o.ExtraFields == nil {
+		return ""
+	}
+	v, _ := o.ExtraFields[key].(string)
+	return v
+}
+
 // GetIssuer returns the OAuth issuer, with backward compatibility for ProviderType.
 // It returns Issuer if set, otherwise falls back to the deprecated ProviderType.
 func (o *OAuthDetail) GetIssuer() Issuer {

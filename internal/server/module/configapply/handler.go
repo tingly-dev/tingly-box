@@ -714,27 +714,21 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	// ChatGPT mode: clear tingly gateway keys from config.toml so codex CLI
 	// uses its own defaults, then leave the rest of config.toml untouched.
 	// Gateway mode: full rewrite as before.
-	var configResult *config.ApplyResult
+	var (
+		configResult *config.ApplyResult
+		err          error
+	)
 	if authMode == config.CodexAuthChatGPT {
-		var err error
 		configResult, err = config.ClearCodexGatewayConfig()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
-				Success: false,
-				Message: "Internal error: " + err.Error(),
-			})
-			return
-		}
 	} else {
-		var err error
 		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
-				Success: false,
-				Message: "Internal error: " + err.Error(),
-			})
-			return
-		}
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
+			Success: false,
+			Message: "Internal error: " + err.Error(),
+		})
+		return
 	}
 	authResult, err := config.ApplyCodexAuth(authMode, apiKey, chatgptTokens)
 	if err != nil {
@@ -773,19 +767,12 @@ func (h *Handler) loadCodexChatGPTTokens(uuid string) (*config.CodexChatGPTToken
 	if provider.OAuthDetail.GetIssuer() != ai.IssuerCodex {
 		return nil, fmt.Errorf("provider %q is not a Codex OAuth provider", provider.Name)
 	}
-	tokens := &config.CodexChatGPTTokens{
+	return &config.CodexChatGPTTokens{
 		AccessToken:  provider.OAuthDetail.AccessToken,
 		RefreshToken: provider.OAuthDetail.RefreshToken,
-	}
-	if extra := provider.OAuthDetail.ExtraFields; extra != nil {
-		if v, ok := extra["id_token"].(string); ok {
-			tokens.IDToken = v
-		}
-		if v, ok := extra["account_id"].(string); ok {
-			tokens.AccountID = v
-		}
-	}
-	return tokens, nil
+		IDToken:      provider.OAuthDetail.GetExtraFieldString("id_token"),
+		AccountID:    provider.OAuthDetail.GetExtraFieldString("account_id"),
+	}, nil
 }
 
 // GetCodexConfigPreview returns the TOML/JSON that ApplyCodexConfigFromState

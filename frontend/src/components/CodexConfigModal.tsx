@@ -87,10 +87,10 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
         setPrefs(defaultCodexPrefs());
     }, [open]);
 
-    // Fetch Codex OAuth providers once when the modal opens so the ChatGPT
-    // mode dropdown is ready before the user toggles to it.
+    // Fetch Codex OAuth providers only the first time the user selects chatgpt
+    // mode — no point paying the network cost if they stay in apikey mode.
     React.useEffect(() => {
-        if (!open) return;
+        if (!open || authMode !== 'chatgpt') return;
         let cancelled = false;
         (async () => {
             try {
@@ -107,7 +107,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             }
         })();
         return () => { cancelled = true; };
-    }, [open]);
+    }, [open, authMode]);
 
     // Re-render the server-authoritative TOML whenever prefs or writeCatalog change
     // while the modal is open. Debounced so dragging through Select options doesn't
