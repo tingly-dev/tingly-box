@@ -265,47 +265,79 @@ const MaskEditorDialog: React.FC<{
     onClose: () => void;
     onApply: (mask: File) => void;
 }> = ({ open, sourceImage, onClose, onApply }) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // displayRef: visible canvas overlaid on the image (re-rendered at fixed opacity).
+    // maskRef:    hidden off-screen canvas (white = edit region, transparent = preserve).
+    //             Drawing happens here; display is derived from it, so alpha never accumulates.
+    const displayRef = useRef<HTMLCanvasElement>(null);
+    const maskRef = useRef<HTMLCanvasElement | null>(null);
     const imgRef = useRef<HTMLImageElement>(null);
     const [brushSize, setBrushSize] = useState(28);
     const [tool, setTool] = useState<MaskTool>('brush');
     const isDrawing = useRef(false);
     const lastPos = useRef<{ x: number; y: number } | null>(null);
 
-    // Initialize canvas when dialog opens or source image changes.
+    // Initialize both canvases when dialog opens or source image changes.
     useEffect(() => {
         if (!open) return;
-        const canvas = canvasRef.current;
+        const display = displayRef.current;
         const img = imgRef.current;
-        if (!canvas || !img) return;
+        if (!display || !img) return;
 
         const init = () => {
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
+            const w = img.naturalWidth || img.width;
+            const h = img.naturalHeight || img.height;
+            // Display canvas: same resolution as image, styled to fill container.
+            display.width = w;
+            display.height = h;
+            display.getContext('2d')!.clearRect(0, 0, w, h);
+            // Mask canvas: in-memory, same resolution — never accumulated alpha.
+            if (!maskRef.current) maskRef.current = document.createElement('canvas');
+            maskRef.current.width = w;
+            maskRef.current.height = h;
+            maskRef.current.getContext('2d')!.clearRect(0, 0, w, h);
         };
 
-        if (img.complete && img.naturalWidth > 0) {
-            init();
-        } else {
-            img.addEventListener('load', init, { once: true });
-        }
+        if (img.complete && img.naturalWidth > 0) init();
+        else img.addEventListener('load', init, { once: true });
     }, [open, sourceImage]);
 
+    // Re-render the display canvas from the mask canvas with a fixed red tint.
+    // Because the display is always derived from scratch, alpha never accumulates.
+    const redrawDisplay = () => {
+        const display = displayRef.current;
+        const mask = maskRef.current;
+        if (!display || !mask) return;
+        const ctx = display.getContext('2d')!;
+        const { width: w, height: h } = display;
+
+        ctx.clearRect(0, 0, w, h);
+        // Fill red, then clip to mask shape so only painted pixels remain red.
+        ctx.fillStyle = '#dc4646';
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(mask, 0, 0, w, h);
+        ctx.globalCompositeOperation = 'source-over';
+        // Display canvas is rendered at CSS opacity 0.5 (see JSX), so the image shows through.
+    };
+
     const canvasCoords = (e: React.PointerEvent): { x: number; y: number } => {
-        const canvas = canvasRef.current!;
-        const rect = canvas.getBoundingClientRect();
+        const display = displayRef.current!;
+        const rect = display.getBoundingClientRect();
         return {
-            x: (e.clientX - rect.left) * (canvas.width / rect.width),
-            y: (e.clientY - rect.top) * (canvas.height / rect.height),
+            x: (e.clientX - rect.left) * (display.width / rect.width),
+            y: (e.clientY - rect.top) * (display.height / rect.height),
         };
     };
 
-    const paint = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number, currentTool: MaskTool) => {
+    // Paint a circle on the mask canvas at full white/erase opacity, then refresh display.
+    const paintOnMask = (x: number, y: number, r: number, currentTool: MaskTool) => {
+        const mask = maskRef.current;
+        if (!mask) return;
+        const ctx = mask.getContext('2d')!;
         ctx.save();
         if (currentTool === 'brush') {
             ctx.globalCompositeOperation = 'source-over';
-            ctx.fillStyle = 'rgba(220, 70, 70, 0.65)';
+            ctx.fillStyle = 'white';
         } else {
             ctx.globalCompositeOperation = 'destination-out';
             ctx.fillStyle = 'rgba(0,0,0,1)';
@@ -318,23 +350,22 @@ const MaskEditorDialog: React.FC<{
 
     // Interpolate circles between two points for smooth strokes.
     const stroke = (from: { x: number; y: number }, to: { x: number; y: number }) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d')!;
-        // brushSize is in display-pixel space; scale to canvas pixel space.
-        const rect = canvas.getBoundingClientRect();
-        const scale = canvas.width / rect.width;
+        const display = displayRef.current;
+        if (!display) return;
+        const rect = display.getBoundingClientRect();
+        const scale = display.width / rect.width;
         const r = (brushSize / 2) * scale;
         const dist = Math.hypot(to.x - from.x, to.y - from.y);
         const steps = Math.max(1, Math.ceil(dist / (r * 0.4)));
         for (let i = 0; i <= steps; i++) {
-            paint(ctx, from.x + (to.x - from.x) * (i / steps), from.y + (to.y - from.y) * (i / steps), r, tool);
+            paintOnMask(from.x + (to.x - from.x) * (i / steps), from.y + (to.y - from.y) * (i / steps), r, tool);
         }
+        redrawDisplay();
     };
 
     const handlePointerDown = (e: React.PointerEvent) => {
         isDrawing.current = true;
-        canvasRef.current?.setPointerCapture(e.pointerId);
+        displayRef.current?.setPointerCapture(e.pointerId);
         const pos = canvasCoords(e);
         lastPos.current = pos;
         stroke(pos, pos);
@@ -353,18 +384,19 @@ const MaskEditorDialog: React.FC<{
     };
 
     const handleClear = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
+        const mask = maskRef.current;
+        const display = displayRef.current;
+        if (!mask || !display) return;
+        mask.getContext('2d')!.clearRect(0, 0, mask.width, mask.height);
+        display.getContext('2d')!.clearRect(0, 0, display.width, display.height);
     };
 
-    // Convert the painted overlay (any non-zero alpha = edit region) into a
-    // standard black-and-white mask PNG: painted pixels → white, rest → black.
+    // Export mask canvas as black-and-white PNG: white pixels → white, transparent → black.
     const handleApply = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const { width: w, height: h } = canvas;
-        const src = canvas.getContext('2d')!.getImageData(0, 0, w, h);
+        const mask = maskRef.current;
+        if (!mask) return;
+        const { width: w, height: h } = mask;
+        const src = mask.getContext('2d')!.getImageData(0, 0, w, h);
 
         const out = document.createElement('canvas');
         out.width = w;
@@ -372,10 +404,10 @@ const MaskEditorDialog: React.FC<{
         const outCtx = out.getContext('2d')!;
         const outData = outCtx.createImageData(w, h);
         for (let i = 0; i < src.data.length; i += 4) {
-            const painted = src.data[i + 3] > 0;
-            outData.data[i] = painted ? 255 : 0;
-            outData.data[i + 1] = painted ? 255 : 0;
-            outData.data[i + 2] = painted ? 255 : 0;
+            const v = src.data[i + 3] > 0 ? 255 : 0;
+            outData.data[i] = v;
+            outData.data[i + 1] = v;
+            outData.data[i + 2] = v;
             outData.data[i + 3] = 255;
         }
         outCtx.putImageData(outData, 0, 0);
@@ -433,7 +465,7 @@ const MaskEditorDialog: React.FC<{
                     </Button>
 
                     <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-                        Paint the region the AI should edit (red overlay)
+                        Paint the region the AI should edit (red = edit, clear = preserve)
                     </Typography>
                 </Stack>
 
@@ -460,8 +492,9 @@ const MaskEditorDialog: React.FC<{
                                 draggable={false}
                                 sx={{ display: 'block', width: '100%', height: 'auto', userSelect: 'none' }}
                             />
+                            {/* Display canvas: opacity 0.5 so the source image shows through painted areas */}
                             <Box
-                                ref={canvasRef}
+                                ref={displayRef}
                                 component="canvas"
                                 onPointerDown={handlePointerDown}
                                 onPointerMove={handlePointerMove}
@@ -472,6 +505,7 @@ const MaskEditorDialog: React.FC<{
                                     top: 0, left: 0,
                                     width: '100%',
                                     height: '100%',
+                                    opacity: 0.5,
                                     cursor: tool === 'brush' ? 'crosshair' : 'cell',
                                     touchAction: 'none',
                                 }}

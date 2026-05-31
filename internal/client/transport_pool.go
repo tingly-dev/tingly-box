@@ -296,7 +296,12 @@ func (tp *TransportPool) createTransport(proxyURL string) *http.Transport {
 	}
 
 	// Create transport with explicit proxy — no env proxy fallback
-	transport := &http.Transport{}
+	transport := &http.Transport{
+		// Prevent stale-connection errors ("use of closed network connection"):
+		// many local proxies close idle connections after 30-60 s, which is
+		// shorter than Go's default of never expiring idle connections.
+		IdleConnTimeout: 30 * time.Second,
+	}
 
 	switch parsedURL.Scheme {
 	case "http", "https":
