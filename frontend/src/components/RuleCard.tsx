@@ -358,6 +358,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 flags={configRecord.flags}
                 registry={flagRegistry}
                 loading={registryLoading}
+                providers={providers}
                 onClose={() => setCatalogOpen(false)}
                 onSave={handleSaveCatalogFlags}
             />

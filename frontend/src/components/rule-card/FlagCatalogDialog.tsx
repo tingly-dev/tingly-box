@@ -27,16 +27,40 @@ import {
     Terminal as TerminalIcon,
 } from '@/components/icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
+import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
+import type { Provider } from '@/types/provider';
+import type { ProviderSelectTabOption } from '@/components/ModelSelectDialog';
+import ModelSelectDialog from '@/components/ModelSelectDialog';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
     flags?: RuleFlags;
     registry?: FlagSpec[];
     loading?: boolean;
+    /** Providers for service_ref flags (e.g. vision_proxy_service model picker). */
+    providers?: Provider[];
     onClose: () => void;
     onSave: (next: RuleFlags) => void;
 }
+
+const flagToServiceRef = (flags: RuleFlags | undefined, key: string): VisionProxyServiceRef | undefined => {
+    if (!flags) return undefined;
+    switch (key) {
+        case 'vision_proxy_service':
+            return flags.visionProxyService;
+        default:
+            return undefined;
+    }
+};
+
+const setServiceRef = (flags: RuleFlags, key: string, value: VisionProxyServiceRef | undefined): RuleFlags => {
+    switch (key) {
+        case 'vision_proxy_service':
+            return { ...flags, visionProxyService: value };
+        default:
+            return flags;
+    }
+};
 
 const flagToBool = (flags: RuleFlags | undefined, key: string): boolean => {
     if (!flags) return false;
@@ -134,6 +158,10 @@ const enumDefault = (spec: FlagSpec): string => spec.options?.[0]?.value ?? '';
 const isFlagActive = (spec: FlagSpec, flags: RuleFlags): boolean => {
     if (spec.type === 'bool') return flagToBool(flags, spec.key);
     if (spec.type === 'int') return flagToInt(flags, spec.key) > 0;
+    if (spec.type === 'service_ref') {
+        const ref = flagToServiceRef(flags, spec.key);
+        return !!(ref && ref.provider && ref.model);
+    }
     const v = flagToString(flags, spec.key);
     if (spec.type === 'enum') return v !== '' && v !== enumDefault(spec);
     return v !== '';
@@ -142,6 +170,7 @@ const isFlagActive = (spec: FlagSpec, flags: RuleFlags): boolean => {
 const resetFlag = (flags: RuleFlags, spec: FlagSpec): RuleFlags => {
     if (spec.type === 'bool') return setBool(flags, spec.key, false);
     if (spec.type === 'int') return setInt(flags, spec.key, 0);
+    if (spec.type === 'service_ref') return setServiceRef(flags, spec.key, undefined);
     return setString(flags, spec.key, '');
 };
 
@@ -171,12 +200,15 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     flags,
     registry,
     loading,
+    providers,
     onClose,
     onSave,
 }) => {
     const [draft, setDraft] = useState<RuleFlags>(flags || {});
     const [activeCategory, setActiveCategory] = useState<string | undefined>();
     const [pulseKey, setPulseKey] = useState<string | undefined>();
+    // Key of the service_ref flag whose model picker is open (null = closed).
+    const [pickerKey, setPickerKey] = useState<string | null>(null);
     const flagRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
     // Reset working copy whenever the dialog is (re-)opened with new flags.
@@ -463,6 +495,22 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                         </Select>
                                                     </FormControl>
                                                 )}
+                                                {spec.type === 'service_ref' && (() => {
+                                                    const ref = flagToServiceRef(draft, spec.key);
+                                                    const label = ref && ref.provider && ref.model
+                                                        ? `${providerName(providers, ref.provider)} / ${ref.model}`
+                                                        : 'Select vision model…';
+                                                    return (
+                                                        <Button
+                                                            variant="outlined"
+                                                            size="small"
+                                                            onClick={() => setPickerKey(spec.key)}
+                                                            sx={{ mt: 1, textTransform: 'none', justifyContent: 'flex-start' }}
+                                                        >
+                                                            {label}
+                                                        </Button>
+                                                    );
+                                                })()}
                                             </Box>
                                         );
                                     })}
@@ -480,8 +528,45 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                     Save
                 </Button>
             </DialogActions>
+
+            {/* Service picker for service_ref flags (e.g. vision_proxy_service). */}
+            <Dialog
+                open={pickerKey !== null}
+                onClose={() => setPickerKey(null)}
+                maxWidth="lg"
+                fullWidth
+                PaperProps={{ sx: { height: '80vh' } }}
+            >
+                <DialogTitle sx={{ textAlign: 'center' }}>
+                    <Typography variant="h6">Pick Vision Proxy Model</Typography>
+                </DialogTitle>
+                <DialogContent>
+                    {pickerKey !== null && (
+                        <ModelSelectDialog
+                            providers={providers || []}
+                            selectedProvider={flagToServiceRef(draft, pickerKey)?.provider}
+                            selectedModel={flagToServiceRef(draft, pickerKey)?.model}
+                            onSelected={(option: ProviderSelectTabOption) => {
+                                const key = pickerKey;
+                                setDraft((d) => setServiceRef(d, key, { provider: option.provider.uuid, model: option.model }));
+                                setPickerKey(null);
+                            }}
+                            onSelectionClear={() => {
+                                const key = pickerKey;
+                                setDraft((d) => setServiceRef(d, key, undefined));
+                                setPickerKey(null);
+                            }}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </Dialog>
     );
 };
+
+// providerName resolves a provider UUID to its display name, falling back to
+// the UUID when the provider is unknown (e.g. deleted).
+const providerName = (providers: Provider[] | undefined, uuid: string): string =>
+    providers?.find((p) => p.uuid === uuid)?.name || uuid;
 
 export default FlagCatalogDialog;

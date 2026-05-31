@@ -102,19 +102,6 @@ var Operations = []SmartOp{
 		},
 	},
 
-	// Proxy Vision (top-level position) — describes images in image-bearing
-	// requests via the matched rule's services, then lets the pipeline route
-	// the now-text-only request downstream. Standalone position because the
-	// rule needs no value: either the bypass is on or it isn't.
-	{
-		Position:  PositionProxyVision,
-		Operation: OpProxyVisionEnabled,
-		Meta: SmartOpMeta{
-			Description: "Enable the vision-proxy bypass: when the latest user message has an image, the matched rule's services describe it and the request continues downstream with image blocks replaced by text",
-			Type:        ValueTypeBool,
-		},
-	},
-
 	// Tool use operations
 	{
 		Position:  PositionToolUse,
@@ -248,17 +235,16 @@ var Operations = []SmartOp{
 }
 
 const (
-	PositionModel           SmartOpPosition = "model"            // Request model name
-	PositionThinking        SmartOpPosition = "thinking"         // Thinking mode enabled
-	PositionContextSystem   SmartOpPosition = "context_system"   // System message content in context
-	PositionContextUser     SmartOpPosition = "context_user"     // User message content in context
-	PositionLatestUser      SmartOpPosition = "latest_user"      // Latest user message
-	PositionToolUse         SmartOpPosition = "tool_use"         // Tool use/name
-	PositionToken           SmartOpPosition = "token"            // Token count
-	PositionServiceTTFT     SmartOpPosition = "service_ttft"     // Service TTFT characteristics
-	PositionServiceCapacity SmartOpPosition = "service_capacity" // Service seat capacity (affinity utilization)
+	PositionModel           SmartOpPosition = "model"             // Request model name
+	PositionThinking        SmartOpPosition = "thinking"          // Thinking mode enabled
+	PositionContextSystem   SmartOpPosition = "context_system"    // System message content in context
+	PositionContextUser     SmartOpPosition = "context_user"      // User message content in context
+	PositionLatestUser      SmartOpPosition = "latest_user"       // Latest user message
+	PositionToolUse         SmartOpPosition = "tool_use"          // Tool use/name
+	PositionToken           SmartOpPosition = "token"             // Token count
+	PositionServiceTTFT     SmartOpPosition = "service_ttft"      // Service TTFT characteristics
+	PositionServiceCapacity SmartOpPosition = "service_capacity"  // Service seat capacity (affinity utilization)
 	PositionAgentClaudeCode SmartOpPosition = "agent.claude_code" // Claude Code agent request kind (main / subagent / compact)
-	PositionProxyVision     SmartOpPosition = "proxy_vision"     // Vision-proxy bypass (image-bearing requests)
 )
 
 const (
@@ -282,9 +268,6 @@ const (
 	// Latest user message operations
 	OpLatestUserContains    SmartOpOperation = "contains" // Latest user message contains the value
 	OpLatestUserRequestType SmartOpOperation = "type"     // Latest user message content type
-
-	// Proxy Vision operations
-	OpProxyVisionEnabled SmartOpOperation = "enabled" // Vision-proxy bypass enabled (matches when latest user has an image)
 
 	// Tool use operations
 	OpToolUseEquals   SmartOpOperation = "equals"   // Latest message is `tool use` and its name equals the value

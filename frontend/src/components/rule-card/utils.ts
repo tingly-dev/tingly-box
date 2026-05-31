@@ -76,6 +76,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             blockTools: rule.flags?.block_tools || '',
             thinkingEffort: rule.flags?.thinking_effort || '',
             sessionAffinity: rule.flags?.session_affinity || 0,
+            visionProxyService: rule.flags?.vision_proxy_service,
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,

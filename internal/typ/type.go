@@ -213,6 +213,22 @@ type RuleFlags struct {
 	// expires. This is a load-balancing concern and works independently of
 	// smart routing. Supersedes the legacy top-level Rule.SmartAffinity field.
 	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
+
+	// VisionProxyService enables the rule-scoped vision proxy when set. When a
+	// request matched by this rule carries an image, the configured service
+	// describes it and the image block is replaced with text before the
+	// request reaches the downstream model. Same effect as the scenario-level
+	// vision proxy (ScenarioConfig.Extensions["vision_proxy_service"]), only
+	// narrower in scope; when both are set the rule-level service wins.
+	VisionProxyService *VisionProxyService `json:"vision_proxy_service,omitempty" yaml:"vision_proxy_service,omitempty"`
+}
+
+// VisionProxyService identifies the upstream used to describe images for the
+// vision proxy: a provider UUID plus a model name (the system's standard
+// two-element service identity).
+type VisionProxyService struct {
+	Provider string `json:"provider" yaml:"provider"`
+	Model    string `json:"model" yaml:"model"`
 }
 
 // ProfileMeta stores metadata for a scenario profile.

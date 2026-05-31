@@ -125,6 +125,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         block_tools: newConfigRecord.flags?.blockTools || '',
                         thinking_effort: newConfigRecord.flags?.thinkingEffort || '',
                         session_affinity: newConfigRecord.flags?.sessionAffinity || 0,
+                        vision_proxy_service: newConfigRecord.flags?.visionProxyService,
                     },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)

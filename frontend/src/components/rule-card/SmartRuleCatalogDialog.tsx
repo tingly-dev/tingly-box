@@ -45,12 +45,6 @@ const POSITION_OPTIONS: PositionMeta[] = [
     { value: 'token', label: 'Token Count', description: 'Token count', category: 'request' },
     { value: 'service_ttft', label: 'Service TTFT', description: 'Time to first token across services (ms)', category: 'service' },
     { value: 'service_capacity', label: 'Service Capacity', description: 'Seat utilization across services (%)', category: 'service' },
-    // Deprecated: vision proxy is now exposed as a per-scenario plugin toggle
-    // (see PluginFeatures' "Vision Proxy" switch). The smart-routing op is
-    // retained on the backend for backward compatibility with existing configs
-    // but no longer offered as a new option in the catalog. Existing rules
-    // that still reference proxy_vision keep working.
-    // { value: 'proxy_vision', label: 'Proxy Vision', description: "Vision-proxy bypass: matched rule's services describe images, request continues to downstream with image blocks replaced by text", category: 'request' },
 ];
 
 const VALUE_OPTIONS: Record<string, Array<{ value: string; label: string }> | undefined> = {
@@ -78,13 +72,6 @@ const OPERATION_OPTIONS: Record<string, Array<{ value: string; label: string; de
     ],
     latest_user: [
         { value: 'contains', label: 'Contains', description: 'Latest user message contains the value', valueType: 'string' },
-    ],
-    // Deprecated alongside the POSITION_OPTIONS entry above. Kept only so any
-    // existing rule that still has proxy_vision can render its operation label
-    // when loaded; new rules cannot reach this map because the catalog no
-    // longer offers proxy_vision as a position option.
-    proxy_vision: [
-        { value: 'enabled', label: 'Enabled', description: "Vision-proxy bypass is enabled — image-bearing requests are described by the matched rule's services and forwarded as text to the downstream model", valueType: 'bool' },
     ],
     tool_use: [
         { value: 'equals', label: 'Equals', description: 'Latest message is tool use and its name equals the value', valueType: 'string' },

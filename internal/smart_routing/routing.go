@@ -116,8 +116,6 @@ func (r *Router) evaluateOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
 		return r.evaluateServiceCapacityOp(ctx, op)
 	case PositionAgentClaudeCode:
 		return r.evaluateAgentClaudeCodeOp(ctx, op)
-	case PositionProxyVision:
-		return r.evaluateProxyVisionOp(ctx, op)
 	default:
 		res := newOpResult(op)
 		res.Reason = fmt.Sprintf("unknown position %q", op.Position)
@@ -357,29 +355,6 @@ func (r *Router) evaluateLatestUserOp(ctx *RequestContext, op *SmartOp) OpEvalRe
 	default:
 		res.Reason = fmt.Sprintf("unsupported latest_user op %q", op.Operation)
 	}
-	return res
-}
-
-// evaluateProxyVisionOp is a pure predicate: matches when ANY message in
-// the request (any role, any position) carries an image. We do not gate on
-// "latest message only" because the processor's responsibilities include
-// cleaning historical images — matching only the latest would let earlier
-// image blocks slip through to a text-only downstream. The side effect
-// (calling the vision upstream + stripping historical images) is triggered
-// by SmartRoutingStage via the OpProcessor registry once the rule matches.
-func (r *Router) evaluateProxyVisionOp(ctx *RequestContext, op *SmartOp) OpEvalResult {
-	res := newOpResult(op)
-	if op.Operation != OpProxyVisionEnabled {
-		res.Reason = fmt.Sprintf("unsupported proxy_vision op %q", op.Operation)
-		return res
-	}
-	if ctx.HasImage {
-		res.Actual = "image"
-	} else {
-		res.Actual = ""
-	}
-	res.Matched = ctx.HasImage
-	res.Reason = "request has at least one image block — vision proxy will describe latest + strip historical"
 	return res
 }
 

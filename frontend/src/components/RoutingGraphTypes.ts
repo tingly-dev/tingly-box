@@ -18,7 +18,7 @@ export interface ConfigProvider {
 
 export interface SmartOp {
     uuid: string;
-    position: 'model' | 'thinking' | 'context_system' | 'context_user' | 'latest_user' | 'tool_use' | 'token' | 'service_ttft' | 'service_capacity' | 'agent.claude_code' | 'proxy_vision';
+    position: 'model' | 'thinking' | 'context_system' | 'context_user' | 'latest_user' | 'tool_use' | 'token' | 'service_ttft' | 'service_capacity' | 'agent.claude_code';
     operation: string;
     value: string;
     meta?: {
@@ -51,6 +51,11 @@ export interface ConfigRecord {
     lbTactic?: string;
 }
 
+export interface VisionProxyServiceRef {
+    provider: string;
+    model: string;
+}
+
 export interface RuleFlags {
     cursorCompat?: boolean;
     cursorCompatAuto?: boolean;
@@ -62,6 +67,7 @@ export interface RuleFlags {
     blockTools?: string;
     thinkingEffort?: string;
     sessionAffinity?: number;
+    visionProxyService?: VisionProxyServiceRef;
 }
 
 export interface RuleFlagsApi {
@@ -75,9 +81,10 @@ export interface RuleFlagsApi {
     block_tools?: string;
     thinking_effort?: string;
     session_affinity?: number;
+    vision_proxy_service?: VisionProxyServiceRef;
 }
 
-export type FlagValueType = 'bool' | 'string' | 'enum';
+export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref';
 
 export interface FlagOption {
     value: string;
