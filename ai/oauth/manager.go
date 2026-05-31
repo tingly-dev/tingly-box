@@ -535,11 +535,7 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		// id_token entirely or returned it under a different key.
 		var raw map[string]json.RawMessage
 		if jsonErr := json.Unmarshal(rawBody, &raw); jsonErr == nil {
-			fields := make([]string, 0, len(raw))
-			for k := range raw {
-				fields = append(fields, k)
-			}
-			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response fields: %v", fields)
+			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response fields: %v", raw)
 		} else {
 			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; could not inspect response: %v", jsonErr)
 		}

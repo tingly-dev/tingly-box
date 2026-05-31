@@ -20,6 +20,16 @@ import (
 // rotateBackups after each new backup is created.
 const defaultBackupRetention = 3
 
+// codexGatewayProviderName is the tingly-box provider key written into
+// config.toml's [model_providers] table by mergeCodexConfig and removed by
+// ClearCodexGatewayConfig.
+const codexGatewayProviderName = "tingly-box"
+
+// codexGatewayTopLevelKeys are the top-level config.toml keys owned by
+// tingly-box. Both mergeCodexConfig (writer) and ClearCodexGatewayConfig
+// (eraser) reference this list so the two functions stay in sync.
+var codexGatewayTopLevelKeys = []string{"model", "model_provider", "model_catalog_json"}
+
 // backupTimestampLayout matches the timestamp format embedded in backup
 // filenames produced by generateBackupPath.
 const backupTimestampLayout = "20060102-150405"
@@ -1104,7 +1114,7 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	if len(models) > 0 {
 		cfg["model"] = models[0]
 	}
-	cfg["model_provider"] = "tingly-box"
+	cfg["model_provider"] = codexGatewayProviderName
 	if catalogPath != "" {
 		cfg["model_catalog_json"] = catalogPath
 	}
@@ -1113,7 +1123,7 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	if providers == nil {
 		providers = map[string]interface{}{}
 	}
-	providers["tingly-box"] = map[string]interface{}{
+	providers[codexGatewayProviderName] = map[string]interface{}{
 		"name":                  "OpenAI using Tingly Box",
 		"base_url":              baseURL,
 		"preferred_auth_method": "apikey",
@@ -1128,7 +1138,7 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	for _, model := range models {
 		profile := map[string]interface{}{
 			"model":          model,
-			"model_provider": "tingly-box",
+			"model_provider": codexGatewayProviderName,
 		}
 		for k, v := range coerced {
 			profile[k] = v
@@ -1242,7 +1252,7 @@ func ClearCodexGatewayConfig() (*ApplyResult, error) {
 	}
 
 	changed := false
-	for _, k := range []string{"model", "model_provider", "model_catalog_json"} {
+	for _, k := range codexGatewayTopLevelKeys {
 		if _, ok := cfg[k]; ok {
 			delete(cfg, k)
 			changed = true
@@ -1250,8 +1260,8 @@ func ClearCodexGatewayConfig() (*ApplyResult, error) {
 	}
 	// Also remove the tingly-box provider stanza if present.
 	if providers, ok := cfg["model_providers"].(map[string]interface{}); ok {
-		if _, ok := providers["tingly-box"]; ok {
-			delete(providers, "tingly-box")
+		if _, ok := providers[codexGatewayProviderName]; ok {
+			delete(providers, codexGatewayProviderName)
 			if len(providers) == 0 {
 				delete(cfg, "model_providers")
 			}
