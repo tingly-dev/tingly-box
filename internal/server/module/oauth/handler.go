@@ -1044,6 +1044,11 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			provider.OAuthDetail.ExtraFields[k] = v
 		}
 	}
+	// Preserve id_token: required for native Codex `~/.codex/auth.json` export
+	// (chatgpt auth mode). Mirrors the CLI flow in internal/command/oauth.go.
+	if token.IDToken != "" {
+		provider.OAuthDetail.ExtraFields["id_token"] = token.IDToken
+	}
 
 	// Save provider to config
 	if err := h.config.AddProvider(provider); err != nil {

@@ -1198,11 +1198,39 @@ func sanitizeCodexProfileKey(name string) string {
 	return out
 }
 
-// ApplyCodexAuth writes `~/.codex/auth.json` with `OPENAI_API_KEY` set to the
-// tingly-box model token. If the file already exists, other top-level keys are
-// preserved; only `OPENAI_API_KEY` is overwritten. The previous version is
-// backed up before modification.
-func ApplyCodexAuth(apiKey string) (*ApplyResult, error) {
+// CodexAuthMode selects how `~/.codex/auth.json` is populated.
+type CodexAuthMode string
+
+const (
+	// CodexAuthAPIKey writes only `OPENAI_API_KEY` — used when codex CLI
+	// should talk to tingly-box as a gateway.
+	CodexAuthAPIKey CodexAuthMode = "apikey"
+	// CodexAuthChatGPT exports a native ChatGPT-login auth.json so codex CLI
+	// can talk to OpenAI directly using OAuth tokens previously obtained by
+	// tingly-box. tingly-box does NOT refresh these tokens afterwards —
+	// codex CLI owns their lifecycle from that point on.
+	CodexAuthChatGPT CodexAuthMode = "chatgpt"
+)
+
+// CodexChatGPTTokens carries the OAuth credentials needed to materialize a
+// native ChatGPT-login `auth.json`.
+type CodexChatGPTTokens struct {
+	IDToken      string
+	AccessToken  string
+	RefreshToken string
+	AccountID    string
+}
+
+// ApplyCodexAuth writes `~/.codex/auth.json`. The previous version (if any) is
+// backed up before modification; existing top-level keys outside the managed
+// set are preserved.
+//
+// Mode semantics:
+//   - CodexAuthAPIKey: sets `OPENAI_API_KEY` to the supplied key (gateway mode).
+//   - CodexAuthChatGPT: writes `tokens` / `last_refresh` / `auth_mode: "chatgpt"`
+//     and clears `OPENAI_API_KEY`. Tokens come from the caller; tingly-box does
+//     not subsequently refresh them.
+func ApplyCodexAuth(mode CodexAuthMode, apiKey string, tokens *CodexChatGPTTokens) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1234,7 +1262,32 @@ func ApplyCodexAuth(apiKey string) (*ApplyResult, error) {
 		result.Created = true
 	}
 
-	existing["OPENAI_API_KEY"] = apiKey
+	switch mode {
+	case CodexAuthChatGPT:
+		if tokens == nil || tokens.AccessToken == "" || tokens.RefreshToken == "" {
+			result.Message = "ChatGPT auth requires access_token and refresh_token"
+			return result, nil
+		}
+		existing["OPENAI_API_KEY"] = nil
+		existing["auth_mode"] = "chatgpt"
+		tokensMap := map[string]interface{}{
+			"access_token":  tokens.AccessToken,
+			"refresh_token": tokens.RefreshToken,
+		}
+		if tokens.IDToken != "" {
+			tokensMap["id_token"] = tokens.IDToken
+		}
+		if tokens.AccountID != "" {
+			tokensMap["account_id"] = tokens.AccountID
+		}
+		existing["tokens"] = tokensMap
+		existing["last_refresh"] = time.Now().UTC().Format(time.RFC3339)
+	case "", CodexAuthAPIKey:
+		existing["OPENAI_API_KEY"] = apiKey
+	default:
+		result.Message = fmt.Sprintf("Unknown Codex auth mode: %q", mode)
+		return result, nil
+	}
 
 	output, err := json.MarshalIndent(existing, "", "  ")
 	if err != nil {

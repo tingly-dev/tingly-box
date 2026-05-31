@@ -48,6 +48,17 @@ type OpenCodeConfigPreviewResponse struct {
 type ApplyCodexConfigRequest struct {
 	Preferences  *config.CodexPrefs `json:"preferences"`
 	WriteCatalog *bool              `json:"writeCatalog"`
+
+	// AuthMode selects how ~/.codex/auth.json is populated. "" / "apikey"
+	// writes the gateway key (existing behavior); "chatgpt" exports the
+	// OAuth tokens of the provider identified by OAuthProviderUUID so codex
+	// CLI talks directly to OpenAI. tingly-box stops managing the tokens
+	// after a chatgpt-mode apply — codex CLI owns refresh from then on.
+	AuthMode string `json:"authMode,omitempty"`
+
+	// OAuthProviderUUID identifies the Codex OAuth provider whose tokens
+	// should be exported. Required when AuthMode == "chatgpt".
+	OAuthProviderUUID string `json:"oauthProviderUuid,omitempty"`
 }
 
 // ApplyCodexConfigResponse is the response for ApplyCodexConfigFromState.

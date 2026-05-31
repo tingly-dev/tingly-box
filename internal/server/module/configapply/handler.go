@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -695,15 +696,36 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	apiKey := h.config.GetModelToken()
 
 	writeCatalog := req.WriteCatalog == nil || *req.WriteCatalog
-	configResult, err := config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
-			Success: false,
-			Message: "Internal error: " + err.Error(),
-		})
-		return
+
+	authMode := config.CodexAuthMode(req.AuthMode)
+	var chatgptTokens *config.CodexChatGPTTokens
+	if authMode == config.CodexAuthChatGPT {
+		tokens, err := h.loadCodexChatGPTTokens(req.OAuthProviderUUID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ApplyCodexConfigResponse{
+				Success: false,
+				Message: err.Error(),
+			})
+			return
+		}
+		chatgptTokens = tokens
 	}
-	authResult, err := config.ApplyCodexAuth(apiKey)
+
+	// ChatGPT mode: skip the gateway config.toml rewrite entirely — the user
+	// is going direct-to-OpenAI and their existing config should be left alone.
+	configResult := &config.ApplyResult{Success: true, Message: "skipped (chatgpt mode)"}
+	if authMode != config.CodexAuthChatGPT {
+		var err error
+		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
+				Success: false,
+				Message: "Internal error: " + err.Error(),
+			})
+			return
+		}
+	}
+	authResult, err := config.ApplyCodexAuth(authMode, apiKey, chatgptTokens)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
 			Success: false,
@@ -716,9 +738,43 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 		Success:        configResult.Success && authResult.Success,
 		ConfigResult:   *configResult,
 		AuthResult:     *authResult,
-		CatalogWritten: writeCatalog && len(models) > 0,
+		CatalogWritten: writeCatalog && len(models) > 0 && authMode != config.CodexAuthChatGPT,
 		Models:         models,
 	})
+}
+
+// loadCodexChatGPTTokens pulls the OAuth credentials of the Codex provider
+// identified by uuid out of config storage and shapes them for the native
+// auth.json writer. We rely on the provider record (not oauth.Manager) because
+// configapply already has the global config in hand and providers are the
+// canonical persistence target for OAuth tokens.
+func (h *Handler) loadCodexChatGPTTokens(uuid string) (*config.CodexChatGPTTokens, error) {
+	if uuid == "" {
+		return nil, fmt.Errorf("oauthProviderUuid is required for chatgpt auth mode")
+	}
+	provider, err := h.config.GetProviderByUUID(uuid)
+	if err != nil {
+		return nil, fmt.Errorf("oauth provider not found: %w", err)
+	}
+	if provider.OAuthDetail == nil {
+		return nil, fmt.Errorf("provider %q is not an OAuth provider", provider.Name)
+	}
+	if provider.OAuthDetail.GetIssuer() != ai.IssuerCodex {
+		return nil, fmt.Errorf("provider %q is not a Codex OAuth provider", provider.Name)
+	}
+	tokens := &config.CodexChatGPTTokens{
+		AccessToken:  provider.OAuthDetail.AccessToken,
+		RefreshToken: provider.OAuthDetail.RefreshToken,
+	}
+	if extra := provider.OAuthDetail.ExtraFields; extra != nil {
+		if v, ok := extra["id_token"].(string); ok {
+			tokens.IDToken = v
+		}
+		if v, ok := extra["account_id"].(string); ok {
+			tokens.AccountID = v
+		}
+	}
+	return tokens, nil
 }
 
 // GetCodexConfigPreview returns the TOML/JSON that ApplyCodexConfigFromState

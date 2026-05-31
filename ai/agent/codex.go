@@ -11,10 +11,12 @@ type CodexConfig struct{}
 
 // CodexParams contains parameters for applying Codex configuration
 type CodexParams struct {
-	// CodexBaseURL is the base URL for Codex API endpoint
+	// CodexBaseURL is the base URL for Codex API endpoint. Ignored when
+	// AuthMode is CodexAuthChatGPT (native OAuth uses OpenAI directly and we
+	// leave the user's own ~/.codex/config.toml untouched).
 	CodexBaseURL string
 
-	// APIKey is the authentication token
+	// APIKey is the authentication token used in gateway / apikey mode.
 	APIKey string
 
 	// Models is a list of model names for the Codex profiles
@@ -30,6 +32,16 @@ type CodexParams struct {
 	// /model picker can list tingly-served models. Defaults to true for the CLI
 	// path; the HTTP handler derives it from the request.
 	WriteCatalog bool
+
+	// AuthMode selects how ~/.codex/auth.json is populated. Empty defaults to
+	// CodexAuthAPIKey (gateway). CodexAuthChatGPT exports native OAuth tokens
+	// for direct codex-to-OpenAI use; tingly-box stops managing the tokens
+	// after the one-shot write.
+	AuthMode serverconfig.CodexAuthMode
+
+	// ChatGPTTokens carries the OAuth credentials used when AuthMode is
+	// CodexAuthChatGPT. Ignored otherwise.
+	ChatGPTTokens *serverconfig.CodexChatGPTTokens
 }
 
 // Apply applies Codex CLI configuration
@@ -39,41 +51,44 @@ func (c *CodexConfig) Apply(paramsInterface interface{}) (*ApplyAgentResult, err
 		return nil, fmt.Errorf("invalid params type, expected *CodexParams")
 	}
 
-	// Apply config.toml
-	configResult, err := serverconfig.ApplyCodexConfig(params.CodexBaseURL, params.Models, params.Prefs, params.WriteCatalog)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply Codex config: %w", err)
+	result := &ApplyAgentResult{
+		AgentType: AgentTypeCodex,
+		Success:   true,
+	}
+
+	// In ChatGPT mode the user is going direct-to-OpenAI; we don't touch
+	// config.toml — their existing model_provider / base_url stay intact.
+	if params.AuthMode != serverconfig.CodexAuthChatGPT {
+		configResult, err := serverconfig.ApplyCodexConfig(params.CodexBaseURL, params.Models, params.Prefs, params.WriteCatalog)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply Codex config: %w", err)
+		}
+		result.Success = result.Success && configResult.Success
+		if configResult.Success {
+			suffix := " (updated)"
+			if configResult.Created {
+				suffix = " (created)"
+			}
+			result.ConfigFiles = append(result.ConfigFiles, "~/.codex/config.toml"+suffix)
+		}
+		if configResult.BackupPath != "" {
+			result.BackupPaths = append(result.BackupPaths, configResult.BackupPath)
+		}
 	}
 
 	// Apply auth.json
-	authResult, err := serverconfig.ApplyCodexAuth(params.APIKey)
+	authResult, err := serverconfig.ApplyCodexAuth(params.AuthMode, params.APIKey, params.ChatGPTTokens)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply Codex auth: %w", err)
 	}
+	result.Success = result.Success && authResult.Success
 
-	result := &ApplyAgentResult{
-		AgentType: AgentTypeCodex,
-		Success:   configResult.Success && authResult.Success,
-	}
-
-	// Build config files list
-	if configResult.Success {
-		suffix := " (updated)"
-		if configResult.Created {
-			suffix = " (created)"
-		}
-		result.ConfigFiles = append(result.ConfigFiles, "~/.codex/config.toml"+suffix)
-	}
 	if authResult.Success {
 		suffix := " (updated)"
 		if authResult.Created {
 			suffix = " (created)"
 		}
 		result.ConfigFiles = append(result.ConfigFiles, "~/.codex/auth.json"+suffix)
-	}
-
-	if configResult.BackupPath != "" {
-		result.BackupPaths = append(result.BackupPaths, configResult.BackupPath)
 	}
 	if authResult.BackupPath != "" {
 		result.BackupPaths = append(result.BackupPaths, authResult.BackupPath)
