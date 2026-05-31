@@ -18,10 +18,15 @@ General UI icons come from `@/components/icons` (Tabler icons adapted to MUI via
 - Brand / provider logos still go through `BrandIcons.tsx` / `ProviderIcon.tsx` (Lobehub + custom SVG).
 - See `.design/icon-hierarchy.md` for details.
 
-## Backend
-Golang backend contains CLI version and GUI version.
+# Build
 
-- sdk as submodules under `libs/`
+## Submodules
+SDK dependencies under `libs/` (anthropic-sdk-go, openai-go, go-genai) are git submodules.
+
+If submodule directories are empty, run:
+```bash
+git submodule update --init --recursive
+```
 
 ## Cross Frontend and Backend
 When you are working with both frontend and backend, 
