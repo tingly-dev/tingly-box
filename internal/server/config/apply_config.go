@@ -1212,6 +1212,82 @@ const (
 	CodexAuthChatGPT CodexAuthMode = "chatgpt"
 )
 
+// ClearCodexGatewayConfig removes tingly-managed top-level keys from
+// ~/.codex/config.toml so that when a user switches to native ChatGPT OAuth
+// mode the codex CLI falls back to its own defaults rather than trying to
+// route requests through the (now-unused) tingly-box gateway.
+//
+// Only the tingly-managed top-level fields are removed; everything else
+// (other provider entries, profiles, user prefs) is left intact. The previous
+// config.toml is backed up before modification.
+func ClearCodexGatewayConfig() (*ApplyResult, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	targetPath := filepath.Join(homeDir, ".codex", "config.toml")
+	result := &ApplyResult{}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		// Nothing to clear — treat as success.
+		result.Success = true
+		result.Message = "no config.toml found, nothing to clear"
+		return result, nil
+	}
+	cfg := map[string]interface{}{}
+	if err := tomlpkg.Unmarshal(data, &cfg); err != nil {
+		result.Message = fmt.Sprintf("Failed to parse config.toml: %v", err)
+		return result, nil
+	}
+
+	changed := false
+	for _, k := range []string{"model", "model_provider", "model_catalog_json"} {
+		if _, ok := cfg[k]; ok {
+			delete(cfg, k)
+			changed = true
+		}
+	}
+	// Also remove the tingly-box provider stanza if present.
+	if providers, ok := cfg["model_providers"].(map[string]interface{}); ok {
+		if _, ok := providers["tingly-box"]; ok {
+			delete(providers, "tingly-box")
+			if len(providers) == 0 {
+				delete(cfg, "model_providers")
+			}
+			changed = true
+		}
+	}
+
+	if !changed {
+		result.Success = true
+		result.Message = "config.toml has no tingly gateway keys, nothing to clear"
+		return result, nil
+	}
+
+	backupPath, err := backupFile(targetPath)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to create backup: %v", err)
+		return result, nil
+	}
+	result.BackupPath = backupPath
+
+	out, err := tomlpkg.Marshal(cfg)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to marshal TOML: %v", err)
+		return result, nil
+	}
+	if err := os.WriteFile(targetPath, out, 0644); err != nil {
+		result.Message = fmt.Sprintf("Failed to write config.toml: %v", err)
+		return result, nil
+	}
+
+	result.Success = true
+	result.Updated = true
+	result.Message = fmt.Sprintf("Cleared tingly gateway keys from %s (backup: %s)", targetPath, backupPath)
+	return result, nil
+}
+
 // CodexChatGPTTokens carries the OAuth credentials needed to materialize a
 // native ChatGPT-login `auth.json`.
 type CodexChatGPTTokens struct {

@@ -711,10 +711,21 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 		chatgptTokens = tokens
 	}
 
-	// ChatGPT mode: skip the gateway config.toml rewrite entirely — the user
-	// is going direct-to-OpenAI and their existing config should be left alone.
-	configResult := &config.ApplyResult{Success: true, Message: "skipped (chatgpt mode)"}
-	if authMode != config.CodexAuthChatGPT {
+	// ChatGPT mode: clear tingly gateway keys from config.toml so codex CLI
+	// uses its own defaults, then leave the rest of config.toml untouched.
+	// Gateway mode: full rewrite as before.
+	var configResult *config.ApplyResult
+	if authMode == config.CodexAuthChatGPT {
+		var err error
+		configResult, err = config.ClearCodexGatewayConfig()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
+				Success: false,
+				Message: "Internal error: " + err.Error(),
+			})
+			return
+		}
+	} else {
 		var err error
 		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
 		if err != nil {

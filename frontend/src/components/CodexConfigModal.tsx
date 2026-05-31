@@ -314,10 +314,12 @@ EOF`;
                                 </Select>
                             </FormControl>
                             <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-                                Exports the OAuth tokens to <code>~/.codex/auth.json</code> so codex CLI talks
-                                directly to OpenAI. Tingly Box will <strong>not</strong> manage refresh after this —
-                                codex CLI owns the token lifecycle from here on. Your existing
-                                <code> ~/.codex/config.toml </code> is left untouched.
+                                Exports the OAuth tokens to <code>~/.codex/auth.json</code> and removes the
+                                tingly gateway keys from <code>config.toml</code> so codex CLI talks directly to
+                                OpenAI. Tingly Box will <strong>not</strong> manage token refresh after this —
+                                codex CLI owns the token lifecycle from here on.{' '}
+                                If <code>id_token</code> is missing in the exported file, re-authenticate
+                                via the OAuth page and apply again.
                             </Alert>
                         </Box>
                     )}
@@ -551,34 +553,14 @@ EOF`;
                             Configuration applied successfully!
                         </Typography>
                         <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            {applyResult.configResult?.created && (
+                            {applyResult.configResult?.message && (
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Created ~/.codex/config.toml
+                                    ✓ {applyResult.configResult.message}
                                 </Typography>
                             )}
-                            {applyResult.configResult?.updated && (
+                            {applyResult.authResult?.message && (
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Updated ~/.codex/config.toml
-                                </Typography>
-                            )}
-                            {applyResult.authResult?.created && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Created ~/.codex/auth.json
-                                </Typography>
-                            )}
-                            {applyResult.authResult?.updated && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Updated ~/.codex/auth.json
-                                </Typography>
-                            )}
-                            {applyResult.catalogWritten && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Written ~/.codex/tingly-model-catalog.json
-                                </Typography>
-                            )}
-                            {applyResult.models && applyResult.models.length > 0 && (
-                                <Typography variant="caption" color="text.secondary">
-                                    Models: {applyResult.models.join(', ')}
+                                    ✓ {applyResult.authResult.message}
                                 </Typography>
                             )}
                             {applyResult.configResult?.backupPath && (
