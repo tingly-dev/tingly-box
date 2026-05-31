@@ -1,14 +1,12 @@
-version: '3.8'
-
 services:
   # Tingly Box Server
   tingly-box:
     build:
       context: .
-      dockerfile: docker.build.Dockerfile
+      dockerfile: docker.npx.Dockerfile
     container_name: tingly-box
     ports:
-      - "8080:8080"
+      - "12581:12580"
     volumes:
       # Mount configuration directory
       - ./data/.tingly-box:/app/.tingly-box
@@ -17,12 +15,12 @@ services:
       # Mount memory directory
       - ./data/memory:/app/memory
     environment:
-      - TINGLY_PORT=8080
+      - TINGLY_PORT=12580
       - TINGLY_HOST=0.0.0.0
       - TINGLY_DEBUG=false
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "tingly", "status"]
+      test: ["CMD", "tingly-box", "version"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -32,15 +30,11 @@ services:
   tingly-box-dev:
     build:
       context: .
-      dockerfile: docker.build.Dockerfile
+      dockerfile: docker.npx.Dockerfile
     container_name: tingly-box-dev
     ports:
-      - "8080:8080"
+      - "12581:12580"
     volumes:
-      # Mount source code for development
-      - .:/app
-      # Mount node_modules to avoid container rebuilding it
-      - /app/frontend/node_modules
       # Mount configuration directory
       - ./data/.tingly-box:/app/.tingly-box
       # Mount logs directory
@@ -48,7 +42,7 @@ services:
       # Mount memory directory
       - ./data/memory:/app/memory
     environment:
-      - TINGLY_PORT=8080
+      - TINGLY_PORT=12580
       - TINGLY_HOST=0.0.0.0
       - TINGLY_DEBUG=true
     profiles:
