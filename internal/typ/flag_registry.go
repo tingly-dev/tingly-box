@@ -38,6 +38,8 @@ const (
 	// FlagCategoryRouting — routing / load-balancing behavior (session
 	// affinity, etc) that decides which upstream service a request lands on.
 	FlagCategoryRouting FlagCategory = "routing"
+	// FlagCategoryVision — image/vision handling (vision proxy describer).
+	FlagCategoryVision FlagCategory = "vision"
 )
 
 // FlagOption is one selectable value for a FlagTypeEnum spec.
@@ -156,7 +158,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Label:       "Vision Proxy",
 			Description: "Describe images via a vision-capable model so text-only downstream models can read them. Applies only to requests matched by this rule. Same effect as the scenario-level Vision Proxy but scoped to this rule; when both are configured, this rule-level service takes precedence.",
 			Type:        FlagTypeServiceRef,
-			Category:    FlagCategoryRequest,
+			Category:    FlagCategoryVision,
 		},
 	}
 }

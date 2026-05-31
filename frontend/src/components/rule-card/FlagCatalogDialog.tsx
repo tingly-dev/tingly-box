@@ -25,6 +25,7 @@ import {
     Outbound as OutboundIcon,
     Psychology as PsychologyIcon,
     Terminal as TerminalIcon,
+    Visibility as VisibilityIcon,
 } from '@/components/icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
@@ -188,6 +189,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     request: { label: 'Request', icon: <InputIcon fontSize="small" /> },
     reasoning: { label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
     routing: { label: 'Routing', icon: <LinkIcon fontSize="small" /> },
+    vision: { label: 'Vision', icon: <VisibilityIcon fontSize="small" /> },
 };
 
 const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] || {

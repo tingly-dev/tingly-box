@@ -104,6 +104,18 @@ const flagStringValue = (flags: RuleFlags | undefined, key: string): string => {
     }
 };
 
+// flagServiceRefDisplay returns the model name of a service_ref flag (the
+// concise label for the extension chip), or '' when unset.
+const flagServiceRefDisplay = (flags: RuleFlags | undefined, key: string): string => {
+    if (!flags) return '';
+    switch (key) {
+        case 'vision_proxy_service':
+            return flags.visionProxyService?.model || '';
+        default:
+            return '';
+    }
+};
+
 /**
  * RuleExtensionsCard renders a compact card displaying the rule's enabled
  * extension flags. The "+ Add" action opens the catalog dialog where users
@@ -124,6 +136,7 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
             const inactive = spec.options?.[0]?.value ?? '';
             return v !== '' && v !== inactive;
         }
+        if (spec.type === 'service_ref') return flagServiceRefDisplay(flags, spec.key) !== '';
         return flagStringValue(flags, spec.key) !== '';
     });
 
@@ -194,13 +207,15 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                         {enabled.map((spec) => {
                             const isString = spec.type === 'string';
                             const isEnum = spec.type === 'enum';
+                            const isServiceRef = spec.type === 'service_ref';
                             const stringVal = isString || isEnum ? flagStringValue(flags, spec.key) : '';
                             let displayVal = stringVal;
                             if (isEnum) {
                                 const opt = (spec.options || []).find((o) => o.value === stringVal);
                                 if (opt) displayVal = opt.label;
                             }
-                            const tooltipTitle = (isString || isEnum) && stringVal
+                            if (isServiceRef) displayVal = flagServiceRefDisplay(flags, spec.key);
+                            const tooltipTitle = ((isString || isEnum) && stringVal) || (isServiceRef && displayVal)
                                 ? `${spec.description}\nValue: ${displayVal}`
                                 : spec.description;
                             return (
