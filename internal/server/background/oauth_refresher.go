@@ -18,6 +18,9 @@ const (
 	defaultCheckInterval = 5 * time.Minute
 	// defaultRefreshBuffer is how long before expiry to refresh a token (matches OAuth package default)
 	defaultRefreshBuffer = 5 * time.Minute
+	// maxExpiryDuration is the maximum time after token expiry to attempt refresh
+	// Tokens expired longer than this will not be refreshed (72 hours = 3 days)
+	maxExpiryDuration = 72 * time.Hour
 	// jitterPercent is the maximum jitter percentage to add to the check interval
 	jitterPercent = 0.10 // 10% jitter
 )
@@ -180,7 +183,19 @@ func (tr *OAuthRefresher) CheckAndRefreshTokens() {
 
 		// Check if token needs refresh (sequential, not concurrent)
 		// Refresh if token is expired OR will expire within buffer window
+		// BUT skip if token expired too long ago (more than maxExpiryDuration)
+		timeSinceExpiry := now.Sub(expiresAt)
 		if expiresAt.Before(now.Add(buffer)) || expiresAt.Before(now) {
+			// Check if token expired too long ago
+			if timeSinceExpiry > maxExpiryDuration {
+				logger.WithFields(logrus.Fields{
+					"provider":          provider.Name,
+					"expiresAt":         provider.OAuthDetail.ExpiresAt,
+					"timeSinceExpiry":   timeSinceExpiry,
+					"maxExpiryDuration": maxExpiryDuration,
+				}).Warn("Token expired too long ago, skipping refresh")
+				continue
+			}
 			tr.refreshProviderToken(provider)
 			refreshCount++
 		}
