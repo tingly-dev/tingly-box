@@ -60,11 +60,10 @@ export const TierNode: React.FC<TierNodeProps> = ({
             >
                 <Typography
                     sx={{
-                        fontSize: '0.9rem',
-                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
                         color: 'text.secondary',
-                        letterSpacing: '0.02em',
-                        lineHeight: 1,
+                        lineHeight: 1.15,
                     }}
                 >
                     {`T${priority}`}
