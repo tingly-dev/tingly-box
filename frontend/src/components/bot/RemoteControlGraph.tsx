@@ -79,7 +79,6 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
                         <AgentNode
                             agentType="smart-guide"
                             active={isBotEnabled}
-                            onClick={readOnly ? undefined : onModelClick}
                         />
                     </NodeContainer>
 
@@ -91,6 +90,7 @@ const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
                             providerName={providerName}
                             model={imbot.smartguide_model}
                             active={isBotEnabled}
+                            onClick={readOnly ? undefined : onModelClick}
                         />
                     </NodeContainer>
                 </Box>
