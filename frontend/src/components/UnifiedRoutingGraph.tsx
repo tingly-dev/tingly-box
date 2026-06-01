@@ -259,47 +259,35 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Each service has up/down arrows. Up from T0 is hidden (already highest).
     // Moving down past the last tier creates a new one.
     const renderTierLayout = React.useCallback(() => {
-        const tierValues = tierGroups.map((g) => g.tier);
-
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {tierGroups.map((group, idx) => {
-                    // prevTier: if first group and tier > 0, go one step up (tier-1).
-                    // If already at tier=0 (T0), no up arrow — can't go higher.
-                    const prevTier = idx > 0
-                        ? tierValues[idx - 1]
-                        : group.tier > 0 ? group.tier - 1 : null;
-                    const nextTier = idx < tierValues.length - 1
-                        ? tierValues[idx + 1]
-                        : group.tier + 1;
-                    return (
-                        <Box
-                            key={group.tier}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
-                        >
-                            <TierNode tierIndex={idx} priority={group.tier} active={active} />
-                            {group.providers.map((p) => (
-                                <ServiceNode
-                                    key={p.uuid}
-                                    provider={p}
-                                    apiStyle={getApiStyle(p.provider)}
-                                    providersData={providers}
-                                    active={active && p.active !== false}
-                                    onDelete={() => onDeleteProvider?.(p.uuid)}
-                                    onNodeClick={() => onProviderNodeClick?.(p.uuid)}
-                                    showTier={false}
-                                    onMoveTierUp={prevTier !== null && onTierChange ? () => onTierChange(p.uuid, prevTier) : undefined}
-                                    onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, nextTier) : undefined}
-                                />
-                            ))}
-                            <ActionAddNode
-                                active={active && !saving}
-                                onAdd={() => onAddService?.(group.tier)}
-                                tooltip={t('rule.tooltips.addServiceSecond')}
+                {tierGroups.map((group, idx) => (
+                    <Box
+                        key={group.tier}
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
+                    >
+                        <TierNode tierIndex={idx} priority={group.tier} active={active} />
+                        {group.providers.map((p) => (
+                            <ServiceNode
+                                key={p.uuid}
+                                provider={p}
+                                apiStyle={getApiStyle(p.provider)}
+                                providersData={providers}
+                                active={active && p.active !== false}
+                                onDelete={() => onDeleteProvider?.(p.uuid)}
+                                onNodeClick={() => onProviderNodeClick?.(p.uuid)}
+                                showTier={false}
+                                onMoveTierUp={group.tier > 0 && onTierChange ? () => onTierChange(p.uuid, group.tier - 1) : undefined}
+                                onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, group.tier + 1) : undefined}
                             />
-                        </Box>
-                    );
-                })}
+                        ))}
+                        <ActionAddNode
+                            active={active && !saving}
+                            onAdd={() => onAddService?.(group.tier)}
+                            tooltip={t('rule.tooltips.addServiceSecond')}
+                        />
+                    </Box>
+                ))}
             </Box>
         );
     }, [t, tierGroups, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService]);
