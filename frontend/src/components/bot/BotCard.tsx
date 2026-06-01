@@ -15,11 +15,14 @@ import {
 import {styled} from '@mui/material/styles';
 import type {BotSettings} from '@/types/bot';
 import type {Provider} from '@/types/provider';
-import {CrossNode, NodeContainer} from '../nodes';
+import {ArrowNode, NodeContainer} from '../nodes';
 import ImBotNode from '../nodes/ImBotNode';
 import BotModelNode from '../nodes/BotModelNode';
+import AtNode from '../nodes/AtNode';
+import AgentNode from '../nodes/AgentNode';
 import PairingCodePanel from './PairingCodePanel';
 import {useCallback, useState} from 'react';
+import {useNavigate} from 'react-router-dom';
 
 // Use same style constants as RuleGraph for consistency
 const RULE_GRAPH_STYLES = {
@@ -120,6 +123,11 @@ const BotCard: React.FC<BotCardProps> = ({
     const isActive = bot.enabled ?? true;
     const isExpanded = true;
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const navigate = useNavigate();
+
+    const handleAgentClick = useCallback(() => {
+        navigate('/agent/claude_code');
+    }, [navigate]);
 
     // Get provider name for SmartGuide node
     const getProviderName = (providerUuid: string | undefined): string => {
@@ -248,22 +256,56 @@ const BotCard: React.FC<BotCardProps> = ({
                     <Box sx={{overflowX: 'auto'}}>
                         <GraphContainer>
                             <GraphRow>
+                                {/* Bot node */}
                                 <NodeContainer>
                                     <ImBotNode imbot={bot} active={isActive} onClick={isActive ? onEdit : undefined}/>
                                 </NodeContainer>
 
-                                <CrossNode/>
+                                <ArrowNode direction="forward"/>
 
-                                <NodeContainer>
-                                    <BotModelNode
-                                        provider={bot.smartguide_provider}
-                                        providerName={providerName}
-                                        model={bot.smartguide_model}
-                                        active={isActive}
-                                        onClick={isActive ? onModelClick : undefined}
-                                    />
-                                </NodeContainer>
+                                {/* Two branches: @tb and @cc */}
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 2,
+                                        borderLeft: '2px solid',
+                                        borderColor: 'divider',
+                                        pl: 2,
+                                    }}
+                                >
+                                    {/* @tb branch: service routing */}
+                                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                                        <NodeContainer>
+                                            <AtNode type="tb"/>
+                                        </NodeContainer>
+                                        <ArrowNode direction="forward"/>
+                                        <NodeContainer>
+                                            <BotModelNode
+                                                provider={bot.smartguide_provider}
+                                                providerName={providerName}
+                                                model={bot.smartguide_model}
+                                                active={isActive}
+                                                onClick={isActive ? onModelClick : undefined}
+                                            />
+                                        </NodeContainer>
+                                    </Box>
 
+                                    {/* @cc branch: Claude Code agent */}
+                                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+                                        <NodeContainer>
+                                            <AtNode type="cc"/>
+                                        </NodeContainer>
+                                        <ArrowNode direction="forward"/>
+                                        <NodeContainer>
+                                            <AgentNode
+                                                agentType="claude-code"
+                                                active={isActive}
+                                                onClick={isActive ? handleAgentClick : undefined}
+                                            />
+                                        </NodeContainer>
+                                    </Box>
+                                </Box>
                             </GraphRow>
                         </GraphContainer>
                     </Box>
