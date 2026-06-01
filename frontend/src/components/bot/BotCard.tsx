@@ -15,35 +15,17 @@ import {
 import {styled} from '@mui/material/styles';
 import type {BotSettings} from '@/types/bot';
 import type {Provider} from '@/types/provider';
-import {ArrowNode, NodeContainer} from '../nodes';
-import ImBotNode from '../nodes/ImBotNode';
-import BotModelNode from '../nodes/BotModelNode';
-import AtNode from '../nodes/AtNode';
-import AgentNode from '../nodes/AgentNode';
+import RemoteControlGraph from './RemoteControlGraph';
 import PairingCodePanel from './PairingCodePanel';
 import {useCallback, useState} from 'react';
-import {useNavigate} from 'react-router-dom';
 
-// Use same style constants as RuleGraph for consistency
 const RULE_GRAPH_STYLES = {
-    header: {
-        paddingX: 16,
-        paddingY: 6,
-    },
-    graphContainer: {
-        paddingX: 16,
-        paddingY: 10,
-        marginX: 16,
-        marginY: 8,
-    },
-    graph: {
-        rowGap: 16,
-    },
+    header: { paddingX: 16, paddingY: 6 },
+    graphContainer: { paddingX: 16, paddingY: 10, marginX: 16, marginY: 8 },
 } as const;
 
-const {header, graphContainer, graph} = RULE_GRAPH_STYLES;
+const {header, graphContainer} = RULE_GRAPH_STYLES;
 
-// Styled Card matching RuleCard style exactly
 const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({active, theme}) => ({
@@ -58,10 +40,7 @@ const StyledCard = styled(Card, {
         '&::before': {
             content: '""',
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: 0, left: 0, right: 0, bottom: 0,
             backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px)',
             pointerEvents: 'none',
             borderRadius: theme.shape.borderRadius,
@@ -85,15 +64,8 @@ const GraphContainer = styled(Box)(({theme}) => ({
     backgroundColor: 'grey.50',
     borderRadius: theme.shape.borderRadius,
     margin: `${graphContainer.marginY}px ${graphContainer.marginX}px 0`,
+    overflowX: 'auto',
 }));
-
-const GraphRow = styled(Box)({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: graph.rowGap,
-    marginBottom: 1,
-});
 
 interface BotCardProps {
     bot: BotSettings;
@@ -109,39 +81,21 @@ interface BotCardProps {
 }
 
 const BotCard: React.FC<BotCardProps> = ({
-                                             bot,
-                                             providers,
-                                             onEdit,
-                                             onDelete,
-                                             onBotToggle,
-                                             onRestart,
-                                             onModelClick,
-                                             onCWDChange,
-                                             isToggling = false,
-                                             isRestarting = false,
-                                         }) => {
+    bot,
+    providers,
+    onEdit,
+    onDelete,
+    onBotToggle,
+    onRestart,
+    onModelClick,
+    onCWDChange,
+    isToggling = false,
+    isRestarting = false,
+}) => {
     const isActive = bot.enabled ?? true;
-    const isExpanded = true;
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const navigate = useNavigate();
 
-    const handleAgentClick = useCallback(() => {
-        navigate('/agent/claude_code');
-    }, [navigate]);
-
-    // Get provider name for SmartGuide node
-    const getProviderName = (providerUuid: string | undefined): string => {
-        if (!providerUuid) return '';
-        const provider = providers.find((p) => p.uuid === providerUuid);
-        return provider?.name || '';
-    };
-
-    const providerName = getProviderName(bot.smartguide_provider);
-
-    const handleDeleteClick = useCallback(() => {
-        setDeleteModalOpen(true);
-    }, []);
-
+    const handleDeleteClick = useCallback(() => setDeleteModalOpen(true), []);
     const handleConfirmDelete = useCallback(() => {
         setDeleteModalOpen(false);
         onDelete();
@@ -149,170 +103,77 @@ const BotCard: React.FC<BotCardProps> = ({
 
     return (
         <StyledCard active={isActive}>
-            {/* Header Section */}
+            {/* Header */}
             <SummarySection>
-                {/* Left side */}
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0}}>
                     <Tooltip title={bot.name || bot.platform}>
-                        <Typography
-                            sx={{
-                                fontFamily: 'monospace',
-                                fontSize: '0.875rem',
-                                fontWeight: 600,
-                                color: isActive ? 'text.primary' : 'text.disabled',
-                                opacity: isActive ? 1 : 0.5,
-                                cursor: 'default',
-                            }}
-                        >
+                        <Typography sx={{
+                            fontFamily: 'monospace', fontSize: '0.875rem', fontWeight: 600,
+                            color: isActive ? 'text.primary' : 'text.disabled',
+                            opacity: isActive ? 1 : 0.5, cursor: 'default',
+                        }}>
                             {bot.name || bot.platform}
                         </Typography>
                     </Tooltip>
-                    {bot.name && (
-                        <Chip
-                            label={bot.platform}
-                            size="small"
-                            sx={{
-                                opacity: isActive ? 1 : 0.5,
-                            }}
-                        />
-                    )}
+                    {bot.name && <Chip label={bot.platform} size="small" sx={{opacity: isActive ? 1 : 0.5}}/>}
                     {isActive && !(bot.smartguide_provider && bot.smartguide_model) && (
                         <Tooltip title="No model configured - click to select a model">
-                            <WarningIcon
-                                sx={{
-                                    fontSize: '1.1rem',
-                                    color: 'warning.main',
-                                }}
-                            />
+                            <WarningIcon sx={{fontSize: '1.1rem', color: 'warning.main'}}/>
                         </Tooltip>
                     )}
                     {bot.chat_id && (
                         <Tooltip title={`Chat ID: ${bot.chat_id}`}>
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    color: 'text.secondary',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    maxWidth: '120px',
-                                }}
-                            >
+                            <Typography variant="caption" sx={{
+                                color: 'text.secondary', overflow: 'hidden',
+                                textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px',
+                            }}>
                                 {bot.chat_id}
                             </Typography>
                         </Tooltip>
                     )}
                 </Box>
-                {/* Right side - All buttons expanded */}
                 <Box sx={{display: 'flex', alignItems: 'center', gap: 0.5}}>
                     <Tooltip title={isActive ? 'Disable Bot' : 'Enable Bot'}>
-                        <Switch
-                            checked={isActive}
-                            onChange={() => onBotToggle()}
-                            size="small"
-                            color="success"
-                            disabled={isToggling}
-                        />
+                        <Switch checked={isActive} onChange={() => onBotToggle()} size="small" color="success" disabled={isToggling}/>
                     </Tooltip>
                     <Tooltip title={isActive ? 'Restart Bot' : 'Enable bot to restart'}>
                         <span>
-                            <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={onRestart}
-                                disabled={!isActive || isToggling || isRestarting}
-                            >
+                            <IconButton size="small" color="primary" onClick={onRestart} disabled={!isActive || isToggling || isRestarting}>
                                 <RestartIcon fontSize="small"/>
                             </IconButton>
                         </span>
                     </Tooltip>
                     <Tooltip title="Edit">
-                        <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={onEdit}
-                            disabled={isToggling || isRestarting}
-                        >
+                        <IconButton size="small" color="primary" onClick={onEdit} disabled={isToggling || isRestarting}>
                             <EditIcon fontSize="small"/>
                         </IconButton>
                     </Tooltip>
                     <Tooltip title="Delete">
-                        <IconButton
-                            size="small"
-                            color="error"
-                            onClick={handleDeleteClick}
-                            disabled={isToggling || isRestarting}
-                        >
+                        <IconButton size="small" color="error" onClick={handleDeleteClick} disabled={isToggling || isRestarting}>
                             <DeleteIcon fontSize="small"/>
                         </IconButton>
                     </Tooltip>
                 </Box>
             </SummarySection>
 
-            {/* Expanded Content - Graph View */}
-            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+            {/* Graph */}
+            <Collapse in timeout="auto" unmountOnExit>
                 <CardContent sx={{pt: 0, pb: 1}}>
-                    {/* Graph Visualization */}
-                    <Box sx={{overflowX: 'auto'}}>
-                        <GraphContainer>
-                            <GraphRow>
-                                {/* Bot node */}
-                                <NodeContainer>
-                                    <ImBotNode imbot={bot} active={isActive} onClick={isActive ? onEdit : undefined}/>
-                                </NodeContainer>
+                    <GraphContainer>
+                        <RemoteControlGraph
+                            imbot={bot}
+                            providers={providers}
+                            currentCWD={bot.default_cwd || ''}
+                            isBotEnabled={isActive}
+                            readOnly={isToggling || isRestarting}
+                            onCWDChange={onCWDChange}
+                            onModelClick={onModelClick}
+                            onBotClick={onEdit}
+                        />
+                    </GraphContainer>
 
-                                <ArrowNode direction="forward"/>
-
-                                {/* Two branches: @tb and @cc */}
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 2,
-                                        borderLeft: '2px solid',
-                                        borderColor: 'divider',
-                                        pl: 2,
-                                    }}
-                                >
-                                    {/* @tb branch: service routing */}
-                                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
-                                        <NodeContainer>
-                                            <AtNode type="tb"/>
-                                        </NodeContainer>
-                                        <ArrowNode direction="forward"/>
-                                        <NodeContainer>
-                                            <BotModelNode
-                                                provider={bot.smartguide_provider}
-                                                providerName={providerName}
-                                                model={bot.smartguide_model}
-                                                active={isActive}
-                                                onClick={isActive ? onModelClick : undefined}
-                                            />
-                                        </NodeContainer>
-                                    </Box>
-
-                                    {/* @cc branch: Claude Code agent */}
-                                    <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
-                                        <NodeContainer>
-                                            <AtNode type="cc"/>
-                                        </NodeContainer>
-                                        <ArrowNode direction="forward"/>
-                                        <NodeContainer>
-                                            <AgentNode
-                                                agentType="claude-code"
-                                                active={isActive}
-                                                onClick={isActive ? handleAgentClick : undefined}
-                                            />
-                                        </NodeContainer>
-                                    </Box>
-                                </Box>
-                            </GraphRow>
-                        </GraphContainer>
-                    </Box>
-
-                    {/* Metadata row below graph */}
                     <Box sx={{mt: 2, display: 'flex', flexDirection: 'column', gap: 1}}>
-                        <PairingCodePanel bot={bot} />
+                        <PairingCodePanel bot={bot}/>
                         {bot.proxy_url && (
                             <Tooltip title={bot.proxy_url}>
                                 <Typography variant="caption" sx={{color: 'text.secondary', fontFamily: 'monospace'}}>
@@ -323,8 +184,7 @@ const BotCard: React.FC<BotCardProps> = ({
                         {bot.bash_allowlist && bot.bash_allowlist.length > 0 && (
                             <Tooltip title={bot.bash_allowlist.join(', ')}>
                                 <Typography variant="caption" sx={{color: 'text.secondary'}}>
-                                    Allowlist: <span
-                                    style={{fontFamily: 'monospace'}}>{bot.bash_allowlist.join(', ')}</span>
+                                    Allowlist: <span style={{fontFamily: 'monospace'}}>{bot.bash_allowlist.join(', ')}</span>
                                 </Typography>
                             </Tooltip>
                         )}
@@ -332,34 +192,21 @@ const BotCard: React.FC<BotCardProps> = ({
                 </CardContent>
             </Collapse>
 
-            {/* Delete Confirmation Modal */}
+            {/* Delete Confirmation */}
             <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        width: 400,
-                        maxWidth: '80vw',
-                        bgcolor: 'background.paper',
-                        boxShadow: 24,
-                        p: 4,
-                        borderRadius: 2,
-                    }}
-                >
+                <Box sx={{
+                    position: 'absolute', top: '50%', left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: 400, maxWidth: '80vw',
+                    bgcolor: 'background.paper', boxShadow: 24, p: 4, borderRadius: 2,
+                }}>
                     <Typography variant="h6" sx={{mb: 2}}>Delete Bot Configuration</Typography>
                     <Typography variant="body2" sx={{mb: 3}}>
-                        Are you sure you want to delete the bot configuration "{bot.name || bot.platform}"? This action
-                        cannot be undone.
+                        Are you sure you want to delete "{bot.name || bot.platform}"? This action cannot be undone.
                     </Typography>
                     <Box sx={{display: 'flex', gap: 2, justifyContent: 'flex-end'}}>
-                        <Button onClick={() => setDeleteModalOpen(false)} color="inherit">
-                            Cancel
-                        </Button>
-                        <Button onClick={handleConfirmDelete} color="error" variant="contained">
-                            Delete
-                        </Button>
+                        <Button onClick={() => setDeleteModalOpen(false)} color="inherit">Cancel</Button>
+                        <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
                     </Box>
                 </Box>
             </Modal>

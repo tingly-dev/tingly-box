@@ -7,6 +7,8 @@ import BotModelNode from '../nodes/BotModelNode.tsx';
 import CWDNode from '../nodes/ConfigNode.tsx';
 import AgentNode from '../nodes/AgentNode.tsx';
 import AtNode from '../nodes/AtNode.tsx';
+import { useNavigate } from 'react-router-dom';
+import { useCallback } from 'react';
 
 const graphRowStyles = (theme: any) => ({
     display: 'flex',
@@ -26,7 +28,6 @@ interface RemoteGraphRowProps {
     onCWDChange: (cwd: string) => void;
     onModelClick?: () => void;
     onBotClick?: () => void;
-    onAgentClick?: () => void;
 }
 
 const getProviderName = (providerUuid: string | undefined, providersData: Provider[]): string => {
@@ -44,9 +45,13 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
     onCWDChange,
     onModelClick,
     onBotClick,
-    onAgentClick,
 }) => {
+    const navigate = useNavigate();
     const providerName = getProviderName(imbot.smartguide_provider, providers);
+
+    const handleAgentClick = useCallback(() => {
+        navigate('/agent/claude_code');
+    }, [navigate]);
 
     return (
         <Box sx={graphRowStyles}>
@@ -105,7 +110,7 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
                         <AgentNode
                             agentType="claude-code"
                             active={isBotEnabled}
-                            onClick={onAgentClick}
+                            onClick={readOnly ? undefined : handleAgentClick}
                         />
                     </NodeContainer>
                 </Box>
