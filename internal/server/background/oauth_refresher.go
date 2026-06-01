@@ -15,7 +15,7 @@ import (
 
 const (
 	// defaultCheckInterval is how often to check for tokens needing refresh
-	defaultCheckInterval = 10 * time.Minute
+	defaultCheckInterval = 5 * time.Minute
 	// defaultRefreshBuffer is how long before expiry to refresh a token (matches OAuth package default)
 	defaultRefreshBuffer = 5 * time.Minute
 	// jitterPercent is the maximum jitter percentage to add to the check interval
@@ -179,7 +179,8 @@ func (tr *OAuthRefresher) CheckAndRefreshTokens() {
 		}
 
 		// Check if token needs refresh (sequential, not concurrent)
-		if expiresAt.Before(now.Add(buffer)) {
+		// Refresh if token is expired OR will expire within buffer window
+		if expiresAt.Before(now.Add(buffer)) || expiresAt.Before(now) {
 			tr.refreshProviderToken(provider)
 			refreshCount++
 		}
