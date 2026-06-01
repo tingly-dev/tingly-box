@@ -10,7 +10,6 @@ import {
     Collapse,
     IconButton,
     Stack,
-    Tooltip,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
@@ -18,8 +17,9 @@ import { getRouteGraphActiveColor, SMART_NODE_STYLES } from '@/components/nodes/
 import {
     ActionAddNode,
     ArrowNode,
+    DividerNode,
     NodeContainer,
-    ProviderNode,
+    ServiceNode,
     SmartOpNode,
     ServiceEntryNode,
 } from '@/components/nodes';
@@ -213,6 +213,21 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         });
     }, [record.providers]);
 
+    // Group providers by priority tier for DividerNode rendering
+    const priorityGroups = React.useMemo(() => {
+        const tiers = [...new Set(sortedDefaultProviders.map(p => p.priority ?? 0))];
+        // Sort: higher priority first, 0 (load-balanced) last
+        tiers.sort((a, b) => {
+            if (a === 0 && b !== 0) return 1;
+            if (b === 0 && a !== 0) return -1;
+            return b - a;
+        });
+        return tiers.map(priority => ({
+            priority,
+            providers: sortedDefaultProviders.filter(p => (p.priority ?? 0) === priority),
+        }));
+    }, [sortedDefaultProviders]);
+
     // Handle provider delete - unified callback
     const handleDeleteProvider = React.useCallback((providerUuid: string) => {
         if (onDeleteProvider) {
@@ -244,54 +259,57 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         }
     }, [smartRouting, onAddServiceToSmartRule]);
 
-    // Reusable provider list renderer - eliminates duplication
+    // Reusable service list renderer with priority-group dividers
     const renderProviderList = React.useCallback(() => {
-        const tooltipBuilder = (provider: typeof sortedDefaultProviders[0], index: number) =>
-            (provider.priority ?? 0) > 0
-                ? `Priority ${provider.priority} (higher = tried first)`
-                : record.providers.length >= 2
-                    ? `Provider ${index + 1} of ${record.providers.length} (load balanced)`
-                    : 'Provider for request forwarding';
+        const hasMultipleTiers = priorityGroups.length > 1;
+
+        const renderServiceNode = (provider: typeof sortedDefaultProviders[0]) => (
+            <ServiceNode
+                key={provider.uuid}
+                provider={provider}
+                apiStyle={getApiStyle(provider.provider)}
+                providersData={providers}
+                active={active && provider.active !== false}
+                onDelete={() => handleDeleteProvider(provider.uuid)}
+                onNodeClick={() => handleProviderNodeClick(provider.uuid)}
+                onPriorityChange={
+                    onProviderPriorityChange
+                        ? (priority) => handleProviderPriorityChange(provider.uuid, priority)
+                        : undefined
+                }
+            />
+        );
 
         return (
             <>
-                {sortedDefaultProviders.map((provider, index) => (
-                    <Tooltip
-                        key={provider.uuid}
-                        title={tooltipBuilder(provider, index)}
-                        placement="top"
-                        arrow
-                    >
-                        <Box>
-                            <ProviderNode
-                                provider={provider}
-                                apiStyle={getApiStyle(provider.provider)}
-                                providersData={providers}
-                                active={active && provider.active !== false}
-                                onDelete={() => handleDeleteProvider(provider.uuid)}
-                                onNodeClick={() => handleProviderNodeClick(provider.uuid)}
-                                onPriorityChange={
-                                    onProviderPriorityChange
-                                        ? (priority) => handleProviderPriorityChange(provider.uuid, priority)
-                                        : undefined
-                                }
-                            />
-                        </Box>
-                    </Tooltip>
-                ))}
+                {hasMultipleTiers ? (
+                    priorityGroups.map((group, groupIndex) => (
+                        <React.Fragment key={group.priority}>
+                            {groupIndex > 0 && (
+                                <DividerNode
+                                    label={group.priority > 0 ? `P${group.priority}` : '均衡'}
+                                    active={active}
+                                />
+                            )}
+                            {group.providers.map(renderServiceNode)}
+                        </React.Fragment>
+                    ))
+                ) : (
+                    sortedDefaultProviders.map(renderServiceNode)
+                )}
                 <ActionAddNode
                     active={active && !saving}
                     warning={record.providers.length === 0}
                     onAdd={onAddProvider ?? (() => {})}
                     tooltip={
                         record.providers.length === 0
-                            ? "Add a provider to enable request forwarding"
-                            : "Add another provider (load balancing will be enabled)"
+                            ? '添加服务以启用请求转发'
+                            : '添加服务（将启用负载均衡）'
                     }
                 />
             </>
         );
-    }, [sortedDefaultProviders, providers, active, saving, record.providers.length, onProviderPriorityChange, handleDeleteProvider, handleProviderNodeClick, handleProviderPriorityChange]);
+    }, [priorityGroups, sortedDefaultProviders, providers, active, saving, record.providers.length, onProviderPriorityChange, handleDeleteProvider, handleProviderNodeClick, handleProviderPriorityChange]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -326,28 +344,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         justifyContent: 'flex-start',
                                         alignItems: 'center'
                                     }}>
-                                        {rule.services.map((service, serviceIndex) => (
-                                            <Tooltip
+                                        {rule.services.map((service) => (
+                                            <ServiceNode
                                                 key={service.uuid}
-                                                title={
-                                                    rule.services && rule.services.length >= 2
-                                                        ? `Service ${serviceIndex + 1} of ${rule.services.length} (load balanced)`
-                                                        : 'Service for this smart rule'
-                                                }
-                                                placement="top"
-                                                arrow
-                                            >
-                                                <Box>
-                                                    <ProviderNode
-                                                        provider={service}
-                                                        apiStyle={getApiStyle(service.provider)}
-                                                        providersData={providers}
-                                                        active={active && service.active !== false}
-                                                        onDelete={() => onDeleteServiceFromSmartRule?.(rule.uuid, service.uuid)}
-                                                        onNodeClick={() => onProviderNodeClick?.(service.provider)}
-                                                    />
-                                                </Box>
-                                            </Tooltip>
+                                                provider={service}
+                                                apiStyle={getApiStyle(service.provider)}
+                                                providersData={providers}
+                                                active={active && service.active !== false}
+                                                onDelete={() => onDeleteServiceFromSmartRule?.(rule.uuid, service.uuid)}
+                                                onNodeClick={() => onProviderNodeClick?.(service.provider)}
+                                            />
                                         ))}
                                         <ActionAddNode
                                             active={active}

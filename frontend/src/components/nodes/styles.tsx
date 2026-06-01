@@ -109,8 +109,8 @@ export const graphNodeBaseHoverStyles = {
     transform: 'translateY(0)',
 } as const;
 
-// Provider node container
-export const ProviderNodeContainer = styled(Box)(({ theme }: { theme: Theme }) => ({
+// Service node container (formerly ProviderNodeContainer)
+export const ServiceNodeContainer = styled(Box)(({ theme }: { theme: Theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -127,6 +127,9 @@ export const ProviderNodeContainer = styled(Box)(({ theme }: { theme: Theme }) =
     ...graphNodeBaseHoverStyles,
     '&:hover': graphNodeHoverStyles(theme),
 }));
+
+/** @deprecated Use ServiceNodeContainer */
+export const ProviderNodeContainer = ServiceNodeContainer;
 
 // Styled model node with unified fixed size
 export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'compact' })<{

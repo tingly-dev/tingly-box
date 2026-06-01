@@ -19,8 +19,8 @@ import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
-import { ProviderNodeContainer, NODE_LAYER_STYLES } from './styles.tsx';
-import ProviderNodeContent from './ProviderNodeContent.tsx';
+import { ServiceNodeContainer, NODE_LAYER_STYLES } from './styles.tsx';
+import ServiceNodeContent from './ProviderNodeContent.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 
 const ActionButtonsBox = styled(Box)(() => ({
@@ -33,7 +33,7 @@ const ActionButtonsBox = styled(Box)(() => ({
     transition: 'opacity 0.2s',
 }));
 
-const ProviderNodeWrapper = styled(Box)(() => ({
+const ServiceNodeWrapper = styled(Box)(() => ({
     position: 'relative',
     '&:hover .action-buttons': { opacity: 1 },
 }));
@@ -42,13 +42,13 @@ const ProviderNodeWrapper = styled(Box)(() => ({
 const PriorityDisk = styled(Box, {
     shouldForwardProp: (p) => p !== 'hasPriority' && p !== 'active',
 })<{ hasPriority: boolean; active: boolean }>(({ theme, hasPriority, active }) => ({
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '0.72rem',
+    fontSize: '0.75rem',
     fontWeight: 700,
     lineHeight: 1,
     userSelect: 'none',
@@ -75,7 +75,7 @@ const getProviderInfo = (providerUuid: string, providersData: Provider[]) => {
     return { name: provider?.name || 'Unknown Provider', exists: !!provider, provider };
 };
 
-export interface ProviderNodeComponentProps {
+export interface ServiceNodeProps {
     provider: ConfigProvider;
     apiStyle: string;
     providersData: Provider[];
@@ -85,6 +85,9 @@ export interface ProviderNodeComponentProps {
     onPriorityChange?: (priority: number) => void;
 }
 
+/** @deprecated Use ServiceNodeProps */
+export type ProviderNodeComponentProps = ServiceNodeProps;
+
 interface PriorityBadgeProps {
     priority: number;
     onChange: (priority: number) => void;
@@ -93,12 +96,12 @@ interface PriorityBadgeProps {
 
 const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, active }) => {
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-    const [draft, setDraft] = useState(String(priority || ''));
+    const [draft, setDraft] = useState(String(priority ?? 0));
     const [error, setError] = useState<string | null>(null);
 
     const open = (e: React.MouseEvent<HTMLElement>) => {
         e.stopPropagation();
-        setDraft(String(priority || ''));
+        setDraft(String(priority ?? 0));
         setError(null);
         setAnchor(e.currentTarget);
     };
@@ -109,19 +112,19 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
     const commit = () => {
         try {
             const parsed = parseInt(draft, 10);
-            const next = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+            const next = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
             if (next !== priority) {
                 onChange(next);
             }
             close();
         } catch (err) {
-            setError('Invalid priority value. Please enter a number.');
+            setError('请输入有效的数字。');
         }
     };
 
     const tooltip = priority > 0
-        ? `Priority ${priority} (higher = tried first). Click to change.`
-        : 'No priority set. Click to assign a priority.';
+        ? `优先级 ${priority}（数值越大越优先）。点击修改。`
+        : '未设置优先级（与其他 0 级服务负载均衡）。点击分配优先级。';
 
     return (
         <>
@@ -130,11 +133,11 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                     hasPriority={priority > 0}
                     active={active}
                     onClick={active ? open : undefined}
-                    aria-label={priority > 0 ? `Priority ${priority}` : 'No priority set'}
+                    aria-label={priority > 0 ? `优先级 ${priority}` : '未设置优先级'}
                     role="button"
                     tabIndex={active ? 0 : undefined}
                 >
-                    {priority > 0 ? String(priority) : null}
+                    {String(priority ?? 0)}
                 </PriorityDisk>
             </NodeTooltip>
             <Popover
@@ -144,9 +147,11 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <Box sx={{ p: 1.5, width: 220 }}>
-                    <Typography variant="caption" color="text.secondary">Priority</Typography>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                <Box sx={{ p: 2, width: 240 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+                        设置优先级
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
                         <TextField
                             type="number"
                             size="small"
@@ -159,22 +164,29 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                             inputProps={{ min: 0, step: 1 }}
                             autoFocus
                             fullWidth
-                            placeholder="0 = unset"
+                            placeholder="0"
                             error={!!error}
                             helperText={error}
                         />
-                        <Button size="small" variant="contained" onClick={commit}>Set</Button>
+                        <Button size="small" variant="contained" onClick={commit} sx={{ mt: 0, flexShrink: 0 }}>
+                            确定
+                        </Button>
                     </Stack>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                        Higher number runs first. Same number = parallel tier.
-                    </Typography>
+                    <Box sx={{ mt: 1.25, p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                            <strong>数值越大越优先</strong>，优先级相同的服务将负载均衡。
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.6 }}>
+                            设为 <strong>0</strong> 表示不设优先级，与其他 0 级服务共享负载。
+                        </Typography>
+                    </Box>
                 </Box>
             </Popover>
         </>
     );
 };
 
-export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
+export const ServiceNode: React.FC<ServiceNodeProps> = ({
     provider,
     apiStyle,
     providersData,
@@ -194,9 +206,9 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     const apiStyleLabel = hasDualApiStyle ? 'openai / anthropic' : apiStyle;
 
     const identityTooltip = (() => {
-        if (isProviderMissing) return 'Provider not found. Please refresh or re-import.';
-        if (!provider.provider) return 'Select Provider';
-        const modelLine = provider.model ? `Model: ${provider.model}` : 'Model: (select model)';
+        if (isProviderMissing) return '找不到该 Provider，请刷新或重新导入。';
+        if (!provider.provider) return '选择 Provider';
+        const modelLine = provider.model ? `Model: ${provider.model}` : 'Model: (请选择模型)';
         const styleLine = apiStyleLabel ? `API Style: ${apiStyleLabel}` : '';
         return [`Provider: ${providerInfo.name}`, modelLine, styleLine].filter(Boolean).join('\n');
     })();
@@ -210,8 +222,8 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
     const hasPriority = !!onPriorityChange;
 
     return (
-        <ProviderNodeWrapper>
-            <ProviderNodeContent
+        <ServiceNodeWrapper>
+            <ServiceNodeContent
                 menuAnchorEl={menuAnchorEl}
                 menuOpen={menuOpen}
                 onMenuClose={handleMenuClose}
@@ -230,7 +242,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 />
             )}
 
-            <ProviderNodeContainer
+            <ServiceNodeContainer
                 onClick={onNodeClick}
                 sx={{ cursor: active ? 'pointer' : 'default' }}
             >
@@ -238,7 +250,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                     <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
                         <Typography variant="body2" color="text.secondary"
                             sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}>
-                            Select Provider
+                            选择 Provider
                         </Typography>
                     </Box>
                 ) : (
@@ -252,7 +264,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                                     fontStyle: !provider.model ? 'italic' : 'normal',
                                     color: provider.model ? 'text.primary' : 'text.disabled',
                                 }}>
-                                    {provider.model || 'select model'}
+                                    {provider.model || '选择模型'}
                                 </Typography>
                             </Box>
                         </NodeTooltip>
@@ -298,7 +310,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                 {/* Action buttons (hover) */}
                 <ActionButtonsBox className="action-buttons">
                     {provider.provider && providerInfo.exists && (
-                        <NodeTooltip title="Test Provider" placement="bottom">
+                        <NodeTooltip title="测试服务" placement="bottom">
                             <IconButton
                                 size="small"
                                 onClick={handleProbeClick}
@@ -308,7 +320,7 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                             </IconButton>
                         </NodeTooltip>
                     )}
-                    <NodeTooltip title="Delete Provider" placement="bottom">
+                    <NodeTooltip title="删除服务" placement="bottom">
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
@@ -318,7 +330,12 @@ export const ProviderNode: React.FC<ProviderNodeComponentProps> = ({
                         </IconButton>
                     </NodeTooltip>
                 </ActionButtonsBox>
-            </ProviderNodeContainer>
-        </ProviderNodeWrapper>
+            </ServiceNodeContainer>
+        </ServiceNodeWrapper>
     );
 };
+
+/** @deprecated Use ServiceNode */
+export const ProviderNode = ServiceNode;
+
+export default ServiceNode;

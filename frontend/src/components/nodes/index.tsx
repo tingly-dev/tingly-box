@@ -1,6 +1,7 @@
 // Re-exports from split node files
 export * from './ActionAddNode';
 export * from './ArrowNode';
+export * from './DividerNode';
 export * from './EntryNode';
 export * from './ServiceEntryNode';
 export * from './ModelNode';

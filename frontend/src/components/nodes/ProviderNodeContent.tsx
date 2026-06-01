@@ -9,14 +9,14 @@ import {
     Delete as DeleteIcon,
 } from '@/components/icons';
 
-interface ProviderNodeContentProps {
+interface ServiceNodeContentProps {
     menuAnchorEl: HTMLElement | null;
     menuOpen: boolean;
     onMenuClose: () => void;
     onDelete: () => void;
 }
 
-const ProviderNodeContent: React.FC<ProviderNodeContentProps> = ({
+const ServiceNodeContent: React.FC<ServiceNodeContentProps> = ({
     menuAnchorEl,
     menuOpen,
     onMenuClose,
@@ -35,7 +35,7 @@ const ProviderNodeContent: React.FC<ProviderNodeContentProps> = ({
                 <ListItemIcon>
                     <DeleteIcon />
                 </ListItemIcon>
-                <ListItemText>Delete Provider</ListItemText>
+                <ListItemText>Delete Service</ListItemText>
             </MenuItem>
             <MenuItem onClick={onMenuClose} sx={{ color: 'text.secondary' }}>
                 <ListItemText>Cancel</ListItemText>
@@ -44,4 +44,4 @@ const ProviderNodeContent: React.FC<ProviderNodeContentProps> = ({
     );
 };
 
-export default ProviderNodeContent;
+export default ServiceNodeContent;
