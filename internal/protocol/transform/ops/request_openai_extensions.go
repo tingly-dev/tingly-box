@@ -36,6 +36,12 @@ var ProviderConfigs = []providerConfig{
 		Transform:      applyDeepSeekTransform,
 	},
 
+	{
+		APIBasePattern: "https://api.kimi.com/coding/v1",
+		ModelPattern:   "*",
+		Transform:      applyDeepSeekTransform,
+	},
+
 	// Moonshot - official API (CN)
 	// Moonshot requires reasoning_content in assistant messages with tool_calls when thinking is enabled
 	// Similar to DeepSeek, we reuse applyDeepSeekTransform to handle x_thinking -> reasoning_content conversion
