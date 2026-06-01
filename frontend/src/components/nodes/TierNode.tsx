@@ -23,23 +23,19 @@ export const TierNode: React.FC<TierNodeProps> = ({
 
     const isPrimary = priority === 0;
 
+    const title = isPrimary
+        ? t('rule.tier.nodeTooltipPrimaryTitle', { defaultValue: 'T0 — Highest priority' })
+        : t('rule.tier.nodeTooltipFallbackTitle', { tier: priority, prev: priority - 1, defaultValue: `T${priority} — Fallback tier` });
+    const body = isPrimary
+        ? t('rule.tier.nodeTooltipPrimaryBody', { defaultValue: 'Tried first on every request. Services here are load-balanced.' })
+        : t('rule.tier.nodeTooltipFallbackBody', { tier: priority, prev: priority - 1, defaultValue: 'Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Services here are load-balanced.' });
+    const hint = t('rule.tier.nodeMoveHint', { defaultValue: '↑ / ↓  on a service card to move it to a different tier' });
+
     const tooltipContent = (
-        <Box sx={{ py: 0.25 }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
-                {isPrimary
-                    ? t('rule.tier.nodeTooltipPrimaryTitle', { defaultValue: 'T0 — Highest priority' })
-                    : t('rule.tier.nodeTooltipFallbackTitle', { tier: priority, prev: priority - 1, defaultValue: `T${priority} — Fallback tier` })
-                }
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', color: 'inherit', opacity: 0.85 }}>
-                {isPrimary
-                    ? t('rule.tier.nodeTooltipPrimaryBody', { defaultValue: 'Tried first on every request. Services here are load-balanced.' })
-                    : t('rule.tier.nodeTooltipFallbackBody', { tier: priority, prev: priority - 1, defaultValue: 'Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Services here are load-balanced.' })
-                }
-            </Typography>
-            <Typography variant="caption" sx={{ display: 'block', mt: 0.75, opacity: 0.65 }}>
-                {t('rule.tier.nodeMoveHint', { defaultValue: '↑ / ↓  on a service card to move it to a different tier' })}
-            </Typography>
+        <Box sx={{ whiteSpace: 'pre-line', maxWidth: 240 }}>
+            <strong>{title}</strong>
+            {`\n${body}\n\n`}
+            <Box component="span" sx={{ opacity: 0.7 }}>{hint}</Box>
         </Box>
     );
 
