@@ -18,10 +18,8 @@ import { getRouteGraphActiveColor, SMART_NODE_STYLES } from '@/components/nodes/
 import {
     ActionAddNode,
     ArrowNode,
-    DividerNode,
     NodeContainer,
     TierNode,
-    TIER_NODE_WIDTH,
     ServiceNode,
     SmartOpNode,
     ServiceEntryNode,
@@ -232,36 +230,15 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         }
     }, [smartRouting, onAddServiceToSmartRule]);
 
-    // isTierMode: at least 2 distinct tier values → stacked tier layout
-    const isTierMode = tierGroups.length > 1;
-
-    // Render a single ServiceNode for the flat (non-tier) layout.
-    // Down-arrow assigns the service to tier 1, entering tier mode
-    // (others stay at tier 0, becoming T0; moved service becomes T1).
-    const renderServiceNode = React.useCallback(
-        (provider: typeof sortedDefaultProviders[0]) => (
-            <ServiceNode
-                key={provider.uuid}
-                provider={provider}
-                apiStyle={getApiStyle(provider.provider)}
-                providersData={providers}
-                active={active && provider.active !== false}
-                onDelete={() => onDeleteProvider?.(provider.uuid)}
-                onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
-                showTier={false}
-                onMoveTierDown={onTierChange ? () => onTierChange(provider.uuid, 1) : undefined}
-            />
-        ),
-        [getApiStyle, providers, active, onDeleteProvider, onProviderNodeClick, onTierChange],
-    );
-
-    // Tier layout: all tier groups (including T0) rendered with TierNode label.
-    // Each service has up/down arrows. Up from T0 is hidden (already highest).
-    // Moving down past the last tier creates a new one.
+    // Tier layout: all tier groups rendered with TierNode label, always shown.
+    // T0 row is always present (even with no providers) to guide users.
+    // Each service has up/down arrows; up from T0 is hidden (already highest).
     const renderTierLayout = React.useCallback(() => {
+        // Always show at least T0, even when no providers exist
+        const groups = tierGroups.length > 0 ? tierGroups : [{ tier: 0, providers: [] as typeof sortedDefaultProviders }];
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {tierGroups.map((group, idx) => (
+                {groups.map((group, idx) => (
                     <Box
                         key={group.tier}
                         sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
@@ -283,44 +260,19 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         ))}
                         <ActionAddNode
                             active={active && !saving}
+                            warning={record.providers.length === 0 && idx === 0}
                             onAdd={() => onAddService?.(group.tier)}
-                            tooltip={t('rule.tooltips.addServiceSecond')}
+                            tooltip={
+                                record.providers.length === 0 && idx === 0
+                                    ? t('rule.tooltips.addServiceFirst')
+                                    : t('rule.tooltips.addServiceSecond')
+                            }
                         />
                     </Box>
                 ))}
             </Box>
         );
-    }, [t, tierGroups, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService]);
-
-    // Flat service list (no tiers): horizontal inline layout with dividers between groups
-    const renderProviderList = React.useCallback(() => {
-        const hasMultipleTiers = tierGroups.length > 1;
-
-        return (
-            <>
-                {hasMultipleTiers ? (
-                    tierGroups.map((group, groupIndex) => (
-                        <React.Fragment key={group.tier}>
-                            {groupIndex > 0 && <DividerNode active={active} />}
-                            {group.providers.map((p) => renderServiceNode(p))}
-                        </React.Fragment>
-                    ))
-                ) : (
-                    sortedDefaultProviders.map((p) => renderServiceNode(p))
-                )}
-                <ActionAddNode
-                    active={active && !saving}
-                    warning={record.providers.length === 0}
-                    onAdd={() => onAddService?.()}
-                    tooltip={
-                        record.providers.length === 0
-                            ? t('rule.tooltips.addServiceFirst')
-                            : t('rule.tooltips.addServiceSecond')
-                    }
-                />
-            </>
-        );
-    }, [t, tierGroups, sortedDefaultProviders, active, saving, record.providers.length, renderServiceNode, onAddService]);
+    }, [t, tierGroups, sortedDefaultProviders, active, saving, record.providers.length, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -429,19 +381,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <ArrowNode direction="forward" />
                 </Box>
 
-                {isTierMode ? (
-                    renderTierLayout()
-                ) : (
-                    <Box sx={{
-                        display: 'flex',
-                        gap: 1.5,
-                        flexWrap: 'nowrap',
-                        justifyContent: 'flex-start',
-                        alignItems: 'center',
-                    }}>
-                        {renderProviderList()}
-                    </Box>
-                )}
+                {renderTierLayout()}
             </GraphRow>
         );
     };
@@ -503,14 +443,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 {renderSmartRules()}
                                                 {renderDefaultProviders()}
                                             </Box>
-                                        ) : isTierMode ? (
-                                            /* Direct + Tier Mode: stacked tier rows */
-                                            renderTierLayout()
                                         ) : (
-                                            /* Direct Mode: providers inline */
-                                            <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 1.5, alignItems: 'center' }}>
-                                                {renderProviderList()}
-                                            </Box>
+                                            renderTierLayout()
                                         )}
                                     </GraphRow>
                                 </GraphContainer>

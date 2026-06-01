@@ -1,9 +1,8 @@
 import { Box, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip.tsx';
-import { getRouteGraphActiveColor, PROVIDER_NODE_STYLES } from './styles.tsx';
+import { getRouteGraphBorderColor, PROVIDER_NODE_STYLES } from './styles.tsx';
 
 export interface TierNodeProps {
     tierIndex: number;
@@ -33,8 +32,8 @@ export const TierNode: React.FC<TierNodeProps> = ({
                 justifyContent: 'center',
                 borderRadius: `${theme.shape.borderRadius}px`,
                 border: '1px solid',
-                borderColor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.44 : 0.38),
-                bgcolor: alpha(getRouteGraphActiveColor(theme), theme.palette.mode === 'dark' ? 0.07 : 0.04),
+                borderColor: getRouteGraphBorderColor(theme),
+                backgroundColor: theme.palette.background.paper,
                 opacity: active ? 1 : 0.6,
                 transition: 'border-color 0.16s, opacity 0.16s',
                 userSelect: 'none',
@@ -42,14 +41,14 @@ export const TierNode: React.FC<TierNodeProps> = ({
         >
             <NodeTooltip title={t('rule.tier.tooltip')} placement="left" arrow>
                 <Typography
-                    sx={(theme) => ({
-                        fontSize: '0.95rem',
-                        fontWeight: 800,
-                        color: getRouteGraphActiveColor(theme),
+                    sx={{
+                        fontSize: '0.9rem',
+                        fontWeight: 700,
+                        color: 'text.secondary',
                         letterSpacing: '0.02em',
                         lineHeight: 1,
                         cursor: 'default',
-                    })}
+                    }}
                 >
                     {`T${priority}`}
                 </Typography>
