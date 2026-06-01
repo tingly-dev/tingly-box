@@ -65,7 +65,7 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-uuid",
 		Name:     "Codex Pro",
@@ -78,7 +78,6 @@ func TestCodexFetcher_Fetch(t *testing.T) {
 				"account_id": "acct-123",
 			},
 		},
-		APIBase: server.URL,
 	}
 
 	usage, err := fetcher.Fetch(context.Background(), provider)
@@ -161,7 +160,7 @@ func TestCodexFetcher_Fetch_NoCredits(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
@@ -169,7 +168,6 @@ func TestCodexFetcher_Fetch_NoCredits(t *testing.T) {
 		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
-		APIBase: server.URL,
 	}
 
 	usage, err := fetcher.Fetch(context.Background(), provider)
@@ -194,11 +192,10 @@ func TestCodexFetcher_StatusError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
 	provider := &ai.Provider{
 		AuthType:    ai.AuthTypeOAuth,
 		OAuthDetail: &ai.OAuthDetail{AccessToken: "expired"},
-		APIBase:     server.URL,
 	}
 
 	_, err := fetcher.Fetch(context.Background(), provider)
@@ -287,7 +284,7 @@ func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-prolite",
 		Name:     "Codex ProLite",
@@ -295,7 +292,6 @@ func TestCodexFetcher_Fetch_WithAdditionalLimits(t *testing.T) {
 		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
-		APIBase: server.URL,
 	}
 
 	usage, err := fetcher.Fetch(context.Background(), provider)
@@ -367,7 +363,7 @@ func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
@@ -375,7 +371,6 @@ func TestCodexFetcher_Fetch_WithCodeReviewLimit(t *testing.T) {
 		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
-		APIBase: server.URL,
 	}
 
 	usage, err := fetcher.Fetch(context.Background(), provider)
@@ -427,7 +422,7 @@ func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-pro",
 		Name:     "Codex Pro",
@@ -435,7 +430,6 @@ func TestCodexFetcher_Fetch_WithCreditsBalancePointer(t *testing.T) {
 		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
-		APIBase: server.URL,
 	}
 
 	usage, err := fetcher.Fetch(context.Background(), provider)
@@ -475,7 +469,7 @@ func TestCodexFetcher_Fetch_WithNilCreditsBalance(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := &CodexFetcher{logger: logger}
+	fetcher := &CodexFetcher{logger: logger, baseURL: server.URL}
 	provider := &ai.Provider{
 		UUID:     "codex-free",
 		Name:     "Codex Free",
@@ -483,7 +477,6 @@ func TestCodexFetcher_Fetch_WithNilCreditsBalance(t *testing.T) {
 		OAuthDetail: &ai.OAuthDetail{
 			AccessToken: "test-token",
 		},
-		APIBase: server.URL,
 	}
 
 	usage, err := fetcher.Fetch(context.Background(), provider)

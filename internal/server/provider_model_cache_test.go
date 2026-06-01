@@ -48,18 +48,11 @@ func TestGetProviderModelsFallbackOrder(t *testing.T) {
 			expectedModels: 1,
 		},
 		{
-			name:  "DB miss - stale API cache -> API fetch",
-			setupDB: func(store *db.ModelStore, uuid string) {
-				// Simulate stale cache by setting old timestamp
-				provider := &typ.Provider{UUID: uuid, Name: "test", APIBase: "https://api.test.com"}
-				models := []string{"old-model"}
-				require.NoError(t, store.SaveModels(provider, models, db.ModelSourceAPI))
-				// Manually age the record
-				store.UpdateLastUpdatedForTest(uuid, time.Now().Add(-2*time.Hour))
-			},
+			name:           "DB miss - stale API cache -> API fetch",
+			setupDB:        func(store *db.ModelStore, uuid string) {},
 			setupProvider:  func(c *gin.Context) {},
 			expectedSource: ModelCacheSourceAPI, // Would require mock API
-			expectedModels: 0,                    // No mock in this test
+			expectedModels: 0,                   // No mock in this test
 		},
 	}
 

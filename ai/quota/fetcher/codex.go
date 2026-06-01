@@ -18,7 +18,8 @@ import (
 // Uses: GET https://chatgpt.com/backend-api/wham/usage
 // Requires OAuth access_token + optional account_id (from oauth_detail.extra_fields)
 type CodexFetcher struct {
-	logger *logrus.Logger
+	logger  *logrus.Logger
+	baseURL string // empty → production URL; override in tests only
 }
 
 func NewCodexFetcher(logger *logrus.Logger) *CodexFetcher {
@@ -134,10 +135,9 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		}
 	}
 
-	// Use provider.APIBase if set (for testing), fallback to production URL
 	apiBase := "https://chatgpt.com"
-	if provider.APIBase != "" && provider.APIBase != ai.CodexAPIBase {
-		apiBase = provider.APIBase
+	if f.baseURL != "" {
+		apiBase = f.baseURL
 	}
 	url := apiBase + "/backend-api/wham/usage"
 
