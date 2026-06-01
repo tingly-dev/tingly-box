@@ -90,7 +90,7 @@ export interface UnifiedRoutingGraphProps {
     onProviderNodeClick?: (providerUuid: string) => void;
     onTierChange?: (providerUuid: string, tier: number) => void;
     onDeleteProvider?: (providerUuid: string) => void;
-    onAddProvider?: (priority?: number) => void;
+    onAddProvider?: (tier?: number) => void;
     onMoveTier?: (tierPriority: number, direction: 'up' | 'down') => void;
     onToggleExpanded?: () => void;
 
@@ -214,7 +214,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     }, [record.providers]);
 
     // Group already-sorted providers into tiers (single pass — order preserved from sortedDefaultProviders)
-    const priorityGroups = React.useMemo(() => {
+    const tierGroups = React.useMemo(() => {
         const groups = new Map<number, typeof sortedDefaultProviders>();
         for (const p of sortedDefaultProviders) {
             const tier = p.tier ?? 0;
@@ -235,22 +235,22 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     }, [smartRouting, onAddServiceToSmartRule]);
 
     // Non-zero tier groups (sorted ascending by tier value = T1, T2, T3...)
-    const nonZeroPriorityGroups = React.useMemo(
-        () => priorityGroups.filter((g) => g.tier > 0),
-        [priorityGroups],
+    const nonZeroTierGroups = React.useMemo(
+        () => tierGroups.filter((g) => g.tier > 0),
+        [tierGroups],
     );
 
     // Unset-tier services (tier === 0)
     const zeroGroup = React.useMemo(
-        () => priorityGroups.find((g) => g.tier === 0) ?? null,
-        [priorityGroups],
+        () => tierGroups.find((g) => g.tier === 0) ?? null,
+        [tierGroups],
     );
 
-    const isTierMode = nonZeroPriorityGroups.length > 0;
+    const isTierMode = nonZeroTierGroups.length > 0;
 
     // Render a single ServiceNode (shared between both layouts)
     const renderServiceNode = React.useCallback(
-        (provider: typeof sortedDefaultProviders[0], hidePriorityBadge = false) => (
+        (provider: typeof sortedDefaultProviders[0], hideTierBadge = false) => (
             <ServiceNode
                 key={provider.uuid}
                 provider={provider}
@@ -259,12 +259,12 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 active={active && provider.active !== false}
                 onDelete={() => onDeleteProvider?.(provider.uuid)}
                 onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
-                onPriorityChange={
+                onTierChange={
                     onTierChange
                         ? (tier) => onTierChange(provider.uuid, tier)
                         : undefined
                 }
-                showPriority={!hidePriorityBadge}
+                showTier={!hideTierBadge}
             />
         ),
         [getApiStyle, providers, active, onDeleteProvider, onProviderNodeClick, onTierChange],
@@ -272,12 +272,12 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
     // Tier layout: stacked rows, one per tier, with TierNode on the left
     const renderTierLayout = React.useCallback(() => {
-        const tierValues = nonZeroPriorityGroups.map((g) => g.tier);
+        const tierValues = nonZeroTierGroups.map((g) => g.tier);
         const maxTier = tierValues.length > 0 ? tierValues[tierValues.length - 1] : 0;
 
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {nonZeroPriorityGroups.map((group, idx) => {
+                {nonZeroTierGroups.map((group, idx) => {
                     const prevTier = idx > 0 ? tierValues[idx - 1] : null;
                     const nextTier = idx < tierValues.length - 1 ? tierValues[idx + 1] : group.tier + 1;
                     return (
@@ -290,7 +290,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 priority={group.tier}
                                 active={active}
                                 canMoveUp={idx > 0}
-                                canMoveDown={idx < nonZeroPriorityGroups.length - 1}
+                                canMoveDown={idx < nonZeroTierGroups.length - 1}
                                 onMoveUp={() => onMoveTier?.(group.tier, 'up')}
                                 onMoveDown={() => onMoveTier?.(group.tier, 'down')}
                             />
@@ -303,7 +303,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                     active={active && p.active !== false}
                                     onDelete={() => onDeleteProvider?.(p.uuid)}
                                     onNodeClick={() => onProviderNodeClick?.(p.uuid)}
-                                    showPriority={false}
+                                    showTier={false}
                                     onMoveTierUp={prevTier !== null && onTierChange ? () => onTierChange(p.uuid, prevTier) : undefined}
                                     onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, nextTier) : undefined}
                                 />
@@ -333,7 +333,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 active={active && p.active !== false}
                                 onDelete={() => onDeleteProvider?.(p.uuid)}
                                 onNodeClick={() => onProviderNodeClick?.(p.uuid)}
-                                showPriority={false}
+                                showTier={false}
                                 onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, maxTier + 1) : undefined}
                             />
                         ))}
@@ -341,16 +341,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 )}
             </Box>
         );
-    }, [t, nonZeroPriorityGroups, zeroGroup, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onMoveTier, onAddProvider]);
+    }, [t, nonZeroTierGroups, zeroGroup, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onMoveTier, onAddProvider]);
 
     // Flat service list (no tiers): horizontal inline layout with dividers between groups
     const renderProviderList = React.useCallback(() => {
-        const hasMultipleTiers = priorityGroups.length > 1;
+        const hasMultipleTiers = tierGroups.length > 1;
 
         return (
             <>
                 {hasMultipleTiers ? (
-                    priorityGroups.map((group, groupIndex) => (
+                    tierGroups.map((group, groupIndex) => (
                         <React.Fragment key={group.tier}>
                             {groupIndex > 0 && <DividerNode active={active} />}
                             {group.providers.map((p) => renderServiceNode(p))}
@@ -371,7 +371,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 />
             </>
         );
-    }, [t, priorityGroups, sortedDefaultProviders, active, saving, record.providers.length, renderServiceNode, onAddProvider]);
+    }, [t, tierGroups, sortedDefaultProviders, active, saving, record.providers.length, renderServiceNode, onAddProvider]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -555,7 +555,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 {renderDefaultProviders()}
                                             </Box>
                                         ) : isTierMode ? (
-                                            /* Direct + Priority Mode: stacked tier rows */
+                                            /* Direct + Tier Mode: stacked tier rows */
                                             renderTierLayout()
                                         ) : (
                                             /* Direct Mode: providers inline */

@@ -172,7 +172,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // Handler: Update a service's tier. Setting any service's tier to > 0
     // flips the rule into "tier" tactic on save (handled in pickLbTactic).
-    const handleProviderPriorityChange = useCallback(
+    const handleProviderTierChange = useCallback(
         async (providerUuid: string, tier: number) => {
             if (!configRecord) return;
             const updated = configRecord.providers.map((p) =>
@@ -347,7 +347,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 extensionsCard={extensionsCard}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}
-                onTierChange={handleProviderPriorityChange}
+                onTierChange={handleProviderTierChange}
                 onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
                 onAddProvider={handleAddProviderButtonClick}
                 onMoveTier={handleMoveTier}

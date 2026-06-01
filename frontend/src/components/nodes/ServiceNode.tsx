@@ -41,8 +41,8 @@ const ServiceNodeWrapper = styled(Box)(() => ({
     '&:hover .action-buttons': { opacity: 1 },
 }));
 
-// Inline priority disk — lives inside the left column of the node, no overflow.
-const PriorityDisk = styled(Box, {
+// Inline tier disk — lives inside the left column of the node, no overflow.
+const TierDisk = styled(Box, {
     shouldForwardProp: (p) => p !== 'active',
 })<{ active: boolean }>(({ theme, active }) => ({
     width: 24,
@@ -76,8 +76,8 @@ export interface ServiceNodeProps {
     active: boolean;
     onDelete: () => void;
     onNodeClick: () => void;
-    onPriorityChange?: (priority: number) => void;
-    showPriority?: boolean;
+    onTierChange?: (priority: number) => void;
+    showTier?: boolean;
     onMoveTierUp?: () => void;
     onMoveTierDown?: () => void;
 }
@@ -85,13 +85,13 @@ export interface ServiceNodeProps {
 /** @deprecated Use ServiceNodeProps */
 export type ProviderNodeComponentProps = ServiceNodeProps;
 
-interface PriorityBadgeProps {
+interface TierBadgeProps {
     priority: number;
     onChange: (priority: number) => void;
     active: boolean;
 }
 
-const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, active }) => {
+const TierBadge: React.FC<TierBadgeProps> = ({ priority, onChange, active }) => {
     const { t } = useTranslation();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [draft, setDraft] = useState(String(priority ?? 0));
@@ -124,7 +124,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
     return (
         <>
             <NodeTooltip title={tooltip} placement="left">
-                <PriorityDisk
+                <TierDisk
                     active={active}
                     onClick={active ? open : undefined}
                     aria-label={priority > 0 ? t('rule.tier.ariaLabel', { tier: priority }) : t('rule.tier.ariaUnset')}
@@ -132,7 +132,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                     tabIndex={active ? 0 : undefined}
                 >
                     {String(priority ?? 0)}
-                </PriorityDisk>
+                </TierDisk>
             </NodeTooltip>
             <Popover
                 open={Boolean(anchor)}
@@ -187,8 +187,8 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     active,
     onDelete,
     onNodeClick,
-    onPriorityChange,
-    showPriority = true,
+    onTierChange,
+    showTier = true,
     onMoveTierUp,
     onMoveTierDown,
 }) => {
@@ -219,7 +219,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const handleProbeClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setProbeAnchorEl(e.currentTarget); };
     const handleProbeClose = () => setProbeAnchorEl(null);
 
-    const hasPriority = showPriority && !!onPriorityChange;
+    const hasTier = showTier && !!onTierChange;
 
     return (
         <ServiceNodeWrapper>
@@ -255,14 +255,14 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                     </Box>
                 ) : (
                     <>
-                        {/* Row 1: priority disk (left) + model name (center) */}
+                        {/* Row 1: tier disk (left) + model name (center) */}
                         <NodeTooltip title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>} placement="top">
                             <Box sx={{ ...NODE_LAYER_STYLES.topLayer, position: 'relative', px: '28px' }}>
-                                {hasPriority && (
+                                {hasTier && (
                                     <Box sx={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', lineHeight: 0 }}>
-                                        <PriorityBadge
+                                        <TierBadge
                                             priority={provider.tier ?? 0}
-                                            onChange={onPriorityChange!}
+                                            onChange={onTierChange!}
                                             active={active}
                                         />
                                     </Box>
