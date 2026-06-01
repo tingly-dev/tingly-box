@@ -43,15 +43,26 @@ export const DividerNode: React.FC<DividerNodeProps> = ({ active = true }) => {
                 borderRadius: '1px',
             })} />
 
-            {/* Help icon sitting on the line */}
+            {/* Help icon sitting on the line, centered */}
             <Tooltip title={t('rule.priority.dividerHelp')} placement="top" arrow>
-                <Box sx={{ lineHeight: 0, cursor: 'help', zIndex: 1, bgcolor: 'background.paper', borderRadius: '50%' }}>
+                <Box sx={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    lineHeight: 0,
+                    cursor: 'help',
+                    zIndex: 1,
+                    bgcolor: 'background.paper',
+                    borderRadius: '50%',
+                    p: '1px',
+                }}>
                     <HelpOutline
                         sx={(theme) => ({
-                            fontSize: '0.85rem',
+                            fontSize: '1rem',
                             color: alpha(
                                 getRouteGraphActiveColor(theme),
-                                theme.palette.mode === 'dark' ? 0.55 : 0.45,
+                                theme.palette.mode === 'dark' ? 0.60 : 0.50,
                             ),
                             display: 'block',
                             transition: 'color 0.15s',
