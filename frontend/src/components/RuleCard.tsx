@@ -183,32 +183,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         [configRecord, updateField, setConfigRecord]
     );
 
-    // Handler: Move an entire tier up or down by swapping its tier value
-    // with the adjacent tier.
-    const handleMoveTier = useCallback(
-        async (tierPriority: number, direction: 'up' | 'down') => {
-            if (!configRecord) return;
-            const nonZero = [...new Set(
-                configRecord.providers
-                    .map((p) => p.tier ?? 0)
-                    .filter((v) => v > 0)
-            )].sort((a, b) => a - b);
-            const idx = nonZero.indexOf(tierPriority);
-            if (idx < 0) return;
-            const adjacentIdx = direction === 'up' ? idx - 1 : idx + 1;
-            if (adjacentIdx < 0 || adjacentIdx >= nonZero.length) return;
-            const adj = nonZero[adjacentIdx];
-            const updated = configRecord.providers.map((p) => {
-                const prio = p.tier ?? 0;
-                if (prio === tierPriority) return { ...p, tier: adj };
-                if (prio === adj) return { ...p, tier: tierPriority };
-                return p;
-            });
-            await updateField(configRecord, setConfigRecord, 'providers', updated);
-        },
-        [configRecord, updateField, setConfigRecord]
-    );
-
     // Adapter: Convert ruleUuid to ruleIndex for smart routing handlers
     const handleAddServiceToSmartRuleByUuid = useCallback(
         (ruleUuid: string) => {
@@ -350,7 +324,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onTierChange={handleProviderTierChange}
                 onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
                 onAddService={handleAddServiceButtonClick}
-                onMoveTier={handleMoveTier}
                 onAddSmartRule={smartHandlers.handleAddSmartRule}
                 onEditSmartRule={smartHandlers.handleEditSmartRule}
                 onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}
