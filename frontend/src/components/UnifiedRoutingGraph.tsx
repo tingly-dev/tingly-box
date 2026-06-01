@@ -370,7 +370,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     const renderDefaultProviders = () => {
         return (
             <GraphRow sx={{ alignItems: 'flex-start' }}>
-                <NodeContainer>
+                {/* Fixed height matches the tier row (72px) so ServiceEntryNode centres vertically */}
+                <NodeContainer sx={{ height: 72, justifyContent: 'center' }}>
                     <ServiceEntryNode
                         providersCount={record.providers.length}
                         active={active}
