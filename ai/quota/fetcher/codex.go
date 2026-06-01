@@ -134,8 +134,11 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 		}
 	}
 
-	// Use provider.APIBase for testing, fallback to production URL
+	// Use provider.APIBase if set (for testing), fallback to production URL
 	apiBase := "https://chatgpt.com"
+	if provider.APIBase != "" && provider.APIBase != ai.CodexAPIBase {
+		apiBase = provider.APIBase
+	}
 	url := apiBase + "/backend-api/wham/usage"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

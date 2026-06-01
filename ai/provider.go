@@ -114,13 +114,18 @@ func (o *OAuthDetail) MarshalJSON() ([]byte, error) {
 	// Define a type alias to avoid infinite recursion
 	type alias OAuthDetail
 
-	// For backward compatibility, if Issuer is set, also write it to provider_type
+	// Prefer Issuer for provider_type; fall back to ProviderType if Issuer is empty
+	providerType := string(o.Issuer)
+	if providerType == "" {
+		providerType = o.ProviderType
+	}
+
 	tmp := struct {
 		alias
 		ProviderType string `json:"provider_type,omitempty"`
 	}{
 		alias:        alias(*o),
-		ProviderType: string(o.Issuer), // Write Issuer to provider_type for compatibility
+		ProviderType: providerType,
 	}
 
 	return json.Marshal(tmp)
@@ -342,6 +347,9 @@ func (p *Provider) IsOAuthToken() bool {
 
 // IsClaudeCodeProvider checks if this provider is using Claude Code OAuth
 func (p *Provider) IsClaudeCodeProvider() bool {
+	if p == nil {
+		return false
+	}
 	if p.AuthType == AuthTypeOAuth && p.OAuthDetail != nil {
 		return p.OAuthDetail.GetIssuer() == IssuerClaudeCode
 	}

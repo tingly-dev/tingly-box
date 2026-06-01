@@ -2,8 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -57,7 +55,7 @@ func TestGetProviderModelsFallbackOrder(t *testing.T) {
 				models := []string{"old-model"}
 				require.NoError(t, store.SaveModels(provider, models, db.ModelSourceAPI))
 				// Manually age the record
-				store.(*db.ModelStore).UpdateLastUpdatedForTest(uuid, time.Now().Add(-2*time.Hour))
+				store.UpdateLastUpdatedForTest(uuid, time.Now().Add(-2*time.Hour))
 			},
 			setupProvider:  func(c *gin.Context) {},
 			expectedSource: ModelCacheSourceAPI, // Would require mock API

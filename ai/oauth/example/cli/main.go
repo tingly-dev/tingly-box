@@ -96,7 +96,7 @@ func main() {
 	showToken := flag.Bool("show-token", false, "Show full token (default false for security)")
 	flag.Parse()
 
-	providerType, err := oauth.ParseProviderType(*provider)
+	providerType, err := oauth.ParseProviderType(ai.Issuer(*provider))
 	if err != nil {
 		log.Fatalf("Invalid provider: %v", err)
 	}
