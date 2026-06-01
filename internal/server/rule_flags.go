@@ -111,15 +111,16 @@ func resolveRuleFlagsWithScenario(
 
 	if scenarioConfig != nil {
 		// Inject scenario-level ThinkingEffort if not already set at rule level
-		if flags.ThinkingEffort == typ.ThinkingEffortDefault &&
-		   scenarioConfig.Flags.ThinkingEffort != typ.ThinkingEffortDefault {
+		if flags.ThinkingEffort != typ.ThinkingEffortDefault {
 			flags.ThinkingEffort = scenarioConfig.Flags.ThinkingEffort
+		} else {
+			if scenarioConfig.Flags.ThinkingEffort != typ.ThinkingEffortDefault {
+				flags.ThinkingEffort = scenarioConfig.Flags.ThinkingEffort
+			}
 		}
 
 		// Inject scenario-level CleanHeader if not already set at rule level
-		if !flags.CleanHeader && scenarioConfig.Flags.CleanHeader {
-			flags.CleanHeader = true
-		}
+		flags.CleanHeader = flags.CleanHeader || scenarioConfig.Flags.CleanHeader
 	}
 
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios
