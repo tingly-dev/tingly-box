@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import RemoteControlGraph from './RemoteControlGraph.tsx';
 
 const GraphRowContainer = styled(TableRow)({
@@ -62,6 +63,11 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
     isToggling = false,
 }) => {
     const isBotEnabled = bot.enabled ?? true;
+    const navigate = useNavigate();
+
+    const handleAgentClick = useCallback(() => {
+        navigate('/agent/claude_code');
+    }, [navigate]);
 
     const handleBotToggle = useCallback((enabled: boolean) => {
         onBotToggle?.(bot.uuid || '', enabled);
@@ -147,6 +153,7 @@ const BotGraphRow: React.FC<BotGraphRowProps> = ({
                                 onCWDChange={onCWDChange}
                                 onModelClick={onModelClick}
                                 onBotClick={onEdit}
+                                onAgentClick={handleAgentClick}
                             />
                         </Box>
                     </Collapse>

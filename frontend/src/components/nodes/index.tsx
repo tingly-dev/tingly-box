@@ -10,6 +10,7 @@ export * from './SmartOpNode';
 export * from './styles';
 
 // Remote Graph nodes
+export { default as AtNode } from './AtNode';
 export { default as ImBotNode } from './ImBotNode';
 export { default as AgentNode } from './AgentNode';
 export { default as AgentConfigNode } from './AgentConfigNode';

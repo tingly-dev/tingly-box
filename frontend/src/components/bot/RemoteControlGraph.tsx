@@ -1,10 +1,12 @@
-import {Box} from '@mui/material';
-import type {BotSettings} from '@/types/bot.ts';
-import type {Provider} from '@/types/provider.ts';
-import {ArrowNode, NodeContainer} from '../nodes';
+import { Box } from '@mui/material';
+import type { BotSettings } from '@/types/bot.ts';
+import type { Provider } from '@/types/provider.ts';
+import { ArrowNode, NodeContainer } from '../nodes';
 import ImBotNode from '../nodes/ImBotNode.tsx';
 import BotModelNode from '../nodes/BotModelNode.tsx';
 import CWDNode from '../nodes/ConfigNode.tsx';
+import AgentNode from '../nodes/AgentNode.tsx';
+import AtNode from '../nodes/AtNode.tsx';
 
 const graphRowStyles = (theme: any) => ({
     display: 'flex',
@@ -24,10 +26,9 @@ interface RemoteGraphRowProps {
     onCWDChange: (cwd: string) => void;
     onModelClick?: () => void;
     onBotClick?: () => void;
-    showAgentNode?: boolean; // Optional prop to show Agent node for future use
+    onAgentClick?: () => void;
 }
 
-// Helper function to get provider name from providersData
 const getProviderName = (providerUuid: string | undefined, providersData: Provider[]): string => {
     if (!providerUuid) return '';
     const provider = providersData.find(p => p.uuid === providerUuid);
@@ -43,33 +44,72 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
     onCWDChange,
     onModelClick,
     onBotClick,
-    showAgentNode = false, // Default to false for simplified 3-node layout
+    onAgentClick,
 }) => {
     const providerName = getProviderName(imbot.smartguide_provider, providers);
 
     return (
         <Box sx={graphRowStyles}>
+            {/* Bot node */}
             <NodeContainer>
-                <ImBotNode imbot={imbot} active={isBotEnabled} onClick={readOnly ? undefined : onBotClick}/>
+                <ImBotNode imbot={imbot} active={isBotEnabled} onClick={readOnly ? undefined : onBotClick} />
             </NodeContainer>
 
-            <ArrowNode direction="forward"/>
+            <ArrowNode direction="forward" />
 
-            <NodeContainer>
-                <BotModelNode
-                    provider={imbot.smartguide_provider}
-                    providerName={providerName}
-                    model={imbot.smartguide_model}
-                    active={isBotEnabled}
-                    onClick={readOnly ? undefined : onModelClick}
-                />
-            </NodeContainer>
+            {/* Two branches: @tb and @cc */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    borderLeft: '2px solid',
+                    borderColor: 'divider',
+                    pl: 2,
+                }}
+            >
+                {/* @tb branch: tingly-box service routing */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <NodeContainer>
+                        <AtNode type="tb" />
+                    </NodeContainer>
 
-            <ArrowNode direction="forward"/>
+                    <ArrowNode direction="forward" />
 
-            <NodeContainer>
-                <CWDNode currentPath={currentCWD} onPathChange={onCWDChange} disabled={readOnly || !isBotEnabled}/>
-            </NodeContainer>
+                    <NodeContainer>
+                        <BotModelNode
+                            provider={imbot.smartguide_provider}
+                            providerName={providerName}
+                            model={imbot.smartguide_model}
+                            active={isBotEnabled}
+                            onClick={readOnly ? undefined : onModelClick}
+                        />
+                    </NodeContainer>
+
+                    <ArrowNode direction="forward" />
+
+                    <NodeContainer>
+                        <CWDNode currentPath={currentCWD} onPathChange={onCWDChange} disabled={readOnly || !isBotEnabled} />
+                    </NodeContainer>
+                </Box>
+
+                {/* @cc branch: Claude Code agent */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <NodeContainer>
+                        <AtNode type="cc" />
+                    </NodeContainer>
+
+                    <ArrowNode direction="forward" />
+
+                    <NodeContainer>
+                        <AgentNode
+                            agentType="claude-code"
+                            active={isBotEnabled}
+                            onClick={onAgentClick}
+                        />
+                    </NodeContainer>
+                </Box>
+            </Box>
         </Box>
     );
 };
