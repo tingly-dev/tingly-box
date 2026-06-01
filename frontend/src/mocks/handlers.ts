@@ -230,29 +230,49 @@ const mockV1Rules: Record<string, any[]> = {
     claude_code: [
         {
             // Unified-mode rule fetched by GET /api/v1/rule/built-in-cc.
-            // Demonstrates smart routing in the default ("Unified Model") view.
+            // Demonstrates smart routing with fabric conditions + tiered default fallback.
             uuid: 'built-in-cc',
             scenario: 'claude_code',
             request_model: 'claude-sonnet-4-6',
             response_model: '',
             active: true,
-            description: 'Unified Claude Code routing (smart)',
+            description: 'Smart routing + tiered fallback',
+            // Default providers in 3 tiers: T0 primary, T1 secondary, T2 budget
             services: [
-                { uuid: 'svc-cc-builtin-default', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true },
+                { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true, tier: 0 },
+                { uuid: 'svc-cc-t0-b', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true, tier: 0 },
+                { uuid: 'svc-cc-t1-a', provider: 'mock-provider-gemini', model: 'gemini-2.0-flash', weight: 1, active: true, tier: 1 },
+                { uuid: 'svc-cc-t2-a', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true, tier: 2 },
+                { uuid: 'svc-cc-t2-b', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true, tier: 2 },
             ],
             smart_enabled: true,
             smart_routing: [
                 {
-                    uuid: 'smart-cc-builtin-sub',
-                    description: 'Subagent → Deepseek',
+                    uuid: 'smart-cc-bi-sub',
+                    description: 'Subagent → Deepseek R1',
                     ops: [{ uuid: 'op-cc-bi-sub', position: 'agent.claude_code', operation: 'equals', value: 'subagent' }],
-                    services: [{ uuid: 'svc-sm-cc-bi-sub', provider: 'mock-provider-deepseek', model: 'deepseek-chat', weight: 1, active: true }],
+                    services: [{ uuid: 'svc-sm-cc-bi-sub', provider: 'mock-provider-deepseek', model: 'deepseek-reasoner', weight: 1, active: true }],
                 },
                 {
-                    uuid: 'smart-cc-builtin-cmp',
-                    description: 'Compact → GLM',
+                    uuid: 'smart-cc-bi-cmp',
+                    description: 'Compact → GLM cheap summarisation',
                     ops: [{ uuid: 'op-cc-bi-cmp', position: 'agent.claude_code', operation: 'equals', value: 'compact' }],
                     services: [{ uuid: 'svc-sm-cc-bi-cmp', provider: 'mock-provider-glm', model: 'glm-4.7', weight: 1, active: true }],
+                },
+                {
+                    uuid: 'smart-cc-bi-tok',
+                    description: 'Large context ≥ 60k tokens → Gemini',
+                    ops: [{ uuid: 'op-cc-bi-tok', position: 'token', operation: 'ge', value: '60000' }],
+                    services: [{ uuid: 'svc-sm-cc-bi-tok', provider: 'mock-provider-gemini', model: 'gemini-2.0-flash', weight: 1, active: true }],
+                },
+                {
+                    uuid: 'smart-cc-bi-default',
+                    description: 'Default (unconditional fallback)',
+                    ops: [],
+                    services: [
+                        { uuid: 'svc-sm-cc-bi-def-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true },
+                        { uuid: 'svc-sm-cc-bi-def-b', provider: 'mock-provider-openai', model: 'gpt-4o', weight: 1, active: true },
+                    ],
                 },
             ],
         },
