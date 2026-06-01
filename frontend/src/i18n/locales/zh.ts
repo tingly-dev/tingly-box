@@ -382,7 +382,12 @@ export default {
       "tierBalanced": "均衡",
       "dividerHelp": "编号越小的层级越优先。只有当该层级所有服务均不可用（熔断）时，流量才会降级到下一层级。同一层级内的服务之间负载均衡。",
       "tooltip": "T0 最先尝试，T1 为备用，依此类推。同一层级内的服务负载均衡。",
-      "addTierTooltip": "添加新的后备层级"
+      "addTierTooltip": "添加新的后备层级",
+      "nodeTooltipPrimaryTitle": "T0 — 最高优先级",
+      "nodeTooltipPrimaryBody": "每次请求优先尝试，同层级内服务负载均衡。",
+      "nodeTooltipFallbackTitle": "T{{tier}} — 后备层级",
+      "nodeTooltipFallbackBody": "仅当 T{{prev}} 所有服务不可用时才启用，同层级内服务负载均衡。",
+      "nodeMoveHint": "↑ / ↓  拖动服务卡片可移动到其他层级"
     },
     "menu": {
       "refreshModels": "刷新模型",

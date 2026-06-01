@@ -381,7 +381,12 @@ export default {
       "tierBalanced": "Balanced",
       "dividerHelp": "Lower-numbered tiers are always tried first. Only when all services in a tier fail (circuit open) does traffic fall through to the next tier. Services within the same tier are load-balanced.",
       "tooltip": "T0 is tried first, T1 is the fallback, and so on. Services within the same tier are load-balanced.",
-      "addTierTooltip": "Add a new fallback tier"
+      "addTierTooltip": "Add a new fallback tier",
+      "nodeTooltipPrimaryTitle": "T0 — Highest priority",
+      "nodeTooltipPrimaryBody": "Tried first on every request. Services here are load-balanced.",
+      "nodeTooltipFallbackTitle": "T{{tier}} — Fallback tier",
+      "nodeTooltipFallbackBody": "Only used when all T{{prev}} services are unavailable. Services here are load-balanced.",
+      "nodeMoveHint": "↑ / ↓  on a service card to move it to a different tier"
     },
     "menu": {
       "refreshModels": "Refresh Models",
