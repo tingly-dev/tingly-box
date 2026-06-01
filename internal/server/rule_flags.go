@@ -161,6 +161,11 @@ func isBillingHeaderScenario(scenario typ.RuleScenario) bool {
 	case typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
 		return true
 	default:
+		// for profile
+		if strings.HasPrefix(string(scenario), string(typ.ScenarioClaudeCode)) {
+			return true
+		}
+
 		return false
 	}
 }
