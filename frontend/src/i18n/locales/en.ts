@@ -358,19 +358,41 @@ export default {
       "addProvider": "Add Provider",
       "noProviders": "No providers configured",
       "legend": "• Click provider node to select provider and model",
-      "selectProvider": "Select provider",
-      "selectModel": "Select model"
+      "selectProvider": "Select Provider",
+      "selectModel": "Select Model"
+    },
+    "service": {
+      "providerNotFound": "Provider not found. Please refresh or re-import.",
+      "selectProvider": "Select Provider",
+      "selectModel": "Select Model",
+      "testService": "Test Service",
+      "deleteService": "Delete Service"
+    },
+    "priority": {
+      "invalidInput": "Please enter a valid number.",
+      "tooltipSet": "Priority {{priority}} (higher = tried first). Click to change.",
+      "tooltipUnset": "No priority set (load balanced with other tier-0 services). Click to assign.",
+      "ariaLabel": "Priority {{priority}}",
+      "ariaUnset": "No priority",
+      "editTitle": "Set Priority",
+      "helpHigher": "Higher number = higher priority. Services in the same tier are load balanced.",
+      "helpZero": "Set to 0 for no priority — shares load with other tier-0 services.",
+      "tierLabel": "P{{priority}}",
+      "tierBalanced": "Balanced"
     },
     "menu": {
       "refreshModels": "Refresh Models",
       "deleteProvider": "Delete Provider",
+      "deleteService": "Delete Service",
       "deleteSmartRule": "Delete Smart Rule"
     },
     "tooltips": {
       "addProviderFirst": "Add a provider to enable request forwarding",
       "addProviderSecond": "Add another provider (with 2+ providers, load balancing will be enabled based on strategy)",
       "addProviderMore": "Add another provider (requests will be load balanced across all providers)",
-      "addFirstProvider": "Add your first provider"
+      "addFirstProvider": "Add your first provider",
+      "addServiceFirst": "Add a service to enable request forwarding",
+      "addServiceSecond": "Add another service (load balancing will be enabled)"
     },
     "notifications": {
       "loadFailed": "Failed to load data",

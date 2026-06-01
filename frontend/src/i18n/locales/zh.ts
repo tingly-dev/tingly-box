@@ -362,16 +362,38 @@ export default {
       "selectProvider": "选择提供商",
       "selectModel": "选择模型"
     },
+    "service": {
+      "providerNotFound": "找不到该提供商，请刷新或重新导入。",
+      "selectProvider": "选择提供商",
+      "selectModel": "选择模型",
+      "testService": "测试服务",
+      "deleteService": "删除服务"
+    },
+    "priority": {
+      "invalidInput": "请输入有效的数字。",
+      "tooltipSet": "优先级 {{priority}}（数值越大越优先）。点击修改。",
+      "tooltipUnset": "未设置优先级（与其他 0 级服务负载均衡）。点击分配优先级。",
+      "ariaLabel": "优先级 {{priority}}",
+      "ariaUnset": "未设置优先级",
+      "editTitle": "设置优先级",
+      "helpHigher": "数值越大越优先，优先级相同的服务将负载均衡。",
+      "helpZero": "设为 0 表示不设优先级，与其他 0 级服务共享负载。",
+      "tierLabel": "P{{priority}}",
+      "tierBalanced": "均衡"
+    },
     "menu": {
       "refreshModels": "刷新模型",
       "deleteProvider": "删除提供商",
+      "deleteService": "删除服务",
       "deleteSmartRule": "删除智能规则"
     },
     "tooltips": {
       "addProviderFirst": "添加提供商以启用请求转发",
       "addProviderSecond": "添加另一个提供商（有 2+ 个提供商时，将根据策略启用负载平衡）",
       "addProviderMore": "添加另一个提供商（请求将在所有提供商之间负载平衡）",
-      "addFirstProvider": "添加您的第一个提供商"
+      "addFirstProvider": "添加您的第一个提供商",
+      "addServiceFirst": "添加服务以启用请求转发",
+      "addServiceSecond": "添加服务（将启用负载均衡）"
     },
     "notifications": {
       "loadFailed": "加载数据失败",

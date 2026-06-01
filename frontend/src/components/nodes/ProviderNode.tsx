@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import { ProbeV2Menu } from '../probe';
@@ -95,6 +96,7 @@ interface PriorityBadgeProps {
 }
 
 const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, active }) => {
+    const { t } = useTranslation();
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     const [draft, setDraft] = useState(String(priority ?? 0));
     const [error, setError] = useState<string | null>(null);
@@ -117,14 +119,14 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                 onChange(next);
             }
             close();
-        } catch (err) {
-            setError('请输入有效的数字。');
+        } catch {
+            setError(t('rule.priority.invalidInput'));
         }
     };
 
     const tooltip = priority > 0
-        ? `优先级 ${priority}（数值越大越优先）。点击修改。`
-        : '未设置优先级（与其他 0 级服务负载均衡）。点击分配优先级。';
+        ? t('rule.priority.tooltipSet', { priority })
+        : t('rule.priority.tooltipUnset');
 
     return (
         <>
@@ -133,7 +135,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                     hasPriority={priority > 0}
                     active={active}
                     onClick={active ? open : undefined}
-                    aria-label={priority > 0 ? `优先级 ${priority}` : '未设置优先级'}
+                    aria-label={priority > 0 ? t('rule.priority.ariaLabel', { priority }) : t('rule.priority.ariaUnset')}
                     role="button"
                     tabIndex={active ? 0 : undefined}
                 >
@@ -149,7 +151,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
             >
                 <Box sx={{ p: 2, width: 240 }}>
                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-                        设置优先级
+                        {t('rule.priority.editTitle')}
                     </Typography>
                     <Stack direction="row" spacing={1} alignItems="flex-start">
                         <TextField
@@ -169,15 +171,15 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                             helperText={error}
                         />
                         <Button size="small" variant="contained" onClick={commit} sx={{ mt: 0, flexShrink: 0 }}>
-                            确定
+                            {t('common.confirm')}
                         </Button>
                     </Stack>
                     <Box sx={{ mt: 1.25, p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                            <strong>数值越大越优先</strong>，优先级相同的服务将负载均衡。
+                            {t('rule.priority.helpHigher')}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.6 }}>
-                            设为 <strong>0</strong> 表示不设优先级，与其他 0 级服务共享负载。
+                            {t('rule.priority.helpZero')}
                         </Typography>
                     </Box>
                 </Box>
@@ -195,6 +197,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     onNodeClick,
     onPriorityChange,
 }) => {
+    const { t } = useTranslation();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(menuAnchorEl);
@@ -206,9 +209,11 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const apiStyleLabel = hasDualApiStyle ? 'openai / anthropic' : apiStyle;
 
     const identityTooltip = (() => {
-        if (isProviderMissing) return '找不到该 Provider，请刷新或重新导入。';
-        if (!provider.provider) return '选择 Provider';
-        const modelLine = provider.model ? `Model: ${provider.model}` : 'Model: (请选择模型)';
+        if (isProviderMissing) return t('rule.service.providerNotFound');
+        if (!provider.provider) return t('rule.service.selectProvider');
+        const modelLine = provider.model
+            ? `Model: ${provider.model}`
+            : `Model: (${t('rule.service.selectModel')})`;
         const styleLine = apiStyleLabel ? `API Style: ${apiStyleLabel}` : '';
         return [`Provider: ${providerInfo.name}`, modelLine, styleLine].filter(Boolean).join('\n');
     })();
@@ -250,7 +255,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                     <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>
                         <Typography variant="body2" color="text.secondary"
                             sx={{ ...NODE_LAYER_STYLES.typography, fontStyle: 'italic' }}>
-                            选择 Provider
+                            {t('rule.service.selectProvider')}
                         </Typography>
                     </Box>
                 ) : (
@@ -264,7 +269,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                     fontStyle: !provider.model ? 'italic' : 'normal',
                                     color: provider.model ? 'text.primary' : 'text.disabled',
                                 }}>
-                                    {provider.model || '选择模型'}
+                                    {provider.model || t('rule.service.selectModel')}
                                 </Typography>
                             </Box>
                         </NodeTooltip>
@@ -310,7 +315,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                 {/* Action buttons (hover) */}
                 <ActionButtonsBox className="action-buttons">
                     {provider.provider && providerInfo.exists && (
-                        <NodeTooltip title="测试服务" placement="bottom">
+                        <NodeTooltip title={t('rule.service.testService')} placement="bottom">
                             <IconButton
                                 size="small"
                                 onClick={handleProbeClick}
@@ -320,7 +325,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             </IconButton>
                         </NodeTooltip>
                     )}
-                    <NodeTooltip title="删除服务" placement="bottom">
+                    <NodeTooltip title={t('rule.service.deleteService')} placement="bottom">
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}

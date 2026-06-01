@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { getRouteGraphActiveColor, SMART_NODE_STYLES } from '@/components/nodes/styles';
 import {
     ActionAddNode,
@@ -182,6 +183,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     extraActions,
     extensionsCard,
 }) => {
+    const { t } = useTranslation();
     const isExpanded = !collapsible || expanded;
 
     // Determine effective mode
@@ -287,7 +289,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         <React.Fragment key={group.priority}>
                             {groupIndex > 0 && (
                                 <DividerNode
-                                    label={group.priority > 0 ? `P${group.priority}` : '均衡'}
+                                    label={group.priority > 0
+                                        ? t('rule.priority.tierLabel', { priority: group.priority })
+                                        : t('rule.priority.tierBalanced')}
                                     active={active}
                                 />
                             )}
@@ -303,8 +307,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     onAdd={onAddProvider ?? (() => {})}
                     tooltip={
                         record.providers.length === 0
-                            ? '添加服务以启用请求转发'
-                            : '添加服务（将启用负载均衡）'
+                            ? t('rule.tooltips.addServiceFirst')
+                            : t('rule.tooltips.addServiceSecond')
                     }
                 />
             </>
