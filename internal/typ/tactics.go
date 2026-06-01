@@ -1116,8 +1116,8 @@ func GetCapacityBasedTactic() *CapacityBasedTactic {
 
 // PriorityTactic implements priority/failover load balancing.
 //
-// Services are bucketed by Service.Priority (ascending for non-zero; lower
-// positive number = tried first; 0 = unset, always tried last). The highest-priority bucket containing at least one service
+// Services are bucketed by Service.Priority (ascending; lower number = tried
+// first; 0 = P0, the highest-priority tier). The highest-priority bucket containing at least one service
 // whose circuit breaker permits a request is selected. Within that
 // bucket, the WithinTierTactic (e.g. random, token-based) chooses the
 // final service. This yields:
@@ -1215,10 +1215,8 @@ type priorityBucket struct {
 }
 
 // groupServicesByPriority buckets services by their Priority field and
-// returns the buckets sorted ascending (lower positive number = higher priority,
-// tried first). Priority == 0 is treated as the "unset" tier and always sinks
-// to the bottom, so explicitly-prioritised services are tried before unset ones
-// even when both are present in a rule.
+// returns the buckets sorted ascending — lower number is tried first (0 = P0,
+// the highest-priority tier). There is no special treatment for any value.
 func groupServicesByPriority(services []*loadbalance.Service) []priorityBucket {
 	groups := make(map[int][]*loadbalance.Service)
 	for _, svc := range services {
@@ -1229,20 +1227,10 @@ func groupServicesByPriority(services []*loadbalance.Service) []priorityBucket {
 	for k := range groups {
 		keys = append(keys, k)
 	}
-	// Ascending for non-zero (lower number = tried first), 0 (unset) sinks last.
+	// Pure ascending: lower number = higher priority = tried first.
 	for i := 0; i < len(keys); i++ {
 		for j := i + 1; j < len(keys); j++ {
-			a, b := keys[i], keys[j]
-			swap := false
-			switch {
-			case a == 0 && b != 0:
-				swap = true
-			case a != 0 && b == 0:
-				swap = false
-			case a > b:
-				swap = true
-			}
-			if swap {
+			if keys[i] > keys[j] {
 				keys[i], keys[j] = keys[j], keys[i]
 			}
 		}

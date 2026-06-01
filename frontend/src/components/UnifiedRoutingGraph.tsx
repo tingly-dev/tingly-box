@@ -210,13 +210,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         const list = record.providers;
         const hasAnyPriority = list.some((p) => (p.priority ?? 0) > 0);
         if (!hasAnyPriority) return list;
-        return [...list].sort((a, b) => {
-            const ap = a.priority ?? 0;
-            const bp = b.priority ?? 0;
-            if (ap === 0 && bp !== 0) return 1;
-            if (bp === 0 && ap !== 0) return -1;
-            return ap - bp;
-        });
+        return [...list].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
     }, [record.providers]);
 
     // Group already-sorted providers into priority tiers (single pass — order preserved from sortedDefaultProviders)
