@@ -11,8 +11,7 @@ import (
 func applyDeepSeekTransform(req *openai.ChatCompletionNewParams, providerURL, model string, config *protocol.OpenAIConfig) *openai.ChatCompletionNewParams {
 	for i := range req.Messages {
 		if req.Messages[i].OfAssistant != nil {
-			// Read/write extra fields on OfAssistant (variant level), not on union level.
-			// MarshalUnion only serializes the active variant — union-level ExtraFields are dropped.
+			// Read/write extra fields on OfAssistant (variant level) for consistency.
 			msgMap := req.Messages[i].OfAssistant.ExtraFields()
 			if msgMap == nil {
 				msgMap = map[string]any{}

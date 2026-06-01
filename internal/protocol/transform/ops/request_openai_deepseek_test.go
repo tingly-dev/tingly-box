@@ -12,7 +12,6 @@ import (
 
 // TestOfAssistantLevelExtraFieldsSerialized proves that ExtraFields set on
 // OfAssistant (variant level) are included in JSON output.
-// This is the CORRECT level — union-level ExtraFields are dropped by MarshalUnion.
 func TestOfAssistantLevelExtraFieldsSerialized(t *testing.T) {
 	msg := assistantToolCallMessage(t)
 
@@ -23,18 +22,18 @@ func TestOfAssistantLevelExtraFieldsSerialized(t *testing.T) {
 		"OfAssistant-level ExtraFields must appear in serialized JSON")
 }
 
-// TestUnionLevelExtraFieldsAreDropped proves that ExtraFields set on the
-// union level are NOT serialized — this is the SDK behavior that caused
-// the DeepSeek reasoning_content bug.
-func TestUnionLevelExtraFieldsAreDropped(t *testing.T) {
+// TestUnionLevelExtraFieldsAreSerialized proves that ExtraFields set on the
+// union level ARE serialized — the SDK's custom MarshalJSON merges union-level
+// extra fields into the active variant's JSON output.
+func TestUnionLevelExtraFieldsAreSerialized(t *testing.T) {
 	msg := assistantToolCallMessage(t)
 
-	msg.SetExtraFields(map[string]any{"reasoning_content": "this will be lost"})
+	msg.SetExtraFields(map[string]any{"reasoning_content": "this will be included"})
 
 	raw := marshalMessage(t, msg)
 	_, hasKey := raw["reasoning_content"]
-	assert.False(t, hasKey,
-		"union-level ExtraFields must NOT appear in serialized JSON (they are dropped by MarshalUnion)")
+	assert.True(t, hasKey,
+		"union-level ExtraFields are merged into serialized JSON by ChatCompletionMessageParamUnion.MarshalJSON")
 }
 
 // TestDeepSeekTransformReadsOfAssistantXThinking proves that the transform

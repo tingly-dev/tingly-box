@@ -118,8 +118,8 @@ func (s *XMLCompactionStrategy) CompressBeta(messages []anthropic.BetaMessagePar
 
 func NewBetaCompactionBlock(content string) anthropic.BetaContentBlockParamUnion {
 	return anthropic.BetaContentBlockParamUnion{
-		OfText: &anthropic.BetaTextBlockParam{
-			Text: content,
+		OfCompaction: &anthropic.BetaCompactionBlockParam{
+			Content: anthropic.String(content),
 		},
 	}
 }

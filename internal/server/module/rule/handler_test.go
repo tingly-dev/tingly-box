@@ -573,7 +573,19 @@ func TestImportRule_RuleConflictSkip(t *testing.T) {
 
 	router.POST("/rules/import", handler.ImportRule)
 
-	// First create an existing rule
+	// Create a provider first so the rule's service reference is valid
+	existingProvider := &typ.Provider{
+		UUID:     uuid.New().String(),
+		Name:     "ExistingProvider",
+		APIBase:  "https://api.existing.com",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-existing",
+		Enabled:  true,
+	}
+	cfg.AddProvider(existingProvider)
+
+	// Create an existing rule referencing the provider above
 	existingRule := typ.Rule{
 		UUID:          uuid.New().String(),
 		RequestModel:  "gpt-4",
@@ -582,7 +594,7 @@ func TestImportRule_RuleConflictSkip(t *testing.T) {
 		Description:   "Existing rule",
 		Services: []*loadbalance.Service{
 			{
-				Provider: uuid.New().String(),
+				Provider: existingProvider.UUID,
 				Model:    "gpt-4",
 				Weight:   100,
 			},
