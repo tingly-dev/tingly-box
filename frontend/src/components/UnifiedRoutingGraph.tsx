@@ -248,9 +248,11 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
     const isTierMode = nonZeroTierGroups.length > 0;
 
-    // Render a single ServiceNode (shared between both layouts)
+    // Render a single ServiceNode for the flat (non-tier) layout.
+    // Tier is changed via the down-arrow only — clicking it assigns the service
+    // to tier 1, which switches the graph into tier mode.
     const renderServiceNode = React.useCallback(
-        (provider: typeof sortedDefaultProviders[0], hideTierBadge = false) => (
+        (provider: typeof sortedDefaultProviders[0]) => (
             <ServiceNode
                 key={provider.uuid}
                 provider={provider}
@@ -259,18 +261,17 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 active={active && provider.active !== false}
                 onDelete={() => onDeleteProvider?.(provider.uuid)}
                 onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
-                onTierChange={
-                    onTierChange
-                        ? (tier) => onTierChange(provider.uuid, tier)
-                        : undefined
-                }
-                showTier={!hideTierBadge}
+                showTier={false}
+                onMoveTierDown={onTierChange ? () => onTierChange(provider.uuid, 1) : undefined}
             />
         ),
         [getApiStyle, providers, active, onDeleteProvider, onProviderNodeClick, onTierChange],
     );
 
-    // Tier layout: stacked rows, one per tier, with TierNode on the left
+    // Tier layout: stacked rows, one per tier, with TierNode on the left.
+    // Each service node has up/down arrows to move between tier groups;
+    // moving down past the last named tier creates a new one.
+    // TierNode is a label only — tier ordering is driven by the service arrows.
     const renderTierLayout = React.useCallback(() => {
         const tierValues = nonZeroTierGroups.map((g) => g.tier);
         const maxTier = tierValues.length > 0 ? tierValues[tierValues.length - 1] : 0;
@@ -285,15 +286,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             key={group.tier}
                             sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
                         >
-                            <TierNode
-                                tierIndex={idx}
-                                priority={group.tier}
-                                active={active}
-                                canMoveUp={idx > 0}
-                                canMoveDown={idx < nonZeroTierGroups.length - 1}
-                                onMoveUp={() => onMoveTier?.(group.tier, 'up')}
-                                onMoveDown={() => onMoveTier?.(group.tier, 'down')}
-                            />
+                            <TierNode tierIndex={idx} priority={group.tier} active={active} />
                             {group.providers.map((p) => (
                                 <ServiceNode
                                     key={p.uuid}
@@ -317,7 +310,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     );
                 })}
 
-                {/* Unset-tier row (tier=0 services) — no tier node, down arrow moves to T1 */}
+                {/* Unset-tier row: up-arrow joins the last named tier */}
                 {zeroGroup && (
                     <Box
                         key={0}
@@ -334,14 +327,14 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 onDelete={() => onDeleteProvider?.(p.uuid)}
                                 onNodeClick={() => onProviderNodeClick?.(p.uuid)}
                                 showTier={false}
-                                onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, maxTier + 1) : undefined}
+                                onMoveTierUp={onTierChange && maxTier > 0 ? () => onTierChange(p.uuid, maxTier) : undefined}
                             />
                         ))}
                     </Box>
                 )}
             </Box>
         );
-    }, [t, nonZeroTierGroups, zeroGroup, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onMoveTier, onAddService]);
+    }, [t, nonZeroTierGroups, zeroGroup, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService]);
 
     // Flat service list (no tiers): horizontal inline layout with dividers between groups
     const renderProviderList = React.useCallback(() => {
