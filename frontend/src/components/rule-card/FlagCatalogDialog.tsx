@@ -237,13 +237,6 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         }
     }, [open, flags]);
 
-    // Original backend category keyed by flag key — used to render origin badges.
-    const originMap = useMemo(() => {
-        const map = new Map<string, string>();
-        (registry || []).forEach((spec) => map.set(spec.key, spec.category));
-        return map;
-    }, [registry]);
-
     // Group registry entries by display category (applying CATEGORY_MERGE),
     // then sort the groups by CATEGORY_ORDER and sub-sort specs within each
     // merged group (http first, then openai, then native request items).
@@ -447,11 +440,9 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                             ? (flagToString(draft, spec.key) || enumDefault(spec))
                                             : '';
                                         const pulsing = pulseKey === spec.key;
-                                        const originCat = originMap.get(spec.key) ?? spec.category;
-                                        const displayCat = CATEGORY_MERGE[originCat] ?? originCat;
                                         // Show origin badge when a flag was merged from another category.
-                                        const originBadge = displayCat !== originCat
-                                            ? categoryMeta(originCat)
+                                        const originBadge = CATEGORY_MERGE[spec.category]
+                                            ? categoryMeta(spec.category)
                                             : null;
                                         return (
                                             <Box
