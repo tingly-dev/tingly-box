@@ -56,6 +56,7 @@ func NewClientPool() *ClientPool {
 
 // GetOpenAIClient returns an OpenAI client wrapper for the specified provider.
 // For Codex OAuth providers, returns a CodexClient with special handling.
+// For Kimi Code OAuth providers, returns a KimiClient with special handling.
 // sessionID is resolved from ctx via typ.GetSessionID; pass context.Background() when no session is available.
 func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider, model string) OpenAIClientInterface {
 	sessionID := typ.GetSessionID(ctx)
@@ -65,10 +66,23 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 	var err error
 
 	// Check if this is a Codex OAuth provider
-	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil && provider.OAuthDetail.GetIssuer() == ai.IssuerCodex {
-		client, err = NewCodexClient(provider, model, sessionID)
-		if err != nil {
-			logrus.WithContext(ctx).Errorf("Failed to create Codex client for provider %s: %v", provider.Name, err)
+	if provider.AuthType == typ.AuthTypeOAuth && provider.OAuthDetail != nil {
+		switch issuer := provider.OAuthDetail.GetIssuer(); issuer {
+		case ai.IssuerCodex:
+			client, err = NewCodexClient(provider, model, sessionID)
+			if err != nil {
+				logrus.WithContext(ctx).Errorf("Failed to create Codex client for provider %s: %v", provider.Name, err)
+				return nil
+			}
+		case ai.IssuerKimiCode:
+			// Check if this is a Kimi Code OAuth provider
+			client, err = NewKimiClient(provider, model, sessionID)
+			if err != nil {
+				logrus.WithContext(ctx).Errorf("Failed to create Kimi client for provider %s: %v", provider.Name, err)
+				return nil
+			}
+		default:
+			logrus.Errorf("Unsupported oauth issuer: %s", issuer)
 			return nil
 		}
 	} else {
@@ -79,7 +93,7 @@ func (p *ClientPool) GetOpenAIClient(ctx context.Context, provider *typ.Provider
 		}
 	}
 
-	// Set record sink if enabled (only for OpenAIClient, not CodexClient)
+	// Set record sink if enabled (only for OpenAIClient, not CodexClient or KimiClient)
 	if p.recordSink != nil && p.recordSink.IsEnabled() {
 		if oc, ok := client.(*OpenAIClient); ok {
 			oc.SetRecordSink(p.recordSink)
