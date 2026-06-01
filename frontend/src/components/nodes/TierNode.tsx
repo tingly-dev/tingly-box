@@ -23,6 +23,7 @@ export const PRIORITY_TIER_NODE_WIDTH = TIER_NODE_WIDTH;
 
 export const TierNode: React.FC<TierNodeProps> = ({
     tierIndex,
+    priority,
     active,
     canMoveUp,
     canMoveDown,
@@ -30,7 +31,7 @@ export const TierNode: React.FC<TierNodeProps> = ({
     onMoveDown,
 }) => {
     const { t } = useTranslation();
-    const tierLabel = `T${tierIndex}`;
+    const tierLabel = `T${priority}`;
 
     return (
         <Box

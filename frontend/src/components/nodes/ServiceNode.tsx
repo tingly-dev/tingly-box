@@ -2,6 +2,8 @@ import {
     Delete as DeleteIcon,
     Warning as WarningIcon,
     PlayArrow as PlayIcon,
+    KeyboardArrowUp,
+    KeyboardArrowDown,
 } from '@/components/icons';
 import {
     Box,
@@ -76,6 +78,8 @@ export interface ServiceNodeProps {
     onNodeClick: () => void;
     onPriorityChange?: (priority: number) => void;
     showPriority?: boolean;
+    onMoveTierUp?: () => void;
+    onMoveTierDown?: () => void;
 }
 
 /** @deprecated Use ServiceNodeProps */
@@ -185,6 +189,8 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     onNodeClick,
     onPriorityChange,
     showPriority = true,
+    onMoveTierUp,
+    onMoveTierDown,
 }) => {
     const { t } = useTranslation();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -301,6 +307,28 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
 
                 {/* Action buttons (hover) */}
                 <ActionButtonsBox className="action-buttons">
+                    {onMoveTierUp && (
+                        <NodeTooltip title={t('common.moveUp', { defaultValue: 'Move up' })} placement="bottom">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => { e.stopPropagation(); onMoveTierUp(); }}
+                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                            >
+                                <KeyboardArrowUp sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    )}
+                    {onMoveTierDown && (
+                        <NodeTooltip title={t('common.moveDown', { defaultValue: 'Move down' })} placement="bottom">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => { e.stopPropagation(); onMoveTierDown(); }}
+                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                            >
+                                <KeyboardArrowDown sx={{ fontSize: '1rem' }} />
+                            </IconButton>
+                        </NodeTooltip>
+                    )}
                     {provider.provider && providerInfo.exists && (
                         <NodeTooltip title={t('rule.service.testService')} placement="bottom">
                             <IconButton

@@ -272,60 +272,76 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
     // Tier layout: stacked rows, one per tier, with TierNode on the left
     const renderTierLayout = React.useCallback(() => {
-        const maxTier = nonZeroPriorityGroups.length > 0
-            ? nonZeroPriorityGroups[nonZeroPriorityGroups.length - 1].tier
-            : 0;
+        const tierValues = nonZeroPriorityGroups.map((g) => g.tier);
+        const maxTier = tierValues.length > 0 ? tierValues[tierValues.length - 1] : 0;
 
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {nonZeroPriorityGroups.map((group, idx) => (
-                    <Box
-                        key={group.tier}
-                        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'nowrap' }}
-                    >
-                        <TierNode
-                            tierIndex={idx}
-                            priority={group.tier}
-                            active={active}
-                            canMoveUp={idx > 0}
-                            canMoveDown={idx < nonZeroPriorityGroups.length - 1}
-                            onMoveUp={() => onMoveTier?.(group.tier, 'up')}
-                            onMoveDown={() => onMoveTier?.(group.tier, 'down')}
-                        />
-                        <ArrowNode direction="forward" />
-                        {group.providers.map((p) => renderServiceNode(p, true))}
-                        <ActionAddNode
-                            active={active && !saving}
-                            onAdd={() => onAddProvider?.(group.tier)}
-                            tooltip={t('rule.tooltips.addServiceSecond')}
-                        />
-                    </Box>
-                ))}
+                {nonZeroPriorityGroups.map((group, idx) => {
+                    const prevTier = idx > 0 ? tierValues[idx - 1] : null;
+                    const nextTier = idx < tierValues.length - 1 ? tierValues[idx + 1] : group.tier + 1;
+                    return (
+                        <Box
+                            key={group.tier}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
+                        >
+                            <TierNode
+                                tierIndex={idx}
+                                priority={group.tier}
+                                active={active}
+                                canMoveUp={idx > 0}
+                                canMoveDown={idx < nonZeroPriorityGroups.length - 1}
+                                onMoveUp={() => onMoveTier?.(group.tier, 'up')}
+                                onMoveDown={() => onMoveTier?.(group.tier, 'down')}
+                            />
+                            {group.providers.map((p) => (
+                                <ServiceNode
+                                    key={p.uuid}
+                                    provider={p}
+                                    apiStyle={getApiStyle(p.provider)}
+                                    providersData={providers}
+                                    active={active && p.active !== false}
+                                    onDelete={() => onDeleteProvider?.(p.uuid)}
+                                    onNodeClick={() => onProviderNodeClick?.(p.uuid)}
+                                    showPriority={false}
+                                    onMoveTierUp={prevTier !== null && onTierChange ? () => onTierChange(p.uuid, prevTier) : undefined}
+                                    onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, nextTier) : undefined}
+                                />
+                            ))}
+                            <ActionAddNode
+                                active={active && !saving}
+                                onAdd={() => onAddProvider?.(group.tier)}
+                                tooltip={t('rule.tooltips.addServiceSecond')}
+                            />
+                        </Box>
+                    );
+                })}
 
-                {/* Unset-tier row (priority=0 services) — no tier node */}
+                {/* Unset-tier row (tier=0 services) — no tier node, down arrow moves to T1 */}
                 {zeroGroup && (
                     <Box
                         key={0}
-                        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'nowrap' }}
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
                     >
                         <Box sx={{ width: TIER_NODE_WIDTH, flexShrink: 0 }} />
-                        <ArrowNode direction="forward" />
-                        {zeroGroup.providers.map((p) => renderServiceNode(p, true))}
+                        {zeroGroup.providers.map((p) => (
+                            <ServiceNode
+                                key={p.uuid}
+                                provider={p}
+                                apiStyle={getApiStyle(p.provider)}
+                                providersData={providers}
+                                active={active && p.active !== false}
+                                onDelete={() => onDeleteProvider?.(p.uuid)}
+                                onNodeClick={() => onProviderNodeClick?.(p.uuid)}
+                                showPriority={false}
+                                onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, maxTier + 1) : undefined}
+                            />
+                        ))}
                     </Box>
                 )}
-
-                {/* Add new tier button */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Box sx={{ width: TIER_NODE_WIDTH, flexShrink: 0 }} />
-                    <ActionAddNode
-                        active={active && !saving}
-                        onAdd={() => onAddProvider?.(maxTier + 1)}
-                        tooltip={t('rule.tier.addTierTooltip')}
-                    />
-                </Box>
             </Box>
         );
-    }, [t, nonZeroPriorityGroups, zeroGroup, active, saving, renderServiceNode, onMoveTier, onAddProvider]);
+    }, [t, nonZeroPriorityGroups, zeroGroup, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onMoveTier, onAddProvider]);
 
     // Flat service list (no tiers): horizontal inline layout with dividers between groups
     const renderProviderList = React.useCallback(() => {
