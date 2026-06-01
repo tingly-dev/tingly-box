@@ -19,21 +19,23 @@ export const DividerNode: React.FC<DividerNodeProps> = ({ active = true }) => {
     return (
         <Box
             sx={{
+                position: 'relative',
                 width: 24,
                 height: PROVIDER_NODE_STYLES.height,
                 flexShrink: 0,
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 0.5,
                 opacity: active ? 1 : 0.5,
             }}
         >
-            {/* Top segment of the line */}
+            {/* Full-height line */}
             <Box sx={(theme) => ({
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: '50%',
                 width: '1px',
-                flex: 1,
                 backgroundColor: alpha(
                     getRouteGraphActiveColor(theme),
                     theme.palette.mode === 'dark' ? 0.28 : 0.20,
@@ -41,13 +43,9 @@ export const DividerNode: React.FC<DividerNodeProps> = ({ active = true }) => {
                 borderRadius: '1px',
             })} />
 
-            {/* Help icon centered on the line */}
-            <Tooltip
-                title={t('rule.priority.dividerHelp')}
-                placement="top"
-                arrow
-            >
-                <Box sx={{ lineHeight: 0, cursor: 'help' }}>
+            {/* Help icon sitting on the line */}
+            <Tooltip title={t('rule.priority.dividerHelp')} placement="top" arrow>
+                <Box sx={{ lineHeight: 0, cursor: 'help', zIndex: 1, bgcolor: 'background.paper', borderRadius: '50%' }}>
                     <HelpOutline
                         sx={(theme) => ({
                             fontSize: '0.85rem',
@@ -55,25 +53,13 @@ export const DividerNode: React.FC<DividerNodeProps> = ({ active = true }) => {
                                 getRouteGraphActiveColor(theme),
                                 theme.palette.mode === 'dark' ? 0.55 : 0.45,
                             ),
-                            '&:hover': {
-                                color: getRouteGraphActiveColor(theme),
-                            },
+                            display: 'block',
                             transition: 'color 0.15s',
+                            '&:hover': { color: getRouteGraphActiveColor(theme) },
                         })}
                     />
                 </Box>
             </Tooltip>
-
-            {/* Bottom segment of the line */}
-            <Box sx={(theme) => ({
-                width: '1px',
-                flex: 1,
-                backgroundColor: alpha(
-                    getRouteGraphActiveColor(theme),
-                    theme.palette.mode === 'dark' ? 0.28 : 0.20,
-                ),
-                borderRadius: '1px',
-            })} />
         </Box>
     );
 };
