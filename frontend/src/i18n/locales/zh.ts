@@ -379,7 +379,8 @@ export default {
       "helpHigher": "数值越大越优先，优先级相同的服务将负载均衡。",
       "helpZero": "设为 0 表示不设优先级，与其他 0 级服务共享负载。",
       "tierLabel": "P{{priority}}",
-      "tierBalanced": "均衡"
+      "tierBalanced": "均衡",
+      "dividerHelp": "高优先级的服务总是优先使用。只有当某一优先级的所有服务均不可用（熔断）时，流量才会降级到下一优先级。同一优先级内的服务之间负载均衡。"
     },
     "menu": {
       "refreshModels": "刷新模型",

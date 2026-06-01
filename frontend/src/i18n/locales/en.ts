@@ -378,7 +378,8 @@ export default {
       "helpHigher": "Higher number = higher priority. Services in the same tier are load balanced.",
       "helpZero": "Set to 0 for no priority — shares load with other tier-0 services.",
       "tierLabel": "P{{priority}}",
-      "tierBalanced": "Balanced"
+      "tierBalanced": "Balanced",
+      "dividerHelp": "Higher-priority services are always tried first. Only when all services in a tier fail (circuit open) does traffic fall through to the next tier. Services within the same tier are load-balanced."
     },
     "menu": {
       "refreshModels": "Refresh Models",
