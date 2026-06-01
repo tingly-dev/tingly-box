@@ -177,7 +177,7 @@ interface CategoryMeta {
 }
 
 // Display order for the category sidebar. Unknown categories are appended.
-const CATEGORY_ORDER = ['request', 'response', 'reasoning', 'vision', 'routing', 'ide'];
+const CATEGORY_ORDER = ['request', 'response', 'reasoning', 'vision', 'routing', 'app'];
 
 const CATEGORY_META: Record<string, CategoryMeta> = {
     request:  { label: 'Request',   icon: <InputIcon      fontSize="small" /> },
@@ -185,7 +185,7 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
     reasoning:{ label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
     vision:   { label: 'Vision',    icon: <VisibilityIcon fontSize="small" /> },
     routing:  { label: 'Routing',   icon: <LinkIcon       fontSize="small" /> },
-    ide:      { label: 'IDE',       icon: <TerminalIcon   fontSize="small" /> },
+    app:      { label: 'App',       icon: <TerminalIcon   fontSize="small" /> },
 };
 
 const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] ?? {

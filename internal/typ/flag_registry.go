@@ -21,8 +21,8 @@ const (
 type FlagCategory string
 
 const (
-	// FlagCategoryIDE — flags that target a specific IDE/client (e.g. Cursor).
-	FlagCategoryIDE FlagCategory = "ide"
+	// FlagCategoryApp — flags that target a specific client application (IDE, CLI tool, etc).
+	FlagCategoryApp FlagCategory = "app"
 	// FlagCategoryRequest — request-level adjustments: transport overrides,
 	// OpenAI-specific field rewrites, tool blocking, etc.
 	FlagCategoryRequest FlagCategory = "request"
@@ -147,20 +147,20 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryRouting,
 			Placeholder: "e.g. 3600",
 		},
-		// ── IDE ────────────────────────────────────────────────────────────
+		// ── App ────────────────────────────────────────────────────────────
 		{
 			Key:         "cursor_compat",
 			Label:       "Cursor compatibility",
 			Description: "Normalize rich content, gate tools, and strip stream usage for Cursor IDE clients.",
 			Type:        FlagTypeBool,
-			Category:    FlagCategoryIDE,
+			Category:    FlagCategoryApp,
 		},
 		{
 			Key:         "cursor_compat_auto",
 			Label:       "Auto-detect Cursor",
 			Description: "Apply cursor compatibility automatically when request headers identify Cursor.",
 			Type:        FlagTypeBool,
-			Category:    FlagCategoryIDE,
+			Category:    FlagCategoryApp,
 		},
 	}
 }
