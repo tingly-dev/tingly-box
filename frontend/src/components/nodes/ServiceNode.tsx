@@ -326,7 +326,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 onClick={handleProbeClick}
                                 sx={{ p: 0.5 }}
                             >
-                                <PlayIcon sx={{ fontSize: '1rem', color: 'success.main' }} />
+                                <PlayIcon sx={{ fontSize: '1rem' }} />
                             </IconButton>
                         </NodeTooltip>
                     )}
@@ -336,7 +336,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             onClick={handleMenuClick}
                             sx={{ p: 0.5 }}
                         >
-                            <DeleteIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
+                            <DeleteIcon sx={{ fontSize: '1rem' }} />
                         </IconButton>
                     </NodeTooltip>
                 </ActionButtonsBox>

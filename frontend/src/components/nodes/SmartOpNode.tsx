@@ -143,7 +143,7 @@ export const SmartOpNode: React.FC<SmartNodeProps> = ({
                                 sx={{ p: 0.25, backgroundColor: 'background.paper' }}
                                 aria-label={t('rule.smart.deleteTooltip')}
                             >
-                                <DeleteIcon sx={{ fontSize: '0.875rem', color: 'error.main' }} />
+                                <DeleteIcon sx={{ fontSize: '0.875rem' }} />
                             </IconButton>
                         </NodeTooltip>
                     </Stack>
