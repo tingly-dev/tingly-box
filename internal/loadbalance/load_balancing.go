@@ -15,7 +15,7 @@ type Service struct {
 	Active        bool         `yaml:"active" json:"active"`                                     // Whether this service is active
 	TimeWindow    int          `yaml:"time_window" json:"time_window"`                           // Statistics time window in seconds
 	ModelCapacity *int         `yaml:"model_capacity,omitempty" json:"model_capacity,omitempty"` // ModelCapacity overrides the provider's default_model_capacity for this specific model
-	Priority      int          `yaml:"priority,omitempty" json:"priority,omitempty"`             // Priority within a rule: higher = tried first. 0 = unset (sinks to bottom). Used by TacticPriority.
+	Tier          int          `yaml:"tier,omitempty" json:"tier,omitempty"`                     // Tier within a rule: lower number = tried first (T0 is highest priority). Used by TacticTier.
 	Stats         ServiceStats `yaml:"-" json:"-"`                                               // Service usage statistics (stored in SQLite, not in config)
 }
 
@@ -474,7 +474,7 @@ const (
 	TacticSpeedBased                      // Route based on token generation speed
 	TacticAdaptive                        // Composite multi-dimensional routing
 	TacticCapacityBased                   // 7: capacity-based load balancing
-	TacticPriority                        // 8: priority/failover by Service.Priority (higher tried first); ties share via sub-tactic
+	TacticTier                            // 8: tier-based failover by Service.Tier (lower = tried first); ties share via sub-tactic
 )
 
 // MarshalJSON implements json.Marshaler for TacticType
@@ -513,8 +513,8 @@ func (tt TacticType) String() string {
 		return "adaptive"
 	case TacticCapacityBased:
 		return "capacity_based"
-	case TacticPriority:
-		return "priority"
+	case TacticTier:
+		return "tier"
 	default:
 		// Unset (type 0) / unknown: report Random, the documented default
 		// (see Rule.GetTacticType). Keeps serialization consistent with the
@@ -542,8 +542,10 @@ func ParseTacticType(s string) TacticType {
 		return TacticAdaptive
 	case "capacity_based":
 		return TacticCapacityBased
-	case "priority":
-		return TacticPriority
+	case "tier":
+		return TacticTier
+	case "priority": // backward-compat alias
+		return TacticTier
 	default:
 		return TacticAdaptive // default to adaptive
 	}

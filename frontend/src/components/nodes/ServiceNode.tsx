@@ -255,7 +255,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 {hasPriority && (
                                     <Box sx={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', lineHeight: 0 }}>
                                         <PriorityBadge
-                                            priority={provider.priority ?? 0}
+                                            priority={provider.tier ?? 0}
                                             onChange={onPriorityChange!}
                                             active={active}
                                         />

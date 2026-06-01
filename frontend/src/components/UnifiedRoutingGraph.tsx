@@ -88,7 +88,7 @@ export interface UnifiedRoutingGraphProps {
     // Callbacks
     onUpdateRecord?: (field: keyof ConfigRecord, value: any) => void;
     onProviderNodeClick?: (providerUuid: string) => void;
-    onProviderPriorityChange?: (providerUuid: string, priority: number) => void;
+    onTierChange?: (providerUuid: string, tier: number) => void;
     onDeleteProvider?: (providerUuid: string) => void;
     onAddProvider?: (priority?: number) => void;
     onMoveTier?: (tierPriority: number, direction: 'up' | 'down') => void;
@@ -172,7 +172,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     collapsible = false,
     onUpdateRecord,
     onProviderNodeClick,
-    onProviderPriorityChange,
+    onTierChange,
     onDeleteProvider,
     onAddProvider,
     onMoveTier,
@@ -205,23 +205,23 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         return provider?.api_style || 'openai';
     }, [providers]);
 
-    // Priority-sorted default providers
+    // Tier-sorted default providers
     const sortedDefaultProviders = React.useMemo(() => {
         const list = record.providers;
-        const hasAnyPriority = list.some((p) => (p.priority ?? 0) > 0);
-        if (!hasAnyPriority) return list;
-        return [...list].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+        const hasTiers = list.some((p) => (p.tier ?? 0) > 0);
+        if (!hasTiers) return list;
+        return [...list].sort((a, b) => (a.tier ?? 0) - (b.tier ?? 0));
     }, [record.providers]);
 
-    // Group already-sorted providers into priority tiers (single pass — order preserved from sortedDefaultProviders)
+    // Group already-sorted providers into tiers (single pass — order preserved from sortedDefaultProviders)
     const priorityGroups = React.useMemo(() => {
         const groups = new Map<number, typeof sortedDefaultProviders>();
         for (const p of sortedDefaultProviders) {
-            const tier = p.priority ?? 0;
+            const tier = p.tier ?? 0;
             if (!groups.has(tier)) groups.set(tier, []);
             groups.get(tier)!.push(p);
         }
-        return [...groups.entries()].map(([priority, providers]) => ({ priority, providers }));
+        return [...groups.entries()].map(([tier, providers]) => ({ tier, providers }));
     }, [sortedDefaultProviders]);
 
     // Handle add service to smart rule
@@ -234,19 +234,19 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         }
     }, [smartRouting, onAddServiceToSmartRule]);
 
-    // Non-zero priority groups (sorted ascending by priority value = P1, P2, P3...)
+    // Non-zero tier groups (sorted ascending by tier value = T1, T2, T3...)
     const nonZeroPriorityGroups = React.useMemo(
-        () => priorityGroups.filter((g) => g.priority > 0),
+        () => priorityGroups.filter((g) => g.tier > 0),
         [priorityGroups],
     );
 
-    // Unset-priority services (priority === 0)
+    // Unset-tier services (tier === 0)
     const zeroGroup = React.useMemo(
-        () => priorityGroups.find((g) => g.priority === 0) ?? null,
+        () => priorityGroups.find((g) => g.tier === 0) ?? null,
         [priorityGroups],
     );
 
-    const isPriorityMode = nonZeroPriorityGroups.length > 0;
+    const isTierMode = nonZeroPriorityGroups.length > 0;
 
     // Render a single ServiceNode (shared between both layouts)
     const renderServiceNode = React.useCallback(
@@ -260,43 +260,43 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 onDelete={() => onDeleteProvider?.(provider.uuid)}
                 onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
                 onPriorityChange={
-                    onProviderPriorityChange
-                        ? (priority) => onProviderPriorityChange(provider.uuid, priority)
+                    onTierChange
+                        ? (tier) => onTierChange(provider.uuid, tier)
                         : undefined
                 }
                 showPriority={!hidePriorityBadge}
             />
         ),
-        [getApiStyle, providers, active, onDeleteProvider, onProviderNodeClick, onProviderPriorityChange],
+        [getApiStyle, providers, active, onDeleteProvider, onProviderNodeClick, onTierChange],
     );
 
-    // Priority tier layout: stacked rows, one per tier, with TierNode on the left
-    const renderPriorityTierLayout = React.useCallback(() => {
-        const maxPriority = nonZeroPriorityGroups.length > 0
-            ? nonZeroPriorityGroups[nonZeroPriorityGroups.length - 1].priority
+    // Tier layout: stacked rows, one per tier, with TierNode on the left
+    const renderTierLayout = React.useCallback(() => {
+        const maxTier = nonZeroPriorityGroups.length > 0
+            ? nonZeroPriorityGroups[nonZeroPriorityGroups.length - 1].tier
             : 0;
 
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 {nonZeroPriorityGroups.map((group, idx) => (
                     <Box
-                        key={group.priority}
+                        key={group.tier}
                         sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'nowrap' }}
                     >
                         <TierNode
                             tierIndex={idx}
-                            priority={group.priority}
+                            priority={group.tier}
                             active={active}
                             canMoveUp={idx > 0}
                             canMoveDown={idx < nonZeroPriorityGroups.length - 1}
-                            onMoveUp={() => onMoveTier?.(group.priority, 'up')}
-                            onMoveDown={() => onMoveTier?.(group.priority, 'down')}
+                            onMoveUp={() => onMoveTier?.(group.tier, 'up')}
+                            onMoveDown={() => onMoveTier?.(group.tier, 'down')}
                         />
                         <ArrowNode direction="forward" />
                         {group.providers.map((p) => renderServiceNode(p, true))}
                         <ActionAddNode
                             active={active && !saving}
-                            onAdd={() => onAddProvider?.(group.priority)}
+                            onAdd={() => onAddProvider?.(group.tier)}
                             tooltip={t('rule.tooltips.addServiceSecond')}
                         />
                     </Box>
@@ -319,7 +319,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <Box sx={{ width: TIER_NODE_WIDTH, flexShrink: 0 }} />
                     <ActionAddNode
                         active={active && !saving}
-                        onAdd={() => onAddProvider?.(maxPriority + 1)}
+                        onAdd={() => onAddProvider?.(maxTier + 1)}
                         tooltip={t('rule.tier.addTierTooltip')}
                     />
                 </Box>
@@ -335,7 +335,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
             <>
                 {hasMultipleTiers ? (
                     priorityGroups.map((group, groupIndex) => (
-                        <React.Fragment key={group.priority}>
+                        <React.Fragment key={group.tier}>
                             {groupIndex > 0 && <DividerNode active={active} />}
                             {group.providers.map((p) => renderServiceNode(p))}
                         </React.Fragment>
@@ -464,8 +464,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <ArrowNode direction="forward" />
                 </Box>
 
-                {isPriorityMode ? (
-                    renderPriorityTierLayout()
+                {isTierMode ? (
+                    renderTierLayout()
                 ) : (
                     <Box sx={{
                         display: 'flex',
@@ -538,9 +538,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 {renderSmartRules()}
                                                 {renderDefaultProviders()}
                                             </Box>
-                                        ) : isPriorityMode ? (
+                                        ) : isTierMode ? (
                                             /* Direct + Priority Mode: stacked tier rows */
-                                            renderPriorityTierLayout()
+                                            renderTierLayout()
                                         ) : (
                                             /* Direct Mode: providers inline */
                                             <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 1.5, alignItems: 'center' }}>

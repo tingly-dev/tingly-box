@@ -45,7 +45,7 @@ export interface SmartRoutingHandlersProps {
     setConfigRecord: (record: ConfigRecord | null) => void;
     autoSave: (record: ConfigRecord) => Promise<boolean>;
     ruleUuid: string;
-    onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string, addPriority?: number) => void;
+    onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string, addTier?: number) => void;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
@@ -135,7 +135,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                             weight: provider.weight || 0,
                             active: provider.active !== undefined ? provider.active : true,
                             time_window: provider.time_window || 0,
-                            priority: provider.priority || 0,
+                            tier: provider.tier ?? 0,
                         })),
                     smart_enabled: newConfigRecord.smartEnabled || false,
                     smart_routing: newConfigRecord.smartRouting || [],

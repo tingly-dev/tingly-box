@@ -43,13 +43,12 @@ type FailoverRoute struct {
 	FallbackCallCount *atomic.Int64 // nil when fallback is env.virtual
 }
 
-// SetupFailoverRoute wires a two-tier priority rule using vmodel's
-// pre-registered error mocks for the primary tier. Both tiers run inside
-// httptest servers; the primary always trips the named injection
-// (RegisterErrorMocks IDs above), the fallback serves successScenario via
-// env.virtual.
+// SetupFailoverRoute wires a two-tier rule using vmodel's pre-registered error
+// mocks for the primary tier. Both tiers run inside httptest servers; the
+// primary always trips the named injection (RegisterErrorMocks IDs above), the
+// fallback serves successScenario via env.virtual.
 //
-// The orchestrator dispatches under TacticPriority; the primary is tried
+// The orchestrator dispatches under TacticTier; the primary (Tier 0) is tried
 // first; pre-content failures are retryable; mid-stream failures commit the
 // gate (no retry). This is the single helper that covers all failover-test
 // shapes: 429/500 pre-content, mid-stream close, mid-stream event.
@@ -101,12 +100,12 @@ func (env *TestEnv) SetupFailoverRoute(
 		RequestModel:  requestModel,
 		ResponseModel: fallbackProviderModel,
 		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Priority: 10, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: fallbackProviderModel, Weight: 1, Active: true, Priority: 5, TimeWindow: 300},
+			{Provider: primaryUUID, Model: primaryFailModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
+			{Provider: fallbackUUID, Model: fallbackProviderModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticPriority,
-			Params: &typ.PriorityParams{WithinTierTactic: loadbalance.TacticRandom},
+			Type:   loadbalance.TacticTier,
+			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
 		},
 		Active: true,
 	}
@@ -158,12 +157,12 @@ func (env *TestEnv) SetupBothFailingRoute(
 		RequestModel:  requestModel,
 		ResponseModel: failModel,
 		Services: []*loadbalance.Service{
-			{Provider: primaryUUID, Model: failModel, Weight: 1, Active: true, Priority: 10, TimeWindow: 300},
-			{Provider: fallbackUUID, Model: failModel, Weight: 1, Active: true, Priority: 5, TimeWindow: 300},
+			{Provider: primaryUUID, Model: failModel, Weight: 1, Active: true, Tier: 0, TimeWindow: 300},
+			{Provider: fallbackUUID, Model: failModel, Weight: 1, Active: true, Tier: 1, TimeWindow: 300},
 		},
 		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticPriority,
-			Params: &typ.PriorityParams{WithinTierTactic: loadbalance.TacticRandom},
+			Type:   loadbalance.TacticTier,
+			Params: &typ.TierParams{WithinTierTactic: loadbalance.TacticRandom},
 		},
 		Active: true,
 	})

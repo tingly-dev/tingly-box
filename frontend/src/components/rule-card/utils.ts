@@ -29,7 +29,7 @@ export function serviceToConfigProvider(service: any): ConfigProvider {
         weight: service.weight || 0,
         active: service.active !== undefined ? service.active : true,
         time_window: service.time_window || 0,
-        priority: service.priority || 0,
+        tier: service.tier ?? 0,
     };
 }
 
@@ -85,24 +85,24 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
 }
 
 /**
- * Returns whether any service in the record has an explicit priority set.
+ * Returns whether any service in the record has an explicit tier assigned.
  * Used to pick the rule's load-balancing tactic on save: as soon as the
- * user assigns at least one Priority > 0, the rule is flipped into the
- * "priority" (direct + fallback) tactic.
+ * user assigns at least one tier, the rule is flipped into the
+ * "tier" (direct + fallback) tactic.
  */
-export function hasPriorityAssigned(record: ConfigRecord): boolean {
-    return record.providers.some((p) => (p.priority ?? 0) > 0);
+export function hasTierAssigned(record: ConfigRecord): boolean {
+    return record.providers.some((p) => (p.tier ?? 0) > 0);
 }
 
 /**
  * Returns the load-balancing tactic payload to send when saving the rule.
- * If any service has Priority > 0 we force "priority"; otherwise we
+ * If any service has a tier assigned we force "tier"; otherwise we
  * preserve the existing tactic so we don't silently clobber what the user
  * (or the backend default) had selected.
  */
 export function pickLbTactic(record: ConfigRecord): { type: string; params: Record<string, unknown> } | undefined {
-    if (hasPriorityAssigned(record)) {
-        return { type: 'priority', params: { within_tier_tactic: 'random' } };
+    if (hasTierAssigned(record)) {
+        return { type: 'tier', params: { within_tier_tactic: 'random' } };
     }
     if (record.lbTactic) {
         return { type: record.lbTactic, params: {} };
@@ -135,7 +135,7 @@ export function cloneSmartRouting(smartRouting: SmartRouting): SmartRouting {
             weight: service.weight,
             active: service.active,
             time_window: service.time_window,
-            priority: service.priority,
+            tier: service.tier,
         })),
     };
 }
@@ -360,9 +360,6 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
                 break;
             case 'use_max_tokens':
                 flags.useMaxTokens = parsedValue;
-                break;
-            case 'session_affinity':
-                flags.sessionAffinity = parsedValue;
                 break;
             default:
                 return { flags, error: `Unknown flag "${rawKey}".` };
