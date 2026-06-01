@@ -1,6 +1,6 @@
-# Priority-Based Service Routing
+# Tier-Based Service Routing
 
-Status: shipped (v1) on branch `claude/priority-service-routing-dIQfX`. Tracking commits: `a362ca3`, `5221109`.
+Status: shipped (v1) on branch `claude/priority-service-routing-dIQfX`. Tracking commits: `a362ca3`, `5221109`. UX redesign on PR #1096 (`claude/dreamy-hawking-DQaYY`).
 
 ## Why
 
@@ -29,29 +29,29 @@ A second, related gap: when an upstream service starts failing, nothing in the b
 
 ### Two new concepts
 
-1. **`Service.Priority int`** — a per-service number inside a rule. Higher = tried first. `0` is "unset" and sinks to the bottom.
-2. **`TacticPriority`** — a new `Tactic` value. When selected, the rule ranks services by `Priority` and picks the highest tier whose circuit breaker is closed.
+1. **`Service.Tier int`** — a per-service number inside a rule. Lower = tried first. `0` is the **highest** priority tier (tried on every request); `1` is the first fallback, `2` the second, and so on.
+2. **`TacticTier`** — a new `Tactic` value. When selected, the rule ranks services by `Tier` ascending and picks the lowest-numbered tier whose circuit breaker is closed.
 
 ### Selection algorithm
 
 ```
 SelectService(rule):
   active = rule.GetActiveServices()
-  buckets = group services by Priority, sorted descending (0 last)
-  for each bucket (highest priority first):
+  buckets = group services by Tier, sorted ascending (0 first — highest priority)
+  for each bucket (lowest tier number = highest priority first):
     candidates = services in bucket whose breaker allows a request
     if candidates is non-empty:
       return WithinTierTactic.pick(candidates)   # default: random
-  // every tier is tripped — fall back to the top bucket regardless
+  // every tier is tripped — fall back to the top bucket (tier 0) regardless
   // so the upstream-error path can surface a real upstream error.
   return WithinTierTactic.pick(top bucket)
 ```
 
 Three properties fall out:
 
-- **Distinct priorities ⇒ pure failover.** Service at priority 10 is used until it fails; service at priority 5 takes over; once the 10's breaker closes, the next request snaps back to it.
-- **Tied priorities ⇒ load sharing within a tier.** Two services at priority 10 share traffic via the sub-tactic (random by default).
-- **All tiers tripped ⇒ degrade, don't disappear.** Picking nothing would let the caller bypass the real upstream error message; picking the top tier guarantees the client sees the actual provider's 5xx / rate-limit text.
+- **Distinct tiers ⇒ pure failover.** Service at tier 0 is used until it fails; service at tier 1 takes over; once tier 0's breaker closes, the next request snaps back to it.
+- **Tied tiers ⇒ load sharing within a tier.** Two services at tier 0 share traffic via the sub-tactic (random by default).
+- **All tiers tripped ⇒ degrade, don't disappear.** Picking nothing would let the caller bypass the real upstream error message; picking the top tier (T0) guarantees the client sees the actual provider's 5xx / rate-limit text.
 
 ### Recovery
 
@@ -61,22 +61,22 @@ The breaker is a three-state machine (`Closed → Open → HalfOpen`):
 - **Open** — too many consecutive failures (`FailureThreshold`, default 3). `Allow()` returns false. After `OpenDuration` (default 30 s) the next `Allow()` call lazily flips to HalfOpen.
 - **HalfOpen** — exactly one probe is permitted. Success → Closed, failure → Open with a fresh timer.
 
-Recovery requires **no separate scheduler**. Selection re-evaluates the priority list every request, and the breaker's lazy state transition admits one probe naturally. Active probing was considered and rejected for v1 — for hot rules it's redundant, and for cold rules there is no one to serve anyway.
+Recovery requires **no separate scheduler**. Selection re-evaluates the tier list every request, and the breaker's lazy state transition admits one probe naturally. Active probing was considered and rejected for v1 — for hot rules it's redundant, and for cold rules there is no one to serve anyway.
 
 ### End-to-end flow: how the tactic switch actually takes effect
 
-The "user clicks a number on a service node" event has to cross five layers before it changes how the next API request is routed. Each layer is wired explicitly:
+The "user moves a service card to a different tier" event has to cross five layers before it changes how the next API request is routed. Each layer is wired explicitly:
 
 ```
 ┌─ Frontend ───────────────────────────────────────────────────────────┐
-│  PriorityBadge click → handleProviderPriorityChange                   │
+│  TierNode up/down arrows → handleProviderTierChange                   │
 │       ↓                                                               │
-│  updateField('providers', updated)  ← service gets priority: 10       │
+│  updateField('providers', updated)  ← service gets tier: 0 (T0)      │
 │       ↓                                                               │
 │  autoSave → pickLbTactic(record)                                      │
-│             returns { type: 'priority',                               │
+│             returns { type: 'tier',                                   │
 │                       params: { within_tier_tactic: 'random' } }      │
-│             whenever any service has priority > 0                     │
+│             whenever any service has a tier assigned                  │
 │       ↓                                                               │
 │  POST /api/v1/rule/:uuid  with body containing lb_tactic              │
 └──────────────────────────────────────────────────────────────────────┘
@@ -85,9 +85,9 @@ The "user clicks a number on a service node" event has to cross five layers befo
 │  rule/handler.go: ShouldBindJSON(&rule)                               │
 │       ↓                                                               │
 │  typ.Tactic.UnmarshalJSON (tactics.go):                               │
-│    – TacticType.UnmarshalJSON parses "priority" → TacticPriority      │
-│    – switch on tc.Type allocates tc.Params = &PriorityParams{}        │
-│    – aux.Params (raw bytes) unmarshalled into the PriorityParams     │
+│    – TacticType.UnmarshalJSON parses "tier" → TacticTier              │
+│    – switch on tc.Type allocates tc.Params = &TierParams{}            │
+│    – aux.Params (raw bytes) unmarshalled into the TierParams          │
 │       ↓                                                               │
 │  config.UpdateRule(uid, rule)  → persisted to SQLite                  │
 └──────────────────────────────────────────────────────────────────────┘
@@ -106,13 +106,13 @@ The "user clicks a number on a service node" event has to cross five layers befo
 │       actualTactic := rule.LBTactic.Instantiate()                     │
 │       ↓                                                               │
 │  typ.Tactic.Instantiate → CreateTacticWithTypedParams(type, params)   │
-│       case TacticPriority → NewPriorityTactic(pp.WithinTierTactic)    │
+│       case TacticTier → NewTierTactic(pp.WithinTierTactic)            │
 │       ↓                                                               │
 │  load_balancer.go:111                                                 │
 │       actualTactic.SelectService(tempRule)                            │
 │       ↓                                                               │
-│  PriorityTactic.SelectService:                                        │
-│    – groupServicesByPriority(active) — descending, 0 last             │
+│  TierTactic.SelectService:                                            │
+│    – groupServicesByTier(active) — ascending, tier 0 first            │
 │    – for each bucket: collect svc where DefaultBreakerStore.Allow()   │
 │    – first non-empty bucket → pickWithinTier(sub-tactic)              │
 └──────────────────────────────────────────────────────────────────────┘
@@ -122,20 +122,20 @@ The "user clicks a number on a service node" event has to cross five layers befo
 │       RecordResponse → loadbalance.RecordServiceSuccess(serviceID)    │
 │       RecordError    → loadbalance.RecordServiceFailure(serviceID)    │
 │  Same DefaultBreakerStore the selection logic consulted, so the next  │
-│  request's PriorityTactic sees the updated state.                     │
+│  request's TierTactic sees the updated state.                         │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 The single transformation point that turns the JSON payload into live runtime behaviour is `Tactic.Instantiate()` at `internal/server/load_balancer.go:92`. Every dispatch path — Anthropic v1/Beta, OpenAI Chat/Responses/Embeddings/Images, Google, smart routing matches — funnels through `LoadBalancer.SelectService`, so the tactic switch is enforced uniformly with no per-protocol changes required.
 
-This is pinned down by `TestPriorityRouting_EndToEnd` in `internal/server/priority_routing_e2e_test.go`, which:
+This is pinned down by `TestTierRouting_EndToEnd` in `internal/server/priority_routing_e2e_test.go`, which:
 
-1. Unmarshals a Rule JSON with `lb_tactic.type = "priority"`,
-2. Asserts `LBTactic.Params` is a `*PriorityParams` after decode,
-3. Calls `LoadBalancer.SelectService` and asserts the high-priority service is picked,
+1. Unmarshals a Rule JSON with `lb_tactic.type = "tier"`,
+2. Asserts `LBTactic.Params` is a `*TierParams` after decode,
+3. Calls `LoadBalancer.SelectService` and asserts the T0 service is picked,
 4. Trips the breaker via `DefaultBreakerStore.RecordFailure` exactly as the recorder does,
-5. Asserts the next pick falls back,
-6. Records a success and asserts the pick returns to the primary.
+5. Asserts the next pick falls back to T1,
+6. Records a success and asserts the pick returns to T0.
 
 ### Wiring failures to the breaker
 
@@ -148,27 +148,26 @@ The `serviceID` is computed from `provider.UUID + ":" + model`, matching the for
 
 ### Frontend UX
 
-A clickable badge on the top-left corner of each provider node:
+The routing graph always renders tier rows, even when only one tier exists (T0 is always shown as a visual guide). Each row has a `TierNode` label on the left (`T0`, `T1`, …) and service cards on the right:
 
-- Shows the current priority (`1`, `2`, …, `–` when unset).
-- Click → small popover with a number input. Setting `0` clears.
-- The badge is sized to overlap the corner, matching the existing badge convention used elsewhere (e.g. SmartOpNode index badges).
-- The provider list re-sorts descending by priority as the user edits.
+- `TierNode` shows a neutral badge (52 px wide, paper background, `text.secondary` label). Hovering it reveals a tooltip explaining what the tier means and how to move services.
+- Each service card has **↑ / ↓ arrow buttons** that move it one tier up or down. The ↑ arrow is hidden on T0 services (can't go higher). ↓ always works and creates a new tier if none exists below.
+- Services in the same tier share load via the sub-tactic (random by default).
 
-The design choice here is **implicit mode activation**: assigning any service a priority > 0 flips the rule's `lb_tactic` to `priority` on save. No separate tactic-selector UI is exposed. Clearing every priority back to 0 leaves the previous tactic intact (the auto-save now round-trips `lb_tactic`, which it didn't before).
+The design choice here is **implicit mode activation**: assigning any service a tier flips the rule's `lb_tactic` to `tier` on save. No separate tactic-selector UI is exposed. Moving all services back to a single tier leaves the tactic as `tier` (consistent; the round-trip is safe).
 
-Why implicit: tactic concepts are jargon for most users. "Set priorities on services" is concrete and matches a real intent ("I want this one first"). The tactic switch is plumbing — it shouldn't be a separate question.
+Why implicit: tactic concepts are jargon for most users. "Move this service to a fallback tier" is concrete and matches a real intent ("I want this one only when the first fails"). The tactic switch is plumbing — it shouldn't be a separate question.
 
 ## Value
 
 | Audience | Value delivered |
 |---|---|
-| Users with multiple equivalent accounts | First-class failover. Set priority 10 on the main, 5 on the backup, walk away. |
+| Users with multiple equivalent accounts | First-class failover. Put the main account at T0, the backup at T1, walk away. |
 | Users running cost-tiered providers | Same model with a cheap-then-expensive cascade. |
-| Operators of any production rule | Free circuit breaking. Even users on the existing tactics get failure isolation as soon as they assign a single priority. |
+| Operators of any production rule | Free circuit breaking. Even users on the existing tactics get failure isolation as soon as they assign a single tier. |
 | Anyone debugging | The recorder now reports per-service success/failure into the breaker, and the breaker state is exposed via `BreakerStore.Snapshot()` for future surfacing. |
 
-The feature is **additive**: rules without explicit priorities behave exactly as before; the new tactic is opt-in via the UI.
+The feature is **additive**: rules without explicit tiers behave exactly as before; the new tactic is opt-in via the UI.
 
 ## Comparison to claude-code-hub
 
@@ -176,8 +175,8 @@ A separate project (`ding113/claude-code-hub`) ships similar capability; we deli
 
 | Their design | Ours | Why we differ |
 |---|---|---|
-| Priority is global across the provider pool. | Priority is scoped to a rule's services. | Our rules already segment requests by model/scenario, so the rule is the natural priority boundary. Global priorities would conflict with our rule isolation. |
-| Numeric priority + cost multiplier + weighted random inside a tier. | Numeric priority + sub-tactic (default random). | Rules typically hold ≤ 5 services. A user-tunable sub-tactic gives flexibility without forcing a second config field on everybody. |
+| Priority is global across the provider pool. | Tier is scoped to a rule's services. | Our rules already segment requests by model/scenario, so the rule is the natural tier boundary. Global tiers would conflict with our rule isolation. |
+| Numeric priority + cost multiplier + weighted random inside a tier. | Numeric tier + sub-tactic (default random). | Rules typically hold ≤ 5 services. A user-tunable sub-tactic gives flexibility without forcing a second config field on everybody. |
 | Per-user-group priority overrides. | Not implemented. | Users already express user-group-specific routing by having separate rules. Adding overrides would duplicate that mechanism. |
 | Redis-shared breaker state. | In-memory, process-local. | Single-instance is the dominant deployment shape. Redis can be added later with no model changes — `BreakerStore` is an interface boundary. |
 | Active probing scheduler for half-open. | Lazy half-open on next request. | Strictly simpler. Hot rules don't need it; cold rules don't matter. |
@@ -199,7 +198,7 @@ v1 only handled cross-request failover: a request that failed returned the error
 2. **`firstChunkGate`** is a passive, protocol-agnostic byte buffer wrapping `c.Writer`. It makes no decisions in its write path: writes land in memory until an explicit signal commits them. Crucially, **single-service requests skip the gate entirely** (`len(GetActiveServices()) <= 1`), so the common case never touches the buffer — zero blast radius.
 3. **Orchestrator** (`dispatchWithPriorityFailover`) owns the retry decision. After each attempt it reads the gate's state:
    - `gate.Committed()` → the stream's first real chunk already reached the wire; retry is impossible, return.
-   - else `gate.Status()` retryable (429, 500, 502, 503, 504) → `gate.Discard()`, pick the next priority tier via `selectFallbackService`, try again.
+   - else `gate.Status()` retryable (429, 500, 502, 503, 504) → `gate.Discard()`, pick the next tier via `selectFallbackService`, try again.
    - else (200, other 4xx, status 0) → terminal; the deferred `gate.CommitIfBuffered()` flushes the captured error to the client.
 4. **Commit seam.** Streaming producers raise `CommitFirstChunk` on their first real chunk (centralised in `ProcessStream`/`StreamLoop`, plus the explicit `message_start` senders), which flushes captured headers + body and switches the gate to pass-through — preserving incremental delivery.
 5. Budget caps at the number of active services so we never loop unbounded. The same service is never tried twice in one request (in-request `tried` map, complementary to the cross-request breaker). The recorder's bound provider is re-set before each attempt (`SetActiveService`), so a second-attempt failure trips the *second* service's breaker — not the first's.
@@ -220,12 +219,12 @@ Two pieces work together to make streaming retryable without losing incremental 
 - **Same API style only.** `selectFallbackService` filters out candidates whose `Provider.APIStyle` differs from the original. The transformed request body in `reqCtx` was built for the original provider's protocol; switching styles mid-request would feed a mismatched payload to the next upstream. Heterogeneous fallback (e.g. OpenAI → Anthropic within one rule) would need re-running the transform chain and is deferred.
 - **Wired into:** `AnthropicMessagesV1Beta`, `AnthropicMessagesV1`, the OpenAI Chat handler, and the OpenAI Responses handler. Google and embeddings/images use a different code shape and can be added incrementally if real demand surfaces.
 
-**What the user sees:** if the primary service hits a 429 or 5xx on this exact request, the request quietly switches to the next priority tier and the client gets the successful response — no error returned, no client-side retry needed. If every tier fails, the last upstream's error reaches the client untouched so the message is honest.
+**What the user sees:** if the primary service hits a 429 or 5xx on this exact request, the request quietly switches to the next tier and the client gets the successful response — no error returned, no client-side retry needed. If every tier fails, the last upstream's error reaches the client untouched so the message is honest.
 
 ## Future work
 
 1. **Mid-stream failover (v3)** — pre-content retry is in place on every streaming path; the remaining gap is reconnecting to the next tier after content has already started flowing. Needs response reassembly or protocol-aware "rewind" semantics; out of scope until users actually hit it.
-2. **Heterogeneous fallback** — re-run the transform chain when the fallback provider has a different API style. Lifts the "same-style only" v2 constraint. (Related: the current fallback swaps provider only and reuses the original transformed body + model, so mixing different models across priority tiers in one rule isn't supported yet.)
+2. **Heterogeneous fallback** — re-run the transform chain when the fallback provider has a different API style. Lifts the "same-style only" v2 constraint. (Related: the current fallback swaps provider only and reuses the original transformed body + model, so mixing different models across tiers in one rule isn't supported yet.)
 3. **Active half-open probing** — opt-in goroutine that probes Open breakers on a cadence, useful for cold rules.
 4. **Per-rule breaker thresholds** — currently process-wide defaults. Could be surfaced as a Rule-level config block.
 5. **Failover decision log + UI** — the recorder already sees every success/failure attribution; surface "request X went to service A → fell back to B" in the system log page.
@@ -234,17 +233,18 @@ Two pieces work together to make streaming retryable without losing incremental 
 ## File map
 
 Backend
-- `internal/loadbalance/load_balancing.go` — `Service.Priority`, `TacticPriority` enum.
+- `internal/loadbalance/load_balancing.go` — `Service.Tier`, `TacticTier` enum.
 - `internal/loadbalance/breaker.go` — three-state breaker + store.
 - `internal/loadbalance/breaker_test.go`
-- `internal/typ/tactics.go` — `PriorityParams`, `PriorityTactic`, `groupServicesByPriority`.
+- `internal/typ/tactics.go` — `TierParams`, `TierTactic`, `groupServicesByTier`.
 - `internal/typ/priority_tactic_test.go`
 - `internal/server/protocol_recording.go` — recorder → breaker bridge.
 
 Frontend
-- `frontend/src/components/RoutingGraphTypes.ts` — `ConfigProvider.priority`, `ConfigRecord.lbTactic`.
-- `frontend/src/components/rule-card/utils.ts` — `pickLbTactic`, `hasPriorityAssigned`.
-- `frontend/src/components/rule-card/useRuleCardHooks.ts` — autosave round-trips `lb_tactic` and `priority`.
-- `frontend/src/components/RuleCard.tsx` — `handleProviderPriorityChange`.
-- `frontend/src/components/RoutingGraph.tsx` — priority-sorted list, prop plumbing.
-- `frontend/src/components/nodes/ProviderNode.tsx` — `PriorityBadge` component overlapping the top-left corner.
+- `frontend/src/components/RoutingGraphTypes.ts` — `ConfigProvider.tier`, `ConfigRecord.lbTactic`.
+- `frontend/src/components/rule-card/utils.ts` — `pickLbTactic`, `hasTierAssigned`.
+- `frontend/src/components/rule-card/useRuleCardHooks.ts` — autosave round-trips `lb_tactic` and `tier`.
+- `frontend/src/components/RuleCard.tsx` — `handleProviderTierChange`.
+- `frontend/src/components/UnifiedRoutingGraph.tsx` — always renders tier layout; `TierNode` per row; up/down arrows on service cards.
+- `frontend/src/components/nodes/TierNode.tsx` — `T0`/`T1`/… label node; hover tooltip explains tier semantics.
+- `frontend/src/components/nodes/ServiceNode.tsx` — service card with ↑ / ↓ move buttons in tier layout.

@@ -1,11 +1,11 @@
-# Priority Routing — Pencil Graph
+# Tier Routing — Pencil Graph
 
-Visual companion to `priority-routing.md`. Shows the runtime flow of priority service routing and its two complementary failover levels: **cross-request** (priority tactic + circuit breaker) and **in-request** (the passive `firstChunkGate` + stream priming). The in-request path is a **layered hand-off**: the producer emits chunks normally, a passive gate buffers them, and the orchestrator owns the retry decision.
+Visual companion to `priority-routing.md`. Shows the runtime flow of tier-based service routing and its two complementary failover levels: **cross-request** (tier tactic + circuit breaker) and **in-request** (the passive `firstChunkGate` + stream priming). The in-request path is a **layered hand-off**: the producer emits chunks normally, a passive gate buffers them, and the orchestrator owns the retry decision.
 
 Contents:
 
 - Two complementary failover levels (map)
-- Cross-request — PriorityTactic bucket walk
+- Cross-request — TierTactic bucket walk
 - Cross-request — circuit breaker state machine
 - Cross-request — recorder → breaker feedback loop
 - In-request — three layers
@@ -25,49 +25,49 @@ Contents:
         ┌─────────────────────────┴──────────────────────────┐
         ▼                                                     ▼
 CROSS-REQUEST  (between requests)                IN-REQUEST  (within one request)
-PriorityTactic + circuit breaker                firstChunkGate + stream priming
+TierTactic + circuit breaker                    firstChunkGate + stream priming
         │                                                     │
-  request N hits broken A                          request N's attempt on A
-  → recorder trips A's breaker                     fails pre-stream (429/5xx)
+  request N hits broken A (T0)                   request N's attempt on A
+  → recorder trips A's breaker                   fails pre-stream (429/5xx)
         │                                                     │
-  request N+1 selection skips A,                   → gate discards buffer,
-  picks B (next tier)                                orchestrator retries B
+  request N+1 selection skips A,                 → gate discards buffer,
+  picks B (next tier T1)                           orchestrator retries B
         │                                              in the SAME request
-  A's breaker half-opens after 30s                          │
-  → request N+k probes A, snaps back               client sees B's success;
-                                                    no error, no client retry
+  A's breaker half-opens after 30s                         │
+  → request N+k probes A, snaps back             client sees B's success;
+                                                  no error, no client retry
         │                                                     │
         └── feedback: recorder.RecordResponse/RecordError ────┘
                  writes the breaker the next request reads
 ```
 
-## Cross-request — PriorityTactic bucket walk
+## Cross-request — TierTactic bucket walk
 
-`PriorityTactic.SelectService` (`internal/typ/tactics.go`) runs once per request inside `LoadBalancer.SelectService`. It groups the rule's active services into priority tiers and walks them highest-first, taking the first tier with a breaker-permitted service.
+`TierTactic.SelectService` (`internal/typ/tactics.go`) runs once per request inside `LoadBalancer.SelectService`. It groups the rule's active services into tier buckets and walks them lowest-number-first (T0 = highest priority), taking the first tier with a breaker-permitted service.
 
 ```
 active = rule.GetActiveServices()
        │
        ▼
-groupServicesByPriority(active)        ← descending; Priority 0 (unset) sinks last
+groupServicesByTier(active)         ← ascending; tier 0 is highest priority, tried first
        │
-   buckets: [ {prio 10: A,A'}, {prio 5: B}, {prio 0: C} ]
+   buckets: [ {tier 0: A,A'}, {tier 1: B}, {tier 2: C} ]
        │
-       ├─ tier prio=10 ─ store.Allow(A)? store.Allow(A')?
+       ├─ T0 (tier=0) ─ store.Allow(A)? store.Allow(A')?
        │       │
        │       ├─ ≥1 allowed → pickWithinTier(allowed) ──► RETURN
        │       │     (1 svc → that svc; N svc → WithinTierTactic, default random)
        │       │
        │       └─ none allowed (all breakers Open) → next tier
        │
-       ├─ tier prio=5  ─ store.Allow(B)?
+       ├─ T1 (tier=1) ─ store.Allow(B)?
        │       └─ allowed → pickWithinTier ──► RETURN
        │
-       ├─ tier prio=0  ─ store.Allow(C)?
+       ├─ T2 (tier=2) ─ store.Allow(C)?
        │       └─ allowed → pickWithinTier ──► RETURN
        │
        └─ EVERY tier tripped
-              └─ pickWithinTier(fallback = first/highest bucket) ──► RETURN
+              └─ pickWithinTier(fallback = first/highest-priority bucket, T0) ──► RETURN
                    (degrade, don't disappear: surface the real upstream 5xx
                     instead of rejecting locally)
 ```
@@ -120,7 +120,7 @@ The dispatch hot path needs **zero** changes: `ProtocolRecorder` already observe
                       └─ RecordServiceFailure(id) ─►  (same keys: UUID:model)
                                                      │
                                                      └─ store.Allow(id) consulted
-                                                        by PriorityTactic above
+                                                        by TierTactic above
    In-request failover re-binds the recorder per attempt
    (rec.SetActiveService) so a 2nd-attempt failure trips the
    SECOND service's breaker, not the first's.
@@ -250,19 +250,19 @@ firstEventReplayStream replays the cached first event:
 Two decisive scenarios, showing Producer ↔ firstChunkGate ↔ Orchestrator over time.
 
 ```
-SCENARIO A — pre-stream failure on tier 1, success on tier 2
+SCENARIO A — pre-stream failure on T0, success on T1
 ────────────────────────────────────────────────────────────
 Orchestrator  Producer (attempt)        firstChunkGate            real wire
    │ wrap ───────────────────────────────► (buffered)
-   │ attempt(A) ─► forward + prime A
+   │ attempt(T0) ─► forward + prime T0
    │                 prime fails ─► handlePreStreamFailure
    │                   WriteHeader(500)+body ─► buf=500/body          (nothing)
    │ ◄─ return
    │ Committed()? no
    │ Status()=500 retryable? yes
-   │ selectFallbackService → B
+   │ selectFallbackService → T1
    │ gate.Discard() ─────────────────────► buf reset, status 0
-   │ attempt(B) ─► forward + prime B
+   │ attempt(T1) ─► forward + prime T1
    │                 prime ok ─► first chunk
    │                   CommitFirstChunk ──► commit: hdr+200+buf ───► FLUSHED
    │                   write events ──────► pass-through ──────────► streamed
@@ -272,7 +272,7 @@ Orchestrator  Producer (attempt)        firstChunkGate            real wire
 
 SCENARIO B — first chunk commits, later mid-stream error (no retry)
 ────────────────────────────────────────────────────────────
-   │ attempt(A) ─► prime ok ─► first chunk
+   │ attempt(T0) ─► prime ok ─► first chunk
    │                 CommitFirstChunk ────► commit ────────────────► FLUSHED
    │                 stream events… ───────► pass-through ─────────► streamed
    │                 upstream dies mid-stream
