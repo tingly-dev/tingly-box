@@ -1116,8 +1116,8 @@ func GetCapacityBasedTactic() *CapacityBasedTactic {
 
 // PriorityTactic implements priority/failover load balancing.
 //
-// Services are bucketed by Service.Priority (descending; higher = tried
-// first). The highest-priority bucket containing at least one service
+// Services are bucketed by Service.Priority (ascending for non-zero; lower
+// positive number = tried first; 0 = unset, always tried last). The highest-priority bucket containing at least one service
 // whose circuit breaker permits a request is selected. Within that
 // bucket, the WithinTierTactic (e.g. random, token-based) chooses the
 // final service. This yields:
@@ -1215,10 +1215,10 @@ type priorityBucket struct {
 }
 
 // groupServicesByPriority buckets services by their Priority field and
-// returns the buckets sorted descending (higher priority first). Services
-// with Priority == 0 are treated as the "unset" tier; placing them last
-// lets explicitly-prioritised services be tried before unset ones even
-// when both are present in a rule.
+// returns the buckets sorted ascending (lower positive number = higher priority,
+// tried first). Priority == 0 is treated as the "unset" tier and always sinks
+// to the bottom, so explicitly-prioritised services are tried before unset ones
+// even when both are present in a rule.
 func groupServicesByPriority(services []*loadbalance.Service) []priorityBucket {
 	groups := make(map[int][]*loadbalance.Service)
 	for _, svc := range services {
@@ -1229,7 +1229,7 @@ func groupServicesByPriority(services []*loadbalance.Service) []priorityBucket {
 	for k := range groups {
 		keys = append(keys, k)
 	}
-	// Descending, but 0 (unset) sinks to the bottom regardless of sign.
+	// Ascending for non-zero (lower number = tried first), 0 (unset) sinks last.
 	for i := 0; i < len(keys); i++ {
 		for j := i + 1; j < len(keys); j++ {
 			a, b := keys[i], keys[j]
@@ -1239,7 +1239,7 @@ func groupServicesByPriority(services []*loadbalance.Service) []priorityBucket {
 				swap = true
 			case a != 0 && b == 0:
 				swap = false
-			case a < b:
+			case a > b:
 				swap = true
 			}
 			if swap {

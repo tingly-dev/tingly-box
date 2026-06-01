@@ -20,6 +20,8 @@ import {
     ArrowNode,
     DividerNode,
     NodeContainer,
+    PriorityTierNode,
+    PRIORITY_TIER_NODE_WIDTH,
     ServiceNode,
     SmartOpNode,
     ServiceEntryNode,
@@ -88,7 +90,8 @@ export interface UnifiedRoutingGraphProps {
     onProviderNodeClick?: (providerUuid: string) => void;
     onProviderPriorityChange?: (providerUuid: string, priority: number) => void;
     onDeleteProvider?: (providerUuid: string) => void;
-    onAddProvider?: () => void;
+    onAddProvider?: (priority?: number) => void;
+    onMoveTier?: (tierPriority: number, direction: 'up' | 'down') => void;
     onToggleExpanded?: () => void;
 
     // Smart routing callbacks
@@ -172,6 +175,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     onProviderPriorityChange,
     onDeleteProvider,
     onAddProvider,
+    onMoveTier,
     onToggleExpanded,
     onAddSmartRule,
     onEditSmartRule,
@@ -211,7 +215,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
             const bp = b.priority ?? 0;
             if (ap === 0 && bp !== 0) return 1;
             if (bp === 0 && ap !== 0) return -1;
-            return bp - ap;
+            return ap - bp;
         });
     }, [record.providers]);
 
@@ -236,11 +240,23 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         }
     }, [smartRouting, onAddServiceToSmartRule]);
 
-    // Reusable service list renderer with priority-group dividers
-    const renderProviderList = React.useCallback(() => {
-        const hasMultipleTiers = priorityGroups.length > 1;
+    // Non-zero priority groups (sorted ascending by priority value = P1, P2, P3...)
+    const nonZeroPriorityGroups = React.useMemo(
+        () => priorityGroups.filter((g) => g.priority > 0),
+        [priorityGroups],
+    );
 
-        const renderServiceNode = (provider: typeof sortedDefaultProviders[0]) => (
+    // Unset-priority services (priority === 0)
+    const zeroGroup = React.useMemo(
+        () => priorityGroups.find((g) => g.priority === 0) ?? null,
+        [priorityGroups],
+    );
+
+    const isPriorityMode = nonZeroPriorityGroups.length > 0;
+
+    // Render a single ServiceNode (shared between both layouts)
+    const renderServiceNode = React.useCallback(
+        (provider: typeof sortedDefaultProviders[0], hidePriorityBadge = false) => (
             <ServiceNode
                 key={provider.uuid}
                 provider={provider}
@@ -254,8 +270,72 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         ? (priority) => onProviderPriorityChange(provider.uuid, priority)
                         : undefined
                 }
+                showPriority={!hidePriorityBadge}
             />
+        ),
+        [getApiStyle, providers, active, onDeleteProvider, onProviderNodeClick, onProviderPriorityChange],
+    );
+
+    // Priority tier layout: stacked rows, one per tier, with PriorityTierNode on the left
+    const renderPriorityTierLayout = React.useCallback(() => {
+        const maxPriority = nonZeroPriorityGroups.length > 0
+            ? nonZeroPriorityGroups[nonZeroPriorityGroups.length - 1].priority
+            : 0;
+
+        return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {nonZeroPriorityGroups.map((group, idx) => (
+                    <Box
+                        key={group.priority}
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'nowrap' }}
+                    >
+                        <PriorityTierNode
+                            tierIndex={idx}
+                            priority={group.priority}
+                            active={active}
+                            canMoveUp={idx > 0}
+                            canMoveDown={idx < nonZeroPriorityGroups.length - 1}
+                            onMoveUp={() => onMoveTier?.(group.priority, 'up')}
+                            onMoveDown={() => onMoveTier?.(group.priority, 'down')}
+                        />
+                        <ArrowNode direction="forward" />
+                        {group.providers.map((p) => renderServiceNode(p, true))}
+                        <ActionAddNode
+                            active={active && !saving}
+                            onAdd={() => onAddProvider?.(group.priority)}
+                            tooltip={t('rule.tooltips.addServiceSecond')}
+                        />
+                    </Box>
+                ))}
+
+                {/* Unset-tier row (priority=0 services) — no tier node */}
+                {zeroGroup && (
+                    <Box
+                        key={0}
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'nowrap' }}
+                    >
+                        <Box sx={{ width: PRIORITY_TIER_NODE_WIDTH, flexShrink: 0 }} />
+                        <ArrowNode direction="forward" />
+                        {zeroGroup.providers.map((p) => renderServiceNode(p, true))}
+                    </Box>
+                )}
+
+                {/* Add new tier button */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box sx={{ width: PRIORITY_TIER_NODE_WIDTH, flexShrink: 0 }} />
+                    <ActionAddNode
+                        active={active && !saving}
+                        onAdd={() => onAddProvider?.(maxPriority + 1)}
+                        tooltip={t('rule.priority.addTierTooltip')}
+                    />
+                </Box>
+            </Box>
         );
+    }, [t, nonZeroPriorityGroups, zeroGroup, active, saving, renderServiceNode, onMoveTier, onAddProvider]);
+
+    // Flat service list (no tiers): horizontal inline layout with dividers between groups
+    const renderProviderList = React.useCallback(() => {
+        const hasMultipleTiers = priorityGroups.length > 1;
 
         return (
             <>
@@ -263,16 +343,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     priorityGroups.map((group, groupIndex) => (
                         <React.Fragment key={group.priority}>
                             {groupIndex > 0 && <DividerNode active={active} />}
-                            {group.providers.map(renderServiceNode)}
+                            {group.providers.map((p) => renderServiceNode(p))}
                         </React.Fragment>
                     ))
                 ) : (
-                    sortedDefaultProviders.map(renderServiceNode)
+                    sortedDefaultProviders.map((p) => renderServiceNode(p))
                 )}
                 <ActionAddNode
                     active={active && !saving}
                     warning={record.providers.length === 0}
-                    onAdd={onAddProvider ?? (() => {})}
+                    onAdd={() => onAddProvider?.()}
                     tooltip={
                         record.providers.length === 0
                             ? t('rule.tooltips.addServiceFirst')
@@ -281,7 +361,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 />
             </>
         );
-    }, [t, getApiStyle, priorityGroups, sortedDefaultProviders, providers, active, saving, record.providers.length, onDeleteProvider, onProviderNodeClick, onProviderPriorityChange, onAddProvider]);
+    }, [t, priorityGroups, sortedDefaultProviders, active, saving, record.providers.length, renderServiceNode, onAddProvider]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -378,7 +458,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Render default providers section
     const renderDefaultProviders = () => {
         return (
-            <GraphRow>
+            <GraphRow sx={{ alignItems: 'flex-start' }}>
                 <NodeContainer>
                     <ServiceEntryNode
                         providersCount={record.providers.length}
@@ -386,17 +466,23 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     />
                 </NodeContainer>
 
-                <ArrowNode direction="forward" />
-
-                <Box sx={{
-                    display: 'flex',
-                    gap: 1.5,
-                    flexWrap: 'nowrap',
-                    justifyContent: 'flex-start',
-                    alignItems: 'center'
-                }}>
-                    {renderProviderList()}
+                <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 72 }}>
+                    <ArrowNode direction="forward" />
                 </Box>
+
+                {isPriorityMode ? (
+                    renderPriorityTierLayout()
+                ) : (
+                    <Box sx={{
+                        display: 'flex',
+                        gap: 1.5,
+                        flexWrap: 'nowrap',
+                        justifyContent: 'flex-start',
+                        alignItems: 'center',
+                    }}>
+                        {renderProviderList()}
+                    </Box>
+                )}
             </GraphRow>
         );
     };
@@ -458,6 +544,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 {renderSmartRules()}
                                                 {renderDefaultProviders()}
                                             </Box>
+                                        ) : isPriorityMode ? (
+                                            /* Direct + Priority Mode: stacked tier rows */
+                                            renderPriorityTierLayout()
                                         ) : (
                                             /* Direct Mode: providers inline */
                                             <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 1.5, alignItems: 'center' }}>

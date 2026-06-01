@@ -371,16 +371,18 @@ export default {
     },
     "priority": {
       "invalidInput": "请输入有效的数字。",
-      "tooltipSet": "优先级 {{priority}}（数值越大越优先）。点击修改。",
+      "tooltipSet": "优先级 {{priority}}（数值越小越优先）。点击修改。",
       "tooltipUnset": "未设置优先级（与其他 0 级服务负载均衡）。点击分配优先级。",
       "ariaLabel": "优先级 {{priority}}",
       "ariaUnset": "未设置优先级",
       "editTitle": "设置优先级",
-      "helpHigher": "数值越大越优先，优先级相同的服务将负载均衡。",
+      "helpHigher": "数值越小越优先（P1 最先尝试），同一层级内的服务将负载均衡。",
       "helpZero": "设为 0 表示不设优先级，与其他 0 级服务共享负载。",
-      "tierLabel": "P{{priority}}",
+      "tierLabel": "P{{index}}",
       "tierBalanced": "均衡",
-      "dividerHelp": "高优先级的服务总是优先使用。只有当某一优先级的所有服务均不可用（熔断）时，流量才会降级到下一优先级。同一优先级内的服务之间负载均衡。"
+      "dividerHelp": "编号越小的层级越优先。只有当该层级所有服务均不可用（熔断）时，流量才会降级到下一层级。同一层级内的服务之间负载均衡。",
+      "tierTooltip": "P1 最先尝试，P2 为备用，依此类推。同一层级内的服务负载均衡。",
+      "addTierTooltip": "添加新的后备层级"
     },
     "menu": {
       "refreshModels": "刷新模型",

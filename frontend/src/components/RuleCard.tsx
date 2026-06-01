@@ -48,7 +48,7 @@ export interface RuleCardProps {
     onRuleChange?: (updatedRule: Rule) => void;
     onProviderModelsChange?: (providerUuid: string, models: ProviderModelData) => void;
     onRefreshProvider?: (providerUuid: string) => void;
-    onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string) => void;
+    onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string, addPriority?: number) => void;
     collapsible?: boolean;
     initiallyExpanded?: boolean;
     allowDeleteRule?: boolean;
@@ -163,24 +163,48 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         [configRecord, rule.uuid, onModelSelectOpen]
     );
 
-    // Handler: Add provider button click
-    const handleAddProviderButtonClick = useCallback(() => {
+    // Handler: Add provider button click — optional priority assigns the new service to a tier
+    const handleAddProviderButtonClick = useCallback((priority?: number) => {
         if (configRecord) {
-            onModelSelectOpen(rule.uuid, configRecord, 'add');
+            onModelSelectOpen(rule.uuid, configRecord, 'add', undefined, priority);
         }
     }, [configRecord, rule.uuid, onModelSelectOpen]);
 
-    // Handler: Update a service's priority. Setting any service's
-    // priority to > 0 flips the rule into "priority" tactic on save
-    // (handled in pickLbTactic), so users get direct/fallback routing
-    // just by clicking a number badge — no separate tactic selector to
-    // learn. Higher number = higher priority = tried first.
+    // Handler: Update a service's priority. Setting any service's priority to > 0
+    // flips the rule into "priority" tactic on save (handled in pickLbTactic).
+    // Lower positive number = higher priority = tried first.
     const handleProviderPriorityChange = useCallback(
         async (providerUuid: string, priority: number) => {
             if (!configRecord) return;
             const updated = configRecord.providers.map((p) =>
                 p.uuid === providerUuid ? { ...p, priority } : p,
             );
+            await updateField(configRecord, setConfigRecord, 'providers', updated);
+        },
+        [configRecord, updateField, setConfigRecord]
+    );
+
+    // Handler: Move an entire priority tier up or down by swapping its priority value
+    // with the adjacent tier.
+    const handleMoveTier = useCallback(
+        async (tierPriority: number, direction: 'up' | 'down') => {
+            if (!configRecord) return;
+            const nonZero = [...new Set(
+                configRecord.providers
+                    .map((p) => p.priority ?? 0)
+                    .filter((v) => v > 0)
+            )].sort((a, b) => a - b);
+            const idx = nonZero.indexOf(tierPriority);
+            if (idx < 0) return;
+            const adjacentIdx = direction === 'up' ? idx - 1 : idx + 1;
+            if (adjacentIdx < 0 || adjacentIdx >= nonZero.length) return;
+            const adj = nonZero[adjacentIdx];
+            const updated = configRecord.providers.map((p) => {
+                const prio = p.priority ?? 0;
+                if (prio === tierPriority) return { ...p, priority: adj };
+                if (prio === adj) return { ...p, priority: tierPriority };
+                return p;
+            });
             await updateField(configRecord, setConfigRecord, 'providers', updated);
         },
         [configRecord, updateField, setConfigRecord]
@@ -327,6 +351,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onProviderPriorityChange={handleProviderPriorityChange}
                 onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
                 onAddProvider={handleAddProviderButtonClick}
+                onMoveTier={handleMoveTier}
                 onAddSmartRule={smartHandlers.handleAddSmartRule}
                 onEditSmartRule={smartHandlers.handleEditSmartRule}
                 onDeleteSmartRule={smartHandlers.handleDeleteSmartRule}

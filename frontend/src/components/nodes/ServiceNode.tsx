@@ -75,6 +75,7 @@ export interface ServiceNodeProps {
     onDelete: () => void;
     onNodeClick: () => void;
     onPriorityChange?: (priority: number) => void;
+    showPriority?: boolean;
 }
 
 /** @deprecated Use ServiceNodeProps */
@@ -183,6 +184,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     onDelete,
     onNodeClick,
     onPriorityChange,
+    showPriority = true,
 }) => {
     const { t } = useTranslation();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -211,7 +213,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const handleProbeClick = (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); setProbeAnchorEl(e.currentTarget); };
     const handleProbeClose = () => setProbeAnchorEl(null);
 
-    const hasPriority = !!onPriorityChange;
+    const hasPriority = showPriority && !!onPriorityChange;
 
     return (
         <ServiceNodeWrapper>

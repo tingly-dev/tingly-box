@@ -370,16 +370,18 @@ export default {
     },
     "priority": {
       "invalidInput": "Please enter a valid number.",
-      "tooltipSet": "Priority {{priority}} (higher = tried first). Click to change.",
+      "tooltipSet": "Priority {{priority}} (lower = tried first). Click to change.",
       "tooltipUnset": "No priority set (load balanced with other tier-0 services). Click to assign.",
       "ariaLabel": "Priority {{priority}}",
       "ariaUnset": "No priority",
       "editTitle": "Set Priority",
-      "helpHigher": "Higher number = higher priority. Services in the same tier are load balanced.",
+      "helpHigher": "Lower number = higher priority (P1 is tried first). Services in the same tier are load balanced.",
       "helpZero": "Set to 0 for no priority — shares load with other tier-0 services.",
-      "tierLabel": "P{{priority}}",
+      "tierLabel": "P{{index}}",
       "tierBalanced": "Balanced",
-      "dividerHelp": "Higher-priority services are always tried first. Only when all services in a tier fail (circuit open) does traffic fall through to the next tier. Services within the same tier are load-balanced."
+      "dividerHelp": "Lower-numbered tiers are always tried first. Only when all services in a tier fail (circuit open) does traffic fall through to the next tier. Services within the same tier are load-balanced.",
+      "tierTooltip": "P1 is tried first, P2 is the fallback, and so on. Services within the same tier are load-balanced.",
+      "addTierTooltip": "Add a new fallback tier"
     },
     "menu": {
       "refreshModels": "Refresh Models",

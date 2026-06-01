@@ -11,6 +11,7 @@ export interface ModelSelectOptions {
     configRecord: ConfigRecord;
     providerUuid?: string; // The uuid of the service to edit, or "smart:${index}" for adding to smart rule
     mode?: 'edit' | 'add';
+    addPriority?: number; // Priority to assign when mode='add' (for tier-based adds)
 }
 
 export interface UseModelSelectDialogOptions {
@@ -46,7 +47,8 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
     const [editingProviderUuid, setEditingProviderUuid] = useState<string | null>(null);
     const [currentRuleUuid, setCurrentRuleUuid] = useState<string | null>(null);
     const [currentConfigRecord, setCurrentConfigRecord] = useState<ConfigRecord | null>(null);
-    const [modelSelectionCleared, setModelSelectionCleared] = useState(false); // Track if model selection was cleared
+    const [modelSelectionCleared, setModelSelectionCleared] = useState(false);
+    const [currentAddPriority, setCurrentAddPriority] = useState<number | undefined>(undefined);
 
     // Refs for tracking context
     const currentSmartRuleIndexRef = useRef<number | null>(null);
@@ -78,12 +80,13 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
 
     // Open the dialog
     const openModelSelect = useCallback((options: ModelSelectOptions) => {
-        const { ruleUuid, configRecord, providerUuid, mode: newMode = 'edit' } = options;
+        const { ruleUuid, configRecord, providerUuid, mode: newMode = 'edit', addPriority } = options;
 
         setCurrentRuleUuid(ruleUuid);
         setCurrentConfigRecord(configRecord);
         setMode(newMode);
-        setModelSelectionCleared(false); // Reset the cleared state when opening dialog
+        setModelSelectionCleared(false);
+        setCurrentAddPriority(addPriority);
 
         // Check if providerUuid is a smart rule reference (format: "smart:${index}")
         if (providerUuid?.startsWith('smart:')) {
@@ -120,6 +123,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setCurrentConfigRecord(null);
         setEditingProviderUuid(null);
         setModelSelectionCleared(false);
+        setCurrentAddPriority(undefined);
         currentSmartRuleIndexRef.current = null;
         editingServiceContextRef.current = null;
         setOpen(true);
@@ -159,12 +163,12 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 }),
             };
         } else if (mode === 'add') {
-            // Add to default providers
+            // Add to default providers, preserving tier priority if specified
             updated = {
                 ...currentConfigRecord,
                 providers: [
                     ...currentConfigRecord.providers,
-                    { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '', isManualInput: false },
+                    { uuid: uuidv4(), provider: option.provider.uuid, model: option.model || '', isManualInput: false, priority: currentAddPriority ?? 0 },
                 ],
             };
         } else if (mode === 'edit' && editingProviderUuid) {
@@ -255,9 +259,10 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setCurrentRuleUuid(null);
         setCurrentConfigRecord(null);
         setEditingProviderUuid(null);
+        setCurrentAddPriority(undefined);
         currentSmartRuleIndexRef.current = null;
         editingServiceContextRef.current = null;
-    }, [currentConfigRecord, currentRuleUuid, mode, editingProviderUuid, rules, onRuleChange, showNotification, onCreateFromModel]);
+    }, [currentConfigRecord, currentAddPriority, currentRuleUuid, mode, editingProviderUuid, rules, onRuleChange, showNotification, onCreateFromModel]);
 
     // Get selected provider and model for pre-selection
     const getSelectedProvider = useCallback(() => {
@@ -289,6 +294,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         setCurrentRuleUuid(null);
         setCurrentConfigRecord(null);
         setEditingProviderUuid(null);
+        setCurrentAddPriority(undefined);
         currentSmartRuleIndexRef.current = null;
         editingServiceContextRef.current = null;
     }, []);

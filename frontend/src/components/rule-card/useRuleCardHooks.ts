@@ -45,7 +45,7 @@ export interface SmartRoutingHandlersProps {
     setConfigRecord: (record: ConfigRecord | null) => void;
     autoSave: (record: ConfigRecord) => Promise<boolean>;
     ruleUuid: string;
-    onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string) => void;
+    onModelSelectOpen: (ruleUuid: string, configRecord: ConfigRecord, mode: 'edit' | 'add', providerUuid?: string, addPriority?: number) => void;
     showNotification: (message: string, severity: 'success' | 'info' | 'warning' | 'error') => void;
 }
 

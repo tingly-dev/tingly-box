@@ -2,6 +2,7 @@
 export * from './ActionAddNode';
 export * from './ArrowNode';
 export * from './DividerNode';
+export * from './PriorityTierNode';
 export * from './EntryNode';
 export * from './ServiceEntryNode';
 export * from './ModelNode';
