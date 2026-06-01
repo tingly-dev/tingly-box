@@ -207,6 +207,11 @@ type RuleFlags struct {
 	// ("max" collapses to "high" for OpenAI which has no "max").
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
+	// CleanHeader strips x-anthropic-billing-header blocks from system messages.
+	// Auto-enabled for billing scenarios (claude_code, claude_desktop) during protocol
+	// transformation. Can be manually set to force enable/disable.
+	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"`
+
 	// SessionAffinity pins a client session to the service it first landed on.
 	// The value is the TTL in seconds (0 = disabled). Subsequent requests in
 	// the same session keep hitting that service until the affinity entry

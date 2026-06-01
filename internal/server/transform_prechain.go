@@ -7,24 +7,15 @@ import (
 )
 
 // buildAnthropicPreChain constructs the pre-request transform chain for Anthropic V1 and Beta handlers.
-// Each transform is only added when its corresponding flag is active, so transforms
-// never need to re-check the same condition inside Apply().
+// Currently only applies MaxTokens validation.
+// All other scenario-level transforms (ThinkingEffort, CleanHeader) are handled via
+// rule flags injection in resolveRuleFlagsWithScenario.
 func buildAnthropicPreChain(
 	scenarioConfig *typ.ScenarioConfig,
 	defaultMaxTokens, maxAllowed int,
 ) []transform.Transform {
 	var chain []transform.Transform
-
-	if scenarioConfig != nil {
-		flags := &scenarioConfig.Flags
-		if flags.ThinkingEffort != typ.ThinkingEffortDefault {
-			chain = append(chain, NewThinkingEffortTransform(flags.ThinkingEffort))
-		}
-		if flags.CleanHeader {
-			chain = append(chain, NewCleanHeaderTransform())
-		}
-	}
-
+	// Only MaxTokens validation remains at scenario level
 	chain = append(chain, NewMaxTokensTransform(defaultMaxTokens, maxAllowed))
 	return chain
 }
