@@ -287,14 +287,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 {hasMultipleTiers ? (
                     priorityGroups.map((group, groupIndex) => (
                         <React.Fragment key={group.priority}>
-                            {groupIndex > 0 && (
-                                <DividerNode
-                                    label={group.priority > 0
-                                        ? t('rule.priority.tierLabel', { priority: group.priority })
-                                        : t('rule.priority.tierBalanced')}
-                                    active={active}
-                                />
-                            )}
+                            {groupIndex > 0 && <DividerNode active={active} />}
                             {group.providers.map(renderServiceNode)}
                         </React.Fragment>
                     ))

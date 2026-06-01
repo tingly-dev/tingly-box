@@ -222,6 +222,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                         weight: provider.weight || 0,
                         active: provider.active !== undefined ? provider.active : true,
                         time_window: provider.time_window || 0,
+                        priority: provider.priority || 0,
                     })),
                 smart_enabled: updated.smartEnabled || false,
                 smart_routing: updated.smartRouting || [],
