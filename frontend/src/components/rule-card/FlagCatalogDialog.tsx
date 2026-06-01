@@ -126,8 +126,6 @@ const setBool = (flags: RuleFlags, key: string, value: boolean): RuleFlags => {
             return { ...flags, useMaxCompletionTokens: value };
         case 'use_max_tokens':
             return { ...flags, useMaxTokens: value };
-        case 'session_affinity':
-            return { ...flags, sessionAffinity: value };
         default:
             return flags;
     }
