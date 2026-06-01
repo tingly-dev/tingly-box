@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -223,5 +224,203 @@ func TestRuleExtraTransforms_CursorCompatAlone_NoTransform(t *testing.T) {
 	})
 	if got != nil {
 		t.Errorf("expected nil, got %d transforms", len(got))
+	}
+}
+
+// TestIsBillingHeaderScenario verifies the detection of billing header scenarios
+func TestIsBillingHeaderScenario(t *testing.T) {
+	tests := []struct {
+		name     string
+		scenario typ.RuleScenario
+		want     bool
+	}{
+		{
+			name:     "Claude Code scenario",
+			scenario: typ.ScenarioClaudeCode,
+			want:     true,
+		},
+		{
+			name:     "Claude Desktop scenario",
+			scenario: typ.ScenarioClaudeDesktop,
+			want:     true,
+		},
+		{
+			name:     "OpenAI scenario",
+			scenario: typ.ScenarioOpenAI,
+			want:     false,
+		},
+		{
+			name:     "Anthropic scenario",
+			scenario: typ.ScenarioAnthropic,
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isBillingHeaderScenario(tt.scenario)
+			if got != tt.want {
+				t.Errorf("isBillingHeaderScenario() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAutoSetCleanHeaderFlag verifies the flag auto-setting logic
+func TestAutoSetCleanHeaderFlag(t *testing.T) {
+	tests := []struct {
+		name            string
+		flags           typ.RuleFlags
+		sourceAPI      protocol.APIType
+		targetAPI      protocol.APIType
+		scenario       typ.RuleScenario
+		wantCleanHeader bool
+	}{
+		{
+			name:            "Auto-set for Claude Code transformation",
+			flags:           typ.RuleFlags{CleanHeader: false},
+			sourceAPI:       protocol.TypeAnthropicV1,
+			targetAPI:       protocol.TypeOpenAIChat,
+			scenario:        typ.ScenarioClaudeCode,
+			wantCleanHeader: true,
+		},
+		{
+			name:            "Manual CleanHeader=true preserved",
+			flags:           typ.RuleFlags{CleanHeader: true},
+			sourceAPI:       protocol.TypeAnthropicV1,
+			targetAPI:       protocol.TypeAnthropicV1,
+			scenario:        typ.ScenarioClaudeCode,
+			wantCleanHeader: true,
+		},
+		{
+			name:            "No transformation, not set",
+			flags:           typ.RuleFlags{CleanHeader: false},
+			sourceAPI:       protocol.TypeAnthropicV1,
+			targetAPI:       protocol.TypeAnthropicV1,
+			scenario:        typ.ScenarioClaudeCode,
+			wantCleanHeader: false,
+		},
+		{
+			name:            "Non-billing scenario, not set",
+			flags:           typ.RuleFlags{CleanHeader: false},
+			sourceAPI:       protocol.TypeAnthropicV1,
+			targetAPI:       protocol.TypeOpenAIChat,
+			scenario:        typ.ScenarioOpenAI,
+			wantCleanHeader: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := autoSetCleanHeaderFlag(tt.flags, tt.sourceAPI, tt.targetAPI, tt.scenario)
+			if result.CleanHeader != tt.wantCleanHeader {
+				t.Errorf("autoSetCleanHeaderFlag() CleanHeader = %v, want %v", result.CleanHeader, tt.wantCleanHeader)
+			}
+		})
+	}
+}
+
+// TestRulePreBaseTransformsWithCleanHeader verifies the transform building
+func TestRulePreBaseTransformsWithCleanHeader(t *testing.T) {
+	tests := []struct {
+		name            string
+		flags           typ.RuleFlags
+		wantCleanCount int
+	}{
+		{
+			name:            "CleanHeader flag adds transform",
+			flags:           typ.RuleFlags{CleanHeader: true},
+			wantCleanCount: 1,
+		},
+		{
+			name:            "No CleanHeader flag, no transform",
+			flags:           typ.RuleFlags{CleanHeader: false},
+			wantCleanCount: 0,
+		},
+		{
+			name:            "CursorCompat + CleanHeader both added",
+			flags:           typ.RuleFlags{CursorCompat: true, CleanHeader: true},
+			wantCleanCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transforms := rulePreBaseTransforms(tt.flags)
+
+			cleanCount := 0
+			for _, transform := range transforms {
+				if transform.Name() == "clean_header" {
+					cleanCount++
+				}
+			}
+
+			if cleanCount != tt.wantCleanCount {
+				t.Errorf("CleanHeader count = %v, want %v", cleanCount, tt.wantCleanCount)
+			}
+		})
+	}
+}
+
+// TestResolveRuleFlagsWithScenario_ThinkingEffort verifies the ThinkingEffort flag
+// merging logic ensures rule-level flags take priority over scenario defaults.
+func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
+	tests := []struct {
+		name                 string
+		ruleFlags           typ.RuleFlags
+		scenarioFlags       typ.ScenarioFlags
+		wantThinkingEffort  typ.ThinkingEffortLevel
+	}{
+		{
+			name: "Rule explicit setting preserved over scenario default",
+			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortOff},
+			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
+			wantThinkingEffort:  typ.ThinkingEffortOff,
+		},
+		{
+			name: "Rule explicit level preserved over scenario different level",
+			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortLow},
+			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortMedium},
+			wantThinkingEffort:  typ.ThinkingEffortLow,
+		},
+		{
+			name: "Scenario default injected when rule is default",
+			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortHigh},
+			wantThinkingEffort:  typ.ThinkingEffortHigh,
+		},
+		{
+			name: "Both default remains default",
+			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			wantThinkingEffort:  typ.ThinkingEffortDefault,
+		},
+		{
+			name: "Rule explicit level preserved when scenario is default",
+			ruleFlags:           typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortMedium},
+			scenarioFlags:       typ.ScenarioFlags{ThinkingEffort: typ.ThinkingEffortDefault},
+			wantThinkingEffort:  typ.ThinkingEffortMedium,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(nil)
+			rule := &typ.Rule{Flags: tt.ruleFlags}
+			scenarioConfig := &typ.ScenarioConfig{Flags: tt.scenarioFlags}
+
+			result := resolveRuleFlagsWithScenario(
+				c,
+				rule,
+				typ.ScenarioClaudeCode,
+				scenarioConfig,
+				protocol.TypeAnthropicV1,
+				protocol.TypeOpenAIChat,
+			)
+
+			if result.ThinkingEffort != tt.wantThinkingEffort {
+				t.Errorf("ThinkingEffort = %v, want %v", result.ThinkingEffort, tt.wantThinkingEffort)
+			}
+		})
 	}
 }

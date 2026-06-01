@@ -55,9 +55,14 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		s.applyGuardrailsToAnthropicV1Request(c, &req.MessageNewParams, actualModel, provider)
 	}
 
-	// Check provider's API style to decide which path to take
-	apiStyle := provider.APIStyle
+	// Get or create the recorder for dual-stage recording
+	var recorder *ProtocolRecorder
+	if s.ApplyRecording(scenarioType) {
+		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
+	}
 
+	// Determine target API type for protocol transformation detection
+	apiStyle := provider.APIStyle
 	target := protocol.TypeAnthropicV1
 	switch apiStyle {
 	case protocol.APIStyleAnthropic:
@@ -79,13 +84,9 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 		target = resolvedTarget
 	}
 
-	// Get or create the recorder for dual-stage recording
-	var recorder *ProtocolRecorder
-	if s.ApplyRecording(scenarioType) {
-		recorder = s.EnsureProtocolRecorder(c, string(scenarioType), provider, actualModel, s.GetScenarioRecordMode(scenarioType))
-	}
+	// Resolve flags with scenario injection and auto-apply for CleanHeader
+	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicV1, target)
 
-	ruleFlags := resolveRuleFlags(c, rule)
 	reqCtx, err := s.transformAnthropicV1(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

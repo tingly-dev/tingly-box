@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -19,6 +20,9 @@ func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
 	var pre []transform.Transform
 	if flags.CursorCompat {
 		pre = append(pre, transform.NewOpenAICursorCompatTransform())
+	}
+	if flags.CleanHeader {
+		pre = append(pre, NewCleanHeaderTransform())
 	}
 	if names := parseBlockTools(flags.BlockTools); len(names) > 0 {
 		pre = append(pre, transform.NewToolBlockTransform(names))
@@ -68,21 +72,56 @@ func ruleExtraTransforms(flags typ.RuleFlags) []transform.Transform {
 }
 
 // resolveRuleFlags returns the effective flags for this request: a copy of
-// the rule's persisted flags, with cursor_compat_auto folded into
-// cursor_compat when the inbound request carries Cursor headers. Returns the
-// zero value when no rule is bound.
+// the rule's persisted flags, with:
+// - cursor_compat_auto folded into cursor_compat when the inbound request carries Cursor headers
+// - scenario flags (ThinkingEffort, CleanHeader) injected for billing scenarios during transformation
+// Returns the zero value when no rule is bound.
 //
-// Folding happens here (not at each handler call site) so that
-// rulePreBaseTransforms and downstream consumers like reqCtx.Extra both read
-// the same merged value with no duplication.
+// All flag folding/injection happens here (not at each handler call site) so that
+// rulePreBaseTransforms and downstream consumers read the same merged value.
 func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 	if rule == nil {
 		return typ.RuleFlags{}
 	}
 	flags := rule.Flags
+
+	// Auto-detect Cursor requests
 	if flags.CursorCompatAuto && isCursorRequest(c) {
 		flags.CursorCompat = true
 	}
+
+	return flags
+}
+
+// resolveRuleFlagsWithScenario extends resolveRuleFlags to also inject scenario-level
+// flags and auto-apply CleanHeader for protocol transformation scenarios.
+//
+// This is the main entry point that merges:
+// 1. Rule-level flags (from the rule definition)
+// 2. Scenario flags (from the scenario configuration)
+// 3. Auto-applied flags (like CleanHeader for protocol transformation)
+func resolveRuleFlagsWithScenario(
+	c *gin.Context,
+	rule *typ.Rule,
+	scenarioType typ.RuleScenario,
+	scenarioConfig *typ.ScenarioConfig,
+	sourceAPI, targetAPI protocol.APIType,
+) typ.RuleFlags {
+	flags := resolveRuleFlags(c, rule)
+
+	if scenarioConfig != nil {
+		// Only inject scenario-level ThinkingEffort if rule hasn't set it explicitly
+		if flags.ThinkingEffort == typ.ThinkingEffortDefault && scenarioConfig.Flags.ThinkingEffort != typ.ThinkingEffortDefault {
+			flags.ThinkingEffort = scenarioConfig.Flags.ThinkingEffort
+		}
+
+		// Inject scenario-level CleanHeader if not already set at rule level
+		flags.CleanHeader = flags.CleanHeader || scenarioConfig.Flags.CleanHeader
+	}
+
+	// Auto-apply CleanHeader for protocol transformation in billing scenarios
+	flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
+
 	return flags
 }
 
@@ -108,4 +147,42 @@ func shouldStripUsage(extra map[string]interface{}) bool {
 		}
 	}
 	return false
+}
+
+// isBillingHeaderScenario returns true if the scenario is known to inject billing headers
+// into system messages. These scenarios require the CleanHeader transform when doing
+// protocol transformation (e.g., Anthropic → OpenAI).
+func isBillingHeaderScenario(scenario typ.RuleScenario) bool {
+	switch scenario {
+	case typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
+		return true
+	default:
+		// for profile
+		if strings.HasPrefix(string(scenario), string(typ.ScenarioClaudeCode)) {
+			return true
+		}
+
+		return false
+	}
+}
+
+// autoSetCleanHeaderFlag automatically sets the CleanHeader flag when protocol
+// transformation is detected for billing scenarios (claude_code, claude_desktop).
+// Returns the potentially modified flags.
+func autoSetCleanHeaderFlag(
+	flags typ.RuleFlags,
+	sourceAPI, targetAPI protocol.APIType,
+	scenario typ.RuleScenario,
+) typ.RuleFlags {
+	// Skip if manual flag is already set
+	if flags.CleanHeader {
+		return flags
+	}
+
+	// Auto-set for protocol transformation in billing scenarios
+	if sourceAPI != targetAPI && isBillingHeaderScenario(scenario) {
+		flags.CleanHeader = true
+	}
+
+	return flags
 }
