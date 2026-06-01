@@ -385,7 +385,7 @@ export default {
       "nodeTooltipPrimaryTitle": "T0 — Highest priority",
       "nodeTooltipPrimaryBody": "Tried first on every request. Services here are load-balanced.",
       "nodeTooltipFallbackTitle": "T{{tier}} — Fallback tier",
-      "nodeTooltipFallbackBody": "Only used when all T{{prev}} services are unavailable. Services here are load-balanced.",
+      "nodeTooltipFallbackBody": "Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Services here are load-balanced.",
       "nodeMoveHint": "↑ / ↓  on a service card to move it to a different tier"
     },
     "menu": {

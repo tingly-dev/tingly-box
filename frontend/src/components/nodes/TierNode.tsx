@@ -34,7 +34,7 @@ export const TierNode: React.FC<TierNodeProps> = ({
             <Typography variant="caption" sx={{ display: 'block', color: 'inherit', opacity: 0.85 }}>
                 {isPrimary
                     ? t('rule.tier.nodeTooltipPrimaryBody', { defaultValue: 'Tried first on every request. Services here are load-balanced.' })
-                    : t('rule.tier.nodeTooltipFallbackBody', { tier: priority, prev: priority - 1, defaultValue: `Only used when all T${priority - 1} services are unavailable. Services here are load-balanced.` })
+                    : t('rule.tier.nodeTooltipFallbackBody', { tier: priority, prev: priority - 1, defaultValue: 'Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Services here are load-balanced.' })
                 }
             </Typography>
             <Typography variant="caption" sx={{ display: 'block', mt: 0.75, opacity: 0.65 }}>

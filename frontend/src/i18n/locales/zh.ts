@@ -386,7 +386,7 @@ export default {
       "nodeTooltipPrimaryTitle": "T0 — 最高优先级",
       "nodeTooltipPrimaryBody": "每次请求优先尝试，同层级内服务负载均衡。",
       "nodeTooltipFallbackTitle": "T{{tier}} — 后备层级",
-      "nodeTooltipFallbackBody": "仅当 T{{prev}} 所有服务不可用时才启用，同层级内服务负载均衡。",
+      "nodeTooltipFallbackBody": "仅当更高优先级的层级（编号越小越优先）全部不可用时才启用，同层级内服务负载均衡。",
       "nodeMoveHint": "↑ / ↓  拖动服务卡片可移动到其他层级"
     },
     "menu": {
