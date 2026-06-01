@@ -110,13 +110,9 @@ func resolveRuleFlagsWithScenario(
 	flags := resolveRuleFlags(c, rule)
 
 	if scenarioConfig != nil {
-		// Inject scenario-level ThinkingEffort if not already set at rule level
-		if flags.ThinkingEffort != typ.ThinkingEffortDefault {
+		// Only inject scenario-level ThinkingEffort if rule hasn't set it explicitly
+		if flags.ThinkingEffort == typ.ThinkingEffortDefault && scenarioConfig.Flags.ThinkingEffort != typ.ThinkingEffortDefault {
 			flags.ThinkingEffort = scenarioConfig.Flags.ThinkingEffort
-		} else {
-			if scenarioConfig.Flags.ThinkingEffort != typ.ThinkingEffortDefault {
-				flags.ThinkingEffort = scenarioConfig.Flags.ThinkingEffort
-			}
 		}
 
 		// Inject scenario-level CleanHeader if not already set at rule level
