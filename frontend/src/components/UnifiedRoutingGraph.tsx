@@ -90,7 +90,7 @@ export interface UnifiedRoutingGraphProps {
     onProviderNodeClick?: (providerUuid: string) => void;
     onTierChange?: (providerUuid: string, tier: number) => void;
     onDeleteProvider?: (providerUuid: string) => void;
-    onAddProvider?: (tier?: number) => void;
+    onAddService?: (tier?: number) => void;
     onMoveTier?: (tierPriority: number, direction: 'up' | 'down') => void;
     onToggleExpanded?: () => void;
 
@@ -174,7 +174,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     onProviderNodeClick,
     onTierChange,
     onDeleteProvider,
-    onAddProvider,
+    onAddService,
     onMoveTier,
     onToggleExpanded,
     onAddSmartRule,
@@ -310,7 +310,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                             ))}
                             <ActionAddNode
                                 active={active && !saving}
-                                onAdd={() => onAddProvider?.(group.tier)}
+                                onAdd={() => onAddService?.(group.tier)}
                                 tooltip={t('rule.tooltips.addServiceSecond')}
                             />
                         </Box>
@@ -341,7 +341,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 )}
             </Box>
         );
-    }, [t, nonZeroTierGroups, zeroGroup, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onMoveTier, onAddProvider]);
+    }, [t, nonZeroTierGroups, zeroGroup, active, saving, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onMoveTier, onAddService]);
 
     // Flat service list (no tiers): horizontal inline layout with dividers between groups
     const renderProviderList = React.useCallback(() => {
@@ -362,7 +362,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 <ActionAddNode
                     active={active && !saving}
                     warning={record.providers.length === 0}
-                    onAdd={() => onAddProvider?.()}
+                    onAdd={() => onAddService?.()}
                     tooltip={
                         record.providers.length === 0
                             ? t('rule.tooltips.addServiceFirst')
@@ -371,7 +371,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 />
             </>
         );
-    }, [t, tierGroups, sortedDefaultProviders, active, saving, record.providers.length, renderServiceNode, onAddProvider]);
+    }, [t, tierGroups, sortedDefaultProviders, active, saving, record.providers.length, renderServiceNode, onAddService]);
 
     // Render smart rules section
     const renderSmartRules = () => {

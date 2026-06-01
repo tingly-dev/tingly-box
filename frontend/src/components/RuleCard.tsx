@@ -164,7 +164,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     );
 
     // Handler: Add provider button click — optional tier assigns the new service to a tier
-    const handleAddProviderButtonClick = useCallback((tier?: number) => {
+    const handleAddServiceButtonClick = useCallback((tier?: number) => {
         if (configRecord) {
             onModelSelectOpen(rule.uuid, configRecord, 'add', undefined, tier);
         }
@@ -349,7 +349,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onProviderNodeClick={handleProviderNodeClick}
                 onTierChange={handleProviderTierChange}
                 onDeleteProvider={(providerUuid) => handleDeleteProvider(configRecord.uuid, providerUuid)}
-                onAddProvider={handleAddProviderButtonClick}
+                onAddService={handleAddServiceButtonClick}
                 onMoveTier={handleMoveTier}
                 onAddSmartRule={smartHandlers.handleAddSmartRule}
                 onEditSmartRule={smartHandlers.handleEditSmartRule}
