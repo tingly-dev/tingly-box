@@ -178,37 +178,27 @@ const resetFlag = (flags: RuleFlags, spec: FlagSpec): RuleFlags => {
 interface CategoryMeta {
     label: string;
     icon: React.ReactElement;
+    /** If set, this category's flags are folded into the named display category. */
+    mergeInto?: string;
+    /** Sub-sort order within a merged display group (lower = earlier). */
+    mergeOrder?: number;
 }
-
-// Backend categories merged into a display category (collapsed in sidebar).
-const CATEGORY_MERGE: Record<string, string> = {
-    openai: 'request',
-    http: 'request',
-};
 
 // Display order for the category sidebar. Unknown categories are appended.
 const CATEGORY_ORDER = ['request', 'response', 'reasoning', 'vision', 'routing', 'ide'];
 
-// Within a merged group, sub-sort by original category (lower = earlier).
-const MERGED_SUBCATEGORY_ORDER: Record<string, number> = {
-    http: 0,
-    openai: 1,
-    request: 2,
-};
-
-// Display metadata for both sidebar categories and origin badges.
 const CATEGORY_META: Record<string, CategoryMeta> = {
-    ide: { label: 'IDE', icon: <TerminalIcon fontSize="small" /> },
-    openai: { label: 'OpenAI', icon: <AutoAwesomeIcon fontSize="small" /> },
-    http: { label: 'HTTP', icon: <CableIcon fontSize="small" /> },
-    response: { label: 'Response', icon: <OutboundIcon fontSize="small" /> },
-    request: { label: 'Request', icon: <InputIcon fontSize="small" /> },
-    reasoning: { label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
-    routing: { label: 'Routing', icon: <LinkIcon fontSize="small" /> },
-    vision: { label: 'Vision', icon: <VisibilityIcon fontSize="small" /> },
+    http:     { label: 'HTTP',      icon: <CableIcon      fontSize="small" />, mergeInto: 'request', mergeOrder: 0 },
+    openai:   { label: 'OpenAI',    icon: <AutoAwesomeIcon fontSize="small" />, mergeInto: 'request', mergeOrder: 1 },
+    request:  { label: 'Request',   icon: <InputIcon      fontSize="small" />, mergeOrder: 2 },
+    response: { label: 'Response',  icon: <OutboundIcon   fontSize="small" /> },
+    reasoning:{ label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
+    vision:   { label: 'Vision',    icon: <VisibilityIcon fontSize="small" /> },
+    routing:  { label: 'Routing',   icon: <LinkIcon       fontSize="small" /> },
+    ide:      { label: 'IDE',       icon: <TerminalIcon   fontSize="small" /> },
 };
 
-const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] || {
+const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] ?? {
     label: category.charAt(0).toUpperCase() + category.slice(1),
     icon: <ExtensionIcon fontSize="small" />,
 };
@@ -237,24 +227,20 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         }
     }, [open, flags]);
 
-    // Group registry entries by display category (applying CATEGORY_MERGE),
+    // Group registry entries by display category (mergeInto from CATEGORY_META),
     // then sort the groups by CATEGORY_ORDER and sub-sort specs within each
     // merged group (http first, then openai, then native request items).
     const grouped = useMemo(() => {
         const groups = new Map<string, FlagSpec[]>();
         (registry || []).forEach((spec) => {
-            const displayCat = CATEGORY_MERGE[spec.category] ?? spec.category;
+            const displayCat = categoryMeta(spec.category).mergeInto ?? spec.category;
             if (!groups.has(displayCat)) groups.set(displayCat, []);
             groups.get(displayCat)!.push(spec);
         });
 
-        // Sub-sort within each merged group.
+        // Sub-sort within each merged group by mergeOrder.
         groups.forEach((specs) => {
-            specs.sort((a, b) => {
-                const ao = MERGED_SUBCATEGORY_ORDER[a.category] ?? 99;
-                const bo = MERGED_SUBCATEGORY_ORDER[b.category] ?? 99;
-                return ao - bo;
-            });
+            specs.sort((a, b) => (categoryMeta(a.category).mergeOrder ?? 99) - (categoryMeta(b.category).mergeOrder ?? 99));
         });
 
         // Build ordered list: defined order first, then any unknown categories.
@@ -291,7 +277,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     };
 
     const jumpToFlag = (spec: FlagSpec) => {
-        const displayCat = CATEGORY_MERGE[spec.category] ?? spec.category;
+        const displayCat = categoryMeta(spec.category).mergeInto ?? spec.category;
         if (displayCat !== activeCategory) setActiveCategory(displayCat);
         // Defer scroll/pulse until the right pane has rendered the target.
         requestAnimationFrame(() => {
@@ -441,9 +427,8 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                             : '';
                                         const pulsing = pulseKey === spec.key;
                                         // Show origin badge when a flag was merged from another category.
-                                        const originBadge = CATEGORY_MERGE[spec.category]
-                                            ? categoryMeta(spec.category)
-                                            : null;
+                                        const meta = categoryMeta(spec.category);
+                                        const originBadge = meta.mergeInto ? meta : null;
                                         return (
                                             <Box
                                                 key={spec.key}
