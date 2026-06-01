@@ -27,7 +27,7 @@ export const PriorityTierNode: React.FC<PriorityTierNodeProps> = ({
     onMoveDown,
 }) => {
     const { t } = useTranslation();
-    const tierLabel = `P${tierIndex + 1}`;
+    const tierLabel = `T${tierIndex}`;
 
     return (
         <Box

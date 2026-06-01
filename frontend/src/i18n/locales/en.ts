@@ -375,12 +375,12 @@ export default {
       "ariaLabel": "Priority {{priority}}",
       "ariaUnset": "No priority",
       "editTitle": "Set Priority",
-      "helpHigher": "Lower number = higher priority (P1 is tried first). Services in the same tier are load balanced.",
-      "helpZero": "Set to 0 for no priority — shares load with other tier-0 services.",
-      "tierLabel": "P{{index}}",
+      "helpHigher": "Lower number = higher priority (T0 is tried first). Services in the same tier are load balanced.",
+      "helpZero": "Set to 0 for T0 — the highest-priority tier.",
+      "tierLabel": "T{{index}}",
       "tierBalanced": "Balanced",
       "dividerHelp": "Lower-numbered tiers are always tried first. Only when all services in a tier fail (circuit open) does traffic fall through to the next tier. Services within the same tier are load-balanced.",
-      "tierTooltip": "P1 is tried first, P2 is the fallback, and so on. Services within the same tier are load-balanced.",
+      "tierTooltip": "T0 is tried first, T1 is the fallback, and so on. Services within the same tier are load-balanced.",
       "addTierTooltip": "Add a new fallback tier"
     },
     "menu": {
