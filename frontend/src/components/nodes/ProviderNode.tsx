@@ -103,16 +103,13 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
         setError(null);
     };
     const commit = () => {
-        try {
-            const parsed = parseInt(draft, 10);
-            const next = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-            if (next !== priority) {
-                onChange(next);
-            }
-            close();
-        } catch {
+        const parsed = parseInt(draft, 10);
+        if (!Number.isFinite(parsed) || parsed < 0) {
             setError(t('rule.priority.invalidInput'));
+            return;
         }
+        if (parsed !== priority) onChange(parsed);
+        close();
     };
 
     const tooltip = priority > 0

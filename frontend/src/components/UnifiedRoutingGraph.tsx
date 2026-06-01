@@ -196,10 +196,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     const hasSmartRules = smartRouting.length > 0;
     const showSmartRouting = effectiveMode === 'smart' || (mode === 'auto' && smartEnabled && hasSmartRules);
 
-    const getApiStyle = (providerUuid: string) => {
+    const getApiStyle = React.useCallback((providerUuid: string) => {
         const provider = providers.find(p => p.uuid === providerUuid);
         return provider?.api_style || 'openai';
-    };
+    }, [providers]);
 
     // Priority-sorted default providers
     const sortedDefaultProviders = React.useMemo(() => {
@@ -215,41 +215,16 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         });
     }, [record.providers]);
 
-    // Group providers by priority tier for DividerNode rendering
+    // Group already-sorted providers into priority tiers (single pass — order preserved from sortedDefaultProviders)
     const priorityGroups = React.useMemo(() => {
-        const tiers = [...new Set(sortedDefaultProviders.map(p => p.priority ?? 0))];
-        // Sort: higher priority first, 0 (load-balanced) last
-        tiers.sort((a, b) => {
-            if (a === 0 && b !== 0) return 1;
-            if (b === 0 && a !== 0) return -1;
-            return b - a;
-        });
-        return tiers.map(priority => ({
-            priority,
-            providers: sortedDefaultProviders.filter(p => (p.priority ?? 0) === priority),
-        }));
+        const groups = new Map<number, typeof sortedDefaultProviders>();
+        for (const p of sortedDefaultProviders) {
+            const tier = p.priority ?? 0;
+            if (!groups.has(tier)) groups.set(tier, []);
+            groups.get(tier)!.push(p);
+        }
+        return [...groups.entries()].map(([priority, providers]) => ({ priority, providers }));
     }, [sortedDefaultProviders]);
-
-    // Handle provider delete - unified callback
-    const handleDeleteProvider = React.useCallback((providerUuid: string) => {
-        if (onDeleteProvider) {
-            onDeleteProvider(providerUuid);
-        }
-    }, [onDeleteProvider]);
-
-    // Handle provider node click - unified callback
-    const handleProviderNodeClick = React.useCallback((providerUuid: string) => {
-        if (onProviderNodeClick) {
-            onProviderNodeClick(providerUuid);
-        }
-    }, [onProviderNodeClick]);
-
-    // Handle provider priority change - unified callback
-    const handleProviderPriorityChange = React.useCallback((providerUuid: string, priority: number) => {
-        if (onProviderPriorityChange) {
-            onProviderPriorityChange(providerUuid, priority);
-        }
-    }, [onProviderPriorityChange]);
 
     // Handle add service to smart rule
     const handleAddServiceToSmartRule = React.useCallback((ruleIndex: number) => {
@@ -272,11 +247,11 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 apiStyle={getApiStyle(provider.provider)}
                 providersData={providers}
                 active={active && provider.active !== false}
-                onDelete={() => handleDeleteProvider(provider.uuid)}
-                onNodeClick={() => handleProviderNodeClick(provider.uuid)}
+                onDelete={() => onDeleteProvider?.(provider.uuid)}
+                onNodeClick={() => onProviderNodeClick?.(provider.uuid)}
                 onPriorityChange={
                     onProviderPriorityChange
-                        ? (priority) => handleProviderPriorityChange(provider.uuid, priority)
+                        ? (priority) => onProviderPriorityChange(provider.uuid, priority)
                         : undefined
                 }
             />
@@ -306,7 +281,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 />
             </>
         );
-    }, [priorityGroups, sortedDefaultProviders, providers, active, saving, record.providers.length, onProviderPriorityChange, handleDeleteProvider, handleProviderNodeClick, handleProviderPriorityChange]);
+    }, [t, getApiStyle, priorityGroups, sortedDefaultProviders, providers, active, saving, record.providers.length, onDeleteProvider, onProviderNodeClick, onProviderPriorityChange, onAddProvider]);
 
     // Render smart rules section
     const renderSmartRules = () => {
