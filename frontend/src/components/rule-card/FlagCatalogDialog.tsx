@@ -16,8 +16,6 @@ import {
     Typography,
 } from '@mui/material';
 import {
-    AutoAwesome as AutoAwesomeIcon,
-    Cable as CableIcon,
     Close as CloseIcon,
     Extension as ExtensionIcon,
     Input as InputIcon,
@@ -178,19 +176,13 @@ const resetFlag = (flags: RuleFlags, spec: FlagSpec): RuleFlags => {
 interface CategoryMeta {
     label: string;
     icon: React.ReactElement;
-    /** If set, this category's flags are folded into the named display category. */
-    mergeInto?: string;
-    /** Sub-sort order within a merged display group (lower = earlier). */
-    mergeOrder?: number;
 }
 
 // Display order for the category sidebar. Unknown categories are appended.
 const CATEGORY_ORDER = ['request', 'response', 'reasoning', 'vision', 'routing', 'ide'];
 
 const CATEGORY_META: Record<string, CategoryMeta> = {
-    http:     { label: 'HTTP',      icon: <CableIcon      fontSize="small" />, mergeInto: 'request', mergeOrder: 0 },
-    openai:   { label: 'OpenAI',    icon: <AutoAwesomeIcon fontSize="small" />, mergeInto: 'request', mergeOrder: 1 },
-    request:  { label: 'Request',   icon: <InputIcon      fontSize="small" />, mergeOrder: 2 },
+    request:  { label: 'Request',   icon: <InputIcon      fontSize="small" /> },
     response: { label: 'Response',  icon: <OutboundIcon   fontSize="small" /> },
     reasoning:{ label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
     vision:   { label: 'Vision',    icon: <VisibilityIcon fontSize="small" /> },
@@ -227,26 +219,16 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         }
     }, [open, flags]);
 
-    // Group registry entries by display category (mergeInto from CATEGORY_META),
-    // then sort the groups by CATEGORY_ORDER and sub-sort specs within each
-    // merged group (http first, then openai, then native request items).
+    // Group registry entries by category, preserving backend order within each
+    // group, then sort groups by CATEGORY_ORDER (unknown categories appended).
     const grouped = useMemo(() => {
         const groups = new Map<string, FlagSpec[]>();
         (registry || []).forEach((spec) => {
-            const displayCat = categoryMeta(spec.category).mergeInto ?? spec.category;
-            if (!groups.has(displayCat)) groups.set(displayCat, []);
-            groups.get(displayCat)!.push(spec);
+            if (!groups.has(spec.category)) groups.set(spec.category, []);
+            groups.get(spec.category)!.push(spec);
         });
-
-        // Sub-sort within each merged group by mergeOrder.
-        groups.forEach((specs) => {
-            specs.sort((a, b) => (categoryMeta(a.category).mergeOrder ?? 99) - (categoryMeta(b.category).mergeOrder ?? 99));
-        });
-
-        // Build ordered list: defined order first, then any unknown categories.
         const ordered = CATEGORY_ORDER.filter((cat) => groups.has(cat));
         groups.forEach((_, cat) => { if (!ordered.includes(cat)) ordered.push(cat); });
-
         return ordered.map((cat) => ({ category: cat, specs: groups.get(cat) || [] }));
     }, [registry]);
 
@@ -277,8 +259,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     };
 
     const jumpToFlag = (spec: FlagSpec) => {
-        const displayCat = categoryMeta(spec.category).mergeInto ?? spec.category;
-        if (displayCat !== activeCategory) setActiveCategory(displayCat);
+        if (spec.category !== activeCategory) setActiveCategory(spec.category);
         // Defer scroll/pulse until the right pane has rendered the target.
         requestAnimationFrame(() => {
             const node = flagRefs.current[spec.key];
@@ -426,9 +407,6 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                             ? (flagToString(draft, spec.key) || enumDefault(spec))
                                             : '';
                                         const pulsing = pulseKey === spec.key;
-                                        // Show origin badge when a flag was merged from another category.
-                                        const meta = categoryMeta(spec.category);
-                                        const originBadge = meta.mergeInto ? meta : null;
                                         return (
                                             <Box
                                                 key={spec.key}
@@ -451,7 +429,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                             >
                                                 <Stack direction="row" alignItems="center" spacing={1}>
                                                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                                        <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap">
+                                                        <Stack direction="row" alignItems="center" spacing={0.75}>
                                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                                 {spec.label}
                                                             </Typography>
@@ -461,16 +439,6 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                                 sx={{ height: 16, fontSize: '0.6rem' }}
                                                                 variant="outlined"
                                                             />
-                                                            {originBadge && (
-                                                                <Chip
-                                                                    size="small"
-                                                                    icon={originBadge.icon}
-                                                                    label={originBadge.label}
-                                                                    sx={{ height: 16, fontSize: '0.6rem' }}
-                                                                    color="default"
-                                                                    variant="filled"
-                                                                />
-                                                            )}
                                                         </Stack>
                                                         <Typography variant="caption" color="text.secondary">
                                                             {spec.description}

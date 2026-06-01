@@ -23,16 +23,11 @@ type FlagCategory string
 const (
 	// FlagCategoryIDE — flags that target a specific IDE/client (e.g. Cursor).
 	FlagCategoryIDE FlagCategory = "ide"
-	// FlagCategoryOpenAI — OpenAI-specific request-shape adjustments
-	// (max_tokens vs max_completion_tokens, chat vs responses endpoint, ...).
-	FlagCategoryOpenAI FlagCategory = "openai"
-	// FlagCategoryHTTP — transport-level overrides (custom User-Agent, etc).
-	FlagCategoryHTTP FlagCategory = "http"
+	// FlagCategoryRequest — request-level adjustments: transport overrides,
+	// OpenAI-specific field rewrites, tool blocking, etc.
+	FlagCategoryRequest FlagCategory = "request"
 	// FlagCategoryResponse — flags that modify the response body/stream.
 	FlagCategoryResponse FlagCategory = "response"
-	// FlagCategoryRequest — protocol-agnostic request-body guard rails
-	// (tool blocking, etc).
-	FlagCategoryRequest FlagCategory = "request"
 	// FlagCategoryReasoning — extended-thinking / reasoning-effort controls.
 	FlagCategoryReasoning FlagCategory = "reasoning"
 	// FlagCategoryRouting — routing / load-balancing behavior (session
@@ -64,50 +59,17 @@ type FlagSpec struct {
 }
 
 // RuleFlagRegistry returns the catalog of supported rule flags. The order is
-// the recommended display order in the UI.
+// the recommended display order in the UI — categories are grouped implicitly
+// by adjacent entries sharing the same Category value.
 func RuleFlagRegistry() []FlagSpec {
 	return []FlagSpec{
-		{
-			Key:         "cursor_compat",
-			Label:       "Cursor compatibility",
-			Description: "Normalize rich content, gate tools, and strip stream usage for Cursor IDE clients.",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryIDE,
-		},
-		{
-			Key:         "cursor_compat_auto",
-			Label:       "Auto-detect Cursor",
-			Description: "Apply cursor compatibility automatically when request headers identify Cursor.",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryIDE,
-		},
-		{
-			Key:         "skip_usage",
-			Label:       "Skip usage in response",
-			Description: "Strip the `usage` block from responses (both SSE deltas and the final body).",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryResponse,
-		},
-		{
-			Key:         "use_max_completion_tokens",
-			Label:       "Use max_completion_tokens",
-			Description: "Rewrite request field `max_tokens` to `max_completion_tokens` (required by o1/o3/gpt-5 family).",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryOpenAI,
-		},
-		{
-			Key:         "use_max_tokens",
-			Label:       "Use max_tokens (legacy)",
-			Description: "Rewrite request field `max_completion_tokens` back to the legacy `max_tokens`. Use for providers that reject the newer field name.",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryOpenAI,
-		},
+		// ── Request ────────────────────────────────────────────────────────
 		{
 			Key:         "custom_user_agent",
 			Label:       "Custom User-Agent",
 			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent.",
 			Type:        FlagTypeString,
-			Category:    FlagCategoryHTTP,
+			Category:    FlagCategoryRequest,
 			Placeholder: "e.g. MyApp/1.0",
 		},
 		{
@@ -115,12 +77,26 @@ func RuleFlagRegistry() []FlagSpec {
 			Label:       "OpenAI endpoint override",
 			Description: "Force OpenAI Chat Completions or Responses for this rule, overriding the provider's declared OpenAIEndpointMode default. OpenAI providers only; Anthropic/Google providers ignore this. If the provider declares mode=responses (e.g. Codex), \"chat\" is ignored; if mode=chat, \"responses\" is ignored.",
 			Type:        FlagTypeEnum,
-			Category:    FlagCategoryOpenAI,
+			Category:    FlagCategoryRequest,
 			Options: []FlagOption{
 				{Value: "auto", Label: "Auto (use provider default)"},
 				{Value: "chat", Label: "Force Chat Completions"},
 				{Value: "responses", Label: "Force Responses API"},
 			},
+		},
+		{
+			Key:         "use_max_completion_tokens",
+			Label:       "Use max_completion_tokens",
+			Description: "Rewrite request field `max_tokens` to `max_completion_tokens` (required by o1/o3/gpt-5 family).",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryRequest,
+		},
+		{
+			Key:         "use_max_tokens",
+			Label:       "Use max_tokens (legacy)",
+			Description: "Rewrite request field `max_completion_tokens` back to the legacy `max_tokens`. Use for providers that reject the newer field name.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryRequest,
 		},
 		{
 			Key:         "block_tools",
@@ -130,6 +106,15 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryRequest,
 			Placeholder: "e.g. web_search,run_terminal_cmd",
 		},
+		// ── Response ───────────────────────────────────────────────────────
+		{
+			Key:         "skip_usage",
+			Label:       "Skip usage in response",
+			Description: "Strip the `usage` block from responses (both SSE deltas and the final body).",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryResponse,
+		},
+		// ── Reasoning ──────────────────────────────────────────────────────
 		{
 			Key:         "thinking_effort",
 			Label:       "Thinking",
@@ -145,6 +130,15 @@ func RuleFlagRegistry() []FlagSpec {
 				{Value: "max", Label: "Max (~32K tokens)"},
 			},
 		},
+		// ── Vision ─────────────────────────────────────────────────────────
+		{
+			Key:         "vision_proxy_service",
+			Label:       "Vision Proxy",
+			Description: "Describe images via a vision-capable model so text-only downstream models can read them. Applies only to requests matched by this rule. Same effect as the scenario-level Vision Proxy but scoped to this rule; when both are configured, this rule-level service takes precedence.",
+			Type:        FlagTypeServiceRef,
+			Category:    FlagCategoryVision,
+		},
+		// ── Routing ────────────────────────────────────────────────────────
 		{
 			Key:         "session_affinity",
 			Label:       "Session affinity",
@@ -153,12 +147,20 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryRouting,
 			Placeholder: "e.g. 3600",
 		},
+		// ── IDE ────────────────────────────────────────────────────────────
 		{
-			Key:         "vision_proxy_service",
-			Label:       "Vision Proxy",
-			Description: "Describe images via a vision-capable model so text-only downstream models can read them. Applies only to requests matched by this rule. Same effect as the scenario-level Vision Proxy but scoped to this rule; when both are configured, this rule-level service takes precedence.",
-			Type:        FlagTypeServiceRef,
-			Category:    FlagCategoryVision,
+			Key:         "cursor_compat",
+			Label:       "Cursor compatibility",
+			Description: "Normalize rich content, gate tools, and strip stream usage for Cursor IDE clients.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryIDE,
+		},
+		{
+			Key:         "cursor_compat_auto",
+			Label:       "Auto-detect Cursor",
+			Description: "Apply cursor compatibility automatically when request headers identify Cursor.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryIDE,
 		},
 	}
 }
