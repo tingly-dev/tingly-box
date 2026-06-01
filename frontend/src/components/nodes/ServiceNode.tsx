@@ -22,19 +22,9 @@ import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
-import { ServiceNodeContainer, NODE_LAYER_STYLES } from './styles.tsx';
+import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox } from './styles.tsx';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
-
-const ActionButtonsBox = styled(Box)(() => ({
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    display: 'flex',
-    gap: 2,
-    opacity: 0,
-    transition: 'opacity 0.2s',
-}));
 
 const ServiceNodeWrapper = styled(Box)(() => ({
     position: 'relative',
@@ -312,7 +302,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             <IconButton
                                 size="small"
                                 onClick={(e) => { e.stopPropagation(); onMoveTierUp(); }}
-                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                                sx={{ p: 0.5 }}
                             >
                                 <KeyboardArrowUp sx={{ fontSize: '1rem' }} />
                             </IconButton>
@@ -323,7 +313,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             <IconButton
                                 size="small"
                                 onClick={(e) => { e.stopPropagation(); onMoveTierDown(); }}
-                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                                sx={{ p: 0.5 }}
                             >
                                 <KeyboardArrowDown sx={{ fontSize: '1rem' }} />
                             </IconButton>
@@ -334,7 +324,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                             <IconButton
                                 size="small"
                                 onClick={handleProbeClick}
-                                sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                                sx={{ p: 0.5 }}
                             >
                                 <PlayIcon sx={{ fontSize: '1rem', color: 'success.main' }} />
                             </IconButton>
@@ -344,7 +334,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                         <IconButton
                             size="small"
                             onClick={handleMenuClick}
-                            sx={{ p: 0.5, backgroundColor: 'background.paper' }}
+                            sx={{ p: 0.5 }}
                         >
                             <DeleteIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
                         </IconButton>

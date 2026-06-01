@@ -155,7 +155,8 @@ export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !
     '&:hover': graphNodeHoverStyles(theme),
 }));
 
-// Action button container
+// Action button container — appears on hover with a solid backing so buttons
+// are always readable regardless of node opacity or background content.
 export const ActionButtonsBox = styled(Box)(({ theme }: { theme: Theme }) => ({
     position: 'absolute',
     top: 4,
@@ -164,6 +165,10 @@ export const ActionButtonsBox = styled(Box)(({ theme }: { theme: Theme }) => ({
     gap: 2,
     opacity: 0,
     transition: 'opacity 0.2s',
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    padding: '2px',
+    boxShadow: theme.shadows[1],
 }));
 
 // Smart node wrapper
