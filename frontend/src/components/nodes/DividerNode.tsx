@@ -44,7 +44,7 @@ export const DividerNode: React.FC<DividerNodeProps> = ({ active = true }) => {
             })} />
 
             {/* Help icon sitting on the line, centered */}
-            <Tooltip title={t('rule.priority.dividerHelp')} placement="top" arrow>
+            <Tooltip title={t('rule.tier.dividerHelp')} placement="top" arrow>
                 <Box sx={{
                     position: 'absolute',
                     top: '50%',

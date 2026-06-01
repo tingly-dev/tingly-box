@@ -368,19 +368,19 @@ export default {
       "testService": "Test Service",
       "deleteService": "Delete Service"
     },
-    "priority": {
+    "tier": {
       "invalidInput": "Please enter a valid number.",
-      "tooltipSet": "Priority {{priority}} (lower = tried first). Click to change.",
-      "tooltipUnset": "No priority set (load balanced with other tier-0 services). Click to assign.",
-      "ariaLabel": "Priority {{priority}}",
-      "ariaUnset": "No priority",
-      "editTitle": "Set Priority",
+      "tooltipSet": "Tier {{tier}} (lower = tried first). Click to change.",
+      "tooltipUnset": "No tier set (load balanced with other T0 services). Click to assign.",
+      "ariaLabel": "Tier {{tier}}",
+      "ariaUnset": "No tier",
+      "editTitle": "Set Tier",
       "helpHigher": "Lower number = higher priority (T0 is tried first). Services in the same tier are load balanced.",
-      "helpZero": "Set to 0 for T0 — the highest-priority tier.",
+      "helpZero": "Set to 0 for T0 — the first tier.",
       "tierLabel": "T{{index}}",
       "tierBalanced": "Balanced",
       "dividerHelp": "Lower-numbered tiers are always tried first. Only when all services in a tier fail (circuit open) does traffic fall through to the next tier. Services within the same tier are load-balanced.",
-      "tierTooltip": "T0 is tried first, T1 is the fallback, and so on. Services within the same tier are load-balanced.",
+      "tooltip": "T0 is tried first, T1 is the fallback, and so on. Services within the same tier are load-balanced.",
       "addTierTooltip": "Add a new fallback tier"
     },
     "menu": {

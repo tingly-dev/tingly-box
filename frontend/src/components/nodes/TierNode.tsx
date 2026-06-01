@@ -4,9 +4,9 @@ import { alpha } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import NodeTooltip from './NodeTooltip.tsx';
-import { getRouteGraphActiveColor, getRouteGraphBorderColor, PROVIDER_NODE_STYLES } from './styles.tsx';
+import { getRouteGraphActiveColor, PROVIDER_NODE_STYLES } from './styles.tsx';
 
-export interface PriorityTierNodeProps {
+export interface TierNodeProps {
     tierIndex: number;
     priority: number;
     active: boolean;
@@ -16,9 +16,12 @@ export interface PriorityTierNodeProps {
     onMoveDown?: () => void;
 }
 
-export const PRIORITY_TIER_NODE_WIDTH = 52;
+export const TIER_NODE_WIDTH = 52;
 
-export const PriorityTierNode: React.FC<PriorityTierNodeProps> = ({
+/** @deprecated Use TIER_NODE_WIDTH */
+export const PRIORITY_TIER_NODE_WIDTH = TIER_NODE_WIDTH;
+
+export const TierNode: React.FC<TierNodeProps> = ({
     tierIndex,
     active,
     canMoveUp,
@@ -33,7 +36,7 @@ export const PriorityTierNode: React.FC<PriorityTierNodeProps> = ({
         <Box
             sx={(theme) => ({
                 position: 'relative',
-                width: PRIORITY_TIER_NODE_WIDTH,
+                width: TIER_NODE_WIDTH,
                 height: PROVIDER_NODE_STYLES.height,
                 flexShrink: 0,
                 display: 'flex',
@@ -51,7 +54,7 @@ export const PriorityTierNode: React.FC<PriorityTierNodeProps> = ({
                 userSelect: 'none',
             })}
         >
-            <NodeTooltip title={t('rule.priority.tierTooltip')} placement="left" arrow>
+            <NodeTooltip title={t('rule.tier.tooltip')} placement="left" arrow>
                 <Typography
                     sx={(theme) => ({
                         fontSize: '0.95rem',
@@ -109,4 +112,7 @@ export const PriorityTierNode: React.FC<PriorityTierNodeProps> = ({
     );
 };
 
-export default PriorityTierNode;
+/** @deprecated Use TierNode */
+export const PriorityTierNode = TierNode;
+
+export default TierNode;

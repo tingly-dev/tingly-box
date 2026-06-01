@@ -369,19 +369,19 @@ export default {
       "testService": "测试服务",
       "deleteService": "删除服务"
     },
-    "priority": {
+    "tier": {
       "invalidInput": "请输入有效的数字。",
-      "tooltipSet": "优先级 {{priority}}（数值越小越优先）。点击修改。",
-      "tooltipUnset": "未设置优先级（与其他 0 级服务负载均衡）。点击分配优先级。",
-      "ariaLabel": "优先级 {{priority}}",
-      "ariaUnset": "未设置优先级",
-      "editTitle": "设置优先级",
+      "tooltipSet": "层级 {{tier}}（数值越小越优先）。点击修改。",
+      "tooltipUnset": "未设置层级（与其他 T0 服务负载均衡）。点击分配。",
+      "ariaLabel": "层级 {{tier}}",
+      "ariaUnset": "未设置层级",
+      "editTitle": "设置层级",
       "helpHigher": "数值越小越优先（T0 最先尝试），同一层级内的服务将负载均衡。",
-      "helpZero": "设为 0 即 T0——最高优先级层级。",
+      "helpZero": "设为 0 即 T0——第一层级。",
       "tierLabel": "T{{index}}",
       "tierBalanced": "均衡",
       "dividerHelp": "编号越小的层级越优先。只有当该层级所有服务均不可用（熔断）时，流量才会降级到下一层级。同一层级内的服务之间负载均衡。",
-      "tierTooltip": "T0 最先尝试，T1 为备用，依此类推。同一层级内的服务负载均衡。",
+      "tooltip": "T0 最先尝试，T1 为备用，依此类推。同一层级内的服务负载均衡。",
       "addTierTooltip": "添加新的后备层级"
     },
     "menu": {

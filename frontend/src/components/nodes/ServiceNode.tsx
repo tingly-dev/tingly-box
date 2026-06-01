@@ -106,7 +106,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
     const commit = () => {
         const parsed = parseInt(draft, 10);
         if (!Number.isFinite(parsed) || parsed < 0) {
-            setError(t('rule.priority.invalidInput'));
+            setError(t('rule.tier.invalidInput'));
             return;
         }
         if (parsed !== priority) onChange(parsed);
@@ -114,8 +114,8 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
     };
 
     const tooltip = priority > 0
-        ? t('rule.priority.tooltipSet', { priority })
-        : t('rule.priority.tooltipUnset');
+        ? t('rule.tier.tooltipSet', { tier: priority })
+        : t('rule.tier.tooltipUnset');
 
     return (
         <>
@@ -123,7 +123,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                 <PriorityDisk
                     active={active}
                     onClick={active ? open : undefined}
-                    aria-label={priority > 0 ? t('rule.priority.ariaLabel', { priority }) : t('rule.priority.ariaUnset')}
+                    aria-label={priority > 0 ? t('rule.tier.ariaLabel', { tier: priority }) : t('rule.tier.ariaUnset')}
                     role="button"
                     tabIndex={active ? 0 : undefined}
                 >
@@ -139,7 +139,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
             >
                 <Box sx={{ p: 2, width: 240 }}>
                     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-                        {t('rule.priority.editTitle')}
+                        {t('rule.tier.editTitle')}
                     </Typography>
                     <Stack direction="row" spacing={1} alignItems="flex-start">
                         <TextField
@@ -164,10 +164,10 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
                     </Stack>
                     <Box sx={{ mt: 1.25, p: 1.25, borderRadius: 1, bgcolor: 'action.hover' }}>
                         <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-                            {t('rule.priority.helpHigher')}
+                            {t('rule.tier.helpHigher')}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.6 }}>
-                            {t('rule.priority.helpZero')}
+                            {t('rule.tier.helpZero')}
                         </Typography>
                     </Box>
                 </Box>

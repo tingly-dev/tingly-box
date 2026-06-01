@@ -20,8 +20,8 @@ import {
     ArrowNode,
     DividerNode,
     NodeContainer,
-    PriorityTierNode,
-    PRIORITY_TIER_NODE_WIDTH,
+    TierNode,
+    TIER_NODE_WIDTH,
     ServiceNode,
     SmartOpNode,
     ServiceEntryNode,
@@ -270,7 +270,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         [getApiStyle, providers, active, onDeleteProvider, onProviderNodeClick, onProviderPriorityChange],
     );
 
-    // Priority tier layout: stacked rows, one per tier, with PriorityTierNode on the left
+    // Priority tier layout: stacked rows, one per tier, with TierNode on the left
     const renderPriorityTierLayout = React.useCallback(() => {
         const maxPriority = nonZeroPriorityGroups.length > 0
             ? nonZeroPriorityGroups[nonZeroPriorityGroups.length - 1].priority
@@ -283,7 +283,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         key={group.priority}
                         sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'nowrap' }}
                     >
-                        <PriorityTierNode
+                        <TierNode
                             tierIndex={idx}
                             priority={group.priority}
                             active={active}
@@ -308,7 +308,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         key={0}
                         sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'nowrap' }}
                     >
-                        <Box sx={{ width: PRIORITY_TIER_NODE_WIDTH, flexShrink: 0 }} />
+                        <Box sx={{ width: TIER_NODE_WIDTH, flexShrink: 0 }} />
                         <ArrowNode direction="forward" />
                         {zeroGroup.providers.map((p) => renderServiceNode(p, true))}
                     </Box>
@@ -316,11 +316,11 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
                 {/* Add new tier button */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Box sx={{ width: PRIORITY_TIER_NODE_WIDTH, flexShrink: 0 }} />
+                    <Box sx={{ width: TIER_NODE_WIDTH, flexShrink: 0 }} />
                     <ActionAddNode
                         active={active && !saving}
                         onAdd={() => onAddProvider?.(maxPriority + 1)}
-                        tooltip={t('rule.priority.addTierTooltip')}
+                        tooltip={t('rule.tier.addTierTooltip')}
                     />
                 </Box>
             </Box>
