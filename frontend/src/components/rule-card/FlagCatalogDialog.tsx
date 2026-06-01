@@ -20,7 +20,7 @@ import {
     Extension as ExtensionIcon,
     Input as InputIcon,
     Link as LinkIcon,
-    Outbound as OutboundIcon,
+    Output as OutputIcon,
     Psychology as PsychologyIcon,
     Terminal as TerminalIcon,
     Visibility as VisibilityIcon,
@@ -183,7 +183,7 @@ const CATEGORY_ORDER = ['request', 'response', 'reasoning', 'vision', 'routing',
 
 const CATEGORY_META: Record<string, CategoryMeta> = {
     request:  { label: 'Request',   icon: <InputIcon      fontSize="small" /> },
-    response: { label: 'Response',  icon: <OutboundIcon   fontSize="small" /> },
+    response: { label: 'Response',  icon: <OutputIcon     fontSize="small" /> },
     reasoning:{ label: 'Reasoning', icon: <PsychologyIcon fontSize="small" /> },
     vision:   { label: 'Vision',    icon: <VisibilityIcon fontSize="small" /> },
     routing:  { label: 'Routing',   icon: <LinkIcon       fontSize="small" /> },
