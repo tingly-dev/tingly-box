@@ -87,14 +87,14 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "use_max_completion_tokens",
 			Label:       "Use max_completion_tokens",
-			Description: "Rewrite request field `max_tokens` to `max_completion_tokens` (required by o1/o3/gpt-5 family).",
+			Description: "OpenAI only. Rewrite `max_tokens` → `max_completion_tokens` in the outgoing request. Required by the o1/o3/gpt-5 model family, which rejects the older field name.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryRequest,
 		},
 		{
 			Key:         "use_max_tokens",
 			Label:       "Use max_tokens (legacy)",
-			Description: "Rewrite request field `max_completion_tokens` back to the legacy `max_tokens`. Use for providers that reject the newer field name.",
+			Description: "OpenAI only. Rewrite `max_completion_tokens` → `max_tokens` in the outgoing request. Use for older OpenAI-compatible providers that do not yet accept the newer field name.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryRequest,
 		},
