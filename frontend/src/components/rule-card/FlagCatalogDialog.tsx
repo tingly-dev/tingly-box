@@ -226,7 +226,8 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
             groups.get(spec.category)!.push(spec);
         });
         const ordered = CATEGORY_ORDER.filter((cat) => groups.has(cat));
-        groups.forEach((_, cat) => { if (!ordered.includes(cat)) ordered.push(cat); });
+        const orderedSet = new Set(ordered);
+        groups.forEach((_, cat) => { if (!orderedSet.has(cat)) ordered.push(cat); });
         return ordered.map((cat) => ({ category: cat, specs: groups.get(cat) || [] }));
     }, [registry]);
 
