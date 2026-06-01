@@ -250,32 +250,18 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                     </Box>
                 ) : (
                     <>
-                        {/* Priority disk — top-left corner */}
-                        {hasPriority && (
-                            <Box sx={{ position: 'absolute', top: 3, left: 3, lineHeight: 0, zIndex: 1 }}>
-                                <PriorityBadge
-                                    priority={provider.priority ?? 0}
-                                    onChange={onPriorityChange!}
-                                    active={active}
-                                />
-                            </Box>
-                        )}
-
-                        {/* Api style tag — bottom-right corner */}
-                        <Box sx={{ position: 'absolute', bottom: 3, right: 3, display: 'flex', gap: '2px', lineHeight: 0, zIndex: 1 }}>
-                            {hasDualApiStyle ? (
-                                <>
-                                    <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
-                                    <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
-                                </>
-                            ) : (
-                                <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
-                            )}
-                        </Box>
-
-                        {/* Row 1: model name */}
+                        {/* Row 1: priority disk (left) + model name (center) */}
                         <NodeTooltip title={<Box sx={{ whiteSpace: 'pre-line' }}>{identityTooltip}</Box>} placement="top">
-                            <Box sx={{ ...NODE_LAYER_STYLES.topLayer, pl: '28px', pr: '8px' }}>
+                            <Box sx={{ ...NODE_LAYER_STYLES.topLayer, position: 'relative', px: '28px' }}>
+                                {hasPriority && (
+                                    <Box sx={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', lineHeight: 0 }}>
+                                        <PriorityBadge
+                                            priority={provider.priority ?? 0}
+                                            onChange={onPriorityChange!}
+                                            active={active}
+                                        />
+                                    </Box>
+                                )}
                                 <Typography variant="body2" noWrap sx={{
                                     ...NODE_LAYER_STYLES.typography,
                                     maxWidth: '100%', textAlign: 'center',
@@ -290,8 +276,8 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                         {/* Divider */}
                         <Divider sx={NODE_LAYER_STYLES.divider} />
 
-                        {/* Row 2: provider name */}
-                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, pl: '8px', pr: hasDualApiStyle ? '48px' : '28px' }}>
+                        {/* Row 2: provider name (center) + api style tag (right) */}
+                        <Box sx={{ ...NODE_LAYER_STYLES.bottomLayer, position: 'relative', px: '28px' }}>
                             {isProviderMissing && (
                                 <WarningIcon sx={{ fontSize: '1rem', color: 'warning.main', flexShrink: 0, mr: 0.5 }} />
                             )}
@@ -300,6 +286,16 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                                 sx={{ ...NODE_LAYER_STYLES.typography, fontWeight: 400, maxWidth: '100%', textAlign: 'center' }}>
                                 {providerInfo.name}
                             </Typography>
+                            <Box sx={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '2px', lineHeight: 0 }}>
+                                {hasDualApiStyle ? (
+                                    <>
+                                        <ApiStyleBadge apiStyle="openai" minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
+                                        <ApiStyleBadge apiStyle="anthropic" minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
+                                    </>
+                                ) : (
+                                    <ApiStyleBadge apiStyle={apiStyle} minimal sx={{ fontSize: '0.72rem', width: 20, height: 20 }} />
+                                )}
+                            </Box>
                         </Box>
                     </>
                 )}
