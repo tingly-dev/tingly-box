@@ -4,7 +4,6 @@ import type { Provider } from '@/types/provider.ts';
 import { ArrowNode, NodeContainer } from '../nodes';
 import ImBotNode from '../nodes/ImBotNode.tsx';
 import BotModelNode from '../nodes/BotModelNode.tsx';
-import CWDNode from '../nodes/ConfigNode.tsx';
 import AgentNode from '../nodes/AgentNode.tsx';
 import AtNode from '../nodes/AtNode.tsx';
 import { useNavigate } from 'react-router-dom';
@@ -15,17 +14,14 @@ const graphRowStyles = (theme: any) => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing(1.5),
-    mb: 2,
     flexWrap: 'wrap',
 });
 
-interface RemoteGraphRowProps {
+export interface RemoteControlGraphProps {
     imbot: BotSettings;
     providers: Provider[];
-    currentCWD: string;
     isBotEnabled: boolean;
     readOnly?: boolean;
-    onCWDChange: (cwd: string) => void;
     onModelClick?: () => void;
     onBotClick?: () => void;
 }
@@ -36,13 +32,11 @@ const getProviderName = (providerUuid: string | undefined, providersData: Provid
     return provider?.name || '';
 };
 
-const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
+const RemoteControlGraph: React.FC<RemoteControlGraphProps> = ({
     imbot,
     providers,
-    currentCWD,
     isBotEnabled,
     readOnly = false,
-    onCWDChange,
     onModelClick,
     onBotClick,
 }) => {
@@ -62,7 +56,7 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
 
             <ArrowNode direction="forward" />
 
-            {/* Two branches: @tb and @cc */}
+            {/* Fork: @tb and @cc branches */}
             <Box
                 sx={{
                     display: 'flex',
@@ -73,10 +67,20 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
                     pl: 2,
                 }}
             >
-                {/* @tb branch: tingly-box service routing */}
+                {/* @tb: SmartGuide agent → model */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <NodeContainer>
                         <AtNode type="tb" />
+                    </NodeContainer>
+
+                    <ArrowNode direction="forward" />
+
+                    <NodeContainer>
+                        <AgentNode
+                            agentType="smart-guide"
+                            active={isBotEnabled}
+                            onClick={readOnly ? undefined : onModelClick}
+                        />
                     </NodeContainer>
 
                     <ArrowNode direction="forward" />
@@ -87,18 +91,11 @@ const RemoteControlGraph: React.FC<RemoteGraphRowProps> = ({
                             providerName={providerName}
                             model={imbot.smartguide_model}
                             active={isBotEnabled}
-                            onClick={readOnly ? undefined : onModelClick}
                         />
-                    </NodeContainer>
-
-                    <ArrowNode direction="forward" />
-
-                    <NodeContainer>
-                        <CWDNode currentPath={currentCWD} onPathChange={onCWDChange} disabled={readOnly || !isBotEnabled} />
                     </NodeContainer>
                 </Box>
 
-                {/* @cc branch: Claude Code agent */}
+                {/* @cc: Claude Code agent only */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <NodeContainer>
                         <AtNode type="cc" />

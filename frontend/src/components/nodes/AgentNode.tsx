@@ -30,10 +30,11 @@ const StyledAgentNode = styled(Box, { shouldForwardProp: (prop) => prop !== 'act
     }),
 }));
 
-type AgentType = 'claude-code' | 'custom' | 'mock';
+type AgentType = 'claude-code' | 'smart-guide' | 'custom' | 'mock';
 
-const AGENT_TYPE_LABELS: Record<AgentType, { label: string; color: 'info' | 'default' | 'warning' }> = {
+const AGENT_TYPE_LABELS: Record<AgentType, { label: string; color: 'info' | 'success' | 'default' | 'warning' }> = {
     'claude-code': { label: 'Claude Code', color: 'info' },
+    'smart-guide': { label: 'SmartGuide', color: 'success' },
     'custom': { label: 'Custom', color: 'warning' },
     'mock': { label: 'Mock', color: 'default' },
 };

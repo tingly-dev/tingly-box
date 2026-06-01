@@ -163,10 +163,8 @@ const BotCard: React.FC<BotCardProps> = ({
                         <RemoteControlGraph
                             imbot={bot}
                             providers={providers}
-                            currentCWD={bot.default_cwd || ''}
                             isBotEnabled={isActive}
                             readOnly={isToggling || isRestarting}
-                            onCWDChange={onCWDChange}
                             onModelClick={onModelClick}
                             onBotClick={onEdit}
                         />
