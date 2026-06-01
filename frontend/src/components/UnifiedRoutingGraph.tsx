@@ -14,7 +14,7 @@ import {
 import { alpha, styled } from '@mui/material/styles';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { getRouteGraphActiveColor, SMART_NODE_STYLES } from '@/components/nodes/styles';
+import { getRouteGraphActiveColor, SMART_NODE_STYLES, PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
 import {
     ActionAddNode,
     ArrowNode,
@@ -243,7 +243,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         key={group.tier}
                         sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
                     >
-                        <TierNode tierIndex={idx} priority={group.tier} active={active} />
+                        <TierNode priority={group.tier} active={active} />
                         {group.providers.map((p) => (
                             <ServiceNode
                                 key={p.uuid}
@@ -272,7 +272,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 ))}
             </Box>
         );
-    }, [t, tierGroups, sortedDefaultProviders, active, saving, record.providers.length, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService]);
+    }, [t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -370,15 +370,15 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     const renderDefaultProviders = () => {
         return (
             <GraphRow sx={{ alignItems: 'flex-start' }}>
-                {/* Fixed height matches the tier row (72px) so ServiceEntryNode centres vertically */}
-                <NodeContainer sx={{ height: 72, justifyContent: 'center' }}>
+                {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
+                <NodeContainer sx={{ height: PROVIDER_NODE_STYLES.height, justifyContent: 'center' }}>
                     <ServiceEntryNode
                         providersCount={record.providers.length}
                         active={active}
                     />
                 </NodeContainer>
 
-                <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 72 }}>
+                <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height }}>
                     <ArrowNode direction="forward" />
                 </Box>
 

@@ -26,19 +26,9 @@ import {
     getRouteGraphControlFillHover,
     StyledModelNode,
     NODE_LAYER_STYLES,
+    ActionButtonsBox,
 } from './styles.tsx';
 import { isWildcardModelName } from '@/components/rule-card/utils';
-
-// Action button container
-const ActionButtonsBox = styled(Box)(({ theme }) => ({
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    display: 'flex',
-    gap: 2,
-    opacity: 0,
-    transition: 'opacity 0.2s',
-}));
 
 const ModelNodeWrapper = styled(Box)(({ theme }) => ({
     position: 'relative',

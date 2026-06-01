@@ -8,36 +8,30 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// TestPriorityRouting_EndToEnd exercises the full chain the frontend
-// triggers when a user assigns a priority to any service:
+// TestTierRouting_EndToEnd exercises the full chain the frontend
+// triggers when a user assigns a tier to any service:
 //
-//  1. A rule JSON arrives carrying lb_tactic.type = "priority".
-//  2. The Rule is unmarshalled — Tactic.UnmarshalJSON has to allocate
-//     a *PriorityParams and decode within_tier_tactic into it.
+//  1. A rule JSON arrives carrying lb_tactic.type = "tier".
+//  2. The Rule is unmarshalled — Tactic.UnmarshalJSON allocates *TierParams.
 //  3. LoadBalancer.SelectService is called for that rule.
 //  4. Internally rule.LBTactic.Instantiate() routes through
-//     CreateTacticWithTypedParams → NewPriorityTactic.
-//  5. PriorityTactic.SelectService groups by Priority and consults the
-//     process-wide breaker store.
-//  6. After enough failures on the top-priority service the breaker
-//     trips and the next call falls back; once the breaker closes the
-//     call returns to the top.
-//
-// This is the test that pins down "the tactic actually changes behaviour
-// at runtime", which was missing from the package-level tactic tests
-// that only exercised PriorityTactic in isolation.
-func TestPriorityRouting_EndToEnd(t *testing.T) {
+//     CreateTacticWithTypedParams → NewTierTactic.
+//  5. TierTactic.SelectService groups by Tier (lower = higher priority)
+//     and consults the process-wide breaker store.
+//  6. After enough failures on the T0 service the breaker trips and the
+//     next call falls back to T1; once the breaker closes it returns to T0.
+func TestTierRouting_EndToEnd(t *testing.T) {
 	ruleJSON := `{
 		"uuid": "rule-e2e",
 		"scenario": "openai",
 		"request_model": "gpt-4",
 		"active": true,
 		"services": [
-			{"provider": "e2e-primary",  "model": "gpt-4", "active": true, "priority": 10},
-			{"provider": "e2e-fallback", "model": "gpt-4", "active": true, "priority": 5}
+			{"provider": "e2e-primary",  "model": "gpt-4", "active": true, "tier": 0},
+			{"provider": "e2e-fallback", "model": "gpt-4", "active": true, "tier": 1}
 		],
 		"lb_tactic": {
-			"type": "priority",
+			"type": "tier",
 			"params": {"within_tier_tactic": "random"}
 		}
 	}`
@@ -48,12 +42,12 @@ func TestPriorityRouting_EndToEnd(t *testing.T) {
 	}
 
 	// Sanity-check the JSON contract the frontend depends on.
-	if rule.LBTactic.Type != loadbalance.TacticPriority {
-		t.Fatalf("lb_tactic.type = %v, want TacticPriority", rule.LBTactic.Type)
+	if rule.LBTactic.Type != loadbalance.TacticTier {
+		t.Fatalf("lb_tactic.type = %v, want TacticTier", rule.LBTactic.Type)
 	}
-	pp, ok := rule.LBTactic.Params.(*typ.PriorityParams)
+	pp, ok := rule.LBTactic.Params.(*typ.TierParams)
 	if !ok || pp == nil {
-		t.Fatalf("LBTactic.Params = %T, want *PriorityParams", rule.LBTactic.Params)
+		t.Fatalf("LBTactic.Params = %T, want *TierParams", rule.LBTactic.Params)
 	}
 	if pp.WithinTierTactic != loadbalance.TacticRandom {
 		t.Fatalf("WithinTierTactic = %v, want random", pp.WithinTierTactic)
@@ -70,7 +64,7 @@ func TestPriorityRouting_EndToEnd(t *testing.T) {
 	primaryID := "e2e-primary:gpt-4"
 	fallbackID := "e2e-fallback:gpt-4"
 
-	// 1. Fresh state: the top-priority service is chosen.
+	// 1. Fresh state: the T0 service is chosen.
 	got, err := lb.SelectService(&rule)
 	if err != nil {
 		t.Fatalf("initial SelectService: %v", err)

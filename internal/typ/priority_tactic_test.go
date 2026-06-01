@@ -6,44 +6,44 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 )
 
-func mkService(provider, model string, priority int) *loadbalance.Service {
+func mkService(provider, model string, tier int) *loadbalance.Service {
 	return &loadbalance.Service{
 		Provider: provider,
 		Model:    model,
 		Active:   true,
-		Priority: priority,
+		Tier:     tier,
 	}
 }
 
-func mkPriorityRule(services ...*loadbalance.Service) *Rule {
+func mkTierRule(services ...*loadbalance.Service) *Rule {
 	return &Rule{
 		UUID:     "rule-test",
 		Services: services,
 		Active:   true,
 		LBTactic: Tactic{
-			Type:   loadbalance.TacticPriority,
-			Params: DefaultPriorityParams(),
+			Type:   loadbalance.TacticTier,
+			Params: DefaultTierParams(),
 		},
 	}
 }
 
-func TestPriorityPicksHighestFirst(t *testing.T) {
-	primary := mkService("p1", "m1", 10)
-	backup := mkService("p2", "m1", 5)
-	rule := mkPriorityRule(primary, backup)
-	tactic := NewPriorityTactic(loadbalance.TacticRandom)
+func TestTierPicksLowestNumberFirst(t *testing.T) {
+	primary := mkService("p1", "m1", 0) // T0 — highest priority
+	backup := mkService("p2", "m1", 1)  // T1 — fallback
+	rule := mkTierRule(primary, backup)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
 
 	got := tactic.SelectService(rule)
 	if got != primary {
-		t.Fatalf("want primary (priority=10), got %v", got)
+		t.Fatalf("want T0 primary, got %v", got)
 	}
 }
 
-func TestPriorityFallsBackWhenBreakerOpen(t *testing.T) {
-	primary := mkService("fb-p1", "m1", 10)
-	backup := mkService("fb-p2", "m1", 5)
-	rule := mkPriorityRule(primary, backup)
-	tactic := NewPriorityTactic(loadbalance.TacticRandom)
+func TestTierFallsBackWhenBreakerOpen(t *testing.T) {
+	primary := mkService("fb-p1", "m1", 0)
+	backup := mkService("fb-p2", "m1", 1)
+	rule := mkTierRule(primary, backup)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
 
 	// Trip the primary's breaker.
 	store := loadbalance.DefaultBreakerStore()
@@ -54,68 +54,68 @@ func TestPriorityFallsBackWhenBreakerOpen(t *testing.T) {
 
 	got := tactic.SelectService(rule)
 	if got != backup {
-		t.Fatalf("primary breaker open, want backup, got %v", got)
+		t.Fatalf("T0 breaker open, want T1 backup, got %v", got)
 	}
 }
 
-func TestPriorityReturnsToHigherWhenBreakerCloses(t *testing.T) {
-	primary := mkService("recover-p1", "recover-m1", 10)
-	backup := mkService("recover-p2", "recover-m1", 5)
-	rule := mkPriorityRule(primary, backup)
-	tactic := NewPriorityTactic(loadbalance.TacticRandom)
+func TestTierReturnsToHigherWhenBreakerCloses(t *testing.T) {
+	primary := mkService("recover-p1", "recover-m1", 0)
+	backup := mkService("recover-p2", "recover-m1", 1)
+	rule := mkTierRule(primary, backup)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
 
 	store := loadbalance.DefaultBreakerStore()
 	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
 		store.RecordFailure(primary.ServiceID())
 	}
 	if got := tactic.SelectService(rule); got != backup {
-		t.Fatalf("expected fallback to backup, got %v", got)
+		t.Fatalf("expected fallback to T1 backup, got %v", got)
 	}
 	store.RecordSuccess(primary.ServiceID())
 	if got := tactic.SelectService(rule); got != primary {
-		t.Fatalf("expected return to primary after recovery, got %v", got)
+		t.Fatalf("expected return to T0 primary after recovery, got %v", got)
 	}
 }
 
-func TestPriorityTiesShareLoad(t *testing.T) {
-	a := mkService("tie-a", "m1", 10)
-	b := mkService("tie-b", "m1", 10)
-	backup := mkService("tie-c", "m1", 5)
-	rule := mkPriorityRule(a, b, backup)
-	tactic := NewPriorityTactic(loadbalance.TacticRandom)
+func TestTierTiesShareLoad(t *testing.T) {
+	a := mkService("tie-a", "m1", 0)
+	b := mkService("tie-b", "m1", 0)
+	backup := mkService("tie-c", "m1", 1)
+	rule := mkTierRule(a, b, backup)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
 
 	counts := map[string]int{}
 	for i := 0; i < 200; i++ {
 		got := tactic.SelectService(rule)
 		if got == backup {
-			t.Fatalf("backup should never be picked while ties are healthy")
+			t.Fatalf("T1 backup should never be picked while T0 ties are healthy")
 		}
 		counts[got.ServiceID()]++
 	}
 	if counts[a.ServiceID()] == 0 || counts[b.ServiceID()] == 0 {
-		t.Fatalf("random within-tier tactic should hit both tied services, got %v", counts)
+		t.Fatalf("random within-tier tactic should hit both T0 services, got %v", counts)
 	}
 }
 
-func TestPriorityZeroTreatedAsUnset(t *testing.T) {
-	prioritised := mkService("ord-p1", "m1", 1)
-	unset := mkService("ord-p2", "m1", 0)
-	rule := mkPriorityRule(prioritised, unset)
-	tactic := NewPriorityTactic(loadbalance.TacticRandom)
+func TestTierZeroIsHighestPriority(t *testing.T) {
+	// T0 (tier=0) is the highest priority and is tried first.
+	highest := mkService("ord-p1", "m1", 0)
+	fallback := mkService("ord-p2", "m1", 1)
+	rule := mkTierRule(highest, fallback)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
 
-	// Any explicit priority (even 1) beats the unset (0) tier.
-	if got := tactic.SelectService(rule); got != prioritised {
-		t.Fatalf("explicit priority should beat unset, got %v", got)
+	if got := tactic.SelectService(rule); got != highest {
+		t.Fatalf("T0 should be tried first, got %v", got)
 	}
 }
 
-func TestPriorityAllBreakersOpenReturnsHighestTier(t *testing.T) {
-	// Even when every service is tripped we still pick something so the
+func TestTierAllBreakersOpenReturnsLowestTier(t *testing.T) {
+	// When every service is tripped we still pick something so the
 	// upstream-error path can surface a real error to the client.
-	high := mkService("allopen-a", "m1", 10)
+	high := mkService("allopen-a", "m1", 0)
 	low := mkService("allopen-b", "m1", 1)
-	rule := mkPriorityRule(high, low)
-	tactic := NewPriorityTactic(loadbalance.TacticRandom)
+	rule := mkTierRule(high, low)
+	tactic := NewTierTactic(loadbalance.TacticRandom)
 
 	store := loadbalance.DefaultBreakerStore()
 	for _, svc := range []*loadbalance.Service{high, low} {
@@ -132,7 +132,7 @@ func TestPriorityAllBreakersOpenReturnsHighestTier(t *testing.T) {
 	if got == nil {
 		t.Fatal("want a fallback service, got nil")
 	}
-	if got.Priority != 10 {
-		t.Fatalf("want priority=10 fallback when all open, got priority=%d", got.Priority)
+	if got.Tier != 0 {
+		t.Fatalf("want T0 fallback when all open, got tier=%d", got.Tier)
 	}
 }

@@ -5,7 +5,6 @@ import NodeTooltip from './NodeTooltip.tsx';
 import { getRouteGraphBorderColor, PROVIDER_NODE_STYLES } from './styles.tsx';
 
 export interface TierNodeProps {
-    tierIndex: number;
     priority: number;
     active: boolean;
 }
