@@ -41,8 +41,8 @@ const ServiceNodeWrapper = styled(Box)(() => ({
 
 // Inline priority disk — lives inside the left column of the node, no overflow.
 const PriorityDisk = styled(Box, {
-    shouldForwardProp: (p) => p !== 'hasPriority' && p !== 'active',
-})<{ hasPriority: boolean; active: boolean }>(({ theme, hasPriority, active }) => ({
+    shouldForwardProp: (p) => p !== 'active',
+})<{ active: boolean }>(({ theme, active }) => ({
     width: 24,
     height: 24,
     borderRadius: '50%',
@@ -55,20 +55,11 @@ const PriorityDisk = styled(Box, {
     userSelect: 'none',
     cursor: active ? 'pointer' : 'not-allowed',
     transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
-    // Always hollow/outline style — differentiates from smart-routing's solid disks
     border: '1.5px solid',
     backgroundColor: 'transparent',
-    ...(hasPriority
-        ? {
-              color: theme.palette.primary.main,
-              borderColor: theme.palette.primary.main,
-              '&:hover': active ? { borderColor: theme.palette.primary.dark, color: theme.palette.primary.dark } : {},
-          }
-        : {
-              color: theme.palette.text.disabled,
-              borderColor: theme.palette.text.disabled,
-              '&:hover': active ? { borderColor: theme.palette.primary.main, color: theme.palette.primary.main } : {},
-          }),
+    color: theme.palette.primary.main,
+    borderColor: theme.palette.primary.main,
+    '&:hover': active ? { borderColor: theme.palette.primary.dark, color: theme.palette.primary.dark } : {},
 }));
 
 const getProviderInfo = (providerUuid: string, providersData: Provider[]) => {
@@ -132,7 +123,6 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, onChange, activ
         <>
             <NodeTooltip title={tooltip} placement="left">
                 <PriorityDisk
-                    hasPriority={priority > 0}
                     active={active}
                     onClick={active ? open : undefined}
                     aria-label={priority > 0 ? t('rule.priority.ariaLabel', { priority }) : t('rule.priority.ariaUnset')}
