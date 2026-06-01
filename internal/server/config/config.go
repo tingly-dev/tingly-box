@@ -1418,13 +1418,18 @@ func (c *Config) CreateProfile(baseScenario typ.RuleScenario, name string, unifi
 		}
 	}
 
-	// Generate next profile ID: p{maxExisting + 1}
-	nextID := 1
+	// Generate next profile ID: find the first unused ID starting from 1.
+	// This reuses IDs from deleted profiles instead of always incrementing the max.
+	seen := make(map[int]bool)
 	for _, p := range profiles {
 		var num int
-		if _, err := fmt.Sscanf(p.ID, "p%d", &num); err == nil && num >= nextID {
-			nextID = num + 1
+		if _, err := fmt.Sscanf(p.ID, "p%d", &num); err == nil {
+			seen[num] = true
 		}
+	}
+	nextID := 1
+	for seen[nextID] {
+		nextID++
 	}
 
 	meta := typ.ProfileMeta{
