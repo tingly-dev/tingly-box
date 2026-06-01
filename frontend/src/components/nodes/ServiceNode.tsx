@@ -21,7 +21,7 @@ import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
 import { ServiceNodeContainer, NODE_LAYER_STYLES } from './styles.tsx';
-import ServiceNodeContent from './ProviderNodeContent.tsx';
+import ServiceNodeContent from './ServiceNodeContent.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 
 const ActionButtonsBox = styled(Box)(() => ({

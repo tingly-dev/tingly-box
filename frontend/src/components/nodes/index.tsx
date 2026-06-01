@@ -5,7 +5,7 @@ export * from './DividerNode';
 export * from './EntryNode';
 export * from './ServiceEntryNode';
 export * from './ModelNode';
-export * from './ProviderNode';
+export * from './ServiceNode';
 export * from './SmartOpNode';
 export * from './styles';
 
