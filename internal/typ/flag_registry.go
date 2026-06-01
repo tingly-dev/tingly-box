@@ -151,7 +151,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "cursor_compat",
 			Label:       "Cursor compatibility",
-			Description: "Normalize rich content, gate tools, and strip stream usage for Cursor IDE clients.",
+			Description: "Normalize rich content, gate tools, and strip stream usage for Cursor clients.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
 		},
