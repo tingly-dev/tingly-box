@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // HandleAnthropicBetaToOpenAIResponsesStream converts Anthropic streaming events
@@ -64,8 +65,7 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 
 	// Initialize converter state
 	state := newResponsesConverterState(time.Now().Unix())
-	var inputTokens, outputTokens, cacheTokens int
-	var hasUsage bool
+	acc := usagepkg.NewAnthropicAccumulator()
 	completedSent := false
 
 	// Process the stream
@@ -77,7 +77,8 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 			// Send completion event before returning since client is disconnecting
 			if !completedSent && !state.finished {
 				logrus.WithContext(c.Request.Context()).Info("Client disconnected, sending completion event before close")
-				sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
+				r := acc.Result()
+				sendFinalCompletionEvent(c, state, flusher, r.InputTokens, r.OutputTokens, r.CacheInputTokens)
 				completedSent = true
 			}
 			return false
@@ -96,21 +97,10 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		case "message_start":
 			handleMessageStart(c, state, responseModel, flusher)
 			state.hasSentCreated = true
-			// Anthropic puts input_tokens in message_start, not message_delta.
-			if event.Message.Usage.InputTokens != 0 {
-				inputTokens = int(event.Message.Usage.InputTokens)
-				state.inputTokens = event.Message.Usage.InputTokens
-				hasUsage = true
-			}
-			// Normalize: add cache_creation so inputTokens = input (uncached) + creation (write).
-			if event.Message.Usage.CacheCreationInputTokens != 0 {
-				inputTokens += int(event.Message.Usage.CacheCreationInputTokens)
-				state.inputTokens += event.Message.Usage.CacheCreationInputTokens
-			}
-			if event.Message.Usage.CacheReadInputTokens != 0 {
-				cacheTokens = int(event.Message.Usage.CacheReadInputTokens)
-				state.cacheTokens = event.Message.Usage.CacheReadInputTokens
-			}
+			acc.ConsumeBeta(&event)
+			r := acc.Result()
+			state.inputTokens = int64(r.InputTokens)
+			state.cacheTokens = int64(r.CacheInputTokens)
 
 		case "content_block_start":
 			handleContentBlockStart(c, state, event, flusher)
@@ -122,9 +112,11 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 			handleContentBlockStop(c, state, event, flusher)
 
 		case "message_delta":
-			inputTokens, outputTokens, cacheTokens, hasUsage = handleMessageDelta(
-				state, event, inputTokens, outputTokens,
-			)
+			acc.ConsumeBeta(&event)
+			r := acc.Result()
+			state.inputTokens = int64(r.InputTokens)
+			state.outputTokens = int64(r.OutputTokens)
+			state.cacheTokens = int64(r.CacheInputTokens)
 
 		case "message_stop":
 			handleMessageStop(c, state, flusher)
@@ -151,32 +143,33 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 			// Send completion event for all errors including context.Canceled
 			// The Stream loop's context check may not have run if stream.Next() was blocking
 			logrus.WithContext(c.Request.Context()).WithError(err).Warn("Stream error occurred, sending completion event")
-			sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
+			r := acc.Result()
+			sendFinalCompletionEvent(c, state, flusher, r.InputTokens, r.OutputTokens, r.CacheInputTokens)
 			completedSent = true
 		}
 
 		if errors.Is(err, context.Canceled) {
 			logrus.WithContext(c.Request.Context()).Debug("Anthropic to Responses stream canceled by client")
-			if hasUsage {
-				return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+			if !acc.HasUsage() {
+				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.ZeroTokenUsage(), nil
+			return acc.Result(), nil
 		}
 
 		if errors.Is(err, io.EOF) {
 			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
-			if hasUsage {
-				return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+			if !acc.HasUsage() {
+				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.ZeroTokenUsage(), nil
+			return acc.Result(), nil
 		}
 
 		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
 		sendResponsesErrorEvent(c, err.Error(), "stream_error", flusher)
-		if hasUsage {
-			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+		if !acc.HasUsage() {
+			return protocol.ZeroTokenUsage(), err
 		}
-		return protocol.ZeroTokenUsage(), err
+		return acc.Result(), err
 	}
 
 	// Some providers end the stream without emitting message_stop
@@ -186,14 +179,15 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 			handleMessageStart(c, state, responseModel, flusher)
 			state.hasSentCreated = true
 		}
-		sendFinalCompletionEvent(c, state, flusher, inputTokens, outputTokens, cacheTokens)
+		r := acc.Result()
+		sendFinalCompletionEvent(c, state, flusher, r.InputTokens, r.OutputTokens, r.CacheInputTokens)
 		completedSent = true
 	}
 
-	if hasUsage {
-		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+	if !acc.HasUsage() {
+		return protocol.ZeroTokenUsage(), nil
 	}
-	return protocol.ZeroTokenUsage(), nil
+	return acc.Result(), nil
 }
 
 // responsesConverterState maintains the state during stream conversion
@@ -466,38 +460,6 @@ func handleContentBlockStop(
 			sendResponsesEvent(c, itemDoneEvent, flusher)
 		}
 	}
-}
-
-// handleMessageDelta updates usage information.
-// Anthropic sends input_tokens in message_start and output_tokens in message_delta,
-// so we only overwrite a value when the event actually carries it (non-zero).
-func handleMessageDelta(
-	state *responsesConverterState,
-	event anthropic.BetaRawMessageStreamEventUnion,
-	inputTokens, outputTokens int,
-) (int, int, int, bool) {
-	hasUsage := false
-	if event.Usage.InputTokens != 0 {
-		state.inputTokens = event.Usage.InputTokens
-		inputTokens = int(event.Usage.InputTokens)
-		hasUsage = true
-	}
-	// Normalize: add cache_creation for non-standard providers that send it in message_delta
-	if event.Usage.CacheCreationInputTokens != 0 {
-		state.inputTokens += event.Usage.CacheCreationInputTokens
-		inputTokens = int(state.inputTokens)
-		hasUsage = true
-	}
-	if event.Usage.OutputTokens != 0 {
-		state.outputTokens = event.Usage.OutputTokens
-		outputTokens = int(event.Usage.OutputTokens)
-		hasUsage = true
-	}
-	if event.Usage.CacheReadInputTokens != 0 {
-		state.cacheTokens = event.Usage.CacheReadInputTokens
-		hasUsage = true
-	}
-	return inputTokens, outputTokens, int(state.cacheTokens), hasUsage
 }
 
 // handleMessageStop sends the response.completed event

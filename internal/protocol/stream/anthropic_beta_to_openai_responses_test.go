@@ -24,57 +24,6 @@ func TestNewResponsesConverterState(t *testing.T) {
 	assert.False(t, state.finished)
 }
 
-// TestHandleMessageDelta tests the message delta handler
-func TestHandleMessageDelta(t *testing.T) {
-	state := newResponsesConverterState(time.Now().Unix())
-
-	// Test with usage data
-	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence": ""}, "usage": {"input_tokens": 100, "output_tokens": 50}}`
-	event := parseTestEvent(eventStr)
-
-	inputTokens, outputTokens, cacheTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
-
-	assert.Equal(t, 100, inputTokens)
-	assert.Equal(t, 50, outputTokens)
-	assert.Equal(t, 0, cacheTokens)
-	assert.True(t, hasUsage)
-	assert.Equal(t, int64(100), state.inputTokens)
-	assert.Equal(t, int64(50), state.outputTokens)
-}
-
-// TestHandleMessageDelta_NoUsage tests delta without usage data
-func TestHandleMessageDelta_NoUsage(t *testing.T) {
-	state := newResponsesConverterState(time.Now().Unix())
-
-	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {}}`
-	event := parseTestEvent(eventStr)
-
-	inputTokens, outputTokens, cacheTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
-
-	assert.Equal(t, 0, inputTokens)
-	assert.Equal(t, 0, outputTokens)
-	assert.Equal(t, 0, cacheTokens)
-	assert.False(t, hasUsage)
-}
-
-// TestHandleMessageDelta_WithCache tests delta with cache tokens
-func TestHandleMessageDelta_WithCache(t *testing.T) {
-	state := newResponsesConverterState(time.Now().Unix())
-
-	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 200}}`
-	event := parseTestEvent(eventStr)
-
-	inputTokens, outputTokens, cacheTokens, hasUsage := handleMessageDelta(state, event, 0, 0)
-
-	assert.Equal(t, 100, inputTokens)
-	assert.Equal(t, 50, outputTokens)
-	assert.Equal(t, 200, cacheTokens)
-	assert.True(t, hasUsage)
-	assert.Equal(t, int64(100), state.inputTokens)
-	assert.Equal(t, int64(50), state.outputTokens)
-	assert.Equal(t, int64(200), state.cacheTokens)
-}
-
 // TestResponsesConverterState_AccumulatedText tests text accumulation
 func TestResponsesConverterState_AccumulatedText(t *testing.T) {
 	state := newResponsesConverterState(time.Now().Unix())
@@ -221,28 +170,6 @@ func TestSpecialCharacters(t *testing.T) {
 			assert.Equal(t, text, parsed["delta"])
 		})
 	}
-}
-
-// TestHandleMessageDelta_PreserveInputFromMessageStart tests the real Anthropic streaming
-// protocol: input_tokens arrive in message_start (not message_delta). When message_delta
-// only carries output_tokens, the previously captured inputTokens must not be clobbered.
-func TestHandleMessageDelta_PreserveInputFromMessageStart(t *testing.T) {
-	state := newResponsesConverterState(time.Now().Unix())
-
-	// Simulate: message_start already captured input_tokens = 35
-	state.inputTokens = 35
-	presetInput := 35
-
-	// Real Anthropic message_delta has output_tokens only; input_tokens is absent (0).
-	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 18}}`
-	event := parseTestEvent(eventStr)
-
-	inputTokens, outputTokens, _, hasUsage := handleMessageDelta(state, event, presetInput, 0)
-
-	assert.Equal(t, 35, inputTokens, "input_tokens must not be overwritten by message_delta")
-	assert.Equal(t, 18, outputTokens)
-	assert.True(t, hasUsage)
-	assert.Equal(t, int64(35), state.inputTokens, "state.inputTokens must not be overwritten")
 }
 
 // Helper to parse event from JSON string

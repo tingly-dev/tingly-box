@@ -8,9 +8,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
-	"github.com/tidwall/gjson"
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // HandleAnthropic handles Anthropic v1 streaming response.
@@ -20,8 +20,7 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 
 	hc.SetupSSEHeaders()
 
-	var inputTokens, outputTokens, cacheTokens int
-	var hasUsage bool
+	acc := usage.NewAnthropicAccumulator()
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
@@ -42,55 +41,7 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
 
-			// Read usage from SDK struct; fall back to raw JSON for providers
-			// or test decoders where apijson doesn't populate struct fields.
-			// Anthropic streaming protocol:
-			//   message_start  → input_tokens at event.Message.Usage (message.usage.input_tokens in JSON)
-			//   message_delta  → output_tokens at event.Usage (usage.output_tokens in JSON)
-			raw := evt.RawJSON()
-			// Input tokens: prefer message_start path, fall back to message_delta path
-			if evt.Message.Usage.InputTokens > 0 {
-				inputTokens = int(evt.Message.Usage.InputTokens)
-				hasUsage = true
-			} else if v := gjson.Get(raw, "message.usage.input_tokens"); v.Int() > 0 {
-				inputTokens = int(v.Int())
-				hasUsage = true
-			} else if evt.Usage.InputTokens > 0 {
-				inputTokens = int(evt.Usage.InputTokens)
-				hasUsage = true
-			} else if v := gjson.Get(raw, "usage.input_tokens"); v.Int() > 0 {
-				inputTokens = int(v.Int())
-				hasUsage = true
-			}
-			if evt.Usage.OutputTokens > 0 {
-				outputTokens = int(evt.Usage.OutputTokens)
-				hasUsage = true
-			} else if v := gjson.Get(raw, "usage.output_tokens"); v.Int() > 0 {
-				outputTokens = int(v.Int())
-				hasUsage = true
-			}
-			// Cache tokens: check both message_start and message_delta paths
-			if evt.Message.Usage.CacheReadInputTokens > 0 {
-				cacheTokens = int(evt.Message.Usage.CacheReadInputTokens)
-				hasUsage = true
-			} else if evt.Usage.CacheReadInputTokens > 0 {
-				cacheTokens = int(evt.Usage.CacheReadInputTokens)
-				hasUsage = true
-			} else if v := gjson.Get(raw, "message.usage.cache_read_input_tokens"); v.Int() > 0 {
-				cacheTokens = int(v.Int())
-				hasUsage = true
-			} else if v := gjson.Get(raw, "usage.cache_read_input_tokens"); v.Int() > 0 {
-				cacheTokens = int(v.Int())
-				hasUsage = true
-			}
-
-			// Normalize: add cache_creation_input_tokens to inputTokens so the denominator
-			// covers total prompt cost = input (uncached) + creation (write) + read (cacheTokens).
-			if c := evt.Message.Usage.CacheCreationInputTokens; c > 0 {
-				inputTokens += int(c)
-			} else if c := evt.Usage.CacheCreationInputTokens; c > 0 {
-				inputTokens += int(c)
-			}
+			acc.Consume(evt)
 
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {
 				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
@@ -130,10 +81,10 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 	if err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.WithContext(hc.GinContext.Request.Context()).Debug("Anthropic v1 stream canceled by client")
-			if !hasUsage {
+			if !acc.HasUsage() {
 				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+			return acc.Result(), nil
 		}
 
 		// Stream failed before any content reached the client: surface a
@@ -141,15 +92,15 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 		// instead of a 200 SSE error event.
 		if !hc.GinContext.Writer.Written() {
 			SendStreamingError(hc.GinContext, err)
-			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+			return acc.Result(), err
 		}
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+		return acc.Result(), err
 	}
 
 	SendFinishEvent(hc.GinContext)
 
-	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+	return acc.Result(), nil
 }
 
 // HandleAnthropicBeta handles Anthropic v1 beta streaming response.
@@ -159,8 +110,7 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 
 	hc.SetupSSEHeaders()
 
-	var inputTokens, outputTokens, cacheTokens int
-	var hasUsage bool
+	acc := usage.NewAnthropicAccumulator()
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
@@ -181,35 +131,7 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
 
-			// Anthropic streaming protocol:
-			//   message_start  → input_tokens at event.Message.Usage
-			//   message_delta  → output_tokens at event.Usage
-			if evt.Message.Usage.InputTokens > 0 {
-				inputTokens = int(evt.Message.Usage.InputTokens)
-				hasUsage = true
-			} else if evt.Usage.InputTokens > 0 {
-				inputTokens = int(evt.Usage.InputTokens)
-				hasUsage = true
-			}
-			if evt.Usage.OutputTokens > 0 {
-				outputTokens = int(evt.Usage.OutputTokens)
-				hasUsage = true
-			}
-			if evt.Message.Usage.CacheReadInputTokens > 0 {
-				cacheTokens = int(evt.Message.Usage.CacheReadInputTokens)
-				hasUsage = true
-			} else if evt.Usage.CacheReadInputTokens > 0 {
-				cacheTokens = int(evt.Usage.CacheReadInputTokens)
-				hasUsage = true
-			}
-
-			// Normalize: add cache_creation_input_tokens to inputTokens so the denominator
-			// covers total prompt cost = input (uncached) + creation (write) + read (cacheTokens).
-			if c := evt.Message.Usage.CacheCreationInputTokens; c > 0 {
-				inputTokens += int(c)
-			} else if c := evt.Usage.CacheCreationInputTokens; c > 0 {
-				inputTokens += int(c)
-			}
+			acc.ConsumeBeta(evt)
 
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {
 				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
@@ -249,10 +171,10 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 	if err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.WithContext(hc.GinContext.Request.Context()).Debug("Anthropic v1 beta stream canceled by client")
-			if !hasUsage {
+			if !acc.HasUsage() {
 				return protocol.ZeroTokenUsage(), nil
 			}
-			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+			return acc.Result(), nil
 		}
 
 		// Stream failed before any content reached the client: surface a
@@ -260,13 +182,13 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 		// instead of a 200 SSE error event.
 		if !hc.GinContext.Writer.Written() {
 			SendStreamingError(hc.GinContext, err)
-			return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+			return acc.Result(), err
 		}
 		MarshalAndSendErrorEvent(hc.GinContext, err.Error(), "stream_error", "stream_failed")
-		return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), err
+		return acc.Result(), err
 	}
 
 	SendFinishEvent(hc.GinContext)
 
-	return protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens), nil
+	return acc.Result(), nil
 }
