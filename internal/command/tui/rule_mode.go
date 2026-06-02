@@ -222,15 +222,20 @@ func pickRuleService(mgr TUIManager) (*loadbalance.Service, error) {
 	}, nil
 }
 
-// pickProviderModel offers a Select over cached models, falling back to a
-// free-form Input when no models are cached. Returns ("", nil) on cancel.
+// pickProviderModel offers a Select over the provider's models. If no
+// models are cached yet it first refreshes them from the provider so the
+// user gets a picker rather than a free-form Input. The list still
+// includes a "Custom…" escape hatch for vendors that don't return a
+// listable catalog. Returns ("", nil) on cancel.
 func pickProviderModel(mgr TUIManager, p *typ.Provider, prompt string) (string, error) {
-	var models []string
-	if cfg := mgr.GetGlobalConfig(); cfg != nil {
-		if mm := cfg.GetModelManager(); mm != nil {
-			models = mm.GetModels(p.UUID)
-		}
+	models := cachedModels(mgr, p.UUID)
+	if len(models) == 0 {
+		_, _ = WithSpinner("Fetching models from "+p.Name, func() (struct{}, error) {
+			return struct{}{}, mgr.FetchAndSaveProviderModels(p.UUID)
+		})
+		models = cachedModels(mgr, p.UUID)
 	}
+
 	if len(models) == 0 {
 		r, err := Input(prompt, InputOptions{
 			Placeholder: "e.g. gpt-4o, claude-3-5-sonnet-20241022",
@@ -242,10 +247,13 @@ func pickProviderModel(mgr TUIManager, p *typ.Provider, prompt string) (string, 
 		}
 		return r.Value, nil
 	}
-	items := []SelectItem[string]{{Title: "Custom…", Description: "Enter a model name manually", Value: ""}}
+
+	items := make([]SelectItem[string], 0, len(models)+1)
 	for _, m := range models {
 		items = append(items, SelectItem[string]{Title: m, Value: m})
 	}
+	items = append(items, SelectItem[string]{Title: "Custom…", Description: "Enter a model name manually", Value: ""})
+
 	sel, err := Select(prompt, items, SelectOptions{CanGoBack: true, PageSize: 12})
 	if err != nil || sel.IsCancel() || sel.IsBack() {
 		return "", err
@@ -258,6 +266,18 @@ func pickProviderModel(mgr TUIManager, p *typ.Provider, prompt string) (string, 
 		return "", err
 	}
 	return r.Value, nil
+}
+
+func cachedModels(mgr TUIManager, providerUUID string) []string {
+	cfg := mgr.GetGlobalConfig()
+	if cfg == nil {
+		return nil
+	}
+	mm := cfg.GetModelManager()
+	if mm == nil {
+		return nil
+	}
+	return mm.GetModels(providerUUID)
 }
 
 func providerName(mgr TUIManager, uuid string) string {
