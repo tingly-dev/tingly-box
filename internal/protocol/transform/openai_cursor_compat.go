@@ -2,7 +2,7 @@ package transform
 
 import (
 	"github.com/openai/openai-go/v3"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 )
 
 // OpenAICursorCompatTransform flattens rich content blocks in OpenAI Chat

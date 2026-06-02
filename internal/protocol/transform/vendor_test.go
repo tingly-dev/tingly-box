@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 )
 
 func TestNewVendorTransform(t *testing.T) {

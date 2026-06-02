@@ -7,7 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 )
 
 // VendorTransform applies provider-specific adjustments to requests

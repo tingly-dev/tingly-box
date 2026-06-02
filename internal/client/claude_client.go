@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 

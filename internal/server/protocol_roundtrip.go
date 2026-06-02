@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
+	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
