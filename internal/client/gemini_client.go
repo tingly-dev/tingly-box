@@ -37,12 +37,7 @@ func NewGeminiClient(provider *typ.Provider, model string, sessionID typ.Session
 		return nil, fmt.Errorf("gemini client requires a gemini OAuth provider")
 	}
 
-	project := ""
-	if provider.OAuthDetail.ExtraFields != nil {
-		if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
-			project = p
-		}
-	}
+	project := provider.OAuthDetail.GetExtraFieldString("project_id")
 	if project == "" {
 		logrus.Warnf("[Gemini] provider %s has no project_id in OAuth metadata; Code Assist calls will fail until loadCodeAssist/onboardUser populates it", provider.Name)
 	}

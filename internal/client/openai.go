@@ -664,10 +664,8 @@ func (c *OpenAIClient) probeCodexResponsesEndpoint(ctx context.Context, model st
 	req.Header.Set("originator", "tingly-box")
 
 	// Add ChatGPT-Account-ID header if available
-	if c.provider.OAuthDetail != nil && c.provider.OAuthDetail.ExtraFields != nil {
-		if accountID, ok := c.provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
-			req.Header.Set("ChatGPT-Account-ID", accountID)
-		}
+	if accountID := c.provider.OAuthDetail.GetExtraFieldString("account_id"); accountID != "" {
+		req.Header.Set("ChatGPT-Account-ID", accountID)
 	}
 
 	// Make the request

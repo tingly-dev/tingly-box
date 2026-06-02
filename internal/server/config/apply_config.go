@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1245,6 +1246,17 @@ func ClearCodexGatewayConfig() (*ApplyResult, error) {
 		result.Message = "no config.toml found, nothing to clear"
 		return result, nil
 	}
+
+	// Fast path: if the file mentions neither the tingly provider name nor any
+	// managed top-level key, skip the unmarshal/marshal round-trip entirely.
+	// Re-marshaling user TOML loses comments and reorders keys, so avoiding it
+	// in the common no-op case is also a correctness win.
+	if !bytes.Contains(data, []byte(codexGatewayProviderName)) {
+		result.Success = true
+		result.Message = "config.toml has no tingly gateway keys, nothing to clear"
+		return result, nil
+	}
+
 	cfg := map[string]interface{}{}
 	if err := tomlpkg.Unmarshal(data, &cfg); err != nil {
 		result.Message = fmt.Sprintf("Failed to parse config.toml: %v", err)
@@ -1358,6 +1370,14 @@ func ApplyCodexAuth(mode CodexAuthMode, apiKey string, tokens *CodexChatGPTToken
 		return result, nil
 	}
 
+	// Marshal before touching disk so a malformed payload can't leave an
+	// orphan backup behind.
+	output, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to marshal JSON: %v", err)
+		return result, nil
+	}
+
 	// Each mode writes a fresh file — no merging with the previous auth.json.
 	// Switching apikey→chatgpt must not leave OPENAI_API_KEY behind, and
 	// chatgpt→apikey must not leave the tokens block behind. The backup
@@ -1374,11 +1394,6 @@ func ApplyCodexAuth(mode CodexAuthMode, apiKey string, tokens *CodexChatGPTToken
 		result.Created = true
 	}
 
-	output, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		result.Message = fmt.Sprintf("Failed to marshal JSON: %v", err)
-		return result, nil
-	}
 	if err := os.WriteFile(targetPath, output, 0600); err != nil {
 		result.Message = fmt.Sprintf("Failed to write file: %v", err)
 		return result, nil

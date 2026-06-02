@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/agent"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -761,10 +760,7 @@ func (h *Handler) loadCodexChatGPTTokens(uuid string) (*config.CodexChatGPTToken
 	if err != nil {
 		return nil, fmt.Errorf("oauth provider not found: %w", err)
 	}
-	if provider.OAuthDetail == nil {
-		return nil, fmt.Errorf("provider %q is not an OAuth provider", provider.Name)
-	}
-	if provider.OAuthDetail.GetIssuer() != ai.IssuerCodex {
+	if !provider.IsCodexProvider() || provider.OAuthDetail == nil {
 		return nil, fmt.Errorf("provider %q is not a Codex OAuth provider", provider.Name)
 	}
 	return &config.CodexChatGPTTokens{

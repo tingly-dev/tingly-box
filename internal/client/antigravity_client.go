@@ -31,12 +31,7 @@ func NewAntigravityClient(provider *typ.Provider, model string, sessionID typ.Se
 		return nil, fmt.Errorf("antigravity client requires an antigravity OAuth provider")
 	}
 
-	project := ""
-	if provider.OAuthDetail.ExtraFields != nil {
-		if p, ok := provider.OAuthDetail.ExtraFields["project_id"].(string); ok {
-			project = p
-		}
-	}
+	project := provider.OAuthDetail.GetExtraFieldString("project_id")
 	if project == "" {
 		logrus.Warnf("[Antigravity] provider %s has no project_id in OAuth metadata; Code Assist calls will fail until loadCodeAssist populates it", provider.Name)
 	}

@@ -51,7 +51,7 @@ func NewCodexClient(provider *typ.Provider, model string, sessionID typ.SessionI
 	// The codexHook will transform this to ChatGPT-Account-ID and add other required headers
 	// Reference: https://github.com/SamSaffron/term-llm/blob/main/internal/llm/chatgpt.go
 	var options = []option.RequestOption{}
-	if accountID, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok && accountID != "" {
+	if accountID := provider.OAuthDetail.GetExtraFieldString("account_id"); accountID != "" {
 		options = append(options, option.WithHeader("X-ChatGPT-Account-ID", accountID))
 	}
 

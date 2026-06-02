@@ -597,6 +597,15 @@ func (h *Handler) RefreshOAuthToken(c *gin.Context) {
 		provider.OAuthDetail.RefreshToken = token.RefreshToken
 	}
 	provider.OAuthDetail.ExpiresAt = token.Expiry.Format(time.RFC3339)
+	// Codex's native auth.json export reads id_token from ExtraFields. Keep
+	// it in lockstep with AccessToken so refreshed providers don't ship an
+	// expired identity assertion alongside a fresh bearer.
+	if token.IDToken != "" {
+		if provider.OAuthDetail.ExtraFields == nil {
+			provider.OAuthDetail.ExtraFields = map[string]interface{}{}
+		}
+		provider.OAuthDetail.ExtraFields["id_token"] = token.IDToken
+	}
 
 	if err := h.config.UpdateProvider(provider.UUID, provider); err != nil {
 		c.JSON(http.StatusInternalServerError, OAuthErrorResponse{

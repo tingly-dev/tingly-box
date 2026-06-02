@@ -85,6 +85,9 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             return;
         }
         setPrefs(defaultCodexPrefs());
+        setAuthMode('apikey');
+        setSelectedOAuthProvider('');
+        setCodexOAuthProviders([]);
     }, [open]);
 
     // Fetch Codex OAuth providers only the first time the user selects chatgpt
