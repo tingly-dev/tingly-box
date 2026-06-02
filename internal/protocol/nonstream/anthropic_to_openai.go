@@ -7,64 +7,92 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-// ConvertAnthropicToOpenAIResponse converts an Anthropic response to OpenAI format
-func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, responseModel string) map[string]interface{} {
+// ChatCompletionWire is the OpenAI Chat Completions response wire format.
+type ChatCompletionWire struct {
+	ID      string                    `json:"id"`
+	Object  string                    `json:"object"`
+	Created int64                     `json:"created"`
+	Model   string                    `json:"model"`
+	Choices []ChatCompletionChoiceWire `json:"choices"`
+	Usage   ChatCompletionUsageWire   `json:"usage"`
+}
 
-	message := make(map[string]interface{})
-	var toolCalls []map[string]interface{}
+// ToMap serializes to a generic map for callers that apply runtime transforms.
+func (r ChatCompletionWire) ToMap() map[string]interface{} {
+	raw, _ := json.Marshal(r)
+	var m map[string]interface{}
+	_ = json.Unmarshal(raw, &m)
+	return m
+}
+
+// ChatCompletionChoiceWire is a single choice in the OpenAI Chat Completions response.
+type ChatCompletionChoiceWire struct {
+	Index        int                      `json:"index"`
+	Message      ChatCompletionMessageWire `json:"message"`
+	FinishReason string                   `json:"finish_reason"`
+}
+
+// ChatCompletionMessageWire is the message inside a choice.
+type ChatCompletionMessageWire struct {
+	Role             string                       `json:"role"`
+	Content          string                       `json:"content,omitempty"`
+	ToolCalls        []ChatCompletionToolCallWire `json:"tool_calls,omitempty"`
+	ReasoningContent string                       `json:"reasoning_content,omitempty"`
+}
+
+// ChatCompletionToolCallWire is a single tool call inside a message.
+type ChatCompletionToolCallWire struct {
+	ID       string                      `json:"id"`
+	Type     string                      `json:"type"`
+	Function ChatCompletionFunctionWire  `json:"function"`
+}
+
+// ChatCompletionFunctionWire carries the function name and JSON-encoded arguments.
+type ChatCompletionFunctionWire struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+// ChatCompletionUsageWire is the usage block in the OpenAI Chat Completions response.
+// prompt_tokens = TOTAL (uncached + cached); cached_tokens is a reported subset.
+type ChatCompletionUsageWire struct {
+	PromptTokens     int64                              `json:"prompt_tokens"`
+	CompletionTokens int64                              `json:"completion_tokens"`
+	TotalTokens      int64                              `json:"total_tokens"`
+	PromptTokensDetails *ChatCompletionPromptDetailsWire `json:"prompt_tokens_details,omitempty"`
+}
+
+// ChatCompletionPromptDetailsWire breaks down prompt token categories.
+type ChatCompletionPromptDetailsWire struct {
+	CachedTokens int64 `json:"cached_tokens"`
+}
+
+// ConvertAnthropicToOpenAIResponse converts an Anthropic BetaMessage to the
+// OpenAI Chat Completions wire format.
+func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, responseModel string) ChatCompletionWire {
+	var toolCalls []ChatCompletionToolCallWire
 	var textContent string
 	var thinking string
 
-	// Walk Anthropic content blocks
 	for _, block := range anthropicResp.Content {
-
 		switch block.Type {
-
 		case "text":
 			textContent += block.Text
-
 		case "tool_use":
-			// Anthropic → OpenAI tool call
-			toolCalls = append(toolCalls, map[string]interface{}{
-				"id":   block.ID,
-				"type": "function",
-				"function": map[string]interface{}{
-					"name":      block.Name,
-					"arguments": block.Input, // map[string]any (NOT stringified yet)
+			argsJSON, _ := json.Marshal(block.Input)
+			toolCalls = append(toolCalls, ChatCompletionToolCallWire{
+				ID:   block.ID,
+				Type: "function",
+				Function: ChatCompletionFunctionWire{
+					Name:      block.Name,
+					Arguments: string(argsJSON),
 				},
 			})
-
 		case "thinking":
-			// Collect thinking content for reasoning_content field
 			thinking += block.Text
 		}
 	}
 
-	// OpenAI expects arguments as STRING
-	for _, tc := range toolCalls {
-		fn := tc["function"].(map[string]interface{})
-		if args, ok := fn["arguments"]; ok {
-			if b, err := json.Marshal(args); err == nil {
-				fn["arguments"] = string(b)
-			}
-		}
-	}
-
-	// Set role from Anthropic response (required by OpenAI format)
-	message["role"] = string(anthropicResp.Role)
-
-	if textContent != "" {
-		message["content"] = textContent
-	}
-	if len(toolCalls) > 0 {
-		message["tool_calls"] = toolCalls
-	}
-	// Add reasoning_content if thinking blocks were present
-	if thinking != "" {
-		message["reasoning_content"] = thinking
-	}
-
-	// Map stop reason
 	finishReason := "stop"
 	switch anthropicResp.StopReason {
 	case "tool_use":
@@ -73,36 +101,42 @@ func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, resp
 		finishReason = "length"
 	}
 
+	msg := ChatCompletionMessageWire{
+		Role:             string(anthropicResp.Role),
+		Content:          textContent,
+		ReasoningContent: thinking,
+	}
+	if len(toolCalls) > 0 {
+		msg.ToolCalls = toolCalls
+	}
+
 	// OpenAI wire: prompt_tokens = total (uncached + cache_read + cache_creation).
-	// Anthropic wire: input_tokens = uncached only, with cache fields separate.
 	promptTokens := anthropicResp.Usage.InputTokens +
 		anthropicResp.Usage.CacheReadInputTokens +
 		anthropicResp.Usage.CacheCreationInputTokens
-	usage := map[string]interface{}{
-		"prompt_tokens":     promptTokens,
-		"completion_tokens": anthropicResp.Usage.OutputTokens,
-		"total_tokens":      promptTokens + anthropicResp.Usage.OutputTokens,
+	usage := ChatCompletionUsageWire{
+		PromptTokens:     promptTokens,
+		CompletionTokens: anthropicResp.Usage.OutputTokens,
+		TotalTokens:      promptTokens + anthropicResp.Usage.OutputTokens,
 	}
 	if anthropicResp.Usage.CacheReadInputTokens > 0 {
-		usage["prompt_tokens_details"] = map[string]interface{}{
-			"cached_tokens": anthropicResp.Usage.CacheReadInputTokens,
+		usage.PromptTokensDetails = &ChatCompletionPromptDetailsWire{
+			CachedTokens: anthropicResp.Usage.CacheReadInputTokens,
 		}
 	}
 
-	response := map[string]interface{}{
-		"id":      anthropicResp.ID,
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   responseModel,
-		"choices": []map[string]interface{}{
+	return ChatCompletionWire{
+		ID:      anthropicResp.ID,
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   responseModel,
+		Choices: []ChatCompletionChoiceWire{
 			{
-				"index":         0,
-				"message":       message,
-				"finish_reason": finishReason,
+				Index:        0,
+				Message:      msg,
+				FinishReason: finishReason,
 			},
 		},
-		"usage": usage,
+		Usage: usage,
 	}
-
-	return response
 }

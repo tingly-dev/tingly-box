@@ -53,9 +53,7 @@ func RoundtripAnthropicBetaResponseViaOpenAI(anthropicResp *anthropic.BetaMessag
 // ConvertAnthropicToOpenAIResponseWithProvider converts an Anthropic response to OpenAI format
 // and applies provider-specific transformations to the response
 func ConvertAnthropicToOpenAIResponseWithProvider(anthropicResp *anthropic.BetaMessage, responseModel string, provider *typ.Provider, model string) map[string]interface{} {
-	// Base conversion
-	openaiResp := nonstream.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel)
-
-	// Apply provider-specific transformations using the transform system
+	// Convert to typed wire struct, then to map for runtime transform compatibility.
+	openaiResp := nonstream.ConvertAnthropicToOpenAIResponse(anthropicResp, responseModel).ToMap()
 	return ops.ApplyResponseTransforms(openaiResp, provider.APIBase, model)
 }

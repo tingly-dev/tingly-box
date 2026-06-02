@@ -77,54 +77,36 @@ func TestConvertAnthropicToOpenAIResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConvertAnthropicToOpenAIResponse(tt.anthropicResp, tt.responseModel)
 
-			// Check that the result has the correct structure
-			assert.Equal(t, tt.anthropicResp.ID, result["id"])
-			assert.Equal(t, "chat.completion", result["object"])
-			assert.Equal(t, tt.responseModel, result["model"])
+			assert.Equal(t, tt.anthropicResp.ID, result.ID)
+			assert.Equal(t, "chat.completion", result.Object)
+			assert.Equal(t, tt.responseModel, result.Model)
 
-			// Check choices
-			choices, ok := result["choices"].([]map[string]interface{})
-			require.True(t, ok)
-			require.Len(t, choices, 1)
+			require.Len(t, result.Choices, 1)
+			choice := result.Choices[0]
+			assert.Equal(t, 0, choice.Index)
 
-			choice := choices[0]
-			assert.Equal(t, int(0), choice["index"])
-
-			// Check message
-			message, ok := choice["message"].(map[string]interface{})
-			require.True(t, ok)
-
-			// Check content
 			if tt.expectContent != "" {
-				assert.Equal(t, tt.expectContent, message["content"])
+				assert.Equal(t, tt.expectContent, choice.Message.Content)
 			}
 
-			// Check tool calls
 			if tt.expectTools {
-				toolCalls, ok := message["tool_calls"].([]map[string]interface{})
-				require.True(t, ok)
-				require.Len(t, toolCalls, 1)
-
-				toolCall := toolCalls[0]
-				assert.Equal(t, "tool_123", toolCall["id"])
-				assert.Equal(t, "function", toolCall["type"])
-
-				funcMap := toolCall["function"].(map[string]interface{})
-				assert.Equal(t, "get_weather", funcMap["name"])
-				assert.Equal(t, `{"location":"New York","unit":"celsius"}`, funcMap["arguments"])
+				require.Len(t, choice.Message.ToolCalls, 1)
+				tc := choice.Message.ToolCalls[0]
+				assert.Equal(t, "tool_123", tc.ID)
+				assert.Equal(t, "function", tc.Type)
+				assert.Equal(t, "get_weather", tc.Function.Name)
+				assert.Equal(t, `{"location":"New York","unit":"celsius"}`, tc.Function.Arguments)
 			}
 
-			// Check usage
-			usage, ok := result["usage"].(map[string]interface{})
-			require.True(t, ok)
-			assert.Equal(t, tt.anthropicResp.Usage.InputTokens, usage["prompt_tokens"])
-			assert.Equal(t, tt.anthropicResp.Usage.OutputTokens, usage["completion_tokens"])
-			assert.Equal(t, tt.anthropicResp.Usage.InputTokens+tt.anthropicResp.Usage.OutputTokens, usage["total_tokens"])
+			// prompt_tokens = total (uncached + cache_read + cache_creation)
+			wantPrompt := tt.anthropicResp.Usage.InputTokens +
+				tt.anthropicResp.Usage.CacheReadInputTokens +
+				tt.anthropicResp.Usage.CacheCreationInputTokens
+			assert.Equal(t, wantPrompt, result.Usage.PromptTokens)
+			assert.Equal(t, tt.anthropicResp.Usage.OutputTokens, result.Usage.CompletionTokens)
+			assert.Equal(t, wantPrompt+tt.anthropicResp.Usage.OutputTokens, result.Usage.TotalTokens)
 
-			// Check that created timestamp is recent (within 5 seconds)
-			created, ok := result["created"].(int64)
-			require.True(t, ok)
-			assert.InDelta(t, time.Now().Unix(), created, 5)
+			assert.InDelta(t, time.Now().Unix(), result.Created, 5)
 		})
 	}
 }

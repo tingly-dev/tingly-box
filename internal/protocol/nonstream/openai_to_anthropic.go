@@ -11,355 +11,276 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
+// anthropicMsgWire is the intermediate JSON representation used to build
+// anthropic.Message / anthropic.BetaMessage via marshal+unmarshal, which is
+// necessary because the SDK content union types have no public constructors.
+type anthropicMsgWire struct {
+	ID           string                 `json:"id"`
+	Type         string                 `json:"type"`
+	Role         string                 `json:"role"`
+	Content      interface{}            `json:"content"`
+	Model        string                 `json:"model"`
+	StopReason   string                 `json:"stop_reason"`
+	StopSequence string                 `json:"stop_sequence"`
+	Usage        anthropicUsageWire     `json:"usage"`
+	ServerToolUse interface{}           `json:"server_tool_use,omitempty"`
+}
+
+// anthropicUsageWire represents the Anthropic usage wire format.
+// input_tokens = uncached only; cache_read and cache_creation are separate.
+type anthropicUsageWire struct {
+	InputTokens           int64 `json:"input_tokens"`
+	OutputTokens          int64 `json:"output_tokens"`
+	CacheReadInputTokens  int64 `json:"cache_read_input_tokens"`
+}
+
 func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model string) *anthropic.BetaMessage {
-	// Create the response as JSON first, then unmarshal into Message
-	// This is a workaround for the complex union types
-	responseJSON := map[string]interface{}{
-		"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
-		"type":          "message",
-		"role":          "assistant",
-		"content":       []map[string]interface{}{},
-		"model":         model,
-		"stop_reason":   "end_turn",
-		"stop_sequence": "",
+	wire := anthropicMsgWire{
+		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
+		Type:         "message",
+		Role:         "assistant",
+		Content:      []interface{}{},
+		Model:        model,
+		StopReason:   "end_turn",
+		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
-		"usage": map[string]interface{}{
-			"input_tokens":            openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
-			"output_tokens":           openaiResp.Usage.CompletionTokens,
-			"cache_read_input_tokens": openaiResp.Usage.PromptTokensDetails.CachedTokens,
+		Usage: anthropicUsageWire{
+			InputTokens:          openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
+			OutputTokens:         openaiResp.Usage.CompletionTokens,
+			CacheReadInputTokens: openaiResp.Usage.PromptTokensDetails.CachedTokens,
 		},
 	}
 
 	// Preserve server_tool_use from ExtraFields if present
 	if openaiResp.JSON.ExtraFields != nil {
 		if serverToolUse, exists := openaiResp.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
-			responseJSON["server_tool_use"] = serverToolUse.Raw()
+			wire.ServerToolUse = json.RawMessage(serverToolUse.Raw())
 		}
 	}
 
-	// Add content from OpenAI response
 	var contentBlocks []anthropic.ContentBlockParamUnion
 	for _, choice := range openaiResp.Choices {
-		// Handle refusal (when model refuses to respond due to safety policies)
 		if choice.Message.Refusal != "" {
 			contentBlocks = append(contentBlocks, anthropic.NewTextBlock(choice.Message.Refusal))
 		}
-
-		// Add text content if present
 		if choice.Message.Content != "" {
 			contentBlocks = append(contentBlocks, anthropic.NewTextBlock(choice.Message.Content))
 		}
-
 		if extra := choice.Message.JSON.ExtraFields; extra != nil {
 			if thinking, ok := extra["reasoning_content"]; ok {
-				// a fake signature for thinking block
 				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], fmt.Sprintf("%s", thinking.Raw())))
 			}
 		}
-
-		// Convert tool_calls to tool_use blocks
-		if len(choice.Message.ToolCalls) > 0 {
-			for _, toolCall := range choice.Message.ToolCalls {
-				// MENTION: must use map for anthropic tool input
-				var input map[string]interface{}
-				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &input); err != nil {
-					input = make(map[string]interface{})
-				}
-				contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(toolCall.ID, input, toolCall.Function.Name))
+		for _, toolCall := range choice.Message.ToolCalls {
+			var input map[string]interface{}
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &input); err != nil {
+				input = make(map[string]interface{})
 			}
-
-			// If there were tool calls, set stop_reason to tool_use
-			if choice.FinishReason == "tool_calls" {
-				responseJSON["stop_reason"] = "tool_use"
-			}
+			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(toolCall.ID, input, toolCall.Function.Name))
+		}
+		if choice.FinishReason == "tool_calls" {
+			wire.StopReason = "tool_use"
 		}
 		break
 	}
+	wire.Content = contentBlocks
 
-	responseJSON["content"] = contentBlocks
-
-	// Marshal and unmarshal to create proper Message struct
-	jsonBytes, _ := json.Marshal(responseJSON)
+	jsonBytes, _ := json.Marshal(wire)
 	var msg anthropic.BetaMessage
 	json.Unmarshal(jsonBytes, &msg)
-
 	return &msg
 }
 
 // ConvertOpenAIToAnthropicBetaResponse converts OpenAI response to Anthropic beta format
 func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, model string) anthropic.BetaMessage {
-	// Create the response as JSON first, then unmarshal into BetaMessage
-	// This is a workaround for the complex union types
-	responseJSON := map[string]interface{}{
-		"id":            fmt.Sprintf("msg_%d", time.Now().Unix()),
-		"type":          "message",
-		"role":          "assistant",
-		"content":       []map[string]interface{}{},
-		"model":         model,
-		"stop_reason":   string(anthropic.BetaStopReasonEndTurn),
-		"stop_sequence": "",
+	wire := anthropicMsgWire{
+		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
+		Type:         "message",
+		Role:         "assistant",
+		Content:      []interface{}{},
+		Model:        model,
+		StopReason:   string(anthropic.BetaStopReasonEndTurn),
+		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
-		"usage": map[string]interface{}{
-			"input_tokens":            openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
-			"output_tokens":           openaiResp.Usage.CompletionTokens,
-			"cache_read_input_tokens": openaiResp.Usage.PromptTokensDetails.CachedTokens,
+		Usage: anthropicUsageWire{
+			InputTokens:          openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
+			OutputTokens:         openaiResp.Usage.CompletionTokens,
+			CacheReadInputTokens: openaiResp.Usage.PromptTokensDetails.CachedTokens,
 		},
 	}
 
-	// Preserve server_tool_use from ExtraFields if present
 	if openaiResp.JSON.ExtraFields != nil {
 		if serverToolUse, exists := openaiResp.JSON.ExtraFields["server_tool_use"]; exists && serverToolUse.Valid() {
-			responseJSON["server_tool_use"] = serverToolUse.Raw()
+			wire.ServerToolUse = json.RawMessage(serverToolUse.Raw())
 		}
 	}
 
-	// Add content from OpenAI response
 	var contentBlocks []anthropic.BetaContentBlockParamUnion
 	for _, choice := range openaiResp.Choices {
-		// Handle refusal (when model refuses to respond due to safety policies)
 		if choice.Message.Refusal != "" {
 			contentBlocks = append(contentBlocks, anthropic.NewBetaTextBlock(choice.Message.Refusal))
 		}
-
-		// Add text content if present
 		if choice.Message.Content != "" {
 			contentBlocks = append(contentBlocks, anthropic.NewBetaTextBlock(choice.Message.Content))
 		}
-
 		if extra := choice.Message.JSON.ExtraFields; extra != nil {
 			if thinking, ok := extra["reasoning_content"]; ok {
-				// a fake signature for thinking block
 				contentBlocks = append(contentBlocks, anthropic.NewBetaThinkingBlock("thinking-"+uuid.New().String()[0:6], fmt.Sprintf("%s", thinking.Raw())))
 			}
 		}
-
-		// Convert tool_calls to tool_use blocks
-		if len(choice.Message.ToolCalls) > 0 {
-			for _, toolCall := range choice.Message.ToolCalls {
-				// MENTION: must use map for anthropic tool input
-				var input map[string]interface{}
-				if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &input); err != nil {
-					input = make(map[string]interface{})
-				}
-				contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(toolCall.ID, input, toolCall.Function.Name))
+		for _, toolCall := range choice.Message.ToolCalls {
+			var input map[string]interface{}
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &input); err != nil {
+				input = make(map[string]interface{})
 			}
-
-			// If there were tool calls, set stop_reason to tool_use
-			if choice.FinishReason == "tool_calls" {
-				responseJSON["stop_reason"] = string(anthropic.BetaStopReasonToolUse)
-			}
+			contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(toolCall.ID, input, toolCall.Function.Name))
+		}
+		if choice.FinishReason == "tool_calls" {
+			wire.StopReason = string(anthropic.BetaStopReasonToolUse)
 		}
 		break
 	}
+	wire.Content = contentBlocks
 
-	responseJSON["content"] = contentBlocks
-
-	// Marshal and unmarshal to create proper BetaMessage struct
-	jsonBytes, _ := json.Marshal(responseJSON)
+	jsonBytes, _ := json.Marshal(wire)
 	var msg anthropic.BetaMessage
 	json.Unmarshal(jsonBytes, &msg)
-
 	return msg
 }
 
 // ConvertResponsesToAnthropicBetaResponse converts OpenAI Responses API response to Anthropic beta format
 func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, model string) anthropic.BetaMessage {
-	// Create the response as JSON first, then unmarshal into BetaMessage
-	responseJSON := map[string]interface{}{
-		"id":            responsesResp.ID,
-		"type":          "message",
-		"role":          "assistant",
-		"content":       []map[string]interface{}{},
-		"model":         model,
-		"stop_reason":   string(anthropic.BetaStopReasonEndTurn),
-		"stop_sequence": "",
+	wire := anthropicMsgWire{
+		ID:           responsesResp.ID,
+		Type:         "message",
+		Role:         "assistant",
+		Content:      []interface{}{},
+		Model:        model,
+		StopReason:   string(anthropic.BetaStopReasonEndTurn),
+		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
-		"usage": map[string]interface{}{
-			"input_tokens":            responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
-			"output_tokens":           responsesResp.Usage.OutputTokens,
-			"cache_read_input_tokens": responsesResp.Usage.InputTokensDetails.CachedTokens,
+		Usage: anthropicUsageWire{
+			InputTokens:          responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
+			OutputTokens:         responsesResp.Usage.OutputTokens,
+			CacheReadInputTokens: responsesResp.Usage.InputTokensDetails.CachedTokens,
 		},
 	}
 
-	// Add content from Responses API response
-	// The Responses API has a different output structure
 	var contentBlocks []anthropic.BetaContentBlockParamUnion
 
-	// Process the output array from Responses API
 	for _, output := range responsesResp.Output {
-		// Handle text content
 		for _, content := range output.Content {
 			if content.Type == "output_text" {
 				contentBlocks = append(contentBlocks, anthropic.NewBetaTextBlock(content.Text))
 			}
-			// Handle other content types as needed
 		}
-
-		// Handle tool calls (function_call, custom_tool_call, mcp_call)
 		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
-			// Parse arguments JSON string to map
+			argsStr := resolveResponsesArguments(responsesResp, output)
 			var arguments map[string]interface{}
-			var argsStr string
-
-			// Try to get arguments as string first
-			if output.Arguments.OfString != "" {
-				argsStr = output.Arguments.OfString
-			} else if output.Arguments.OfResponseToolSearchCallArguments != nil {
-				// Convert to JSON string
-				if jsonBytes, err := json.Marshal(output.Arguments.OfResponseToolSearchCallArguments); err == nil {
-					argsStr = string(jsonBytes)
-				}
-			}
-
-			if argsStr != "" {
-				if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
-					arguments = make(map[string]interface{})
-				}
-			} else {
+			if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
 				arguments = make(map[string]interface{})
 			}
-
-			contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(
-				output.ID,
-				arguments,
-				output.Name,
-			))
-
-			// If there were tool calls, set stop_reason to tool_use
-			responseJSON["stop_reason"] = string(anthropic.BetaStopReasonToolUse)
+			contentBlocks = append(contentBlocks, anthropic.NewBetaToolUseBlock(output.ID, arguments, output.Name))
+			wire.StopReason = string(anthropic.BetaStopReasonToolUse)
 		}
 	}
 
-	// Handle reasoning content if present
 	for _, output := range responsesResp.Output {
 		for _, content := range output.Content {
 			if content.Type == "reasoning_text" && content.Text != "" {
-				contentBlocks = append(contentBlocks, anthropic.NewBetaThinkingBlock(
-					"thinking-"+uuid.New().String()[0:6],
-					content.Text,
-				))
+				contentBlocks = append(contentBlocks, anthropic.NewBetaThinkingBlock("thinking-"+uuid.New().String()[0:6], content.Text))
 			}
 		}
 	}
 
-	// Handle refusal if present
 	for _, output := range responsesResp.Output {
 		for _, content := range output.Content {
 			if content.Type == "refusal" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewBetaTextBlock(content.Text))
-				// Set stop_reason to refusal if present
-				responseJSON["stop_reason"] = string(anthropic.BetaStopReasonRefusal)
+				wire.StopReason = string(anthropic.BetaStopReasonRefusal)
 			}
 		}
 	}
 
-	responseJSON["content"] = contentBlocks
+	wire.Content = contentBlocks
 
-	// Marshal and unmarshal to create proper BetaMessage struct
-	jsonBytes, _ := json.Marshal(responseJSON)
+	jsonBytes, _ := json.Marshal(wire)
 	var msg anthropic.BetaMessage
 	json.Unmarshal(jsonBytes, &msg)
-
 	return msg
 }
 
 // ConvertResponsesToAnthropicV1Response converts OpenAI Responses API response to Anthropic v1 format
 func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, model string) anthropic.Message {
-	// Create the response as JSON first, then unmarshal into Message
-	responseJSON := map[string]interface{}{
-		"id":            responsesResp.ID,
-		"type":          "message",
-		"role":          "assistant",
-		"content":       []map[string]interface{}{},
-		"model":         model,
-		"stop_reason":   "end_turn",
-		"stop_sequence": "",
+	wire := anthropicMsgWire{
+		ID:           responsesResp.ID,
+		Type:         "message",
+		Role:         "assistant",
+		Content:      []interface{}{},
+		Model:        model,
+		StopReason:   "end_turn",
+		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
-		"usage": map[string]interface{}{
-			"input_tokens":            responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
-			"output_tokens":           responsesResp.Usage.OutputTokens,
-			"cache_read_input_tokens": responsesResp.Usage.InputTokensDetails.CachedTokens,
+		Usage: anthropicUsageWire{
+			InputTokens:          responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
+			OutputTokens:         responsesResp.Usage.OutputTokens,
+			CacheReadInputTokens: responsesResp.Usage.InputTokensDetails.CachedTokens,
 		},
 	}
 
-	// Add content from Responses API response
-	// The Responses API has a different output structure
 	var contentBlocks []anthropic.ContentBlockParamUnion
 
-	// Process the output array from Responses API
 	for _, output := range responsesResp.Output {
-		// Handle text content
 		for _, content := range output.Content {
 			if content.Type == "output_text" {
 				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
 			}
-			// Handle other content types as needed
 		}
-
-		// Handle tool calls (function_call, custom_tool_call, mcp_call)
 		if output.Type == "function_call" || output.Type == "custom_tool_call" || output.Type == "mcp_call" {
-			// Parse arguments JSON string to map
+			argsStr := resolveResponsesArguments(responsesResp, output)
 			var arguments map[string]interface{}
-			var argsStr string
-
-			// Try to get arguments as string first
-			if output.Arguments.OfString != "" {
-				argsStr = output.Arguments.OfString
-			} else if output.Arguments.OfResponseToolSearchCallArguments != nil {
-				// Convert to JSON string
-				if jsonBytes, err := json.Marshal(output.Arguments.OfResponseToolSearchCallArguments); err == nil {
-					argsStr = string(jsonBytes)
-				}
-			}
-
-			if argsStr != "" {
-				if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
-					arguments = make(map[string]interface{})
-				}
-			} else {
+			if err := json.Unmarshal([]byte(argsStr), &arguments); err != nil {
 				arguments = make(map[string]interface{})
 			}
-
-			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(
-				output.ID,
-				arguments,
-				output.Name,
-			))
-
-			// If there were tool calls, set stop_reason to tool_use
-			responseJSON["stop_reason"] = "tool_use"
+			contentBlocks = append(contentBlocks, anthropic.NewToolUseBlock(output.ID, arguments, output.Name))
+			wire.StopReason = "tool_use"
 		}
 	}
 
-	// Handle reasoning content if present
 	for _, output := range responsesResp.Output {
 		for _, content := range output.Content {
 			if content.Type == "reasoning_text" && content.Text != "" {
-				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock(
-					"thinking-"+uuid.New().String()[0:6],
-					content.Text,
-				))
+				contentBlocks = append(contentBlocks, anthropic.NewThinkingBlock("thinking-"+uuid.New().String()[0:6], content.Text))
 			}
 		}
 	}
 
-	// Handle refusal if present
 	for _, output := range responsesResp.Output {
 		for _, content := range output.Content {
 			if content.Type == "refusal" && content.Text != "" {
 				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(content.Text))
-				// Set stop_reason to refusal if present
-				responseJSON["stop_reason"] = "refusal"
+				wire.StopReason = "refusal"
 			}
 		}
 	}
 
-	responseJSON["content"] = contentBlocks
+	wire.Content = contentBlocks
 
-	// Marshal and unmarshal to create proper Message struct
-	jsonBytes, _ := json.Marshal(responseJSON)
+	jsonBytes, _ := json.Marshal(wire)
 	var msg anthropic.Message
 	json.Unmarshal(jsonBytes, &msg)
-
 	return msg
+}
+
+// resolveResponsesArguments extracts the arguments string from a Responses API output item.
+func resolveResponsesArguments(responsesResp *responses.Response, output responses.ResponseOutputItemUnion) string {
+	if output.Arguments.OfString != "" {
+		return output.Arguments.OfString
+	}
+	if output.Arguments.OfResponseToolSearchCallArguments != nil {
+		if b, err := json.Marshal(output.Arguments.OfResponseToolSearchCallArguments); err == nil {
+			return string(b)
+		}
+	}
+	return "{}"
 }
