@@ -35,7 +35,7 @@ const UseVSCodePageContent: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
-                    title="VS Code Copilot"
+                    title="VS Code (BYOK)"
                     size="full"
                     rightAction={
                         <Button
