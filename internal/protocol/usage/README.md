@@ -1,137 +1,70 @@
 # internal/protocol/usage
 
-Centralized token extraction and normalization for all supported provider protocols.
-Every handler calls into this package instead of re-implementing provider rules inline.
+Centralized token extraction and normalization. All handlers call into this package
+instead of re-implementing provider rules inline.
 
 ---
 
-## Why normalization matters
+## Normalization rules
 
-The `TokenUsage` struct (`InputTokens`, `OutputTokens`, `CacheInputTokens`) is used for
-cost accounting and cache-hit ratio display. The front-end formula is:
+Different providers report tokens with incompatible semantics. We normalize to a
+consistent internal representation so the front-end cache-hit formula works correctly:
 
 ```
 cache_hit_ratio = CacheInputTokens / (InputTokens + CacheInputTokens)
 ```
 
-Different providers report tokens with incompatible semantics, so we normalize to a
-consistent internal representation before populating `TokenUsage`.
+| Provider | Wire semantics | InputTokens stored as | CacheInputTokens stored as |
+|---|---|---|---|
+| **OpenAI Chat / Responses** | `prompt_tokens` = total (cached + uncached) | `prompt_tokens - cached_tokens` | `cached_tokens` |
+| **Anthropic** | `input_tokens` = uncached only; `cache_creation_input_tokens` = write cost | `input_tokens + cache_creation_input_tokens` | `cache_read_input_tokens` |
 
----
+> **Why add `cache_creation` to input?** Creation tokens are billable at a write-cost
+> rate, so they belong in the denominator to correctly represent total prompt spend.
 
-## Provider normalization rules
+### Anthropic streaming event split
 
-### OpenAI — Chat Completions & Responses API
+Anthropic splits usage across two events:
 
-| Wire field | Meaning |
-|---|---|
-| `prompt_tokens` / `input_tokens` | **Total** prompt tokens (cached + uncached) |
-| `prompt_tokens_details.cached_tokens` / `input_tokens_details.cached_tokens` | Cached subset (≤ total) |
-| `completion_tokens` / `output_tokens` | Output tokens |
-| `completion_tokens_details.reasoning_tokens` / `output_tokens_details.reasoning_tokens` | Reasoning subset of output |
+- `message_start` → `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`
+- `message_delta` → `output_tokens` (some non-standard providers also send `input_tokens` here)
 
-**Normalization:**
-```
-InputTokens     = prompt_tokens - cached_tokens   (uncached only)
-CacheInputTokens = cached_tokens
-OutputTokens    = completion_tokens
-ReasoningTokens = reasoning_tokens
-```
-
-Cache hit ratio: `cached / (uncached + cached)` = `cached / prompt_tokens` ✓
-
-### Anthropic — v1 & v1 Beta
-
-| Wire field | Meaning |
-|---|---|
-| `input_tokens` | **Uncached** prompt tokens only |
-| `cache_creation_input_tokens` | Tokens written to cache (priced as write cost) |
-| `cache_read_input_tokens` | Tokens read from cache |
-| `output_tokens` | Output tokens |
-
-**Normalization:**
-```
-InputTokens     = input_tokens + cache_creation_input_tokens   (uncached + write cost)
-CacheInputTokens = cache_read_input_tokens
-OutputTokens    = output_tokens
-```
-
-Cache hit ratio: `cache_read / (uncached + creation + cache_read)` ✓
-
-> **Why add `cache_creation`?** Creation tokens are billable at a write-cost rate, so
-> they belong in the denominator to correctly represent total prompt spend. Omitting
-> them would inflate the apparent hit rate.
-
-### Anthropic Streaming — event split
-
-Anthropic streams usage across two events:
-
-| Event | Fields present |
-|---|---|
-| `message_start` | `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` |
-| `message_delta` | `output_tokens` (occasionally `input_tokens` for non-standard providers) |
-
-`AnthropicAccumulator` handles this split, the priority fallback, and the
-normalization transparently.
-
-### Google GenAI
-
-Google usage is extracted and normalized inline in `stream/google_to_any.go` and
-`nonstream/any_to_google.go`. The Google protocol uses `promptTokenCount` /
-`candidatesTokenCount` with no cache sub-fields exposed in the SDK, so no
-centralized extractor is provided here.
+`AnthropicAccumulator` handles this split, priority fallback, and normalization transparently.
 
 ---
 
 ## API
 
-### Non-streaming (stateless, pure functions)
+### Non-streaming (pure functions)
 
 ```go
-import "github.com/tingly-dev/tingly-box/internal/protocol/usage"
-
-// OpenAI Chat Completions
-tu := usage.FromOpenAIChatCompletion(resp.Usage)
-
-// OpenAI Responses API
-tu := usage.FromOpenAIResponses(resp.Usage)
-
-// Anthropic v1 non-beta message
-tu := usage.FromAnthropicMessage(resp.Usage)
-
-// Anthropic v1 beta message
-tu := usage.FromAnthropicBetaMessage(resp.Usage)
+usage.FromOpenAIChatCompletion(resp.Usage)   // openai.CompletionUsage
+usage.FromOpenAIResponses(resp.Usage)        // responses.ResponseUsage
+usage.FromAnthropicMessage(resp.Usage)       // anthropic.Usage
+usage.FromAnthropicBetaMessage(resp.Usage)   // anthropic.BetaUsage
 ```
-
-Each function returns `*protocol.TokenUsage` with fields already normalized.
 
 ### Streaming — Anthropic accumulator
 
 ```go
 acc := usage.NewAnthropicAccumulator()
 
-// In the event loop:
-acc.Consume(&evt)      // non-beta: MessageStreamEventUnion
-acc.ConsumeBeta(&evt)  // beta:     BetaRawMessageStreamEventUnion
+// In event loop:
+acc.Consume(&evt)      // MessageStreamEventUnion (non-beta)
+acc.ConsumeBeta(&evt)  // BetaRawMessageStreamEventUnion (beta)
 
-// At return points:
+// At return:
 if acc.HasUsage() {
     return acc.Result(), nil
 }
 return protocol.ZeroTokenUsage(), nil
 ```
 
-`Result()` returns `*protocol.TokenUsage` with all normalization applied.
-`HasUsage()` is false if no usage-carrying events were seen (use `ZeroTokenUsage()` as
-the default).
-
 ---
 
-## Where the extractors are used
+## Coverage
 
 ### `internal/protocol/nonstream/`
-
-All four `Handle*` functions call the shared extractors:
 
 | Function | Extractor |
 |---|---|
@@ -139,9 +72,6 @@ All four `Handle*` functions call the shared extractors:
 | `HandleOpenAIResponsesNonStream` | `FromOpenAIResponses` |
 | `HandleAnthropicV1NonStream` | `FromAnthropicMessage` |
 | `HandleAnthropicV1BetaNonStream` | `FromAnthropicBetaMessage` |
-
-The `Convert*` helpers in that package (e.g. `ConvertAnthropicToOpenAIResponse`) return
-`map[string]interface{}` wire format and are not in the `*TokenUsage` tracking path.
 
 ### `internal/protocol/stream/`
 
@@ -154,36 +84,23 @@ The `Convert*` helpers in that package (e.g. `ConvertAnthropicToOpenAIResponse`)
 
 ### `internal/server/` (dispatch layer)
 
-Non-stream dispatch paths that receive a complete response:
-
 | Code site | Extractor |
 |---|---|
-| `protocol_dispatch.go` — Anthropic Beta non-stream (direct forward) | `FromAnthropicBetaMessage` |
-| `protocol_dispatch.go` — Anthropic V1 non-stream passthrough | `FromAnthropicBetaMessage` |
-| `protocol_dispatch.go` — OpenAI Chat non-stream | `FromOpenAIChatCompletion` |
-| `protocol_dispatch.go` — OpenAI Responses non-stream (→ Chat) | `FromOpenAIResponses` |
-| `protocol_dispatch.go` — OpenAI Responses passthrough | `FromOpenAIResponses` |
-| `protocol_dispatch.go` — Chat non-stream (→ Responses) | `FromOpenAIChatCompletion` |
-| `protocol_dispatch.go` — Responses → Anthropic Beta non-stream | `FromAnthropicBetaMessage` |
-| `anthropic_message_v1.go` — Responses → Anthropic v1 non-stream | `FromOpenAIResponses` |
-| `anthropic_message_beta.go` — Responses → Anthropic Beta non-stream | `FromOpenAIResponses` |
+| `protocol_dispatch` — Anthropic Beta non-stream (×2) | `FromAnthropicBetaMessage` |
+| `protocol_dispatch` — Responses → Anthropic Beta | `FromAnthropicBetaMessage` |
+| `protocol_dispatch` — OpenAI Chat non-stream (×2) | `FromOpenAIChatCompletion` |
+| `protocol_dispatch` — OpenAI Responses non-stream (×2) | `FromOpenAIResponses` |
+| `anthropic_message_v1` — Responses → Anthropic v1 | `FromOpenAIResponses` |
+| `anthropic_message_beta` — Responses → Anthropic Beta | `FromOpenAIResponses` |
 
----
+### Intentional inline extraction (not migrated)
 
-## What is NOT covered here
-
-| Handler | Why inline extraction remains |
+| File | Reason |
 |---|---|
-| `stream/openai_passthrough.go` | Streams accumulate per-chunk; also drives estimated usage injection when provider omits usage |
-| `stream/openai_to_anthropic*.go` | Uses `StreamTokenCounter` from `protocol/token` (incremental counting, not extraction) |
-| `stream/openai_chat_to_responses.go` | `state` struct fields are dual-use: also build the wire response body |
-| `stream/openai_responses_to_chat.go` | Same dual-use pattern |
-| `stream/google_to_any.go` | Google-specific schema with no SDK usage struct |
-| `nonstream/anthropic_to_openai.go` | Returns `map[string]interface{}` wire format, not `*TokenUsage` |
-| `nonstream/openai_to_anthropic.go` | Same — wire format conversion only |
-| `server/protocol_dispatch.go` — Google non-stream | Google schema has no `CachedTokens` in the SDK struct |
-| `server/protocol_dispatch.go` — streaming return sites | Already normalized by stream-layer accumulators or `StreamTokenCounter` |
-
-These files normalize correctly inline; they are just not candidates for the shared
-extractors because their token variables serve double duty as wire response fields, or
-use a schema that predates SDK support.
+| `stream/openai_passthrough.go` | Per-chunk accumulation + estimated usage injection fallback |
+| `stream/openai_to_anthropic*.go` | Uses `StreamTokenCounter` (incremental counting, not extraction) |
+| `stream/openai_{chat,responses}_to_*.go` | `state` fields are dual-use: also build the wire response body |
+| `stream/google_to_any.go` | Google SDK has no structured cache sub-fields |
+| `nonstream/anthropic_to_openai.go` | Returns wire format (`map[string]interface{}`), not `*TokenUsage` |
+| `nonstream/openai_to_anthropic.go` | Same |
+| `server/protocol_dispatch` — Google non-stream | Google schema, no cached tokens in SDK struct |
