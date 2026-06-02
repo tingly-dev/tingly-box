@@ -107,6 +107,51 @@ func buildAnthropicMessageDeltaJSON(t *testing.T, inputTokens, outputTokens, cac
 	return string(data)
 }
 
+// buildAnthropicMessageStartJSON creates a message_start event — the real Anthropic
+// streaming format where input_tokens live in message.usage, not in message_delta.
+func buildAnthropicMessageStartJSON(t *testing.T, inputTokens, cacheReadTokens int64) string {
+	t.Helper()
+	event := map[string]interface{}{
+		"type": "message_start",
+		"message": map[string]interface{}{
+			"id":            "msg_test",
+			"type":          "message",
+			"role":          "assistant",
+			"content":       []interface{}{},
+			"model":         "claude-3-5-sonnet-20241022",
+			"stop_reason":   nil,
+			"stop_sequence": nil,
+			"usage": map[string]interface{}{
+				"input_tokens":            inputTokens,
+				"output_tokens":           0,
+				"cache_read_input_tokens": cacheReadTokens,
+			},
+		},
+	}
+	data, err := json.Marshal(event)
+	require.NoError(t, err)
+	return string(data)
+}
+
+// buildAnthropicOutputOnlyDeltaJSON creates a message_delta with output_tokens only,
+// matching the real Anthropic API (input_tokens are absent from message_delta).
+func buildAnthropicOutputOnlyDeltaJSON(t *testing.T, outputTokens int64) string {
+	t.Helper()
+	event := map[string]interface{}{
+		"type": "message_delta",
+		"delta": map[string]interface{}{
+			"stop_reason":   "end_turn",
+			"stop_sequence": nil,
+		},
+		"usage": map[string]interface{}{
+			"output_tokens": outputTokens,
+		},
+	}
+	data, err := json.Marshal(event)
+	require.NoError(t, err)
+	return string(data)
+}
+
 // newTestHandleContext creates a minimal HandleContext wired to the given gin context.
 func newTestHandleContext(c *gin.Context) *protocol.HandleContext {
 	return protocol.NewHandleContext(c, "test-model")
@@ -303,4 +348,59 @@ func TestHandleAnthropic_UsageTokens(t *testing.T) {
 	assert.Equal(t, 18, usage.OutputTokens)
 	assert.Equal(t, 5, usage.CacheInputTokens)
 	assert.Equal(t, 0, usage.ReasoningTokens) // Anthropic SDK has no reasoning tokens
+}
+
+// TestHandleAnthropic_RealStreamFormat verifies input_tokens from message_start are
+// captured. The real Anthropic API puts input_tokens in message_start.message.usage
+// and only output_tokens in message_delta.usage — not input_tokens in both.
+func TestHandleAnthropic_RealStreamFormat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	events := []string{
+		buildAnthropicMessageStartJSON(t, 35, 5),   // input_tokens=35, cache=5
+		buildAnthropicOutputOnlyDeltaJSON(t, 18),   // output_tokens=18 only
+	}
+	decoder := newFakeAnthropicDecoder(events)
+	stream := anthropicstream.NewStream[anthropic.MessageStreamEventUnion](decoder, nil)
+
+	hc := newTestHandleContext(c)
+
+	usage, err := HandleAnthropic(hc, stream)
+	require.NoError(t, err)
+
+	assert.Equal(t, 35, usage.InputTokens, "input_tokens must come from message_start")
+	assert.Equal(t, 18, usage.OutputTokens)
+	assert.Equal(t, 5, usage.CacheInputTokens)
+}
+
+// ---------------------------------------------------------------------------
+// HandleAnthropicBeta
+// ---------------------------------------------------------------------------
+
+// TestHandleAnthropicBeta_RealStreamFormat verifies input_tokens from message_start
+// are captured for the beta passthrough handler.
+func TestHandleAnthropicBeta_RealStreamFormat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	events := []string{
+		buildAnthropicMessageStartJSON(t, 40, 8),  // input_tokens=40, cache=8
+		buildAnthropicOutputOnlyDeltaJSON(t, 22),  // output_tokens=22 only
+	}
+	decoder := newFakeAnthropicDecoder(events)
+	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](decoder, nil)
+
+	hc := newTestHandleContext(c)
+
+	usage, err := HandleAnthropicBeta(hc, stream)
+	require.NoError(t, err)
+
+	assert.Equal(t, 40, usage.InputTokens, "input_tokens must come from message_start")
+	assert.Equal(t, 22, usage.OutputTokens)
+	assert.Equal(t, 8, usage.CacheInputTokens)
 }

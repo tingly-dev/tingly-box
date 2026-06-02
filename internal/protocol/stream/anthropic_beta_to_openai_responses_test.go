@@ -223,6 +223,28 @@ func TestSpecialCharacters(t *testing.T) {
 	}
 }
 
+// TestHandleMessageDelta_PreserveInputFromMessageStart tests the real Anthropic streaming
+// protocol: input_tokens arrive in message_start (not message_delta). When message_delta
+// only carries output_tokens, the previously captured inputTokens must not be clobbered.
+func TestHandleMessageDelta_PreserveInputFromMessageStart(t *testing.T) {
+	state := newResponsesConverterState(time.Now().Unix())
+
+	// Simulate: message_start already captured input_tokens = 35
+	state.inputTokens = 35
+	presetInput := 35
+
+	// Real Anthropic message_delta has output_tokens only; input_tokens is absent (0).
+	eventStr := `{"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 18}}`
+	event := parseTestEvent(eventStr)
+
+	inputTokens, outputTokens, _, hasUsage := handleMessageDelta(state, event, presetInput, 0)
+
+	assert.Equal(t, 35, inputTokens, "input_tokens must not be overwritten by message_delta")
+	assert.Equal(t, 18, outputTokens)
+	assert.True(t, hasUsage)
+	assert.Equal(t, int64(35), state.inputTokens, "state.inputTokens must not be overwritten")
+}
+
 // Helper to parse event from JSON string
 func parseTestEvent(eventStr string) anthropic.BetaRawMessageStreamEventUnion {
 	var event anthropic.BetaRawMessageStreamEventUnion
