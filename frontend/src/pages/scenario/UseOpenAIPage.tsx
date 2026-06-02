@@ -23,13 +23,13 @@ const UseOpenAIPageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>OpenAI SDK Configuration</span>
+                            <span>OpenAI SDK</span>
                         </Box>
                     }
                     size="full"
                 >
                     <ProviderConfigCard
-                        title="OpenAI SDK Configuration"
+                        title="OpenAI SDK"
                         baseUrlPath="/tingly/openai"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

@@ -23,13 +23,13 @@ const UseAgentPageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Claw | Agent Configuration</span>
+                            <span>Claw | Agent</span>
                         </Box>
                     }
                     size="full"
                 >
                     <ProviderConfigCard
-                        title="Claw | Agent Configuration"
+                        title="Claw | Agent"
                         baseUrlPath="/tingly/agent"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

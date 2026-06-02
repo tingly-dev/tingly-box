@@ -30,7 +30,7 @@ const UseImageGenPageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Image Generation API Configuration</span>
+                            <span>Image Generation API</span>
                             <Tooltip title="AI-powered image generation through Tingly Box proxy with multiple model support">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -51,7 +51,7 @@ const UseImageGenPageContent: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        title="Image Generation API Configuration"
+                        title="Image Generation API"
                         baseUrlPath="/tingly/imagegen"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

@@ -23,13 +23,13 @@ const UseEmbedPageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Embed API Configuration</span>
+                            <span>Embed API</span>
                         </Box>
                     }
                     size="full"
                 >
                     <ProviderConfigCard
-                        title="Embed API Configuration"
+                        title="Embed API"
                         baseUrlPath="/tingly/embed"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}

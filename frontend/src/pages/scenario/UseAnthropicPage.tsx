@@ -23,13 +23,13 @@ const UseAnthropicPageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Anthropic SDK Configuration</span>
+                            <span>Anthropic SDK</span>
                         </Box>
                     }
                     size="full"
                 >
                     <ProviderConfigCard
-                        title="Anthropic SDK Configuration"
+                        title="Anthropic SDK"
                         baseUrlPath="/tingly/anthropic"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
