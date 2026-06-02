@@ -27,8 +27,8 @@ func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
 	if names := parseBlockTools(flags.BlockTools); len(names) > 0 {
 		pre = append(pre, transform.NewToolBlockTransform(names))
 	}
-	if flags.AnthropicCompat {
-		pre = append(pre, transform.NewAnthropicCompatTransform())
+	if flags.ClaudeCodeCompat {
+		pre = append(pre, transform.NewClaudeCodeCompatTransform())
 	}
 	return pre
 }
@@ -121,8 +121,8 @@ func resolveRuleFlagsWithScenario(
 		// Inject scenario-level CleanHeader if not already set at rule level
 		flags.CleanHeader = flags.CleanHeader || scenarioConfig.Flags.CleanHeader
 
-		// Inject scenario-level AnthropicCompat if not already set at rule level
-		flags.AnthropicCompat = flags.AnthropicCompat || scenarioConfig.Flags.AnthropicCompat
+		// Inject scenario-level ClaudeCodeCompat if not already set at rule level
+		flags.ClaudeCodeCompat = flags.ClaudeCodeCompat || scenarioConfig.Flags.ClaudeCodeCompat
 	}
 
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios

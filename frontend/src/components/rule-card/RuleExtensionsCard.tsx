@@ -66,8 +66,8 @@ const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.useMaxCompletionTokens;
         case 'use_max_tokens':
             return !!flags.useMaxTokens;
-        case 'anthropic_compat':
-            return !!flags.anthropicCompat;
+        case 'claude_code_compat':
+            return !!flags.claudeCodeCompat;
         default:
             return false;
     }

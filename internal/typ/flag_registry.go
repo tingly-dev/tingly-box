@@ -109,14 +109,6 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryRequestOpenAI,
 			Placeholder: "e.g. web_search,run_terminal_cmd",
 		},
-		// ── Request (Anthropic) ────────────────────────────────────────────
-		{
-			Key:         "anthropic_compat",
-			Label:       "Anthropic compatibility",
-			Description: "Rewrite any \"system\" role in the messages array to \"user\" before forwarding. Some clients send system-role entries inside the messages list (a non-standard extension); enabling this normalizes them so third-party Anthropic-compatible providers that reject that role do not error out.",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryRequestAnthropic,
-		},
 		// ── Response ───────────────────────────────────────────────────────
 		{
 			Key:         "skip_usage",
@@ -170,6 +162,13 @@ func RuleFlagRegistry() []FlagSpec {
 			Key:         "cursor_compat_auto",
 			Label:       "Auto-detect Cursor",
 			Description: "Apply cursor compatibility automatically when request headers identify Cursor.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryApp,
+		},
+		{
+			Key:         "claude_code_compat",
+			Label:       "Claude Code compatibility",
+			Description: "Rewrite any \"system\" role in the messages array to \"user\" before forwarding. Claude Code sends system-role entries inside the messages list (a non-standard extension); enabling this normalizes them so third-party Anthropic-compatible providers that reject that role do not error out.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
 		},

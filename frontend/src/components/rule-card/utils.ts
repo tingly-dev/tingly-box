@@ -77,7 +77,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             thinkingEffort: rule.flags?.thinking_effort || '',
             sessionAffinity: rule.flags?.session_affinity || 0,
             visionProxyService: rule.flags?.vision_proxy_service,
-            anthropicCompat: rule.flags?.anthropic_compat || false,
+            claudeCodeCompat: rule.flags?.claude_code_compat || false,
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -260,7 +260,7 @@ export function formatRuleFlags(flags?: RuleFlags): string {
         entries.push(`thinking_effort=${flags.thinkingEffort}`);
     }
     if (flags.sessionAffinity) entries.push(`session_affinity=${flags.sessionAffinity}`);
-    if (flags.anthropicCompat) entries.push('anthropic_compat=true');
+    if (flags.claudeCodeCompat) entries.push('claude_code_compat=true');
     return entries.join(',');
 }
 
@@ -280,7 +280,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         blockTools: '',
         thinkingEffort: '',
         sessionAffinity: 0,
-        anthropicCompat: false,
+        claudeCodeCompat: false,
     };
 
     const trimmed = input.trim();
@@ -364,8 +364,8 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             case 'use_max_tokens':
                 flags.useMaxTokens = parsedValue;
                 break;
-            case 'anthropic_compat':
-                flags.anthropicCompat = parsedValue;
+            case 'claude_code_compat':
+                flags.claudeCodeCompat = parsedValue;
                 break;
             default:
                 return { flags, error: `Unknown flag "${rawKey}".` };
@@ -389,7 +389,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.blockTools && flags.blockTools.trim() !== '') n++;
     if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) n++;
     if (flags.sessionAffinity && flags.sessionAffinity > 0) n++;
-    if (flags.anthropicCompat) n++;
+    if (flags.claudeCodeCompat) n++;
     return n;
 }
 

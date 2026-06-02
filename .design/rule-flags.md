@@ -128,7 +128,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `custom_user_agent` | string | request | 覆盖出站 User-Agent header | `customUserAgentTransport` + `WithCustomUserAgent(ctx, ...)`（Type 2）|
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
 | `block_tools` | string (逗号分隔) | request | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre：pre-Base chain stage）|
-| `anthropic_compat` | bool | app | 把 `messages` 数组中 `role == "system"` 的条目重写为 `"user"`。部分客户端 SDK 在 messages 中写入 system role（非标准扩展），严格遵守规范的第三方 Anthropic 兼容 Provider 会拒绝该字段；此 flag 在转发前归一化。同时作为 `ScenarioFlags.AnthropicCompat` 存在，场景级启用后自动注入到该场景所有 rule（同 `CleanHeader` 模式）。| `transform.AnthropicCompatTransform` → `ops.ApplyAnthropicCompatRoleRewrite` / `ops.ApplyAnthropicBetaCompatRoleRewrite`（Type 1b-pre：pre-Base chain stage，仅对 Anthropic 入站形态生效）|
+| `claude_code_compat` | bool | app | 把 `messages` 数组中 `role == "system"` 的条目重写为 `"user"`。Claude Code 会在 messages 中写入 system role（非标准扩展），严格遵守规范的第三方 Anthropic 兼容 Provider 会拒绝该字段；此 flag 在转发前归一化。同时作为 `ScenarioFlags.ClaudeCodeCompat` 存在，场景级启用后自动注入到该场景所有 rule（同 `CleanHeader` 模式）。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite` / `ops.ApplyClaudeCodeBetaCompatRoleRewrite`（Type 1b-pre：pre-Base chain stage，仅对 Anthropic 入站形态生效）|
 
 ---
 
