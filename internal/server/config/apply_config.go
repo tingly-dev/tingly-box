@@ -1317,6 +1317,33 @@ type CodexChatGPTTokens struct {
 //     and clears `OPENAI_API_KEY`. Tokens come from the caller; tingly-box does
 //     not subsequently refresh them.
 func ApplyCodexAuth(mode CodexAuthMode, apiKey string, tokens *CodexChatGPTTokens) (*ApplyResult, error) {
+	// Validate inputs before touching disk so a malformed request can't leave
+	// orphaned backups behind.
+	payload := map[string]interface{}{}
+	switch mode {
+	case CodexAuthChatGPT:
+		if tokens == nil || tokens.AccessToken == "" || tokens.RefreshToken == "" {
+			return &ApplyResult{Message: "ChatGPT auth requires access_token and refresh_token"}, nil
+		}
+		payload["auth_mode"] = "chatgpt"
+		tokensMap := map[string]interface{}{
+			"access_token":  tokens.AccessToken,
+			"refresh_token": tokens.RefreshToken,
+		}
+		if tokens.IDToken != "" {
+			tokensMap["id_token"] = tokens.IDToken
+		}
+		if tokens.AccountID != "" {
+			tokensMap["account_id"] = tokens.AccountID
+		}
+		payload["tokens"] = tokensMap
+		payload["last_refresh"] = time.Now().UTC().Format(time.RFC3339)
+	case "", CodexAuthAPIKey:
+		payload["OPENAI_API_KEY"] = apiKey
+	default:
+		return &ApplyResult{Message: fmt.Sprintf("Unknown Codex auth mode: %q", mode)}, nil
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1331,12 +1358,11 @@ func ApplyCodexAuth(mode CodexAuthMode, apiKey string, tokens *CodexChatGPTToken
 		return result, nil
 	}
 
-	existing := map[string]interface{}{}
-	if data, err := os.ReadFile(targetPath); err == nil {
-		if err := json.Unmarshal(data, &existing); err != nil {
-			result.Message = fmt.Sprintf("Failed to parse existing JSON: %v", err)
-			return result, nil
-		}
+	// Each mode writes a fresh file — no merging with the previous auth.json.
+	// Switching apikey→chatgpt must not leave OPENAI_API_KEY behind, and
+	// chatgpt→apikey must not leave the tokens block behind. The backup
+	// preserves whatever the user had.
+	if _, err := os.Stat(targetPath); err == nil {
 		backupPath, err := backupFile(targetPath)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to create backup: %v", err)
@@ -1348,34 +1374,7 @@ func ApplyCodexAuth(mode CodexAuthMode, apiKey string, tokens *CodexChatGPTToken
 		result.Created = true
 	}
 
-	switch mode {
-	case CodexAuthChatGPT:
-		if tokens == nil || tokens.AccessToken == "" || tokens.RefreshToken == "" {
-			result.Message = "ChatGPT auth requires access_token and refresh_token"
-			return result, nil
-		}
-		existing["OPENAI_API_KEY"] = nil
-		existing["auth_mode"] = "chatgpt"
-		tokensMap := map[string]interface{}{
-			"access_token":  tokens.AccessToken,
-			"refresh_token": tokens.RefreshToken,
-		}
-		if tokens.IDToken != "" {
-			tokensMap["id_token"] = tokens.IDToken
-		}
-		if tokens.AccountID != "" {
-			tokensMap["account_id"] = tokens.AccountID
-		}
-		existing["tokens"] = tokensMap
-		existing["last_refresh"] = time.Now().UTC().Format(time.RFC3339)
-	case "", CodexAuthAPIKey:
-		existing["OPENAI_API_KEY"] = apiKey
-	default:
-		result.Message = fmt.Sprintf("Unknown Codex auth mode: %q", mode)
-		return result, nil
-	}
-
-	output, err := json.MarshalIndent(existing, "", "  ")
+	output, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		result.Message = fmt.Sprintf("Failed to marshal JSON: %v", err)
 		return result, nil
