@@ -12,9 +12,28 @@ import { useCallback } from 'react';
 const graphRowStyles = (theme: any) => ({
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: theme.spacing(1.5),
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    overflowX: 'auto',
+    overflowY: 'visible',
+    paddingBottom: theme.spacing(0.5),
+    // Custom scrollbar styling
+    scrollbarWidth: 'thin',
+    scrollbarColor: (theme.palette.mode === 'dark' ? '#555' : '#ccc') + ' transparent',
+    '&::-webkit-scrollbar': {
+        height: 6,
+    },
+    '&::-webkit-scrollbar-track': {
+        background: 'transparent',
+    },
+    '&::-webkit-scrollbar-thumb': {
+        backgroundColor: theme.palette.mode === 'dark' ? '#555' : '#ccc',
+        borderRadius: 3,
+        '&:hover': {
+            backgroundColor: theme.palette.mode === 'dark' ? '#777' : '#999',
+        },
+    },
 });
 
 export interface RemoteControlGraphProps {
