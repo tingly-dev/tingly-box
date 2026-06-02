@@ -358,3 +358,51 @@ func extractFirstBetaUserMessageText(messages []anthropic.BetaMessageParam) stri
 	}
 	return ""
 }
+
+// ApplyAnthropicV1DeepSeekThinkingPatch ensures every assistant message carries
+// at least one thinking block. DeepSeek's Anthropic-compatible endpoint rejects
+// assistant turns that lack one — mirrors the reasoning_content fill in
+// applyDeepSeekTransform for the OpenAI Chat path.
+func ApplyAnthropicV1DeepSeekThinkingPatch(req *anthropic.MessageNewParams) {
+	if req == nil {
+		return
+	}
+	for i := range req.Messages {
+		if string(req.Messages[i].Role) != "assistant" {
+			continue
+		}
+		found := false
+		for _, b := range req.Messages[i].Content {
+			if b.OfThinking != nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewThinkingBlock("", ""))
+		}
+	}
+}
+
+// ApplyAnthropicBetaDeepSeekThinkingPatch is the Beta-variant of
+// ApplyAnthropicV1DeepSeekThinkingPatch.
+func ApplyAnthropicBetaDeepSeekThinkingPatch(req *anthropic.BetaMessageNewParams) {
+	if req == nil {
+		return
+	}
+	for i := range req.Messages {
+		if string(req.Messages[i].Role) != "assistant" {
+			continue
+		}
+		found := false
+		for _, b := range req.Messages[i].Content {
+			if b.OfThinking != nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			req.Messages[i].Content = append(req.Messages[i].Content, anthropic.NewBetaThinkingBlock("", ""))
+		}
+	}
+}

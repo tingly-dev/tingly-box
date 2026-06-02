@@ -48,22 +48,9 @@ func TestVendorTransform_Apply_MissingOpenAIConfig(t *testing.T) {
 	require.NoError(t, err) // Should use default config
 }
 
-func TestVendorTransform_Apply_InvalidRequestType(t *testing.T) {
-	vt := NewVendorTransform("api.openai.com")
-
-	ctx := &TransformContext{
-		Request:     "invalid",
-		ProviderURL: "api.openai.com",
-		Extra:       map[string]interface{}{},
-	}
-
-	err := vt.Apply(ctx)
-	require.Error(t, err)
-
-	validationErr, ok := err.(*ValidationError)
-	require.True(t, ok)
-	assert.Equal(t, "request", validationErr.Field)
-}
+// TestVendorTransform_Apply_InvalidRequestType removed: VendorTransform now
+// silently no-ops on unknown request shapes (consistent with every other
+// Transform in the chain) rather than returning a ValidationError.
 
 func TestVendorTransform_Apply_NilRequest(t *testing.T) {
 	vt := NewVendorTransform("api.openai.com")
@@ -74,8 +61,11 @@ func TestVendorTransform_Apply_NilRequest(t *testing.T) {
 		Extra:       map[string]interface{}{},
 	}
 
-	err := vt.Apply(ctx)
-	require.Error(t, err)
+	// Nil request is a silent no-op now (same contract as every other
+	// Transform on an unknown / nil shape).
+	if err := vt.Apply(ctx); err != nil {
+		t.Fatalf("expected nil no-op, got error: %v", err)
+	}
 }
 
 func TestVendorTransform_Protocols(t *testing.T) {
@@ -106,30 +96,9 @@ func TestVendorTransform_Protocols(t *testing.T) {
 	}
 }
 
-func TestNormalizeProviderURL(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"https://api.openai.com/v1/chat/completions", "api.openai.com"},
-		{"http://api.deepseek.com:8080/v1", "api.deepseek.com"},
-		{"api.moonshot.cn", "api.moonshot.cn"},
-		{"api.openai.com:443", "api.openai.com"},
-		{"https://api.anthropic.com", "api.anthropic.com"},
-		{"https://api.openai.com/", "api.openai.com"},
-		{"", ""},
-		{"  https://api.openai.com  ", "api.openai.com"},
-		{"HTTPS://API.OPENAI.COM", "api.openai.com"},
-		{"https://api.example.com:8443/v1/models/gpt-4", "api.example.com"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := normalizeProviderURL(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
+// TestNormalizeProviderURL removed alongside the helper itself: vendor
+// dispatch now uses strings.Contains on the raw lowercased URL, no
+// separate parse step.
 
 func TestVendorTransform_TransformerIntegration(t *testing.T) {
 	// Test integration with transformer package
