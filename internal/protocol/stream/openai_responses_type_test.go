@@ -6,6 +6,8 @@ import (
 
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
@@ -18,7 +20,7 @@ func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 		reasoningTokens: 2,
 	}
 
-	wireEvent := responsesCreatedEvent{
+	wireEvent := wire.ResponsesCreatedEvent{
 		Type:           "response.created",
 		SequenceNumber: 1,
 		Response:       newResponsesWireResponse(state, "in_progress", nil, ""),
@@ -80,11 +82,11 @@ func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
 
 func TestResponsesWireFunctionCallPreservesEmptyArguments(t *testing.T) {
 	arguments := ""
-	event := responsesOutputItemAddedEvent{
+	event := wire.ResponsesOutputItemAddedEvent{
 		Type:           "response.output_item.added",
 		SequenceNumber: 2,
 		OutputIndex:    1,
-		Item: responsesOutputItemWire{
+		Item: wire.ResponsesOutputItemWire{
 			ID:        "call_1",
 			CallID:    "call_1",
 			Type:      "function_call",

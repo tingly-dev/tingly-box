@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // chatToResponsesState tracks the streaming conversion state from Chat Completions to Responses API
@@ -249,10 +250,10 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
 		}
 
-		errorEvent := responsesStreamErrorEvent{
+		errorEvent := wire.ResponsesStreamErrorEvent{
 			Type:           "error",
 			SequenceNumber: nextSequenceNumber(state),
-			Error: responsesStreamErrorBody{
+			Error: wire.ResponsesStreamErrorBody{
 				Message: err.Error(),
 				Type:    "stream_error",
 			},
@@ -283,7 +284,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 
 // sendResponsesCreatedEvent sends the response.created event
 func sendResponsesCreatedEvent(c *gin.Context, state *chatToResponsesState, flusher http.Flusher) {
-	event := responsesCreatedEvent{
+	event := wire.ResponsesCreatedEvent{
 		Type:           "response.created",
 		SequenceNumber: nextSequenceNumber(state),
 		Response:       newResponsesWireResponse(state, "in_progress", nil, ""),
@@ -295,7 +296,7 @@ func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesStat
 	if state.outputIndex == 0 {
 		state.outputIndex = 1
 	}
-	event := responsesOutputItemAddedEvent{
+	event := wire.ResponsesOutputItemAddedEvent{
 		Type:           "response.output_item.added",
 		SequenceNumber: nextSequenceNumber(state),
 		OutputIndex:    0,
@@ -306,7 +307,7 @@ func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesStat
 
 // sendResponsesOutputTextDelta sends response.output_text.delta event
 func sendResponsesOutputTextDelta(c *gin.Context, state *chatToResponsesState, delta string, flusher http.Flusher) {
-	event := responsesOutputTextDeltaEvent{
+	event := wire.ResponsesOutputTextDeltaEvent{
 		Type:           "response.output_text.delta",
 		SequenceNumber: nextSequenceNumber(state),
 		ItemID:         state.textItemID,
@@ -323,7 +324,7 @@ func sendResponsesOutputItemAdded(c *gin.Context, state *chatToResponsesState, i
 	if callID == "" {
 		callID = itemID
 	}
-	event := responsesOutputItemAddedEvent{
+	event := wire.ResponsesOutputItemAddedEvent{
 		Type:           "response.output_item.added",
 		SequenceNumber: nextSequenceNumber(state),
 		OutputIndex:    outputIndex,
@@ -334,7 +335,7 @@ func sendResponsesOutputItemAdded(c *gin.Context, state *chatToResponsesState, i
 
 // sendResponsesFunctionCallArgumentsDelta sends response.function_call_arguments.delta event
 func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToResponsesState, itemID string, outputIndex int, delta string, flusher http.Flusher) {
-	event := responsesFunctionCallArgumentsDeltaEvent{
+	event := wire.ResponsesFunctionCallArgumentsDeltaEvent{
 		Type:           "response.function_call_arguments.delta",
 		SequenceNumber: nextSequenceNumber(state),
 		ItemID:         itemID,
@@ -348,7 +349,7 @@ func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToRespon
 func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, model, finishReason string, flusher http.Flusher) {
 	if state.hasTextItem {
 		text := state.accumulatedText.String()
-		textDone := responsesOutputTextDoneEvent{
+		textDone := wire.ResponsesOutputTextDoneEvent{
 			Type:           "response.output_text.done",
 			SequenceNumber: nextSequenceNumber(state),
 			ItemID:         state.textItemID,
@@ -359,7 +360,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		}
 		OpenAIResponsesEvent(c, textDone.EventType(), textDone)
 
-		textItemDone := responsesOutputItemDoneEvent{
+		textItemDone := wire.ResponsesOutputItemDoneEvent{
 			Type:           "response.output_item.done",
 			SequenceNumber: nextSequenceNumber(state),
 			OutputIndex:    0,
@@ -381,7 +382,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 			callID = ptc.itemID
 		}
 		arguments := ptc.arguments.String()
-		argumentsDone := responsesFunctionCallArgumentsDoneEvent{
+		argumentsDone := wire.ResponsesFunctionCallArgumentsDoneEvent{
 			Type:           "response.function_call_arguments.done",
 			SequenceNumber: nextSequenceNumber(state),
 			ItemID:         ptc.itemID,
@@ -391,7 +392,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		}
 		OpenAIResponsesEvent(c, argumentsDone.EventType(), argumentsDone)
 
-		itemDone := responsesOutputItemDoneEvent{
+		itemDone := wire.ResponsesOutputItemDoneEvent{
 			Type:           "response.output_item.done",
 			SequenceNumber: nextSequenceNumber(state),
 			OutputIndex:    ptc.outputIdx,
@@ -400,7 +401,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		OpenAIResponsesEvent(c, itemDone.EventType(), itemDone)
 	}
 
-	var output []responsesOutputItemWire
+	var output []wire.ResponsesOutputItemWire
 	if state.accumulatedText.Len() > 0 {
 		output = append(output, newResponsesMessageItem(state.textItemID, "completed", state.accumulatedText.String()))
 	}
@@ -414,7 +415,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		output = append(output, newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, ptc.arguments.String(), "completed"))
 	}
 
-	event := responsesCompletedEvent{
+	event := wire.ResponsesCompletedEvent{
 		Type:           "response.completed",
 		SequenceNumber: nextSequenceNumber(state),
 		Response:       newResponsesWireResponse(state, "completed", output, model),
@@ -423,24 +424,24 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 	OpenAIResponsesEvent(c, event.EventType(), event)
 }
 
-func newResponsesWireResponse(state *chatToResponsesState, status string, output []responsesOutputItemWire, model string) responsesWireResponse {
+func newResponsesWireResponse(state *chatToResponsesState, status string, output []wire.ResponsesOutputItemWire, model string) wire.ResponsesWireResponse {
 	if output == nil {
-		output = []responsesOutputItemWire{}
+		output = []wire.ResponsesOutputItemWire{}
 	}
-	return responsesWireResponse{
+	return wire.ResponsesWireResponse{
 		ID:        state.responseID,
 		Object:    "response",
 		CreatedAt: state.createdAt,
 		Status:    status,
 		Output:    output,
-		Usage: &responsesUsageWire{
+		Usage: &wire.ResponsesUsageWire{
 			InputTokens:  state.inputTokens,
 			OutputTokens: state.outputTokens,
 			TotalTokens:  state.inputTokens + state.outputTokens,
-			InputTokensDetails: responsesInputTokensDetailsWire{
+			InputTokensDetails: wire.TokenCacheDetailsWire{
 				CachedTokens: state.cacheTokens,
 			},
-			OutputTokensDetails: responsesOutputTokensDetailsWire{
+			OutputTokensDetails: wire.TokenReasoningDetailsWire{
 				ReasoningTokens: state.reasoningTokens,
 			},
 		},
@@ -448,13 +449,13 @@ func newResponsesWireResponse(state *chatToResponsesState, status string, output
 	}
 }
 
-func newResponsesMessageItem(itemID, status, text string) responsesOutputItemWire {
-	return responsesOutputItemWire{
+func newResponsesMessageItem(itemID, status, text string) wire.ResponsesOutputItemWire {
+	return wire.ResponsesOutputItemWire{
 		ID:     itemID,
 		Type:   "message",
 		Role:   "assistant",
 		Status: status,
-		Content: []responsesContentPartWire{
+		Content: []wire.ResponsesContentPartWire{
 			{
 				Type:        "output_text",
 				Text:        text,
@@ -464,8 +465,8 @@ func newResponsesMessageItem(itemID, status, text string) responsesOutputItemWir
 	}
 }
 
-func newResponsesFunctionCallItem(itemID, callID, name, arguments, status string) responsesOutputItemWire {
-	return responsesOutputItemWire{
+func newResponsesFunctionCallItem(itemID, callID, name, arguments, status string) wire.ResponsesOutputItemWire {
+	return wire.ResponsesOutputItemWire{
 		ID:        itemID,
 		CallID:    callID,
 		Type:      "function_call",

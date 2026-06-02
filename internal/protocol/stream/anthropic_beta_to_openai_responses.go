@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // HandleAnthropicBetaToOpenAIResponsesStream converts Anthropic streaming events
@@ -215,7 +216,7 @@ func handleMessageStart(c *gin.Context, state *responsesConverterState, model st
 	resp.Model = model
 	resp.Usage = nil
 
-	event := responsesCreatedEvent{
+	event := wire.ResponsesCreatedEvent{
 		Type:           "response.created",
 		SequenceNumber: int64(state.nextSequenceNumber()),
 		Response:       resp,
@@ -227,7 +228,7 @@ func handleMessageStart(c *gin.Context, state *responsesConverterState, model st
 	inProgressResp.Model = model
 	inProgressResp.Usage = nil
 
-	inProgressEvent := responsesInProgressEvent{
+	inProgressEvent := wire.ResponsesInProgressEvent{
 		Type:           "response.in_progress",
 		SequenceNumber: int64(state.nextSequenceNumber()),
 		Response:       inProgressResp,
@@ -248,28 +249,28 @@ func handleContentBlockStart(
 
 	if blockType == "text" {
 		// Handle text output - send response.output_item.added with message type
-		outputEvent := responsesOutputItemAddedEvent{
+		outputEvent := wire.ResponsesOutputItemAddedEvent{
 			Type:           "response.output_item.added",
 			SequenceNumber: int64(state.nextSequenceNumber()),
 			OutputIndex:    state.outputIndex,
-			Item: responsesOutputItemWire{
+			Item: wire.ResponsesOutputItemWire{
 				ID:      state.itemID,
 				Type:    "message",
 				Status:  "in_progress",
 				Role:    "assistant",
-				Content: []responsesContentPartWire{},
+				Content: []wire.ResponsesContentPartWire{},
 			},
 		}
 		sendResponsesEvent(c, outputEvent, flusher)
 
 		// Also send response.content_part.added for the text part
-		contentPartEvent := responsesContentPartAddedEvent{
+		contentPartEvent := wire.ResponsesContentPartAddedEvent{
 			Type:           "response.content_part.added",
 			SequenceNumber: int64(state.nextSequenceNumber()),
 			ItemID:         state.itemID,
 			OutputIndex:    state.outputIndex,
 			ContentIndex:   0,
-			Part: responsesContentPartWire{
+			Part: wire.ResponsesContentPartWire{
 				Type: "output_text",
 				Text: "",
 			},
@@ -288,11 +289,11 @@ func handleContentBlockStart(
 		}
 
 		arguments := ""
-		outputEvent := responsesOutputItemAddedEvent{
+		outputEvent := wire.ResponsesOutputItemAddedEvent{
 			Type:           "response.output_item.added",
 			SequenceNumber: int64(state.nextSequenceNumber()),
 			OutputIndex:    state.outputIndex,
-			Item: responsesOutputItemWire{
+			Item: wire.ResponsesOutputItemWire{
 				Type:      "function_call",
 				ID:        toolID,
 				CallID:    toolID,
@@ -322,7 +323,7 @@ func handleContentBlockDelta(
 		text := event.Delta.Text
 		state.accumulatedText += text
 
-		deltaEvent := responsesOutputTextDeltaEvent{
+		deltaEvent := wire.ResponsesOutputTextDeltaEvent{
 			Type:           "response.output_text.delta",
 			Delta:          text,
 			ItemID:         state.itemID,
@@ -337,7 +338,7 @@ func handleContentBlockDelta(
 			argsDelta := event.Delta.PartialJSON
 			pending.arguments.WriteString(argsDelta)
 
-			deltaEvent := responsesFunctionCallArgumentsDeltaEvent{
+			deltaEvent := wire.ResponsesFunctionCallArgumentsDeltaEvent{
 				Type:           "response.function_call_arguments.delta",
 				Delta:          argsDelta,
 				ItemID:         pending.itemID,
@@ -361,7 +362,7 @@ func handleContentBlockStop(
 
 	if blockType == "text" {
 		// Send response.output_text.done event
-		textDoneEvent := responsesOutputTextDoneEvent{
+		textDoneEvent := wire.ResponsesOutputTextDoneEvent{
 			Type:           "response.output_text.done",
 			ItemID:         state.itemID,
 			OutputIndex:    state.outputIndex,
@@ -372,13 +373,13 @@ func handleContentBlockStop(
 		sendResponsesEvent(c, textDoneEvent, flusher)
 
 		// Send response.content_part.done event
-		contentPartDoneEvent := responsesContentPartDoneEvent{
+		contentPartDoneEvent := wire.ResponsesContentPartDoneEvent{
 			Type:           "response.content_part.done",
 			SequenceNumber: int64(state.nextSequenceNumber()),
 			ItemID:         state.itemID,
 			OutputIndex:    state.outputIndex,
 			ContentIndex:   0,
-			Part: responsesContentPartWire{
+			Part: wire.ResponsesContentPartWire{
 				Type: "output_text",
 				Text: state.accumulatedText,
 			},
@@ -386,16 +387,16 @@ func handleContentBlockStop(
 		sendResponsesEvent(c, contentPartDoneEvent, flusher)
 
 		// Send response.output_item.done event
-		itemDoneEvent := responsesOutputItemDoneEvent{
+		itemDoneEvent := wire.ResponsesOutputItemDoneEvent{
 			Type:           "response.output_item.done",
 			SequenceNumber: int64(state.nextSequenceNumber()),
 			OutputIndex:    state.outputIndex,
-			Item: responsesOutputItemWire{
+			Item: wire.ResponsesOutputItemWire{
 				ID:     state.itemID,
 				Type:   "message",
 				Status: "completed",
 				Role:   "assistant",
-				Content: []responsesContentPartWire{
+				Content: []wire.ResponsesContentPartWire{
 					{
 						Type: "output_text",
 						Text: state.accumulatedText,
@@ -408,7 +409,7 @@ func handleContentBlockStop(
 		// Handle tool call completion
 		if pending, exists := state.pendingToolCalls[int(index)]; exists {
 			// Send response.function_call_arguments.done event
-			argsDoneEvent := responsesFunctionCallArgumentsDoneEvent{
+			argsDoneEvent := wire.ResponsesFunctionCallArgumentsDoneEvent{
 				Type:           "response.function_call_arguments.done",
 				ItemID:         pending.itemID,
 				OutputIndex:    state.outputIndex,
@@ -419,11 +420,11 @@ func handleContentBlockStop(
 
 			argumentsStr := pending.arguments.String()
 			// Send response.output_item.done event for the function call
-			itemDoneEvent := responsesOutputItemDoneEvent{
+			itemDoneEvent := wire.ResponsesOutputItemDoneEvent{
 				Type:           "response.output_item.done",
 				SequenceNumber: int64(state.nextSequenceNumber()),
 				OutputIndex:    state.outputIndex,
-				Item: responsesOutputItemWire{
+				Item: wire.ResponsesOutputItemWire{
 					Type:      "function_call",
 					ID:        pending.itemID,
 					CallID:    pending.itemID,
@@ -452,7 +453,7 @@ func sendResponsesEvent(c *gin.Context, event any, flusher http.Flusher) {
 	default:
 	}
 
-	if e, ok := event.(responsesEvent); ok {
+	if e, ok := event.(wire.ResponsesEvent); ok {
 		OpenAIResponsesEvent(c, e.EventType(), event)
 	} else {
 		OpenAISSE(c, event)
@@ -466,9 +467,9 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, f
 		f = flusher[0]
 	}
 
-	errorEvent := responsesStreamErrorEvent{
+	errorEvent := wire.ResponsesStreamErrorEvent{
 		Type: "error",
-		Error: responsesStreamErrorBody{
+		Error: wire.ResponsesStreamErrorBody{
 			Type:    errorType,
 			Message: message,
 		},
@@ -480,13 +481,13 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, f
 // usage struct. OpenAI Responses wire: InputTokens = TOTAL (uncached + cached);
 // CachedTokens is a subset. Uses a local struct rather than the SDK type so we
 // can emit cached_tokens without omitempty (required by Codex CLI).
-func toResponsesUsageWire(u *protocol.TokenUsage) *responsesUsageWire {
+func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 	totalInput := int64(u.InputTokens + u.CacheInputTokens)
-	return &responsesUsageWire{
+	return &wire.ResponsesUsageWire{
 		InputTokens:  totalInput,
 		OutputTokens: int64(u.OutputTokens),
 		TotalTokens:  totalInput + int64(u.OutputTokens),
-		InputTokensDetails: responsesInputTokensDetailsWire{
+		InputTokensDetails: wire.TokenCacheDetailsWire{
 			CachedTokens: int64(u.CacheInputTokens),
 		},
 	}
@@ -502,21 +503,21 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 
 	state.finished = true
 
-	var output []responsesOutputItemWire
+	var output []wire.ResponsesOutputItemWire
 	if state.accumulatedText != "" {
-		output = append(output, responsesOutputItemWire{
+		output = append(output, wire.ResponsesOutputItemWire{
 			ID:     state.itemID,
 			Type:   "message",
 			Status: "completed",
 			Role:   "assistant",
-			Content: []responsesContentPartWire{
+			Content: []wire.ResponsesContentPartWire{
 				{Type: "output_text", Text: state.accumulatedText},
 			},
 		})
 	}
 	for _, pending := range state.pendingToolCalls {
 		argumentsStr := pending.arguments.String()
-		output = append(output, responsesOutputItemWire{
+		output = append(output, wire.ResponsesOutputItemWire{
 			Type:      "function_call",
 			ID:        pending.itemID,
 			CallID:    pending.itemID,
@@ -526,10 +527,10 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 		})
 	}
 
-	doneEvent := responsesCompletedEvent{
+	doneEvent := wire.ResponsesCompletedEvent{
 		Type:           "response.completed",
 		SequenceNumber: int64(state.nextSequenceNumber()),
-		Response: responsesWireResponse{
+		Response: wire.ResponsesWireResponse{
 			ID:          state.responseID,
 			Object:      "response",
 			CreatedAt:   state.createdAt,
@@ -544,11 +545,11 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 	OpenAISSEDone(c)
 }
 
-func newResponsesWireResponseFromState(state *responsesConverterState, status string, output []responsesOutputItemWire) responsesWireResponse {
+func newResponsesWireResponseFromState(state *responsesConverterState, status string, output []wire.ResponsesOutputItemWire) wire.ResponsesWireResponse {
 	if output == nil {
-		output = []responsesOutputItemWire{}
+		output = []wire.ResponsesOutputItemWire{}
 	}
-	return responsesWireResponse{
+	return wire.ResponsesWireResponse{
 		ID:        state.responseID,
 		Object:    "response",
 		CreatedAt: state.createdAt,

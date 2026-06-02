@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // responsesToChatState tracks the streaming conversion state from Responses API to Chat Completions
@@ -209,8 +210,8 @@ func HandleResponsesToOpenAIChatStream(
 			state.completed = true
 
 		case "error":
-			writeSSEChunk(c, flusher, chatCompletionStreamErrorChunk{
-				Error: chatCompletionStreamError{
+			writeSSEChunk(c, flusher, wire.ChatStreamErrorChunk{
+				Error: wire.ChatStreamError{
 					Message: evt.Message,
 					Type:    "error",
 					Code:    evt.Param,
@@ -256,7 +257,7 @@ func HandleResponsesToOpenAIChatStream(
 }
 
 func writeResponsesToChatRoleChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string) {
-	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
+	chunk := newResponsesToChatChunk(state, responseModel, wire.ChatStreamDelta{
 		Role: "assistant",
 	}, nil)
 	writeSSEChunk(c, flusher, chunk)
@@ -264,7 +265,7 @@ func writeResponsesToChatRoleChunk(c *gin.Context, flusher http.Flusher, state *
 }
 
 func writeResponsesToChatTextChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, delta string) {
-	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
+	chunk := newResponsesToChatChunk(state, responseModel, wire.ChatStreamDelta{
 		Content: delta,
 	}, nil)
 	writeSSEChunk(c, flusher, chunk)
@@ -272,13 +273,13 @@ func writeResponsesToChatTextChunk(c *gin.Context, flusher http.Flusher, state *
 
 func writeResponsesToChatToolCallStart(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string, index int, id, name string) {
 	arguments := ""
-	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
-		ToolCalls: []chatCompletionStreamToolCall{
+	chunk := newResponsesToChatChunk(state, responseModel, wire.ChatStreamDelta{
+		ToolCalls: []wire.ChatStreamToolCall{
 			{
 				Index: index,
 				ID:    id,
 				Type:  "function",
-				Function: chatCompletionStreamToolFunction{
+				Function: wire.ChatStreamToolFunction{
 					Name:      name,
 					Arguments: &arguments,
 				},
@@ -289,11 +290,11 @@ func writeResponsesToChatToolCallStart(c *gin.Context, flusher http.Flusher, sta
 }
 
 func writeResponsesToChatToolCallDelta(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string, index int, delta string) {
-	chunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{
-		ToolCalls: []chatCompletionStreamToolCall{
+	chunk := newResponsesToChatChunk(state, responseModel, wire.ChatStreamDelta{
+		ToolCalls: []wire.ChatStreamToolCall{
 			{
 				Index: index,
-				Function: chatCompletionStreamToolFunction{
+				Function: wire.ChatStreamToolFunction{
 					Arguments: &delta,
 				},
 			},
@@ -337,25 +338,25 @@ func flushResponsesToChatCompletedOutput(c *gin.Context, flusher http.Flusher, s
 }
 
 func writeResponsesToChatFinalChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, finishReason string, includeUsage bool) {
-	finalChunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{}, &finishReason)
+	finalChunk := newResponsesToChatChunk(state, responseModel, wire.ChatStreamDelta{}, &finishReason)
 	if includeUsage {
 		totalInput := state.inputTokens + state.cacheTokens
 		total := state.totalTokens
 		if total == 0 {
 			total = totalInput + state.outputTokens
 		}
-		usage := &chatCompletionStreamUsage{
+		usage := &wire.ChatStreamUsage{
 			PromptTokens:     totalInput,
 			CompletionTokens: state.outputTokens,
 			TotalTokens:      total,
 		}
 		if state.cacheTokens != 0 {
-			usage.PromptTokensDetails = &chatCompletionStreamPromptTokenDetails{
+			usage.PromptTokensDetails = &wire.TokenCacheDetailsWire{
 				CachedTokens: state.cacheTokens,
 			}
 		}
 		if state.reasoningTokens != 0 {
-			usage.CompletionTokensDetails = &chatCompletionStreamOutputTokenDetails{
+			usage.CompletionTokensDetails = &wire.TokenReasoningDetailsWire{
 				ReasoningTokens: state.reasoningTokens,
 			}
 		}
@@ -364,13 +365,13 @@ func writeResponsesToChatFinalChunk(c *gin.Context, flusher http.Flusher, state 
 	writeSSEChunk(c, flusher, finalChunk)
 }
 
-func newResponsesToChatChunk(state *responsesToChatState, responseModel string, delta chatCompletionStreamDelta, finishReason *string) chatCompletionStreamChunk {
-	return chatCompletionStreamChunk{
+func newResponsesToChatChunk(state *responsesToChatState, responseModel string, delta wire.ChatStreamDelta, finishReason *string) wire.ChatStreamChunk {
+	return wire.ChatStreamChunk{
 		ID:      state.chatID,
 		Object:  "chat.completion.chunk",
 		Created: state.createdAt,
 		Model:   responseModel,
-		Choices: []chatCompletionStreamChoice{
+		Choices: []wire.ChatStreamChoice{
 			{
 				Index:        0,
 				Delta:        delta,

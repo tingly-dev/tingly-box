@@ -13,6 +13,8 @@ import (
 	openaiOption "github.com/openai/openai-go/v3/option"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // TestHandleOpenAIChatToResponsesStream_TextOnly tests the Chat to Responses stream conversion
@@ -311,17 +313,17 @@ func TestSendResponsesCompletedEvent_WithReasoningTokens(t *testing.T) {
 	assert.Equal(t, float64(12), outputDetails["reasoning_tokens"])
 }
 
-// TestChatStreamUsage_DetailFields verifies that chatCompletionStreamUsage
+// TestChatStreamUsage_DetailFields verifies that wire.ChatStreamUsage
 // serialises prompt_tokens_details and completion_tokens_details when non-nil.
 func TestChatStreamUsage_DetailFields(t *testing.T) {
-	usage := chatCompletionStreamUsage{
+	usage := wire.ChatStreamUsage{
 		PromptTokens:     100,
 		CompletionTokens: 40,
 		TotalTokens:      140,
-		PromptTokensDetails: &chatCompletionStreamPromptTokenDetails{
+		PromptTokensDetails: &wire.TokenCacheDetailsWire{
 			CachedTokens: 20,
 		},
-		CompletionTokensDetails: &chatCompletionStreamOutputTokenDetails{
+		CompletionTokensDetails: &wire.TokenReasoningDetailsWire{
 			ReasoningTokens: 15,
 		},
 	}
@@ -345,7 +347,7 @@ func TestChatStreamUsage_DetailFields(t *testing.T) {
 
 // TestChatStreamUsage_NilDetails verifies that nil detail fields are omitted from JSON.
 func TestChatStreamUsage_NilDetails(t *testing.T) {
-	usage := chatCompletionStreamUsage{
+	usage := wire.ChatStreamUsage{
 		PromptTokens:     10,
 		CompletionTokens: 5,
 		TotalTokens:      15,
