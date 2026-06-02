@@ -32,6 +32,7 @@ func pickAgent(mgr TUIManager) (*agent.AgentInfo, error) {
 	infos := agent.ListAgentInfo()
 	if len(infos) == 0 {
 		fmt.Println(descStyle.Render("No agents registered."))
+		Pause("")
 		return nil, nil
 	}
 
@@ -137,10 +138,8 @@ func agentApply(mgr TUIManager, info agent.AgentInfo) error {
 		return err
 	}
 
-	_, _ = WithSpinner("Refreshing models for "+p.Name, func() (struct{}, error) {
-		return struct{}{}, mgr.FetchAndSaveProviderModels(p.UUID)
-	})
-
+	// pickProviderModel auto-fetches from the provider when the cache is empty,
+	// so we don't need an explicit refresh here.
 	model, err := pickProviderModel(mgr, p, "Model for "+info.Name+":")
 	if err != nil || model == "" {
 		return err
@@ -187,6 +186,7 @@ func agentApply(mgr TUIManager, info agent.AgentInfo) error {
 			fmt.Println(errorStyle.Render("✗ " + strings.TrimSpace(res.Message)))
 		}
 	}
+	Pause("")
 	return nil
 }
 
@@ -218,6 +218,7 @@ func agentShow(mgr TUIManager, info agent.AgentInfo) error {
 		fmt.Println(descStyle.Render("    - " + f))
 	}
 	fmt.Println()
+	Pause("")
 	return nil
 }
 
@@ -244,5 +245,6 @@ func agentRestore(mgr TUIManager, info agent.AgentInfo) error {
 			fmt.Println(errorStyle.Render("✗ " + strings.TrimSpace(res.Message)))
 		}
 	}
+	Pause("")
 	return nil
 }

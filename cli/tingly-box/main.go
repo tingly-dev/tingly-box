@@ -55,8 +55,8 @@ type CLI struct {
 	Swagger    command.SwaggerCmdKong    `kong:"cmd,hidden,help='Generate OpenAPI schema'"`
 	Quota      command.QuotaCmdKong      `kong:"cmd,help='Quota information'"`
 	Remote     command.RemoteCmdKong     `kong:"cmd,help='Remote control'"`
-	TUI        command.TUICmdKong        `kong:"cmd,name='tui',help='Interactive setup wizard'"`
-	Quickstart command.QuickstartCmdKong `kong:"cmd,name='quickstart',hidden,help='Alias for tui'"`
+	TUI        command.TUICmdKong        `kong:"cmd,name='tui',help='Interactive console (QuickStart / Provider / Rule / Agent)'"`
+	Quickstart command.QuickstartCmdKong `kong:"cmd,name='quickstart',hidden,help='Jump straight to the QuickStart wizard'"`
 
 	// System log streaming/inspection
 	Log command.LogCmdKong `kong:"cmd,name='log',help='View system logs (real-time follow by default, use --once for one-shot)'"`

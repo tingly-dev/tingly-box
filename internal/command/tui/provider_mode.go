@@ -56,6 +56,7 @@ func providerList(mgr TUIManager) error {
 	providers := mgr.ListProviders()
 	if len(providers) == 0 {
 		fmt.Println(descStyle.Render("No providers configured."))
+		Pause("")
 		return nil
 	}
 	fmt.Println()
@@ -70,6 +71,7 @@ func providerList(mgr TUIManager) error {
 		fmt.Println(descStyle.Render(fmt.Sprintf("     %s · %s", p.APIStyle, p.APIBase)))
 	}
 	fmt.Println()
+	Pause("")
 	return nil
 }
 
@@ -123,13 +125,15 @@ func providerAdd(mgr TUIManager) error {
 		}
 	}
 	fmt.Println(successStyle.Render(fmt.Sprintf("✓ Provider '%s' added (uuid: %s).", nameR.Value, uuid)))
+	Pause("")
 	return nil
 }
 
 func pickProvider(mgr TUIManager, prompt string) (*typ.Provider, error) {
 	providers := mgr.ListProviders()
 	if len(providers) == 0 {
-		fmt.Println(descStyle.Render("No providers configured."))
+		fmt.Println(descStyle.Render("No providers configured. Add one from Provider → Add first."))
+		Pause("")
 		return nil, nil
 	}
 	sort.Slice(providers, func(i, j int) bool {
@@ -199,6 +203,7 @@ func providerEdit(mgr TUIManager) error {
 		return err
 	}
 	fmt.Println(successStyle.Render(fmt.Sprintf("✓ Provider '%s' updated.", p.Name)))
+	Pause("")
 	return nil
 }
 
@@ -218,6 +223,7 @@ func providerDelete(mgr TUIManager) error {
 		return err
 	}
 	fmt.Println(successStyle.Render(fmt.Sprintf("✓ Provider '%s' deleted.", p.Name)))
+	Pause("")
 	return nil
 }
 
@@ -243,5 +249,6 @@ func providerRefreshModels(mgr TUIManager) error {
 		fmt.Println(descStyle.Render("  - " + m))
 	}
 	fmt.Println()
+	Pause("")
 	return nil
 }

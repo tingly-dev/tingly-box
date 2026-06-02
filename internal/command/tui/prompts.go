@@ -708,6 +708,45 @@ func (m *multiModel[T]) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
+// ============================================================================
+// Pause
+// ============================================================================
+
+// Pause renders a "press any key to continue" footer and blocks until a key
+// is pressed. Use after List / Show / Refresh style operations so the
+// printed output stays on screen instead of being pushed up by the next
+// menu render. Errors are swallowed — Pause is best-effort UX glue, not
+// a load-bearing prompt.
+func Pause(message string) {
+	if message == "" {
+		message = "Press any key to continue..."
+	}
+	m := &pauseModel{message: message}
+	_, _ = run(m)
+}
+
+type pauseModel struct {
+	message string
+	done    bool
+}
+
+func (m *pauseModel) Init() tea.Cmd { return nil }
+
+func (m *pauseModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(tea.KeyMsg); ok {
+		m.done = true
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m *pauseModel) View() string {
+	if m.done {
+		return ""
+	}
+	return helpStyle.Render(m.message)
+}
+
 // ---------- helpers ----------
 
 // renderAnsweredPrompt is shown after a prompt is dismissed - leaves a clean

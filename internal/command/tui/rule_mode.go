@@ -52,6 +52,7 @@ func ruleList(mgr TUIManager) error {
 	rules := mgr.ListRules()
 	if len(rules) == 0 {
 		fmt.Println(descStyle.Render("No rules configured."))
+		Pause("")
 		return nil
 	}
 	fmt.Println()
@@ -67,6 +68,7 @@ func ruleList(mgr TUIManager) error {
 		fmt.Println(descStyle.Render(fmt.Sprintf("     service: %s", svc)))
 	}
 	fmt.Println()
+	Pause("")
 	return nil
 }
 
@@ -133,6 +135,7 @@ func ruleAdd(mgr TUIManager) error {
 		return err
 	}
 	fmt.Println(successStyle.Render(fmt.Sprintf("✓ Rule added (uuid: %s).", rule.UUID)))
+	Pause("")
 	return nil
 }
 
@@ -159,6 +162,7 @@ func ruleEdit(mgr TUIManager) error {
 		return err
 	}
 	fmt.Println(successStyle.Render("✓ Rule updated."))
+	Pause("")
 	return nil
 }
 
@@ -177,6 +181,7 @@ func ruleDelete(mgr TUIManager) error {
 		return err
 	}
 	fmt.Println(successStyle.Render("✓ Rule deleted."))
+	Pause("")
 	return nil
 }
 
@@ -184,6 +189,7 @@ func pickRule(mgr TUIManager, prompt string) (*typ.Rule, error) {
 	rules := mgr.ListRules()
 	if len(rules) == 0 {
 		fmt.Println(descStyle.Render("No rules configured."))
+		Pause("")
 		return nil, nil
 	}
 	items := make([]SelectItem[string], 0, len(rules))
