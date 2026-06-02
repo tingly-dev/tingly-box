@@ -320,10 +320,10 @@ func TestChatStreamUsage_DetailFields(t *testing.T) {
 		PromptTokens:     100,
 		CompletionTokens: 40,
 		TotalTokens:      140,
-		PromptTokensDetails: &wire.TokenCacheDetailsWire{
+		PromptTokensDetails: &wire.ChatStreamPromptTokenDetails{
 			CachedTokens: 20,
 		},
-		CompletionTokensDetails: &wire.TokenReasoningDetailsWire{
+		CompletionTokensDetails: &wire.ChatStreamOutputTokenDetails{
 			ReasoningTokens: 15,
 		},
 	}

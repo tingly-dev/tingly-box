@@ -62,17 +62,24 @@ type ResponsesWireResponse struct {
 	CompletedAt int64                    `json:"completed_at,omitempty"`
 }
 
-// ResponsesUsageWire is the usage block in the Responses API wire format.
-// Codex CLI's ResponseCompleted decoder requires cached_tokens and
-// reasoning_tokens to be present; omitempty on the details structs would drop
-// them when zero and cause "missing field" parse errors for chat-only providers
-// (e.g. DeepSeek) routed through chat-to-responses.
 type ResponsesUsageWire struct {
-	InputTokens         int64                     `json:"input_tokens"`
-	OutputTokens        int64                     `json:"output_tokens"`
-	TotalTokens         int64                     `json:"total_tokens"`
-	InputTokensDetails  TokenCacheDetailsWire     `json:"input_tokens_details,omitempty"`
-	OutputTokensDetails TokenReasoningDetailsWire `json:"output_tokens_details,omitempty"`
+	InputTokens         int64                           `json:"input_tokens"`
+	OutputTokens        int64                           `json:"output_tokens"`
+	TotalTokens         int64                           `json:"total_tokens"`
+	InputTokensDetails  ResponsesInputTokensDetailsWire  `json:"input_tokens_details,omitempty"`
+	OutputTokensDetails ResponsesOutputTokensDetailsWire `json:"output_tokens_details,omitempty"`
+}
+
+// Codex CLI's ResponseCompleted decoder requires cached_tokens and
+// reasoning_tokens to be present; omitempty would drop them when zero and
+// cause "missing field 'reasoning_tokens'" parse errors for chat-only
+// providers (e.g. DeepSeek) routed through chat-to-responses.
+type ResponsesInputTokensDetailsWire struct {
+	CachedTokens int64 `json:"cached_tokens"`
+}
+
+type ResponsesOutputTokensDetailsWire struct {
+	ReasoningTokens int64 `json:"reasoning_tokens"`
 }
 
 type ResponsesOutputItemAddedEvent struct {

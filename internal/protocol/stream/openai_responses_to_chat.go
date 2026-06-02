@@ -351,12 +351,12 @@ func writeResponsesToChatFinalChunk(c *gin.Context, flusher http.Flusher, state 
 			TotalTokens:      total,
 		}
 		if state.cacheTokens != 0 {
-			usage.PromptTokensDetails = &wire.TokenCacheDetailsWire{
+			usage.PromptTokensDetails = &wire.ChatStreamPromptTokenDetails{
 				CachedTokens: state.cacheTokens,
 			}
 		}
 		if state.reasoningTokens != 0 {
-			usage.CompletionTokensDetails = &wire.TokenReasoningDetailsWire{
+			usage.CompletionTokensDetails = &wire.ChatStreamOutputTokenDetails{
 				ReasoningTokens: state.reasoningTokens,
 			}
 		}

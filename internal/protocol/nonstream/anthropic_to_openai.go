@@ -61,7 +61,7 @@ func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, resp
 		TotalTokens:      promptTokens + anthropicResp.Usage.OutputTokens,
 	}
 	if anthropicResp.Usage.CacheReadInputTokens > 0 {
-		usage.PromptTokensDetails = &wire.TokenCacheDetailsWire{
+		usage.PromptTokensDetails = &wire.ChatCompletionPromptDetailsWire{
 			CachedTokens: anthropicResp.Usage.CacheReadInputTokens,
 		}
 	}

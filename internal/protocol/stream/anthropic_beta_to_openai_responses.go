@@ -487,7 +487,7 @@ func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 		InputTokens:  totalInput,
 		OutputTokens: int64(u.OutputTokens),
 		TotalTokens:  totalInput + int64(u.OutputTokens),
-		InputTokensDetails: wire.TokenCacheDetailsWire{
+		InputTokensDetails: wire.ResponsesInputTokensDetailsWire{
 			CachedTokens: int64(u.CacheInputTokens),
 		},
 	}

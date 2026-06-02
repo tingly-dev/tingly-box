@@ -438,10 +438,10 @@ func newResponsesWireResponse(state *chatToResponsesState, status string, output
 			InputTokens:  state.inputTokens,
 			OutputTokens: state.outputTokens,
 			TotalTokens:  state.inputTokens + state.outputTokens,
-			InputTokensDetails: wire.TokenCacheDetailsWire{
+			InputTokensDetails: wire.ResponsesInputTokensDetailsWire{
 				CachedTokens: state.cacheTokens,
 			},
-			OutputTokensDetails: wire.TokenReasoningDetailsWire{
+			OutputTokensDetails: wire.ResponsesOutputTokensDetailsWire{
 				ReasoningTokens: state.reasoningTokens,
 			},
 		},

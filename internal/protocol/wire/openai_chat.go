@@ -2,18 +2,6 @@ package wire
 
 import "encoding/json"
 
-// TokenCacheDetailsWire is the shared "cached_tokens" sub-object used in both
-// Chat Completions (prompt_tokens_details) and Responses API (input_tokens_details).
-type TokenCacheDetailsWire struct {
-	CachedTokens int64 `json:"cached_tokens"`
-}
-
-// TokenReasoningDetailsWire is the shared "reasoning_tokens" sub-object used in both
-// Chat Completions (completion_tokens_details) and Responses API (output_tokens_details).
-type TokenReasoningDetailsWire struct {
-	ReasoningTokens int64 `json:"reasoning_tokens"`
-}
-
 // Chat Completions stream DTOs preserve the minimal outbound JSON shape emitted by this proxy.
 // Keep these fields checked against openai-go Chat Completions stream types when updating the SDK.
 type ChatStreamChunk struct {
@@ -50,11 +38,19 @@ type ChatStreamToolFunction struct {
 }
 
 type ChatStreamUsage struct {
-	PromptTokens            int64                      `json:"prompt_tokens"`
-	CompletionTokens        int64                      `json:"completion_tokens"`
-	TotalTokens             int64                      `json:"total_tokens"`
-	PromptTokensDetails     *TokenCacheDetailsWire     `json:"prompt_tokens_details,omitempty"`
-	CompletionTokensDetails *TokenReasoningDetailsWire `json:"completion_tokens_details,omitempty"`
+	PromptTokens            int64                         `json:"prompt_tokens"`
+	CompletionTokens        int64                         `json:"completion_tokens"`
+	TotalTokens             int64                         `json:"total_tokens"`
+	PromptTokensDetails     *ChatStreamPromptTokenDetails `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *ChatStreamOutputTokenDetails `json:"completion_tokens_details,omitempty"`
+}
+
+type ChatStreamPromptTokenDetails struct {
+	CachedTokens int64 `json:"cached_tokens"`
+}
+
+type ChatStreamOutputTokenDetails struct {
+	ReasoningTokens int64 `json:"reasoning_tokens"`
 }
 
 type ChatStreamErrorChunk struct {
@@ -116,8 +112,13 @@ type ChatCompletionFunctionWire struct {
 // ChatCompletionUsageWire is the usage block in the OpenAI Chat Completions response.
 // prompt_tokens = TOTAL (uncached + cached); cached_tokens is a reported subset.
 type ChatCompletionUsageWire struct {
-	PromptTokens        int64                  `json:"prompt_tokens"`
-	CompletionTokens    int64                  `json:"completion_tokens"`
-	TotalTokens         int64                  `json:"total_tokens"`
-	PromptTokensDetails *TokenCacheDetailsWire `json:"prompt_tokens_details,omitempty"`
+	PromptTokens        int64                            `json:"prompt_tokens"`
+	CompletionTokens    int64                            `json:"completion_tokens"`
+	TotalTokens         int64                            `json:"total_tokens"`
+	PromptTokensDetails *ChatCompletionPromptDetailsWire `json:"prompt_tokens_details,omitempty"`
+}
+
+// ChatCompletionPromptDetailsWire breaks down prompt token categories.
+type ChatCompletionPromptDetailsWire struct {
+	CachedTokens int64 `json:"cached_tokens"`
 }
