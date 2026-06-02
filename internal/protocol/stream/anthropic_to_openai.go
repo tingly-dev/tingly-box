@@ -302,18 +302,17 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 			}
 
 			// Add usage if available and not disabled.
-			// Anthropic's message_delta usage carries cache_read / cache_creation
-			// counts; forward cached prompt tokens into OpenAI's
-			// prompt_tokens_details.cached_tokens so downstream consumers see
-			// the full shape. (Anthropic has no reasoning_tokens analogue —
-			// extended-thinking tokens are billed inside output_tokens.)
-			if !disableStreamUsage && usage != nil {
+			// Use the local inputTokens/outputTokens which are the correctly merged
+			// values: inputTokens is captured from message_start (where Anthropic
+			// puts it) and outputTokens from message_delta. usage.InputTokens from
+			// message_delta is typically 0 for real Anthropic responses.
+			if !disableStreamUsage && (inputTokens > 0 || outputTokens > 0) {
 				chunk.Usage = openai.CompletionUsage{
-					PromptTokens:     usage.InputTokens,
-					CompletionTokens: usage.OutputTokens,
-					TotalTokens:      usage.InputTokens + usage.OutputTokens,
+					PromptTokens:     int64(inputTokens),
+					CompletionTokens: int64(outputTokens),
+					TotalTokens:      int64(inputTokens + outputTokens),
 				}
-				if usage.CacheReadInputTokens > 0 {
+				if usage != nil && usage.CacheReadInputTokens > 0 {
 					chunk.Usage.PromptTokensDetails.CachedTokens = usage.CacheReadInputTokens
 				}
 			}
