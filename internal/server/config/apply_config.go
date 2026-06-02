@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,16 @@ import (
 // original config file. Older backups beyond this count are removed by
 // rotateBackups after each new backup is created.
 const defaultBackupRetention = 3
+
+// codexGatewayProviderName is the tingly-box provider key written into
+// config.toml's [model_providers] table by mergeCodexConfig and removed by
+// ClearCodexGatewayConfig.
+const codexGatewayProviderName = "tingly-box"
+
+// codexGatewayTopLevelKeys are the top-level config.toml keys owned by
+// tingly-box. Both mergeCodexConfig (writer) and ClearCodexGatewayConfig
+// (eraser) reference this list so the two functions stay in sync.
+var codexGatewayTopLevelKeys = []string{"model", "model_provider", "model_catalog_json"}
 
 // backupTimestampLayout matches the timestamp format embedded in backup
 // filenames produced by generateBackupPath.
@@ -1104,7 +1115,7 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	if len(models) > 0 {
 		cfg["model"] = models[0]
 	}
-	cfg["model_provider"] = "tingly-box"
+	cfg["model_provider"] = codexGatewayProviderName
 	if catalogPath != "" {
 		cfg["model_catalog_json"] = catalogPath
 	}
@@ -1113,7 +1124,7 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	if providers == nil {
 		providers = map[string]interface{}{}
 	}
-	providers["tingly-box"] = map[string]interface{}{
+	providers[codexGatewayProviderName] = map[string]interface{}{
 		"name":                  "OpenAI using Tingly Box",
 		"base_url":              baseURL,
 		"preferred_auth_method": "apikey",
@@ -1128,7 +1139,7 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	for _, model := range models {
 		profile := map[string]interface{}{
 			"model":          model,
-			"model_provider": "tingly-box",
+			"model_provider": codexGatewayProviderName,
 		}
 		for k, v := range coerced {
 			profile[k] = v
@@ -1198,11 +1209,153 @@ func sanitizeCodexProfileKey(name string) string {
 	return out
 }
 
-// ApplyCodexAuth writes `~/.codex/auth.json` with `OPENAI_API_KEY` set to the
-// tingly-box model token. If the file already exists, other top-level keys are
-// preserved; only `OPENAI_API_KEY` is overwritten. The previous version is
-// backed up before modification.
-func ApplyCodexAuth(apiKey string) (*ApplyResult, error) {
+// CodexAuthMode selects how `~/.codex/auth.json` is populated.
+type CodexAuthMode string
+
+const (
+	// CodexAuthAPIKey writes only `OPENAI_API_KEY` — used when codex CLI
+	// should talk to tingly-box as a gateway.
+	CodexAuthAPIKey CodexAuthMode = "apikey"
+	// CodexAuthChatGPT exports a native ChatGPT-login auth.json so codex CLI
+	// can talk to OpenAI directly using OAuth tokens previously obtained by
+	// tingly-box. tingly-box does NOT refresh these tokens afterwards —
+	// codex CLI owns their lifecycle from that point on.
+	CodexAuthChatGPT CodexAuthMode = "chatgpt"
+)
+
+// ClearCodexGatewayConfig removes tingly-managed top-level keys from
+// ~/.codex/config.toml so that when a user switches to native ChatGPT OAuth
+// mode the codex CLI falls back to its own defaults rather than trying to
+// route requests through the (now-unused) tingly-box gateway.
+//
+// Only the tingly-managed top-level fields are removed; everything else
+// (other provider entries, profiles, user prefs) is left intact. The previous
+// config.toml is backed up before modification.
+func ClearCodexGatewayConfig() (*ApplyResult, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	targetPath := filepath.Join(homeDir, ".codex", "config.toml")
+	result := &ApplyResult{}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		// Nothing to clear — treat as success.
+		result.Success = true
+		result.Message = "no config.toml found, nothing to clear"
+		return result, nil
+	}
+
+	// Fast path: if the file mentions neither the tingly provider name nor any
+	// managed top-level key, skip the unmarshal/marshal round-trip entirely.
+	// Re-marshaling user TOML loses comments and reorders keys, so avoiding it
+	// in the common no-op case is also a correctness win.
+	if !bytes.Contains(data, []byte(codexGatewayProviderName)) {
+		result.Success = true
+		result.Message = "config.toml has no tingly gateway keys, nothing to clear"
+		return result, nil
+	}
+
+	cfg := map[string]interface{}{}
+	if err := tomlpkg.Unmarshal(data, &cfg); err != nil {
+		result.Message = fmt.Sprintf("Failed to parse config.toml: %v", err)
+		return result, nil
+	}
+
+	changed := false
+	for _, k := range codexGatewayTopLevelKeys {
+		if _, ok := cfg[k]; ok {
+			delete(cfg, k)
+			changed = true
+		}
+	}
+	// Also remove the tingly-box provider stanza if present.
+	if providers, ok := cfg["model_providers"].(map[string]interface{}); ok {
+		if _, ok := providers[codexGatewayProviderName]; ok {
+			delete(providers, codexGatewayProviderName)
+			if len(providers) == 0 {
+				delete(cfg, "model_providers")
+			}
+			changed = true
+		}
+	}
+
+	if !changed {
+		result.Success = true
+		result.Message = "config.toml has no tingly gateway keys, nothing to clear"
+		return result, nil
+	}
+
+	backupPath, err := backupFile(targetPath)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to create backup: %v", err)
+		return result, nil
+	}
+	result.BackupPath = backupPath
+
+	out, err := tomlpkg.Marshal(cfg)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to marshal TOML: %v", err)
+		return result, nil
+	}
+	if err := os.WriteFile(targetPath, out, 0644); err != nil {
+		result.Message = fmt.Sprintf("Failed to write config.toml: %v", err)
+		return result, nil
+	}
+
+	result.Success = true
+	result.Updated = true
+	result.Message = fmt.Sprintf("Cleared tingly gateway keys from %s (backup: %s)", targetPath, backupPath)
+	return result, nil
+}
+
+// CodexChatGPTTokens carries the OAuth credentials needed to materialize a
+// native ChatGPT-login `auth.json`.
+type CodexChatGPTTokens struct {
+	IDToken      string
+	AccessToken  string
+	RefreshToken string
+	AccountID    string
+}
+
+// ApplyCodexAuth writes `~/.codex/auth.json`. The previous version (if any) is
+// backed up before modification; existing top-level keys outside the managed
+// set are preserved.
+//
+// Mode semantics:
+//   - CodexAuthAPIKey: sets `OPENAI_API_KEY` to the supplied key (gateway mode).
+//   - CodexAuthChatGPT: writes `tokens` / `last_refresh` / `auth_mode: "chatgpt"`
+//     and clears `OPENAI_API_KEY`. Tokens come from the caller; tingly-box does
+//     not subsequently refresh them.
+func ApplyCodexAuth(mode CodexAuthMode, apiKey string, tokens *CodexChatGPTTokens) (*ApplyResult, error) {
+	// Validate inputs before touching disk so a malformed request can't leave
+	// orphaned backups behind.
+	payload := map[string]interface{}{}
+	switch mode {
+	case CodexAuthChatGPT:
+		if tokens == nil || tokens.AccessToken == "" || tokens.RefreshToken == "" {
+			return &ApplyResult{Message: "ChatGPT auth requires access_token and refresh_token"}, nil
+		}
+		payload["auth_mode"] = "chatgpt"
+		tokensMap := map[string]interface{}{
+			"access_token":  tokens.AccessToken,
+			"refresh_token": tokens.RefreshToken,
+		}
+		if tokens.IDToken != "" {
+			tokensMap["id_token"] = tokens.IDToken
+		}
+		if tokens.AccountID != "" {
+			tokensMap["account_id"] = tokens.AccountID
+		}
+		payload["tokens"] = tokensMap
+		payload["last_refresh"] = time.Now().UTC().Format(time.RFC3339)
+	case "", CodexAuthAPIKey:
+		payload["OPENAI_API_KEY"] = apiKey
+	default:
+		return &ApplyResult{Message: fmt.Sprintf("Unknown Codex auth mode: %q", mode)}, nil
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1217,12 +1370,19 @@ func ApplyCodexAuth(apiKey string) (*ApplyResult, error) {
 		return result, nil
 	}
 
-	existing := map[string]interface{}{}
-	if data, err := os.ReadFile(targetPath); err == nil {
-		if err := json.Unmarshal(data, &existing); err != nil {
-			result.Message = fmt.Sprintf("Failed to parse existing JSON: %v", err)
-			return result, nil
-		}
+	// Marshal before touching disk so a malformed payload can't leave an
+	// orphan backup behind.
+	output, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to marshal JSON: %v", err)
+		return result, nil
+	}
+
+	// Each mode writes a fresh file — no merging with the previous auth.json.
+	// Switching apikey→chatgpt must not leave OPENAI_API_KEY behind, and
+	// chatgpt→apikey must not leave the tokens block behind. The backup
+	// preserves whatever the user had.
+	if _, err := os.Stat(targetPath); err == nil {
 		backupPath, err := backupFile(targetPath)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to create backup: %v", err)
@@ -1234,13 +1394,6 @@ func ApplyCodexAuth(apiKey string) (*ApplyResult, error) {
 		result.Created = true
 	}
 
-	existing["OPENAI_API_KEY"] = apiKey
-
-	output, err := json.MarshalIndent(existing, "", "  ")
-	if err != nil {
-		result.Message = fmt.Sprintf("Failed to marshal JSON: %v", err)
-		return result, nil
-	}
 	if err := os.WriteFile(targetPath, output, 0600); err != nil {
 		result.Message = fmt.Sprintf("Failed to write file: %v", err)
 		return result, nil

@@ -1070,17 +1070,37 @@ export const api = {
         });
     },
 
-    applyCodexConfig: async (preferences?: Record<string, string>, writeCatalog?: boolean): Promise<any> => {
+    applyCodexConfig: async (
+        preferences?: Record<string, string>,
+        writeCatalog?: boolean,
+        authMode?: 'apikey' | 'chatgpt',
+        oauthProviderUuid?: string,
+    ): Promise<any> => {
         return uiAPI('/config/apply/codex', {
             method: 'POST',
-            body: JSON.stringify({ preferences: preferences ?? null, writeCatalog: writeCatalog ?? true }),
+            body: JSON.stringify({
+                preferences: preferences ?? null,
+                writeCatalog: writeCatalog ?? true,
+                authMode: authMode ?? 'apikey',
+                oauthProviderUuid: oauthProviderUuid ?? '',
+            }),
         });
     },
 
-    getCodexConfigPreview: async (preferences?: Record<string, string>, writeCatalog?: boolean): Promise<any> => {
+    getCodexConfigPreview: async (
+        preferences?: Record<string, string>,
+        writeCatalog?: boolean,
+        authMode?: 'apikey' | 'chatgpt',
+        oauthProviderUuid?: string,
+    ): Promise<any> => {
         return uiAPI('/config/preview/codex', {
             method: 'POST',
-            body: JSON.stringify({ preferences: preferences ?? null, writeCatalog: writeCatalog ?? true }),
+            body: JSON.stringify({
+                preferences: preferences ?? null,
+                writeCatalog: writeCatalog ?? true,
+                authMode: authMode ?? 'apikey',
+                oauthProviderUuid: oauthProviderUuid ?? '',
+            }),
         });
     },
 

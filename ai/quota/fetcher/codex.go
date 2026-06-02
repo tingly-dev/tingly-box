@@ -128,12 +128,7 @@ func (f *CodexFetcher) Fetch(ctx context.Context, provider *ai.Provider) (*quota
 	client := quota.NewHTTPClient(provider.ProxyURL, 30*time.Second)
 
 	// Resolve account_id from OAuth extra_fields
-	var accountID string
-	if provider.OAuthDetail != nil && provider.OAuthDetail.ExtraFields != nil {
-		if aid, ok := provider.OAuthDetail.ExtraFields["account_id"].(string); ok {
-			accountID = aid
-		}
-	}
+	accountID := provider.OAuthDetail.GetExtraFieldString("account_id")
 
 	apiBase := "https://chatgpt.com"
 	if f.baseURL != "" {

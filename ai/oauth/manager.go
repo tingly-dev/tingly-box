@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -496,9 +497,14 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		return nil, fmt.Errorf("token exchange failed: status %d, body: %s", resp.StatusCode, bodyStr)
 	}
 
-	// Parse response directly into Token
+	// Read response body so we can both decode it and log it on failure.
+	rawBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading token response: %w", err)
+	}
+
 	token := &Token{}
-	if err := json.NewDecoder(resp.Body).Decode(token); err != nil {
+	if err := json.Unmarshal(rawBody, token); err != nil {
 		return nil, fmt.Errorf("data decode: %w: %v", ErrTokenExchangeFailed, err)
 	}
 
@@ -526,7 +532,20 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
 		}
 	} else if config.Type == ai.IssuerCodex {
-		logrus.Warnf("[OAuth] Codex provider token has no ID token (id_token field is empty)")
+		// Log only the key set so we can tell whether OpenAI omitted id_token
+		// or returned it under a different key — never the values, which
+		// contain access_token / refresh_token.
+		var raw map[string]json.RawMessage
+		if jsonErr := json.Unmarshal(rawBody, &raw); jsonErr == nil {
+			keys := make([]string, 0, len(raw))
+			for k := range raw {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response field names: %v", keys)
+		} else {
+			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; could not inspect response: %v", jsonErr)
+		}
 	}
 
 	// Call provider's after-token hook to fetch additional metadata

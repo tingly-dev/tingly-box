@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Typography } from '@mui/material';
 import React from 'react';
 import CodeBlock from './CodeBlock';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs } from './CodexQuickConfig';
@@ -15,6 +15,12 @@ interface CodexConfigModalProps {
 type MainTab = 'quick' | 'manual';
 type ScriptTab = 'json' | 'windows' | 'unix';
 type SessionAction = 'import' | 'undo';
+type AuthMode = 'apikey' | 'chatgpt';
+
+interface CodexOAuthProviderOption {
+    uuid: string;
+    name: string;
+}
 
 interface ApplyCodexConfigResponse {
     success: boolean;
@@ -50,6 +56,9 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     const [mainTab, setMainTab] = React.useState<MainTab>('quick');
     const [prefs, setPrefs] = React.useState<CodexPrefs>(() => defaultCodexPrefs());
     const [writeCatalog, setWriteCatalog] = React.useState(true);
+    const [authMode, setAuthMode] = React.useState<AuthMode>('apikey');
+    const [codexOAuthProviders, setCodexOAuthProviders] = React.useState<CodexOAuthProviderOption[]>([]);
+    const [selectedOAuthProvider, setSelectedOAuthProvider] = React.useState<string>('');
     const [configTab, setConfigTab] = React.useState<ScriptTab>('json');
     const [authTab, setAuthTab] = React.useState<ScriptTab>('json');
     const [catalogTab, setCatalogTab] = React.useState<ScriptTab>('json');
@@ -76,13 +85,41 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             return;
         }
         setPrefs(defaultCodexPrefs());
+        setAuthMode('apikey');
+        setSelectedOAuthProvider('');
+        setCodexOAuthProviders([]);
     }, [open]);
+
+    // Fetch Codex OAuth providers only the first time the user selects chatgpt
+    // mode — no point paying the network cost if they stay in apikey mode.
+    React.useEffect(() => {
+        if (!open || authMode !== 'chatgpt') return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const resp = await api.getProviders();
+                if (cancelled) return;
+                const list: any[] = Array.isArray(resp?.data) ? resp.data : [];
+                const codexOAuth = list
+                    .filter((p) => p?.auth_type === 'oauth' && (p?.oauth_detail?.issuer === 'codex' || p?.oauth_detail?.provider_type === 'codex'))
+                    .map((p) => ({ uuid: p.uuid, name: p.name }));
+                setCodexOAuthProviders(codexOAuth);
+                setSelectedOAuthProvider((prev) => prev || codexOAuth[0]?.uuid || '');
+            } catch {
+                setCodexOAuthProviders([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [open, authMode]);
 
     // Re-render the server-authoritative TOML whenever prefs or writeCatalog change
     // while the modal is open. Debounced so dragging through Select options doesn't
     // spam the backend.
     React.useEffect(() => {
         if (!open) return;
+        // ChatGPT-mode preview would render OAuth tokens — skip it entirely;
+        // the user gets an info card on the modal instead.
+        if (authMode === 'chatgpt') return;
         let cancelled = false;
         const handle = setTimeout(async () => {
             try {
@@ -100,7 +137,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
             }
         }, 250);
         return () => { cancelled = true; clearTimeout(handle); };
-    }, [open, prefs, writeCatalog, token]);
+    }, [open, prefs, writeCatalog, token, authMode]);
 
     const windowsCatalogScript = `$catalogDir = Join-Path $HOME ".codex"
 $catalogPath = Join-Path $catalogDir "tingly-model-catalog.json"
@@ -173,11 +210,20 @@ EOF`;
     };
 
     const handleApplyConfiguration = async () => {
+        if (authMode === 'chatgpt' && !selectedOAuthProvider) {
+            setApplyError('Select a Codex OAuth provider to export.');
+            return;
+        }
         setIsApplying(true);
         setApplyError(null);
         setApplyResult(null);
         try {
-            const response = await api.applyCodexConfig(prefs as Record<string, string>, writeCatalog);
+            const response = await api.applyCodexConfig(
+                prefs as Record<string, string>,
+                writeCatalog,
+                authMode,
+                authMode === 'chatgpt' ? selectedOAuthProvider : undefined,
+            );
             if (response?.success) {
                 setApplyResult(response);
             } else {
@@ -232,7 +278,56 @@ EOF`;
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
-                {mainTab === 'quick' && (
+                <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Auth source
+                    </Typography>
+                    <RadioGroup
+                        row
+                        value={authMode}
+                        onChange={(e) => setAuthMode(e.target.value as AuthMode)}
+                    >
+                        <FormControlLabel
+                            value="apikey"
+                            control={<Radio size="small" />}
+                            label="Via Tingly Box gateway (API key)"
+                        />
+                        <FormControlLabel
+                            value="chatgpt"
+                            control={<Radio size="small" />}
+                            label="Native ChatGPT OAuth (direct to OpenAI)"
+                        />
+                    </RadioGroup>
+                    {authMode === 'chatgpt' && (
+                        <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            <FormControl size="small" sx={{ maxWidth: 360 }}>
+                                <Select
+                                    displayEmpty
+                                    value={selectedOAuthProvider}
+                                    onChange={(e) => setSelectedOAuthProvider(e.target.value as string)}
+                                >
+                                    <MenuItem value="" disabled>
+                                        {codexOAuthProviders.length === 0
+                                            ? 'No Codex OAuth provider — log in first'
+                                            : 'Select a Codex OAuth provider'}
+                                    </MenuItem>
+                                    {codexOAuthProviders.map((p) => (
+                                        <MenuItem key={p.uuid} value={p.uuid}>{p.name}</MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
+                                Exports the OAuth tokens to <code>~/.codex/auth.json</code> and removes the
+                                tingly gateway keys from <code>config.toml</code> so codex CLI talks directly to
+                                OpenAI. Tingly Box will <strong>not</strong> manage token refresh after this —
+                                codex CLI owns the token lifecycle from here on.{' '}
+                                If <code>id_token</code> is missing in the exported file, re-authenticate
+                                via the OAuth page and apply again.
+                            </Alert>
+                        </Box>
+                    )}
+                </Box>
+                {authMode !== 'chatgpt' && mainTab === 'quick' && (
                     <CodexQuickConfig
                         prefs={prefs}
                         setPrefs={setPrefs}
@@ -242,7 +337,7 @@ EOF`;
                     />
                 )}
 
-                {mainTab === 'manual' && (
+                {authMode !== 'chatgpt' && mainTab === 'manual' && (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -461,34 +556,14 @@ EOF`;
                             Configuration applied successfully!
                         </Typography>
                         <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            {applyResult.configResult?.created && (
+                            {applyResult.configResult?.message && (
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Created ~/.codex/config.toml
+                                    ✓ {applyResult.configResult.message}
                                 </Typography>
                             )}
-                            {applyResult.configResult?.updated && (
+                            {applyResult.authResult?.message && (
                                 <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Updated ~/.codex/config.toml
-                                </Typography>
-                            )}
-                            {applyResult.authResult?.created && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Created ~/.codex/auth.json
-                                </Typography>
-                            )}
-                            {applyResult.authResult?.updated && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Updated ~/.codex/auth.json
-                                </Typography>
-                            )}
-                            {applyResult.catalogWritten && (
-                                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                    ✓ Written ~/.codex/tingly-model-catalog.json
-                                </Typography>
-                            )}
-                            {applyResult.models && applyResult.models.length > 0 && (
-                                <Typography variant="caption" color="text.secondary">
-                                    Models: {applyResult.models.join(', ')}
+                                    ✓ {applyResult.authResult.message}
                                 </Typography>
                             )}
                             {applyResult.configResult?.backupPath && (
