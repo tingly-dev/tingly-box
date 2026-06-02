@@ -74,6 +74,8 @@ const flagToBool = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.useMaxCompletionTokens;
         case 'use_max_tokens':
             return !!flags.useMaxTokens;
+        case 'anthropic_compat':
+            return !!flags.anthropicCompat;
         default:
             return false;
     }
@@ -126,6 +128,8 @@ const setBool = (flags: RuleFlags, key: string, value: boolean): RuleFlags => {
             return { ...flags, useMaxCompletionTokens: value };
         case 'use_max_tokens':
             return { ...flags, useMaxTokens: value };
+        case 'anthropic_compat':
+            return { ...flags, anthropicCompat: value };
         default:
             return flags;
     }

@@ -162,5 +162,12 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
 		},
+		{
+			Key:         "anthropic_compat",
+			Label:       "Anthropic compatibility",
+			Description: "Rewrite any \"system\" role in the messages array to \"user\" before forwarding. Some clients send system-role entries inside the messages list (a non-standard extension); enabling this normalizes them so third-party Anthropic-compatible providers that reject that role do not error out.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryApp,
+		},
 	}
 }
