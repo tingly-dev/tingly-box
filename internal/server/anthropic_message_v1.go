@@ -10,6 +10,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
+	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -134,14 +135,7 @@ func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string
 		return
 	}
 
-	// Extract usage from response
-	inputTokens := int(response.Usage.InputTokens)
-	outputTokens := int(response.Usage.OutputTokens)
-	cacheTokens := int(response.Usage.InputTokensDetails.CachedTokens)
-	usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-
-	// Track usage
-	s.trackUsageWithTokenUsage(c, usage, nil)
+	s.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(response.Usage), nil)
 
 	// Convert Responses API response back to Anthropic v1 format
 	anthropicResp := nonstream.ConvertResponsesToAnthropicV1Response(response, proxyModel)

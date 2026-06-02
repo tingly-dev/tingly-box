@@ -20,6 +20,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
@@ -255,11 +256,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 				}
 				return
 			}
-			usage = protocol.NewTokenUsageWithCache(
-				int(anthropicResp.Usage.InputTokens),
-				int(anthropicResp.Usage.OutputTokens),
-				int(anthropicResp.Usage.CacheReadInputTokens+anthropicResp.Usage.CacheCreationInputTokens),
-			)
+			usage = usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage)
 		}
 
 		s.trackUsageWithTokenUsage(c, usage, nil)
@@ -366,12 +363,7 @@ func (s *Server) passthroughAnthropicBeta(
 				return
 			}
 
-			tokenUsage := protocol.NewTokenUsageWithCache(
-				int(anthropicResp.Usage.InputTokens),
-				int(anthropicResp.Usage.OutputTokens),
-				int(anthropicResp.Usage.CacheReadInputTokens+anthropicResp.Usage.CacheCreationInputTokens),
-			)
-			s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+			s.trackUsageWithTokenUsage(c, usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage), nil)
 		}
 
 		s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
@@ -708,11 +700,7 @@ func (s *Server) dispatchOpenAIChat(
 				}
 				return
 			}
-			usage = protocol.NewTokenUsageWithCache(
-				int(resp.Usage.PromptTokens),
-				int(resp.Usage.CompletionTokens),
-				int(resp.Usage.PromptTokensDetails.CachedTokens),
-			)
+			usage = usagepkg.FromOpenAIChatCompletion(resp.Usage)
 		}
 
 		s.trackUsageWithTokenUsage(c, usage, err)
@@ -804,11 +792,7 @@ func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.Tran
 		return
 	}
 
-	inputTokens := int(responsesResp.Usage.InputTokens)
-	outputTokens := int(responsesResp.Usage.OutputTokens)
-	cacheTokens := int(responsesResp.Usage.InputTokensDetails.CachedTokens)
-	tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, cacheTokens)
-	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
+	s.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(responsesResp.Usage), nil)
 
 	chatResp := nonstream.OpenAIResponsesToChat(responsesResp, responseModel)
 	if recorder != nil {
@@ -846,13 +830,7 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 		return
 	}
 
-	// Extract usage from response
-	inputTokens := int64(response.Usage.InputTokens)
-	outputTokens := int64(response.Usage.OutputTokens)
-	cacheTokens := int64(response.Usage.InputTokensDetails.CachedTokens)
-
-	// Track usage
-	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
+	s.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(response.Usage), nil)
 
 	// Override model in response if needed
 	if responseModel != reqCtx.RequestModel {
@@ -935,10 +913,7 @@ func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transfor
 		}
 		return
 	}
-	inputTokens := chatResp.Usage.PromptTokens
-	outputTokens := chatResp.Usage.CompletionTokens
-	cacheTokens := chatResp.Usage.PromptTokensDetails.CachedTokens
-	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(inputTokens), int(outputTokens), int(cacheTokens)), nil)
+	s.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIChatCompletion(chatResp.Usage), nil)
 	c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, reqCtx.RequestModel))
 }
 
@@ -990,8 +965,7 @@ func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *tra
 		return
 	}
 
-	cacheTokens := int(anthropicResp.Usage.CacheReadInputTokens)
-	s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(int(anthropicResp.Usage.InputTokens), int(anthropicResp.Usage.OutputTokens), cacheTokens), nil)
+	s.trackUsageWithTokenUsage(c, usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage), nil)
 	c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropicBeta(anthropicResp, responseModel, reqCtx.RequestModel))
 }
 
