@@ -44,8 +44,18 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 
 			// Read usage from SDK struct; fall back to raw JSON for providers
 			// or test decoders where apijson doesn't populate struct fields.
+			// Anthropic streaming protocol:
+			//   message_start  → input_tokens at event.Message.Usage (message.usage.input_tokens in JSON)
+			//   message_delta  → output_tokens at event.Usage (usage.output_tokens in JSON)
 			raw := evt.RawJSON()
-			if evt.Usage.InputTokens > 0 {
+			// Input tokens: prefer message_start path, fall back to message_delta path
+			if evt.Message.Usage.InputTokens > 0 {
+				inputTokens = int(evt.Message.Usage.InputTokens)
+				hasUsage = true
+			} else if v := gjson.Get(raw, "message.usage.input_tokens"); v.Int() > 0 {
+				inputTokens = int(v.Int())
+				hasUsage = true
+			} else if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
 				hasUsage = true
 			} else if v := gjson.Get(raw, "usage.input_tokens"); v.Int() > 0 {
@@ -59,8 +69,15 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 				outputTokens = int(v.Int())
 				hasUsage = true
 			}
-			if evt.Usage.CacheReadInputTokens > 0 {
+			// Cache tokens: check both message_start and message_delta paths
+			if evt.Message.Usage.CacheReadInputTokens > 0 {
+				cacheTokens = int(evt.Message.Usage.CacheReadInputTokens)
+				hasUsage = true
+			} else if evt.Usage.CacheReadInputTokens > 0 {
 				cacheTokens = int(evt.Usage.CacheReadInputTokens)
+				hasUsage = true
+			} else if v := gjson.Get(raw, "message.usage.cache_read_input_tokens"); v.Int() > 0 {
+				cacheTokens = int(v.Int())
 				hasUsage = true
 			} else if v := gjson.Get(raw, "usage.cache_read_input_tokens"); v.Int() > 0 {
 				cacheTokens = int(v.Int())
@@ -156,7 +173,13 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
 
-			if evt.Usage.InputTokens > 0 {
+			// Anthropic streaming protocol:
+			//   message_start  → input_tokens at event.Message.Usage
+			//   message_delta  → output_tokens at event.Usage
+			if evt.Message.Usage.InputTokens > 0 {
+				inputTokens = int(evt.Message.Usage.InputTokens)
+				hasUsage = true
+			} else if evt.Usage.InputTokens > 0 {
 				inputTokens = int(evt.Usage.InputTokens)
 				hasUsage = true
 			}
@@ -164,7 +187,10 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 				outputTokens = int(evt.Usage.OutputTokens)
 				hasUsage = true
 			}
-			if evt.Usage.CacheReadInputTokens > 0 {
+			if evt.Message.Usage.CacheReadInputTokens > 0 {
+				cacheTokens = int(evt.Message.Usage.CacheReadInputTokens)
+				hasUsage = true
+			} else if evt.Usage.CacheReadInputTokens > 0 {
 				cacheTokens = int(evt.Usage.CacheReadInputTokens)
 				hasUsage = true
 			}

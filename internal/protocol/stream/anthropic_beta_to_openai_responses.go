@@ -96,6 +96,16 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		case "message_start":
 			handleMessageStart(c, state, responseModel, flusher)
 			state.hasSentCreated = true
+			// Anthropic puts input_tokens in message_start, not message_delta.
+			if event.Message.Usage.InputTokens != 0 {
+				inputTokens = int(event.Message.Usage.InputTokens)
+				state.inputTokens = event.Message.Usage.InputTokens
+				hasUsage = true
+			}
+			if event.Message.Usage.CacheReadInputTokens != 0 {
+				cacheTokens = int(event.Message.Usage.CacheReadInputTokens)
+				state.cacheTokens = event.Message.Usage.CacheReadInputTokens
+			}
 
 		case "content_block_start":
 			handleContentBlockStart(c, state, event, flusher)
@@ -453,22 +463,30 @@ func handleContentBlockStop(
 	}
 }
 
-// handleMessageDelta updates usage information
+// handleMessageDelta updates usage information.
+// Anthropic sends input_tokens in message_start and output_tokens in message_delta,
+// so we only overwrite a value when the event actually carries it (non-zero).
 func handleMessageDelta(
 	state *responsesConverterState,
 	event anthropic.BetaRawMessageStreamEventUnion,
 	inputTokens, outputTokens int,
 ) (int, int, int, bool) {
-	if event.Usage.InputTokens != 0 || event.Usage.OutputTokens != 0 || event.Usage.CacheReadInputTokens != 0 {
+	hasUsage := false
+	if event.Usage.InputTokens != 0 {
 		state.inputTokens = event.Usage.InputTokens
-		state.outputTokens = event.Usage.OutputTokens
-		state.cacheTokens = event.Usage.CacheReadInputTokens
 		inputTokens = int(event.Usage.InputTokens)
-		outputTokens = int(event.Usage.OutputTokens)
-		cacheTokens := int(event.Usage.CacheReadInputTokens)
-		return inputTokens, outputTokens, cacheTokens, true
+		hasUsage = true
 	}
-	return inputTokens, outputTokens, int(state.cacheTokens), false
+	if event.Usage.OutputTokens != 0 {
+		state.outputTokens = event.Usage.OutputTokens
+		outputTokens = int(event.Usage.OutputTokens)
+		hasUsage = true
+	}
+	if event.Usage.CacheReadInputTokens != 0 {
+		state.cacheTokens = event.Usage.CacheReadInputTokens
+		hasUsage = true
+	}
+	return inputTokens, outputTokens, int(state.cacheTokens), hasUsage
 }
 
 // handleMessageStop sends the response.completed event

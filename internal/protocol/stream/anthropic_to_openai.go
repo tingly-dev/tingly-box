@@ -117,6 +117,10 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 				},
 			}
 			sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
+			// Anthropic puts input_tokens in message_start, not message_delta.
+			if event.Message.Usage.InputTokens != 0 {
+				inputTokens = int(event.Message.Usage.InputTokens)
+			}
 
 		case "content_block_start":
 			// Content block starting
@@ -245,11 +249,18 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 			// Content block finished - no specific action needed
 
 		case "message_delta":
-			// Message delta (includes usage info)
+			// Message delta (includes usage info).
+			// Anthropic only sends output_tokens here; input_tokens came from message_start.
+			// Only update a value when the event actually carries it to avoid clobbering
+			// the input_tokens already captured from message_start.
 			if event.Usage.InputTokens != 0 || event.Usage.OutputTokens != 0 {
 				usage = &event.Usage
-				inputTokens = int(event.Usage.InputTokens)
-				outputTokens = int(event.Usage.OutputTokens)
+				if event.Usage.InputTokens != 0 {
+					inputTokens = int(event.Usage.InputTokens)
+				}
+				if event.Usage.OutputTokens != 0 {
+					outputTokens = int(event.Usage.OutputTokens)
+				}
 			}
 
 		case "message_stop":
