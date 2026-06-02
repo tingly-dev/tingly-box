@@ -202,7 +202,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
                             <span>Claude Code</span>
-                            <Tooltip title={`Base URL: ${baseUrl}/tingly/${SCENARIO}`}>
+                            <Tooltip title="AI-powered CLI development agent for implementation, testing, and git operations">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>

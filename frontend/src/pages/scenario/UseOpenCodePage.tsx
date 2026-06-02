@@ -89,7 +89,7 @@ const UseOpenCodePageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>OpenCode Configuration</span>
-                            <Tooltip title={`Base URL: ${baseUrl}/tingly/opencode`}>
+                            <Tooltip title="OpenCode AI development environment proxy with BYOK support">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>

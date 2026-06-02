@@ -2,8 +2,8 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import ImageGenQuickStartCard from "@/components/ImageGenQuickStartCard.tsx";
-import { Box, Button } from '@mui/material';
-import { PlayArrow as PlayArrowIcon } from '@/components/icons';
+import { Box, Button, Tooltip, IconButton } from '@mui/material';
+import { PlayArrow as PlayArrowIcon, Info as InfoIcon } from '@/components/icons';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -31,6 +31,11 @@ const UseImageGenPageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Image Generation API Configuration</span>
+                            <Tooltip title="AI-powered image generation through Tingly Box proxy with multiple model support">
+                                <IconButton size="small" sx={{ ml: 0.5 }}>
+                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                </IconButton>
+                            </Tooltip>
                         </Box>
                     }
                     size="full"

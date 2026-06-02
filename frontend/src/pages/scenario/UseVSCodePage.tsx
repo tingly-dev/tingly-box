@@ -35,7 +35,16 @@ const UseVSCodePageContent: React.FC = () => {
         <PageLayout loading={isLoading} notification={notification}>
             <CardGrid>
                 <UnifiedCard
-                    title="VS Code (BYOK)"
+                    title={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span>VS Code (BYOK)</span>
+                            <Tooltip title="Bring Your Own Key: Use your own API keys with VS Code Copilot through Tingly Box proxy">
+                                <IconButton size="small" sx={{ ml: 0.5 }}>
+                                    <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    }
                     size="full"
                     rightAction={
                         <Button

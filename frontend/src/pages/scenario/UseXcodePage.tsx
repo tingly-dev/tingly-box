@@ -33,7 +33,7 @@ const UseXcodePageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Xcode Configuration</span>
-                            <Tooltip title={`Base URL: ${baseUrl}/tingly/xcode`}>
+                            <Tooltip title="Xcode AI coding assistant through Tingly Box proxy for iOS/macOS development">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>

@@ -35,7 +35,7 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <span>Claude Desktop Configuration</span>
-                            <Tooltip title={`Base URL: ${baseUrl}/tingly/claude_desktop`}>
+                            <Tooltip title="Claude Desktop app API proxy for AI assistance in desktop environment">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
