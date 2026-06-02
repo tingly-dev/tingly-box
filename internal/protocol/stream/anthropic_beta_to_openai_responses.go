@@ -102,6 +102,11 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 				state.inputTokens = event.Message.Usage.InputTokens
 				hasUsage = true
 			}
+			// Normalize: add cache_creation so inputTokens = input (uncached) + creation (write).
+			if event.Message.Usage.CacheCreationInputTokens != 0 {
+				inputTokens += int(event.Message.Usage.CacheCreationInputTokens)
+				state.inputTokens += event.Message.Usage.CacheCreationInputTokens
+			}
 			if event.Message.Usage.CacheReadInputTokens != 0 {
 				cacheTokens = int(event.Message.Usage.CacheReadInputTokens)
 				state.cacheTokens = event.Message.Usage.CacheReadInputTokens
@@ -475,6 +480,12 @@ func handleMessageDelta(
 	if event.Usage.InputTokens != 0 {
 		state.inputTokens = event.Usage.InputTokens
 		inputTokens = int(event.Usage.InputTokens)
+		hasUsage = true
+	}
+	// Normalize: add cache_creation for non-standard providers that send it in message_delta
+	if event.Usage.CacheCreationInputTokens != 0 {
+		state.inputTokens += event.Usage.CacheCreationInputTokens
+		inputTokens = int(state.inputTokens)
 		hasUsage = true
 	}
 	if event.Usage.OutputTokens != 0 {

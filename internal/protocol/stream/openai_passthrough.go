@@ -38,7 +38,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 
-	var inputTokens, outputTokens, cacheTokens, reasoningTokens int
+	var promptTokensTotal, inputTokens, outputTokens, cacheTokens, reasoningTokens int
 	var hasUsage bool
 	var contentBuilder strings.Builder
 	var firstChunkID string
@@ -79,7 +79,7 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 
 			// Accumulate usage from chunks (if present)
 			if chunk.Usage.PromptTokens != 0 {
-				inputTokens = int(chunk.Usage.PromptTokens)
+				promptTokensTotal = int(chunk.Usage.PromptTokens)
 				hasUsage = true
 			}
 			if chunk.Usage.CompletionTokens != 0 {
@@ -242,6 +242,12 @@ func HandleOpenAIChatStream(hc *protocol.HandleContext, streamResp *openaistream
 		},
 	)
 
+	// Normalize: OpenAI prompt_tokens = total (cached + uncached); subtract cache
+	// so inputTokens represents uncached-only, matching Anthropic semantics.
+	if promptTokensTotal > 0 {
+		inputTokens = promptTokensTotal - cacheTokens
+	}
+
 	if err != nil && !errors.Is(err, context.Canceled) {
 		if !hasUsage {
 			inputTokens, _ = token.EstimateInputTokens(req)
@@ -330,7 +336,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 
-	var inputTokens, outputTokens, cacheTokens, reasoningTokens int64
+	var promptTokensTotal, inputTokens, outputTokens, cacheTokens, reasoningTokens int64
 	var hasUsage bool
 
 	StreamLoop(c, func(w io.Writer) bool {
@@ -354,7 +360,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		// Accumulate usage from the raw JSON (SDK struct fields may be zero for
 		// providers that use custom serialisation or in unit-test fake decoders).
 		if it := gjson.Get(eventRaw, "response.usage.input_tokens"); it.Exists() && it.Int() > 0 {
-			inputTokens = it.Int()
+			promptTokensTotal = it.Int()
 			hasUsage = true
 		}
 		if ot := gjson.Get(eventRaw, "response.usage.output_tokens"); ot.Exists() && ot.Int() > 0 {
@@ -403,6 +409,11 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 		OpenAIResponsesEvent(c, eventType, eventRaw)
 		return true
 	})
+
+	// Normalize: OpenAI input_tokens = total; subtract cache for uncached-only semantics.
+	if promptTokensTotal > 0 {
+		inputTokens = promptTokensTotal - cacheTokens
+	}
 
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
@@ -481,7 +492,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream ResponsesStre
 		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported by this connection")
 	}
 
-	var inputTokens, outputTokens, cacheTokens, reasoningTokens int
+	var promptTokensTotal, inputTokens, outputTokens, cacheTokens, reasoningTokens int
 
 	// Generate message ID for Anthropic format
 	messageID := fmt.Sprintf("msg_%d", time.Now().Unix())
@@ -524,7 +535,7 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream ResponsesStre
 
 		// Extract usage from the event
 		if evt.Response.Usage.InputTokens > 0 {
-			inputTokens = int(evt.Response.Usage.InputTokens)
+			promptTokensTotal = int(evt.Response.Usage.InputTokens)
 		}
 		if evt.Response.Usage.OutputTokens > 0 {
 			outputTokens = int(evt.Response.Usage.OutputTokens)
@@ -535,6 +546,11 @@ func HandleOpenAIResponsesStreamToAnthropic(c *gin.Context, stream ResponsesStre
 		if evt.Response.Usage.OutputTokensDetails.ReasoningTokens > 0 {
 			reasoningTokens = int(evt.Response.Usage.OutputTokensDetails.ReasoningTokens)
 		}
+	}
+
+	// Normalize: OpenAI input_tokens = total; subtract cache for uncached-only semantics.
+	if promptTokensTotal > 0 {
+		inputTokens = promptTokensTotal - cacheTokens
 	}
 
 	// Check for stream errors

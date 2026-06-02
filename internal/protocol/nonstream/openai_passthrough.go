@@ -12,9 +12,9 @@ import (
 // HandleOpenAIChatNonStream handles OpenAI chat non-streaming response.
 // Returns (UsageStat, error)
 func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatCompletion) (*protocol.TokenUsage, error) {
-	inputTokens := int(resp.Usage.PromptTokens)
-	outputTokens := int(resp.Usage.CompletionTokens)
 	cacheTokens := int(resp.Usage.PromptTokensDetails.CachedTokens)
+	inputTokens := int(resp.Usage.PromptTokens) - cacheTokens
+	outputTokens := int(resp.Usage.CompletionTokens)
 	reasoningTokens := int(resp.Usage.CompletionTokensDetails.ReasoningTokens)
 
 	// Convert response to JSON map for modification
@@ -40,9 +40,9 @@ func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatComp
 // HandleOpenAIResponsesNonStream handles OpenAI Responses API non-streaming response.
 // Returns (UsageStat, error)
 func HandleOpenAIResponsesNonStream(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
-	inputTokens := int(resp.Usage.InputTokens)
-	outputTokens := int(resp.Usage.OutputTokens)
 	cacheTokens := int(resp.Usage.InputTokensDetails.CachedTokens)
+	inputTokens := int(resp.Usage.InputTokens) - cacheTokens
+	outputTokens := int(resp.Usage.OutputTokens)
 	reasoningTokens := int(resp.Usage.OutputTokensDetails.ReasoningTokens)
 
 	hc.GinContext.JSON(http.StatusOK, resp)

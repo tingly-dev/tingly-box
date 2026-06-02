@@ -789,9 +789,9 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 
 		case "response.completed":
 			completed := currentEvent.AsResponseCompleted()
-			state.inputTokens = completed.Response.Usage.InputTokens
-			state.outputTokens = completed.Response.Usage.OutputTokens
 			state.cacheTokens = completed.Response.Usage.InputTokensDetails.CachedTokens
+			state.inputTokens = completed.Response.Usage.InputTokens - state.cacheTokens
+			state.outputTokens = completed.Response.Usage.OutputTokens
 			state.reasoningTokens = completed.Response.Usage.OutputTokensDetails.ReasoningTokens
 
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", state.inputTokens, state.outputTokens)

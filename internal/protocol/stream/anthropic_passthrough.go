@@ -84,6 +84,14 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 				hasUsage = true
 			}
 
+			// Normalize: add cache_creation_input_tokens to inputTokens so the denominator
+			// covers total prompt cost = input (uncached) + creation (write) + read (cacheTokens).
+			if c := evt.Message.Usage.CacheCreationInputTokens; c > 0 {
+				inputTokens += int(c)
+			} else if c := evt.Usage.CacheCreationInputTokens; c > 0 {
+				inputTokens += int(c)
+			}
+
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {
 				if handled, rewritten, err := guardrailsmutate.RewriteAnthropicToolUseEvent(hc.Guardrails.CredentialMask, hc.Guardrails.Stream, evt); err != nil {
 					return err
@@ -193,6 +201,14 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 			} else if evt.Usage.CacheReadInputTokens > 0 {
 				cacheTokens = int(evt.Usage.CacheReadInputTokens)
 				hasUsage = true
+			}
+
+			// Normalize: add cache_creation_input_tokens to inputTokens so the denominator
+			// covers total prompt cost = input (uncached) + creation (write) + read (cacheTokens).
+			if c := evt.Message.Usage.CacheCreationInputTokens; c > 0 {
+				inputTokens += int(c)
+			} else if c := evt.Usage.CacheCreationInputTokens; c > 0 {
+				inputTokens += int(c)
 			}
 
 			if hc.Guardrails != nil && hc.Guardrails.Enabled {

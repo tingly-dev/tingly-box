@@ -250,7 +250,8 @@ func TestHandleOpenAIResponsesStream_UsageTokens(t *testing.T) {
 	usage, err := HandleOpenAIResponsesStream(hc, stream, "gpt-4o")
 	require.NoError(t, err)
 
-	assert.Equal(t, 50, usage.InputTokens)
+	// OpenAI Responses API: input=50 total, cached=7 → stored as 50-7=43 (uncached only)
+	assert.Equal(t, 43, usage.InputTokens)
 	assert.Equal(t, 30, usage.OutputTokens)
 	assert.Equal(t, 7, usage.CacheInputTokens)
 	assert.Equal(t, 15, usage.ReasoningTokens)
@@ -296,7 +297,8 @@ func TestHandleOpenAIResponsesStreamToAnthropic_UsageTokens(t *testing.T) {
 	usage, err := HandleOpenAIResponsesStreamToAnthropic(c, stream, "gpt-4o")
 	require.NoError(t, err)
 
-	assert.Equal(t, 60, usage.InputTokens)
+	// OpenAI Responses API: input=60 total, cached=12 → stored as 60-12=48 (uncached only)
+	assert.Equal(t, 48, usage.InputTokens)
 	assert.Equal(t, 25, usage.OutputTokens)
 	assert.Equal(t, 12, usage.CacheInputTokens)
 	assert.Equal(t, 8, usage.ReasoningTokens)

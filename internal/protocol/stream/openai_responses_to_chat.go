@@ -191,9 +191,9 @@ func HandleResponsesToOpenAIChatStream(
 			}
 
 		case "response.completed":
-			state.inputTokens = evt.Response.Usage.InputTokens
-			state.outputTokens = evt.Response.Usage.OutputTokens
 			state.cacheTokens = evt.Response.Usage.InputTokensDetails.CachedTokens
+			state.inputTokens = evt.Response.Usage.InputTokens - state.cacheTokens
+			state.outputTokens = evt.Response.Usage.OutputTokens
 			state.reasoningTokens = evt.Response.Usage.OutputTokensDetails.ReasoningTokens
 			if evt.Response.Usage.TotalTokens != 0 {
 				state.totalTokens = evt.Response.Usage.TotalTokens

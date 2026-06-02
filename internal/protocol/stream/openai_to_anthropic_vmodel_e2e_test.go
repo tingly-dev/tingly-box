@@ -148,10 +148,11 @@ func TestOpenAIToAnthropicStream_VModelFullUsage(t *testing.T) {
 			require.NotNil(t, usageBlock)
 
 			// MockUsage from StreamTestMockSpecs: prompt=42 completion=17 cached=11 reasoning=9
+			// After normalization: inputTokens = 42 - 11 = 31 (uncached portion only)
 			assert.EqualValues(t, 17, usageBlock["output_tokens"], "output_tokens from explicit MockUsage.CompletionTokens")
 			assert.EqualValues(t, 11, usageBlock["cache_read_input_tokens"], "cache_read_input_tokens from prompt_tokens_details.cached_tokens")
 
-			assert.Equal(t, 42, usage.InputTokens)
+			assert.Equal(t, 31, usage.InputTokens)
 			assert.Equal(t, 17, usage.OutputTokens)
 			assert.Equal(t, 11, usage.CacheInputTokens)
 			assert.Equal(t, 9, usage.ReasoningTokens)

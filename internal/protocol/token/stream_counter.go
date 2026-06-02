@@ -101,7 +101,7 @@ func (c *StreamTokenCounter) ConsumeOpenAIChunk(chunk *openai.ChatCompletionChun
 		if chunk.Usage.CompletionTokensDetails.ReasoningTokens > 0 {
 			c.upstreamReasoning = chunk.Usage.CompletionTokensDetails.ReasoningTokens
 		}
-		return int(c.upstreamInputTokens), int(c.upstreamOutputTokens), nil
+		return int(c.upstreamInputTokens - c.upstreamCacheTokens), int(c.upstreamOutputTokens), nil
 	}
 
 	// Incremental counting for each delta in choices
@@ -151,7 +151,8 @@ func (c *StreamTokenCounter) GetCounts() (inputTokens, outputTokens int) {
 
 	i, o := c.inputTokens, c.outputTokens
 	if c.upstreamInputTokens > 0 {
-		i = int(c.upstreamInputTokens)
+		// Normalize: subtract cache so inputTokens = uncached-only portion
+		i = int(c.upstreamInputTokens - c.upstreamCacheTokens)
 	}
 	if c.upstreamOutputTokens > 0 {
 		o = int(c.upstreamOutputTokens)

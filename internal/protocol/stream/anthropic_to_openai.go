@@ -121,6 +121,10 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 			if event.Message.Usage.InputTokens != 0 {
 				inputTokens = int(event.Message.Usage.InputTokens)
 			}
+			// Normalize: add cache_creation so inputTokens = input (uncached) + creation (write).
+			if event.Message.Usage.CacheCreationInputTokens != 0 {
+				inputTokens += int(event.Message.Usage.CacheCreationInputTokens)
+			}
 
 		case "content_block_start":
 			// Content block starting
@@ -257,6 +261,10 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 				usage = &event.Usage
 				if event.Usage.InputTokens != 0 {
 					inputTokens = int(event.Usage.InputTokens)
+				}
+				// Normalize: add cache_creation for non-standard providers that send it in message_delta
+				if event.Usage.CacheCreationInputTokens != 0 {
+					inputTokens += int(event.Usage.CacheCreationInputTokens)
 				}
 				if event.Usage.OutputTokens != 0 {
 					outputTokens = int(event.Usage.OutputTokens)

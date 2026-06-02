@@ -57,7 +57,8 @@ func TestAnthropicToOpenAIStream_VModelFullUsage(t *testing.T) {
 
 			input, output, err := AnthropicToOpenAIStream(c, nil, stream, modelID, false)
 			require.NoError(t, err)
-			assert.Equal(t, 42, input, "InputTokens should reflect upstream input_tokens")
+			// Anthropic input_tokens=42, cache_creation=5 → stored as 42+5=47 (non-cache-read total)
+			assert.Equal(t, 47, input, "InputTokens should be input_tokens + cache_creation_input_tokens")
 			assert.Equal(t, 17, output, "OutputTokens should reflect upstream output_tokens")
 
 			body := w.Body.String()
@@ -68,7 +69,7 @@ func TestAnthropicToOpenAIStream_VModelFullUsage(t *testing.T) {
 			usageChunk := lastOpenAIChunkUsage(t, body)
 			require.NotNil(t, usageChunk, "anthropic_to_openai stream should attach usage to the final chunk")
 
-			assert.EqualValues(t, 42, jsonNumber(usageChunk, "prompt_tokens"))
+			assert.EqualValues(t, 47, jsonNumber(usageChunk, "prompt_tokens"))
 			assert.EqualValues(t, 17, jsonNumber(usageChunk, "completion_tokens"))
 
 			details, _ := usageChunk["prompt_tokens_details"].(map[string]interface{})

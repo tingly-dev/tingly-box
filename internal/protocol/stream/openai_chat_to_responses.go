@@ -28,10 +28,11 @@ type chatToResponsesState struct {
 	hasTextItem      bool
 	pendingToolCalls map[int]*pendingToolCallResponse
 	accumulatedText  strings.Builder
-	inputTokens      int64
-	outputTokens     int64
-	cacheTokens      int64 // Cached tokens from prompt
-	reasoningTokens  int64 // Reasoning tokens from output
+	promptTokensTotal int64 // Raw total prompt_tokens from OpenAI (cached + uncached)
+	inputTokens       int64
+	outputTokens      int64
+	cacheTokens       int64 // Cached tokens from prompt
+	reasoningTokens   int64 // Reasoning tokens from output
 	hasSentCreated   bool
 }
 
@@ -123,7 +124,7 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 
 		// Track usage from chunks
 		if chunk.Usage.PromptTokens != 0 {
-			state.inputTokens = int64(chunk.Usage.PromptTokens)
+			state.promptTokensTotal = int64(chunk.Usage.PromptTokens)
 			hasUsage = true
 		}
 		if chunk.Usage.CompletionTokens != 0 {
@@ -139,6 +140,10 @@ func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stre
 		if chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
 			state.reasoningTokens = int64(chunk.Usage.CompletionTokensDetails.ReasoningTokens)
 			hasUsage = true
+		}
+		// Normalize after each usage update: uncached = total - cached
+		if state.promptTokensTotal > 0 {
+			state.inputTokens = state.promptTokensTotal - state.cacheTokens
 		}
 
 		// Skip empty chunks
