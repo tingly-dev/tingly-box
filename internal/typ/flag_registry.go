@@ -23,9 +23,12 @@ type FlagCategory string
 const (
 	// FlagCategoryApp — flags that target a specific client application (IDE, CLI tool, etc).
 	FlagCategoryApp FlagCategory = "app"
-	// FlagCategoryRequest — request-level adjustments: transport overrides,
-	// OpenAI-specific field rewrites, tool blocking, etc.
-	FlagCategoryRequest FlagCategory = "request"
+	// FlagCategoryRequestOpenAI — request-level adjustments for OpenAI-compatible upstreams:
+	// endpoint routing, field rewrites, tool blocking, user-agent overrides.
+	FlagCategoryRequestOpenAI FlagCategory = "request_openai"
+	// FlagCategoryRequestAnthropic — request-level adjustments for Anthropic-compatible upstreams:
+	// message normalisation and other Anthropic-protocol-specific transforms.
+	FlagCategoryRequestAnthropic FlagCategory = "request_anthropic"
 	// FlagCategoryResponse — flags that modify the response body/stream.
 	FlagCategoryResponse FlagCategory = "response"
 	// FlagCategoryReasoning — extended-thinking / reasoning-effort controls.
@@ -63,13 +66,13 @@ type FlagSpec struct {
 // by adjacent entries sharing the same Category value.
 func RuleFlagRegistry() []FlagSpec {
 	return []FlagSpec{
-		// ── Request ────────────────────────────────────────────────────────
+		// ── Request (OpenAI) ───────────────────────────────────────────────
 		{
 			Key:         "custom_user_agent",
 			Label:       "Custom User-Agent",
 			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent.",
 			Type:        FlagTypeString,
-			Category:    FlagCategoryRequest,
+			Category:    FlagCategoryRequestOpenAI,
 			Placeholder: "e.g. MyApp/1.0",
 		},
 		{
@@ -77,7 +80,7 @@ func RuleFlagRegistry() []FlagSpec {
 			Label:       "OpenAI endpoint override",
 			Description: "Force OpenAI Chat Completions or Responses for this rule, overriding the provider's declared OpenAIEndpointMode default. OpenAI providers only; Anthropic/Google providers ignore this. If the provider declares mode=responses (e.g. Codex), \"chat\" is ignored; if mode=chat, \"responses\" is ignored.",
 			Type:        FlagTypeEnum,
-			Category:    FlagCategoryRequest,
+			Category:    FlagCategoryRequestOpenAI,
 			Options: []FlagOption{
 				{Value: "auto", Label: "Auto (use provider default)"},
 				{Value: "chat", Label: "Force Chat Completions"},
@@ -89,22 +92,30 @@ func RuleFlagRegistry() []FlagSpec {
 			Label:       "OpenAI: Use max_completion_tokens",
 			Description: "OpenAI only. Rewrite `max_tokens` → `max_completion_tokens` in the outgoing request. Required by the o1/o3/gpt-5 model family, which rejects the older field name.",
 			Type:        FlagTypeBool,
-			Category:    FlagCategoryRequest,
+			Category:    FlagCategoryRequestOpenAI,
 		},
 		{
 			Key:         "use_max_tokens",
 			Label:       "OpenAI: Use max_tokens (legacy)",
 			Description: "OpenAI only. Rewrite `max_completion_tokens` → `max_tokens` in the outgoing request. Use for older OpenAI-compatible providers that do not yet accept the newer field name.",
 			Type:        FlagTypeBool,
-			Category:    FlagCategoryRequest,
+			Category:    FlagCategoryRequestOpenAI,
 		},
 		{
 			Key:         "block_tools",
 			Label:       "Block tools",
 			Description: "Comma-separated list of tool names to remove from the request before it is forwarded upstream. Matches the tool name as the client sent it; works across OpenAI Chat, OpenAI Responses, Anthropic, and Google requests.",
 			Type:        FlagTypeString,
-			Category:    FlagCategoryRequest,
+			Category:    FlagCategoryRequestOpenAI,
 			Placeholder: "e.g. web_search,run_terminal_cmd",
+		},
+		// ── Request (Anthropic) ────────────────────────────────────────────
+		{
+			Key:         "anthropic_compat",
+			Label:       "Anthropic compatibility",
+			Description: "Rewrite any \"system\" role in the messages array to \"user\" before forwarding. Some clients send system-role entries inside the messages list (a non-standard extension); enabling this normalizes them so third-party Anthropic-compatible providers that reject that role do not error out.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryRequestAnthropic,
 		},
 		// ── Response ───────────────────────────────────────────────────────
 		{
@@ -159,13 +170,6 @@ func RuleFlagRegistry() []FlagSpec {
 			Key:         "cursor_compat_auto",
 			Label:       "Auto-detect Cursor",
 			Description: "Apply cursor compatibility automatically when request headers identify Cursor.",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryApp,
-		},
-		{
-			Key:         "anthropic_compat",
-			Label:       "Anthropic compatibility",
-			Description: "Rewrite any \"system\" role in the messages array to \"user\" before forwarding. Some clients send system-role entries inside the messages list (a non-standard extension); enabling this normalizes them so third-party Anthropic-compatible providers that reject that role do not error out.",
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
 		},
