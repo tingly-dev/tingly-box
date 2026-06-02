@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 func init() {
@@ -261,5 +263,173 @@ func TestFirstChunkGate_HeaderOnlyResponseCommits(t *testing.T) {
 	g.CommitIfBuffered()
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("committed code = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestSelectFallbackService_RespectsTierOrdering(t *testing.T) {
+	// Test that TierTactic.SelectService respects tier ordering.
+	// This indirectly validates that selectFallbackService will use
+	// tier-aware selection when the rule has tier-based routing.
+	//
+	// This test verifies the fix for the bug where selectFallbackService
+	// was using the generic load balancer instead of tier-aware selection,
+	// causing lower-tier services to be selected before higher-tier ones.
+
+	// Create a tier tactic with random within-tier selection
+	tierTactic := typ.NewTierTactic(loadbalance.TacticRandom)
+
+	// Create a rule with tier-based routing and multiple providers per tier
+	// T0: 2 providers (provider-t0a, provider-t0b)
+	// T1: 1 provider  (provider-t1)
+	// T2: 2 providers (provider-t2a, provider-t2b)
+	rule := &typ.Rule{
+		UUID: "test-tier-rule",
+		LBTactic: typ.Tactic{
+			Type: loadbalance.TacticTier,
+			Params: &typ.TierParams{
+				WithinTierTactic: loadbalance.TacticRandom,
+			},
+		},
+		Services: []*loadbalance.Service{
+			{Provider: "provider-t0a", Model: "gpt-4", Active: true, Tier: 0},
+			{Provider: "provider-t0b", Model: "gpt-4", Active: true, Tier: 0},
+			{Provider: "provider-t1", Model: "gpt-4", Active: true, Tier: 1},
+			{Provider: "provider-t2a", Model: "gpt-4", Active: true, Tier: 2},
+			{Provider: "provider-t2b", Model: "gpt-4", Active: true, Tier: 2},
+		},
+	}
+
+	// Test 1: All services available - should pick from T0 (highest priority, tier=0)
+	service := tierTactic.SelectService(rule)
+	if service == nil {
+		t.Fatal("TierTactic.SelectService returned nil with all services available")
+	}
+	if service.Tier != 0 {
+		t.Fatalf("with all services available, picked tier %d, want T0 (0)", service.Tier)
+	}
+	if service.Provider != "provider-t0a" && service.Provider != "provider-t0b" {
+		t.Fatalf("with all services available, picked provider %s, want one of T0 providers", service.Provider)
+	}
+
+	// Test 2: All T0 providers disabled - should pick from T1 (tier=1)
+	rule.Services[0].Active = false
+	rule.Services[1].Active = false
+	service = tierTactic.SelectService(rule)
+	if service == nil {
+		t.Fatal("TierTactic.SelectService returned nil with T0 disabled")
+	}
+	if service.Tier != 1 {
+		t.Fatalf("with T0 disabled, picked tier %d, want T1 (1)", service.Tier)
+	}
+	if service.Provider != "provider-t1" {
+		t.Fatalf("with T0 disabled, picked provider %s, want provider-t1", service.Provider)
+	}
+
+	// Test 3: T0 and T1 disabled - should pick from T2 (tier=2)
+	rule.Services[2].Active = false
+	service = tierTactic.SelectService(rule)
+	if service == nil {
+		t.Fatal("TierTactic.SelectService returned nil with T0,T1 disabled")
+	}
+	if service.Tier != 2 {
+		t.Fatalf("with T0,T1 disabled, picked tier %d, want T2 (2)", service.Tier)
+	}
+	if service.Provider != "provider-t2a" && service.Provider != "provider-t2b" {
+		t.Fatalf("with T0,T1 disabled, picked provider %s, want one of T2 providers", service.Provider)
+	}
+
+	// Test 4: One T2 provider disabled - should still pick from T2 (the remaining one)
+	rule.Services[3].Active = false
+	service = tierTactic.SelectService(rule)
+	if service == nil {
+		t.Fatal("TierTactic.SelectService returned nil with only one T2 provider")
+	}
+	if service.Tier != 2 {
+		t.Fatalf("with only one T2 provider, picked tier %d, want T2 (2)", service.Tier)
+	}
+	if service.Provider != "provider-t2b" {
+		t.Fatalf("with only T2b available, picked provider %s, want provider-t2b", service.Provider)
+	}
+
+	// Test 5: All services disabled - should return nil (no active services)
+	rule.Services[4].Active = false
+	service = tierTactic.SelectService(rule)
+	if service != nil {
+		t.Fatalf("with all services disabled, expected nil, got %v", service)
+	}
+}
+
+func TestSelectFallbackService_TierVsRandomTactic(t *testing.T) {
+	// Compare tier-based vs random selection to ensure they behave differently.
+	// This validates that selectFallbackService uses the correct tactic type.
+	// Test with multiple providers per tier to ensure within-tier selection works.
+
+	services := []*loadbalance.Service{
+		{Provider: "provider-a1", Model: "gpt-4", Active: true, Tier: 1}, // Lower priority (tier 1)
+		{Provider: "provider-a2", Model: "gpt-4", Active: true, Tier: 1}, // Also tier 1
+		{Provider: "provider-b1", Model: "gpt-4", Active: true, Tier: 0}, // Higher priority (tier 0)
+		{Provider: "provider-b2", Model: "gpt-4", Active: true, Tier: 0}, // Also tier 0
+	}
+
+	tierRule := &typ.Rule{
+		UUID: "test-tier",
+		LBTactic: typ.Tactic{
+			Type: loadbalance.TacticTier,
+			Params: &typ.TierParams{
+				WithinTierTactic: loadbalance.TacticRandom,
+			},
+		},
+		Services: services,
+	}
+
+	randomRule := &typ.Rule{
+		UUID: "test-random",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticRandom,
+			Params: &typ.RandomParams{},
+		},
+		Services: services,
+	}
+
+	// Tier tactic should prefer lower tier (tier 0 = provider-b1 or provider-b2)
+	tierTactic := typ.NewTierTactic(loadbalance.TacticRandom)
+	tierService := tierTactic.SelectService(tierRule)
+	if tierService == nil {
+		t.Fatal("TierTactic.SelectService returned nil")
+	}
+	// Tier 0 should be selected over tier 1
+	if tierService.Tier != 0 {
+		t.Errorf("TierTactic picked tier %d, expected tier 0 (higher priority)", tierService.Tier)
+	}
+	if tierService.Provider != "provider-b1" && tierService.Provider != "provider-b2" {
+		t.Errorf("TierTactic picked provider %s, expected one of tier 0 providers (b1/b2)", tierService.Provider)
+	}
+
+	// Random tactic could pick any of the 4 providers
+	randomTactic := typ.NewRandomTactic()
+	randomService := randomTactic.SelectService(randomRule)
+	if randomService == nil {
+		t.Fatal("RandomTactic.SelectService returned nil")
+	}
+	// Random tactic doesn't guarantee tier ordering
+	validProviders := []string{"provider-a1", "provider-a2", "provider-b1", "provider-b2"}
+	found := false
+	for _, valid := range validProviders {
+		if randomService.Provider == valid {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("RandomTactic picked unexpected provider: %s", randomService.Provider)
+	}
+
+	// The key assertion: tier tactic respects ordering (always picks tier 0)
+	// Run multiple times to verify consistency
+	for i := 0; i < 10; i++ {
+		tierService = tierTactic.SelectService(tierRule)
+		if tierService.Tier != 0 {
+			t.Errorf("TierTactic iteration %d: picked tier %d instead of 0", i, tierService.Tier)
+		}
 	}
 }

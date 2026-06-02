@@ -274,6 +274,21 @@ func (s *Server) selectFallbackService(
 	tempRule.Services = available
 	tempRule.CurrentServiceID = ""
 
+	// Use tier-aware selection when the rule uses tier-based routing.
+	// This ensures fallback respects tier ordering (T0 → T1 → T2...)
+	// instead of using the generic load balancer which might select
+	// any available service regardless of tier priority.
+	tactic := rule.LBTactic.Instantiate()
+	if tactic.GetType() == loadbalance.TacticTier {
+		// TierTactic already handles tier-ordered selection with breaker awareness
+		svc := tactic.SelectService(&tempRule)
+		if svc == nil {
+			return nil, nil, nil
+		}
+		return candidateProviders[svc.ServiceID()], svc, nil
+	}
+
+	// For non-tier tactics, use the load balancer
 	svc, err := s.loadBalancer.SelectService(&tempRule)
 	if err != nil {
 		return nil, nil, err
