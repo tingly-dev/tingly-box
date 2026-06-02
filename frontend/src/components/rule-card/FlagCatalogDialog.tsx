@@ -181,16 +181,16 @@ interface CategoryMeta {
 }
 
 // Display order for the category sidebar. Unknown categories are appended.
-const CATEGORY_ORDER = ['request_openai', 'request_anthropic', 'response', 'reasoning', 'vision', 'routing', 'app'];
+const CATEGORY_ORDER = ['app', 'request_openai', 'request_anthropic', 'response', 'reasoning', 'vision', 'routing'];
 
 const CATEGORY_META: Record<string, CategoryMeta> = {
+    app:               { label: 'App',         icon: <TerminalIcon   fontSize="small" /> },
     request_openai:    { label: 'Request (O)', icon: <InputIcon      fontSize="small" /> },
     request_anthropic: { label: 'Request (A)', icon: <InputIcon      fontSize="small" /> },
     response:          { label: 'Response',    icon: <OutputIcon     fontSize="small" /> },
     reasoning:         { label: 'Reasoning',   icon: <PsychologyIcon fontSize="small" /> },
     vision:            { label: 'Vision',      icon: <VisibilityIcon fontSize="small" /> },
     routing:           { label: 'Routing',     icon: <LinkIcon       fontSize="small" /> },
-    app:               { label: 'App',         icon: <TerminalIcon   fontSize="small" /> },
 };
 
 const categoryMeta = (category: string): CategoryMeta => CATEGORY_META[category] ?? {
