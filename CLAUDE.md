@@ -22,15 +22,6 @@ General UI icons come from `@/components/icons` (Tabler icons adapted to MUI via
 
 Key design decisions and architecture notes are kept in `.design/`. Before implementing a new feature or modifying an existing subsystem, check whether a relevant `.design/*.md` file exists — it captures the rationale, trade-offs, and wiring details that are not obvious from the code alone.
 
-Notable design docs:
-- `.design/rule-flags.md` — rule flag system end-to-end (registry, transforms, frontend wiring, how to add a new flag)
-- `.design/anthropic-compat.md` — Anthropic compatibility mode (`anthropic_compat` flag)
-- `.design/openai-endpoint-routing.md` — OpenAI Chat vs Responses endpoint routing
-- `.design/icon-hierarchy.md` — icon sourcing and usage rules
-- `.design/priority-routing.md` — priority-based load balancing
-- `.design/stream-usage-tracking.md` — usage tracking in streaming responses
-- `.design/vision-proxy.md` — vision proxy describer pipeline
-
 # Build
 
 ## Submodules
