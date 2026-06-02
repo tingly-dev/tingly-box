@@ -2,9 +2,9 @@ package command
 
 import (
 	"bufio"
-	"fmt"
 	"os"
-	"strings"
+
+	"github.com/tingly-dev/tingly-box/internal/command/tui"
 )
 
 // ConfigProviderCmdKong groups provider operations under `config provider`.
@@ -24,7 +24,7 @@ type ConfigProviderCmdKong struct {
 type ConfigProviderInteractiveCmdKong struct{}
 
 func (c *ConfigProviderInteractiveCmdKong) Run(appManager *AppManager) error {
-	return runProviderSubMenu(appManager, bufio.NewReader(os.Stdin))
+	return tui.RunProviderMode(appManager)
 }
 
 // ConfigProviderAddCmdKong adds a new provider.
@@ -87,68 +87,3 @@ func (c *ConfigProviderGetCmdKong) Run(appManager *AppManager) error {
 	return runProviderGet(appManager, c.UUID)
 }
 
-// runProviderSubMenu shows the provider sub-menu (reached from `config` or
-// `config provider` with no further args). Returning nil drops back to the
-// caller, which is either the top-level menu loop or the Kong command.
-func runProviderSubMenu(appManager *AppManager, reader *bufio.Reader) error {
-	for {
-		showProviderSubMenu()
-		fmt.Print("Select an option (1-5, 0 to go back): ")
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				return nil
-			}
-			fmt.Printf("Error reading input: %v\n", err)
-			continue
-		}
-
-		choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
-
-		switch choice {
-		case "1":
-			if err := runAdd(appManager, []string{}); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "2":
-			if err := runProviderList(appManager); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "3":
-			if err := runProviderUpdateInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "4":
-			if err := runProviderDeleteInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "5":
-			if err := runProviderGetInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "0":
-			return nil
-		default:
-			fmt.Println("Invalid choice. Please select 1-5 or 0 to go back.")
-		}
-
-		fmt.Println("\nPress Enter to continue...")
-		_, _ = reader.ReadString('\n')
-	}
-}
-
-// showProviderSubMenu displays the provider sub-menu.
-func showProviderSubMenu() {
-	fmt.Println("\n" + strings.Repeat("-", 60))
-	fmt.Println("Provider Management")
-	fmt.Println(strings.Repeat("-", 60))
-	fmt.Println("1. Add a new provider")
-	fmt.Println("2. List all providers")
-	fmt.Println("3. Update a provider")
-	fmt.Println("4. Delete a provider")
-	fmt.Println("5. View provider details")
-	fmt.Println()
-	fmt.Println("0. Back")
-	fmt.Println(strings.Repeat("-", 60))
-}

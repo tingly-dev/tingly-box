@@ -14,25 +14,39 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// QuickstartManager is the surface the wizard needs from the host (the CLI's
+// TUIManager is the surface the TUI needs from the host (the CLI's
 // AppManager). Defined here as an interface so this package stays a leaf.
-type QuickstartManager interface {
+// It covers Quickstart, Provider, Rule, and Agent modes.
+type TUIManager interface {
+	// Providers
 	ListProviders() []*typ.Provider
 	GetProvider(name string) (*typ.Provider, error)
 	AddProvider(name, apiBase, token string, apiStyle protocol.APIStyle) (string, error)
-	SaveConfig() error
+	UpdateProviderByUUID(uuid string, provider *typ.Provider) error
+	DeleteProviderByUUID(uuid string) error
+	FetchAndSaveProviderModels(providerUUID string) error
 
+	// Rules
+	ListRules() []typ.Rule
+	GetRuleByUUID(uuid string) *typ.Rule
+	AddRule(rule typ.Rule) error
+	UpdateRule(uuid string, rule typ.Rule) error
+	DeleteRule(uuid string) error
+
+	// Config + server
+	SaveConfig() error
+	GetGlobalConfig() *serverconfig.Config
 	GetServerPort() int
 	SetupServerWithPort(port int) error
 	StartServer() error
-
-	GetGlobalConfig() *serverconfig.Config
-	FetchAndSaveProviderModels(providerUUID string) error
 }
+
+// QuickstartManager is kept as an alias for backward compatibility.
+type QuickstartManager = TUIManager
 
 // quickstartState is the wizard's accumulated state.
 type quickstartState struct {
-	mgr QuickstartManager
+	mgr TUIManager
 
 	apiStyle    protocol.APIStyle
 	provider    *typ.Provider
@@ -54,7 +68,7 @@ type quickstartState struct {
 }
 
 // RunQuickstart runs the interactive Tingly Box quickstart wizard.
-func RunQuickstart(mgr QuickstartManager) error {
+func RunQuickstart(mgr TUIManager) error {
 	steps := []Step[quickstartState]{
 		{Name: "Welcome", Execute: qsWelcome, Skip: qsHasProviders},
 		{Name: "Credential", Execute: qsCredential, Skip: qsHasNoProviders},
@@ -807,7 +821,7 @@ func isRuleConfigured(rule *typ.Rule, cfg *serverconfig.Config) bool {
 	return false
 }
 
-func startServer(mgr QuickstartManager) error {
+func startServer(mgr TUIManager) error {
 	port := mgr.GetServerPort()
 	if port == 0 {
 		port = 12580

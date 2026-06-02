@@ -1,10 +1,10 @@
 package command
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"strings"
+
+	"github.com/tingly-dev/tingly-box/internal/command/tui"
 )
 
 // ConfigCmdKong is the unified configuration management command.
@@ -30,53 +30,13 @@ func (c *ConfigInteractiveCmdKong) Run(appManager *AppManager) error {
 	return runConfigInteractiveMode(appManager)
 }
 
-// runConfigInteractiveMode runs the top-level interactive configuration menu.
-// It dispatches into either the provider or rule sub-menu.
+// runConfigInteractiveMode is deprecated. The text-based provider/rule
+// menus have been absorbed into the bubbletea TUI — this shim launches
+// the new TUI so existing muscle memory keeps working.
 func runConfigInteractiveMode(appManager *AppManager) error {
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		showConfigMenu()
-		fmt.Print("Select an option (1-2, 0 to exit): ")
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				fmt.Println("\n👋 Exiting configuration management...")
-				return nil
-			}
-			fmt.Printf("Error reading input: %v\n", err)
-			continue
-		}
-
-		choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
-
-		switch choice {
-		case "1":
-			if err := runProviderSubMenu(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "2":
-			if err := runRuleSubMenu(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "0":
-			fmt.Println("Exiting configuration management...")
-			return nil
-		default:
-			fmt.Println("Invalid choice. Please select 1-2 or 0 to exit.")
-		}
-	}
-}
-
-// showConfigMenu displays the top-level configuration management menu.
-func showConfigMenu() {
-	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("Configuration Management")
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("1. Manage providers")
-	fmt.Println("2. Manage rules")
-	fmt.Println()
-	fmt.Println("0. Exit")
-	fmt.Println(strings.Repeat("=", 60))
+	// stderr so scripts piping the TUI's stdout aren't disturbed
+	fmt.Fprintln(os.Stderr,
+		"`tingly-box config interactive` is deprecated; launching the unified TUI. "+
+			"Use `tingly-box tui` directly next time.")
+	return tui.RunTUI(appManager)
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/tingly-dev/tingly-box/internal/command/tui"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -31,7 +32,7 @@ type ConfigRuleCmdKong struct {
 type ConfigRuleInteractiveCmdKong struct{}
 
 func (c *ConfigRuleInteractiveCmdKong) Run(appManager *AppManager) error {
-	return runRuleSubMenu(appManager, bufio.NewReader(os.Stdin))
+	return tui.RunRuleMode(appManager)
 }
 
 // ConfigRuleAddCmdKong adds a rule via interactive prompts.
@@ -132,83 +133,6 @@ func (c *ConfigRuleImportCmdKong) Run(appManager *AppManager) error {
 		args = []string{c.File}
 	}
 	return runImport(appManager, c.Format, args)
-}
-
-// ============== Rule sub-menu ==============
-
-// runRuleSubMenu shows the rule sub-menu (reached from `config` or
-// `config rule` with no further args).
-func runRuleSubMenu(appManager *AppManager, reader *bufio.Reader) error {
-	for {
-		showRuleSubMenu()
-		fmt.Print("Select an option (1-6, 0 to go back): ")
-
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			if err.Error() == "EOF" {
-				return nil
-			}
-			fmt.Printf("Error reading input: %v\n", err)
-			continue
-		}
-
-		choice := strings.TrimSpace(strings.TrimSuffix(input, "\n"))
-
-		switch choice {
-		case "1":
-			if err := runRuleAddInteractive(appManager, reader); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "2":
-			if err := runRuleList(appManager); err != nil {
-				fmt.Printf("Error: %v\n", err)
-			}
-		case "3":
-			uid, err := selectRuleInteractive(appManager, reader, "update")
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
-			} else if uid != "" {
-				if err := runRuleUpdateService(appManager, reader, uid); err != nil {
-					fmt.Printf("Error: %v\n", err)
-				}
-			}
-		case "4":
-			uid, err := selectRuleInteractive(appManager, reader, "delete")
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
-			} else if uid != "" {
-				if err := runRuleDelete(appManager, reader, uid); err != nil {
-					fmt.Printf("Error: %v\n", err)
-				}
-			}
-		case "5":
-			runRuleExportInteractive(appManager, reader)
-		case "6":
-			runRuleImportInteractive(appManager, reader)
-		case "0":
-			return nil
-		default:
-			fmt.Println("Invalid choice. Please select 1-6 or 0 to go back.")
-		}
-
-		fmt.Println("\nPress Enter to continue...")
-		_, _ = reader.ReadString('\n')
-	}
-}
-
-func showRuleSubMenu() {
-	fmt.Println("\n" + strings.Repeat("-", 60))
-	fmt.Println("Rule Management")
-	fmt.Println(strings.Repeat("-", 60))
-	fmt.Println("1. Add a new rule")
-	fmt.Println("2. List all rules")
-	fmt.Println("3. Update a rule (re-pick service)")
-	fmt.Println("4. Delete a rule")
-	fmt.Println("5. Export a rule")
-	fmt.Println("6. Import a rule")
-	fmt.Println()
-	fmt.Println("0. Back")
-	fmt.Println(strings.Repeat("-", 60))
 }
 
 // ============== Rule operations ==============
@@ -499,45 +423,4 @@ func promptForScenario(reader *bufio.Reader) (typ.RuleScenario, error) {
 	return typ.RuleScenario(choice), nil
 }
 
-// runRuleExportInteractive prompts for a rule + format/output and forwards
-// to runExport. Used by the menu; the CLI subcommand calls runExport
-// directly after resolving UUID.
-func runRuleExportInteractive(appManager *AppManager, reader *bufio.Reader) {
-	uid, err := selectRuleInteractive(appManager, reader, "export")
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
-	}
-	if uid == "" {
-		return
-	}
-	rule := appManager.GetRuleByUUID(uid)
-	if rule == nil {
-		fmt.Printf("Error: rule not found: %s\n", uid)
-		return
-	}
-
-	fmt.Print("Output file (press Enter for stdout): ")
-	outputFile, _ := reader.ReadString('\n')
-	outputFile = strings.TrimSpace(outputFile)
-
-	if err := runExport(appManager, rule.RequestModel, string(rule.Scenario), "jsonl", outputFile); err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-}
-
-// runRuleImportInteractive prompts for a file path and forwards to runImport.
-func runRuleImportInteractive(appManager *AppManager, reader *bufio.Reader) {
-	fmt.Print("Input file (press Enter for stdin): ")
-	inputFile, _ := reader.ReadString('\n')
-	inputFile = strings.TrimSpace(inputFile)
-
-	var args []string
-	if inputFile != "" {
-		args = []string{inputFile}
-	}
-	if err := runImport(appManager, "auto", args); err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-}
 
