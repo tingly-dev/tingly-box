@@ -141,25 +141,16 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 
 		if errors.Is(err, context.Canceled) {
 			logrus.WithContext(c.Request.Context()).Debug("Anthropic to Responses stream canceled by client")
-			if !acc.HasUsage() {
-				return protocol.ZeroTokenUsage(), nil
-			}
 			return acc.Result(), nil
 		}
 
 		if errors.Is(err, io.EOF) {
 			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
-			if !acc.HasUsage() {
-				return protocol.ZeroTokenUsage(), nil
-			}
 			return acc.Result(), nil
 		}
 
 		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
 		sendResponsesErrorEvent(c, err.Error(), "stream_error", flusher)
-		if !acc.HasUsage() {
-			return protocol.ZeroTokenUsage(), err
-		}
 		return acc.Result(), err
 	}
 
@@ -174,9 +165,6 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 		completedSent = true
 	}
 
-	if !acc.HasUsage() {
-		return protocol.ZeroTokenUsage(), nil
-	}
 	return acc.Result(), nil
 }
 

@@ -81,9 +81,6 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 	if err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.WithContext(hc.GinContext.Request.Context()).Debug("Anthropic v1 stream canceled by client")
-			if !acc.HasUsage() {
-				return protocol.ZeroTokenUsage(), nil
-			}
 			return acc.Result(), nil
 		}
 
@@ -171,9 +168,6 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 	if err != nil {
 		if errors.Is(err, context.Canceled) || protocol.IsContextCanceled(err) {
 			logrus.WithContext(hc.GinContext.Request.Context()).Debug("Anthropic v1 beta stream canceled by client")
-			if !acc.HasUsage() {
-				return protocol.ZeroTokenUsage(), nil
-			}
 			return acc.Result(), nil
 		}
 
