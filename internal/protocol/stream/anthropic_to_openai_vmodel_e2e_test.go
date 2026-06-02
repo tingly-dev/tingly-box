@@ -69,7 +69,8 @@ func TestAnthropicToOpenAIStream_VModelFullUsage(t *testing.T) {
 			usageChunk := lastOpenAIChunkUsage(t, body)
 			require.NotNil(t, usageChunk, "anthropic_to_openai stream should attach usage to the final chunk")
 
-			assert.EqualValues(t, 47, jsonNumber(usageChunk, "prompt_tokens"))
+			// OpenAI wire: prompt_tokens = total (uncached 47 + cached 11 = 58).
+			assert.EqualValues(t, 58, jsonNumber(usageChunk, "prompt_tokens"))
 			assert.EqualValues(t, 17, jsonNumber(usageChunk, "completion_tokens"))
 
 			details, _ := usageChunk["prompt_tokens_details"].(map[string]interface{})

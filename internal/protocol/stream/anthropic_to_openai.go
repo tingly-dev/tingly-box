@@ -288,17 +288,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 
 			// Add usage if available and not disabled.
 			if !disableStreamUsage && acc.HasUsage() {
-				result := acc.Result()
-				inputTokens := result.InputTokens
-				outputTokens := result.OutputTokens
-				chunk.Usage = openai.CompletionUsage{
-					PromptTokens:     int64(inputTokens),
-					CompletionTokens: int64(outputTokens),
-					TotalTokens:      int64(inputTokens + outputTokens),
-				}
-				if result.CacheInputTokens > 0 {
-					chunk.Usage.PromptTokensDetails.CachedTokens = int64(result.CacheInputTokens)
-				}
+				chunk.Usage = usagepkg.ChatUsage(acc.Result())
 			}
 
 			sendOpenAIStreamChunk(c, chunk, disableStreamUsage)

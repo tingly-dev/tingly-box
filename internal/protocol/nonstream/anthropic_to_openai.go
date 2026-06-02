@@ -73,10 +73,15 @@ func ConvertAnthropicToOpenAIResponse(anthropicResp *anthropic.BetaMessage, resp
 		finishReason = "length"
 	}
 
+	// OpenAI wire: prompt_tokens = total (uncached + cache_read + cache_creation).
+	// Anthropic wire: input_tokens = uncached only, with cache fields separate.
+	promptTokens := anthropicResp.Usage.InputTokens +
+		anthropicResp.Usage.CacheReadInputTokens +
+		anthropicResp.Usage.CacheCreationInputTokens
 	usage := map[string]interface{}{
-		"prompt_tokens":     anthropicResp.Usage.InputTokens,
+		"prompt_tokens":     promptTokens,
 		"completion_tokens": anthropicResp.Usage.OutputTokens,
-		"total_tokens":      anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens,
+		"total_tokens":      promptTokens + anthropicResp.Usage.OutputTokens,
 	}
 	if anthropicResp.Usage.CacheReadInputTokens > 0 {
 		usage["prompt_tokens_details"] = map[string]interface{}{

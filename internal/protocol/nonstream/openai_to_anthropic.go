@@ -22,8 +22,9 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 		"model":         model,
 		"stop_reason":   "end_turn",
 		"stop_sequence": "",
+		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
 		"usage": map[string]interface{}{
-			"input_tokens":            openaiResp.Usage.PromptTokens,
+			"input_tokens":            openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
 			"output_tokens":           openaiResp.Usage.CompletionTokens,
 			"cache_read_input_tokens": openaiResp.Usage.PromptTokensDetails.CachedTokens,
 		},
@@ -97,8 +98,9 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 		"model":         model,
 		"stop_reason":   string(anthropic.BetaStopReasonEndTurn),
 		"stop_sequence": "",
+		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
 		"usage": map[string]interface{}{
-			"input_tokens":            openaiResp.Usage.PromptTokens,
+			"input_tokens":            openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
 			"output_tokens":           openaiResp.Usage.CompletionTokens,
 			"cache_read_input_tokens": openaiResp.Usage.PromptTokensDetails.CachedTokens,
 		},
@@ -171,8 +173,9 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 		"model":         model,
 		"stop_reason":   string(anthropic.BetaStopReasonEndTurn),
 		"stop_sequence": "",
+		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
 		"usage": map[string]interface{}{
-			"input_tokens":            responsesResp.Usage.InputTokens,
+			"input_tokens":            responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
 			"output_tokens":           responsesResp.Usage.OutputTokens,
 			"cache_read_input_tokens": responsesResp.Usage.InputTokensDetails.CachedTokens,
 		},
@@ -271,8 +274,9 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 		"model":         model,
 		"stop_reason":   "end_turn",
 		"stop_sequence": "",
+		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
 		"usage": map[string]interface{}{
-			"input_tokens":            responsesResp.Usage.InputTokens,
+			"input_tokens":            responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
 			"output_tokens":           responsesResp.Usage.OutputTokens,
 			"cache_read_input_tokens": responsesResp.Usage.InputTokensDetails.CachedTokens,
 		},

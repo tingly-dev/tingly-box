@@ -339,12 +339,13 @@ func flushResponsesToChatCompletedOutput(c *gin.Context, flusher http.Flusher, s
 func writeResponsesToChatFinalChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel, finishReason string, includeUsage bool) {
 	finalChunk := newResponsesToChatChunk(state, responseModel, chatCompletionStreamDelta{}, &finishReason)
 	if includeUsage {
+		totalInput := state.inputTokens + state.cacheTokens
 		total := state.totalTokens
 		if total == 0 {
-			total = state.inputTokens + state.outputTokens
+			total = totalInput + state.outputTokens
 		}
 		usage := &chatCompletionStreamUsage{
-			PromptTokens:     state.inputTokens,
+			PromptTokens:     totalInput,
 			CompletionTokens: state.outputTokens,
 			TotalTokens:      total,
 		}

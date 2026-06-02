@@ -488,6 +488,22 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, f
 	sendResponsesEvent(c, errorEvent, f)
 }
 
+// toResponsesUsageWire converts normalized TokenUsage to the Responses API wire
+// usage struct. OpenAI Responses wire: InputTokens = TOTAL (uncached + cached);
+// CachedTokens is a subset. Uses a local struct rather than the SDK type so we
+// can emit cached_tokens without omitempty (required by Codex CLI).
+func toResponsesUsageWire(u *protocol.TokenUsage) *responsesUsageWire {
+	totalInput := int64(u.InputTokens + u.CacheInputTokens)
+	return &responsesUsageWire{
+		InputTokens:  totalInput,
+		OutputTokens: int64(u.OutputTokens),
+		TotalTokens:  totalInput + int64(u.OutputTokens),
+		InputTokensDetails: responsesInputTokensDetailsWire{
+			CachedTokens: int64(u.CacheInputTokens),
+		},
+	}
+}
+
 // sendCompletionEvent sends the response.completed event and the final [DONE] marker.
 // u carries the normalized token counts from the accumulator.
 func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher http.Flusher, u *protocol.TokenUsage) {
@@ -533,14 +549,7 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 			CompletedAt: state.createdAt,
 			Model:       "",
 			Output:      output,
-			Usage: &responsesUsageWire{
-				InputTokens:  int64(u.InputTokens),
-				OutputTokens: int64(u.OutputTokens),
-				TotalTokens:  int64(u.InputTokens + u.OutputTokens),
-				InputTokensDetails: responsesInputTokensDetailsWire{
-					CachedTokens: int64(u.CacheInputTokens),
-				},
-			},
+			Usage: toResponsesUsageWire(u),
 		},
 	}
 	sendResponsesEvent(c, doneEvent, flusher)
