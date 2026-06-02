@@ -8,6 +8,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // TestNewResponsesConverterState tests the state initialization
@@ -19,8 +21,6 @@ func TestNewResponsesConverterState(t *testing.T) {
 	assert.Equal(t, "item_1234567890", state.itemID)
 	assert.Equal(t, 0, state.outputIndex)
 	assert.Equal(t, "", state.accumulatedText)
-	assert.Equal(t, int64(0), state.inputTokens)
-	assert.Equal(t, int64(0), state.outputTokens)
 	assert.False(t, state.finished)
 }
 
@@ -131,16 +131,18 @@ func TestResponsesConverterState_MultipleDeltas(t *testing.T) {
 	assert.Equal(t, "Hello World!", state.accumulatedText)
 }
 
-// TestResponsesConverterState_UsageAccumulation tests usage tracking
+// TestResponsesConverterState_UsageAccumulation tests that the accumulator produces correct usage
 func TestResponsesConverterState_UsageAccumulation(t *testing.T) {
-	state := newResponsesConverterState(time.Now().Unix())
+	acc := usagepkg.NewAnthropicAccumulator()
 
-	// Simulate multiple delta events with usage
-	state.inputTokens = 100
-	state.outputTokens = 50
+	startEvt := parseTestEvent(`{"type":"message_start","message":{"id":"m","type":"message","role":"assistant","content":[],"model":"claude","usage":{"input_tokens":100,"output_tokens":0}}}`)
+	deltaEvt := parseTestEvent(`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":50}}`)
+	acc.ConsumeBeta(&startEvt)
+	acc.ConsumeBeta(&deltaEvt)
 
-	assert.Equal(t, int64(100), state.inputTokens)
-	assert.Equal(t, int64(50), state.outputTokens)
+	r := acc.Result()
+	assert.Equal(t, 100, r.InputTokens)
+	assert.Equal(t, 50, r.OutputTokens)
 }
 
 // TestSpecialCharacters tests JSON encoding of special characters
