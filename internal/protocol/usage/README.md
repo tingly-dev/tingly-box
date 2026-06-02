@@ -127,6 +127,49 @@ the default).
 
 ---
 
+## Where the extractors are used
+
+### `internal/protocol/nonstream/`
+
+All four `Handle*` functions call the shared extractors:
+
+| Function | Extractor |
+|---|---|
+| `HandleOpenAIChatNonStream` | `FromOpenAIChatCompletion` |
+| `HandleOpenAIResponsesNonStream` | `FromOpenAIResponses` |
+| `HandleAnthropicV1NonStream` | `FromAnthropicMessage` |
+| `HandleAnthropicV1BetaNonStream` | `FromAnthropicBetaMessage` |
+
+The `Convert*` helpers in that package (e.g. `ConvertAnthropicToOpenAIResponse`) return
+`map[string]interface{}` wire format and are not in the `*TokenUsage` tracking path.
+
+### `internal/protocol/stream/`
+
+| Function | Mechanism |
+|---|---|
+| `HandleAnthropic` | `AnthropicAccumulator.Consume` |
+| `HandleAnthropicBeta` | `AnthropicAccumulator.ConsumeBeta` |
+| `AnthropicToOpenAIStreamWithMCPHooks` | `AnthropicAccumulator.ConsumeBeta` |
+| `HandleAnthropicBetaToOpenAIResponsesStream` | `AnthropicAccumulator.ConsumeBeta` |
+
+### `internal/server/` (dispatch layer)
+
+Non-stream dispatch paths that receive a complete response:
+
+| Code site | Extractor |
+|---|---|
+| `protocol_dispatch.go` — Anthropic Beta non-stream (direct forward) | `FromAnthropicBetaMessage` |
+| `protocol_dispatch.go` — Anthropic V1 non-stream passthrough | `FromAnthropicBetaMessage` |
+| `protocol_dispatch.go` — OpenAI Chat non-stream | `FromOpenAIChatCompletion` |
+| `protocol_dispatch.go` — OpenAI Responses non-stream (→ Chat) | `FromOpenAIResponses` |
+| `protocol_dispatch.go` — OpenAI Responses passthrough | `FromOpenAIResponses` |
+| `protocol_dispatch.go` — Chat non-stream (→ Responses) | `FromOpenAIChatCompletion` |
+| `protocol_dispatch.go` — Responses → Anthropic Beta non-stream | `FromAnthropicBetaMessage` |
+| `anthropic_message_v1.go` — Responses → Anthropic v1 non-stream | `FromOpenAIResponses` |
+| `anthropic_message_beta.go` — Responses → Anthropic Beta non-stream | `FromOpenAIResponses` |
+
+---
+
 ## What is NOT covered here
 
 | Handler | Why inline extraction remains |
@@ -138,6 +181,9 @@ the default).
 | `stream/google_to_any.go` | Google-specific schema with no SDK usage struct |
 | `nonstream/anthropic_to_openai.go` | Returns `map[string]interface{}` wire format, not `*TokenUsage` |
 | `nonstream/openai_to_anthropic.go` | Same — wire format conversion only |
+| `server/protocol_dispatch.go` — Google non-stream | Google schema has no `CachedTokens` in the SDK struct |
+| `server/protocol_dispatch.go` — streaming return sites | Already normalized by stream-layer accumulators or `StreamTokenCounter` |
 
 These files normalize correctly inline; they are just not candidates for the shared
-extractors because their token variables serve double duty as wire response fields.
+extractors because their token variables serve double duty as wire response fields, or
+use a schema that predates SDK support.
