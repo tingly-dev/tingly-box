@@ -205,8 +205,8 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                 open={open}
                 anchorEl={anchorEl.current}
                 onClose={() => setOpen(false)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
                 disableRestoreFocus
                 slotProps={{ paper: { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } }}
                 sx={{ pointerEvents: 'none' }}
