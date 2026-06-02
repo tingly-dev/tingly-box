@@ -16,7 +16,6 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
@@ -69,7 +68,7 @@ func AnthropicToOpenAIStreamWithMCPHooks(c *gin.Context, req *anthropic.BetaMess
 		chatID      = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
 		created     = time.Now().Unix()
 		contentText = strings.Builder{}
-		acc         = wire.NewAnthropicAccumulator()
+		acc         = usagepkg.NewAnthropicAccumulator()
 		finished    bool
 		hookErr     error
 		// Track tool call state for proper streaming

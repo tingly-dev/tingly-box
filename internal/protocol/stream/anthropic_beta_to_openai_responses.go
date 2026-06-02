@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
+	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 // HandleAnthropicBetaToOpenAIResponsesStream converts Anthropic streaming events
@@ -65,7 +65,7 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 
 	// Initialize converter state
 	state := newResponsesConverterState(time.Now().Unix())
-	acc := wire.NewAnthropicAccumulator()
+	acc := usagepkg.NewAnthropicAccumulator()
 	completedSent := false
 
 	// Process the stream

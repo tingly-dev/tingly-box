@@ -12,7 +12,6 @@ import (
 	"github.com/tidwall/gjson"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
-	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // ---------------------------------------------------------------------------
@@ -274,7 +273,7 @@ func TestAnthropicAccumulator_RealFormat(t *testing.T) {
 	dec := newFakeDecoder(events)
 	stream := anthropicstream.NewStream[anthropic.MessageStreamEventUnion](dec, nil)
 
-	acc := wire.NewAnthropicAccumulator()
+	acc := usage.NewAnthropicAccumulator()
 	for stream.Next() {
 		evt := stream.Current()
 		acc.Consume(&evt)
@@ -297,7 +296,7 @@ func TestAnthropicAccumulator_WithCacheCreation(t *testing.T) {
 	dec := newFakeDecoder(events)
 	stream := anthropicstream.NewStream[anthropic.MessageStreamEventUnion](dec, nil)
 
-	acc := wire.NewAnthropicAccumulator()
+	acc := usage.NewAnthropicAccumulator()
 	for stream.Next() {
 		evt := stream.Current()
 		acc.Consume(&evt)
@@ -320,7 +319,7 @@ func TestAnthropicAccumulator_NonStandardDelta(t *testing.T) {
 	dec := newFakeDecoder(events)
 	stream := anthropicstream.NewStream[anthropic.MessageStreamEventUnion](dec, nil)
 
-	acc := wire.NewAnthropicAccumulator()
+	acc := usage.NewAnthropicAccumulator()
 	for stream.Next() {
 		evt := stream.Current()
 		acc.Consume(&evt)
@@ -340,7 +339,7 @@ func TestAnthropicAccumulator_Beta(t *testing.T) {
 	dec := newFakeDecoder(events)
 	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](dec, nil)
 
-	acc := wire.NewAnthropicAccumulator()
+	acc := usage.NewAnthropicAccumulator()
 	for stream.Next() {
 		evt := stream.Current()
 		acc.ConsumeBeta(&evt)
@@ -354,7 +353,7 @@ func TestAnthropicAccumulator_Beta(t *testing.T) {
 
 // TestAnthropicAccumulator_NoUsage verifies HasUsage is false when no usage seen.
 func TestAnthropicAccumulator_NoUsage(t *testing.T) {
-	acc := wire.NewAnthropicAccumulator()
+	acc := usage.NewAnthropicAccumulator()
 	assert.False(t, acc.HasUsage())
 	got := acc.Result()
 	assert.Equal(t, 0, got.InputTokens)
