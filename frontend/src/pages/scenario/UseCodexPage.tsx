@@ -60,8 +60,8 @@ const UseCodexPageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Codex Configuration</span>
-                            <Tooltip title="OpenAI Codex AI coding assistant with Tingly Box proxy configuration">
+                            <span>Codex</span>
+                            <Tooltip title="OpenAI Codex AI coding assistant with Tingly Box proxy">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>

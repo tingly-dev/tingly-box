@@ -88,8 +88,8 @@ const UseOpenCodePageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>OpenCode Configuration</span>
-                            <Tooltip title="OpenCode AI development environment proxy with BYOK support">
+                            <span>OpenCode</span>
+                            <Tooltip title="OpenCode AI development environment with BYOK support">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 </IconButton>
