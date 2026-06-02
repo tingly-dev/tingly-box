@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -14,6 +14,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    ListSubheader,
     Paper,
     Divider,
     useTheme,
@@ -37,6 +38,7 @@ import api from '../services/api';
 interface Provider {
     uuid: string;
     name: string;
+    auth_type?: string;
 }
 
 type TimeRange = 'today' | 'yesterday' | '3d' | '7d' | '30d' | '90d';
@@ -264,6 +266,13 @@ export default function DashboardPage() {
         ? (totalCacheTokens / (totalCacheTokens + totalInputTokens)) * 100
         : 0;
 
+    // Build provider name → uuid lookup for top-model click filtering
+    const providerNameToUuid = useMemo(() => {
+        const map: Record<string, string> = {};
+        providers.forEach((p) => { map[p.name] = p.uuid; });
+        return map;
+    }, [providers]);
+
     // Prepare chart data - include provider name to distinguish same model from different providers
     // Sort by total tokens first
     const sortedStats = [...stats].sort((a, b) => {
@@ -279,6 +288,7 @@ export default function DashboardPage() {
         return {
             name: label,
             provider: provider,
+            providerUuid: stat.provider_uuid || providerNameToUuid[provider] || '',
             model: model,
             inputTokens: stat.total_input_tokens || 0,
             outputTokens: stat.total_output_tokens || 0,
@@ -292,6 +302,40 @@ export default function DashboardPage() {
         if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
         return num.toLocaleString();
     };
+
+    // Group providers by auth_type for the dropdown
+    const authTypeLabel = (authType: string): string => {
+        switch (authType) {
+            case 'oauth': return 'OAuth';
+            case 'api_key': return 'API Key';
+            case 'bearer_token': return 'Bearer Token';
+            case 'basic_auth': return 'Basic Auth';
+            case 'vmodel': return 'Virtual Model';
+            default: return authType || 'Other';
+        }
+    };
+
+    const AUTH_TYPE_ORDER = ['oauth', 'api_key', 'bearer_token', 'basic_auth', 'vmodel'];
+
+    const groupedProviderOptions = useMemo(() => {
+        const groups: Record<string, Provider[]> = {};
+        providers.forEach((p) => {
+            const authType = p.auth_type || 'api_key';
+            if (!groups[authType]) groups[authType] = [];
+            groups[authType].push(p);
+        });
+        // Sort providers within each group by name
+        Object.values(groups).forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
+
+        // Return in predefined order, skip empty groups
+        return AUTH_TYPE_ORDER
+            .filter((t) => groups[t]?.length)
+            .map((authType) => ({
+                authType,
+                label: authTypeLabel(authType),
+                providers: groups[authType],
+            }));
+    }, [providers]);
 
     if (loading) {
         return <DashboardSkeleton />;
@@ -311,11 +355,31 @@ export default function DashboardPage() {
                     }}
                 >
                     <MenuItem value="all">All Providers</MenuItem>
-                    {providers.map((p) => (
-                        <MenuItem key={p.uuid} value={p.uuid}>
-                            {p.name}
-                        </MenuItem>
-                    ))}
+                    {groupedProviderOptions.map((group) => [
+                        <ListSubheader
+                            key={`header-${group.authType}`}
+                            sx={{
+                                fontWeight: 600,
+                                fontSize: '0.7rem',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                lineHeight: '28px',
+                                pt: 1,
+                                pl: 1.5,
+                                // colored left accent bar
+                                borderLeft: '3px solid',
+                                borderLeftColor: 'primary.main',
+                                backgroundColor: 'action.hover',
+                            }}
+                        >
+                            {group.label}
+                        </ListSubheader>,
+                        ...group.providers.map((p) => (
+                            <MenuItem key={p.uuid} value={p.uuid}>
+                                {p.name}
+                            </MenuItem>
+                        )),
+                    ])}
                 </Select>
             </FormControl>
 
@@ -519,6 +583,11 @@ export default function DashboardPage() {
                                         placement="left"
                                     >
                                         <Box
+                                            onClick={() => {
+                                                if (item.providerUuid) {
+                                                    setSelectedProvider(item.providerUuid);
+                                                }
+                                            }}
                                             sx={{
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -527,7 +596,7 @@ export default function DashboardPage() {
                                                 px: 1,
                                                 borderRadius: 1,
                                                 transition: 'background-color 0.15s ease',
-                                                cursor: 'pointer',
+                                                cursor: item.providerUuid ? 'pointer' : 'default',
                                                 '&:hover': {
                                                     backgroundColor: 'action.hover',
                                                 },
