@@ -18,6 +18,10 @@ General UI icons come from `@/components/icons` (Tabler icons adapted to MUI via
 - Brand / provider logos still go through `BrandIcons.tsx` / `ProviderIcon.tsx` (Lobehub + custom SVG).
 - See `.design/icon-hierarchy.md` for details.
 
+# Documentation
+
+Key design decisions and architecture notes are kept in `.design/`. Before implementing a new feature or modifying an existing subsystem, check whether a relevant `.design/*.md` file exists — it captures the rationale, trade-offs, and wiring details that are not obvious from the code alone.
+
 # Build
 
 ## Submodules

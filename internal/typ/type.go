@@ -163,6 +163,12 @@ type ScenarioFlags struct {
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
 	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
+
+	// AnthropicCompat rewrites any "system" role in the messages array to "user"
+	// before forwarding. Some clients send system-role entries inside the
+	// messages list (a non-standard extension); this flag normalizes them so
+	// third-party providers that reject that role do not error out.
+	AnthropicCompat bool `json:"anthropic_compat,omitempty" yaml:"anthropic_compat,omitempty"`
 }
 
 // RuleFlags represents per-rule feature flags.
@@ -211,6 +217,13 @@ type RuleFlags struct {
 	// Auto-enabled for billing scenarios (claude_code, claude_desktop) during protocol
 	// transformation. Can be manually set to force enable/disable.
 	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"`
+
+	// AnthropicCompat rewrites any "system" role in the messages array to "user"
+	// before forwarding. Some clients send system-role entries inside the messages
+	// list (a non-standard extension); this flag normalizes them for third-party
+	// providers that reject that role. Auto-applied when the scenario's
+	// AnthropicCompat flag is set.
+	AnthropicCompat bool `json:"anthropic_compat,omitempty" yaml:"anthropic_compat,omitempty"`
 
 	// SessionAffinity pins a client session to the service it first landed on.
 	// The value is the TTL in seconds (0 = disabled). Subsequent requests in

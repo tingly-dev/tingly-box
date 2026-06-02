@@ -68,6 +68,7 @@ export interface RuleFlags {
     thinkingEffort?: string;
     sessionAffinity?: number;
     visionProxyService?: VisionProxyServiceRef;
+    anthropicCompat?: boolean;
 }
 
 export interface RuleFlagsApi {
@@ -82,6 +83,7 @@ export interface RuleFlagsApi {
     thinking_effort?: string;
     session_affinity?: number;
     vision_proxy_service?: VisionProxyServiceRef;
+    anthropic_compat?: boolean;
 }
 
 export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref';
