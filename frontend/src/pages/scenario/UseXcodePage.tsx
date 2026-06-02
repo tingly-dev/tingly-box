@@ -32,7 +32,7 @@ const UseXcodePageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>Xcode Configuration</span>
+                            <span>Xcode</span>
                             <Tooltip title="Xcode AI coding assistant through Tingly Box proxy for iOS/macOS development">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -52,13 +52,14 @@ const UseXcodePageContent: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        title="Xcode Configuration"
+                        title="Xcode"
                         baseUrlPath="/tingly/xcode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
                         scenario={scenario}
                         showApiKeyRow={true}
-                        compact={false}
+                        showBaseUrlRow={true}
+                        compact={true}
                     />
                 </UnifiedCard>
 

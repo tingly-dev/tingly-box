@@ -37,7 +37,7 @@ const UseVSCodePageContent: React.FC = () => {
                 <UnifiedCard
                     title={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <span>VS Code (BYOK)</span>
+                            <span>VS Code</span>
                             <Tooltip title="Bring Your Own Key: Use your own API keys with VS Code Copilot through Tingly Box proxy">
                                 <IconButton size="small" sx={{ ml: 0.5 }}>
                                     <InfoIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -57,13 +57,14 @@ const UseVSCodePageContent: React.FC = () => {
                     }
                 >
                     <ProviderConfigCard
-                        title="VSCode Copliot Chat"
+                        title="VS Code"
                         baseUrlPath="/tingly/vscode"
                         baseUrl={baseUrl}
                         onCopy={copyToClipboard}
                         scenario={scenario}
                         showApiKeyRow={true}
-                        compact={false}
+                        showBaseUrlRow={true}
+                        compact={true}
                     />
                 </UnifiedCard>
 
