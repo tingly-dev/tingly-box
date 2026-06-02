@@ -10,6 +10,25 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
+// HandleOpenAIResponsesPassthroughNonStream handles Responses API passthrough (non-streaming),
+// overriding the model field in the response when responseModel differs from the request model.
+// Corresponds to stream.HandleOpenAIResponsesStream.
+func HandleOpenAIResponsesPassthroughNonStream(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
+	responseJSON, err := json.Marshal(resp)
+	if err != nil {
+		hc.SendError(err, "api_error", "marshal_failed")
+		return protocol.ZeroTokenUsage(), err
+	}
+	var responseMap map[string]any
+	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {
+		hc.SendError(err, "api_error", "unmarshal_failed")
+		return protocol.ZeroTokenUsage(), err
+	}
+	responseMap["model"] = hc.ResponseModel
+	hc.GinContext.JSON(http.StatusOK, responseMap)
+	return usage.FromOpenAIResponses(resp.Usage), nil
+}
+
 // HandleOpenAIChatNonStream handles OpenAI chat non-streaming response.
 // Returns (UsageStat, error)
 func HandleOpenAIChatNonStream(hc *protocol.HandleContext, resp *openai.ChatCompletion) (*protocol.TokenUsage, error) {

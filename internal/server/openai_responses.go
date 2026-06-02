@@ -7,9 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 
@@ -243,94 +241,6 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		func(p *typ.Provider, _ string) {
 			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
 		})
-}
-
-// buildResponsesPayloadFromChat converts a Chat completion response to Responses API format
-func buildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, actualModel string) map[string]any {
-	model := responseModel
-	if model == "" {
-		model = actualModel
-	}
-
-	messageContent := ""
-	if len(resp.Choices) > 0 {
-		messageContent = resp.Choices[0].Message.Content
-	}
-
-	output := []map[string]any{}
-	if messageContent != "" {
-		output = append(output, map[string]any{
-			"type":         "output_text",
-			"text":         messageContent,
-			"output_index": 0,
-		})
-	}
-
-	return map[string]any{
-		"id":     resp.ID,
-		"object": "response",
-		"model":  model,
-		"status": "completed",
-		"output": output,
-		"usage": map[string]any{
-			"input_tokens":  resp.Usage.PromptTokens,
-			"output_tokens": resp.Usage.CompletionTokens,
-			"total_tokens":  resp.Usage.PromptTokens + resp.Usage.CompletionTokens,
-		},
-	}
-}
-
-// buildResponsesPayloadFromAnthropicBeta converts an Anthropic Beta message response to Responses API format
-func buildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, responseModel, actualModel string) map[string]any {
-	model := responseModel
-	if model == "" {
-		model = actualModel
-	}
-
-	output := []map[string]any{}
-	outputIndex := 0
-	for _, block := range resp.Content {
-		switch block.Type {
-		case "text":
-			if block.Text == "" {
-				continue
-			}
-			output = append(output, map[string]any{
-				"type":         "output_text",
-				"text":         block.Text,
-				"output_index": outputIndex,
-			})
-			outputIndex++
-		case "tool_use":
-			argsJSON := "{}"
-			if block.Input != nil {
-				if raw, err := json.Marshal(block.Input); err == nil {
-					argsJSON = string(raw)
-				}
-			}
-			output = append(output, map[string]any{
-				"type":         "function_call",
-				"id":           block.ID,
-				"name":         block.Name,
-				"arguments":    argsJSON,
-				"output_index": outputIndex,
-			})
-			outputIndex++
-		}
-	}
-
-	return map[string]any{
-		"id":     resp.ID,
-		"object": "response",
-		"model":  model,
-		"status": "completed",
-		"output": output,
-		"usage": map[string]any{
-			"input_tokens":  resp.Usage.InputTokens,
-			"output_tokens": resp.Usage.OutputTokens,
-			"total_tokens":  resp.Usage.InputTokens + resp.Usage.OutputTokens,
-		},
-	}
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format

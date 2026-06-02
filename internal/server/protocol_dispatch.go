@@ -773,7 +773,7 @@ func (s *Server) streamResponsesToChat(c *gin.Context, reqCtx *transform.Transfo
 }
 
 func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
+	actualModel := reqCtx.RequestModel
 	req := reqCtx.Request.(*responses.ResponseNewParams)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, actualModel)
@@ -792,36 +792,26 @@ func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.Tran
 		return
 	}
 
-	s.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(responsesResp.Usage), nil)
-
-	chatResp := nonstream.OpenAIResponsesToChat(responsesResp, responseModel)
+	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
+	tokenUsage, _ := nonstream.HandleResponsesToOpenAIChatNonStream(hc, responsesResp)
+	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	if recorder != nil {
-		recorder.SetAssembledResponse(chatResp)
+		recorder.SetAssembledResponse(nonstream.OpenAIResponsesToChat(responsesResp, reqCtx.ResponseModel))
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
-	c.JSON(http.StatusOK, chatResp)
 }
 
 // nonstreamOpenAIResponses handles Responses API passthrough (non-streaming)
-// Moved from openai_responses.go:371-419
 func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	responseModel := reqCtx.ResponseModel
 	params := reqCtx.Request.(*responses.ResponseNewParams)
-
-	// Forward request to provider
-	var response *responses.Response
-	var err error
-	var cancel context.CancelFunc
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(params.Model))
 	fc := forwarding.NewForwardContext(nil, provider)
-	response, cancel, err = forwarding.ForwardOpenAIResponses(fc, wrapper, *params)
+	response, cancel, err := forwarding.ForwardOpenAIResponses(fc, wrapper, *params)
 	if cancel != nil {
 		defer cancel()
 	}
-
 	if err != nil {
-		// Track error with no usage
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
 		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
@@ -830,30 +820,13 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 		return
 	}
 
-	s.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIResponses(response.Usage), nil)
-
-	// Override model in response if needed
-	if responseModel != reqCtx.RequestModel {
-		// Create a copy of the response with updated model
-		responseJSON, _ := json.Marshal(response)
-		var responseMap map[string]any
-		if err := json.Unmarshal(responseJSON, &responseMap); err == nil {
-			responseMap["model"] = responseModel
-			if recorder != nil {
-				recorder.SetAssembledResponse(response)
-				recorder.RecordResponse(provider, reqCtx.RequestModel)
-			}
-			c.JSON(http.StatusOK, responseMap)
-			return
-		}
-	}
-
+	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
+	tokenUsage, _ := nonstream.HandleOpenAIResponsesPassthroughNonStream(hc, response)
+	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 	if recorder != nil {
 		recorder.SetAssembledResponse(response)
 		recorder.RecordResponse(provider, reqCtx.RequestModel)
 	}
-	// Return response as-is
-	c.JSON(http.StatusOK, response)
 }
 
 // streamOpenAIResponses handles Responses API passthrough (streaming)
@@ -897,9 +870,7 @@ func (s *Server) streamOpenAIResponses(c *gin.Context, reqCtx *transform.Transfo
 }
 
 // nonstreamOpenAIChatToResponses handles Chat → Responses conversion (non-streaming)
-// Extracted from openai_responses.go:218-233
 func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	responseModel := reqCtx.ResponseModel
 	chatReq := reqCtx.Request.(*openai.ChatCompletionNewParams)
 
 	wrapper := s.clientPool.GetOpenAIClient(c.Request.Context(), provider, string(chatReq.Model))
@@ -913,8 +884,10 @@ func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transfor
 		}
 		return
 	}
-	s.trackUsageWithTokenUsage(c, usagepkg.FromOpenAIChatCompletion(chatResp.Usage), nil)
-	c.JSON(http.StatusOK, buildResponsesPayloadFromChat(chatResp, responseModel, reqCtx.RequestModel))
+
+	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
+	tokenUsage, _ := nonstream.HandleOpenAIChatToResponsesNonStream(hc, chatResp, reqCtx.RequestModel)
+	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 }
 
 // streamOpenAIChatToResponses handles Chat → Responses conversion (streaming)
@@ -945,11 +918,9 @@ func (s *Server) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.T
 // request that has been normalized to Anthropic Beta and forwarded to an
 // Anthropic provider (non-streaming).
 func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider, recorder *ProtocolRecorder) {
-	responseModel := reqCtx.ResponseModel
 	anthropicReq := reqCtx.Request.(*anthropic.BetaMessageNewParams)
 
 	ctx := c.Request.Context()
-
 	wrapper := s.clientPool.GetAnthropicClient(ctx, provider, string(anthropicReq.Model))
 	fc := forwarding.NewForwardContext(nil, provider)
 	anthropicResp, cancel, err := forwarding.ForwardAnthropicV1Beta(fc, wrapper, anthropicReq)
@@ -965,8 +936,9 @@ func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *tra
 		return
 	}
 
-	s.trackUsageWithTokenUsage(c, usagepkg.FromAnthropicBetaMessage(anthropicResp.Usage), nil)
-	c.JSON(http.StatusOK, buildResponsesPayloadFromAnthropicBeta(anthropicResp, responseModel, reqCtx.RequestModel))
+	hc := protocol.NewHandleContext(c, reqCtx.ResponseModel)
+	tokenUsage, _ := nonstream.HandleAnthropicBetaToResponsesNonStream(hc, anthropicResp, reqCtx.RequestModel)
+	s.trackUsageWithTokenUsage(c, tokenUsage, nil)
 }
 
 // streamAnthropicBetaFromResponses handles a Responses-shaped client
