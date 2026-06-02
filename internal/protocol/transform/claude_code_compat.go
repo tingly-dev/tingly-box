@@ -1,9 +1,6 @@
 package transform
 
-import (
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/tingly-dev/tingly-box/internal/protocol/transform/ops"
-)
+import "github.com/anthropics/anthropic-sdk-go"
 
 // ClaudeCodeCompatTransform rewrites "system" roles in the inbound messages
 // array to "user". Claude Code sends system-role entries inside the messages
@@ -26,9 +23,31 @@ func (t *ClaudeCodeCompatTransform) Name() string {
 func (t *ClaudeCodeCompatTransform) Apply(ctx *TransformContext) error {
 	switch req := ctx.Request.(type) {
 	case *anthropic.MessageNewParams:
-		ops.ApplyClaudeCodeCompatRoleRewrite(req)
+		applyClaudeCodeCompatRoleRewrite(req)
 	case *anthropic.BetaMessageNewParams:
-		ops.ApplyClaudeCodeBetaCompatRoleRewrite(req)
+		applyClaudeCodeBetaCompatRoleRewrite(req)
 	}
 	return nil
+}
+
+func applyClaudeCodeCompatRoleRewrite(req *anthropic.MessageNewParams) {
+	if req == nil {
+		return
+	}
+	for i := range req.Messages {
+		if req.Messages[i].Role == "system" {
+			req.Messages[i].Role = anthropic.MessageParamRoleUser
+		}
+	}
+}
+
+func applyClaudeCodeBetaCompatRoleRewrite(req *anthropic.BetaMessageNewParams) {
+	if req == nil {
+		return
+	}
+	for i := range req.Messages {
+		if req.Messages[i].Role == "system" {
+			req.Messages[i].Role = anthropic.BetaMessageParamRoleUser
+		}
+	}
 }

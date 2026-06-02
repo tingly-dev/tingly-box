@@ -46,23 +46,22 @@
 2. **L2（推荐）**：把 server-domain Transform 中可纯函数化的部分抽到 ops，server-domain 文件只保留 "组合 op + 读 ScenarioConfig" 的胶水。
 3. **L3（可选）**：`base.go` 的协议转换是大块逻辑，**不强制拆 op**——它本质上是状态机式的双向映射，强行拆反而碎片化。但可以拆出**字段级辅助函数**（thinking 解析、stop sequences 映射等）放到独立文件，让主开关读起来更清晰。
 
-### 2.2 设计原则（沿用 `.design/rule-flags.md` §6 的两层分工）
+### 2.2 设计原则
+
+**Transform 文件**（`transform/` 包）：实现 Transform 接口；构造期接受配置；`Apply()` 里 type-switch `ctx.Request`；是唯一感知 `ctx` / 链路位置的层。
+
+**纯函数辅助**：mutation 逻辑不需要 `ctx`、`*typ.ScenarioConfig`、`*runtime.Runtime` 时，写成 package-level 函数。放置位置由**复用需求**决定：
 
 ```
-op（ops/ 包）              纯函数；签名 ApplyXxx(*concreteRequestType, cfg...)
-                          ↑ 无 ctx / rule / chain / scenario 感知
-                          ↑ 只依赖 SDK / protocol 类型
-                          ↑ 可独立单测、可被多端复用
-
-Transform（transform/ 包）  实现 Transform 接口
-                          ↑ 构造期接受配置（含 *typ.ScenarioConfig 等域类型）
-                          ↑ Apply() 里 type-switch ctx.Request，调 op
-                          ↑ 只在这一层感知 ctx / 链路位置
+需要被 server-domain 或其他包复用  →  ops/ 包（ApplyXxx 导出函数）
+仅被本 Transform 文件使用          →  同文件内的 unexported 函数
 ```
 
-**判断 op vs Transform 的分界**：mutation 是否需要读 `ctx.TransformContext`、`*typ.ScenarioConfig`、`*runtime.Runtime` 等"非 SDK 类型"。
-- 不需要 → 写成 op。
-- 需要 → 留在 Transform 里组合 op + 传 cfg。
+**判断边界**：
+- 函数只被一个 Transform 调用 → 放在同文件（unexported）。
+- 函数被 `internal/server/` 或 2+ 个 Transform 调用 → 放到 `ops/`（exported）。
+
+这条原则避免了"每个 Transform 都配一个 ops 文件"的无意义间接层：`ops/` 是真正的对外共享 API 层，不是 Transform 的内部实现存放处。
 
 ---
 
