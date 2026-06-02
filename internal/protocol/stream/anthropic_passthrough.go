@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	"github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // HandleAnthropic handles Anthropic v1 streaming response.
@@ -20,7 +20,7 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 
 	hc.SetupSSEHeaders()
 
-	acc := usage.NewAnthropicAccumulator()
+	acc := wire.NewAnthropicAccumulator()
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
@@ -107,7 +107,7 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 
 	hc.SetupSSEHeaders()
 
-	acc := usage.NewAnthropicAccumulator()
+	acc := wire.NewAnthropicAccumulator()
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {

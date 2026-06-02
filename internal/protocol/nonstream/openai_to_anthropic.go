@@ -9,33 +9,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-// anthropicMsgWire is the intermediate JSON representation used to build
-// anthropic.Message / anthropic.BetaMessage via marshal+unmarshal, which is
-// necessary because the SDK content union types have no public constructors.
-type anthropicMsgWire struct {
-	ID           string                 `json:"id"`
-	Type         string                 `json:"type"`
-	Role         string                 `json:"role"`
-	Content      interface{}            `json:"content"`
-	Model        string                 `json:"model"`
-	StopReason   string                 `json:"stop_reason"`
-	StopSequence string                 `json:"stop_sequence"`
-	Usage        anthropicUsageWire     `json:"usage"`
-	ServerToolUse interface{}           `json:"server_tool_use,omitempty"`
-}
-
-// anthropicUsageWire represents the Anthropic usage wire format.
-// input_tokens = uncached only; cache_read and cache_creation are separate.
-type anthropicUsageWire struct {
-	InputTokens           int64 `json:"input_tokens"`
-	OutputTokens          int64 `json:"output_tokens"`
-	CacheReadInputTokens  int64 `json:"cache_read_input_tokens"`
-}
-
 func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model string) *anthropic.BetaMessage {
-	wire := anthropicMsgWire{
+	wire := wire.AnthropicMsgWire{
 		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
 		Type:         "message",
 		Role:         "assistant",
@@ -44,7 +22,7 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 		StopReason:   "end_turn",
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
-		Usage: anthropicUsageWire{
+		Usage: wire.AnthropicUsageWire{
 			InputTokens:          openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
 			OutputTokens:         openaiResp.Usage.CompletionTokens,
 			CacheReadInputTokens: openaiResp.Usage.PromptTokensDetails.CachedTokens,
@@ -93,7 +71,7 @@ func ConvertOpenAIToAnthropicResponse(openaiResp *openai.ChatCompletion, model s
 
 // ConvertOpenAIToAnthropicBetaResponse converts OpenAI response to Anthropic beta format
 func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, model string) anthropic.BetaMessage {
-	wire := anthropicMsgWire{
+	wire := wire.AnthropicMsgWire{
 		ID:           fmt.Sprintf("msg_%d", time.Now().Unix()),
 		Type:         "message",
 		Role:         "assistant",
@@ -102,7 +80,7 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 		StopReason:   string(anthropic.BetaStopReasonEndTurn),
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI PromptTokens = total.
-		Usage: anthropicUsageWire{
+		Usage: wire.AnthropicUsageWire{
 			InputTokens:          openaiResp.Usage.PromptTokens - openaiResp.Usage.PromptTokensDetails.CachedTokens,
 			OutputTokens:         openaiResp.Usage.CompletionTokens,
 			CacheReadInputTokens: openaiResp.Usage.PromptTokensDetails.CachedTokens,
@@ -150,7 +128,7 @@ func ConvertOpenAIToAnthropicBetaResponse(openaiResp *openai.ChatCompletion, mod
 
 // ConvertResponsesToAnthropicBetaResponse converts OpenAI Responses API response to Anthropic beta format
 func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, model string) anthropic.BetaMessage {
-	wire := anthropicMsgWire{
+	wire := wire.AnthropicMsgWire{
 		ID:           responsesResp.ID,
 		Type:         "message",
 		Role:         "assistant",
@@ -159,7 +137,7 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 		StopReason:   string(anthropic.BetaStopReasonEndTurn),
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
-		Usage: anthropicUsageWire{
+		Usage: wire.AnthropicUsageWire{
 			InputTokens:          responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
 			OutputTokens:         responsesResp.Usage.OutputTokens,
 			CacheReadInputTokens: responsesResp.Usage.InputTokensDetails.CachedTokens,
@@ -212,7 +190,7 @@ func ConvertResponsesToAnthropicBetaResponse(responsesResp *responses.Response, 
 
 // ConvertResponsesToAnthropicV1Response converts OpenAI Responses API response to Anthropic v1 format
 func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, model string) anthropic.Message {
-	wire := anthropicMsgWire{
+	wire := wire.AnthropicMsgWire{
 		ID:           responsesResp.ID,
 		Type:         "message",
 		Role:         "assistant",
@@ -221,7 +199,7 @@ func ConvertResponsesToAnthropicV1Response(responsesResp *responses.Response, mo
 		StopReason:   "end_turn",
 		StopSequence: "",
 		// Anthropic wire: input_tokens = uncached only; OpenAI Responses InputTokens = total.
-		Usage: anthropicUsageWire{
+		Usage: wire.AnthropicUsageWire{
 			InputTokens:          responsesResp.Usage.InputTokens - responsesResp.Usage.InputTokensDetails.CachedTokens,
 			OutputTokens:         responsesResp.Usage.OutputTokens,
 			CacheReadInputTokens: responsesResp.Usage.InputTokensDetails.CachedTokens,

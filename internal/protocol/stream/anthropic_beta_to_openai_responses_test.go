@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // TestNewResponsesConverterState tests the state initialization
@@ -133,7 +133,7 @@ func TestResponsesConverterState_MultipleDeltas(t *testing.T) {
 
 // TestResponsesConverterState_UsageAccumulation tests that the accumulator produces correct usage
 func TestResponsesConverterState_UsageAccumulation(t *testing.T) {
-	acc := usagepkg.NewAnthropicAccumulator()
+	acc := wire.NewAnthropicAccumulator()
 
 	startEvt := parseTestEvent(`{"type":"message_start","message":{"id":"m","type":"message","role":"assistant","content":[],"model":"claude","usage":{"input_tokens":100,"output_tokens":0}}}`)
 	deltaEvt := parseTestEvent(`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":50}}`)
