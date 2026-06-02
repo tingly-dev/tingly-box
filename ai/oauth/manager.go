@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -531,11 +532,17 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 			logrus.Warnf("[OAuth] Failed to parse ID token for Codex provider")
 		}
 	} else if config.Type == ai.IssuerCodex {
-		// Log the actual response fields so we can tell whether OpenAI omitted
-		// id_token entirely or returned it under a different key.
+		// Log only the key set so we can tell whether OpenAI omitted id_token
+		// or returned it under a different key — never the values, which
+		// contain access_token / refresh_token.
 		var raw map[string]json.RawMessage
 		if jsonErr := json.Unmarshal(rawBody, &raw); jsonErr == nil {
-			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response fields: %v", raw)
+			keys := make([]string, 0, len(raw))
+			for k := range raw {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; response field names: %v", keys)
 		} else {
 			logrus.Warnf("[OAuth] Codex token exchange returned no id_token; could not inspect response: %v", jsonErr)
 		}
