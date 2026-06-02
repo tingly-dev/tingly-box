@@ -105,7 +105,7 @@ export default function DashboardPage() {
     const validTimeRanges: TimeRange[] = ['today', 'yesterday', '3d', '7d', '30d', '90d'];
     const timeRange: TimeRange = validTimeRanges.includes(urlTimeRange as TimeRange)
         ? (urlTimeRange as TimeRange)
-        : '7d';
+        : 'today';
 
     const isHourlyRange = timeRange === 'today' || timeRange === 'yesterday';
 
@@ -375,11 +375,6 @@ export default function DashboardPage() {
                     flexDirection: { xs: 'column', md: 'row' },
                 }}
             >
-                {/* Left Column (12%) - Agent Quick Nav */}
-                <Box sx={{ flex: { xs: 1, md: 0, lg: 1.2 }, display: { xs: 'none', lg: 'flex' }, minWidth: 160 }}>
-                    <AgentQuickNav />
-                </Box>
-
                 {/* Middle Column (68%) */}
                 <Box sx={{ flex: { xs: 1, md: 7, lg: 6.8 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {/* Stat Cards Row - 5 cards */}
