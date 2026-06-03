@@ -1,5 +1,5 @@
 import {Check, Close} from '@/components/icons';
-import {Box, Button, IconButton, Stack, Typography} from '@mui/material';
+import {Box, Button, IconButton, Stack, Typography, alpha} from '@mui/material';
 import React from 'react';
 import type {VerificationResult} from './probe';
 
@@ -105,7 +105,7 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                     direction="row"
                     alignItems="center"
                     spacing={1}
-                    sx={{mt: 1.5, p: 1, borderRadius: 1, bgcolor: 'warning.lighter', border: '1px solid', borderColor: 'warning.light'}}
+                    sx={{mt: 1.5, p: 1, borderRadius: 1, bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08), border: '1px solid', borderColor: 'warning.light'}}
                 >
                     <Typography variant="caption" sx={{flex: 1}}>
                         Some OpenAI-compatible APIs require a <code>/v1</code> suffix on the base URL.

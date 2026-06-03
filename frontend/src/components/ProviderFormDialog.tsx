@@ -572,7 +572,8 @@ const ProviderFormDialog = ({
     // Persistent /v1 suffix hint: shown in custom mode when an OpenAI
     // protocol is selected and the current URL doesn't already end with /v1.
     const currentUrl = data.apiBase || providerInputValue;
-    const showV1Hint = customMode && protocolOpenAI && !!currentUrl.trim() && !(/\/v1\/?$/.test(currentUrl));
+    const showV1Hint = customMode && protocolOpenAI;
+    const urlAlreadyHasV1 = /\/v1\/?$/.test(currentUrl);
     const applyV1Suffix = () => {
         const base = currentUrl.replace(/\/+$/, '');
         const newUrl = `${base}/v1`;
@@ -624,23 +625,25 @@ const ProviderFormDialog = ({
                                     <Stack direction="row" alignItems="center" spacing={0.75}>
                                         <Typography variant="caption">
                                             {t('providerDialog.v1Hint.message', {
-                                                defaultValue: 'Most OpenAI-compatible APIs need /v1 suffix.',
+                                                defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
                                             })}
                                         </Typography>
-                                        <Link
-                                            component="button"
-                                            type="button"
-                                            variant="caption"
-                                            onClick={applyV1Suffix}
-                                            sx={{
-                                                color: 'warning.light',
-                                                fontWeight: 700,
-                                                whiteSpace: 'nowrap',
-                                                textDecorationColor: 'inherit',
-                                            }}
-                                        >
-                                            {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
-                                        </Link>
+                                        {!urlAlreadyHasV1 && (
+                                            <Link
+                                                component="button"
+                                                type="button"
+                                                variant="caption"
+                                                onClick={applyV1Suffix}
+                                                underline="always"
+                                                sx={{
+                                                    color: 'inherit',
+                                                    fontWeight: 700,
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
+                                            </Link>
+                                        )}
                                     </Stack>
                                 }
                                 placement="top-end"
@@ -648,17 +651,6 @@ const ProviderFormDialog = ({
                                 disableFocusListener
                                 disableHoverListener
                                 disableTouchListener
-                                slotProps={{
-                                    tooltip: {
-                                        sx: {
-                                            bgcolor: 'grey.800',
-                                            maxWidth: 320,
-                                            py: 0.75,
-                                            px: 1.5,
-                                        },
-                                    },
-                                    arrow: { sx: { color: 'grey.800' } },
-                                }}
                             >
                                 <TextField
                                     size="small"
