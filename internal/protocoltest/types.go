@@ -24,7 +24,7 @@
 //	env := protocoltest.NewTestEnv(t)
 //	defer env.Close()
 //	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, protocoltest.TextScenario())
-//	result := env.SendAs(t, protocol.TypeAnthropicV1, protocoltest.TextScenario(), false)
+//	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, protocoltest.TextScenario(), false)
 //	assert.Equal(t, "assistant", result.Role)
 package protocoltest
 
