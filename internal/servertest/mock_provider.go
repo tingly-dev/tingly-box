@@ -1,4 +1,4 @@
-package server
+package servertest
 
 import (
 	"encoding/json"
