@@ -13,15 +13,6 @@ import (
 // After this duration, GetModels returns empty so the caller re-fetches.
 const ModelCacheTTL = time.Hour
 
-// ModelList represents the models available for a specific provider (kept for backward compatibility)
-type ModelList struct {
-	Provider    string   `yaml:"provider"`
-	UUID        string   `yaml:"uuid"`
-	APIBase     string   `yaml:"api_base"`
-	Models      []string `yaml:"models"`
-	LastUpdated string   `yaml:"last_updated"`
-}
-
 // ModelListManager manages models for different providers using SQLite database
 type ModelListManager struct {
 	modelStore *db.ModelStore
