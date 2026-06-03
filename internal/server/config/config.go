@@ -1561,17 +1561,17 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 	}
 	flags := config.GetDefaultFlags()
 	switch flagName {
-	case "unified":
+	case FlagUnified:
 		return flags.Unified
-	case "separate":
+	case FlagSeparate:
 		return flags.Separate
-	case "smart":
+	case FlagSmart:
 		return flags.Smart
-	case "smart_compact":
+	case FlagSmartCompact:
 		return flags.SmartCompact
-	case "disable_stream_usage":
+	case FlagDisableStreamUsage:
 		return flags.DisableStreamUsage
-	case "clean_header":
+	case FlagCleanHeader:
 		return flags.CleanHeader
 	case ExtensionSkillUser:
 		if val, ok := config.Extensions[ExtensionSkillUser].(bool); ok {
@@ -1625,17 +1625,17 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 
 	// Set the specific flag
 	switch flagName {
-	case "unified":
+	case FlagUnified:
 		config.Flags.Unified = value
-	case "separate":
+	case FlagSeparate:
 		config.Flags.Separate = value
-	case "smart":
+	case FlagSmart:
 		config.Flags.Smart = value
-	case "smart_compact":
+	case FlagSmartCompact:
 		config.Flags.SmartCompact = value
-	case "disable_stream_usage":
+	case FlagDisableStreamUsage:
 		config.Flags.DisableStreamUsage = value
-	case "clean_header":
+	case FlagCleanHeader:
 		config.Flags.CleanHeader = value
 	case ExtensionSkillUser:
 		if config.Extensions == nil {
@@ -1674,9 +1674,9 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	}
 	flags := config.GetDefaultFlags()
 	switch flagName {
-	case "thinking_effort":
+	case FlagThinkingEffort:
 		return flags.ThinkingEffort
-	case "recording_v2":
+	case FlagRecordingV2:
 		return string(flags.RecordingV2)
 	default:
 		return ""
@@ -1710,9 +1710,9 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 
 	// Set the specific flag
 	switch flagName {
-	case "thinking_effort":
+	case FlagThinkingEffort:
 		config.Flags.ThinkingEffort = typ.ThinkingEffortLevel(value)
-	case "recording_v2":
+	case FlagRecordingV2:
 		if !typ.IsValidRecordingMode(value) {
 			return fmt.Errorf("invalid recording_v2 value: %s (must be one of: request, request_response, staged_request_response, or empty)", value)
 		}
