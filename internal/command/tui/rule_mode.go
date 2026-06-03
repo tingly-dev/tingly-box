@@ -229,12 +229,12 @@ func pickRuleService(mgr TUIManager) (*loadbalance.Service, error) {
 // includes a "Custom…" escape hatch for vendors that don't return a
 // listable catalog. Returns ("", nil) on cancel.
 func pickProviderModel(mgr TUIManager, p *typ.Provider, prompt string) (string, error) {
-	models := cachedModels(mgr, p.UUID)
+	models := availableModels(mgr, p)
 	if len(models) == 0 {
 		_, _ = WithSpinner("Fetching models from "+p.Name, func() (struct{}, error) {
 			return struct{}{}, mgr.FetchAndSaveProviderModels(p.UUID)
 		})
-		models = cachedModels(mgr, p.UUID)
+		models = availableModels(mgr, p)
 	}
 
 	if len(models) == 0 {
@@ -269,16 +269,32 @@ func pickProviderModel(mgr TUIManager, p *typ.Provider, prompt string) (string, 
 	return r.Value, nil
 }
 
-func cachedModels(mgr TUIManager, providerUUID string) []string {
+// availableModels returns the model list for a provider with the same
+// fallback order FetchAndSaveProviderModels uses internally:
+//
+//  1. DB-cached models (populated by a successful provider /v1/models call)
+//  2. compile-time embedded template (GetEmbeddedModelsForProvider) — used
+//     when the upstream API has no models endpoint (Anthropic, OAuth-only
+//     providers, etc.) or the call failed.
+//
+// Without the second step the UI shows an empty list for providers whose
+// catalogs only exist as build-time data — exactly the case the user hit.
+func availableModels(mgr TUIManager, p *typ.Provider) []string {
 	cfg := mgr.GetGlobalConfig()
 	if cfg == nil {
 		return nil
 	}
-	mm := cfg.GetModelManager()
-	if mm == nil {
-		return nil
+	if mm := cfg.GetModelManager(); mm != nil {
+		if models := mm.GetModels(p.UUID); len(models) > 0 {
+			return models
+		}
 	}
-	return mm.GetModels(providerUUID)
+	if tm := cfg.GetTemplateManager(); tm != nil {
+		if models, err := tm.GetEmbeddedModelsForProvider(p); err == nil {
+			return models
+		}
+	}
+	return nil
 }
 
 func providerName(mgr TUIManager, uuid string) string {

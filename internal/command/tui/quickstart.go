@@ -433,15 +433,10 @@ func qsModel(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		if err := s.mgr.FetchAndSaveProviderModels(s.provider.UUID); err != nil {
 			return nil, err
 		}
-		cfg := s.mgr.GetGlobalConfig()
-		if cfg == nil {
-			return nil, nil
-		}
-		mm := cfg.GetModelManager()
-		if mm == nil {
-			return nil, nil
-		}
-		return mm.GetModels(s.provider.UUID), nil
+		// availableModels does the DB-cached → embedded-template cascade so
+		// providers whose catalogs only exist as build-time data (Anthropic,
+		// OAuth-only) still produce a non-empty list.
+		return availableModels(s.mgr, s.provider), nil
 	})
 
 	if len(models) == 0 {

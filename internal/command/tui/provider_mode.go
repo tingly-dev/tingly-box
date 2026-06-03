@@ -238,13 +238,8 @@ func providerRefreshModels(mgr TUIManager) error {
 	if err != nil {
 		return err
 	}
-	var models []string
-	if cfg := mgr.GetGlobalConfig(); cfg != nil {
-		if mm := cfg.GetModelManager(); mm != nil {
-			models = mm.GetModels(p.UUID)
-		}
-	}
-	fmt.Println(successStyle.Render(fmt.Sprintf("✓ %d model(s) cached for %s.", len(models), p.Name)))
+	models := availableModels(mgr, p)
+	fmt.Println(successStyle.Render(fmt.Sprintf("✓ %d model(s) available for %s.", len(models), p.Name)))
 	for _, m := range models {
 		fmt.Println(descStyle.Render("  - " + m))
 	}
