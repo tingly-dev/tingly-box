@@ -572,8 +572,8 @@ const ProviderFormDialog = ({
     // Persistent /v1 suffix hint: shown in custom mode when an OpenAI
     // protocol is selected and the current URL doesn't already end with /v1.
     const currentUrl = data.apiBase || providerInputValue;
-    const showV1Hint = customMode && protocolOpenAI;
     const urlAlreadyHasV1 = /\/v1\/?$/.test(currentUrl);
+    const showV1Hint = customMode && protocolOpenAI && !urlAlreadyHasV1;
     const applyV1Suffix = () => {
         const base = currentUrl.replace(/\/+$/, '');
         const newUrl = `${base}/v1`;
@@ -628,24 +628,22 @@ const ProviderFormDialog = ({
                                                 defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
                                             })}
                                         </Typography>
-                                        {!urlAlreadyHasV1 && (
-                                            <Link
-                                                component="button"
-                                                type="button"
-                                                variant="body2"
-                                                onClick={applyV1Suffix}
-                                                underline="always"
-                                                sx={{
-                                                    fontWeight: 600,
-                                                    whiteSpace: 'nowrap',
-                                                }}
-                                            >
-                                                {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
-                                            </Link>
-                                        )}
+                                        <Link
+                                            component="button"
+                                            type="button"
+                                            variant="body2"
+                                            onClick={applyV1Suffix}
+                                            underline="always"
+                                            sx={{
+                                                fontWeight: 600,
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
+                                        </Link>
                                     </Stack>
                                 }
-                                placement="top-end"
+                                placement="top"
                                 arrow
                                 disableFocusListener
                                 disableHoverListener
