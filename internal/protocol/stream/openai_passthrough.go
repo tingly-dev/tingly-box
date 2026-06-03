@@ -339,7 +339,7 @@ func HandleOpenAIResponsesStream(hc *protocol.HandleContext, stream ResponsesStr
 	var promptTokensTotal, inputTokens, outputTokens, cacheTokens, reasoningTokens int64
 	var hasUsage bool
 
-	StreamLoop(c, func(w io.Writer) bool {
+	protocol.RunLoop(c, func(w io.Writer) bool {
 		select {
 		case <-c.Request.Context().Done():
 			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Responses stream")

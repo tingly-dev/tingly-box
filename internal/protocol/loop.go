@@ -10,7 +10,7 @@ import (
 // RunLoop drives a streaming response, handling client-disconnect detection,
 // first-chunk commitment, and per-step flushing. It is the shared primitive
 // used by both ProcessStream (typed-event hook pipeline) and raw-byte stream
-// handlers via stream.StreamLoop.
+// handlers.
 //
 // step should write to w and return true to continue or false to stop.
 // Returns true if the client disconnected mid-stream.
@@ -46,8 +46,13 @@ func RunLoop(c *gin.Context, step func(w io.Writer) bool) bool {
 	}
 }
 
-func commitFirstChunk(c *gin.Context) {
+// CommitFirstChunk signals a failover gate wrapping c.Writer (if any) that
+// the first real stream chunk has been produced, so it flushes buffered
+// output and switches to pass-through. No-op when no gate is installed.
+func CommitFirstChunk(c *gin.Context) {
 	if cm, ok := c.Writer.(interface{ CommitFirstChunk() }); ok {
 		cm.CommitFirstChunk()
 	}
 }
+
+func commitFirstChunk(c *gin.Context) { CommitFirstChunk(c) }

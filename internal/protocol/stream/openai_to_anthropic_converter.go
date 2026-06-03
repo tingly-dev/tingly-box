@@ -469,7 +469,7 @@ func anthropicSSEWriterWithFirstChunk(c *gin.Context) func(interface{}) error {
 	inner := anthropicSSEWriter(c)
 	return func(event interface{}) error {
 		if first {
-			CommitFirstChunk(c)
+			protocol.CommitFirstChunk(c)
 			first = false
 		}
 		return inner(event)

@@ -202,13 +202,15 @@ conv.HookErr() != nil
 | `HandleResponsesToAnthropicV1Assembly` | 非流式，内存聚合后一次性 JSON 响应 |
 | `HandleResponsesToAnthropicBetaAssembly` | 同上 |
 | `handlerResponsesToAnthropicStream`（v1 文件内） | 仅供 Assembly 使用的旧实现，共享状态机逻辑 |
-| `StreamLoop` | `openai_chat.go` 和 `openai_passthrough.go` 透传路径仍在使用 |
+| `protocol.RunLoop` | `openai_chat.go` 和 `openai_passthrough.go` 透传路径直接使用（`stream.StreamLoop` 包装已删除） |
 
 ---
 
 ## 10. 已移除
 
 - `HandleContext.DispatchStreamEvent()`：Phase 0–6 完成后无任何调用方，已删除。所有 converter 路径通过 `ProcessStream` 自动 dispatch `OnStreamEventHooks`。
+- `stream.StreamLoop`：合并到 `protocol.RunLoop`（同一实现），包装层删除。调用方直接使用 `protocol.RunLoop`。
+- `stream.CommitFirstChunk`：上移到 `protocol.CommitFirstChunk`（`protocol/loop.go`），stream 包内部直接引用。
 
 ---
 
