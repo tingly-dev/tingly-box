@@ -623,7 +623,7 @@ const ProviderFormDialog = ({
                                 open={showV1Hint}
                                 title={
                                     <Stack direction="row" alignItems="center" spacing={0.75}>
-                                        <Typography variant="caption">
+                                        <Typography variant="body2" color="text.secondary">
                                             {t('providerDialog.v1Hint.message', {
                                                 defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
                                             })}
@@ -632,12 +632,11 @@ const ProviderFormDialog = ({
                                             <Link
                                                 component="button"
                                                 type="button"
-                                                variant="caption"
+                                                variant="body2"
                                                 onClick={applyV1Suffix}
                                                 underline="always"
                                                 sx={{
-                                                    color: 'inherit',
-                                                    fontWeight: 700,
+                                                    fontWeight: 600,
                                                     whiteSpace: 'nowrap',
                                                 }}
                                             >
@@ -651,6 +650,28 @@ const ProviderFormDialog = ({
                                 disableFocusListener
                                 disableHoverListener
                                 disableTouchListener
+                                slotProps={{
+                                    tooltip: {
+                                        sx: {
+                                            bgcolor: 'background.paper',
+                                            color: 'text.primary',
+                                            border: 1,
+                                            borderColor: 'divider',
+                                            boxShadow: 2,
+                                            px: 1.5,
+                                            py: 1,
+                                        },
+                                    },
+                                    arrow: {
+                                        sx: {
+                                            color: 'background.paper',
+                                            '&::before': {
+                                                border: 1,
+                                                borderColor: 'divider',
+                                            },
+                                        },
+                                    },
+                                }}
                             >
                                 <TextField
                                     size="small"
