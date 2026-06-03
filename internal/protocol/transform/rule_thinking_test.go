@@ -189,6 +189,28 @@ func TestRuleThinkingTransform_AnthropicCapsBudgetToMaxTokens(t *testing.T) {
 	}
 }
 
+func TestRuleThinkingTransform_AnthropicCapsBudgetToMaxTokensWhenBelowMinimum(t *testing.T) {
+	// max_tokens=512 is below Anthropic's 1024 thinking minimum. The old code used
+	// max(1024, MaxTokens) which would set budget=1024 > MaxTokens=512 and cause a
+	// 400 from Anthropic. The correct behavior is to cap at MaxTokens and let the
+	// API surface the conflict rather than silently exceeding the operator limit.
+	req := &anthropic.MessageNewParams{}
+	req.MaxTokens = 512
+	ctx := &TransformContext{Request: req}
+
+	if err := NewRuleThinkingTransform(typ.ThinkingEffortLow).Apply(ctx); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if req.MaxTokens != 512 {
+		t.Errorf("max_tokens changed from 512 to %d — must not be raised", req.MaxTokens)
+	}
+	if got := req.Thinking.OfEnabled; got == nil {
+		t.Fatalf("expected thinking enabled")
+	} else if got.BudgetTokens > req.MaxTokens {
+		t.Errorf("budget_tokens %d exceeds max_tokens %d — would cause Anthropic 400", got.BudgetTokens, req.MaxTokens)
+	}
+}
+
 func TestRuleThinkingTransform_AnthropicDoesNotReduceBudgetWhenMaxTokensSufficient(t *testing.T) {
 	budget := typ.ThinkingBudgetMapping[typ.ThinkingEffortLow]
 	req := &anthropic.MessageNewParams{}
