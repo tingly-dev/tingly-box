@@ -14,6 +14,10 @@ type Record struct {
 	Scenario   string
 	Model      string
 
+	// Provider connection details for debugging
+	APIStyle string `json:"api_style,omitempty"` // Provider API style (e.g., "openai", "anthropic")
+	BaseURL  string `json:"base_url,omitempty"`  // Provider base URL
+
 	OriginalRequest    *RecordRequest
 	TransformedRequest *RecordRequest
 	ProviderResponse   *RecordResponse

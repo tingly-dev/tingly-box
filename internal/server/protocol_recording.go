@@ -54,10 +54,12 @@ type ProtocolRecorder struct {
 
 	transformSteps []string
 
-	providerName string
-	providerUUID string
-	model        string
-	mode         obs.RecordMode
+	providerName  string
+	providerUUID  string
+	providerStyle string // API style (e.g., "openai", "anthropic")
+	providerBase  string // Base URL
+	model         string
+	mode          obs.RecordMode
 }
 
 // SetActiveService re-binds the recorder to a new provider/model. The
@@ -176,6 +178,8 @@ func (sr *ProtocolRecorder) bindProvider(provider *typ.Provider, model string, m
 	if provider != nil {
 		sr.providerName = provider.Name
 		sr.providerUUID = provider.UUID
+		sr.providerStyle = string(provider.APIStyle)
+		sr.providerBase = provider.APIBase
 	}
 	if model != "" {
 		sr.model = model
@@ -322,6 +326,8 @@ func (sr *ProtocolRecorder) emit(err error) {
 		Model:      sr.resolveModel(),
 		Steps:      sr.transformSteps,
 		Duration:   time.Since(sr.startTime),
+		APIStyle:   sr.providerStyle,
+		BaseURL:    sr.providerBase,
 	}
 	if err != nil {
 		r.Err = err.Error()
