@@ -11,6 +11,7 @@ import (
 	guardrailsmutate "github.com/tingly-dev/tingly-box/internal/guardrails/mutate"
 	guardrailspipeline "github.com/tingly-dev/tingly-box/internal/guardrails/pipeline"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -64,8 +65,8 @@ func (s *Server) guardrailsEnabledForScenario(scenario string) bool {
 	if !s.guardrailsSupportsScenario(scenario) {
 		return false
 	}
-	return s.config.GetScenarioFlag(typ.RuleScenario(scenario), "guardrails") ||
-		s.config.GetScenarioFlag(typ.ScenarioGlobal, "guardrails")
+	return s.config.GetScenarioFlag(typ.RuleScenario(scenario), config.ExtensionGuardrails) ||
+		s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionGuardrails)
 }
 
 func hasActiveGuardrailsPolicies(cfg guardrailscore.Config) bool {

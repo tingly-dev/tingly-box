@@ -74,8 +74,8 @@ func (h *Handler) IsMCPEnabled() bool {
 	if h.cfg == nil {
 		return false
 	}
-	return h.cfg.GetScenarioFlag(typ.ScenarioGlobal, "mcp") ||
-		h.cfg.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
+	return h.cfg.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionMCP) ||
+		h.cfg.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionMCP)
 }
 
 // MCPRuntimeConfigResponse is the API response for MCP runtime config

@@ -37,8 +37,8 @@ func (t *TransportHandler) isMCPEnabled() bool {
 	if t.cfg == nil {
 		return false
 	}
-	return t.cfg.GetScenarioFlag(typ.ScenarioGlobal, "mcp") ||
-		t.cfg.GetScenarioFlag(typ.ScenarioClaudeCode, "mcp")
+	return t.cfg.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionMCP) ||
+		t.cfg.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionMCP)
 }
 
 // GetServer returns the MCPServer for a client, creating it if needed.

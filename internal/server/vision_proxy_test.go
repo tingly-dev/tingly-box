@@ -84,7 +84,7 @@ func visionTestServer(scenario typ.RuleScenario, ext map[string]interface{}) *Se
 
 func scenarioVisionExt(provider, model string) map[string]interface{} {
 	return map[string]interface{}{
-		visionProxyServiceKey: map[string]interface{}{
+		config.ExtensionVisionProxyService: map[string]interface{}{
 			"provider": provider,
 			"model":    model,
 		},

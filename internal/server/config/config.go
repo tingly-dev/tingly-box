@@ -1573,23 +1573,23 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.DisableStreamUsage
 	case "clean_header":
 		return flags.CleanHeader
-	case "skill_user":
-		if val, ok := config.Extensions["skill_user"].(bool); ok {
+	case ExtensionSkillUser:
+		if val, ok := config.Extensions[ExtensionSkillUser].(bool); ok {
 			return val
 		}
 		return false
-	case "skill_ide":
-		if val, ok := config.Extensions["skill_ide"].(bool); ok {
+	case ExtensionSkillIDE:
+		if val, ok := config.Extensions[ExtensionSkillIDE].(bool); ok {
 			return val
 		}
 		return false
-	case "guardrails":
-		if val, ok := config.Extensions["guardrails"].(bool); ok {
+	case ExtensionGuardrails:
+		if val, ok := config.Extensions[ExtensionGuardrails].(bool); ok {
 			return val
 		}
 		return false
-	case "mcp":
-		if val, ok := config.Extensions["mcp"].(bool); ok {
+	case ExtensionMCP:
+		if val, ok := config.Extensions[ExtensionMCP].(bool); ok {
 			return val
 		}
 		return false
@@ -1637,28 +1637,26 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.DisableStreamUsage = value
 	case "clean_header":
 		config.Flags.CleanHeader = value
-	case "skill_user":
-		// Store in Extensions
+	case ExtensionSkillUser:
 		if config.Extensions == nil {
 			config.Extensions = make(map[string]interface{})
 		}
-		config.Extensions["skill_user"] = value
-	case "skill_ide":
-		// Store in Extensions
+		config.Extensions[ExtensionSkillUser] = value
+	case ExtensionSkillIDE:
 		if config.Extensions == nil {
 			config.Extensions = make(map[string]interface{})
 		}
-		config.Extensions["skill_ide"] = value
-	case "guardrails":
+		config.Extensions[ExtensionSkillIDE] = value
+	case ExtensionGuardrails:
 		if config.Extensions == nil {
 			config.Extensions = make(map[string]interface{})
 		}
-		config.Extensions["guardrails"] = value
-	case "mcp":
+		config.Extensions[ExtensionGuardrails] = value
+	case ExtensionMCP:
 		if config.Extensions == nil {
 			config.Extensions = make(map[string]interface{})
 		}
-		config.Extensions["mcp"] = value
+		config.Extensions[ExtensionMCP] = value
 	default:
 		return fmt.Errorf("unknown flag name: %s", flagName)
 	}

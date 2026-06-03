@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/server_validate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -147,7 +148,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 		serverOpts = append(serverOpts, server.WithRecordDir(cfg.recordDir))
 	}
 	if cfg.mcpEnabled {
-		_ = appConfig.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, "mcp", true)
+		_ = appConfig.GetGlobalConfig().SetScenarioFlag(typ.ScenarioGlobal, serverconfig.ExtensionMCP, true)
 	}
 
 	gatewayServer := server.NewServer(appConfig.GetGlobalConfig(), serverOpts...)
