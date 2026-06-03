@@ -240,7 +240,60 @@ the current flat structure.
 
 ---
 
-## 10. CLI / CI mode
+## 10. Action audit: known gap, intentionally not closed here
+
+Both the HTTP handlers and the TUI/AppManager mutate via the same
+`Config.*` methods, but neither side currently feeds the action-audit
+pipeline that backs `/api/v1/actions/history`.
+
+What the pipeline expects:
+
+- `multiLogger.WithSource(obs.LogSourceAction).LogAction(action, details, success, message)`
+- routed by `WriteEntry` to the action memory sink (entries must carry
+  `source: "action"`), read back by `GetActionHistory`.
+
+What's actually happening:
+
+- `internal/server/provider_handler.go` and friends log with global
+  `logrus.WithFields("action": ...).Info(...)`. Those entries land in
+  `LogSourceSystem` (no `source: "action"` field), so the action sink
+  stays empty and `/api/v1/actions/history` is effectively unused.
+- The TUI/AppManager doesn't log actions at all.
+
+So there is no real audit parity we'd be breaking. We considered
+adding `LogAction` calls to AppManager so TUI changes show up in the
+action history, but two things kept it from being worth doing in this
+PR:
+
+1. **Asymmetric fix**. Wiring only the TUI side would make TUI log
+   everything while HTTP still logs nothing — strictly worse than the
+   current symmetric "nobody logs" state.
+2. **Process-local memory.** The CLI binary and the running server
+   are separate processes with separate `MultiLogger` instances and
+   separate in-memory action sinks. Even if TUI logged correctly,
+   the entries would live in the CLI process's memory and disappear
+   when the command exits — they would never reach the server's
+   `/api/v1/actions/history`. A real audit trail needs a persistent
+   action store (DB-backed) that both processes append to and the
+   HTTP endpoint reads back.
+
+The proper fix is therefore out of scope for the TUI work:
+
+- (a) Persist action records to the DB (an `action_log` table or
+  reusing the existing log JSON file on disk), and have
+  `GetActionHistory` read from there instead of in-memory.
+- (b) Once (a) exists, fill in `LogAction` calls at the shared
+  `Config.*` layer so both HTTP and TUI/AppManager paths produce
+  records automatically — no per-caller work.
+
+Until then, treat action history as not-yet-wired across the board.
+TUI users who need an audit trail can rely on system logs (every
+mutation eventually shows up via the global logrus hook in
+`LogSourceSystem`).
+
+---
+
+## 11. CLI / CI mode
 
 TUI is the interactive surface; the flag-driven `config` and
 `agent` subcommands are the non-interactive surface. The full
@@ -269,7 +322,7 @@ matching UUIDs printed, so the user can pick by UUID.
 
 ---
 
-## 11. Deprecation of the bufio menus
+## 12. Deprecation of the bufio menus
 
 `runConfigInteractiveMode`, `runProviderSubMenu`, `runRuleSubMenu`,
 and the `runRule{Export,Import}Interactive` shims were removed; their
