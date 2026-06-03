@@ -363,7 +363,7 @@ func buildResponsesCompletedJSON(t *testing.T, inputTokens, outputTokens, cacheT
 // cache, and reasoning tokens from response.completed are captured and returned.
 func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
@@ -372,7 +372,8 @@ func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
 	})
 	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
 
-	usage, err := HandleResponsesToAnthropicV1Stream(c, stream, "gpt-4o")
+	hc := protocol.NewHandleContext(c, "gpt-4o")
+	usage, err := HandleResponsesToAnthropicV1Stream(hc, stream, "gpt-4o")
 	require.NoError(t, err)
 
 	// OpenAI Responses API: input=50 total, cached=8 → stored as 50-8=42 (uncached only)
@@ -386,7 +387,7 @@ func TestHandleResponsesToAnthropicV1Stream_UsageTokens(t *testing.T) {
 // cache_read_input_tokens is emitted in the message_delta SSE event.
 func TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
@@ -395,7 +396,8 @@ func TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens(t *testing.T
 	})
 	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
 
-	_, err := HandleResponsesToAnthropicV1Stream(c, stream, "gpt-4o")
+	hc := protocol.NewHandleContext(c, "gpt-4o")
+	_, err := HandleResponsesToAnthropicV1Stream(hc, stream, "gpt-4o")
 	require.NoError(t, err)
 
 	// Find the message_delta event and verify its usage block
@@ -412,7 +414,7 @@ func TestHandleResponsesToAnthropicV1Stream_MessageDeltaCacheTokens(t *testing.T
 // cache_read_input_tokens is absent from message_delta when cache tokens are zero.
 func TestHandleResponsesToAnthropicV1Stream_ZeroCacheTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 
@@ -421,7 +423,8 @@ func TestHandleResponsesToAnthropicV1Stream_ZeroCacheTokens(t *testing.T) {
 	})
 	stream := openaistream.NewStream[responses.ResponseStreamEventUnion](decoder, nil)
 
-	_, err := HandleResponsesToAnthropicV1Stream(c, stream, "gpt-4o")
+	hc := protocol.NewHandleContext(c, "gpt-4o")
+	_, err := HandleResponsesToAnthropicV1Stream(hc, stream, "gpt-4o")
 	require.NoError(t, err)
 
 	events := parseSSEEvents(w.Body.String())

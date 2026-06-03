@@ -18,6 +18,78 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
+// handleResponsesToAnthropicStream is the shared implementation for both v1 and beta
+// Responses API → Anthropic stream conversions using the iterator pattern.
+func handleResponsesToAnthropicStream(hc *protocol.HandleContext, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
+	c := hc.GinContext
+	logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Starting Responses to Anthropic stream, model=%s", responseModel)
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Responses to Anthropic streaming handler: %v", r)
+			if c.Writer != nil {
+				c.SSEvent("error", "{\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}")
+				if flusher, ok := c.Writer.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+		}
+		if stream != nil {
+			if err := stream.Close(); err != nil {
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing Responses API stream: %v", err)
+			}
+		}
+		logrus.WithContext(c.Request.Context()).Debug("[ResponsesAPI] Finished Responses to Anthropic stream")
+	}()
+
+	conv := newResponsesToAnthropicConverter(c.Request.Context(), stream, responseModel)
+	_, err := RunConverter(hc, conv, anthropicSSEWriterWithFirstChunk(c))
+
+	// Protocol-level error (response.failed, etc.): SSE error event already sent by converter.
+	if hookErr := conv.HookErr(); hookErr != nil {
+		logrus.WithContext(c.Request.Context()).Errorf("[ResponsesAPI] Protocol error: %v", hookErr)
+		return conv.Usage(), hookErr
+	}
+
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			logrus.WithContext(c.Request.Context()).Debug("[ResponsesAPI] Stream canceled by client")
+			return conv.Usage(), nil
+		}
+		logrus.WithContext(c.Request.Context()).Errorf("[ResponsesAPI] Stream error: %v", err)
+		hc.DispatchStreamError(err)
+		sendAnthropicStreamEvent(c, "error", map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"message": err.Error(),
+				"type":    "stream_error",
+				"code":    "stream_failed",
+			},
+		}, nil)
+		return conv.Usage(), err
+	}
+
+	if streamErr := stream.Err(); streamErr != nil {
+		if errors.Is(streamErr, context.Canceled) {
+			logrus.WithContext(c.Request.Context()).Debug("[ResponsesAPI] Stream canceled by client")
+			return conv.Usage(), nil
+		}
+		logrus.WithContext(c.Request.Context()).Errorf("[ResponsesAPI] Stream error: %v", streamErr)
+		hc.DispatchStreamError(streamErr)
+		sendAnthropicStreamEvent(c, "error", map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"message": streamErr.Error(),
+				"type":    "stream_error",
+				"code":    "stream_failed",
+			},
+		}, nil)
+		return conv.Usage(), streamErr
+	}
+
+	hc.CallOnStreamComplete()
+	return conv.Usage(), nil
+}
+
 // OpenAIToAnthropicToolCall captures a complete tool call assembled from OpenAI stream chunks.
 type OpenAIToAnthropicToolCall struct {
 	ID        string
@@ -131,39 +203,9 @@ func handleOpenAIToAnthropicStreamResponse(
 }
 
 // HandleResponsesToAnthropicV1Stream processes OpenAI Responses API streaming events and converts them to Anthropic v1 format.
-// This is a thin wrapper that uses the shared core logic with v1 event senders.
-// Returns UsageStat containing token usage information for tracking.
-func HandleResponsesToAnthropicV1Stream(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
-	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
-		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
-			// message_start is the first SSE byte for this stream; priming
-			// already confirmed the upstream works, so open the failover gate
-			// before writing so the client sees output immediately.
-			CommitFirstChunk(c)
-			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
-		},
-		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
-			sendContentBlockStart(c, index, blockType, content, flusher)
-		},
-		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
-			sendContentBlockDelta(c, index, content, flusher)
-		},
-		SendContentBlockStop: func(state *streamState, index int, flusher http.Flusher) {
-			sendContentBlockStop(c, state, index, flusher)
-		},
-		SendStopEvents: func(state *streamState, flusher http.Flusher) {
-			sendStopEvents(c, state, flusher)
-		},
-		SendMessageDelta: func(state *streamState, stopReason string, flusher http.Flusher) {
-			sendMessageDelta(c, state, stopReason, flusher)
-		},
-		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
-			sendMessageStop(c, messageID, model, state, stopReason, flusher)
-		},
-		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
-			sendAnthropicStreamEvent(c, "error", event, flusher)
-		},
-	})
+// Returns TokenUsage containing token usage information for tracking.
+func HandleResponsesToAnthropicV1Stream(hc *protocol.HandleContext, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
+	return handleResponsesToAnthropicStream(hc, stream, responseModel)
 }
 
 // handlerResponsesToAnthropicStream is the shared core logic for processing OpenAI Responses API streams

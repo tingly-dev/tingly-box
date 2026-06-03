@@ -114,39 +114,9 @@ func handleOpenAIToAnthropicBetaStream(
 }
 
 // HandleResponsesToAnthropicBetaStream processes OpenAI Responses API streaming events and converts them to Anthropic beta format.
-// This is a thin wrapper that uses the shared core logic with beta event senders.
-// Returns UsageStat containing token usage information for tracking.
-func HandleResponsesToAnthropicBetaStream(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
-	return handlerResponsesToAnthropicStream(c, stream, responseModel, responsesAPIEventSenders{
-		SendMessageStart: func(event map[string]interface{}, flusher http.Flusher) {
-			// message_start is the first SSE byte for this stream; priming
-			// already confirmed the upstream works, so open the failover gate
-			// before writing so the client sees output immediately.
-			CommitFirstChunk(c)
-			sendAnthropicStreamEvent(c, eventTypeMessageStart, event, flusher)
-		},
-		SendContentBlockStart: func(index int, blockType string, content map[string]interface{}, flusher http.Flusher) {
-			sendContentBlockStart(c, index, blockType, content, flusher)
-		},
-		SendContentBlockDelta: func(index int, content map[string]interface{}, flusher http.Flusher) {
-			sendContentBlockDelta(c, index, content, flusher)
-		},
-		SendContentBlockStop: func(state *streamState, index int, flusher http.Flusher) {
-			sendContentBlockStop(c, state, index, flusher)
-		},
-		SendStopEvents: func(state *streamState, flusher http.Flusher) {
-			sendStopEvents(c, state, flusher)
-		},
-		SendMessageDelta: func(state *streamState, stopReason string, flusher http.Flusher) {
-			sendMessageDelta(c, state, stopReason, flusher)
-		},
-		SendMessageStop: func(messageID, model string, state *streamState, stopReason string, flusher http.Flusher) {
-			sendMessageStop(c, messageID, model, state, stopReason, flusher)
-		},
-		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
-			sendAnthropicStreamEvent(c, "error", event, flusher)
-		},
-	})
+// Returns TokenUsage containing token usage information for tracking.
+func HandleResponsesToAnthropicBetaStream(hc *protocol.HandleContext, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
+	return handleResponsesToAnthropicStream(hc, stream, responseModel)
 }
 
 func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream ResponsesStreamIter, responseModel string) (*protocol.TokenUsage, error) {
