@@ -133,24 +133,39 @@ func runAgentSubmenu(mgr TUIManager, info agent.AgentInfo) error {
 }
 
 func agentApply(mgr TUIManager, info agent.AgentInfo) error {
-	p, err := pickProvider(mgr, "Provider for "+info.Name+":")
-	if err != nil || p == nil {
-		return err
-	}
-
-	// pickProviderModel auto-fetches from the provider when the cache is empty,
-	// so we don't need an explicit refresh here.
-	model, err := pickProviderModel(mgr, p, "Model for "+info.Name+":")
-	if err != nil || model == "" {
-		return err
-	}
-
+	// Apply is fundamentally "point the agent CLI at tb" — it writes the
+	// agent's config files (e.g. ~/.claude/settings.json) so the agent
+	// talks to this box. Picking provider+model is a separate concern:
+	// it wires/updates the routing rule for the agent's scenario. The
+	// underlying ApplyAgent supports an empty provider/model ("config
+	// files only" mode), so we offer that here too.
 	req := &agent.ApplyAgentRequest{
 		AgentType: info.Type,
-		Provider:  p.UUID,
-		Model:     model,
 		Unified:   true,
 		Force:     true,
+	}
+
+	wireRule, err := Confirm("Also wire a routing rule (pick provider + model)?", ConfirmOptions{
+		Header:      titleStyle.Render("Tingly Box · TUI · Agent · " + info.Name + " · Apply"),
+		DefaultYes:  true,
+		CanGoBack:   true,
+		Description: "No = only write the agent's config files; keep whatever routing rule is already set up.",
+	})
+	if err != nil || wireRule.IsCancel() || wireRule.IsBack() {
+		return nil
+	}
+
+	if wireRule.Value {
+		p, err := pickProvider(mgr, "Provider for "+info.Name+":")
+		if err != nil || p == nil {
+			return err
+		}
+		model, err := pickProviderModel(mgr, p, "Model for "+info.Name+":")
+		if err != nil || model == "" {
+			return err
+		}
+		req.Provider = p.UUID
+		req.Model = model
 	}
 
 	if info.Type == agent.AgentTypeClaudeCode {
