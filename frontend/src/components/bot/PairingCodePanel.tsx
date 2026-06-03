@@ -93,8 +93,8 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
     const handleCopy = useCallback(async () => {
         if (!code) return;
         try {
-            await navigator.clipboard.writeText(code);
-            notify.success('Pairing code copied');
+            await navigator.clipboard.writeText(`/bind ${code}`);
+            notify.success('Pairing command copied');
         } catch {
             notify.error('Copy failed — check clipboard permissions');
         }
@@ -154,7 +154,7 @@ const PairingCodePanel: React.FC<Props> = ({ bot }) => {
                             borderRadius: 1,
                         }}
                     >
-                        {revealed ? code : '••••••••'}
+                        {revealed ? `/bind ${code}` : '••••••••'}
                     </Typography>
                     {expiresAt && (
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
