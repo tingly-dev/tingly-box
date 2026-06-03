@@ -58,34 +58,45 @@ Each tool has an independent toggle (enable/disable) and required configuration 
 
 ## MCP Local Mode (`/mcp/local-mode`)
 
-Configure Claude Code CLI to use Tingly-Box as an MCP server.
+![MCP Local Mode](../images/mcp-local-mode.png)
 
-### Configuration Methods
+Configure Claude Code to use Tingly-Box as an MCP server.
 
-**Method 1: CLI Command**
+The top of the page shows the current status:
+- **Active** badge (green): MCP service is running and external clients can connect
+- Info banner: `Tingly-Box is running in Client Tool mode. Register MCP sources in the Sources page, then connect your MCP client using the instructions below.`
 
-A one-click-copy Claude CLI command is provided — run it directly in the terminal:
+### Connection Information
+
+Displays the **MCP Endpoint URL** — the complete endpoint (including auth) that Claude Code needs to connect.
+
+### Connect Claude Code
+
+**Method 1: Claude CLI**
 
 ```bash
-claude mcp add tingly-box --transport sse <your-tingly-box-mcp-url>
+claude mcp add --transport http tb "<mcp-endpoint-url>" \
+  --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"
 ```
+
+The command auto-reads the User Token from `~/.tingly-box/config.json` as the Bearer Token — no manual token entry needed.
 
 **Method 2: Manual Configuration File**
 
-The page also shows the corresponding JSON snippet to manually add to Claude Desktop's configuration file:
+Add the following to Claude Desktop's configuration file (includes the Authorization header):
 
 ```json
 {
   "mcpServers": {
-    "tingly-box": {
-      "url": "<your-tingly-box-mcp-url>",
-      "type": "sse"
+    "tb": {
+      "url": "<mcp-endpoint-url>",
+      "headers": { "Authorization": "Bearer <your-token>" }
     }
   }
 }
 ```
 
-The page notes the default Claude Desktop config file path for each OS (macOS / Linux / Windows).
+The page notes the default configuration file path for each OS.
 
 ---
 

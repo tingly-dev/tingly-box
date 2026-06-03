@@ -48,7 +48,11 @@ Guardrails enforce rule-based safety checks on AI agent tool calls and tool resu
 
 ## Policy Groups (`/guardrails/groups`)
 
+![Policy Groups](../images/guardrails-groups.png)
+
 Policy groups organize multiple policies for collective management, with group-level enable/disable support.
+
+> Page note: `Groups organize policies and control whether those policy sets participate in evaluation. Built-in is a policy label, not a group type.`
 
 ### Group List
 
@@ -63,14 +67,19 @@ Each policy group shows:
 
 ### Create/Edit a Group
 
-Click **Create Group** or the edit icon:
+Click **New Group** or the edit icon:
 - **Name**: Group name
 - **Severity**: Low / Medium / High
 - **Enabled**: Toggle
 
-### Policy Assignment
+### Assign Policies
 
-After selecting a policy group, the right panel shows the policies in that group. Use checkboxes to add or remove policies.
+The lower half of the page shows the **assignable policy list**. Each policy entry has:
+- Policy name and type badge (e.g. `Privacy`)
+- Description (e.g. `No patterns configured`)
+- An individual toggle
+
+Toggle a policy on to include it in the current group; toggle off to remove it. A single policy can belong to multiple groups.
 
 ---
 

@@ -96,11 +96,50 @@
 
 ---
 
+## 今日/昨日视图补充
+
+![今日视图（按小时）](../images/dashboard-today.png)
+
+当选择 `Today` 或 `Yesterday` 时，图表切换为**按小时**粒度，可直观看到当日各小时的 Token 高峰。右侧同时出现 **By Request** 请求明细列表。
+
+---
+
 ## Token 热力图
 
 路径：`/overview/:timeRange`（默认 `/overview/90d`）
 
-在活动栏「Usage」分组下，还有一个 **Heatmap（热力图）** 视图，以日历热力图形式展示过去 90 天每日的 Token 使用量，直观呈现使用密度分布。
+![Token 热力图](../images/heatmap.png)
+
+在活动栏「Usage」分组底部，**Heatmap** 导航项提供日历热力图视图，完整呈现长期使用密度。
+
+### 顶部汇总数据
+
+| 指标 | 说明 |
+|------|------|
+| INPUT TOKENS | 时间范围内累计输入 Token |
+| CACHE TOKENS | 时间范围内缓存命中 Token |
+| OUTPUT TOKENS | 时间范围内累计输出 Token |
+| TOTAL TOKENS | 总 Token（以上三项之和） |
+
+### 热力图区域
+
+- 横轴：月份（Dec / Jan / Feb …）
+- 纵轴：周内星期（Mon–Sun）
+- 色块深浅对应当日 Token 使用量（颜色越深 = 使用越多）
+
+### 底部统计数据
+
+| 指标 | 说明 |
+|------|------|
+| LONGEST STREAK | 历史最长连续活跃天数 |
+| CURRENT STREAK | 当前连续活跃天数 |
+| ACTIVE DAYS | 活跃天数 / 总天数 |
+| MAX DAILY | 单日最高 Token 用量 |
+
+### 筛选选项
+
+- **Time Range**：180 Days / 365 Days
+- **Provider**：All Providers 或指定 Provider
 
 ---
 

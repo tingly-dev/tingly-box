@@ -14,21 +14,31 @@
 
 页面标题：**Welcome to Tingly Box**
 
+![Onboarding 页面](../images/onboarding.png)
+
 提供两种方式添加第一个 AI Provider：
 
 ### 方式一：浏览并选择 Provider
 
-切换到 **Browse providers** 标签页：
+切换到 **Browse providers** 标签页，Provider 分两类展示：
 
-1. 通过搜索框过滤 Provider 列表
-2. 点击目标 Provider（如 Anthropic、OpenAI、DeepSeek 等）
-3. 在弹出的表单中填写：
-   - **Name**：Provider 显示名称
-   - **API Base**：API 端点地址（通常已预填）
-   - **API Style**：接口风格（`openai` 或 `anthropic`）
-   - **Token**：API Key
-   - **Proxy URL**（可选）：HTTP/HTTPS 代理地址
-4. 点击确认，系统保存凭证
+**Custom（自定义）**
+- **Custom endpoint**：手动填写任意 OpenAI/Anthropic 兼容的 API 端点
+
+**OAuth sign-in**
+- 列出支持 OAuth 授权的 Provider（如 Claude Code、Google Gemini CLI、Codex 等）
+- 点击后直接发起 OAuth 授权流程，无需手动输入 API Key
+
+向下滚动可看到更多通过 API Key 接入的 Provider（Anthropic、OpenAI、DeepSeek 等），按协议风格（OpenAI / Anthropic）分组展示。
+
+点击目标 Provider 后：
+- **OAuth Provider**：自动弹出 OAuth 授权对话框，完成授权即保存
+- **API Key Provider**：弹出配置表单，填写：
+  - **Name**：Provider 显示名称
+  - **API Base**：API 端点（通常已预填）
+  - **API Style**：`openai` 或 `anthropic`
+  - **Token**：API Key
+  - **Proxy URL**（可选）：HTTP/HTTPS 代理地址
 
 对于支持 OAuth 的 Provider（如 Claude.ai），系统会自动发起 OAuth 授权流程。
 

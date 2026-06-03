@@ -64,6 +64,8 @@ Configure a unified HTTP/HTTPS proxy for all outbound API requests:
 
 Path: `/system/logs`
 
+![Logs Page](../images/logs.png)
+
 View real-time Tingly-Box server logs.
 
 ### Features

@@ -96,11 +96,50 @@ Detailed breakdown by model/provider:
 
 ---
 
+## Today / Yesterday View
+
+![Today View (hourly)](../images/dashboard-today.png)
+
+When **Today** or **Yesterday** is selected, the chart switches to **hourly** granularity, showing token peaks per hour. A **By Request** detail list also appears on the right.
+
+---
+
 ## Token Heatmap
 
 Path: `/overview/:timeRange` (default: `/overview/90d`)
 
-Under the Usage activity group in the sidebar, there's also a **Heatmap** view — a calendar-style heatmap showing daily token usage intensity over the past 90 days.
+![Token Heatmap](../images/heatmap.png)
+
+The **Heatmap** navigation item at the bottom of the Usage group provides a calendar-style view of long-term usage density.
+
+### Top Summary
+
+| Metric | Description |
+|--------|-------------|
+| INPUT TOKENS | Cumulative input tokens for the time range |
+| CACHE TOKENS | Cache-hit tokens for the time range |
+| OUTPUT TOKENS | Cumulative output tokens |
+| TOTAL TOKENS | Sum of all three |
+
+### Heatmap Grid
+
+- Horizontal axis: months (Dec / Jan / Feb …)
+- Vertical axis: day of week (Mon–Sun)
+- Cell darkness = daily token usage (darker = more)
+
+### Bottom Stats
+
+| Metric | Description |
+|--------|-------------|
+| LONGEST STREAK | Longest consecutive active-day streak |
+| CURRENT STREAK | Current active-day streak |
+| ACTIVE DAYS | Active days / total days in range |
+| MAX DAILY | Single-day peak token usage |
+
+### Filter Options
+
+- **Time Range**: 180 Days / 365 Days
+- **Provider**: All Providers or a specific provider
 
 ---
 

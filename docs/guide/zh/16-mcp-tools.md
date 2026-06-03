@@ -58,34 +58,45 @@ MCP（Model Context Protocol）工具扩展支持为 Claude Code 等场景注册
 
 ## MCP 本地模式（`/mcp/local-mode`）
 
-配置 Claude Code CLI 将 Tingly-Box 作为 MCP 服务器使用。
+![MCP 本地模式](../images/mcp-local-mode.png)
 
-### 配置方式
+配置 Claude Code 将 Tingly-Box 作为 MCP 服务器使用。
 
-**方法一：CLI 命令**
+页面顶部显示当前状态：
+- **Active**（绿色）：MCP 服务正在运行，外部客户端可以连接
+- 提示信息：`Tingly-Box is running in Client Tool mode. Register MCP sources in the Sources page, then connect your MCP client using the instructions below.`
 
-页面提供一键复制的 Claude CLI 命令，直接在终端执行即可完成配置：
+### Connection Information
+
+展示 **MCP Endpoint URL**（完整地址，含认证信息），是 Claude Code 连接所需的端点。
+
+### Connect Claude Code
+
+**方法一：Claude CLI**
 
 ```bash
-claude mcp add tingly-box --transport sse <your-tingly-box-mcp-url>
+claude mcp add --transport http tb "<mcp-endpoint-url>" \
+  --header "Authorization: Bearer $(cat ~/.tingly-box/config.json | jq -r '.user_token')"
 ```
+
+命令会自动从 `~/.tingly-box/config.json` 中读取 User Token 作为 Bearer Token，无需手动输入。
 
 **方法二：手动配置文件**
 
-页面同时展示对应的 JSON 配置片段，可手动添加到 Claude Desktop 的配置文件中：
+将以下片段添加到 Claude Desktop 配置文件（含认证 Header）：
 
 ```json
 {
   "mcpServers": {
-    "tingly-box": {
-      "url": "<your-tingly-box-mcp-url>",
-      "type": "sse"
+    "tb": {
+      "url": "<mcp-endpoint-url>",
+      "headers": { "Authorization": "Bearer <your-token>" }
     }
   }
 }
 ```
 
-页面标注了各操作系统下 Claude Desktop 配置文件的默认路径（macOS / Linux / Windows）。
+页面标注了各操作系统下配置文件的默认路径。
 
 ---
 

@@ -48,7 +48,11 @@
 
 ## 策略组（`/guardrails/groups`）
 
+![策略组](../images/guardrails-groups.png)
+
 策略组将多条策略归类管理，支持整体启用/禁用。
+
+> 页面说明文字：`Groups organize policies and control whether those policy sets participate in evaluation. Built-in is a policy label, not a group type.`
 
 ### 组列表
 
@@ -63,14 +67,19 @@
 
 ### 创建/编辑组
 
-点击 **Create Group** 或编辑图标：
+点击 **New Group** 或编辑图标：
 - **Name**：组名称
 - **Severity**：Low / Medium / High
 - **Enabled**：启用开关
 
-### 策略分配
+### 策略分配（Assign Policies）
 
-选中策略组后，右侧显示该组包含的策略清单，可通过复选框增减策略。
+页面下半部分展示**可分配的策略列表**，每条策略带有：
+- 策略名称和类型标签（如 `Privacy`）
+- 描述（如 `No patterns configured`）
+- 独立的开关控制
+
+勾选后该策略加入当前组，取消勾选则从组中移除。一条策略可以同时属于多个组。
 
 ---
 

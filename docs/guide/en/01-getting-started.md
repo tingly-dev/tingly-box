@@ -14,21 +14,31 @@ When you access the Tingly-Box Web UI for the first time, the system detects tha
 
 Page title: **Welcome to Tingly Box**
 
+![Onboarding Page](../images/onboarding.png)
+
 Two methods are available to add your first AI provider:
 
 ### Method 1: Browse and Select a Provider
 
-Switch to the **Browse providers** tab:
+Switch to the **Browse providers** tab. Providers are grouped into two categories:
 
-1. Use the search box to filter the provider list
-2. Click the target provider (e.g. Anthropic, OpenAI, DeepSeek)
-3. Fill in the configuration form:
-   - **Name**: Display name for the provider
-   - **API Base**: API endpoint (usually pre-filled)
-   - **API Style**: Interface style (`openai` or `anthropic`)
-   - **Token**: Your API Key
-   - **Proxy URL** (optional): HTTP/HTTPS proxy address
-4. Confirm — the system saves the credentials
+**Custom**
+- **Custom endpoint**: Manually specify any OpenAI/Anthropic-compatible API endpoint
+
+**OAuth sign-in**
+- Lists providers that support OAuth authorization (e.g. Claude Code, Google Gemini CLI, Codex)
+- Clicking one launches the OAuth flow directly — no API Key required
+
+Scroll down to see more providers that use API Keys (Anthropic, OpenAI, DeepSeek, etc.), grouped by protocol (OpenAI / Anthropic).
+
+After clicking a provider:
+- **OAuth provider**: An OAuth authorization dialog opens automatically — complete the auth to save
+- **API Key provider**: A configuration form appears — fill in:
+  - **Name**: Display name (customizable)
+  - **API Base**: API endpoint (pre-filled, editable)
+  - **API Style**: `openai` or `anthropic`
+  - **Token**: API Key
+  - **Proxy URL** (optional): HTTP/HTTPS proxy address
 
 For OAuth-enabled providers (e.g. Claude.ai), the system automatically initiates the OAuth authorization flow.
 

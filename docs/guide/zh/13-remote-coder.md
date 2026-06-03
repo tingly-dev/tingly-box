@@ -44,6 +44,8 @@ Remote Coder 提供基于 Web 的对话界面，直接在浏览器中与 Claude 
 
 ## Sessions 页面（`/remote-coder/sessions`）
 
+![Remote Coder Sessions](../images/remote-coder-sessions.png)
+
 ### 页面结构
 
 **统计卡片（顶部）：**
