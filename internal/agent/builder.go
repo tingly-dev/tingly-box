@@ -1,6 +1,10 @@
 package agent
 
-import aiagent "github.com/tingly-dev/tingly-box/ai/agent"
+import (
+	"strings"
+
+	aiagent "github.com/tingly-dev/tingly-box/ai/agent"
+)
 
 // BuildClaudeCodeModelConfig constructs the model configuration for Claude Code.
 // This contains the business logic for unified vs separate mode.
@@ -58,7 +62,7 @@ func CollectCodexModels(rules []string) []string {
 	var out []string
 
 	for _, ruleModel := range rules {
-		model := trimSpace(ruleModel)
+		model := strings.TrimSpace(ruleModel)
 		if model == "" {
 			continue
 		}
@@ -70,22 +74,4 @@ func CollectCodexModels(rules []string) []string {
 	}
 
 	return out
-}
-
-// String helpers to avoid importing strings package
-
-func trimSpace(s string) string {
-	// Simple trim leading/trailing whitespace
-	start := 0
-	end := len(s)
-
-	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
-		start++
-	}
-
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
-		end--
-	}
-
-	return s[start:end]
 }
