@@ -1,13 +1,13 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import AgentSetupCard, { hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
+import AgentSetupCard, { hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
-import VSCodeConfigModal from '@/components/VSCodeConfigModal';
+import VSCodeConfigModal from './components/VSCodeConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 

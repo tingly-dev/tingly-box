@@ -6,7 +6,7 @@ import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
-import ClaudeDesktopConfigModal from '@/components/ClaudeDesktopConfigModal';
+import ClaudeDesktopConfigModal from './components/ClaudeDesktopConfigModal';
 import { useScenarioPageInternal } from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import { ScenarioPageModalProvider } from '@/pages/scenario/context/ScenarioPageContext';
 

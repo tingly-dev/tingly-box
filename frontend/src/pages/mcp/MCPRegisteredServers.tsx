@@ -1,5 +1,5 @@
 import { PageLayout } from '@/components/PageLayout';
-import AgentInstallCard from '@/components/AgentInstallCard';
+import AgentInstallCard from './AgentInstallCard';
 import ToolCard from '@/components/ToolCard';
 import ToolFilterBar, { type ToolFilter } from '@/components/ToolFilterBar';
 import { api } from '@/services/api';

@@ -1,8 +1,8 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
-import OpenCodeConfigModal from '@/components/OpenCodeConfigModal';
+import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
+import OpenCodeConfigModal from './components/OpenCodeConfigModal';
 import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';

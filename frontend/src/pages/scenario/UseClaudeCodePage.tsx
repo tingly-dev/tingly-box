@@ -1,7 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
-import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
-import ClaudeCodeConfigModal from '@/components/ClaudeCodeConfigModal';
-import { derivePrefsFromRules } from '@/components/ClaudeCodeQuickConfig';
+import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
+import ClaudeCodeConfigModal from './components/ClaudeCodeConfigModal';
+import { derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import TemplatePage from './components/TemplatePage.tsx';

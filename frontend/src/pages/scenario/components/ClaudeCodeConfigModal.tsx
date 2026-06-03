@@ -3,7 +3,7 @@ import { Close as CloseIcon } from '@/components/icons';
 import { VisibilityOutlined as VisibilityOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import CodeBlock from './CodeBlock';
+import CodeBlock from '@/components/CodeBlock';
 import { isFullEdition } from '@/utils/edition';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';

@@ -1,6 +1,6 @@
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Stack } from '@mui/material';
 import React from 'react';
-import xcodeImage from '../assets/images/xcode.png';
+import xcodeImage from '@/assets/images/xcode.png';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 
 interface XcodeConfigModalProps {

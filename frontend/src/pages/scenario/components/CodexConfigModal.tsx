@@ -1,8 +1,8 @@
 import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Typography } from '@mui/material';
 import React from 'react';
-import CodeBlock from './CodeBlock';
+import CodeBlock from '@/components/CodeBlock';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs } from './CodexQuickConfig';
-import { shouldIgnoreDialogClose } from './dialogClose';
+import { shouldIgnoreDialogClose } from '@/components/dialogClose';
 import { api } from '@/services/api';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
 

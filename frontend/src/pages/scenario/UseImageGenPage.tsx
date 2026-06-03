@@ -1,7 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import ImageGenQuickStartCard from "@/components/ImageGenQuickStartCard.tsx";
+import ImageGenQuickStartCard from "./components/ImageGenQuickStartCard";
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { PlayArrow as PlayArrowIcon, Info as InfoIcon } from '@/components/icons';
 import { useNavigate } from 'react-router-dom';

@@ -1,7 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
-import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from '@/components/AgentSetupCard';
-import CodexConfigModal from "@/components/CodexConfigModal.tsx";
-import { defaultCodexPrefs } from "@/components/CodexQuickConfig.tsx";
+import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
+import CodexConfigModal from "./components/CodexConfigModal";
+import { defaultCodexPrefs } from "./components/CodexQuickConfig";
 import { api } from '@/services/api';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";

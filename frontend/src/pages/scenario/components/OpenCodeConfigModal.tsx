@@ -1,6 +1,6 @@
 import { Box, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Button, Typography, Tab, Tabs } from '@mui/material';
 import React from 'react';
-import CodeBlock from './CodeBlock';
+import CodeBlock from '@/components/CodeBlock';
 import { useTranslation } from 'react-i18next';
 import { isFullEdition } from '@/utils/edition';
 
