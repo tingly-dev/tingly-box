@@ -17,7 +17,6 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/command/options"
 	"github.com/tingly-dev/tingly-box/internal/config"
-	"github.com/tingly-dev/tingly-box/internal/feature"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
@@ -39,9 +38,8 @@ type StartCmdKong struct {
 	Daemon               bool   `kong:"flag,name='daemon',help='Run as daemon'"`
 	LogFile              string `kong:"flag,name='log-file',help='Log file path'"`
 	PromptRestart        bool   `kong:"flag,name='prompt-restart',help='Prompt to restart if running'"`
-	RecordMode           string `kong:"flag,name='record-mode',help='Record mode'"`
-	RecordDir            string `kong:"flag,name='record-dir',help='Record directory'"`
-	Expr                 string `kong:"flag,name='expr',help='Experimental features'"`
+	RecordMode string `kong:"flag,name='record-mode',help='Record mode'"`
+	RecordDir  string `kong:"flag,name='record-dir',help='Record directory'"`
 }
 
 func (s *StartCmdKong) Run(appManager *AppManager) error {
@@ -57,7 +55,6 @@ func (s *StartCmdKong) Run(appManager *AppManager) error {
 		PromptRestart:        s.PromptRestart,
 		RecordMode:           s.RecordMode,
 		RecordDir:            s.RecordDir,
-		Expr:                 s.Expr,
 	}
 	opts := options.ResolveStartOptions(newKongShimCmd(s.EnableDebug), flags, appManager.AppConfig())
 	return startServer(appManager, opts)
@@ -109,7 +106,6 @@ func (r *RestartCmdKong) Run(appManager *AppManager) error {
 		PromptRestart:        r.PromptRestart,
 		RecordMode:           r.RecordMode,
 		RecordDir:            r.RecordDir,
-		Expr:                 r.Expr,
 	}
 	opts := options.ResolveStartOptions(newKongShimCmd(r.EnableDebug), flags, appManager.AppConfig())
 	return startServer(appManager, opts)
@@ -276,20 +272,17 @@ func resolveStartCmdKongOptions(start *StartCmdKong, appConfig *config.AppConfig
 		resolvedRecordDir = appConfig.ConfigDir() + "/record"
 	}
 
-	experimentalFeatures := feature.ParseFeatures(start.Expr)
-
 	return options.StartServerOptions{
-		Host:                 start.Host,
-		Port:                 resolvedPort,
-		EnableUI:             start.EnableUI,
-		EnableDebug:          resolvedDebug,
-		EnableOpenBrowser:    start.EnableOpenBrowser,
-		Daemon:               start.Daemon,
-		LogFile:              start.LogFile,
-		PromptRestart:        start.PromptRestart,
-		RecordMode:           start.RecordMode,
-		RecordDir:            resolvedRecordDir,
-		ExperimentalFeatures: experimentalFeatures,
+		Host:              start.Host,
+		Port:              resolvedPort,
+		EnableUI:          start.EnableUI,
+		EnableDebug:       resolvedDebug,
+		EnableOpenBrowser: start.EnableOpenBrowser,
+		Daemon:            start.Daemon,
+		LogFile:           start.LogFile,
+		PromptRestart:     start.PromptRestart,
+		RecordMode:        start.RecordMode,
+		RecordDir:         resolvedRecordDir,
 	}
 }
 
@@ -553,7 +546,6 @@ func startServerWithHook(appManager *AppManager, opts options.StartServerOptions
 		server.WithHost(opts.Host),
 		server.WithRecordMode(obs.RecordMode(opts.RecordMode)),
 		server.WithRecordDir(opts.RecordDir),
-		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
 		server.WithMultiLogger(multiLogger),
 	)
 

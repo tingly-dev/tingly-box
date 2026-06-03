@@ -161,9 +161,6 @@ type Server struct {
 	// recording flag - enables dual-stage request recording
 	enableRecording bool
 
-	// experimental features
-	experimentalFeatures map[string]bool
-
 	// remote control lifecycle management
 	remoteCoderCtx    context.Context
 	remoteCoderCancel context.CancelFunc

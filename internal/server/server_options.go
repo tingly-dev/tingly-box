@@ -94,13 +94,6 @@ func WithGuardrails(runtime *guardrails.Guardrails) ServerOption {
 	}
 }
 
-// WithExperimentalFeatures sets the experimental features for the server
-func WithExperimentalFeatures(features map[string]bool) ServerOption {
-	return func(s *Server) {
-		s.experimentalFeatures = features
-	}
-}
-
 // WithDebug enables or disables debug mode for the server
 func WithDebug(enabled bool) ServerOption {
 	return func(s *Server) {
@@ -124,11 +117,6 @@ func WithTemplateManager(tm *data.TemplateManager) ServerOption {
 			s.config.SetTemplateManager(tm)
 		}
 	}
-}
-
-// IsFeatureEnabled checks if a specific feature is enabled
-func (s *Server) IsFeatureEnabled(feature string) bool {
-	return s.experimentalFeatures[feature]
 }
 
 // sinkOpts derives obs.SinkOption values from the server's recording config.
