@@ -1,19 +1,19 @@
-import CardGrid from '@/components/CardGrid';
-import { PageLayout } from '@/components/PageLayout';
-import UnifiedCard from '@/components/UnifiedCard';
+import CardGrid from '@/components/CardGrid.tsx';
+import { PageLayout } from '@/components/PageLayout.tsx';
+import UnifiedCard from '@/components/UnifiedCard.tsx';
 import { Logout } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { IconCircleCheck, IconCircleX, IconInfoCircle, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage, IconBrush, IconWorld, IconCheck, IconClock } from '@tabler/icons-react';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useHealth } from '@/contexts/HealthContext';
-import { useVersion } from '@/contexts/VersionContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { useThemeMode } from '@/contexts/ThemeContext';
-import { useNotify } from '@/hooks/useNotify';
-import { api } from '@/services/api';
-import { getThemeOptions } from '@/theme/options';
+import { useHealth } from '@/contexts/HealthContext.tsx';
+import { useVersion } from '@/contexts/VersionContext.tsx';
+import { useAuth } from '@/contexts/AuthContext.tsx';
+import { useThemeMode } from '@/contexts/ThemeContext.tsx';
+import { useNotify } from '@/hooks/useNotify.ts';
+import { api } from '@/services/api.ts';
+import { getThemeOptions } from '@/theme/options.ts';
 
 const System = () => {
     const { t, i18n } = useTranslation();

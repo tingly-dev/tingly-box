@@ -23,10 +23,10 @@ import {
     Security as SecurityIcon,
 } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
-import { api } from '@/services/api';
-import { useAuth } from '@/contexts/AuthContext';
-import { PageLayout } from '@/components/PageLayout';
-import UnifiedCard from '@/components/UnifiedCard';
+import { api } from '@/services/api.ts';
+import { useAuth } from '@/contexts/AuthContext.tsx';
+import { PageLayout } from '@/components/PageLayout.tsx';
+import UnifiedCard from '@/components/UnifiedCard.tsx';
 
 interface TokenInfo {
     token: string;
