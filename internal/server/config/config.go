@@ -1573,28 +1573,12 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.DisableStreamUsage
 	case FlagCleanHeader:
 		return flags.CleanHeader
-	case ExtensionSkillUser:
-		if val, ok := config.Extensions[ExtensionSkillUser].(bool); ok {
-			return val
-		}
-		return false
-	case ExtensionSkillIDE:
-		if val, ok := config.Extensions[ExtensionSkillIDE].(bool); ok {
-			return val
-		}
-		return false
-	case ExtensionGuardrails:
-		if val, ok := config.Extensions[ExtensionGuardrails].(bool); ok {
-			return val
-		}
-		return false
-	case ExtensionMCP:
-		if val, ok := config.Extensions[ExtensionMCP].(bool); ok {
-			return val
-		}
-		return false
 	default:
-		return false
+		if config.Extensions == nil {
+			return false
+		}
+		val, _ := config.Extensions[flagName].(bool)
+		return val
 	}
 }
 

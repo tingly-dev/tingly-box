@@ -265,7 +265,6 @@ func (l *appLauncher) StartGUI(appManager *command.AppManager, opts options.Star
 		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		server.WithRecordMode(recordMode),
 		server.WithRecordDir(opts.RecordDir),
-		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Create Wails app with ServerManager embedded
@@ -316,7 +315,6 @@ func (l *appLauncher) StartTray(appManager *command.AppManager, opts options.Sta
 		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		server.WithRecordMode(recordMode),
 		server.WithRecordDir(opts.RecordDir),
-		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Create slim Wails app with ServerManager embedded
@@ -368,7 +366,6 @@ func (l *appLauncher) StartSlim(appManager *command.AppManager, opts options.Sta
 		server.WithHTTPSRegenerate(opts.HTTPS.Regenerate),
 		server.WithRecordMode(recordMode),
 		server.WithRecordDir(opts.RecordDir),
-		server.WithExperimentalFeatures(opts.ExperimentalFeatures),
 	)
 
 	// Create slim Wails app with ServerManager embedded

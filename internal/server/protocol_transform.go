@@ -46,18 +46,15 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-		scenarioFlags = &scenarioConfig.Flags
-	}
-
-	if s.ApplySmartCompact(scenarioType) {
-		baseTransforms := chain.GetTransforms()
-		newTransforms := append(
-			[]transform.Transform{
-				smart_compact.NewCompactTransform(2),
-			},
-			baseTransforms...,
-		)
-		chain.SetTransforms(newTransforms)
+		flags := scenarioConfig.GetDefaultFlags()
+		scenarioFlags = &flags
+		if flags.SmartCompact {
+			baseTransforms := chain.GetTransforms()
+			chain.SetTransforms(append(
+				[]transform.Transform{smart_compact.NewCompactTransform(2)},
+				baseTransforms...,
+			))
+		}
 	}
 
 	opts := []transform.TransformOption{
@@ -116,18 +113,15 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
 	if scenarioConfig := s.config.GetScenarioConfig(scenarioType); scenarioConfig != nil {
-		scenarioFlags = &scenarioConfig.Flags
-	}
-
-	if s.ApplySmartCompact(scenarioType) {
-		baseTransforms := chain.GetTransforms()
-		newTransforms := append(
-			[]transform.Transform{
-				smart_compact.NewCompactTransform(2),
-			},
-			baseTransforms...,
-		)
-		chain.SetTransforms(newTransforms)
+		flags := scenarioConfig.GetDefaultFlags()
+		scenarioFlags = &flags
+		if flags.SmartCompact {
+			baseTransforms := chain.GetTransforms()
+			chain.SetTransforms(append(
+				[]transform.Transform{smart_compact.NewCompactTransform(2)},
+				baseTransforms...,
+			))
+		}
 	}
 
 	opts := []transform.TransformOption{
