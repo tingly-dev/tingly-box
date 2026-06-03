@@ -2,7 +2,6 @@ package config
 
 import (
 	"bytes"
-	"crypto/cipher"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -20,7 +19,6 @@ type AppConfig struct {
 	configDir  string
 	config     *config.Config
 	version    string
-	gcm        cipher.AEAD
 	mu         sync.RWMutex
 }
 
