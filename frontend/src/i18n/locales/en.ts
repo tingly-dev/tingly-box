@@ -175,7 +175,7 @@ export default {
     "emptyState": {
       "title": "No API Keys Available",
       "description": "Get started by adding your first AI API Key to use the service.",
-      "button": "Add Your First API Key"
+      "button": "Connect Your First AI"
     },
     "token": {
       "generated": "{{label}} copied to clipboard!",
@@ -197,10 +197,10 @@ export default {
     "pageTitle": "Credentials",
     "subtitleWithCount": "Managing {{count}} providers and API keys",
     "subtitleEmpty": "No API keys configured yet",
-    "addButton": "Add API Key",
+    "addButton": "Connect AI",
     "emptyCardTitle": "No Model API Key Configured",
-    "emptyCardSubtitle": "Get started by adding your first API token or key",
-    "emptyCardButton": "Add Your First Provider",
+    "emptyCardSubtitle": "Get started by connecting your first AI provider",
+    "emptyCardButton": "Connect Your First Provider",
     "emptyCardContent": "Configure your API tokens and keys to access AI services",
     "notifications": {
       "loadFailed": "Failed to load providers: {{error}}",
@@ -215,10 +215,10 @@ export default {
     }
   },
   "providerDialog": {
-    "addTitle": "Add New API Key",
+    "addTitle": "Connect AI",
     "addDescription": "Select a provider and enter your API key to connect AI services. Multiple protocols can be enabled for providers that support them.",
-    "editTitle": "Edit API Key",
-    "addButton": "Add API Key",
+    "editTitle": "Edit Connection",
+    "addButton": "Connect",
     "apiStyle": {
       "label": "API Style",
       "placeholder": "Select API style...",

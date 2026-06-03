@@ -17,7 +17,7 @@ const EmptyStateGuide: React.FC<EmptyStateGuideProps> = ({
     description = "Get started by adding your first API key or OAuth provider to access AI services",
     showOAuthButton = true,
     showHeroIcon = true,
-    primaryButtonLabel = "Add API Key",
+    primaryButtonLabel = "Connect AI",
     secondaryButtonLabel = "Add OAuth",
     onAddApiKeyClick,
     onAddOAuthClick,

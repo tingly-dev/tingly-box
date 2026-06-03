@@ -1,14 +1,16 @@
 import {Check, Close} from '@/components/icons';
-import {Box, IconButton, Stack, Typography} from '@mui/material';
+import {Box, Button, IconButton, Stack, Typography} from '@mui/material';
 import React from 'react';
 import type {VerificationResult} from './probe';
 
 interface VerificationResultPanelProps {
     result: VerificationResult;
     onClose: () => void;
+    /** When the probe fails on an OpenAI URL without /v1, suggest appending it. */
+    v1Hint?: { show: boolean; onApply: () => void };
 }
 
-const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result, onClose}) => {
+const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result, onClose, v1Hint}) => {
     const details = (result.details ?? '').split(' • ').filter(d => d.trim());
 
     return (
@@ -97,6 +99,22 @@ const VerificationResultPanel: React.FC<VerificationResultPanelProps> = ({result
                     );
                 })}
             </Stack>
+
+            {v1Hint?.show && (
+                <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1}
+                    sx={{mt: 1.5, p: 1, borderRadius: 1, bgcolor: 'warning.lighter', border: '1px solid', borderColor: 'warning.light'}}
+                >
+                    <Typography variant="caption" sx={{flex: 1}}>
+                        Some OpenAI-compatible APIs require a <code>/v1</code> suffix on the base URL.
+                    </Typography>
+                    <Button size="small" variant="outlined" color="warning" onClick={v1Hint.onApply} sx={{whiteSpace: 'nowrap', minWidth: 'auto'}}>
+                        Try /v1
+                    </Button>
+                </Stack>
+            )}
 
             <Typography
                 variant="caption"

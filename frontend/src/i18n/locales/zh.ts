@@ -176,7 +176,7 @@ export default {
     "emptyState": {
       "title": "没有可用的 API 密钥",
       "description": "添加您的第一个 AI API 密钥以开始使用服务。",
-      "button": "添加您的第一个 API 密钥"
+      "button": "连接您的第一个 AI"
     },
     "token": {
       "generated": "{{label}} 已复制到剪贴板！",
@@ -198,10 +198,10 @@ export default {
     "pageTitle": "凭证",
     "subtitleWithCount": "正在管理 {{count}} 个提供商和 API 密钥",
     "subtitleEmpty": "尚未配置 API 密钥",
-    "addButton": "添加 API 密钥",
+    "addButton": "连接 AI",
     "emptyCardTitle": "未配置模型 API 密钥",
-    "emptyCardSubtitle": "添加您的第一个 API 令牌或密钥以开始使用",
-    "emptyCardButton": "添加您的第一个提供商",
+    "emptyCardSubtitle": "连接您的第一个 AI 提供商以开始使用",
+    "emptyCardButton": "连接您的第一个提供商",
     "emptyCardContent": "配置您的 API 令牌和密钥以访问 AI 服务",
     "notifications": {
       "loadFailed": "加载提供商失败：{{error}}",
@@ -216,10 +216,10 @@ export default {
     }
   },
   "providerDialog": {
-    "addTitle": "添加新的 API 密钥",
+    "addTitle": "连接 AI",
     "addDescription": "选择提供商并输入您的 API 密钥以连接 AI 服务。支持多种协议的提供商可以启用多个协议。",
-    "editTitle": "编辑 API 密钥",
-    "addButton": "添加 API 密钥",
+    "editTitle": "编辑连接",
+    "addButton": "连接",
     "apiStyle": {
       "label": "API 风格",
       "placeholder": "选择 API 风格...",

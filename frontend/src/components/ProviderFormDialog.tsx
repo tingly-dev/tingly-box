@@ -70,6 +70,9 @@ interface PresetProviderFormDialogProps {
     isFirstProvider?: boolean;
     /** Pass true for local providers: token field stays editable but is not required. */
     optionalEditableToken?: boolean;
+    /** When true, the user entered via "Custom endpoint" — hide the provider
+     *  dropdown and show a plain URL text field instead. */
+    customMode?: boolean;
 }
 
 const ProviderFormDialog = ({
@@ -84,6 +87,7 @@ const ProviderFormDialog = ({
                                 submitText,
                                 isFirstProvider = false,
                                 optionalEditableToken = false,
+                                customMode = false,
                             }: PresetProviderFormDialogProps) => {
     const {t} = useTranslation();
     const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
@@ -599,17 +603,41 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        <ProviderAutocomplete
-                            options={allProviders}
-                            value={selectedProvider}
-                            inputValue={providerInputValue}
-                            onChange={handleProviderSelect}
-                            onInputChange={handleProviderInputChange}
-                            onBlur={handleProviderInputBlur}
-                            required
-                            error={baseUrlError}
-                            helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
-                        />
+                        {customMode ? (
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label={t('providerDialog.provider.label')}
+                                placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
+                                value={providerInputValue}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setProviderInputValue(val);
+                                    if (val.trim()) setBaseUrlError(false);
+                                }}
+                                onBlur={() => {
+                                    if (data.apiBase !== providerInputValue) {
+                                        onChangeRef.current('apiBase', providerInputValue);
+                                        onChangeRef.current('providerBaseUrls', undefined);
+                                    }
+                                }}
+                                required
+                                error={baseUrlError}
+                                helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
+                            />
+                        ) : (
+                            <ProviderAutocomplete
+                                options={allProviders}
+                                value={selectedProvider}
+                                inputValue={providerInputValue}
+                                onChange={handleProviderSelect}
+                                onInputChange={handleProviderInputChange}
+                                onBlur={handleProviderInputBlur}
+                                required
+                                error={baseUrlError}
+                                helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
+                            />
+                        )}
 
                         <ApiKeyField
                             mode={mode}
@@ -699,6 +727,18 @@ const ProviderFormDialog = ({
                             <VerificationResultPanel
                                 result={verificationResult}
                                 onClose={() => setVerificationResult(null)}
+                                v1Hint={{
+                                    show: !verificationResult.success
+                                        && protocolOpenAI
+                                        && !(/\/v1\/?$/.test(data.apiBase || providerInputValue)),
+                                    onApply: () => {
+                                        const base = (data.apiBase || providerInputValue).replace(/\/+$/, '');
+                                        const newUrl = `${base}/v1`;
+                                        setProviderInputValue(newUrl);
+                                        onChangeRef.current('apiBase', newUrl);
+                                        setVerificationResult(null);
+                                    },
+                                }}
                             />
                         )}
 
