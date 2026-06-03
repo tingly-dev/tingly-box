@@ -6,7 +6,7 @@
 // These primitives back the production /virtual/v1/* endpoint (onboarding,
 // demos, dry-runs without a real upstream provider) and are also reused as
 // an in-process LLM substitute by test packages such as protocoltest
-// and protocoltest. The production endpoint is the package's primary
+// and servertest. The production endpoint is the package's primary
 // surface; test consumers are secondary and use GenericRegistry directly
 // rather than RegisterDefaults — see README.md "Positioning & registration
 // discipline".
