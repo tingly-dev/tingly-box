@@ -10,7 +10,10 @@
  *   - es-toolkit shim patched (see doc-guide SKILL.md) if recharts errors appear
  */
 
-import { chromium } from '../../frontend/node_modules/playwright/index.js';
+// Playwright is installed in frontend/ (not in package.json — tooling only).
+// createRequire resolves CJS packages from the frontend/ node_modules tree.
+import { createRequire } from 'module';
+const { chromium } = createRequire(new URL('file:///home/user/tingly-box/frontend/'))('playwright');
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -59,18 +62,14 @@ async function shot(ctx, name, route, { action, waitMs = 3500 } = {}) {
 
 // --- Contexts ----------------------------------------------------------
 
-// Standard context: auth + all feature flags
+// Standard context: auth + all feature flags + onboarding suppressed.
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 await ctx.addInitScript(() => {
     localStorage.setItem('user_auth_token', 'mock-token');
     localStorage.setItem('feature_guardrails', 'true');
     localStorage.setItem('feature_mcp', 'true');
-});
-
-// Auth-only context (no feature flags) for feature-gated pages
-const ctxClean = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-await ctxClean.addInitScript(() => {
-    localStorage.setItem('user_auth_token', 'mock-token');
+    localStorage.setItem('onboarding_complete', 'true');
+    localStorage.setItem('onboarding_dismissed', 'true');
 });
 
 // --- Batch 1: top-level pages ------------------------------------------
@@ -125,11 +124,101 @@ await shot(ctx, 'claude-code-config-modal', '/agent/claude_code', {
     },
 });
 
-// --- Batch 3: routing graph -------------------------------------------
-console.log('\nBatch 3: routing graph');
+// --- Batch 3: routing graph & extensions catalog ----------------------
+console.log('\nBatch 3: routing graph & extensions');
 
-await shot(ctx, 'routing-graph-direct', '/agent/claude_code',  { waitMs: 5000 });
-await shot(ctx, 'routing-graph-sdk',    '/agent/sdk-proxy',    { waitMs: 5000 });
+// Scroll the page's overflow container up by `nudge` px after scrollIntoViewIfNeeded,
+// so the element being targeted has some headroom above it in the viewport.
+async function nudgeScrollUp(page, px = 120) {
+    await page.evaluate((px) => {
+        const all = document.querySelectorAll('*');
+        for (const n of all) {
+            const s = window.getComputedStyle(n);
+            if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && n.scrollHeight > n.clientHeight) {
+                n.scrollTop = Math.max(0, n.scrollTop - px);
+                break;
+            }
+        }
+    }, px);
+    await page.waitForTimeout(400);
+}
+
+// Routing graph — Direct mode.
+// Navigate to the Claude Code scenario page, scroll until the T0 tier label
+// is in frame (plus some headroom above it for the EntryNode toggle), then
+// capture the full viewport so the entire routing graph row is visible.
+{
+    const page = await ctx.newPage();
+    page.on('pageerror', err => console.error(`  [err] ${err.message.slice(0, 80)}`));
+    await page.goto(`${BASE}/agent/claude_code`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(5000);
+    // Dismiss any residual onboarding overlay
+    await page.locator('button:has-text("Skip")').click().catch(() => {});
+    await page.waitForTimeout(300);
+
+    // T0 is the first tier label rendered by TierNode (exact text "T0").
+    await page.locator('text="T0"').first().scrollIntoViewIfNeeded().catch(() => {});
+    await page.waitForTimeout(800);
+    await nudgeScrollUp(page, 120);
+
+    const out = path.join(OUT_DIR, 'routing-graph-direct.png');
+    await page.screenshot({ path: out, fullPage: false });
+    console.log(`  [${fs.statSync(out).size > 10000 ? 'OK  ' : 'BLNK'}] routing-graph-direct.png  (${fs.statSync(out).size}b)`);
+    await page.close();
+}
+
+// Routing graph — Smart mode.
+// Same as Direct, but click the "Smart" ToggleButton (rendered by RoutingModeNode
+// with label text "Smart") before capturing.
+{
+    const page = await ctx.newPage();
+    page.on('pageerror', err => console.error(`  [err] ${err.message.slice(0, 80)}`));
+    await page.goto(`${BASE}/agent/claude_code`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(5000);
+    await page.locator('button:has-text("Skip")').click().catch(() => {});
+    await page.waitForTimeout(300);
+
+    await page.locator('text="T0"').first().scrollIntoViewIfNeeded().catch(() => {});
+    await page.waitForTimeout(600);
+    await nudgeScrollUp(page, 120);
+
+    // RoutingModeNode renders a ToggleButton with text "Smart".
+    await page.locator('button:has-text("Smart")').first().click().catch(() => {});
+    await page.waitForTimeout(2000);
+
+    const out = path.join(OUT_DIR, 'routing-graph-smart.png');
+    await page.screenshot({ path: out, fullPage: false });
+    console.log(`  [${fs.statSync(out).size > 10000 ? 'OK  ' : 'BLNK'}] routing-graph-smart.png  (${fs.statSync(out).size}b)`);
+    await page.close();
+}
+
+// Rule Extensions catalog dialog.
+// Scroll to the Extensions card (RuleExtensionsCard — header text starts with
+// "Extensions"), click it to open FlagCatalogDialog, then capture the dialog.
+{
+    const page = await ctx.newPage();
+    page.on('pageerror', err => console.error(`  [err] ${err.message.slice(0, 80)}`));
+    await page.goto(`${BASE}/agent/claude_code`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(5000);
+    await page.locator('button:has-text("Skip")').click().catch(() => {});
+    await page.waitForTimeout(300);
+
+    // The card header is a Typography caption whose text starts with "Extensions".
+    const extHeader = page.locator('text=/^Extensions/').first();
+    await extHeader.scrollIntoViewIfNeeded().catch(() => {});
+    await page.waitForTimeout(600);
+    await nudgeScrollUp(page, 80);
+
+    // The whole StyledExtensionsCard is the click target (cursor: pointer).
+    await extHeader.click();
+    await page.waitForSelector('[role="dialog"]', { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+
+    const out = path.join(OUT_DIR, 'rule-extensions.png');
+    await page.screenshot({ path: out, fullPage: false });
+    console.log(`  [${fs.statSync(out).size > 10000 ? 'OK  ' : 'BLNK'}] rule-extensions.png  (${fs.statSync(out).size}b)`);
+    await page.close();
+}
 
 // --- Done -------------------------------------------------------------
 await browser.close();

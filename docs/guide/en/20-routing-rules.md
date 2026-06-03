@@ -8,9 +8,9 @@ Routing rules are the core mechanism by which Tingly-Box dispatches requests. Ea
 
 ## Routing Graph Overview
 
-![Routing Graph Overview](../images/routing-graph-direct.png)
+![Direct Routing Graph](../images/routing-graph-direct.png)
 
-Each rule card embeds a routing graph that visualizes the request flow path. The graph supports two modes, switchable via the toggle button in the top-right corner: **Direct** and **Smart**.
+Each rule card embeds a routing graph that visualizes the request flow path. The graph supports two modes, switchable via the toggle button inside the rule card: **Direct** and **Smart**.
 
 ---
 
@@ -63,6 +63,8 @@ Via the `firstChunkGate` buffer mechanism (v2), if an upstream fails before the 
 
 ## Smart Routing
 
+![Smart Routing Graph](../images/routing-graph-smart.png)
+
 When smart routing is enabled (`smartEnabled: true`), each sub-rule (SmartOp) in the rule chain can carry conditions. Requests are matched in order; the **first sub-rule where all conditions pass** wins.
 
 ```
@@ -99,6 +101,8 @@ Request Entry
 The **Extensions** card on the right of each rule card provides pre-built flags that tune request/response behavior at the rule level — without touching service configuration.
 
 Click the Extensions card or its **+** button to open the **Flag Catalog** (category sidebar + detail panel).
+
+![Rule Extensions Catalog](../images/rule-extensions.png)
 
 ### App
 
