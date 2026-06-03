@@ -61,8 +61,8 @@ func TestTierRouting_EndToEnd(t *testing.T) {
 		healthFilter: hf,
 	}
 
-	primaryID := "e2e-primary:gpt-4"
-	fallbackID := "e2e-fallback:gpt-4"
+	primaryID := "e2e-primary/gpt-4"
+	fallbackID := "e2e-fallback/gpt-4"
 
 	// 1. Fresh state: the T0 service is chosen.
 	got, err := lb.SelectService(&rule)

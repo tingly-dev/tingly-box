@@ -34,7 +34,7 @@ func TestLatencyBasedTactic_SelectService(t *testing.T) {
 		Model:    "model1",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 	service2 := &loadbalance.Service{
@@ -42,7 +42,7 @@ func TestLatencyBasedTactic_SelectService(t *testing.T) {
 		Model:    "model2",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider2:model2",
+			ServiceID: "provider2/model2",
 		},
 	}
 	service3 := &loadbalance.Service{
@@ -50,7 +50,7 @@ func TestLatencyBasedTactic_SelectService(t *testing.T) {
 		Model:    "model3",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider3:model3",
+			ServiceID: "provider3/model3",
 		},
 	}
 
@@ -80,23 +80,23 @@ func TestLatencyBasedTactic_SelectService(t *testing.T) {
 		{
 			name:             "selects lowest latency service when threshold exceeded",
 			services:         []*loadbalance.Service{service1, service2, service3},
-			currentServiceID: "provider1:model1", // Current has high latency (~200ms)
+			currentServiceID: "provider1/model1", // Current has high latency (~200ms)
 			thresholdMs:      150,                // Threshold below current latency
-			wantServiceID:    "provider3:model3", // Should switch to lowest latency
+			wantServiceID:    "provider3/model3", // Should switch to lowest latency
 		},
 		{
 			name:             "keeps current if within threshold",
 			services:         []*loadbalance.Service{service1, service2, service3},
-			currentServiceID: "provider3:model3", // Current has lowest latency (~100ms)
+			currentServiceID: "provider3/model3", // Current has lowest latency (~100ms)
 			thresholdMs:      2000,               // High threshold
-			wantServiceID:    "provider3:model3", // Should keep current
+			wantServiceID:    "provider3/model3", // Should keep current
 		},
 		{
 			name:             "handles single service",
 			services:         []*loadbalance.Service{service1},
-			currentServiceID: "provider1:model1",
+			currentServiceID: "provider1/model1",
 			thresholdMs:      2000,
-			wantServiceID:    "provider1:model1",
+			wantServiceID:    "provider1/model1",
 		},
 		{
 			name:             "handles no active services",
@@ -138,7 +138,7 @@ func TestLatencyBasedTactic_getLatencyForService(t *testing.T) {
 		Provider: "provider1",
 		Model:    "model1",
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 
@@ -214,7 +214,7 @@ func TestLatencyBasedTactic_getLatencyForService_NoSamples(t *testing.T) {
 		Provider: "provider1",
 		Model:    "model1",
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 

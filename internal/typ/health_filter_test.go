@@ -54,7 +54,7 @@ func TestHealthFilter_Filter_WithUnhealthy(t *testing.T) {
 	}
 
 	// Mark one service as unhealthy
-	monitor.ReportRateLimit("p1:m1")
+	monitor.ReportRateLimit("p1/m1")
 
 	filtered := hf.Filter(services)
 	assert.Len(t, filtered, 1)
@@ -72,8 +72,8 @@ func TestHealthFilter_Filter_AllUnhealthy(t *testing.T) {
 	}
 
 	// Mark all services as unhealthy
-	monitor.ReportRateLimit("p1:m1")
-	monitor.ReportRateLimit("p2:m2")
+	monitor.ReportRateLimit("p1/m1")
+	monitor.ReportRateLimit("p2/m2")
 
 	filtered := hf.Filter(services)
 	assert.Len(t, filtered, 0)
@@ -114,8 +114,8 @@ func TestHealthFilter_FilterWithFallback(t *testing.T) {
 	}
 
 	// Mark all services as unhealthy
-	monitor.ReportRateLimit("p1:m1")
-	monitor.ReportRateLimit("p2:m2")
+	monitor.ReportRateLimit("p1/m1")
+	monitor.ReportRateLimit("p2/m2")
 
 	// FilterWithFallback should return all services when none are healthy
 	filtered := hf.FilterWithFallback(services)
@@ -133,7 +133,7 @@ func TestHealthFilter_FilterWithFallback_HealthyExist(t *testing.T) {
 	}
 
 	// Mark only one service as unhealthy
-	monitor.ReportRateLimit("p1:m1")
+	monitor.ReportRateLimit("p1/m1")
 
 	// FilterWithFallback should return only healthy services
 	filtered := hf.FilterWithFallback(services)
@@ -147,18 +147,18 @@ func TestHealthFilter_IsHealthy(t *testing.T) {
 	hf := NewHealthFilter(monitor)
 
 	// Mark service as unhealthy
-	monitor.ReportRateLimit("p1:m1")
+	monitor.ReportRateLimit("p1/m1")
 
-	assert.False(t, hf.IsHealthy("p1:m1"))
-	assert.True(t, hf.IsHealthy("p2:m2"))
+	assert.False(t, hf.IsHealthy("p1/m1"))
+	assert.True(t, hf.IsHealthy("p2/m2"))
 }
 
 func TestHealthFilter_IsHealthy_NilMonitor(t *testing.T) {
 	hf := NewHealthFilter(nil)
 
 	// With nil monitor, everything is healthy
-	assert.True(t, hf.IsHealthy("p1:m1"))
-	assert.True(t, hf.IsHealthy("p2:m2"))
+	assert.True(t, hf.IsHealthy("p1/m1"))
+	assert.True(t, hf.IsHealthy("p2/m2"))
 }
 
 func TestHealthFilter_GetHealthMonitor(t *testing.T) {

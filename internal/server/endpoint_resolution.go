@@ -48,12 +48,16 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 
 	mode := provider.OpenAIEndpointMode
 
-	switch ParseEndpointOverride(flags.OpenAIEndpointOverride) {
-	case OverrideChat:
-		return protocol.TypeOpenAIChat, nil
-
-	case OverrideResponses:
-		return protocol.TypeOpenAIResponses, nil
+	// Overrides only apply when the provider supports both endpoints.
+	// A chat-only or responses-only declaration is authoritative; the rule
+	// override cannot force the unsupported path.
+	if mode == ai.EndpointModeBoth {
+		switch ParseEndpointOverride(flags.OpenAIEndpointOverride) {
+		case OverrideChat:
+			return protocol.TypeOpenAIChat, nil
+		case OverrideResponses:
+			return protocol.TypeOpenAIResponses, nil
+		}
 	}
 
 	switch mode {

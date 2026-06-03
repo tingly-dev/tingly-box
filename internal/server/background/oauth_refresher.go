@@ -15,7 +15,7 @@ import (
 
 const (
 	// defaultCheckInterval is how often to check for tokens needing refresh
-	defaultCheckInterval = 5 * time.Minute
+	defaultCheckInterval = 10 * time.Minute
 	// defaultRefreshBuffer is how long before expiry to refresh a token (matches OAuth package default)
 	defaultRefreshBuffer = 5 * time.Minute
 	// maxExpiryDuration is the maximum time after token expiry to attempt refresh
