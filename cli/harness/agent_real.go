@@ -7,7 +7,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // RealAgentTestResult holds the result of one real-model Agent run.
@@ -28,7 +28,7 @@ type RealAgentTestResult struct {
 }
 
 // missingFields returns the names of fields required to run a test that are missing or placeholder.
-func missingFields(entry protocol_validate.RealModelEntry) []string {
+func missingFields(entry protocoltest.RealModelEntry) []string {
 	var miss []string
 	if strings.TrimSpace(entry.BaseURL) == "" {
 		miss = append(miss, "baseurl")
@@ -50,8 +50,8 @@ func missingFields(entry protocol_validate.RealModelEntry) []string {
 
 // loadProvidersConfig reads and parses a providers config file (YAML).
 // Returns the expanded list of test entries.
-func loadProvidersConfig(path string) ([]protocol_validate.RealModelEntry, error) {
-	return protocol_validate.LoadProvidersConfig(path)
+func loadProvidersConfig(path string) ([]protocoltest.RealModelEntry, error) {
+	return protocoltest.LoadProvidersConfig(path)
 }
 
 // runRealAgentTests iterates over all model entries and runs the agent against each.
@@ -98,7 +98,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 	matched := make(map[string]struct{}, len(wanted))
 
 	// Separate runnable entries from incomplete ones.
-	var runnable []protocol_validate.RealModelEntry
+	var runnable []protocoltest.RealModelEntry
 	var skipped []string
 	for _, entry := range entries {
 		if wanted != nil {
@@ -178,7 +178,7 @@ func runRealAgentTests(agentName string, modelsFile string, prompt string, write
 }
 
 // runOneRealAgentTest runs the agent CLI for a single model entry.
-func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_validate.RealModelEntry, prompt string) *RealAgentTestResult {
+func runOneRealAgentTest(agentType protocoltest.AgentType, entry protocoltest.RealModelEntry, prompt string) *RealAgentTestResult {
 	result := &RealAgentTestResult{
 		EntryName: entry.Name,
 		Agent:     string(agentType),
@@ -189,7 +189,7 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 	start := time.Now()
 
 	// Start isolated gateway (virtual server is also started but unused here)
-	env, err := protocol_validate.NewAgentTestEnv(agentType)
+	env, err := protocoltest.NewAgentTestEnv(agentType)
 	if err != nil {
 		result.Error = fmt.Sprintf("create test env: %v", err)
 		result.Duration = time.Since(start)
@@ -197,7 +197,7 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 	}
 	defer env.Close(false)
 
-	apiStyle, err := protocol_validate.ResolveAPIStyle(entry)
+	apiStyle, err := protocoltest.ResolveAPIStyle(entry)
 	if err != nil {
 		result.Error = fmt.Sprintf("resolve api_style: %v", err)
 		result.Duration = time.Since(start)
@@ -227,11 +227,11 @@ func runOneRealAgentTest(agentType protocol_validate.AgentType, entry protocol_v
 
 	var agentResult *AgentTestResult
 	switch agentType {
-	case protocol_validate.AgentTypeClaudeCode:
+	case protocoltest.AgentTypeClaudeCode:
 		agentResult, err = executeClaudeWithEnv(env, prompt)
-	case protocol_validate.AgentTypeCodex:
+	case protocoltest.AgentTypeCodex:
 		agentResult, err = executeCodexWithEnv(env, requestModel, prompt)
-	case protocol_validate.AgentTypeOpenCode:
+	case protocoltest.AgentTypeOpenCode:
 		agentResult, err = executeOpenCodeWithEnv(env, requestModel, prompt)
 	}
 

@@ -1,4 +1,4 @@
-package protocol_validate
+package protocoltest
 
 import (
 	"bytes"
@@ -96,7 +96,7 @@ func (env *AgentTestEnv) SetupVirtualAgentScenario(agentType AgentType, scenario
 		return fmt.Errorf("virtual server not initialized")
 	}
 
-	env.virtualServer.RegisterScenario(scenario.toVirtualServerScenario())
+	env.virtualServer.RegisterScenario(scenario)
 
 	style := agentAPIStyle(agentType)
 	apiBase := virtualURL

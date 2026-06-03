@@ -14,7 +14,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/agentboot/claude"
 	internalagent "github.com/tingly-dev/tingly-box/internal/agent"
-	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // AgentCmd runs an agent CLI (claude, codex, opencode) end-to-end through the
@@ -252,11 +252,11 @@ func runVirtualAgentTest(agentName string, prompt string, writer *summaryWriter,
 
 // virtualAPIStyle returns the API style used by the virtual upstream for a given agent.
 // It mirrors the branches in AgentTestEnv.SetupAgent.
-func virtualAPIStyle(agentType protocol_validate.AgentType) string {
+func virtualAPIStyle(agentType protocoltest.AgentType) string {
 	switch agentType {
-	case protocol_validate.AgentTypeClaudeCode, protocol_validate.AgentTypeOpenCode:
+	case protocoltest.AgentTypeClaudeCode, protocoltest.AgentTypeOpenCode:
 		return "anthropic"
-	case protocol_validate.AgentTypeCodex:
+	case protocoltest.AgentTypeCodex:
 		return "openai"
 	}
 	return ""
@@ -264,13 +264,13 @@ func virtualAPIStyle(agentType protocol_validate.AgentType) string {
 
 // builtinRequestModel returns the fixed RequestModel used by the built-in rule
 // for each agent type. This is what the agent CLI actually sends to the gateway.
-func builtinRequestModel(agentType protocol_validate.AgentType) string {
+func builtinRequestModel(agentType protocoltest.AgentType) string {
 	switch agentType {
-	case protocol_validate.AgentTypeClaudeCode:
+	case protocoltest.AgentTypeClaudeCode:
 		return "tingly/cc"
-	case protocol_validate.AgentTypeCodex:
+	case protocoltest.AgentTypeCodex:
 		return "tingly-codex"
-	case protocol_validate.AgentTypeOpenCode:
+	case protocoltest.AgentTypeOpenCode:
 		return "tingly-opencode"
 	}
 	return ""
@@ -412,13 +412,13 @@ type AgentTestResult struct {
 }
 
 // executeAgentCommand executes the actual agent CLI command against the virtual-model gateway.
-func executeAgentCommand(agentType protocol_validate.AgentType, prompt string) (*AgentTestResult, error) {
+func executeAgentCommand(agentType protocoltest.AgentType, prompt string) (*AgentTestResult, error) {
 	switch agentType {
-	case protocol_validate.AgentTypeClaudeCode:
+	case protocoltest.AgentTypeClaudeCode:
 		return executeClaudeTest(prompt)
-	case protocol_validate.AgentTypeCodex:
+	case protocoltest.AgentTypeCodex:
 		return executeCodexTest(prompt)
-	case protocol_validate.AgentTypeOpenCode:
+	case protocoltest.AgentTypeOpenCode:
 		return executeOpenCodeTest(prompt)
 	default:
 		return nil, fmt.Errorf("unknown agent type: %s", agentType)
@@ -429,13 +429,13 @@ func executeAgentCommand(agentType protocol_validate.AgentType, prompt string) (
 func executeClaudeTest(prompt string) (*AgentTestResult, error) {
 	const model = "tingly/cc"
 
-	env, err := protocol_validate.NewAgentTestEnv(protocol_validate.AgentTypeClaudeCode)
+	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeClaudeCode)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	if err := env.SetupAgent(protocol_validate.AgentTypeClaudeCode, "virtual-claude", model); err != nil {
+	if err := env.SetupAgent(protocoltest.AgentTypeClaudeCode, "virtual-claude", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
@@ -448,7 +448,7 @@ func executeClaudeTest(prompt string) (*AgentTestResult, error) {
 // same canonical defaults the GUI quick-config seeds from — so the harness
 // exercises the real Claude Code configuration shape (telemetry flags,
 // model routing vars) rather than a hand-rolled minimal subset.
-func executeClaudeWithEnv(env *protocol_validate.AgentTestEnv, prompt string) (*AgentTestResult, error) {
+func executeClaudeWithEnv(env *protocoltest.AgentTestEnv, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
 		Agent:  "claude",
@@ -520,13 +520,13 @@ func executeClaudeWithEnv(env *protocol_validate.AgentTestEnv, prompt string) (*
 func executeCodexTest(prompt string) (*AgentTestResult, error) {
 	const model = "tingly-codex"
 
-	env, err := protocol_validate.NewAgentTestEnv(protocol_validate.AgentTypeCodex)
+	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeCodex)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	if err := env.SetupAgent(protocol_validate.AgentTypeCodex, "virtual-codex", model); err != nil {
+	if err := env.SetupAgent(protocoltest.AgentTypeCodex, "virtual-codex", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
@@ -534,7 +534,7 @@ func executeCodexTest(prompt string) (*AgentTestResult, error) {
 }
 
 // executeCodexWithEnv writes CODEX_HOME config and runs codex CLI against a pre-configured env.
-func executeCodexWithEnv(env *protocol_validate.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
+func executeCodexWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
 		Agent:  "codex",
@@ -612,13 +612,13 @@ wire_api = "responses"
 func executeOpenCodeTest(prompt string) (*AgentTestResult, error) {
 	const model = "tingly-opencode"
 
-	env, err := protocol_validate.NewAgentTestEnv(protocol_validate.AgentTypeOpenCode)
+	env, err := protocoltest.NewAgentTestEnv(protocoltest.AgentTypeOpenCode)
 	if err != nil {
 		return nil, fmt.Errorf("create test env: %w", err)
 	}
 	defer env.Close(false)
 
-	if err := env.SetupAgent(protocol_validate.AgentTypeOpenCode, "virtual-opencode", model); err != nil {
+	if err := env.SetupAgent(protocoltest.AgentTypeOpenCode, "virtual-opencode", model); err != nil {
 		return nil, fmt.Errorf("setup profile: %w", err)
 	}
 
@@ -631,7 +631,7 @@ func executeOpenCodeTest(prompt string) (*AgentTestResult, error) {
 // same logic the production `agent apply` flow uses — so the harness exercises
 // the real provider layout (provider key "tingly-box", model map shape)
 // instead of a hand-rolled variant that could drift from production.
-func executeOpenCodeWithEnv(env *protocol_validate.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
+func executeOpenCodeWithEnv(env *protocoltest.AgentTestEnv, model string, prompt string) (*AgentTestResult, error) {
 	start := time.Now()
 	result := &AgentTestResult{
 		Agent:  "opencode",
@@ -714,14 +714,14 @@ func exitCode(err error) int {
 }
 
 // parseAgentType converts a string to AgentType
-func parseAgentType(s string) protocol_validate.AgentType {
+func parseAgentType(s string) protocoltest.AgentType {
 	switch strings.ToLower(s) {
 	case "claude", "claude-code", "claudecode", "cc":
-		return protocol_validate.AgentTypeClaudeCode
+		return protocoltest.AgentTypeClaudeCode
 	case "codex":
-		return protocol_validate.AgentTypeCodex
+		return protocoltest.AgentTypeCodex
 	case "opencode", "open-code", "oc":
-		return protocol_validate.AgentTypeOpenCode
+		return protocoltest.AgentTypeOpenCode
 	default:
 		return ""
 	}

@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // MatrixCmd runs the protocol validation matrix tests.
 //
 // The set of (source → target) pairs is defined explicitly in
-// internal/protocol_validate.DefaultPairs() rather than as a Cartesian
+// internal/protocoltest.DefaultPairs() rather than as a Cartesian
 // product, so what's exercised matches the dispatch graph documented
 // in internal/protocol/README.md. Each pair runs against every
 // scenario and both streaming modes.
@@ -75,7 +75,7 @@ func (m *MatrixCmd) Run() error {
 	}
 
 	// Build matrix with filters
-	matrix := protocol_validate.DefaultMatrix()
+	matrix := protocoltest.DefaultMatrix()
 
 	if len(m.Scenarios) > 0 {
 		matrix = matrix.OnlyScenarios(m.Scenarios...)
@@ -130,8 +130,8 @@ func (m *MatrixCmd) Run() error {
 }
 
 // filterResults filters test results based on command options.
-func filterResults(results []protocol_validate.TestResult, m *MatrixCmd) []protocol_validate.TestResult {
-	var filtered []protocol_validate.TestResult
+func filterResults(results []protocoltest.TestResult, m *MatrixCmd) []protocoltest.TestResult {
+	var filtered []protocoltest.TestResult
 
 	for _, r := range results {
 		if len(m.Sources) > 0 && !contains(m.Sources, string(r.Source)) {

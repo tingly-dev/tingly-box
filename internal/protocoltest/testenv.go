@@ -1,4 +1,4 @@
-package protocol_validate
+package protocoltest
 
 import (
 	"bytes"
@@ -17,7 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -41,7 +40,7 @@ type TestEnv struct {
 		ServeHTTP(http.ResponseWriter, *http.Request)
 	}
 	gatewayServer *httptest.Server // real HTTP server for streaming support
-	virtual       *server_validate.VirtualServer
+	virtual       *VirtualServer
 	modelToken    string
 
 	mu          sync.Mutex
@@ -98,7 +97,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		appConfig:     appConfig,
 		ginEngine:     router,
 		gatewayServer: ts,
-		virtual:       server_validate.NewVirtualServer(t),
+		virtual:       NewVirtualServer(t),
 		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
 		routeModels:   make(map[string]string),
 		setupRoutes:   make(map[string]bool),
@@ -155,7 +154,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	router := gatewayServer.GetRouter()
 	ts := httptest.NewServer(router)
 
-	virtual := server_validate.NewVirtualServerForCLI()
+	virtual := NewVirtualServerForCLI()
 	if virtual == nil {
 		ts.Close()
 		os.RemoveAll(configDir)
@@ -205,7 +204,7 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 	env.setupRoutes[key] = true
 	env.mu.Unlock()
 
-	env.virtual.RegisterScenario(s.toVirtualServerScenario())
+	env.virtual.RegisterScenario(s)
 
 	virtualURL := env.virtual.URL()
 

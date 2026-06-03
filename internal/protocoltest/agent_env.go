@@ -1,4 +1,4 @@
-package protocol_validate
+package protocoltest
 
 import (
 	"fmt"
@@ -11,7 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
@@ -100,7 +99,7 @@ type AgentTestEnv struct {
 	gatewayServer *httptest.Server
 
 	// virtualServer is the mock provider server
-	virtualServer *server_validate.VirtualServer
+	virtualServer *VirtualServer
 
 	// baseURL is the base URL for the gateway
 	baseURL string
@@ -148,9 +147,9 @@ func NewAgentTestEnv(AgentType AgentType) (*AgentTestEnv, error) {
 	}
 
 	// Start virtual server (mock provider) and register default scenarios
-	virtualServer := server_validate.NewVirtualServerForCLI()
+	virtualServer := NewVirtualServerForCLI()
 	for _, ps := range AgentScenarios() {
-		virtualServer.RegisterScenario(server_validate.Scenario{
+		virtualServer.RegisterScenario(Scenario{
 			Name:          ps.Name,
 			MockResponses: ps.MockResponses,
 		})

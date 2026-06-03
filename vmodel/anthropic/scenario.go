@@ -11,7 +11,7 @@ import (
 )
 
 // MockScenario describes a named test scenario with an Anthropic-protocol mock response.
-// It mirrors server_validate.Scenario for cross-package alignment.
+// It mirrors protocoltest.Scenario for cross-package alignment.
 type MockScenario struct {
 	ID           string
 	Name         string

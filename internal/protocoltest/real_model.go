@@ -1,4 +1,4 @@
-package protocol_validate
+package protocoltest
 
 import (
 	"fmt"

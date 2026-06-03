@@ -1,4 +1,4 @@
-package server_validate
+package protocoltest
 
 import (
 	"encoding/json"

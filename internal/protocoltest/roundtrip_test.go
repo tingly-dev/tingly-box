@@ -1,7 +1,7 @@
 //go:build e2e
 // +build e2e
 
-package protocol_validate_test
+package protocoltest_test
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
-	pt "github.com/tingly-dev/tingly-box/internal/protocol_validate"
+	pt "github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 func TestRoundTrip_AnthropicV1_To_OpenAIChat_Text(t *testing.T) {
