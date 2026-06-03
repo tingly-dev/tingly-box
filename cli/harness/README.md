@@ -85,10 +85,10 @@ converted payloads.
             every cell = one TestResult (pass / fail / skip)
 ```
 
-- Defined by `protocol_validate.DefaultMatrix()`; filter with
+- Defined by `protocoltest.DefaultMatrix()`; filter with
   `--scenario`, `--source`, `--target`, `--streaming`, `--non-streaming`.
 - Known-broken cells are centralized in
-  `protocol_validate.skipSourceScenarios` (e.g. `openai_responses|tool_use`).
+  `protocoltest.skipSourceScenarios` (e.g. `openai_responses|tool_use`).
 - `--json` for CI; `-v` / `-vv` to raise log verbosity; `--record-dir` to dump
   request/response pairs; `--batch N` for stability runs.
 
@@ -248,7 +248,7 @@ providers.
 cli/harness/
   main.go            Kong CLI root: version / matrix / agent / replay /
                      provider / init-config
-  matrix.go          Tier A command — wraps protocol_validate.Matrix
+  matrix.go          Tier A command — wraps protocoltest.Matrix
   replay.go          Tier B command — fixture replay, upstreams, skip list
   agent.go           Tier C command — agent CLI subprocess driver (+ env wiring)
   agent_real.go      Tier C real-provider mode: config iteration, per-entry runs
@@ -261,7 +261,7 @@ cli/harness/
     anthropic/        text.json, tool_use.json, streaming_text.json
     openai_responses/ text.json, tool_use.json, streaming_text.json
 
-internal/protocol_validate/   shared engine used by all tiers
+internal/protocoltest/   shared engine used by all tiers
   matrix.go          Tier A cross-product engine + skipSourceScenarios
   scenarios.go       Scenario definitions + content-level Assertions (reused by
                      Tier B's virtual upstream)
@@ -275,11 +275,11 @@ internal/protocol_validate/   shared engine used by all tiers
 
 ## How the tiers share code
 
-The three tiers are thin CLI shells over one engine (`internal/protocol_validate`):
+The three tiers are thin CLI shells over one engine (`internal/protocoltest`):
 
 ```
                     ┌───────────────────────────────┐
-                    │   internal/protocol_validate  │
+                    │   internal/protocoltest  │
                     │                               │
                     │   Scenario + Assertions       │◀── Tier A asserts here
                     │   Matrix engine               │◀── Tier A

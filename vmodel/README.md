@@ -8,7 +8,7 @@ and shipped in the production binary via `server.UseVirtualModelEndpoints`.
 
 The same primitives are reused as an in-process LLM substitute by test
 packages that need wire-format-correct fixtures (see
-`internal/server_validate`).
+`internal/protocoltest`).
 
 ## Layout
 
@@ -44,7 +44,7 @@ Test packages are **secondary consumers** that reuse the same primitives.
 | Role | Surface | Consumer |
 |------|---------|----------|
 | Primary (production) | `/virtual/v1/messages`, `/virtual/v1/chat/completions` | `internal/server` mounts `virtualserver.Service` for end-user demos / onboarding / dry-runs |
-| Secondary (tests)    | In-process `GenericRegistry[T]`                       | `internal/server_validate.Scenario`, `internal/protocol_validate`, `cli/harness --mock` |
+| Secondary (tests)    | In-process `GenericRegistry[T]`                       | `internal/protocoltest.Scenario`, `cli/harness --mock` |
 
 **Registration discipline.** Anything added to `anthropic.RegisterDefaults` or
 `openai.RegisterDefaults` is visible to **end users** of the production
@@ -56,7 +56,7 @@ dry-runs (`echo-model`, `ask-user-question`, `virtual-claude-3`,
 Test-only fixtures (protocol corner cases, wire-format edge cases,
 scenario-specific stubs) **must not** be added to `RegisterDefaults`. Tests
 that need bespoke synthetic models should construct their own
-`GenericRegistry[T]` (the way `server_validate` does for `Scenario`) and
+`GenericRegistry[T]` (the way `protocoltest` does for `Scenario`) and
 register fixtures there — keeping the production defaults clean.
 
 **Opt-in fixture sets.** Two named registration helpers ship alongside
@@ -85,7 +85,7 @@ type Registry = virtualmodel.GenericRegistry[VirtualModel]
 ```
 
 Any package that needs to store objects satisfying `virtualmodel.VirtualModel`
-can instantiate its own `GenericRegistry` directly — `server_validate.Scenario`
+can instantiate its own `GenericRegistry` directly — `protocoltest.Scenario`
 does this for test scenarios.
 
 ### One registry per protocol
@@ -358,7 +358,7 @@ anthropic.RegisterErrorMocks(svc.GetAnthropicRegistry())
 | `virtual-fail-midstream-close` | One real chunk then TCP close (not retryable) |
 | `virtual-fail-midstream-event` | One real chunk then SSE error frame (not retryable) |
 
-Failover e2e tests (`internal/protocol_validate`) use these directly via
+Failover e2e tests (`internal/protocoltest`) use these directly via
 `SetupFailoverRoute(... primaryFailModel: pt.FailMockPreContent429)` instead
 of standing up ad-hoc `httptest.Server` instances.
 
@@ -386,7 +386,7 @@ See `benchmark/examples/` for runnable server and client programs.
 
 - `vmodel/virtualserver` — Production Gin HTTP handler, routes,
   request/response shaping. Owns the v1 → beta lift for Anthropic.
-- `internal/server_validate` — Test-only consumer that **reuses**
+- `internal/protocoltest` — Test-only consumer that **reuses**
   `GenericRegistry[Scenario]` as a primitive (its `Scenario` type satisfies
   `vmodel.VirtualModel`). Serves pre-rendered byte/SSE payloads for
   wire-format protocol testing. It does **not** inherit production defaults
