@@ -3,6 +3,9 @@ docs
 script
 .worktrees
 
+# claude code - externally installed skills (via install-sdlc.sh etc.)
+.claude/skills/sdlc/
+
 # codegen
 internal/web/dist
 internal/web_wails3/dist
