@@ -31,119 +31,121 @@ type AnthropicToOpenAIMCPHooks struct {
 	OnToolCallsFinal   func(calls []AnthropicToOpenAIToolCall) error
 }
 
-// AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format
-// Returns inputTokens, outputTokens, and error for usage tracking
-func AnthropicToOpenAIStream(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
-	return AnthropicToOpenAIStreamWithMCPHooks(hc, req, stream, responseModel, disableStreamUsage, nil)
+// anthropicToOpenAIConverter is a stateful iterator that reads Anthropic Beta stream
+// events and emits OpenAI Chat Completion chunk maps.
+type anthropicToOpenAIConverter struct {
+	stream             *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
+	responseModel      string
+	disableStreamUsage bool
+	hooks              *AnthropicToOpenAIMCPHooks
+
+	// state
+	chatID           string
+	created          int64
+	acc              *usagepkg.AnthropicAccumulator
+	toolCallID       string
+	toolCallName     string
+	toolCallArgs     strings.Builder
+	hasToolCalls     bool
+	suppressToolCall bool
+	pendingToolCalls []AnthropicToOpenAIToolCall
+	thinkingText     strings.Builder
+
+	// pending event queue
+	pending []interface{}
+	hookErr error
+	done    bool
 }
 
-func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (int, int, error) {
-	c := hc.GinContext
-	logrus.WithContext(c.Request.Context()).Info("Starting Anthropic to OpenAI streaming response handler")
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.WithContext(c.Request.Context()).Errorf("Panic in Anthropic to OpenAI streaming handler: %v", r)
-			// Try to send an error event if possible
-			if c.Writer != nil {
-				c.Writer.WriteHeader(http.StatusInternalServerError)
-				sendOpenAIStreamError(c, "Internal streaming error", "internal_error")
-			}
+func newAnthropicToOpenAIConverter(
+	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
+	responseModel string,
+	disableStreamUsage bool,
+	hooks *AnthropicToOpenAIMCPHooks,
+) *anthropicToOpenAIConverter {
+	return &anthropicToOpenAIConverter{
+		stream:             stream,
+		responseModel:      responseModel,
+		disableStreamUsage: disableStreamUsage,
+		hooks:              hooks,
+		chatID:             fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
+		created:            time.Now().Unix(),
+		acc:                usagepkg.NewAnthropicAccumulator(),
+	}
+}
+
+func (c *anthropicToOpenAIConverter) Next() (interface{}, bool, error) {
+	// Drain buffered events first
+	if len(c.pending) > 0 {
+		evt := c.pending[0]
+		c.pending = c.pending[1:]
+		return evt, false, nil
+	}
+
+	if c.done {
+		return nil, true, nil
+	}
+
+	for {
+		if !c.stream.Next() {
+			return nil, true, nil
 		}
-		// Ensure stream is always closed
-		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.WithContext(c.Request.Context()).Errorf("Error closing Anthropic stream: %v", err)
-			}
+		event := c.stream.Current()
+		c.processEvent(&event)
+
+		if len(c.pending) > 0 {
+			evt := c.pending[0]
+			c.pending = c.pending[1:]
+			return evt, false, nil
 		}
-		logrus.WithContext(c.Request.Context()).Info("Finished Anthropic to OpenAI streaming response handler")
-	}()
-
-	// Set SSE headers
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
-
-	// Track streaming state
-	var (
-		chatID      = fmt.Sprintf("chatcmpl-%d", time.Now().Unix())
-		created     = time.Now().Unix()
-		contentText = strings.Builder{}
-		acc         = usagepkg.NewAnthropicAccumulator()
-		finished    bool
-		hookErr     error
-		// Track tool call state for proper streaming
-		toolCallID       string
-		toolCallName     string
-		toolCallArgs     strings.Builder
-		hasToolCalls     bool
-		suppressToolCall bool
-		pendingToolCalls []AnthropicToOpenAIToolCall
-		// Track thinking state for extended thinking support
-		thinkingText strings.Builder
-	)
-
-	// Process the stream with context cancellation checking
-	StreamLoop(c, func(w io.Writer) bool {
-		// Check context cancellation first
-		select {
-		case <-c.Request.Context().Done():
-			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Anthropic to OpenAI stream")
-			return false
-		default:
+		if c.done {
+			return nil, true, nil
 		}
+	}
+}
 
-		// Try to get next event
-		if !stream.Next() {
-			return false
-		}
+func (c *anthropicToOpenAIConverter) Usage() *protocol.TokenUsage {
+	return c.acc.Result()
+}
 
-		event := stream.Current()
+// HookErr returns the MCP hook error, if any (e.g. ErrMCPStreamContinue).
+func (c *anthropicToOpenAIConverter) HookErr() error {
+	return c.hookErr
+}
 
-		// Handle different event types
-		switch event.Type {
-		case "message_start":
-			// Send initial chat completion chunk with role
-			chunk := openai.ChatCompletionChunk{
-				ID:      chatID,
-				Created: created,
-				Model:   responseModel,
-				Choices: []openai.ChatCompletionChunkChoice{
-					{
-						Index: 0,
-						Delta: openai.ChatCompletionChunkChoiceDelta{
-							Role: "assistant",
-						},
+func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessageStreamEventUnion) {
+	switch event.Type {
+	case "message_start":
+		chunk := openai.ChatCompletionChunk{
+			ID:      c.chatID,
+			Created: c.created,
+			Model:   c.responseModel,
+			Choices: []openai.ChatCompletionChunkChoice{
+				{
+					Index: 0,
+					Delta: openai.ChatCompletionChunkChoiceDelta{
+						Role: "assistant",
 					},
 				},
-			}
-			sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
-			acc.ConsumeBeta(&event)
+			},
+		}
+		c.emitChunk(chunk)
+		c.acc.ConsumeBeta(event)
 
-		case "content_block_start":
-			// Content block starting
-			if event.ContentBlock.Type == "text" {
-				// Reset content builder for new text block
-				contentText.Reset()
-			} else if event.ContentBlock.Type == "tool_use" {
-				// Tool use block starting - send first tool_call chunk
-				toolCallID = event.ContentBlock.ID
-				toolCallName = event.ContentBlock.Name
-				toolCallArgs.Reset()
-				suppressToolCall = hooks != nil && hooks.ShouldSuppressTool != nil && hooks.ShouldSuppressTool(toolCallName)
-				if !suppressToolCall {
-					hasToolCalls = true
-				}
-				if suppressToolCall {
-					return true
-				}
-
-				// Send initial tool_call chunk with id, type, and name
+	case "content_block_start":
+		if event.ContentBlock.Type == "text" {
+			// no chunk to emit; text deltas come via content_block_delta
+		} else if event.ContentBlock.Type == "tool_use" {
+			c.toolCallID = event.ContentBlock.ID
+			c.toolCallName = event.ContentBlock.Name
+			c.toolCallArgs.Reset()
+			c.suppressToolCall = c.hooks != nil && c.hooks.ShouldSuppressTool != nil && c.hooks.ShouldSuppressTool(c.toolCallName)
+			if !c.suppressToolCall {
+				c.hasToolCalls = true
 				chunk := openai.ChatCompletionChunk{
-					ID:      chatID,
-					Created: created,
-					Model:   responseModel,
+					ID:      c.chatID,
+					Created: c.created,
+					Model:   c.responseModel,
 					Choices: []openai.ChatCompletionChunkChoice{
 						{
 							Index: 0,
@@ -152,10 +154,10 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
 									{
 										Index: 0,
-										ID:    toolCallID,
+										ID:    c.toolCallID,
 										Type:  "function",
 										Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
-											Name:      toolCallName,
+											Name:      c.toolCallName,
 											Arguments: "",
 										},
 									},
@@ -164,50 +166,41 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 						},
 					},
 				}
-				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
-			} else if event.ContentBlock.Type == "thinking" {
-				// Thinking block starting - reset thinking builder
-				thinkingText.Reset()
-			} else if event.ContentBlock.Type == "redacted_thinking" {
-				// Redacted thinking - should be included as reasoning_content with placeholder
-				thinkingText.Reset()
-				thinkingText.WriteString("[REDACTED THINKING]")
+				c.emitChunk(chunk)
 			}
+		} else if event.ContentBlock.Type == "thinking" {
+			c.thinkingText.Reset()
+		} else if event.ContentBlock.Type == "redacted_thinking" {
+			c.thinkingText.Reset()
+			c.thinkingText.WriteString("[REDACTED THINKING]")
+		}
 
-		case "content_block_delta":
-			// Text, tool arguments, or thinking delta - send as OpenAI chunk
-			if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
-				text := event.Delta.Text
-				contentText.WriteString(text)
-
-				chunk := openai.ChatCompletionChunk{
-					ID:      chatID,
-					Created: created,
-					Model:   responseModel,
-					Choices: []openai.ChatCompletionChunkChoice{
-						{
-							Index: 0,
-							Delta: openai.ChatCompletionChunkChoiceDelta{
-								Role:    "assistant",
-								Content: text,
-							},
+	case "content_block_delta":
+		if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
+			text := event.Delta.Text
+			chunk := openai.ChatCompletionChunk{
+				ID:      c.chatID,
+				Created: c.created,
+				Model:   c.responseModel,
+				Choices: []openai.ChatCompletionChunkChoice{
+					{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoiceDelta{
+							Role:    "assistant",
+							Content: text,
 						},
 					},
-				}
-				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
-			} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
-				// Tool call arguments delta
-				args := event.Delta.PartialJSON
-				toolCallArgs.WriteString(args)
-				if suppressToolCall {
-					return true
-				}
-
-				// Send subsequent tool_call chunks with only arguments (no id, no name, no type)
+				},
+			}
+			c.emitChunk(chunk)
+		} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
+			args := event.Delta.PartialJSON
+			c.toolCallArgs.WriteString(args)
+			if !c.suppressToolCall {
 				chunk := openai.ChatCompletionChunk{
-					ID:      chatID,
-					Created: created,
-					Model:   responseModel,
+					ID:      c.chatID,
+					Created: c.created,
+					Model:   c.responseModel,
 					Choices: []openai.ChatCompletionChunkChoice{
 						{
 							Index: 0,
@@ -225,120 +218,160 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 						},
 					},
 				}
-				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
-			} else if event.Delta.Type == "thinking_delta" && event.Delta.Thinking != "" {
-				// Thinking content delta - convert to OpenAI's reasoning_content format
-				thinking := event.Delta.Thinking
-				thinkingText.WriteString(thinking)
-
-				// Send as reasoning_content - use custom chunk creation since reasoning_content is not a standard field
-				chunk := createReasoningContentChunk(chatID, created, responseModel, thinking)
-				sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
+				c.emitChunk(chunk)
 			}
-			// Note: signature_delta is intentionally ignored as OpenAI doesn't have an equivalent
+		} else if event.Delta.Type == "thinking_delta" && event.Delta.Thinking != "" {
+			thinking := event.Delta.Thinking
+			c.thinkingText.WriteString(thinking)
+			chunk := createReasoningContentChunk(c.chatID, c.created, c.responseModel, thinking)
+			c.emitChunk(chunk)
+		}
+		// signature_delta is intentionally ignored
 
-		case "content_block_stop":
-			if toolCallID != "" {
-				pendingToolCalls = append(pendingToolCalls, AnthropicToOpenAIToolCall{ID: toolCallID, Name: toolCallName, Arguments: toolCallArgs.String()})
-				toolCallID = ""
-				toolCallName = ""
-				toolCallArgs.Reset()
-				suppressToolCall = false
-			}
-			// Content block finished - no specific action needed
-
-		case "message_delta":
-			acc.ConsumeBeta(&event)
-
-		case "message_stop":
-			if hooks != nil && hooks.OnToolCallsFinal != nil && len(pendingToolCalls) > 0 {
-				if err := hooks.OnToolCallsFinal(pendingToolCalls); err != nil {
-					hookErr = err
-					return false
-				}
-			}
-			if errors.Is(hookErr, ErrMCPStreamContinue) {
-				return false
-			}
-			// Determine the correct finish_reason
-			// "tool_calls" if we had tool use, "stop" otherwise
-			// Any of "stop", "length", "tool_calls", "content_filter", "function_call".
-			finishReason := "stop"
-			if hasToolCalls {
-				finishReason = "tool_calls"
-			}
-
-			// Build delta for final chunk
-			delta := openai.ChatCompletionChunkChoiceDelta{}
-			if hasToolCalls {
-				// For tool_calls, content should be empty string (matching DeepSeek format)
-				delta.Content = ""
-			}
-
-			chunk := openai.ChatCompletionChunk{
-				ID:      chatID,
-				Created: created,
-				Model:   responseModel,
-				Choices: []openai.ChatCompletionChunkChoice{
-					{
-						Index:        0,
-						Delta:        delta,
-						FinishReason: finishReason,
-					},
-				},
-			}
-
-			// Add usage if available and not disabled.
-			if !disableStreamUsage && acc.HasUsage() {
-				chunk.Usage = usagepkg.ChatUsage(acc.Result())
-			}
-
-			sendOpenAIStreamChunk(c, chunk, disableStreamUsage)
-			// Send final [DONE] message
-			// MENTION: must keep extra space (matching openai_chat.go:462)
-			c.SSEvent("", " [DONE]")
-			finished = true
-			return false
+	case "content_block_stop":
+		if c.toolCallID != "" {
+			c.pendingToolCalls = append(c.pendingToolCalls, AnthropicToOpenAIToolCall{
+				ID:        c.toolCallID,
+				Name:      c.toolCallName,
+				Arguments: c.toolCallArgs.String(),
+			})
+			c.toolCallID = ""
+			c.toolCallName = ""
+			c.toolCallArgs.Reset()
+			c.suppressToolCall = false
 		}
 
-		return true
-	})
+	case "message_delta":
+		c.acc.ConsumeBeta(event)
 
-	result := acc.Result()
-	in, out := result.InputTokens, result.OutputTokens
-	if errors.Is(hookErr, ErrMCPStreamContinue) {
+	case "message_stop":
+		if c.hooks != nil && c.hooks.OnToolCallsFinal != nil && len(c.pendingToolCalls) > 0 {
+			if err := c.hooks.OnToolCallsFinal(c.pendingToolCalls); err != nil {
+				c.hookErr = err
+				c.done = true
+				return
+			}
+		}
+		if errors.Is(c.hookErr, ErrMCPStreamContinue) {
+			c.done = true
+			return
+		}
+
+		finishReason := "stop"
+		if c.hasToolCalls {
+			finishReason = openaiFinishReasonToolCalls
+		}
+		delta := openai.ChatCompletionChunkChoiceDelta{}
+		if c.hasToolCalls {
+			delta.Content = ""
+		}
+		chunk := openai.ChatCompletionChunk{
+			ID:      c.chatID,
+			Created: c.created,
+			Model:   c.responseModel,
+			Choices: []openai.ChatCompletionChunkChoice{
+				{
+					Index:        0,
+					Delta:        delta,
+					FinishReason: finishReason,
+				},
+			},
+		}
+		if !c.disableStreamUsage && c.acc.HasUsage() {
+			chunk.Usage = usagepkg.ChatUsage(c.acc.Result())
+		}
+		c.emitChunk(chunk)
+		c.done = true
+	}
+}
+
+// emitChunk converts a ChatCompletionChunk to a map and appends to pending.
+func (c *anthropicToOpenAIConverter) emitChunk(chunk openai.ChatCompletionChunk) {
+	m, err := chunkToMap(chunk)
+	if err != nil {
+		return
+	}
+	if c.disableStreamUsage {
+		delete(m, "usage")
+	}
+	c.pending = append(c.pending, m)
+}
+
+// AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format
+// Returns inputTokens, outputTokens, and error for usage tracking
+func AnthropicToOpenAIStream(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
+	return AnthropicToOpenAIStreamWithMCPHooks(hc, req, stream, responseModel, disableStreamUsage, nil)
+}
+
+func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (int, int, error) {
+	c := hc.GinContext
+	logrus.WithContext(c.Request.Context()).Info("Starting Anthropic to OpenAI streaming response handler")
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.WithContext(c.Request.Context()).Errorf("Panic in Anthropic to OpenAI streaming handler: %v", r)
+			if c.Writer != nil {
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				sendOpenAIStreamError(c, "Internal streaming error", "internal_error")
+			}
+		}
+		if stream != nil {
+			if err := stream.Close(); err != nil {
+				logrus.WithContext(c.Request.Context()).Errorf("Error closing Anthropic stream: %v", err)
+			}
+		}
+		logrus.WithContext(c.Request.Context()).Info("Finished Anthropic to OpenAI streaming response handler")
+	}()
+
+	conv := newAnthropicToOpenAIConverter(stream, responseModel, disableStreamUsage, hooks)
+	usage, err := RunConverter(hc, conv, openaiChatSSEWriter(c))
+	in, out := usage.InputTokens, usage.OutputTokens
+
+	// MCP continuation: hook requested the stream to be retried
+	if hookErr := conv.HookErr(); errors.Is(hookErr, ErrMCPStreamContinue) {
 		return in, out, hookErr
 	}
-	if finished {
-		return in, out, nil
-	}
 
-	// Check for stream errors
-	if err := stream.Err(); err != nil {
-		// Check if it was a client cancellation
+	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			logrus.WithContext(c.Request.Context()).Debug("Anthropic to OpenAI stream canceled by client")
 			return in, out, nil
 		}
-		// EOF is expected when stream ends normally
 		if errors.Is(err, io.EOF) {
 			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
 			return in, out, nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
-		// Stream failed before any content reached the client: surface a
-		// retryable 5xx so mid-request failover can try the next tier,
-		// instead of a 200 SSE error event.
 		streamErr := fmt.Errorf("anthropic stream error: %w", err)
+		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
 			return in, out, streamErr
 		}
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
-		// Return the error so TB's usage tracking can detect and report health status
 		return in, out, streamErr
 	}
 
+	if err := stream.Err(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			logrus.WithContext(c.Request.Context()).Debug("Anthropic to OpenAI stream canceled by client")
+			return in, out, nil
+		}
+		if errors.Is(err, io.EOF) {
+			return in, out, nil
+		}
+		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
+		streamErr := fmt.Errorf("anthropic stream error: %w", err)
+		hc.DispatchStreamError(streamErr)
+		if !c.Writer.Written() {
+			SendStreamingError(c, err)
+			return in, out, streamErr
+		}
+		sendOpenAIStreamError(c, err.Error(), "stream_error")
+		return in, out, streamErr
+	}
+
+	OpenAISSEDone(c)
+	hc.CallOnStreamComplete()
 	return in, out, nil
 }
 
@@ -370,7 +403,7 @@ func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error
 	return chunkMap, nil
 }
 
-// sendOpenAIStreamChunk helper function to send a chunk in OpenAI format
+// sendOpenAIStreamChunkForce helper function to send a chunk in OpenAI format
 func sendOpenAIStreamChunkForce(c *gin.Context, chunk map[string]interface{}) {
 	OpenAISSE(c, chunk)
 }
@@ -389,7 +422,6 @@ func sendOpenAIStreamError(c *gin.Context, message, errorType string) {
 // createReasoningContentChunk creates a chunk with reasoning_content field
 // This is a workaround for OpenAI's extended thinking format which is not natively supported in the SDK
 func createReasoningContentChunk(chatID string, created int64, model, reasoning string) openai.ChatCompletionChunk {
-	// Create the chunk structure manually with reasoning_content
 	chunk := openai.ChatCompletionChunk{
 		ID:      chatID,
 		Created: created,
@@ -404,18 +436,14 @@ func createReasoningContentChunk(chatID string, created int64, model, reasoning 
 		},
 	}
 
-	// Only add reasoning_content if reasoning is not empty
-	// DeepSeek and other providers reject empty reasoning_content fields
 	if reasoning == "" {
 		return chunk
 	}
 
-	// Marshal to JSON, add reasoning_content, and unmarshal back
 	chunkJSON, _ := json.Marshal(chunk)
 	var chunkMap map[string]interface{}
 	json.Unmarshal(chunkJSON, &chunkMap)
 
-	// Add reasoning_content to the delta
 	if choices, ok := chunkMap["choices"].([]interface{}); ok && len(choices) > 0 {
 		if choice, ok := choices[0].(map[string]interface{}); ok {
 			if delta, ok := choice["delta"].(map[string]interface{}); ok {
@@ -424,7 +452,6 @@ func createReasoningContentChunk(chatID string, created int64, model, reasoning 
 		}
 	}
 
-	// Marshal back and unmarshal into the struct
 	updatedJSON, _ := json.Marshal(chunkMap)
 	json.Unmarshal(updatedJSON, &chunk)
 
