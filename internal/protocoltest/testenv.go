@@ -1,4 +1,4 @@
-package protocol_validate
+package protocoltest
 
 import (
 	"bytes"
@@ -17,7 +17,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/server"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -41,7 +40,7 @@ type TestEnv struct {
 		ServeHTTP(http.ResponseWriter, *http.Request)
 	}
 	gatewayServer *httptest.Server // real HTTP server for streaming support
-	virtual       *server_validate.VirtualServer
+	virtual       *VirtualServer
 	modelToken    string
 
 	mu          sync.Mutex
@@ -98,7 +97,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		appConfig:     appConfig,
 		ginEngine:     router,
 		gatewayServer: ts,
-		virtual:       server_validate.NewVirtualServer(t),
+		virtual:       NewVirtualServer(t),
 		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
 		routeModels:   make(map[string]string),
 		setupRoutes:   make(map[string]bool),
@@ -155,12 +154,7 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	router := gatewayServer.GetRouter()
 	ts := httptest.NewServer(router)
 
-	virtual := server_validate.NewVirtualServerForCLI()
-	if virtual == nil {
-		ts.Close()
-		os.RemoveAll(configDir)
-		return nil, fmt.Errorf("failed to create virtual server")
-	}
+	virtual := NewVirtualServerForCLI()
 
 	return &TestEnv{
 		appConfig:     appConfig,
@@ -205,7 +199,7 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 	env.setupRoutes[key] = true
 	env.mu.Unlock()
 
-	env.virtual.RegisterScenario(s.toVirtualServerScenario())
+	env.virtual.RegisterScenario(s)
 
 	virtualURL := env.virtual.URL()
 
@@ -213,16 +207,7 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 	providerUUID := fmt.Sprintf("virtual-%s-%s-%s", source, target, s.Name)
 	providerName := providerUUID // Use UUID as name for uniqueness
 
-	// Build model name that reflects the target type. The "-codex" / "-chat"
-	// suffix is just a debug marker so the test fixture's logs distinguish
-	// virtual providers wired for each endpoint family.
-	modelSuffix := s.Name
-	if target == protocol.TypeOpenAIResponses {
-		modelSuffix = s.Name + "-codex"
-	} else if target == protocol.TypeOpenAIChat {
-		modelSuffix = s.Name + "-chat"
-	}
-	providerModel := fmt.Sprintf("virtual-model-%s", modelSuffix)
+	providerModel := fmt.Sprintf("virtual-model-%s", s.Name)
 	requestModel := fmt.Sprintf("pv-%s-to-%s-%s", source, target, s.Name)
 
 	apiStyle := targetToAPIStyle(target)
@@ -290,6 +275,7 @@ func (env *TestEnv) SendAs(t *testing.T, source, target protocol.APIType, s Scen
 
 	result := &RoundTripResult{
 		SourceProtocol: source,
+		TargetProtocol: target,
 		ScenarioName:   s.Name,
 		IsStreaming:    streaming,
 	}
@@ -351,6 +337,7 @@ func (env *TestEnv) SendAsCLI(source, target protocol.APIType, s Scenario, strea
 
 	result := &RoundTripResult{
 		SourceProtocol: source,
+		TargetProtocol: target,
 		ScenarioName:   s.Name,
 		IsStreaming:    streaming,
 	}

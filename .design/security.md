@@ -83,7 +83,7 @@ Deleting them would silently break:
 - The detection branch in `NewConfig` and the `is_default` flag exposed
   by `GetUserToken` to the Web UI.
 - The "real token vs test token" assertion in
-  `internal/server_test/server_test.go`.
+  `internal/servertest/server_test.go`.
 
 The right read of these constants today is *"the string we look for in
 older configs"*, not *"the value we hand out to new configs"*. Renaming
@@ -106,4 +106,4 @@ to make that clearer is a follow-up.
 | `internal/server/config/util.go`           | `GenerateUserToken`, `GenerateModelToken`, `GenerateSecureToken`, `IsDefaultToken`.   |
 | `internal/server/config/config.go`         | `NewConfig` bootstrap and `CreateDefaultConfig`. Both refuse legacy defaults.         |
 | `internal/server/webui_auth.go`            | `GetUserToken` (exposes `is_default`), `ResetUserToken`, `ResetModelToken`.           |
-| `internal/server_test/server_test.go`      | Distinguishes real vs test tokens via the legacy default string.                      |
+| `internal/servertest/server_test.go`      | Distinguishes real vs test tokens via the legacy default string.                      |

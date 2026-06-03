@@ -3,7 +3,7 @@
 //
 // # Architecture
 //
-//  1. server_validate.VirtualServer — a mock HTTP provider that speaks OpenAI, Anthropic,
+//  1. VirtualServer — a mock HTTP provider that speaks OpenAI, Anthropic,
 //     and Google response formats. Conceptually a "virtual model" for testing.
 //
 //  2. TestEnv — wires a real gateway Server (with transform pipeline) to a
@@ -11,23 +11,22 @@
 //
 //  3. Matrix — executes the full cross-product of sources × targets × scenarios × streaming modes.
 //
-// Note: This package (protocol_validate) is the test-only framework, while
-// internal/virtualmodel is the production Gin server. They share the
-// vmodel.GenericRegistry primitive for scenario / model storage —
-// server_validate.Scenario implements vmodel.VirtualModel — but their
-// HTTP handlers remain separate by design: virtualserver/handler.go operates
-// on structured request/response shapes, while protocol_validate scenarios
-// serve pre-rendered byte / SSE-line payloads that exercise the gateway
-// transform pipeline at the wire-format level.
+// This package is the test-only framework, while internal/virtualmodel is the
+// production Gin server. They share the vmodel.GenericRegistry primitive for
+// scenario / model storage — Scenario implements vmodel.VirtualModel — but their
+// HTTP handlers remain separate by design: virtualserver/handler.go operates on
+// structured request/response shapes, while protocoltest scenarios serve
+// pre-rendered byte / SSE-line payloads that exercise the gateway transform
+// pipeline at the wire-format level.
 //
 // # Usage
 //
 //	env := protocoltest.NewTestEnv(t)
 //	defer env.Close()
 //	env.SetupRoute(protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, protocoltest.TextScenario())
-//	result := env.SendAs(t, protocol.TypeAnthropicV1, protocoltest.TextScenario(), false)
+//	result := env.SendAs(t, protocol.TypeAnthropicV1, protocol.TypeOpenAIChat, protocoltest.TextScenario(), false)
 //	assert.Equal(t, "assistant", result.Role)
-package protocol_validate
+package protocoltest
 
 import (
 	"time"

@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	virtualserver2 "github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
+	"github.com/tingly-dev/tingly-box/vmodel/vmodeltest"
 )
 
 // newTestServer spins up a real Gin httptest.Server with virtualserver routes
 // mounted at /v1 to match VirtualClient endpoint paths.
-func newTestServer(t *testing.T) *server_validate.VirtualClient {
+func newTestServer(t *testing.T) *vmodeltest.Client {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -30,13 +30,13 @@ func newTestServer(t *testing.T) *server_validate.VirtualClient {
 	srv := httptest.NewServer(engine)
 	t.Cleanup(srv.Close)
 
-	return server_validate.NewVirtualClient(srv.URL)
+	return vmodeltest.NewClient(srv.URL)
 }
 
 // ─── Typed response parsers ────────────────────────────────────────────────────
 
 // parseOpenAI deserializes RawBody into ChatCompletionResponse and logs it.
-func parseOpenAI(t *testing.T, result *server_validate.ParsedResponse) virtualserver2.ChatCompletionResponse {
+func parseOpenAI(t *testing.T, result *vmodeltest.ParsedResponse) virtualserver2.ChatCompletionResponse {
 	t.Helper()
 	var resp virtualserver2.ChatCompletionResponse
 	require.NoError(t, json.Unmarshal(result.RawBody, &resp), "unmarshal OpenAI response")
@@ -45,7 +45,7 @@ func parseOpenAI(t *testing.T, result *server_validate.ParsedResponse) virtualse
 }
 
 // parseAnthropic deserializes RawBody into AnthropicMessageResponse and logs it.
-func parseAnthropic(t *testing.T, result *server_validate.ParsedResponse) virtualserver2.AnthropicMessageResponse {
+func parseAnthropic(t *testing.T, result *vmodeltest.ParsedResponse) virtualserver2.AnthropicMessageResponse {
 	t.Helper()
 	var resp virtualserver2.AnthropicMessageResponse
 	require.NoError(t, json.Unmarshal(result.RawBody, &resp), "unmarshal Anthropic response")
@@ -100,7 +100,7 @@ func logAnthropic(t *testing.T, resp *virtualserver2.AnthropicMessageResponse) {
 
 // parseOpenAIStream deserializes each SSE data line into ChatCompletionStreamResponse chunks.
 // Lines that are "[DONE]" or event-type lines are skipped.
-func parseOpenAIStream(t *testing.T, result *server_validate.ParsedResponse) []virtualserver2.ChatCompletionStreamResponse {
+func parseOpenAIStream(t *testing.T, result *vmodeltest.ParsedResponse) []virtualserver2.ChatCompletionStreamResponse {
 	t.Helper()
 	var chunks []virtualserver2.ChatCompletionStreamResponse
 	for _, line := range result.StreamEvents {
@@ -118,7 +118,7 @@ func parseOpenAIStream(t *testing.T, result *server_validate.ParsedResponse) []v
 }
 
 // parseAnthropicStream deserializes each SSE data line into AnthropicStreamEvent items.
-func parseAnthropicStream(t *testing.T, result *server_validate.ParsedResponse) []virtualserver2.AnthropicStreamEvent {
+func parseAnthropicStream(t *testing.T, result *vmodeltest.ParsedResponse) []virtualserver2.AnthropicStreamEvent {
 	t.Helper()
 	var events []virtualserver2.AnthropicStreamEvent
 	for _, line := range result.StreamEvents {

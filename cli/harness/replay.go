@@ -9,7 +9,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // fixtureFS holds captured agent request bodies, grouped by API style and
@@ -32,41 +32,41 @@ var fixtureFS embed.FS
 // "real" upstreams the response is not controlled by the test, so only the
 // upstream-independent `structural` assertions are run.
 type replayScenario struct {
-	matrix        protocol_validate.Scenario
+	matrix        protocoltest.Scenario
 	streaming     bool
 	defaultVModel string // vmodel registry ID used when --upstream=vmodel
-	structural    []protocol_validate.Assertion
+	structural    []protocoltest.Assertion
 }
 
 // replayScenarios is the set of scenarios `harness replay` can run. The map
 // key is the scenario name as it appears on the CLI and in fixture paths.
 var replayScenarios = map[string]replayScenario{
 	"text": {
-		matrix:        protocol_validate.TextScenario(),
+		matrix:        protocoltest.TextScenario(),
 		streaming:     false,
 		defaultVModel: "echo-model",
-		structural: []protocol_validate.Assertion{
-			protocol_validate.AssertHTTPStatus(200),
-			protocol_validate.AssertContentNonEmpty(),
+		structural: []protocoltest.Assertion{
+			protocoltest.AssertHTTPStatus(200),
+			protocoltest.AssertContentNonEmpty(),
 		},
 	},
 	"tool_use": {
-		matrix:        protocol_validate.ToolUseScenario(),
+		matrix:        protocoltest.ToolUseScenario(),
 		streaming:     false,
 		defaultVModel: "web-search-example",
-		structural: []protocol_validate.Assertion{
-			protocol_validate.AssertHTTPStatus(200),
-			protocol_validate.AssertHasToolCalls(1),
+		structural: []protocoltest.Assertion{
+			protocoltest.AssertHTTPStatus(200),
+			protocoltest.AssertHasToolCalls(1),
 		},
 	},
 	"streaming_text": {
-		matrix:        protocol_validate.StreamingTextScenario(),
+		matrix:        protocoltest.StreamingTextScenario(),
 		streaming:     true,
 		defaultVModel: "echo-model",
-		structural: []protocol_validate.Assertion{
-			protocol_validate.AssertHTTPStatus(200),
-			protocol_validate.AssertStreamEventCount(1),
-			protocol_validate.AssertContentNonEmpty(),
+		structural: []protocoltest.Assertion{
+			protocoltest.AssertHTTPStatus(200),
+			protocoltest.AssertStreamEventCount(1),
+			protocoltest.AssertContentNonEmpty(),
 		},
 	},
 }
@@ -82,7 +82,7 @@ var replayScenarioOrder = []string{"text", "tool_use", "streaming_text"}
 var replaySkip = map[string]string{
 	// Transform-pipeline gap: codex speaks the OpenAI Responses API, and
 	// tool_use round-trips through the Responses source path, whose
-	// tool_call conversion is incomplete. Mirrors protocol_validate's
+	// tool_call conversion is incomplete. Mirrors protocoltest's
 	// skipSourceScenarios["openai_responses|tool_use"]. Fails on every upstream.
 	"virtual/codex/tool_use": "Responses API source: tool_use conversion incomplete",
 	"vmodel/codex/tool_use":  "Responses API source: tool_use conversion incomplete",
@@ -159,7 +159,7 @@ func (r *ReplayCmd) Run() error {
 		return err
 	}
 
-	var realEntry *protocol_validate.RealModelEntry
+	var realEntry *protocoltest.RealModelEntry
 	if r.Upstream == "real" {
 		realEntry, err = firstRunnableEntry(r.Config)
 		if err != nil {
@@ -196,7 +196,7 @@ func (r *ReplayCmd) Run() error {
 }
 
 // runOne replays a single (agent, scenario) pair against the configured upstream.
-func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocol_validate.RealModelEntry) replayRow {
+func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocoltest.RealModelEntry) replayRow {
 	row := replayRow{Agent: agentName, Scenario: scenarioName, Upstream: r.Upstream}
 	start := time.Now()
 
@@ -226,7 +226,7 @@ func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocol_v
 		return row
 	}
 
-	env, err := protocol_validate.NewAgentTestEnv(agentType)
+	env, err := protocoltest.NewAgentTestEnv(agentType)
 	if err != nil {
 		row.Err = fmt.Sprintf("create test env: %v", err)
 		row.Duration = time.Since(start)
@@ -245,7 +245,7 @@ func (r *ReplayCmd) runOne(agentName, scenarioName string, realEntry *protocol_v
 		}
 		err = env.SetupVModelAgent(agentType, vmodelID)
 	case "real":
-		apiStyle, sErr := protocol_validate.ResolveAPIStyle(*realEntry)
+		apiStyle, sErr := protocoltest.ResolveAPIStyle(*realEntry)
 		if sErr != nil {
 			err = sErr
 			break
@@ -317,7 +317,7 @@ func resolveReplayScenarios(filter []string) ([]string, error) {
 
 // firstRunnableEntry loads a provider config and returns its first entry that
 // has all fields needed to run (used by --upstream=real).
-func firstRunnableEntry(configFile string) (*protocol_validate.RealModelEntry, error) {
+func firstRunnableEntry(configFile string) (*protocoltest.RealModelEntry, error) {
 	if configFile == "" {
 		return nil, fmt.Errorf("--upstream=real requires --config <file>")
 	}
@@ -335,9 +335,9 @@ func firstRunnableEntry(configFile string) (*protocol_validate.RealModelEntry, e
 
 // loadFixture reads testdata/fixtures/<style>/<scenario>.json from the
 // embedded FS. style is derived from the agent type.
-func loadFixture(agentType protocol_validate.AgentType, scenario string) ([]byte, error) {
+func loadFixture(agentType protocoltest.AgentType, scenario string) ([]byte, error) {
 	style := "anthropic"
-	if agentType == protocol_validate.AgentTypeCodex {
+	if agentType == protocoltest.AgentTypeCodex {
 		style = "openai_responses"
 	}
 	path := fmt.Sprintf("testdata/fixtures/%s/%s.json", style, scenario)

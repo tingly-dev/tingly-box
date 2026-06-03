@@ -1,7 +1,7 @@
 // Prime wrapper unit tests. The full end-to-end prime path is covered
 // by TestRoundTrip_AnthropicBeta_To_OpenAIResponses_Streaming and
 // TestRoundTrip_StreamingPrimeFailure_To_OpenAIResponses in
-// internal/protocol_validate; these check the Next/Current contract
+// internal/protocoltest; these check the Next/Current contract
 // of the replay wrapper directly without standing up an SDK stream.
 
 package stream

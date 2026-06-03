@@ -9,11 +9,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/protocol_validate"
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // printTable prints test results in tabular format.
-func printTable(results []protocol_validate.TestResult, verbose int) {
+func printTable(results []protocoltest.TestResult, verbose int) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	// Summary
@@ -90,7 +90,7 @@ func printTable(results []protocol_validate.TestResult, verbose int) {
 }
 
 // printJSON prints test results in JSON format.
-func printJSON(results []protocol_validate.TestResult) error {
+func printJSON(results []protocoltest.TestResult) error {
 	type JSONResult struct {
 		Name       string `json:"name"`
 		Scenario   string `json:"scenario"`
@@ -142,7 +142,7 @@ func printJSON(results []protocol_validate.TestResult) error {
 }
 
 // printFailures prints detailed information about failed tests.
-func printFailures(results []protocol_validate.TestResult, verbose int) {
+func printFailures(results []protocoltest.TestResult, verbose int) {
 	hasFailures := false
 	for _, r := range results {
 		if !r.Passed && !r.Skipped {
@@ -174,7 +174,7 @@ func printFailures(results []protocol_validate.TestResult, verbose int) {
 }
 
 // countResults counts pass/fail/skip totals.
-func countResults(results []protocol_validate.TestResult) (pass, fail, skip int) {
+func countResults(results []protocoltest.TestResult) (pass, fail, skip int) {
 	for _, r := range results {
 		if r.Skipped {
 			skip++

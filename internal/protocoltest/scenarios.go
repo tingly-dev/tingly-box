@@ -1,38 +1,62 @@
-package protocol_validate
+package protocoltest
 
 import (
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
+	"github.com/tingly-dev/tingly-box/vmodel"
 )
 
-// MockResponseBuilder re-exports server_validate.MockResponseBuilder for convenience.
-type MockResponseBuilder = server_validate.MockResponseBuilder
+// ResponseFormat represents the format of the mock response for different endpoints.
+type ResponseFormat string
 
-// Scenario is a named test scenario describing:
-//   - What the mock provider should return (MockResponses per ResponseFormat)
-//   - What assertions to run on the round-trip result
+const (
+	FormatOpenAIChat      ResponseFormat = "openai_chat"      // /v1/chat/completions
+	FormatOpenAIResponses ResponseFormat = "openai_responses" // /v1/responses
+	FormatAnthropic       ResponseFormat = "anthropic"        // /v1/messages
+	FormatGoogle          ResponseFormat = "google"           // /v1beta/models/.../generateContent
+)
+
+// MockResponseBuilder defines how a virtual server should respond for one response format.
+type MockResponseBuilder struct {
+	NonStream func() (statusCode int, body []byte)
+	Stream    func() []string
+}
+
+// Scenario is a named test scenario describing what the mock provider returns
+// and what assertions to run on the round-trip result.
+//
+// Scenario satisfies vmodel.VirtualModel so scenario storage can reuse
+// vmodel.GenericRegistry.
 type Scenario struct {
 	Name        string
 	Description string
 	Tags        []string
 
-	// MockResponses keyed by response format (openai_chat, openai_responses, anthropic, google).
-	MockResponses map[server_validate.ResponseFormat]MockResponseBuilder
+	MockResponses map[ResponseFormat]MockResponseBuilder
 
-	// Assertions run after every round-trip for this scenario.
 	Assertions []Assertion
 }
 
-// toVirtualServerScenario converts to a server_validate.Scenario (strips assertions).
-func (s Scenario) toVirtualServerScenario() server_validate.Scenario {
-	return server_validate.Scenario{
-		Name:          s.Name,
-		Description:   s.Description,
-		Tags:          s.Tags,
-		MockResponses: s.MockResponses,
+var _ vmodel.VirtualModel = Scenario{}
+
+func (s Scenario) GetID() string          { return s.Name }
+func (s Scenario) GetName() string        { return s.Name }
+func (s Scenario) GetDescription() string { return s.Description }
+
+func (s Scenario) GetType() vmodel.VirtualModelType {
+	return vmodel.VirtualModelTypeStatic
+}
+
+func (s Scenario) SimulatedDelay() time.Duration { return 0 }
+
+func (s Scenario) ToModel() vmodel.Model {
+	return vmodel.Model{
+		ID:      s.Name,
+		Object:  "model",
+		Created: 0,
+		OwnedBy: vmodel.DefaultMockOwnedBy,
 	}
 }
 
@@ -58,11 +82,11 @@ func TextScenario() Scenario {
 		Name:        "text",
 		Description: "Basic text completion: user asks a question, assistant answers",
 		Tags:        []string{"text"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatOpenAIChat:      openAITextResponse(),
-			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
-			server_validate.FormatAnthropic:       anthropicTextResponse(),
-			server_validate.FormatGoogle:          googleTextResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAITextResponse(),
+			FormatOpenAIResponses: openAIResponsesTextResponse(),
+			FormatAnthropic:       anthropicTextResponse(),
+			FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -156,11 +180,11 @@ func ToolUseScenario() Scenario {
 		Name:        "tool_use",
 		Description: "Single tool call: assistant calls get_weather with location arg",
 		Tags:        []string{"tool_use"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatOpenAIChat:      openAIToolUseResponse(),
-			server_validate.FormatOpenAIResponses: openAIResponsesToolUseResponse(),
-			server_validate.FormatAnthropic:       anthropicToolUseResponse(),
-			server_validate.FormatGoogle:          googleToolUseResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAIToolUseResponse(),
+			FormatOpenAIResponses: openAIResponsesToolUseResponse(),
+			FormatAnthropic:       anthropicToolUseResponse(),
+			FormatGoogle:          googleToolUseResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -274,11 +298,11 @@ func ToolResultScenario() Scenario {
 		Name:        "tool_result",
 		Description: "Multi-turn with tool result: user→assistant(tool_use)→user(tool_result)→assistant",
 		Tags:        []string{"tool_use", "multi_turn"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatOpenAIChat:      openAITextResponse(),
-			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
-			server_validate.FormatAnthropic:       anthropicTextResponse(),
-			server_validate.FormatGoogle:          googleTextResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAITextResponse(),
+			FormatOpenAIResponses: openAIResponsesTextResponse(),
+			FormatAnthropic:       anthropicTextResponse(),
+			FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -296,11 +320,11 @@ func ThinkingScenario() Scenario {
 		Name:        "thinking",
 		Description: "Extended thinking: response contains a thinking block before text",
 		Tags:        []string{"thinking"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatAnthropic:       anthropicThinkingResponse(),
-			server_validate.FormatOpenAIChat:      openAITextResponse(),
-			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
-			server_validate.FormatGoogle:          googleTextResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatAnthropic:       anthropicThinkingResponse(),
+			FormatOpenAIChat:      openAITextResponse(),
+			FormatOpenAIResponses: openAIResponsesTextResponse(),
+			FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -345,11 +369,11 @@ func MultiTurnScenario() Scenario {
 		Name:        "multi_turn",
 		Description: "Multi-turn conversation: system + user/assistant history + final user message",
 		Tags:        []string{"multi_turn"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatOpenAIChat:      openAITextResponse(),
-			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
-			server_validate.FormatAnthropic:       anthropicTextResponse(),
-			server_validate.FormatGoogle:          googleTextResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAITextResponse(),
+			FormatOpenAIResponses: openAIResponsesTextResponse(),
+			FormatAnthropic:       anthropicTextResponse(),
+			FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -367,11 +391,11 @@ func StreamingTextScenario() Scenario {
 		Name:        "streaming_text",
 		Description: "Streaming text: SSE chunks assembling to a complete text response",
 		Tags:        []string{"text", "streaming"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatOpenAIChat:      openAITextResponse(),
-			server_validate.FormatOpenAIResponses: openAIResponsesTextResponse(),
-			server_validate.FormatAnthropic:       anthropicTextResponse(),
-			server_validate.FormatGoogle:          googleTextResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAITextResponse(),
+			FormatOpenAIResponses: openAIResponsesTextResponse(),
+			FormatAnthropic:       anthropicTextResponse(),
+			FormatGoogle:          googleTextResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -389,11 +413,11 @@ func StreamingToolUseScenario() Scenario {
 		Name:        "streaming_tool_use",
 		Description: "Streaming tool use: SSE chunks with tool call deltas",
 		Tags:        []string{"tool_use", "streaming"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatOpenAIChat:      openAIToolUseResponse(),
-			server_validate.FormatOpenAIResponses: openAIResponsesToolUseResponse(),
-			server_validate.FormatAnthropic:       anthropicToolUseResponse(),
-			server_validate.FormatGoogle:          googleToolUseResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAIToolUseResponse(),
+			FormatOpenAIResponses: openAIResponsesToolUseResponse(),
+			FormatAnthropic:       anthropicToolUseResponse(),
+			FormatGoogle:          googleToolUseResponse(),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -410,11 +434,11 @@ func ErrorScenario() Scenario {
 		Name:        "error",
 		Description: "Provider rate limit error (429) propagated to client",
 		Tags:        []string{"error"},
-		MockResponses: map[server_validate.ResponseFormat]MockResponseBuilder{
-			server_validate.FormatOpenAIChat:      openAIErrorResponse(),
-			server_validate.FormatOpenAIResponses: openAIErrorResponse(),
-			server_validate.FormatAnthropic:       anthropicErrorResponse(),
-			server_validate.FormatGoogle:          googleErrorResponse(),
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAIErrorResponse(),
+			FormatOpenAIResponses: openAIErrorResponse(),
+			FormatAnthropic:       anthropicErrorResponse(),
+			FormatGoogle:          googleErrorResponse(),
 		},
 		Assertions: []Assertion{},
 	}
