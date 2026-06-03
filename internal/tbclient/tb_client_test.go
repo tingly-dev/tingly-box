@@ -29,10 +29,36 @@ func TestTBClient_BuildBaseURL(t *testing.T) {
 }
 
 func TestTBClient_BuildBaseURL_DefaultPort(t *testing.T) {
-	cfg := &serverconfig.Config{} // ServerPort = 0
+	cfg := &serverconfig.Config{} // ServerPort = 0, ServerHost = ""
 	client := NewTBClient(cfg, nil)
 
 	assert.Equal(t, "http://localhost:12580/tingly/claude_code", client.buildBaseURL())
+}
+
+func TestTBClient_BuildBaseURL_CustomHost(t *testing.T) {
+	cfg := &serverconfig.Config{ServerPort: 8080}
+	_ = cfg.SetServerHost("192.168.1.100") // Set custom host
+	client := NewTBClient(cfg, nil)
+
+	assert.Equal(t, "http://192.168.1.100:8080/tingly/claude_code", client.buildBaseURL())
+}
+
+func TestTBClient_BuildBaseURL_HostZeroAll(t *testing.T) {
+	cfg := &serverconfig.Config{ServerPort: 9000}
+	_ = cfg.SetServerHost("0.0.0.0") // Note: In actual runtime, server resolves 0.0.0.0 to actual local IP before storing
+	client := NewTBClient(cfg, nil)
+
+	assert.Equal(t, "http://0.0.0.0:9000/tingly/claude_code", client.buildBaseURL())
+}
+
+func TestTBClient_BuildBaseURL_ResolvedLocalIP(t *testing.T) {
+	cfg := &serverconfig.Config{ServerPort: 9000}
+	// Simulate what server does: network.ResolveHost("0.0.0.0") returns actual local IP
+	// For test consistency, we directly set a resolved IP
+	_ = cfg.SetServerHost("192.168.1.100")
+	client := NewTBClient(cfg, nil)
+
+	assert.Equal(t, "http://192.168.1.100:9000/tingly/claude_code", client.buildBaseURL())
 }
 
 func TestProviderInfo_Structure(t *testing.T) {

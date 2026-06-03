@@ -55,6 +55,7 @@ type Config struct {
 	ProvidersV1 map[string]*typ.Provider `json:"providers"`
 	Providers   []*typ.Provider          `json:"providers_v2"`
 	ServerPort  int                      `json:"-"`
+	ServerHost  string                   `json:"-"` // Server host address (e.g., "localhost", "0.0.0.0", "192.168.1.100")
 	JWTSecret   string                   `json:"jwt_secret"`
 
 	// Server settings
@@ -1104,6 +1105,27 @@ func (c *Config) SetServerPort(port int) error {
 	defer c.mu.Unlock()
 
 	c.ServerPort = port
+	return c.Save()
+}
+
+// GetServerHost returns the configured server host
+// Returns "localhost" if no host is configured
+func (c *Config) GetServerHost() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.ServerHost == "" {
+		return "localhost"
+	}
+	return c.ServerHost
+}
+
+// SetServerHost updates the server host
+func (c *Config) SetServerHost(host string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.ServerHost = host
 	return c.Save()
 }
 

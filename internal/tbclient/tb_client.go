@@ -107,7 +107,8 @@ func (c *TBClientImpl) buildBaseURL() string {
 	if port == 0 {
 		port = 12580
 	}
-	return fmt.Sprintf("http://localhost:%d/tingly/claude_code", port)
+	host := c.config.GetServerHost()
+	return fmt.Sprintf("http://%s:%d/tingly/claude_code", host, port)
 }
 
 // findFirstClaudeCodeRule finds the first active ClaudeCode rule
@@ -147,7 +148,8 @@ func (c *TBClientImpl) GetClaudeCodeEnv(ctx context.Context) ([]string, error) {
 	if port == 0 {
 		port = 12580
 	}
-	baseURL := fmt.Sprintf("http://localhost:%d", port)
+	host := c.config.GetServerHost()
+	baseURL := fmt.Sprintf("http://%s:%d", host, port)
 	apiKey := c.config.GetModelToken()
 
 	models := c.resolveClaudeCodeModels()
@@ -321,10 +323,11 @@ func (c *TBClientImpl) GetHTTPEndpointForScenario(ctx context.Context, scenario 
 	if port == 0 {
 		port = 12580
 	}
+	host := c.config.GetServerHost()
 
 	// Build scenario-specific path
 	scenarioPath := c.GetScenarioEndpointPath(scenario)
-	baseURL := fmt.Sprintf("http://localhost:%d%s", port, scenarioPath)
+	baseURL := fmt.Sprintf("http://%s:%d%s", host, port, scenarioPath)
 
 	// Get API key from config
 	apiKey := c.config.GetModelToken()
