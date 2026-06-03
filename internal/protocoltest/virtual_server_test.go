@@ -1,4 +1,4 @@
-package server_validate_test
+package protocoltest_test
 
 import (
 	"testing"
@@ -6,15 +6,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // newTextScenario returns a minimal text scenario for direct virtual server tests.
-func newTextScenario() server_validate.Scenario {
-	return server_validate.Scenario{
+func newTextScenario() protocoltest.Scenario {
+	return protocoltest.Scenario{
 		Name: "text",
-		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
-			server_validate.FormatOpenAIChat: {
+		MockResponses: map[protocoltest.ResponseFormat]protocoltest.MockResponseBuilder{
+			protocoltest.FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"chatcmpl-test","object":"chat.completion","model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"The capital of France is Paris."},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}`)
 				},
@@ -27,7 +27,7 @@ func newTextScenario() server_validate.Scenario {
 					}
 				},
 			},
-			server_validate.FormatAnthropic: {
+			protocoltest.FormatAnthropic: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"msg-test","type":"message","role":"assistant","content":[{"type":"text","text":"The capital of France is Paris."}],"model":"claude-3-5-sonnet-20241022","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":8}}`)
 				},
@@ -42,7 +42,7 @@ func newTextScenario() server_validate.Scenario {
 					}
 				},
 			},
-			server_validate.FormatGoogle: {
+			protocoltest.FormatGoogle: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"candidates":[{"content":{"role":"model","parts":[{"text":"The capital of France is Paris."}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":8}}`)
 				},
@@ -56,21 +56,21 @@ func newTextScenario() server_validate.Scenario {
 	}
 }
 
-func newToolUseScenario() server_validate.Scenario {
-	return server_validate.Scenario{
+func newToolUseScenario() protocoltest.Scenario {
+	return protocoltest.Scenario{
 		Name: "tool_use",
-		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
-			server_validate.FormatOpenAIChat: {
+		MockResponses: map[protocoltest.ResponseFormat]protocoltest.MockResponseBuilder{
+			protocoltest.FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"chatcmpl-tool","object":"chat.completion","model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Paris\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":15,"completion_tokens":20}}`)
 				},
 			},
-			server_validate.FormatAnthropic: {
+			protocoltest.FormatAnthropic: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"msg-tool","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"get_weather","input":{"location":"Paris"}}],"model":"claude-3-5-sonnet-20241022","stop_reason":"tool_use","usage":{"input_tokens":15,"output_tokens":20}}`)
 				},
 			},
-			server_validate.FormatGoogle: {
+			protocoltest.FormatGoogle: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_weather","args":{"location":"Paris"}}}]},"finishReason":"STOP"}]}`)
 				},
@@ -79,11 +79,11 @@ func newToolUseScenario() server_validate.Scenario {
 	}
 }
 
-func newErrorScenario() server_validate.Scenario {
-	return server_validate.Scenario{
+func newErrorScenario() protocoltest.Scenario {
+	return protocoltest.Scenario{
 		Name: "error",
-		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
-			server_validate.FormatOpenAIChat: {
+		MockResponses: map[protocoltest.ResponseFormat]protocoltest.MockResponseBuilder{
+			protocoltest.FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 429, []byte(`{"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`)
 				},
@@ -93,7 +93,7 @@ func newErrorScenario() server_validate.Scenario {
 }
 
 func TestServerValidate_Lifecycle(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	require.NotNil(t, vs)
 	defer vs.Close()
 
@@ -103,7 +103,7 @@ func TestServerValidate_Lifecycle(t *testing.T) {
 }
 
 func TestServerValidate_OpenAI_ChatCompletions(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newTextScenario()
@@ -116,7 +116,7 @@ func TestServerValidate_OpenAI_ChatCompletions(t *testing.T) {
 }
 
 func TestServerValidate_OpenAI_ChatCompletions_Streaming(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newTextScenario()
@@ -127,7 +127,7 @@ func TestServerValidate_OpenAI_ChatCompletions_Streaming(t *testing.T) {
 }
 
 func TestServerValidate_Anthropic_Messages(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newTextScenario()
@@ -139,7 +139,7 @@ func TestServerValidate_Anthropic_Messages(t *testing.T) {
 }
 
 func TestServerValidate_Anthropic_Messages_Streaming(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newTextScenario()
@@ -150,7 +150,7 @@ func TestServerValidate_Anthropic_Messages_Streaming(t *testing.T) {
 }
 
 func TestServerValidate_Google_GenerateContent(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newTextScenario()
@@ -160,7 +160,7 @@ func TestServerValidate_Google_GenerateContent(t *testing.T) {
 }
 
 func TestServerValidate_ToolUse_OpenAI(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newToolUseScenario()
@@ -172,7 +172,7 @@ func TestServerValidate_ToolUse_OpenAI(t *testing.T) {
 }
 
 func TestServerValidate_ToolUse_Anthropic(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newToolUseScenario()
@@ -184,7 +184,7 @@ func TestServerValidate_ToolUse_Anthropic(t *testing.T) {
 }
 
 func TestServerValidate_ErrorResponse(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newErrorScenario()
@@ -193,7 +193,7 @@ func TestServerValidate_ErrorResponse(t *testing.T) {
 }
 
 func TestServerValidate_CallCount(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	defer vs.Close()
 
 	s := newTextScenario()

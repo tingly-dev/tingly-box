@@ -1,4 +1,4 @@
-package protocol_validate
+package protocoltest
 
 import (
 	"bytes"
@@ -60,7 +60,7 @@ func (env *TestEnv) SetupFailoverRoute(
 ) FailoverRoute {
 	t.Helper()
 
-	env.virtual.RegisterScenario(successScenario.toVirtualServerScenario())
+	env.virtual.RegisterScenario(successScenario)
 
 	modelSuffix := successScenario.Name
 	switch target {

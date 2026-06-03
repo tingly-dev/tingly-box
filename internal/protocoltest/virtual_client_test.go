@@ -1,4 +1,4 @@
-package server_validate_test
+package protocoltest_test
 
 import (
 	"testing"
@@ -6,14 +6,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
+	"github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 // TestVirtualClient_BoundToServer verifies the bound-client pattern:
 // vs.Client() auto-registers scenarios and sends provider-native requests.
 
 func TestVirtualClient_OpenAIChat_NonStream(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendOpenAIChat(t, newTextScenario(), false)
@@ -26,7 +26,7 @@ func TestVirtualClient_OpenAIChat_NonStream(t *testing.T) {
 }
 
 func TestVirtualClient_OpenAIChat_Stream(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendOpenAIChat(t, newTextScenario(), true)
@@ -37,7 +37,7 @@ func TestVirtualClient_OpenAIChat_Stream(t *testing.T) {
 }
 
 func TestVirtualClient_OpenAIResponses_NonStream(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	// The Responses endpoint delegates to the OpenAI handler, so use the OpenAI
@@ -48,7 +48,7 @@ func TestVirtualClient_OpenAIResponses_NonStream(t *testing.T) {
 }
 
 func TestVirtualClient_Anthropic_NonStream(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendAnthropicV1(t, newTextScenario(), false)
@@ -59,7 +59,7 @@ func TestVirtualClient_Anthropic_NonStream(t *testing.T) {
 }
 
 func TestVirtualClient_Anthropic_Stream(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendAnthropicV1(t, newTextScenario(), true)
@@ -70,7 +70,7 @@ func TestVirtualClient_Anthropic_Stream(t *testing.T) {
 }
 
 func TestVirtualClient_Google_NonStream(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendGoogle(t, newTextScenario(), false)
@@ -79,7 +79,7 @@ func TestVirtualClient_Google_NonStream(t *testing.T) {
 }
 
 func TestVirtualClient_Google_Stream(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendGoogle(t, newTextScenario(), true)
@@ -89,7 +89,7 @@ func TestVirtualClient_Google_Stream(t *testing.T) {
 }
 
 func TestVirtualClient_ToolUse_OpenAI(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendOpenAIChat(t, newToolUseScenario(), false)
@@ -100,7 +100,7 @@ func TestVirtualClient_ToolUse_OpenAI(t *testing.T) {
 }
 
 func TestVirtualClient_ToolUse_Anthropic(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendAnthropicV1(t, newToolUseScenario(), false)
@@ -111,7 +111,7 @@ func TestVirtualClient_ToolUse_Anthropic(t *testing.T) {
 }
 
 func TestVirtualClient_ToolUse_Google(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendGoogle(t, newToolUseScenario(), false)
@@ -121,7 +121,7 @@ func TestVirtualClient_ToolUse_Google(t *testing.T) {
 }
 
 func TestVirtualClient_Error(t *testing.T) {
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	vc := vs.Client()
 
 	result := vc.SendOpenAIChat(t, newErrorScenario(), false)
@@ -130,11 +130,11 @@ func TestVirtualClient_Error(t *testing.T) {
 
 func TestVirtualClient_Standalone(t *testing.T) {
 	// Standalone: manually register scenario, then use client pointed at same URL.
-	vs := server_validate.NewVirtualServer(t)
+	vs := protocoltest.NewVirtualServer(t)
 	s := newTextScenario()
 	vs.RegisterScenario(s)
 
-	vc := server_validate.NewVirtualClient(vs.URL())
+	vc := protocoltest.NewVirtualClient(vs.URL())
 	result := vc.SendOpenAIChat(t, s, false)
 	require.Equal(t, 200, result.HTTPStatus)
 	assert.Equal(t, "The capital of France is Paris.", result.Content)
@@ -142,8 +142,8 @@ func TestVirtualClient_Standalone(t *testing.T) {
 
 func TestVirtualClient_WithServer(t *testing.T) {
 	// WithServer: create standalone then bind after the fact.
-	vs := server_validate.NewVirtualServer(t)
-	vc := server_validate.NewVirtualClient(vs.URL()).WithServer(vs)
+	vs := protocoltest.NewVirtualServer(t)
+	vc := protocoltest.NewVirtualClient(vs.URL()).WithServer(vs)
 
 	result := vc.SendAnthropicV1(t, newTextScenario(), false)
 	require.Equal(t, 200, result.HTTPStatus)

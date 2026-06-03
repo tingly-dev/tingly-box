@@ -1,14 +1,14 @@
 //go:build e2e
 // +build e2e
 
-package protocol_validate_test
+package protocoltest_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	pt "github.com/tingly-dev/tingly-box/internal/protocol_validate"
+	pt "github.com/tingly-dev/tingly-box/internal/protocoltest"
 )
 
 func TestAllScenarios_Registered(t *testing.T) {

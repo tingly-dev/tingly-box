@@ -1,8 +1,5 @@
-package protocol_validate
+package protocoltest
 
-import (
-	"github.com/tingly-dev/tingly-box/internal/server_validate"
-)
 
 // AgentScenario defines a test scenario for profile testing
 // Unlike matrix scenarios which test protocol transformations,
@@ -15,7 +12,7 @@ type AgentScenario struct {
 	Description string
 
 	// MockResponses are the mock responses keyed by API style
-	MockResponses map[server_validate.ResponseFormat]server_validate.MockResponseBuilder
+	MockResponses map[ResponseFormat]MockResponseBuilder
 }
 
 // AgentScenarios returns all built-in profile test scenarios
@@ -32,8 +29,8 @@ func AgentTextScenario() AgentScenario {
 	return AgentScenario{
 		Name:        "text",
 		Description: "Basic text message request and response",
-		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
-			server_validate.FormatAnthropic: {
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatAnthropic: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"msg_123","type":"message","role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"model":"claude-3-5-sonnet-20241022","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`)
 				},
@@ -63,7 +60,7 @@ func AgentTextScenario() AgentScenario {
 					}
 				},
 			},
-			server_validate.FormatOpenAIChat: {
+			FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"chatcmpl-123","object":"chat.completion","created":1234567890,"model":"gpt-4","choices":[{"index":0,"message":{"role":"assistant","content":"Hello, world!"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`)
 				},
@@ -95,8 +92,8 @@ func AgentToolUseScenario() AgentScenario {
 	return AgentScenario{
 		Name:        "tool_use",
 		Description: "Tool use request and response",
-		MockResponses: map[server_validate.ResponseFormat]server_validate.MockResponseBuilder{
-			server_validate.FormatAnthropic: {
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatAnthropic: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"msg_456","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_123","name":"bash","input":{"command":"echo 'hello'"}}],"model":"claude-3-5-sonnet-20241022","stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":20}}`)
 				},
@@ -126,7 +123,7 @@ func AgentToolUseScenario() AgentScenario {
 					}
 				},
 			},
-			server_validate.FormatOpenAIChat: {
+			FormatOpenAIChat: {
 				NonStream: func() (int, []byte) {
 					return 200, []byte(`{"id":"chatcmpl-456","object":"chat.completion","created":1234567890,"model":"gpt-4","choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_123","type":"function","function":{"name":"bash","arguments":"{\"command\":\"echo 'hello'\"}"}}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`)
 				},

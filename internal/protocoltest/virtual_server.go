@@ -1,22 +1,4 @@
-// Package server_validate provides a mock HTTP provider server that speaks
-// OpenAI, Anthropic, and Google response formats for testing purposes.
-//
-// **Architecture Note**: VirtualServer is a **provider mock**, not a gateway mock.
-// It speaks provider-native formats (OpenAI/Anthropic/Google APIs) at provider-native
-// routes (/v1/chat/completions, /v1/messages, /v1beta/models/...).
-//
-// The test harness routing flow is:
-//
-//	Client → Gateway (/tingly/{scenario}/v1/...) → Protocol Transform → Virtual Server (/v1/...)
-//
-// A VirtualServer acts as a deterministic "virtual model" — scenario responses
-// are pre-configured and returned without any real model calls. It is used by
-// the protocol_validate test framework to exercise the gateway's protocol transform
-// pipeline end-to-end.
-//
-// Use VirtualClient (client.go) to send requests directly to the server and inspect
-// parsed responses. A bound client is obtained via vs.Client().
-package server_validate
+package protocoltest
 
 import (
 	"bytes"
@@ -27,80 +9,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/vmodel"
 )
-
-// ResponseFormat represents the format of the mock response for different endpoints.
-type ResponseFormat string
-
-const (
-	FormatOpenAIChat      ResponseFormat = "openai_chat"      // /v1/chat/completions
-	FormatOpenAIResponses ResponseFormat = "openai_responses" // /v1/responses
-	FormatAnthropic       ResponseFormat = "anthropic"        // /v1/messages
-	FormatGoogle          ResponseFormat = "google"           // /v1beta/models/.../generateContent
-)
-
-// MockResponseBuilder defines how a virtual server should respond for one response format.
-type MockResponseBuilder struct {
-	// NonStream returns the HTTP status code and response body bytes.
-	NonStream func() (statusCode int, body []byte)
-	// Stream returns the SSE event lines (each line is "data: ..." or "event: ...").
-	Stream func() []string
-}
-
-// Scenario is a named test scenario describing what the mock provider returns.
-//
-// Scenario also satisfies vmodel.VirtualModel via stub identity methods
-// so that scenario storage can reuse vmodel.GenericRegistry, the same
-// thread-safe registry primitive used by the production virtualmodel sub-
-// packages. The byte-replay handlers in this file are intentionally NOT
-// wired through virtualserver/handler.go — that handler operates on
-// structured request/response shapes, while protocol_validate scenarios are
-// pre-rendered byte / SSE-line payloads. Sharing the registry primitive is
-// the cleanest reuse available without losing wire-format control.
-type Scenario struct {
-	Name        string
-	Description string
-	Tags        []string
-
-	// MockResponses keyed by response format (openai_chat, openai_responses, anthropic, google).
-	// Each endpoint (/v1/chat/completions, /v1/responses, /v1/messages, /v1beta/models/.../generateContent)
-	// returns the corresponding format.
-	MockResponses map[ResponseFormat]MockResponseBuilder
-}
-
-// Compile-time check: Scenario satisfies vmodel.VirtualModel.
-var _ vmodel.VirtualModel = Scenario{}
-
-// GetID returns the scenario name; scenarios are looked up by name.
-func (s Scenario) GetID() string { return s.Name }
-
-// GetName returns the scenario name.
-func (s Scenario) GetName() string { return s.Name }
-
-// GetDescription returns the scenario description.
-func (s Scenario) GetDescription() string { return s.Description }
-
-// GetType is always Static — scenarios serve fixed pre-rendered responses.
-func (s Scenario) GetType() vmodel.VirtualModelType {
-	return vmodel.VirtualModelTypeStatic
-}
-
-// SimulatedDelay is always 0 — protocol-validate scenarios do not simulate latency.
-func (s Scenario) SimulatedDelay() time.Duration { return 0 }
-
-// ToModel returns the OpenAI-compatible models-list entry for this scenario.
-func (s Scenario) ToModel() vmodel.Model {
-	return vmodel.Model{
-		ID:      s.Name,
-		Object:  "model",
-		Created: 0,
-		OwnedBy: vmodel.DefaultMockOwnedBy,
-	}
-}
 
 // VirtualServer is a mock provider server backed by httptest.Server.
 // It speaks OpenAI, Anthropic, and Google response formats and returns
