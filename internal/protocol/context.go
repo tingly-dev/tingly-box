@@ -191,18 +191,6 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 	return nil
 }
 
-// DispatchStreamEvent calls all OnStreamEvent hooks with the given event.
-// Used by raw-byte stream handlers that own their own loop but still want
-// to participate in the hook chain (e.g. for TTFT tracking).
-func (hc *HandleContext) DispatchStreamEvent(event interface{}) error {
-	for _, hook := range hc.OnStreamEventHooks {
-		if err := hook(event); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // DispatchStreamError calls all OnStreamError hooks.
 func (hc *HandleContext) DispatchStreamError(err error) {
 	for _, hook := range hc.OnStreamErrorHooks {
