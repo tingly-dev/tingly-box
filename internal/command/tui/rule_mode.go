@@ -89,24 +89,19 @@ func formatRuleService(mgr TUIManager, r *typ.Rule) string {
 }
 
 func ruleAdd(mgr TUIManager) error {
+	scn, ok, err := pickScenario(typ.ScenarioOpenAI)
+	if err != nil || !ok {
+		return err
+	}
+
 	rmR, err := Input("Request model (e.g. gpt-4o, claude-3-5-sonnet):", InputOptions{Required: true, CanGoBack: true})
 	if err != nil || rmR.IsCancel() || rmR.IsBack() {
 		return nil
 	}
 
-	scenarios := typ.BuiltinScenarios()
-	scnItems := make([]SelectItem[typ.RuleScenario], 0, len(scenarios))
-	for _, s := range scenarios {
-		scnItems = append(scnItems, SelectItem[typ.RuleScenario]{Title: string(s), Value: s})
-	}
-	scnR, err := Select("Scenario:", scnItems, SelectOptions{CanGoBack: true, PageSize: 12, Initial: typ.ScenarioOpenAI})
-	if err != nil || scnR.IsCancel() || scnR.IsBack() {
-		return nil
-	}
-
-	if existing := mgr.GetGlobalConfig().GetRuleByRequestModelAndScenario(rmR.Value, scnR.Value); existing != nil {
+	if existing := mgr.GetGlobalConfig().GetRuleByRequestModelAndScenario(rmR.Value, scn); existing != nil {
 		return fmt.Errorf("a rule for %q + %q already exists (uuid %s); use Edit instead",
-			rmR.Value, scnR.Value, existing.UUID)
+			rmR.Value, scn, existing.UUID)
 	}
 
 	svc, err := pickRuleService(mgr)
@@ -116,7 +111,7 @@ func ruleAdd(mgr TUIManager) error {
 
 	rule := typ.Rule{
 		UUID:         uuid.New().String(),
-		Scenario:     scnR.Value,
+		Scenario:     scn,
 		RequestModel: rmR.Value,
 		Services:     []*loadbalance.Service{svc},
 		LBTactic: typ.Tactic{
@@ -127,7 +122,7 @@ func ruleAdd(mgr TUIManager) error {
 	}
 
 	cfm, err := Confirm("Save this rule?", ConfirmOptions{DefaultYes: true, CanGoBack: true,
-		Description: fmt.Sprintf("%s · %s → %s:%s", rmR.Value, scnR.Value, providerName(mgr, svc.Provider), svc.Model)})
+		Description: fmt.Sprintf("%s · %s → %s:%s", rmR.Value, scn, providerName(mgr, svc.Provider), svc.Model)})
 	if err != nil || !cfm.IsConfirm() || !cfm.Value {
 		return nil
 	}
