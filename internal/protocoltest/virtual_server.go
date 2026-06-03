@@ -276,8 +276,7 @@ func (vs *VirtualServer) detectScenarioFromURLOrBody(urlPath string, body []byte
 }
 
 // detectScenario extracts the scenario name from the request body's model field.
-// The model field is expected to be "virtual-model-{target}-{scenario}" (set by SetupRoute).
-// We extract just the scenario name for lookup.
+// The model field is expected to be "virtual-model-{scenario}" (set by SetupRoute).
 // Falls back to the first registered scenario if extraction fails.
 func (vs *VirtualServer) detectScenario(body []byte) string {
 	var m map[string]interface{}
@@ -285,16 +284,9 @@ func (vs *VirtualServer) detectScenario(body []byte) string {
 		if model, ok := m["model"].(string); ok {
 			const prefix = "virtual-model-"
 			if strings.HasPrefix(model, prefix) {
-				// Format: virtual-model-{target}-{scenario}
-				// We need to extract the scenario name after the target
-				remaining := model[len(prefix):] // "{target}-{scenario}"
-				// Find the last "-" to separate target from scenario
-				lastDash := strings.LastIndex(remaining, "-")
-				if lastDash > 0 {
-					name := remaining[lastDash+1:]
-					if vs.scenarios.Has(name) {
-						return name
-					}
+				name := model[len(prefix):]
+				if vs.scenarios.Has(name) {
+					return name
 				}
 			}
 		}

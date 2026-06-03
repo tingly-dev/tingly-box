@@ -88,7 +88,7 @@ func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, u
 // scenario's content-level Assertions against the round-trip result.
 //
 // The rule's upstream model encodes the scenario name as
-// "virtual-model-<style>-<scenario>" so the VirtualServer's scenario
+// "virtual-model-<scenario>" so the VirtualServer's scenario
 // detection resolves the right mock.
 func (env *AgentTestEnv) SetupVirtualAgentScenario(agentType AgentType, scenario Scenario) error {
 	virtualURL := env.VirtualServerURL()
@@ -100,15 +100,13 @@ func (env *AgentTestEnv) SetupVirtualAgentScenario(agentType AgentType, scenario
 
 	style := agentAPIStyle(agentType)
 	apiBase := virtualURL
-	styleName := "anthropic"
 	if style == protocol.APIStyleOpenAI {
 		// OpenAI-style providers expect the /v1 prefix on the base URL so the
 		// gateway forwards to {base}/responses etc. — mirrors TestEnv.SetupRoute.
 		apiBase = virtualURL + "/v1"
-		styleName = "openai"
 	}
 
-	const providerName = "virtual-replay"
+	providerName := fmt.Sprintf("virtual-replay-%s-%s", agentType, scenario.Name)
 	provider := &typ.Provider{
 		UUID:     providerName,
 		Name:     providerName,
@@ -122,7 +120,7 @@ func (env *AgentTestEnv) SetupVirtualAgentScenario(agentType AgentType, scenario
 		return fmt.Errorf("add provider: %w", err)
 	}
 
-	upstreamModel := fmt.Sprintf("virtual-model-%s-%s", styleName, scenario.Name)
+	upstreamModel := fmt.Sprintf("virtual-model-%s", scenario.Name)
 	return env.repointBuiltinRule(agentType, providerName, upstreamModel)
 }
 
