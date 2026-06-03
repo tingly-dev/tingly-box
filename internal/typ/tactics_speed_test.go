@@ -142,7 +142,7 @@ func TestSpeedBasedTactic_InsufficientSamples(t *testing.T) {
 		t.Fatal("SelectService() returned nil")
 	}
 	if got.ServiceID() != "provider2/model2" {
-		t.Errorf("SelectService() = %v, want provider2:model2", got.ServiceID())
+		t.Errorf("SelectService() = %v, want provider2/model2", got.ServiceID())
 	}
 }
 
