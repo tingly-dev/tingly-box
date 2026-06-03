@@ -183,23 +183,14 @@ func (aa *AgentApply) RestoreAgent(req *RestoreAgentRequest) (*RestoreAgentResul
 // collectCodexRuleModels returns the request_models of every active rule under
 // the Codex scenario, deduplicated and in declaration order.
 func (aa *AgentApply) collectCodexRuleModels() []string {
-	seen := map[string]struct{}{}
-	var out []string
+	var models []string
 	for _, rule := range aa.config.GetRequestConfigs() {
 		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
 			continue
 		}
-		model := strings.TrimSpace(rule.RequestModel)
-		if model == "" {
-			continue
-		}
-		if _, dup := seen[model]; dup {
-			continue
-		}
-		seen[model] = struct{}{}
-		out = append(out, model)
+		models = append(models, rule.RequestModel)
 	}
-	return out
+	return CollectCodexModels(models)
 }
 
 // getBaseURLAndToken returns the base URL and API token for configuration

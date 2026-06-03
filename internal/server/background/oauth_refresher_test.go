@@ -376,3 +376,40 @@ func TestOAuthRefresherSkipValidTokens(t *testing.T) {
 		t.Error("Expected RefreshToken NOT to be called for valid token")
 	}
 }
+
+// TestOAuthRefresherSkipExpiredTooLong verifies that tokens expired longer than
+// maxExpiryDuration (72h) are silently skipped rather than refreshed.
+func TestOAuthRefresherSkipExpiredTooLong(t *testing.T) {
+	cfg := &mockConfig{Config: &config.Config{}}
+	mockMgr := &mockTokenRefresher{}
+
+	provider := &typ.Provider{
+		UUID:     "stale-provider-uuid",
+		Name:     "StaleOAuthProvider",
+		APIBase:  "https://api.test.com",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeOAuth,
+		OAuthDetail: &typ.OAuthDetail{
+			AccessToken:  "stale_access_token",
+			RefreshToken: "stale_refresh_token",
+			ProviderType: "claude_code",
+			UserID:       "test-user",
+			ExpiresAt:    time.Now().Add(-73 * time.Hour).Format(time.RFC3339), // expired 73h ago
+		},
+	}
+	cfg.Providers = append(cfg.Providers, provider)
+
+	refresher := &OAuthRefresher{
+		manager:       mockMgr,
+		serverConfig:  cfg,
+		checkInterval: 10 * time.Minute,
+		refreshBuffer: 5 * time.Minute,
+		rng:           rand.New(rand.NewSource(42)),
+	}
+
+	refresher.CheckAndRefreshTokens()
+
+	if mockMgr.refreshCalled {
+		t.Error("Expected RefreshToken NOT to be called for token expired more than 72h ago")
+	}
+}

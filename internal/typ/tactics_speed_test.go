@@ -14,7 +14,7 @@ func TestSpeedBasedTactic_SelectService(t *testing.T) {
 		Model:    "model1",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 	service2 := &loadbalance.Service{
@@ -22,7 +22,7 @@ func TestSpeedBasedTactic_SelectService(t *testing.T) {
 		Model:    "model2",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider2:model2",
+			ServiceID: "provider2/model2",
 		},
 	}
 	service3 := &loadbalance.Service{
@@ -30,7 +30,7 @@ func TestSpeedBasedTactic_SelectService(t *testing.T) {
 		Model:    "model3",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider3:model3",
+			ServiceID: "provider3/model3",
 		},
 	}
 
@@ -64,12 +64,12 @@ func TestSpeedBasedTactic_SelectService(t *testing.T) {
 		{
 			name:          "selects highest speed service",
 			services:      []*loadbalance.Service{service1, service2, service3},
-			wantServiceID: "provider3:model3",
+			wantServiceID: "provider3/model3",
 		},
 		{
 			name:          "handles single service",
 			services:      []*loadbalance.Service{service1},
-			wantServiceID: "provider1:model1",
+			wantServiceID: "provider1/model1",
 		},
 		{
 			name:          "handles no active services",
@@ -104,7 +104,7 @@ func TestSpeedBasedTactic_InsufficientSamples(t *testing.T) {
 		Model:    "model1",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 	service2 := &loadbalance.Service{
@@ -112,7 +112,7 @@ func TestSpeedBasedTactic_InsufficientSamples(t *testing.T) {
 		Model:    "model2",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider2:model2",
+			ServiceID: "provider2/model2",
 		},
 	}
 
@@ -141,8 +141,8 @@ func TestSpeedBasedTactic_InsufficientSamples(t *testing.T) {
 	if got == nil {
 		t.Fatal("SelectService() returned nil")
 	}
-	if got.ServiceID() != "provider2:model2" {
-		t.Errorf("SelectService() = %v, want provider2:model2", got.ServiceID())
+	if got.ServiceID() != "provider2/model2" {
+		t.Errorf("SelectService() = %v, want provider2/model2", got.ServiceID())
 	}
 }
 

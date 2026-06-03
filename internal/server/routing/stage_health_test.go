@@ -11,11 +11,11 @@ import (
 )
 
 func TestHealthStage_FiltersUnhealthy(t *testing.T) {
-	// Create a health monitor that marks "provider-b:gpt-4" as unhealthy
+	// Create a health monitor that marks "provider-b/gpt-4" as unhealthy
 	config := loadbalance.DefaultHealthMonitorConfig()
 	config.ConsecutiveErrorThreshold = 1 // Mark unhealthy after 1 error
 	monitor := loadbalance.NewHealthMonitor(config)
-	monitor.ReportError("provider-b:gpt-4", errors.New("test error"))
+	monitor.ReportError("provider-b/gpt-4", errors.New("test error"))
 
 	filter := typ.NewHealthFilter(monitor)
 	stage := NewHealthStage(filter)
@@ -60,8 +60,8 @@ func TestHealthStage_AllUnhealthy(t *testing.T) {
 	config := loadbalance.DefaultHealthMonitorConfig()
 	config.ConsecutiveErrorThreshold = 1
 	monitor := loadbalance.NewHealthMonitor(config)
-	monitor.ReportError("provider-a:gpt-4", errors.New("test error"))
-	monitor.ReportError("provider-b:gpt-4", errors.New("test error"))
+	monitor.ReportError("provider-a/gpt-4", errors.New("test error"))
+	monitor.ReportError("provider-b/gpt-4", errors.New("test error"))
 
 	filter := typ.NewHealthFilter(monitor)
 	stage := NewHealthStage(filter)

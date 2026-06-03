@@ -14,7 +14,7 @@ func TestAdaptiveTactic_SelectService(t *testing.T) {
 		Model:    "model1",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 	service2 := &loadbalance.Service{
@@ -22,7 +22,7 @@ func TestAdaptiveTactic_SelectService(t *testing.T) {
 		Model:    "model2",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider2:model2",
+			ServiceID: "provider2/model2",
 		},
 	}
 	service3 := &loadbalance.Service{
@@ -30,7 +30,7 @@ func TestAdaptiveTactic_SelectService(t *testing.T) {
 		Model:    "model3",
 		Active:   true,
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider3:model3",
+			ServiceID: "provider3/model3",
 		},
 	}
 
@@ -71,12 +71,12 @@ func TestAdaptiveTactic_SelectService(t *testing.T) {
 		{
 			name:          "selects best overall service",
 			services:      []*loadbalance.Service{service1, service2, service3},
-			wantServiceID: "provider3:model3",
+			wantServiceID: "provider3/model3",
 		},
 		{
 			name:          "handles single service",
 			services:      []*loadbalance.Service{service1},
-			wantServiceID: "provider1:model1",
+			wantServiceID: "provider1/model1",
 		},
 		{
 			name:          "handles no active services",
@@ -109,7 +109,7 @@ func TestAdaptiveTactic_calculateScore(t *testing.T) {
 		Provider: "provider1",
 		Model:    "model1",
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 
@@ -148,7 +148,7 @@ func TestAdaptiveTactic_calculateScore_NoData(t *testing.T) {
 		Provider: "provider1",
 		Model:    "model1",
 		Stats: loadbalance.ServiceStats{
-			ServiceID: "provider1:model1",
+			ServiceID: "provider1/model1",
 		},
 	}
 

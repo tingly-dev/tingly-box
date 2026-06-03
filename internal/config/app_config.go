@@ -2,12 +2,10 @@ package config
 
 import (
 	"bytes"
-	"crypto/cipher"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -20,8 +18,6 @@ type AppConfig struct {
 	configDir  string
 	config     *config.Config
 	version    string
-	gcm        cipher.AEAD
-	mu         sync.RWMutex
 }
 
 // AppConfigOption defines a functional option for AppConfig
@@ -40,12 +36,10 @@ func WithConfigDir(dir string) AppConfigOption {
 
 // NewAppConfig creates a new application configuration with default options
 func NewAppConfig(opts ...AppConfigOption) (*AppConfig, error) {
-	// Default options
 	options := &appConfigOptions{
 		configDir: constant.GetTinglyConfDir(),
 	}
 
-	// Apply provided options
 	for _, opt := range opts {
 		opt(options)
 	}
@@ -55,70 +49,36 @@ func NewAppConfig(opts ...AppConfigOption) (*AppConfig, error) {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Ensure all required directories exist
 	if err := ensureDirectories(configDir); err != nil {
 		return nil, fmt.Errorf("failed to ensure required directories: %w", err)
 	}
 
-	configFile := filepath.Join(configDir, "config.json")
-	ac := &AppConfig{
-		configFile: configFile,
-		configDir:  configDir,
-	}
-
-	// Initialize global config (use same directory as app config)
 	globalConfig, err := config.NewConfigWithDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize global config: %w", err)
 	}
-	ac.config = globalConfig
 
-	return ac, nil
+	return &AppConfig{
+		configFile: filepath.Join(configDir, "config.json"),
+		configDir:  configDir,
+		config:     globalConfig,
+	}, nil
 }
 
 func (ac *AppConfig) ConfigDir() string {
 	return ac.configDir
 }
 
-// AddProviderByName adds a new AI provider configuration by name, API base, and token
-func (ac *AppConfig) AddProviderByName(name, apiBase, token string) error {
-	return ac.config.AddProviderByName(name, apiBase, token)
+func (ac *AppConfig) SetVersion(version string) { ac.version = version }
+func (ac *AppConfig) GetVersion() string        { return ac.version }
+
+// GetGlobalConfig returns the underlying configuration manager
+func (ac *AppConfig) GetGlobalConfig() *config.Config {
+	return ac.config
 }
 
-// GetProviderByUUID returns a provider by uuid
-func (ac *AppConfig) GetProviderByUUID(uuid string) (*typ.Provider, error) {
-	return ac.config.GetProviderByUUID(uuid)
-}
-
-// GetProviderByName returns a provider by name
-func (ac *AppConfig) GetProviderByName(name string) (*typ.Provider, error) {
-	return ac.config.GetProviderByName(name)
-}
-
-// ListProviders returns all providers
-func (ac *AppConfig) ListProviders() []*typ.Provider {
-	return ac.config.ListProviders()
-}
-
-// AddProvider adds a new provider using Provider struct
-func (ac *AppConfig) AddProvider(provider *typ.Provider) error {
-	return ac.config.AddProvider(provider)
-}
-
-// UpdateProvider updates an existing provider by UUID
-func (ac *AppConfig) UpdateProvider(uuid string, provider *typ.Provider) error {
-	return ac.config.UpdateProvider(uuid, provider)
-}
-
-// DeleteProvider removes a provider by name
-func (ac *AppConfig) DeleteProvider(name string) error {
-	return ac.config.DeleteProvider(name)
-}
-
-// Save saves the configuration to file
+// Save saves the configuration to file with pretty-printed, HTML-unescaped JSON.
 func (ac *AppConfig) Save() error {
-	// Save as plaintext JSON with pretty formatting
-	// Use encoder with DisableHTMLEscape for human-readable output
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
 	encoder.SetEscapeHTML(false)
@@ -135,14 +95,12 @@ func (ac *AppConfig) Save() error {
 	return nil
 }
 
-// ensureDirectories ensures all required directories exist, creating them if necessary.
-// Returns an error if any directory cannot be created.
+// ensureDirectories creates required subdirectories under baseDir.
 func ensureDirectories(baseDir string) error {
-	// Directories to ensure exist, with their desired permissions
 	dirs := map[string]os.FileMode{
-		constant.GetMemoryDir(baseDir): 0700, // Memory dir - private
-		constant.GetLogDir(baseDir):    0700, // Log dir - private
-		constant.GetDBDir(baseDir):     0700, // Log dir - private
+		constant.GetMemoryDir(baseDir): 0700,
+		constant.GetLogDir(baseDir):    0700,
+		constant.GetDBDir(baseDir):     0700,
 	}
 
 	for dir, perm := range dirs {
@@ -154,129 +112,60 @@ func ensureDirectories(baseDir string) error {
 	return nil
 }
 
-// GetServerPort returns the configured server port
-func (ac *AppConfig) GetServerPort() int {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
+// Provider management — delegates to config.Config which is internally thread-safe.
 
-	return ac.config.ServerPort
+func (ac *AppConfig) AddProviderByName(name, apiBase, token string) error {
+	return ac.config.AddProviderByName(name, apiBase, token)
 }
 
-// GetJWTSecret returns the JWT secret for token generation
-func (ac *AppConfig) GetJWTSecret() string {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-
-	return ac.config.JWTSecret
+func (ac *AppConfig) GetProviderByUUID(uuid string) (*typ.Provider, error) {
+	return ac.config.GetProviderByUUID(uuid)
 }
 
-// SetServerPort updates the server port
-func (ac *AppConfig) SetServerPort(port int) error {
-	return ac.config.SetServerPort(port)
+func (ac *AppConfig) GetProviderByName(name string) (*typ.Provider, error) {
+	return ac.config.GetProviderByName(name)
 }
 
-// GetGlobalConfig returns the global configuration manager
-func (ac *AppConfig) GetGlobalConfig() *config.Config {
-	return ac.config
+func (ac *AppConfig) ListProviders() []*typ.Provider {
+	return ac.config.ListProviders()
 }
 
-// FetchAndSaveProviderModels fetches models from a provider and saves them
+func (ac *AppConfig) AddProvider(provider *typ.Provider) error {
+	return ac.config.AddProvider(provider)
+}
+
+func (ac *AppConfig) UpdateProvider(uuid string, provider *typ.Provider) error {
+	return ac.config.UpdateProvider(uuid, provider)
+}
+
+func (ac *AppConfig) DeleteProvider(name string) error {
+	return ac.config.DeleteProvider(name)
+}
+
 func (ac *AppConfig) FetchAndSaveProviderModels(providerName string) error {
 	return ac.config.FetchAndSaveProviderModels(providerName)
 }
 
-func (ac *AppConfig) SetVersion(version string) {
-	ac.version = version
-}
+// Server settings
 
-func (ac *AppConfig) GetVersion() string {
-	return ac.version
-}
+func (ac *AppConfig) GetServerPort() int          { return ac.config.GetServerPort() }
+func (ac *AppConfig) SetServerPort(port int) error { return ac.config.SetServerPort(port) }
+func (ac *AppConfig) GetJWTSecret() string         { return ac.config.GetJWTSecret() }
 
-// GetVerbose returns verbose setting
-func (ac *AppConfig) GetVerbose() bool {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-	return ac.config.GetVerbose()
-}
+// Runtime flags
 
-// SetVerbose updates verbose setting
-func (ac *AppConfig) SetVerbose(verbose bool) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	return ac.config.SetVerbose(verbose)
-}
+func (ac *AppConfig) GetVerbose() bool                { return ac.config.GetVerbose() }
+func (ac *AppConfig) SetVerbose(verbose bool) error   { return ac.config.SetVerbose(verbose) }
+func (ac *AppConfig) GetDebug() bool                  { return ac.config.GetDebug() }
+func (ac *AppConfig) SetDebug(debug bool) error       { return ac.config.SetDebug(debug) }
+func (ac *AppConfig) GetOpenBrowser() bool            { return ac.config.GetOpenBrowser() }
+func (ac *AppConfig) SetOpenBrowser(v bool) error     { return ac.config.SetOpenBrowser(v) }
 
-// GetDebug returns debug setting
-func (ac *AppConfig) GetDebug() bool {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-	return ac.config.GetDebug()
-}
+// GUI configuration
 
-// SetDebug updates debug setting
-func (ac *AppConfig) SetDebug(debug bool) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	return ac.config.SetDebug(debug)
-}
-
-// GetOpenBrowser returns the open browser setting
-func (ac *AppConfig) GetOpenBrowser() bool {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-	return ac.config.GetOpenBrowser()
-}
-
-// SetOpenBrowser updates the open browser setting
-func (ac *AppConfig) SetOpenBrowser(openBrowser bool) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	return ac.config.SetOpenBrowser(openBrowser)
-}
-
-// ============
-// GUI Configuration
-// ============
-
-// GetGUIDebug returns the GUI debug setting
-func (ac *AppConfig) GetGUIDebug() bool {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-	return ac.config.GetGUIDebug()
-}
-
-// SetGUIDebug updates the GUI debug setting
-func (ac *AppConfig) SetGUIDebug(debug bool) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	return ac.config.SetGUIDebug(debug)
-}
-
-// GetGUIPort returns the GUI port setting (0 means use ServerPort)
-func (ac *AppConfig) GetGUIPort() int {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-	return ac.config.GetGUIPort()
-}
-
-// SetGUIPort updates the GUI port setting
-func (ac *AppConfig) SetGUIPort(port int) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	return ac.config.SetGUIPort(port)
-}
-
-// GetGUIVerbose returns the GUI verbose setting
-func (ac *AppConfig) GetGUIVerbose() bool {
-	ac.mu.RLock()
-	defer ac.mu.RUnlock()
-	return ac.config.GetGUIVerbose()
-}
-
-// SetGUIVerbose updates the GUI verbose setting
-func (ac *AppConfig) SetGUIVerbose(verbose bool) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-	return ac.config.SetGUIVerbose(verbose)
-}
+func (ac *AppConfig) GetGUIDebug() bool               { return ac.config.GetGUIDebug() }
+func (ac *AppConfig) SetGUIDebug(debug bool) error    { return ac.config.SetGUIDebug(debug) }
+func (ac *AppConfig) GetGUIPort() int                 { return ac.config.GetGUIPort() }
+func (ac *AppConfig) SetGUIPort(port int) error       { return ac.config.SetGUIPort(port) }
+func (ac *AppConfig) GetGUIVerbose() bool             { return ac.config.GetGUIVerbose() }
+func (ac *AppConfig) SetGUIVerbose(verbose bool) error { return ac.config.SetGUIVerbose(verbose) }

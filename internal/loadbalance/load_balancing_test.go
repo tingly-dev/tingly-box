@@ -23,7 +23,7 @@ func TestService_ServiceID(t *testing.T) {
 		Model:    "gpt-4",
 	}
 
-	expected := "openai:gpt-4"
+	expected := "openai/gpt-4"
 	if got := service.ServiceID(); got != expected {
 		t.Errorf("Service.ServiceID() = %v, want %v", got, expected)
 	}

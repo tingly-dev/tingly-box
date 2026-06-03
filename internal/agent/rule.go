@@ -31,82 +31,32 @@ var CodexRequestModels = []string{
 	"tingly-codex",
 }
 
-// createOrUpdateClaudeCodeRules creates or updates all Claude Code rules
-// For convenience, all tingly/cc-* rules are updated with the same provider + model
+// createOrUpdateClaudeCodeRules creates or updates all Claude Code rules.
+// For convenience, all tingly/cc-* rules are updated with the same provider + model.
 func (aa *AgentApply) createOrUpdateClaudeCodeRules(providerUUID, model string) (int, int, error) {
-	created := 0
-	updated := 0
-
-	// Create service with the selected provider + model
-	service := &loadbalance.Service{
-		Active:   true,
-		Provider: providerUUID,
-		Model:    model,
-	}
-
-	// Update all Claude Code request models
-	for _, requestModel := range ClaudeCodeRequestModels {
-		ruleCreated, ruleUpdated, err := aa.createOrUpdateRule(
-			typ.ScenarioClaudeCode,
-			requestModel,
-			service,
-			fmt.Sprintf("Claude Code - %s routing", requestModel),
-		)
-		if err != nil {
-			return created, updated, fmt.Errorf("failed to update rule %s: %w", requestModel, err)
-		}
-
-		if ruleCreated {
-			created++
-		}
-		if ruleUpdated {
-			updated++
-		}
-	}
-
-	return created, updated, nil
+	return aa.createOrUpdateRulesForScenario(typ.ScenarioClaudeCode, "Claude Code", ClaudeCodeRequestModels, providerUUID, model)
 }
 
-// createOrUpdateOpenCodeRules creates or updates OpenCode rules
+// createOrUpdateOpenCodeRules creates or updates OpenCode rules.
 func (aa *AgentApply) createOrUpdateOpenCodeRules(providerUUID, model string) (int, int, error) {
-	created := 0
-	updated := 0
-
-	// Create service with the selected provider + model
-	service := &loadbalance.Service{
-		Active:   true,
-		Provider: providerUUID,
-		Model:    model,
-	}
-
-	// Update OpenCode request model
-	for _, requestModel := range OpenCodeRequestModels {
-		ruleCreated, ruleUpdated, err := aa.createOrUpdateRule(
-			typ.ScenarioOpenCode,
-			requestModel,
-			service,
-			fmt.Sprintf("OpenCode - %s routing", requestModel),
-		)
-		if err != nil {
-			return created, updated, fmt.Errorf("failed to update rule %s: %w", requestModel, err)
-		}
-
-		if ruleCreated {
-			created++
-		}
-		if ruleUpdated {
-			updated++
-		}
-	}
-
-	return created, updated, nil
+	return aa.createOrUpdateRulesForScenario(typ.ScenarioOpenCode, "OpenCode", OpenCodeRequestModels, providerUUID, model)
 }
 
-// createOrUpdateCodexRules creates or updates the default Codex rule
-// (`tingly-codex`) to point at the supplied provider+model. Other Codex rules
-// the user has added by hand are left alone — Codex apply just needs *some*
-// active rule to seed the generated config.toml.
+// createOrUpdateCodexRules creates or updates the default Codex rule (tingly-codex).
+// Other Codex rules the user has added by hand are left alone — Codex apply just
+// needs *some* active rule to seed the generated config.toml.
 func (aa *AgentApply) createOrUpdateCodexRules(providerUUID, model string) (int, int, error) {
+	return aa.createOrUpdateRulesForScenario(typ.ScenarioCodex, "Codex", CodexRequestModels, providerUUID, model)
+}
+
+// createOrUpdateRulesForScenario applies a single provider+model to every request
+// model in the list, creating or updating the corresponding routing rule.
+func (aa *AgentApply) createOrUpdateRulesForScenario(
+	scenario typ.RuleScenario,
+	label string,
+	requestModels []string,
+	providerUUID, model string,
+) (int, int, error) {
 	created := 0
 	updated := 0
 
@@ -116,17 +66,16 @@ func (aa *AgentApply) createOrUpdateCodexRules(providerUUID, model string) (int,
 		Model:    model,
 	}
 
-	for _, requestModel := range CodexRequestModels {
+	for _, requestModel := range requestModels {
 		ruleCreated, ruleUpdated, err := aa.createOrUpdateRule(
-			typ.ScenarioCodex,
+			scenario,
 			requestModel,
 			service,
-			fmt.Sprintf("Codex - %s routing", requestModel),
+			fmt.Sprintf("%s - %s routing", label, requestModel),
 		)
 		if err != nil {
 			return created, updated, fmt.Errorf("failed to update rule %s: %w", requestModel, err)
 		}
-
 		if ruleCreated {
 			created++
 		}
