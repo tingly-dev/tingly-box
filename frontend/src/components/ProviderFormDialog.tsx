@@ -567,6 +567,18 @@ const ProviderFormDialog = ({
 
     const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
 
+    // Persistent /v1 suffix hint: shown in custom mode when an OpenAI
+    // protocol is selected and the current URL doesn't already end with /v1.
+    const currentUrl = data.apiBase || providerInputValue;
+    const showV1Hint = customMode && protocolOpenAI && !!currentUrl.trim() && !(/\/v1\/?$/.test(currentUrl));
+    const applyV1Suffix = () => {
+        const base = currentUrl.replace(/\/+$/, '');
+        const newUrl = `${base}/v1`;
+        setProviderInputValue(newUrl);
+        onChangeRef.current('apiBase', newUrl);
+        setVerificationResult(null);
+    };
+
     // When both protocols are checked on a template that exposes two base URLs,
     // the outcome ("merge into one" vs "create two") is otherwise invisible.
     // Surface it as a one-line hint that tracks the fusion toggle.
@@ -637,6 +649,48 @@ const ProviderFormDialog = ({
                                 error={baseUrlError}
                                 helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
                             />
+                        )}
+
+                        {showV1Hint && (
+                            <Stack
+                                direction="row"
+                                alignItems="center"
+                                spacing={1}
+                                sx={{
+                                    mt: -1.5,
+                                    px: 1.5,
+                                    py: 0.75,
+                                    borderRadius: 1,
+                                    bgcolor: (theme) => theme.palette.mode === 'dark'
+                                        ? 'rgba(255, 167, 38, 0.08)'
+                                        : 'rgba(237, 108, 2, 0.06)',
+                                    border: '1px dashed',
+                                    borderColor: 'warning.main',
+                                }}
+                            >
+                                <InfoOutlined sx={{fontSize: 15, color: 'warning.main', flexShrink: 0}}/>
+                                <Typography variant="caption" color="text.secondary" sx={{flex: 1, lineHeight: 1.4}}>
+                                    {t('providerDialog.v1Hint.message', {
+                                        defaultValue: 'Most OpenAI-compatible APIs require a /v1 suffix',
+                                    })}
+                                </Typography>
+                                <Button
+                                    size="small"
+                                    variant="text"
+                                    color="warning"
+                                    onClick={applyV1Suffix}
+                                    sx={{
+                                        minWidth: 'auto',
+                                        whiteSpace: 'nowrap',
+                                        px: 1,
+                                        py: 0.25,
+                                        fontSize: '0.75rem',
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
+                                </Button>
+                            </Stack>
                         )}
 
                         <ApiKeyField
