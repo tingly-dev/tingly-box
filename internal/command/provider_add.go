@@ -38,7 +38,14 @@ func runAdd(appManager *AppManager, args []string) error {
 		}
 	}
 
-	// If we have all required arguments, skip interactive prompts
+	// If we have all four arguments, treat the call as CI mode and add
+	// without prompting for confirmation — the user already supplied the
+	// full configuration on the command line.
+	if len(args) >= 4 {
+		return addProviderCI(appManager, name, apiBase, token, apiStyle)
+	}
+	// 3 args (no style): still show the summary + confirm so the user can
+	// review the auto-inferred default before persisting.
 	if len(args) >= 3 {
 		return addProviderWithConfirmation(appManager, reader, name, apiBase, token, apiStyle)
 	}
@@ -96,6 +103,17 @@ func runAdd(appManager *AppManager, args []string) error {
 	}
 
 	return addProviderWithConfirmation(appManager, reader, name, apiBase, token, apiStyle)
+}
+
+// addProviderCI adds a provider without prompting. Used when every required
+// field is provided on the command line — typical for scripts and CI.
+func addProviderCI(appManager *AppManager, name, apiBase, token string, apiStyle APIStyle) error {
+	uuid, err := appManager.AddProvider(name, apiBase, token, apiStyle)
+	if err != nil {
+		return fmt.Errorf("failed to add provider: %w", err)
+	}
+	fmt.Printf("✓ Provider '%s' added (uuid: %s, style: %s)\n", name, uuid, apiStyle)
+	return nil
 }
 
 // addProviderWithConfirmation displays summary and adds the provider.
