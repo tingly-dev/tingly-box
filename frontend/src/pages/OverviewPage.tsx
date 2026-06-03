@@ -15,8 +15,8 @@ import {
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { CalendarToday as CalendarTodayIcon } from '@/components/icons';
 import {type DailyUsage, TokenHeatmap} from '@/components/dashboard';
-import PageHeader from '@/components/PageHeader';
-import api from '@/services/api';
+import PageHeader from '@/components/PageHeader.tsx';
+import api from '@/services/api.ts';
 import {format} from 'date-fns';
 
 type TimeRange = '180d' | '365d';

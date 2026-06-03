@@ -50,7 +50,7 @@ import GuardrailsCredentialsPage from './pages/guardrails/CredentialsPage';
 import GuardrailsGroupsPage from './pages/guardrails/GroupsPage';
 import GuardrailsHistoryPage from './pages/guardrails/HistoryPage';
 import DashboardPage from './pages/DashboardPage';
-import OverviewPage from './pages/overview/OverviewPage';
+import OverviewPage from './pages/OverviewPage.tsx';
 import ModelTestPage from './pages/ModelTestPage';
 import UserPage from './pages/prompt/UserPage';
 import SkillPage from './pages/prompt/SkillPage';
