@@ -18,162 +18,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-// HandleAnthropicBetaToOpenAIResponsesStream converts Anthropic streaming events
-// to OpenAI Responses API format.
-//
-// Returns (UsageStat, error) for usage tracking and error handling.
-func HandleAnthropicBetaToOpenAIResponsesStream(
-	hc *protocol.HandleContext,
-	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
-	responseModel string,
-) (*protocol.TokenUsage, error) {
-	logrus.WithContext(hc.GinContext.Request.Context()).Info("Starting Anthropic to OpenAI Responses streaming converter")
-	defer func() {
-		if r := recover(); r != nil {
-			logrus.WithContext(hc.GinContext.Request.Context()).Errorf("Panic in Anthropic to Responses converter: %v", r)
-			if hc.GinContext.Writer != nil {
-				hc.GinContext.Writer.WriteHeader(http.StatusInternalServerError)
-				sendResponsesErrorEvent(hc.GinContext, "Internal streaming error", "internal_error")
-			}
-		}
-		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.WithContext(hc.GinContext.Request.Context()).Errorf("Error closing Anthropic stream: %v", err)
-			}
-		}
-		logrus.WithContext(hc.GinContext.Request.Context()).Info("Finished Anthropic to Responses converter")
-	}()
+// anthropicBetaToResponsesConverter converts an Anthropic Beta stream into
+// a sequence of Responses API wire events. It implements StreamConverter.
+type anthropicBetaToResponsesConverter struct {
+	stream        *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
+	responseModel string
+	acc           *usagepkg.AnthropicAccumulator
 
-	// Set SSE headers for Responses API
-	c := hc.GinContext
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
-
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
-			Error: protocol.ErrorDetail{
-				Message: "Streaming not supported by this connection",
-				Type:    "api_error",
-				Code:    "streaming_unsupported",
-			},
-		})
-		return protocol.ZeroTokenUsage(), fmt.Errorf("streaming not supported")
-	}
-
-	// Initialize converter state
-	state := newResponsesConverterState(time.Now().Unix())
-	acc := usagepkg.NewAnthropicAccumulator()
-	completedSent := false
-
-	// Process the stream
-	StreamLoop(c, func(w io.Writer) bool {
-		// Check context cancellation first
-		select {
-		case <-c.Request.Context().Done():
-			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Anthropic to Responses stream")
-			// Send completion event before returning since client is disconnecting
-			if !completedSent && !state.finished {
-				logrus.WithContext(c.Request.Context()).Info("Client disconnected, sending completion event before close")
-				sendCompletionEvent(c, state, flusher, acc.Result())
-				completedSent = true
-			}
-			return false
-		default:
-		}
-
-		// Try to get next event
-		if !stream.Next() {
-			return false
-		}
-
-		event := stream.Current()
-
-		// Handle different event types
-		switch event.Type {
-		case "message_start":
-			handleMessageStart(c, state, responseModel, flusher)
-			state.hasSentCreated = true
-			acc.ConsumeBeta(&event)
-
-		case "content_block_start":
-			handleContentBlockStart(c, state, event, flusher)
-
-		case "content_block_delta":
-			handleContentBlockDelta(c, state, event, flusher)
-
-		case "content_block_stop":
-			handleContentBlockStop(c, state, event, flusher)
-
-		case "message_delta":
-			acc.ConsumeBeta(&event)
-			if sr := string(event.Delta.StopReason); sr != "" {
-				state.stopReason = sr
-			}
-
-		case "message_stop":
-			sendCompletionEvent(c, state, flusher, acc.Result())
-			completedSent = true
-			return false
-		}
-
-		return true
-	})
-
-	// Check for stream errors
-	if err := stream.Err(); err != nil {
-		// Pre-content failure: nothing reached the client yet (not a cancel
-		// or normal EOF). Surface a retryable 5xx instead of synthesizing a
-		// completion event, so mid-request failover can try the next tier.
-		if !c.Writer.Written() && !errors.Is(err, context.Canceled) && !errors.Is(err, io.EOF) {
-			logrus.WithContext(c.Request.Context()).Errorf("Anthropic to Responses pre-stream error: %v", err)
-			SendStreamingError(c, err)
-			return protocol.ZeroTokenUsage(), err
-		}
-
-		// Only send completion event if not already sent
-		if !completedSent && !state.finished {
-			// Send completion event for all errors including context.Canceled
-			// The Stream loop's context check may not have run if stream.Next() was blocking
-			logrus.WithContext(c.Request.Context()).WithError(err).Warn("Stream error occurred, sending completion event")
-			sendCompletionEvent(c, state, flusher, acc.Result())
-			completedSent = true
-		}
-
-		if errors.Is(err, context.Canceled) {
-			logrus.WithContext(c.Request.Context()).Debug("Anthropic to Responses stream canceled by client")
-			return acc.Result(), nil
-		}
-
-		if errors.Is(err, io.EOF) {
-			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
-			return acc.Result(), nil
-		}
-
-		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
-		sendResponsesErrorEvent(c, err.Error(), "stream_error", flusher)
-		return acc.Result(), err
-	}
-
-	// Some providers end the stream without emitting message_stop
-	// Ensure clients still receive response.completed and [DONE]
-	if !completedSent && !state.finished {
-		if !state.hasSentCreated {
-			handleMessageStart(c, state, responseModel, flusher)
-			state.hasSentCreated = true
-		}
-		sendCompletionEvent(c, state, flusher, acc.Result())
-		completedSent = true
-	}
-
-	return acc.Result(), nil
-}
-
-// responsesConverterState maintains the state during stream conversion
-type responsesConverterState struct {
+	// state (formerly responsesConverterState)
 	responseID       string
 	itemID           string
 	outputIndex      int
@@ -183,8 +35,11 @@ type responsesConverterState struct {
 	hasSentCreated   bool
 	sequenceNumber   int
 	createdAt        int64
-	currentBlockType string // Track the type of the current block being processed
-	stopReason       string // Anthropic stop_reason from message_delta (e.g. "max_tokens")
+	currentBlockType string
+	stopReason       string
+
+	// internal event queue
+	pending []wire.ResponsesEvent
 }
 
 // pendingResponseToolCall tracks a tool call being assembled from Anthropic stream chunks
@@ -194,109 +49,148 @@ type pendingResponseToolCall struct {
 	arguments strings.Builder
 }
 
-// newResponsesConverterState creates a new converter state with generated IDs
-func newResponsesConverterState(timestamp int64) *responsesConverterState {
-	return &responsesConverterState{
-		responseID:       fmt.Sprintf("resp_%d", timestamp),
-		itemID:           fmt.Sprintf("item_%d", timestamp),
-		outputIndex:      0,
+// NewAnthropicBetaToResponsesConverter creates a converter that reads from an
+// Anthropic Beta stream and yields Responses API wire events.
+func NewAnthropicBetaToResponsesConverter(
+	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
+	responseModel string,
+) *anthropicBetaToResponsesConverter {
+	ts := time.Now().Unix()
+	return &anthropicBetaToResponsesConverter{
+		stream:           stream,
+		responseModel:    responseModel,
+		acc:              usagepkg.NewAnthropicAccumulator(),
+		responseID:       fmt.Sprintf("resp_%d", ts),
+		itemID:           fmt.Sprintf("item_%d", ts),
 		pendingToolCalls: make(map[int]*pendingResponseToolCall),
-		hasSentCreated:   false,
-		sequenceNumber:   0,
-		createdAt:        timestamp,
+		createdAt:        ts,
 	}
 }
 
-// nextSequenceNumber returns the next sequence number and increments it
-func (s *responsesConverterState) nextSequenceNumber() int {
-	seq := s.sequenceNumber
-	s.sequenceNumber++
-	return seq
+func (c *anthropicBetaToResponsesConverter) Next() (interface{}, bool, error) {
+	if len(c.pending) > 0 {
+		evt := c.pending[0]
+		c.pending = c.pending[1:]
+		return evt, false, nil
+	}
+
+	for {
+		if !c.stream.Next() {
+			if err := c.stream.Err(); err != nil {
+				return nil, false, err
+			}
+			// Stream ended without message_stop — emit fallback completion
+			if !c.finished {
+				c.emitCompletionEvents()
+				if len(c.pending) > 0 {
+					evt := c.pending[0]
+					c.pending = c.pending[1:]
+					return evt, false, nil
+				}
+			}
+			return nil, true, nil
+		}
+
+		event := c.stream.Current()
+		c.processEvent(&event)
+
+		if len(c.pending) > 0 {
+			evt := c.pending[0]
+			c.pending = c.pending[1:]
+			return evt, false, nil
+		}
+	}
 }
 
-// handleMessageStart sends the response.created event
-func handleMessageStart(c *gin.Context, state *responsesConverterState, model string, flusher http.Flusher) {
-	resp := newResponsesWireResponseFromState(state, "in_progress", nil)
-	resp.Model = model
+func (c *anthropicBetaToResponsesConverter) Usage() *protocol.TokenUsage {
+	return c.acc.Result()
+}
+
+func (c *anthropicBetaToResponsesConverter) processEvent(event *anthropic.BetaRawMessageStreamEventUnion) {
+	switch event.Type {
+	case "message_start":
+		c.emitMessageStart()
+		c.hasSentCreated = true
+		c.acc.ConsumeBeta(event)
+
+	case "content_block_start":
+		c.emitContentBlockStart(event)
+
+	case "content_block_delta":
+		c.emitContentBlockDelta(event)
+
+	case "content_block_stop":
+		c.emitContentBlockStop(event)
+
+	case "message_delta":
+		if event.Delta.StopReason != "" {
+			c.stopReason = string(event.Delta.StopReason)
+		}
+		c.acc.ConsumeBeta(event)
+
+	case "message_stop":
+		c.emitCompletionEvents()
+	}
+}
+
+func (c *anthropicBetaToResponsesConverter) emitMessageStart() {
+	resp := c.wireResponse("in_progress", nil)
+	resp.Model = c.responseModel
 	resp.Usage = nil
 
-	event := wire.ResponsesCreatedEvent{
+	c.pending = append(c.pending, wire.ResponsesCreatedEvent{
 		Type:           "response.created",
-		SequenceNumber: int64(state.nextSequenceNumber()),
+		SequenceNumber: int64(c.nextSeq()),
 		Response:       resp,
-	}
-	sendResponsesEvent(c, event, flusher)
+	})
 
-	// Also send response.in_progress event as per the real API
-	inProgressResp := newResponsesWireResponseFromState(state, "in_progress", nil)
-	inProgressResp.Model = model
+	inProgressResp := c.wireResponse("in_progress", nil)
+	inProgressResp.Model = c.responseModel
 	inProgressResp.Usage = nil
 
-	inProgressEvent := wire.ResponsesInProgressEvent{
+	c.pending = append(c.pending, wire.ResponsesInProgressEvent{
 		Type:           "response.in_progress",
-		SequenceNumber: int64(state.nextSequenceNumber()),
+		SequenceNumber: int64(c.nextSeq()),
 		Response:       inProgressResp,
-	}
-	sendResponsesEvent(c, inProgressEvent, flusher)
+	})
 }
 
-// handleContentBlockStart sends the response.output_item.added event
-func handleContentBlockStart(
-	c *gin.Context,
-	state *responsesConverterState,
-	event anthropic.BetaRawMessageStreamEventUnion,
-	flusher http.Flusher,
-) {
+func (c *anthropicBetaToResponsesConverter) emitContentBlockStart(event *anthropic.BetaRawMessageStreamEventUnion) {
 	index := event.Index
 	blockType := event.ContentBlock.Type
-	state.currentBlockType = blockType
+	c.currentBlockType = blockType
 
 	if blockType == "text" {
-		// Handle text output - send response.output_item.added with message type
-		outputEvent := wire.ResponsesOutputItemAddedEvent{
+		c.pending = append(c.pending, wire.ResponsesOutputItemAddedEvent{
 			Type:           "response.output_item.added",
-			SequenceNumber: int64(state.nextSequenceNumber()),
-			OutputIndex:    state.outputIndex,
+			SequenceNumber: int64(c.nextSeq()),
+			OutputIndex:    c.outputIndex,
 			Item: wire.ResponsesOutputItemWire{
-				ID:      state.itemID,
+				ID:      c.itemID,
 				Type:    "message",
 				Status:  "in_progress",
 				Role:    "assistant",
 				Content: []wire.ResponsesContentPartWire{},
 			},
-		}
-		sendResponsesEvent(c, outputEvent, flusher)
-
-		// Also send response.content_part.added for the text part
-		contentPartEvent := wire.ResponsesContentPartAddedEvent{
+		})
+		c.pending = append(c.pending, wire.ResponsesContentPartAddedEvent{
 			Type:           "response.content_part.added",
-			SequenceNumber: int64(state.nextSequenceNumber()),
-			ItemID:         state.itemID,
-			OutputIndex:    state.outputIndex,
+			SequenceNumber: int64(c.nextSeq()),
+			ItemID:         c.itemID,
+			OutputIndex:    c.outputIndex,
 			ContentIndex:   0,
-			Part: wire.ResponsesContentPartWire{
-				Type: "output_text",
-				Text: "",
-			},
-		}
-		sendResponsesEvent(c, contentPartEvent, flusher)
+			Part:           wire.ResponsesContentPartWire{Type: "output_text", Text: ""},
+		})
 	} else if blockType == "tool_use" {
-		// Handle tool use - create a new pending tool call
-		// The ID and Name are in ContentBlock fields for tool_use type
 		toolID := event.ContentBlock.ID
 		toolName := event.ContentBlock.Name
-
-		state.pendingToolCalls[int(index)] = &pendingResponseToolCall{
-			itemID:    toolID,
-			name:      toolName,
-			arguments: strings.Builder{},
-		}
+		c.pendingToolCalls[int(index)] = &pendingResponseToolCall{itemID: toolID, name: toolName}
 
 		arguments := ""
-		outputEvent := wire.ResponsesOutputItemAddedEvent{
+		c.pending = append(c.pending, wire.ResponsesOutputItemAddedEvent{
 			Type:           "response.output_item.added",
-			SequenceNumber: int64(state.nextSequenceNumber()),
-			OutputIndex:    state.outputIndex,
+			SequenceNumber: int64(c.nextSeq()),
+			OutputIndex:    c.outputIndex,
 			Item: wire.ResponsesOutputItemWire{
 				Type:      "function_call",
 				ID:        toolID,
@@ -305,158 +199,251 @@ func handleContentBlockStart(
 				Arguments: &arguments,
 				Status:    "in_progress",
 			},
-		}
-		sendResponsesEvent(c, outputEvent, flusher)
-		state.outputIndex++
+		})
+		c.outputIndex++
 	}
-	// Ignore other block types (thinking, etc.)
 }
 
-// handleContentBlockDelta sends the appropriate delta event
-func handleContentBlockDelta(
-	c *gin.Context,
-	state *responsesConverterState,
-	event anthropic.BetaRawMessageStreamEventUnion,
-	flusher http.Flusher,
-) {
+func (c *anthropicBetaToResponsesConverter) emitContentBlockDelta(event *anthropic.BetaRawMessageStreamEventUnion) {
 	deltaType := event.Delta.Type
 	index := event.Index
 
 	if deltaType == "text_delta" {
-		// Handle text delta
 		text := event.Delta.Text
-		state.accumulatedText += text
-
-		deltaEvent := wire.ResponsesOutputTextDeltaEvent{
+		c.accumulatedText += text
+		c.pending = append(c.pending, wire.ResponsesOutputTextDeltaEvent{
 			Type:           "response.output_text.delta",
 			Delta:          text,
-			ItemID:         state.itemID,
-			OutputIndex:    state.outputIndex,
+			ItemID:         c.itemID,
+			OutputIndex:    c.outputIndex,
 			ContentIndex:   0,
-			SequenceNumber: int64(state.nextSequenceNumber()),
-		}
-		sendResponsesEvent(c, deltaEvent, flusher)
+			SequenceNumber: int64(c.nextSeq()),
+		})
 	} else if deltaType == "input_json_delta" {
-		// Handle tool call arguments delta
-		if pending, exists := state.pendingToolCalls[int(index)]; exists {
+		if pending, exists := c.pendingToolCalls[int(index)]; exists {
 			argsDelta := event.Delta.PartialJSON
 			pending.arguments.WriteString(argsDelta)
-
-			deltaEvent := wire.ResponsesFunctionCallArgumentsDeltaEvent{
+			c.pending = append(c.pending, wire.ResponsesFunctionCallArgumentsDeltaEvent{
 				Type:           "response.function_call_arguments.delta",
 				Delta:          argsDelta,
 				ItemID:         pending.itemID,
-				OutputIndex:    state.outputIndex,
-				SequenceNumber: int64(state.nextSequenceNumber()),
-			}
-			sendResponsesEvent(c, deltaEvent, flusher)
+				OutputIndex:    c.outputIndex,
+				SequenceNumber: int64(c.nextSeq()),
+			})
 		}
 	}
 }
 
-// handleContentBlockStop sends the appropriate completion events based on block type
-func handleContentBlockStop(
-	c *gin.Context,
-	state *responsesConverterState,
-	event anthropic.BetaRawMessageStreamEventUnion,
-	flusher http.Flusher,
-) {
+func (c *anthropicBetaToResponsesConverter) emitContentBlockStop(event *anthropic.BetaRawMessageStreamEventUnion) {
 	index := event.Index
-	blockType := state.currentBlockType
+	blockType := c.currentBlockType
 
 	if blockType == "text" {
-		// Send response.output_text.done event
-		textDoneEvent := wire.ResponsesOutputTextDoneEvent{
-			Type:           "response.output_text.done",
-			ItemID:         state.itemID,
-			OutputIndex:    state.outputIndex,
-			ContentIndex:   0,
-			Text:           state.accumulatedText,
-			SequenceNumber: int64(state.nextSequenceNumber()),
-		}
-		sendResponsesEvent(c, textDoneEvent, flusher)
-
-		// Send response.content_part.done event
-		contentPartDoneEvent := wire.ResponsesContentPartDoneEvent{
-			Type:           "response.content_part.done",
-			SequenceNumber: int64(state.nextSequenceNumber()),
-			ItemID:         state.itemID,
-			OutputIndex:    state.outputIndex,
-			ContentIndex:   0,
-			Part: wire.ResponsesContentPartWire{
-				Type: "output_text",
-				Text: state.accumulatedText,
+		c.pending = append(c.pending,
+			wire.ResponsesOutputTextDoneEvent{
+				Type:           "response.output_text.done",
+				ItemID:         c.itemID,
+				OutputIndex:    c.outputIndex,
+				ContentIndex:   0,
+				Text:           c.accumulatedText,
+				SequenceNumber: int64(c.nextSeq()),
 			},
-		}
-		sendResponsesEvent(c, contentPartDoneEvent, flusher)
-
-		// Send response.output_item.done event
-		itemDoneEvent := wire.ResponsesOutputItemDoneEvent{
-			Type:           "response.output_item.done",
-			SequenceNumber: int64(state.nextSequenceNumber()),
-			OutputIndex:    state.outputIndex,
-			Item: wire.ResponsesOutputItemWire{
-				ID:     state.itemID,
-				Type:   "message",
-				Status: "completed",
-				Role:   "assistant",
-				Content: []wire.ResponsesContentPartWire{
-					{
-						Type: "output_text",
-						Text: state.accumulatedText,
+			wire.ResponsesContentPartDoneEvent{
+				Type:           "response.content_part.done",
+				SequenceNumber: int64(c.nextSeq()),
+				ItemID:         c.itemID,
+				OutputIndex:    c.outputIndex,
+				ContentIndex:   0,
+				Part:           wire.ResponsesContentPartWire{Type: "output_text", Text: c.accumulatedText},
+			},
+			wire.ResponsesOutputItemDoneEvent{
+				Type:           "response.output_item.done",
+				SequenceNumber: int64(c.nextSeq()),
+				OutputIndex:    c.outputIndex,
+				Item: wire.ResponsesOutputItemWire{
+					ID:     c.itemID,
+					Type:   "message",
+					Status: "completed",
+					Role:   "assistant",
+					Content: []wire.ResponsesContentPartWire{
+						{Type: "output_text", Text: c.accumulatedText},
 					},
 				},
 			},
-		}
-		sendResponsesEvent(c, itemDoneEvent, flusher)
+		)
 	} else if blockType == "tool_use" {
-		// Handle tool call completion
-		if pending, exists := state.pendingToolCalls[int(index)]; exists {
-			// Send response.function_call_arguments.done event
-			argsDoneEvent := wire.ResponsesFunctionCallArgumentsDoneEvent{
-				Type:           "response.function_call_arguments.done",
-				ItemID:         pending.itemID,
-				OutputIndex:    state.outputIndex,
-				Arguments:      pending.arguments.String(),
-				SequenceNumber: int64(state.nextSequenceNumber()),
-			}
-			sendResponsesEvent(c, argsDoneEvent, flusher)
-
+		if pending, exists := c.pendingToolCalls[int(index)]; exists {
 			argumentsStr := pending.arguments.String()
-			// Send response.output_item.done event for the function call
-			itemDoneEvent := wire.ResponsesOutputItemDoneEvent{
-				Type:           "response.output_item.done",
-				SequenceNumber: int64(state.nextSequenceNumber()),
-				OutputIndex:    state.outputIndex,
-				Item: wire.ResponsesOutputItemWire{
-					Type:      "function_call",
-					ID:        pending.itemID,
-					CallID:    pending.itemID,
-					Name:      pending.name,
-					Arguments: &argumentsStr,
-					Status:    "completed",
+			c.pending = append(c.pending,
+				wire.ResponsesFunctionCallArgumentsDoneEvent{
+					Type:           "response.function_call_arguments.done",
+					ItemID:         pending.itemID,
+					OutputIndex:    c.outputIndex,
+					Arguments:      argumentsStr,
+					SequenceNumber: int64(c.nextSeq()),
 				},
-			}
-			sendResponsesEvent(c, itemDoneEvent, flusher)
+				wire.ResponsesOutputItemDoneEvent{
+					Type:           "response.output_item.done",
+					SequenceNumber: int64(c.nextSeq()),
+					OutputIndex:    c.outputIndex,
+					Item: wire.ResponsesOutputItemWire{
+						Type:      "function_call",
+						ID:        pending.itemID,
+						CallID:    pending.itemID,
+						Name:      pending.name,
+						Arguments: &argumentsStr,
+						Status:    "completed",
+					},
+				},
+			)
 		}
 	}
 }
 
-
-// sendResponsesEvent sends a single Responses API event as SSE
-func sendResponsesEvent(c *gin.Context, event any, flusher http.Flusher) {
-	// Check if connection is still valid before writing
-	if c.Writer == nil || flusher == nil {
+func (c *anthropicBetaToResponsesConverter) emitCompletionEvents() {
+	if c.finished {
 		return
 	}
+	c.finished = true
 
-	// Check if context is canceled - don't try to write
-	select {
-	case <-c.Request.Context().Done():
-		return
+	if !c.hasSentCreated {
+		c.emitMessageStart()
+		c.hasSentCreated = true
+	}
+
+	isIncomplete, incompleteReason := anthropicStopReasonToIncomplete(c.stopReason)
+	itemStatus := "completed"
+	if isIncomplete {
+		itemStatus = "incomplete"
+	}
+
+	var output []wire.ResponsesOutputItemWire
+	if c.accumulatedText != "" {
+		output = append(output, wire.ResponsesOutputItemWire{
+			ID:     c.itemID,
+			Type:   "message",
+			Status: itemStatus,
+			Role:   "assistant",
+			Content: []wire.ResponsesContentPartWire{
+				{Type: "output_text", Text: c.accumulatedText},
+			},
+		})
+	}
+	for _, pending := range c.pendingToolCalls {
+		argumentsStr := pending.arguments.String()
+		output = append(output, wire.ResponsesOutputItemWire{
+			Type:      "function_call",
+			ID:        pending.itemID,
+			CallID:    pending.itemID,
+			Name:      pending.name,
+			Arguments: &argumentsStr,
+			Status:    "completed",
+		})
+	}
+
+	u := c.acc.Result()
+	resp := wire.ResponsesWireResponse{
+		ID:          c.responseID,
+		Object:      "response",
+		CreatedAt:   c.createdAt,
+		CompletedAt: c.createdAt,
+		Output:      output,
+		Usage:       toResponsesUsageWire(u),
+	}
+
+	if isIncomplete {
+		resp.Status = "incomplete"
+		resp.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{Reason: incompleteReason}
+		c.pending = append(c.pending, wire.ResponsesIncompleteEvent{
+			Type:           "response.incomplete",
+			SequenceNumber: int64(c.nextSeq()),
+			Response:       resp,
+		})
+	} else {
+		resp.Status = "completed"
+		c.pending = append(c.pending, wire.ResponsesCompletedEvent{
+			Type:           "response.completed",
+			SequenceNumber: int64(c.nextSeq()),
+			Response:       resp,
+		})
+	}
+}
+
+// anthropicStopReasonToIncomplete maps an Anthropic stop_reason to the
+// Responses API incomplete status. Returns (true, reason) when the response
+// should be marked incomplete, or (false, "") for normal completion.
+func anthropicStopReasonToIncomplete(stopReason string) (bool, string) {
+	switch stopReason {
+	case "max_tokens":
+		return true, "max_output_tokens"
 	default:
+		return false, ""
+	}
+}
+
+func (c *anthropicBetaToResponsesConverter) nextSeq() int {
+	seq := c.sequenceNumber
+	c.sequenceNumber++
+	return seq
+}
+
+func (c *anthropicBetaToResponsesConverter) wireResponse(status string, output []wire.ResponsesOutputItemWire) wire.ResponsesWireResponse {
+	if output == nil {
+		output = []wire.ResponsesOutputItemWire{}
+	}
+	return wire.ResponsesWireResponse{
+		ID:        c.responseID,
+		Object:    "response",
+		CreatedAt: c.createdAt,
+		Status:    status,
+		Output:    output,
+	}
+}
+
+// HandleAnthropicBetaToOpenAIResponsesStream converts Anthropic Beta streaming
+// to Responses API format using the chain pipeline architecture.
+func HandleAnthropicBetaToOpenAIResponsesStream(
+	hc *protocol.HandleContext,
+	stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion],
+	responseModel string,
+) (*protocol.TokenUsage, error) {
+	c := hc.GinContext
+	defer func() {
+		if stream != nil {
+			stream.Close()
+		}
+	}()
+
+	conv := NewAnthropicBetaToResponsesConverter(stream, responseModel)
+
+	usage, err := RunConverter(hc, conv, responsesSSEWriter(c))
+
+	if err != nil {
+		if !c.Writer.Written() && !errors.Is(err, context.Canceled) && !errors.Is(err, io.EOF) {
+			logrus.WithContext(c.Request.Context()).Errorf("Anthropic to Responses pre-stream error: %v", err)
+			SendStreamingError(c, err)
+			return protocol.ZeroTokenUsage(), err
+		}
+		if errors.Is(err, context.Canceled) {
+			logrus.WithContext(c.Request.Context()).Debug("Anthropic to Responses stream canceled by client")
+			return conv.Usage(), nil
+		}
+		if errors.Is(err, io.EOF) {
+			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
+			OpenAISSEDone(c)
+			return conv.Usage(), nil
+		}
+		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
+		sendResponsesErrorEvent(c, err.Error(), "stream_error")
+		return conv.Usage(), err
 	}
 
+	OpenAISSEDone(c)
+	return usage, nil
+}
+
+// sendResponsesEvent sends a single Responses API event as SSE.
+func sendResponsesEvent(c *gin.Context, event any, _ interface{ Flush() }) {
 	if e, ok := event.(wire.ResponsesEvent); ok {
 		OpenAIResponsesEvent(c, e.EventType(), event)
 	} else {
@@ -464,13 +451,8 @@ func sendResponsesEvent(c *gin.Context, event any, flusher http.Flusher) {
 	}
 }
 
-// sendResponsesErrorEvent sends an error event in Responses API format
-func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, flusher ...http.Flusher) {
-	f := http.Flusher(nil)
-	if len(flusher) > 0 {
-		f = flusher[0]
-	}
-
+// sendResponsesErrorEvent sends an error event in Responses API format.
+func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, _ ...http.Flusher) {
 	errorEvent := wire.ResponsesStreamErrorEvent{
 		Type: "error",
 		Error: wire.ResponsesStreamErrorBody{
@@ -478,13 +460,11 @@ func sendResponsesErrorEvent(c *gin.Context, message string, errorType string, f
 			Message: message,
 		},
 	}
-	sendResponsesEvent(c, errorEvent, f)
+	OpenAIResponsesEvent(c, errorEvent.EventType(), errorEvent)
 }
 
 // toResponsesUsageWire converts normalized TokenUsage to the Responses API wire
-// usage struct. OpenAI Responses wire: InputTokens = TOTAL (uncached + cached);
-// CachedTokens is a subset. Uses a local struct rather than the SDK type so we
-// can emit cached_tokens without omitempty (required by Codex CLI).
+// usage struct. InputTokens on the wire = total (uncached + cached).
 func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 	totalInput := int64(u.InputTokens + u.CacheInputTokens)
 	return &wire.ResponsesUsageWire{
@@ -497,29 +477,61 @@ func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 	}
 }
 
-// sendCompletionEvent sends the terminal response event and the final [DONE] marker.
-// When the Anthropic stop_reason indicates truncation (max_tokens), it emits
-// response.incomplete; otherwise response.completed.
+// responsesConverterState and newResponsesWireResponseFromState are kept for
+// any callers outside this file that still use them.
+type responsesConverterState struct {
+	responseID       string
+	itemID           string
+	outputIndex      int
+	accumulatedText  string
+	finished         bool
+	pendingToolCalls map[int]*pendingResponseToolCall
+	hasSentCreated   bool
+	sequenceNumber   int
+	createdAt        int64
+	currentBlockType string
+}
+
+func newResponsesConverterState(timestamp int64) *responsesConverterState {
+	return &responsesConverterState{
+		responseID:       fmt.Sprintf("resp_%d", timestamp),
+		itemID:           fmt.Sprintf("item_%d", timestamp),
+		pendingToolCalls: make(map[int]*pendingResponseToolCall),
+		createdAt:        timestamp,
+	}
+}
+
+func (s *responsesConverterState) nextSequenceNumber() int {
+	seq := s.sequenceNumber
+	s.sequenceNumber++
+	return seq
+}
+
+func newResponsesWireResponseFromState(state *responsesConverterState, status string, output []wire.ResponsesOutputItemWire) wire.ResponsesWireResponse {
+	if output == nil {
+		output = []wire.ResponsesOutputItemWire{}
+	}
+	return wire.ResponsesWireResponse{
+		ID:        state.responseID,
+		Object:    "response",
+		CreatedAt: state.createdAt,
+		Status:    status,
+		Output:    output,
+	}
+}
+
+// sendCompletionEvent is kept for callers that use the old responsesConverterState.
 func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher http.Flusher, u *protocol.TokenUsage) {
 	if c == nil || c.Writer == nil || flusher == nil {
-		logrus.Warn("Cannot send completion event: connection is nil")
 		return
 	}
-
 	state.finished = true
-
-	isIncomplete, incompleteReason := anthropicStopReasonToIncomplete(state.stopReason)
-	itemStatus := "completed"
-	if isIncomplete {
-		itemStatus = "incomplete"
-	}
-
 	var output []wire.ResponsesOutputItemWire
 	if state.accumulatedText != "" {
 		output = append(output, wire.ResponsesOutputItemWire{
 			ID:     state.itemID,
 			Type:   "message",
-			Status: itemStatus,
+			Status: "completed",
 			Role:   "assistant",
 			Content: []wire.ResponsesContentPartWire{
 				{Type: "output_text", Text: state.accumulatedText},
@@ -537,56 +549,19 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 			Status:    "completed",
 		})
 	}
-
-	resp := wire.ResponsesWireResponse{
-		ID:          state.responseID,
-		Object:      "response",
-		CreatedAt:   state.createdAt,
-		CompletedAt: state.createdAt,
-		Model:       "",
-		Output:      output,
-		Usage:       toResponsesUsageWire(u),
+	doneEvent := wire.ResponsesCompletedEvent{
+		Type:           "response.completed",
+		SequenceNumber: int64(state.nextSequenceNumber()),
+		Response: wire.ResponsesWireResponse{
+			ID:          state.responseID,
+			Object:      "response",
+			CreatedAt:   state.createdAt,
+			Status:      "completed",
+			CompletedAt: state.createdAt,
+			Output:      output,
+			Usage:       toResponsesUsageWire(u),
+		},
 	}
-
-	if isIncomplete {
-		resp.Status = "incomplete"
-		resp.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{Reason: incompleteReason}
-		event := wire.ResponsesIncompleteEvent{
-			Type:           "response.incomplete",
-			SequenceNumber: int64(state.nextSequenceNumber()),
-			Response:       resp,
-		}
-		sendResponsesEvent(c, event, flusher)
-	} else {
-		resp.Status = "completed"
-		event := wire.ResponsesCompletedEvent{
-			Type:           "response.completed",
-			SequenceNumber: int64(state.nextSequenceNumber()),
-			Response:       resp,
-		}
-		sendResponsesEvent(c, event, flusher)
-	}
+	sendResponsesEvent(c, doneEvent, flusher)
 	OpenAISSEDone(c)
-}
-
-func anthropicStopReasonToIncomplete(stopReason string) (bool, string) {
-	switch stopReason {
-	case "max_tokens":
-		return true, "max_output_tokens"
-	default:
-		return false, ""
-	}
-}
-
-func newResponsesWireResponseFromState(state *responsesConverterState, status string, output []wire.ResponsesOutputItemWire) wire.ResponsesWireResponse {
-	if output == nil {
-		output = []wire.ResponsesOutputItemWire{}
-	}
-	return wire.ResponsesWireResponse{
-		ID:        state.responseID,
-		Object:    "response",
-		CreatedAt: state.createdAt,
-		Status:    status,
-		Output:    output,
-	}
 }
