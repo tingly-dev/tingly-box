@@ -219,7 +219,8 @@ func (s *Server) streamResponsesToAnthropicBeta(c *gin.Context, proxyModel strin
 		return
 	}
 
-	usage, err := stream.HandleResponsesToAnthropicBetaStream(c, primedStream, proxyModel)
+	hc := protocol.NewHandleContext(c, proxyModel)
+	usage, err := stream.HandleResponsesToAnthropicBetaStream(hc, primedStream, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {
