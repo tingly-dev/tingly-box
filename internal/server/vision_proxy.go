@@ -4,10 +4,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
-	"github.com/tingly-dev/tingly-box/internal/server/config"
 	smartrouting "github.com/tingly-dev/tingly-box/internal/smart_routing"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
+
+// visionProxyServiceKey is the ScenarioConfig.Extensions key under which the
+// scenario-level vision proxy target service ({provider, model}) is stored.
+const visionProxyServiceKey = "vision_proxy_service"
 
 // applyVisionProxy is the single entry point for the vision proxy plugin,
 // covering both the rule-level and scenario-level scopes. It must run before
@@ -63,13 +66,13 @@ func buildVisionService(provider, model string) *loadbalance.Service {
 
 // parseScenarioVisionService reads the scenario-level vision service from a
 // scenario's Extensions map (stored as a nested object under
-// VisionProxyServiceKey; a map[string]interface{} after JSON/YAML unmarshal).
+// visionProxyServiceKey; a map[string]interface{} after JSON/YAML unmarshal).
 // Returns nil when absent or malformed.
 func parseScenarioVisionService(extensions map[string]interface{}) *loadbalance.Service {
 	if extensions == nil {
 		return nil
 	}
-	raw, ok := extensions[config.VisionProxyServiceKey]
+	raw, ok := extensions[visionProxyServiceKey]
 	if !ok {
 		return nil
 	}
