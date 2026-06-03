@@ -184,6 +184,8 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		if pv, exists := c.Get("tracking_provider"); exists {
 			if p, ok := pv.(*typ.Provider); ok && p != nil {
 				fields["routed_provider"] = p.Name
+				fields["api_style"] = string(p.APIStyle)
+				fields["base_url"] = p.APIBase
 			}
 		}
 
