@@ -196,7 +196,8 @@ func (s *Server) streamResponsesToAnthropic(c *gin.Context, proxyModel string, a
 		return
 	}
 
-	usage, err := stream.HandleResponsesToAnthropicV1Stream(c, primedStream, proxyModel)
+	hc := protocol.NewHandleContext(c, proxyModel)
+	usage, err := stream.HandleResponsesToAnthropicV1Stream(hc, primedStream, proxyModel)
 
 	// Track usage from stream handler
 	if err != nil {

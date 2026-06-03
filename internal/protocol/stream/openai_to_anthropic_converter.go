@@ -462,6 +462,20 @@ func anthropicSSEWriter(c *gin.Context) func(interface{}) error {
 	}
 }
 
+// anthropicSSEWriterWithFirstChunk wraps anthropicSSEWriter and calls CommitFirstChunk
+// on the first event, signalling that upstream is healthy before any byte hits the wire.
+func anthropicSSEWriterWithFirstChunk(c *gin.Context) func(interface{}) error {
+	first := true
+	inner := anthropicSSEWriter(c)
+	return func(event interface{}) error {
+		if first {
+			protocol.CommitFirstChunk(c)
+			first = false
+		}
+		return inner(event)
+	}
+}
+
 // nopFlusher satisfies http.Flusher with a no-op; gin's ResponseWriter handles flushing.
 type nopFlusher struct{}
 
