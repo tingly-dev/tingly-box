@@ -19,7 +19,7 @@ replay, not test artifacts. The goal is an empty skip list.
 
 When the Responses→{Anthropic,Chat} tool_call conversion is completed, remove
 the three `*/codex/tool_use` entries **and** the corresponding
-`skipSourceScenarios` entry in `internal/protocol_validate/matrix.go` together —
+`skipSourceScenarios` entry in `internal/protocoltest/matrix.go` together —
 they describe the same defect at two tiers.
 
 **Done when:** `replay batch --upstream {virtual,vmodel,real}` is fully green
