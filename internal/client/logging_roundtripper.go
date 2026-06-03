@@ -16,21 +16,20 @@ import (
 // are never logged.
 type loggingRoundTripper struct {
 	inner    http.RoundTripper
-	provider string
+	provider *typ.Provider
 	proxy    string // redacted (scheme://host) or "direct"
 }
 
 // wrapWithLogging wraps a transport so every provider's upstream call is logged
 // uniformly. It is the single place that surfaces proxy + outcome per request.
 func wrapWithLogging(inner http.RoundTripper, provider *typ.Provider) http.RoundTripper {
-	var proxyRaw, name string
+	var proxyRaw string
 	if provider != nil {
 		proxyRaw = provider.ProxyURL
-		name = provider.Name
 	}
 	return &loggingRoundTripper{
 		inner:    inner,
-		provider: name,
+		provider: provider,
 		proxy:    redactProxy(proxyRaw),
 	}
 }
@@ -50,14 +49,31 @@ func (t *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	resp, err := t.inner.RoundTrip(req)
 	latencyMs := time.Since(start).Milliseconds()
 
-	entry := logrus.WithContext(req.Context()).WithFields(logrus.Fields{
+	// Build fields with provider information
+	providerName := ""
+	var apiStyle, baseURL string
+	if t.provider != nil {
+		providerName = t.provider.Name
+		apiStyle = string(t.provider.APIStyle)
+		baseURL = t.provider.APIBase
+	}
+
+	fields := logrus.Fields{
 		"stage":      "upstream",
-		"provider":   t.provider,
+		"provider":   providerName,
 		"proxy":      proxy,
 		"method":     req.Method,
 		"host":       req.URL.Host,
 		"latency_ms": latencyMs,
-	})
+	}
+	if apiStyle != "" {
+		fields["api_style"] = apiStyle
+	}
+	if baseURL != "" {
+		fields["base_url"] = baseURL
+	}
+
+	entry := logrus.WithContext(req.Context()).WithFields(fields)
 	if err != nil {
 		entry.WithError(err).Errorf("upstream call failed via %s", proxy)
 		return resp, err
