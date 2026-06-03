@@ -2,6 +2,7 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
+import ConnectProviderFlow from '@/components/ConnectProviderFlow';
 import OpenCodeConfigModal from './components/OpenCodeConfigModal';
 import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
@@ -26,6 +27,7 @@ const UseOpenCodePageContent: React.FC = () => {
 
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [connectProviderOpen, setConnectProviderOpen] = useState(false);
     const [configJson, setConfigJson] = useState('');
     const [scriptWindows, setScriptWindows] = useState('');
     const [scriptUnix, setScriptUnix] = useState('');
@@ -128,6 +130,7 @@ const UseOpenCodePageContent: React.FC = () => {
                     onViewConfig={handleOpenConfigModal}
                     hasModelSelected={hasModelOnAnyRule(rules)}
                     onSelectModel={scrollToModelsCard}
+                    onConnectProvider={() => setConnectProviderOpen(true)}
                 />
 
                 <TemplatePage
@@ -147,6 +150,13 @@ const UseOpenCodePageContent: React.FC = () => {
                     onApply={async () => { await handleApply(); }}
                     isApplyLoading={isApplyLoading}
                     isLoading={isConfigLoading}
+                />
+
+                <ConnectProviderFlow
+                    open={connectProviderOpen}
+                    onClose={() => setConnectProviderOpen(false)}
+                    showNotification={showNotification}
+                    onProviderAdded={() => window.location.reload()}
                 />
             </CardGrid>
         </PageLayout>

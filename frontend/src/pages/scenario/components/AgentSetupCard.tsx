@@ -17,7 +17,6 @@ import {
     Typography,
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 
@@ -58,8 +57,10 @@ export interface AgentSetupCardProps {
     viewConfigButtonLabel?: string;
     /** Whether at least one rule has a service with both a provider and model set. */
     hasModelSelected?: boolean;
-    /** Triggered when the user clicks the Step 4 CTA — usually scrolls the page to the rules card. */
+    /** Triggered when the user clicks the Step 2 CTA — usually scrolls the page to the rules card. */
     onSelectModel?: () => void;
+    /** Triggered when the user clicks "Connect AI" in Step 1. Opens the provider connection dialog. */
+    onConnectProvider?: () => void;
 }
 
 const COLLAPSED_KEY = (agentKey: string) => `setup-card-collapsed-${agentKey}`;
@@ -101,6 +102,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     viewConfigButtonLabel = 'Config',
     hasModelSelected = false,
     onSelectModel,
+    onConnectProvider,
 }) => {
     // We read the stored collapsed preference once on mount so the auto-collapse
     // effect below can distinguish "user has not chosen" from "user chose expanded".
@@ -258,12 +260,12 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const progressColor = allDone ? 'success' : 'default';
 
     const collapsedHint = !providerDone
-        ? 'Add a provider to get started'
+        ? 'Connect an AI provider to get started'
         : !modelDone
-            ? 'Pick a model'
+            ? 'Choose a model to continue'
             : !installDone
-                ? `Install ${agentName}`
-                : `${applyStepLabel} to finish`;
+                ? `Install ${agentName} on your machine`
+                : `One-click ${applyStepLabel} to finish`;
 
     return (
         <UnifiedCard
@@ -320,22 +322,36 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             {providerLoading ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} /> : null}
                             <Box sx={{ flex: 1 }}>
                                 <Typography variant="body2" fontWeight={500} color={providerDone ? 'text.primary' : 'primary.main'}>
-                                    Step 1 — Add a Provider
+                                    Step 1 — Connect AI Provider
                                 </Typography>
                                 {providerDone ? (
-                                    <Typography variant="caption" color="text.secondary">
-                                        {providerCount === 1
-                                            ? `${providerCount} provider ready`
-                                            : `${providerCount} providers ready`}
-                                    </Typography>
-                                ) : (
                                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                                         <Typography variant="caption" color="text.secondary">
-                                            An AI provider is required to use {agentName}.
+                                            {providerCount === 1
+                                                ? `${providerCount} provider connected`
+                                                : `${providerCount} providers connected`}
                                         </Typography>
-                                        <Button component={Link} to="/onboarding" size="small" variant="outlined" sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem' }}>
-                                            Add Provider
-                                        </Button>
+                                        {onConnectProvider && (
+                                            <Button size="small" variant="text" onClick={onConnectProvider} sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem', textTransform: 'none' }}>
+                                                + Add more
+                                            </Button>
+                                        )}
+                                    </Stack>
+                                ) : (
+                                    <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using {agentName}.
+                                        </Typography>
+                                        <Box>
+                                            <Button
+                                                size="small"
+                                                variant="contained"
+                                                onClick={onConnectProvider}
+                                                sx={{ flexShrink: 0, py: 0.25, fontSize: '0.75rem' }}
+                                            >
+                                                Connect AI
+                                            </Button>
+                                        </Box>
                                     </Stack>
                                 )}
                             </Box>
@@ -349,11 +365,32 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     Step 2 — Select a Model
                                 </Typography>
                                 {modelDone ? (
-                                    <Typography variant="caption" color="text.secondary">Model selected — you're ready to go.</Typography>
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary">Model configured — routing is ready.</Typography>
+                                        {onSelectModel && (
+                                            <Button size="small" variant="text" onClick={onSelectModel} sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem', textTransform: 'none' }}>
+                                                Change model
+                                            </Button>
+                                        )}
+                                    </Stack>
                                 ) : (
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap" gap={1}>
-                                        <Typography variant="caption" color="text.secondary">Pick a model in <em>Models and Forwarding Rules</em> to start routing requests.</Typography>
-                                        {onSelectModel && <Button size="small" variant="outlined" disabled={!providerDone} onClick={onSelectModel} sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem' }}>Choose Model</Button>}
+                                    <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Choose which model {agentName} will use. You can configure it in the <em>Models and Forwarding Rules</em> section below.
+                                        </Typography>
+                                        {onSelectModel && (
+                                            <Box>
+                                                <Button
+                                                    size="small"
+                                                    variant="contained"
+                                                    disabled={!providerDone}
+                                                    onClick={onSelectModel}
+                                                    sx={{ flexShrink: 0, py: 0.25, fontSize: '0.75rem' }}
+                                                >
+                                                    Choose Model
+                                                </Button>
+                                            </Box>
+                                        )}
                                     </Stack>
                                 )}
                             </Box>
@@ -363,39 +400,89 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                         {stepCursor === 2 && (
                         <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}>
                             <Typography variant="body2" fontWeight={500} color={!modelDone ? 'text.disabled' : installDone ? 'text.primary' : 'primary.main'}>Step 3 — Install {agentName}</Typography>
-                            {installStepDescription && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                                    {installStepDescription}
-                                </Typography>
-                            )}
                             {installActions?.length ? (
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ maxWidth: 520 }}>
-                                    {installActions.map((action) => (
-                                        <Button
-                                            key={`${action.label}-${action.href}`}
-                                            href={action.href}
-                                            target={action.external ? '_blank' : undefined}
-                                            rel={action.external ? 'noopener noreferrer' : undefined}
-                                            variant={action.variant ?? 'outlined'}
-                                            size="small"
-                                            disabled={!modelDone}
-                                            sx={{ flex: 1 }}
-                                        >
-                                            {action.label}
-                                        </Button>
-                                    ))}
+                                <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+                                    {installStepDescription && (
+                                        <Typography variant="caption" color="text.secondary">
+                                            {installStepDescription}
+                                        </Typography>
+                                    )}
+                                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ maxWidth: 520 }}>
+                                        {installActions.map((action) => (
+                                            <Button
+                                                key={`${action.label}-${action.href}`}
+                                                href={action.href}
+                                                target={action.external ? '_blank' : undefined}
+                                                rel={action.external ? 'noopener noreferrer' : undefined}
+                                                variant={action.variant ?? 'outlined'}
+                                                size="small"
+                                                disabled={!modelDone}
+                                                sx={{ flex: 1 }}
+                                            >
+                                                {action.label}
+                                            </Button>
+                                        ))}
+                                    </Stack>
                                 </Stack>
                             ) : (
-                                <>
+                                <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        {installStepDescription || `Please install ${agentName} manually on your local machine. Copy the command below and run it in your terminal.`}
+                                    </Typography>
+                                    <Alert severity="info" variant="outlined" sx={{ py: 0, px: 1, '& .MuiAlert-message': { py: 0.5 } }}>
+                                        <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                            This step requires manual operation — run the command on the machine where you will use {agentName}.
+                                        </Typography>
+                                    </Alert>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}><Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>npm official</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}><Tooltip title={copied ? 'Copied!' : 'Copy'}><IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip><Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: 'monospace', flex: 1, fontSize: '0.8rem', color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography></Box></Box>
-                                    {installMirrorCommand && (<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800, mt: 0.75 }}><Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>npm mirror</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}><Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}><IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip><Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: 'monospace', flex: 1, fontSize: '0.8rem', color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography></Box></Box>)}
-                                </>
+                                    {installMirrorCommand && (<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800, mt: 0.25 }}><Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>npm mirror</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}><Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}><IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip><Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: 'monospace', flex: 1, fontSize: '0.8rem', color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography></Box></Box>)}
+                                </Stack>
                             )}
                         </Box></Stack>
                         )}
 
                         {stepCursor === 3 && (
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>Step 4 — {applyStepLabel}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{applyStepDescription ?? `Write the proxy configuration to ${agentName}'s settings file.`}</Typography><Collapse in={!applyDone}><Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>{onApply && <Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>{applyButtonLabel}</Button>}{onApplyWithStatusLine && <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>Auto Config + Status Line</Button>}{onViewConfig && <Button variant={onApply ? "outlined" : "contained"} size="small" disabled={!installDone} onClick={onViewConfig}>{viewConfigButtonLabel}</Button>}</Stack></Collapse>{applyResult && (<Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>{applyResult.success ? (<Box><Typography variant="caption" fontWeight={600}>{applySuccessLabel}</Typography>{applyResult.files?.map(f => (<Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>))}</Box>) : (<Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>)}</Alert>)}</Box></Stack>
+                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}>
+                            <Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>
+                                Step 4 — {applyStepLabel}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                {applyStepDescription ?? `One click to write the proxy configuration to ${agentName}'s settings file. Advanced users can review the config first.`}
+                            </Typography>
+                            <Collapse in={!applyDone}>
+                                <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                                    {onApply && (
+                                        <Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
+                                            {applyButtonLabel}
+                                        </Button>
+                                    )}
+                                    {onApplyWithStatusLine && (
+                                        <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>
+                                            Auto Config + Status Line
+                                        </Button>
+                                    )}
+                                    {onViewConfig && (
+                                        <Button variant="text" size="small" disabled={!installDone} onClick={onViewConfig} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+                                            {viewConfigButtonLabel} (Advanced)
+                                        </Button>
+                                    )}
+                                </Stack>
+                            </Collapse>
+                            {applyResult && (
+                                <Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>
+                                    {applyResult.success ? (
+                                        <Box>
+                                            <Typography variant="caption" fontWeight={600}>{applySuccessLabel}</Typography>
+                                            {applyResult.files?.map(f => (
+                                                <Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>
+                                    )}
+                                </Alert>
+                            )}
+                        </Box></Stack>
                         )}
 
                         </Box>

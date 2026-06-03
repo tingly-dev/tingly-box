@@ -1,6 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
 import CodexConfigModal from "./components/CodexConfigModal";
+import ConnectProviderFlow from '@/components/ConnectProviderFlow';
 import { defaultCodexPrefs } from "./components/CodexQuickConfig";
 import { api } from '@/services/api';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
@@ -19,6 +20,7 @@ const UseCodexPageContent: React.FC = () => {
     const {
         isLoading,
         notification,
+        showNotification,
         copyToClipboard,
         baseUrl,
         rules,
@@ -26,6 +28,7 @@ const UseCodexPageContent: React.FC = () => {
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
+    const [connectProviderOpen, setConnectProviderOpen] = useState(false);
 
     const handleApply = async (): Promise<AgentApplyResult> => {
         try {
@@ -99,6 +102,7 @@ const UseCodexPageContent: React.FC = () => {
                     onViewConfig={() => setConfigModalOpen(true)}
                     hasModelSelected={hasModelOnAnyRule(rules)}
                     onSelectModel={scrollToModelsCard}
+                    onConnectProvider={() => setConnectProviderOpen(true)}
                 />
 
                 <TemplatePage
@@ -112,6 +116,13 @@ const UseCodexPageContent: React.FC = () => {
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
                     copyToClipboard={copyToClipboard}
+                />
+
+                <ConnectProviderFlow
+                    open={connectProviderOpen}
+                    onClose={() => setConnectProviderOpen(false)}
+                    showNotification={showNotification}
+                    onProviderAdded={() => window.location.reload()}
                 />
             </CardGrid>
         </PageLayout>

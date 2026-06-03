@@ -1,6 +1,7 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import AgentSetupCard, { type AgentApplyResult, hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
 import ClaudeCodeConfigModal from './components/ClaudeCodeConfigModal';
+import ConnectProviderFlow from '@/components/ConnectProviderFlow';
 import { derivePrefsFromRules } from './components/ClaudeCodeQuickConfig';
 import PageLayout from '@/components/PageLayout';
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
@@ -55,6 +56,7 @@ const UseClaudeCodePageContent: React.FC = () => {
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [connectProviderOpen, setConnectProviderOpen] = useState(false);
 
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
@@ -264,6 +266,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                     onViewConfig={() => setConfigModalOpen(true)}
                     hasModelSelected={hasModelOnAnyRule(rules)}
                     onSelectModel={scrollToModelsCard}
+                    onConnectProvider={() => setConnectProviderOpen(true)}
                 />
 
                 <TemplatePage
@@ -312,6 +315,13 @@ const UseClaudeCodePageContent: React.FC = () => {
                         applyPrefs(prefs as Record<string, string>, installStatusLine)
                     }
                     isApplyLoading={isApplyLoading}
+                />
+
+                <ConnectProviderFlow
+                    open={connectProviderOpen}
+                    onClose={() => setConnectProviderOpen(false)}
+                    showNotification={showNotification}
+                    onProviderAdded={() => window.location.reload()}
                 />
 
             </CardGrid>
