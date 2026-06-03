@@ -11,19 +11,18 @@ import (
 )
 
 func TestResponsesWireResponseJSONIsMinimalComparedToSDKResponse(t *testing.T) {
-	state := &chatToResponsesState{
-		responseID:      "resp_test",
-		createdAt:       123,
-		inputTokens:     10,
-		outputTokens:    5,
-		cacheTokens:     3,
-		reasoningTokens: 2,
-	}
+	conv := NewChatToResponsesConverter(nil, "")
+	conv.responseID = "resp_test"
+	conv.createdAt = 123
+	conv.inputTokens = 10
+	conv.outputTokens = 5
+	conv.cacheTokens = 3
+	conv.reasoningTokens = 2
 
 	wireEvent := wire.ResponsesCreatedEvent{
 		Type:           "response.created",
 		SequenceNumber: 1,
-		Response:       newResponsesWireResponse(state, "in_progress", nil, ""),
+		Response:       conv.wireResponse("in_progress", nil),
 	}
 	wireJSON := marshalJSONForTest(t, wireEvent)
 
