@@ -200,7 +200,7 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 
 	// `separate` flag → per-tier models; anything else (unset/unified/smart)
 	// → a single unified model for every tier.
-	if c.config.GetScenarioFlag(typ.ScenarioClaudeCode, "separate") {
+	if sc := c.config.GetScenarioConfig(typ.ScenarioClaudeCode); sc != nil && sc.GetDefaultFlags().Separate {
 		return claudeCodeModels{
 			def:      ruleModel("built-in-cc-default", "tingly/cc-default"),
 			haiku:    ruleModel("built-in-cc-haiku", "tingly/cc-haiku"),

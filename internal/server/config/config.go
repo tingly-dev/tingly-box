@@ -1567,7 +1567,7 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.Separate
 	case "smart":
 		return flags.Smart
-	case FeatureSmartCompact:
+	case "smart_compact":
 		return flags.SmartCompact
 	case "disable_stream_usage":
 		return flags.DisableStreamUsage
@@ -1631,7 +1631,7 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.Separate = value
 	case "smart":
 		config.Flags.Smart = value
-	case FeatureSmartCompact:
+	case "smart_compact":
 		config.Flags.SmartCompact = value
 	case "disable_stream_usage":
 		config.Flags.DisableStreamUsage = value

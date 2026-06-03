@@ -128,7 +128,9 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 		envUnified = profileMeta.Unified
 	} else {
 		// Default mode: use scenario flag
-		envUnified = globalConfig.GetScenarioFlag(scenario, "unified")
+		if sc := globalConfig.GetScenarioConfig(scenario); sc != nil {
+			envUnified = sc.GetDefaultFlags().Unified
+		}
 	}
 	env := generateCCEnv(baseURL, apiKey, scenarioPath, envUnified, profileID != "")
 
