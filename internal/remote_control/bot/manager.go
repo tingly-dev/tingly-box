@@ -10,7 +10,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/imbot"
-	imbotfeishu "github.com/tingly-dev/tingly-box/imbot/platform/feishu"
 	imbottelegram "github.com/tingly-dev/tingly-box/imbot/platform/telegram"
 	"github.com/tingly-dev/tingly-box/internal/remote_control/bot/feature"
 	"github.com/tingly-dev/tingly-box/remote/audit"
@@ -126,8 +125,6 @@ func runBotWithSettings(ctx context.Context, setting BotSetting, dataPath string
 		switch platform {
 		case imbot.PlatformTelegram:
 			err = imbottelegram.SetupMenuButton(bot, cmdRegistry)
-		case imbot.PlatformFeishu, imbot.PlatformLark:
-			err = imbotfeishu.SetupQuickActions(bot, cmdRegistry)
 		default:
 			// Other platforms don't support menu configuration
 			err = nil

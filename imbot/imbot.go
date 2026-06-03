@@ -2,6 +2,9 @@
 package imbot
 
 import (
+	"context"
+	"io"
+
 	"github.com/go-telegram/bot/models"
 	"github.com/tingly-dev/tingly-box/imbot/command"
 	"github.com/tingly-dev/tingly-box/imbot/core"
@@ -38,10 +41,9 @@ func AsTelegramBot(bot Bot) (TelegramBot, bool) {
 // FeishuBot is an interface for Feishu/Lark-specific bot operations
 type FeishuBot interface {
 	Bot
-	// SetQuickActions sets the bot's quick actions (shown when typing /)
-	SetQuickActions(actions interface{}) error
-	// GetQuickActions gets the current quick actions configuration
-	GetQuickActions() (map[string]interface{}, error)
+	// DownloadMessageResource downloads an image ("image") or file ("file")
+	// attachment from a received message.
+	DownloadMessageResource(ctx context.Context, messageID, fileKey, resType string) (io.Reader, error)
 }
 
 // AsFeishuBot attempts to cast a Bot to FeishuBot interface

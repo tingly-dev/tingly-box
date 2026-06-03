@@ -219,14 +219,14 @@ func GetPlatformCapabilities(platform Platform) *PlatformCapabilities {
 		PlatformFeishu: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes: []string{"image", "video", "audio", "document"},
-			Features:   []string{"reactions", "delete", "threads", "nativeCommands", "mentions", "interactiveCards"},
+			Features:   []string{"reactions", "delete", "threads", "nativeCommands", "mentions", "interactiveCards", "callbackQueries", "messageEditing"},
 			TextLimit:  40000, // ~150KB request body limit, practical character limit
 			RateLimit:  50,
 		},
 		PlatformLark: {
 			ChatTypes:  []ChatType{ChatTypeDirect, ChatTypeGroup, ChatTypeChannel, ChatTypeThread},
 			MediaTypes: []string{"image", "video", "audio", "document"},
-			Features:   []string{"reactions", "delete", "threads", "nativeCommands", "mentions", "interactiveCards"},
+			Features:   []string{"reactions", "delete", "threads", "nativeCommands", "mentions", "interactiveCards", "callbackQueries", "messageEditing"},
 			TextLimit:  40000,
 			RateLimit:  50,
 		},
