@@ -46,6 +46,10 @@ Provider 和凭证管理是所有场景正常工作的前提。
 
 - [实验性功能](./19-experimental.md) — Skills IDE、Guardrails、MCP 开关
 
+### 七、高阶特性
+
+- [路由规则与扩展标记](./20-routing-rules.md) — 直接路由（Tier/熔断器）、智能路由（SmartOp 条件）、规则扩展标记
+
 ---
 
 ## 版本说明

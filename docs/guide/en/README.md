@@ -46,6 +46,10 @@ Provider and credential management is a prerequisite for all scenarios.
 
 - [Experimental Features](./19-experimental.md) — Skills IDE, Guardrails, MCP toggles
 
+### VII. Advanced Topics
+
+- [Routing Rules & Extensions](./20-routing-rules.md) — Direct routing (tiers/circuit breaker), Smart routing (SmartOp conditions), rule extension flags
+
 ---
 
 ## Edition Notes
