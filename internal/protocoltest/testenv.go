@@ -155,11 +155,6 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 	ts := httptest.NewServer(router)
 
 	virtual := NewVirtualServerForCLI()
-	if virtual == nil {
-		ts.Close()
-		os.RemoveAll(configDir)
-		return nil, fmt.Errorf("failed to create virtual server")
-	}
 
 	return &TestEnv{
 		appConfig:     appConfig,
@@ -212,16 +207,7 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 	providerUUID := fmt.Sprintf("virtual-%s-%s-%s", source, target, s.Name)
 	providerName := providerUUID // Use UUID as name for uniqueness
 
-	// Build model name that reflects the target type. The "-codex" / "-chat"
-	// suffix is just a debug marker so the test fixture's logs distinguish
-	// virtual providers wired for each endpoint family.
-	modelSuffix := s.Name
-	if target == protocol.TypeOpenAIResponses {
-		modelSuffix = s.Name + "-codex"
-	} else if target == protocol.TypeOpenAIChat {
-		modelSuffix = s.Name + "-chat"
-	}
-	providerModel := fmt.Sprintf("virtual-model-%s", modelSuffix)
+	providerModel := fmt.Sprintf("virtual-model-%s", s.Name)
 	requestModel := fmt.Sprintf("pv-%s-to-%s-%s", source, target, s.Name)
 
 	apiStyle := targetToAPIStyle(target)
@@ -289,6 +275,7 @@ func (env *TestEnv) SendAs(t *testing.T, source, target protocol.APIType, s Scen
 
 	result := &RoundTripResult{
 		SourceProtocol: source,
+		TargetProtocol: target,
 		ScenarioName:   s.Name,
 		IsStreaming:    streaming,
 	}
@@ -350,6 +337,7 @@ func (env *TestEnv) SendAsCLI(source, target protocol.APIType, s Scenario, strea
 
 	result := &RoundTripResult{
 		SourceProtocol: source,
+		TargetProtocol: target,
 		ScenarioName:   s.Name,
 		IsStreaming:    streaming,
 	}
