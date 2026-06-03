@@ -78,14 +78,14 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                 </Tooltip>
             )}
             {showAddApiKeyButton && (
-                <Tooltip title="Add new API Key">
+                <Tooltip title="Connect AI">
                     <Button
                         variant="outlined"
                         startIcon={<KeyIcon/>}
                         onClick={onAddApiKeyClick}
                         size="small"
                     >
-                        New Key
+                        Connect AI
                     </Button>
                 </Tooltip>
             )}

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { api } from '../services/api';
 import type { EnhancedProviderFormData } from '@/components/ProviderFormDialog';
+import type { ConnectSelection } from '@/components/ConnectProviderDialog';
 
 interface UseProviderDialogOptions {
     defaultApiStyle?: 'openai' | 'anthropic' | undefined;
@@ -10,12 +11,29 @@ interface UseProviderDialogOptions {
 interface UseProviderDialogReturn {
     providerDialogOpen: boolean;
     providerFormData: EnhancedProviderFormData;
+    /** @deprecated Use handleConnectAIClick to open the picker instead. */
     handleAddProviderClick: () => void;
     handleProviderSubmit: (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => Promise<void>;
     handleProviderForceAdd: () => Promise<void>;
     handleCloseDialog: () => void;
     handleFieldChange: (field: keyof EnhancedProviderFormData, value: any) => void;
+    connectDialogOpen: boolean;
+    handleConnectAIClick: () => void;
+    handleConnectSelect: (selection: ConnectSelection) => void;
+    handleCloseConnect: () => void;
+    customMode: boolean;
+    fromConnectPicker: boolean;
 }
+
+const emptyForm = (apiStyle?: 'openai' | 'anthropic'): EnhancedProviderFormData => ({
+    name: '',
+    apiBase: '',
+    apiStyle: apiStyle || undefined,
+    token: '',
+    enabled: true,
+    noKeyRequired: false,
+    proxyUrl: '',
+});
 
 export const useProviderDialog = (
     showNotification: (message: string, severity: 'success' | 'error') => void,
@@ -24,28 +42,75 @@ export const useProviderDialog = (
     const { defaultApiStyle, onProviderAdded } = options;
 
     const [providerDialogOpen, setProviderDialogOpen] = useState(false);
-    const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>({
-        name: '',
-        apiBase: '',
-        apiStyle: defaultApiStyle || undefined,
-        token: '',
-        enabled: true,
-        noKeyRequired: false,
-        proxyUrl: '',
-    });
+    const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+    const [customMode, setCustomMode] = useState(false);
+    const [fromConnectPicker, setFromConnectPicker] = useState(false);
+    const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>(emptyForm(defaultApiStyle));
 
     const handleAddProviderClick = () => {
+        setProviderFormData(emptyForm(defaultApiStyle));
+        setCustomMode(false);
+        setFromConnectPicker(false);
+        setProviderDialogOpen(true);
+    };
+
+    const handleConnectAIClick = useCallback(() => {
+        setConnectDialogOpen(true);
+    }, []);
+
+    const handleCloseConnect = useCallback(() => {
+        setConnectDialogOpen(false);
+    }, []);
+
+    const handleConnectSelect = useCallback((selection: ConnectSelection) => {
+        setConnectDialogOpen(false);
+        setFromConnectPicker(true);
+
+        if (selection.kind === 'oauth') {
+            return;
+        }
+
+        if (selection.kind === 'custom') {
+            setCustomMode(true);
+            setProviderFormData(emptyForm(defaultApiStyle));
+            setProviderDialogOpen(true);
+            return;
+        }
+
+        if (selection.kind === 'local') {
+            const lp = selection.provider as any;
+            setCustomMode(false);
+            setProviderFormData({
+                name: lp.alias || lp.name,
+                apiBase: lp.url || lp.baseUrlOpenAI || lp.baseUrlAnthropic || '',
+                apiStyle: 'openai',
+                token: lp.defaultApiKey ?? '',
+                enabled: true,
+                noKeyRequired: !lp.defaultApiKey,
+            });
+            setProviderDialogOpen(true);
+            return;
+        }
+
+        const p = selection.provider;
+        setCustomMode(false);
         setProviderFormData({
-            name: '',
-            apiBase: '',
-            apiStyle: defaultApiStyle || undefined,
+            name: p.alias || p.name,
+            apiBase: p.baseUrlOpenAI || p.baseUrlAnthropic || '',
+            apiStyle: undefined,
             token: '',
             enabled: true,
             noKeyRequired: false,
             proxyUrl: '',
+            userAgent: '',
+            createFusionProvider: false,
+            providerBaseUrls: { openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic },
+            protocols: p.supportsOpenAI && p.supportsAnthropic
+                ? ['openai', 'anthropic']
+                : p.supportsOpenAI ? ['openai'] : ['anthropic'],
         });
         setProviderDialogOpen(true);
-    };
+    }, [defaultApiStyle]);
 
     const handleProviderSubmit = async (e: React.FormEvent, resolved?: Partial<EnhancedProviderFormData>) => {
         e.preventDefault();
@@ -67,11 +132,11 @@ export const useProviderDialog = (
         const result = await api.addProvider(providerData);
 
         if (result.success) {
-            showNotification('API Key added successfully!', 'success');
+            showNotification('Provider connected successfully!', 'success');
             setProviderDialogOpen(false);
             onProviderAdded?.();
         } else {
-            showNotification(`Failed to add API Key: ${result.error}`, 'error');
+            showNotification(`Failed to connect provider: ${result.error}`, 'error');
         }
     };
 
@@ -95,17 +160,19 @@ export const useProviderDialog = (
         console.log('addProvider result:', result);
 
         if (result.success) {
-            showNotification('API Key added successfully!', 'success');
+            showNotification('Provider connected successfully!', 'success');
             setProviderDialogOpen(false);
             onProviderAdded?.();
         } else {
             console.error('Force add failed:', result);
-            showNotification(`Failed to add API Key: ${result.error}`, 'error');
+            showNotification(`Failed to connect provider: ${result.error}`, 'error');
         }
     };
 
     const handleCloseDialog = () => {
         setProviderDialogOpen(false);
+        setCustomMode(false);
+        setFromConnectPicker(false);
     };
 
     const handleFieldChange = (field: keyof EnhancedProviderFormData, value: any) => {
@@ -120,5 +187,11 @@ export const useProviderDialog = (
         handleProviderForceAdd,
         handleCloseDialog,
         handleFieldChange,
+        connectDialogOpen,
+        handleConnectAIClick,
+        handleConnectSelect,
+        handleCloseConnect,
+        customMode,
+        fromConnectPicker,
     };
 };

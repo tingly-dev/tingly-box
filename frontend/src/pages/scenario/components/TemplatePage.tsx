@@ -8,6 +8,7 @@ import EmptyStateGuide from '@/components/EmptyStateGuide';
 import RuleCard from '@/components/RuleCard.tsx';
 import ImportModal from '@/components/ImportModal';
 import ProviderFormDialog from '@/components/ProviderFormDialog';
+import ConnectProviderDialog from '@/components/ConnectProviderDialog';
 import UnifiedCard from '@/components/UnifiedCard';
 import type {TabTemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
@@ -163,11 +164,16 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
     const {
         providerDialogOpen,
         providerFormData,
-        handleAddProviderClick,
         handleProviderSubmit,
         handleProviderForceAdd,
         handleCloseDialog,
         handleFieldChange,
+        connectDialogOpen,
+        handleConnectAIClick,
+        handleConnectSelect,
+        handleCloseConnect,
+        customMode,
+        fromConnectPicker,
     } = useProviderDialog(showNotification, {
         onProviderAdded: () => {
             void onProvidersLoad?.();
@@ -175,8 +181,8 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
     });
 
     const handleAddApiKeyClick = useCallback(() => {
-        handleAddProviderClick();
-    }, [handleAddProviderClick]);
+        handleConnectAIClick();
+    }, [handleConnectAIClick]);
 
     const handleCreateRule = useCallback(() => {
         openModelSelectForCreate();
@@ -431,14 +437,22 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                 loading={importing}
             />
 
+            <ConnectProviderDialog
+                open={connectDialogOpen}
+                onClose={handleCloseConnect}
+                onSelect={handleConnectSelect}
+            />
+
             <ProviderFormDialog
                 open={providerDialogOpen}
                 onClose={handleCloseDialog}
+                onBack={fromConnectPicker ? () => { handleCloseDialog(); handleConnectAIClick(); } : undefined}
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
                 data={providerFormData}
                 onChange={handleFieldChange}
                 mode="add"
+                customMode={customMode}
             />
 
             {showScrollTop && (
