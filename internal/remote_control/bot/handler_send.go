@@ -87,8 +87,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		// outbound bubble. Drop silently — there's nothing to render.
 		return
 	}
-	kb := feature.BuildActionKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
+	kb := feature.BuildActionKeyboard(hCtx.Platform)
 
 	// Extract context_token from incoming message metadata (required by Weixin)
 	var contextToken string
@@ -98,7 +97,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		}
 	}
 
-	actionCard := feature.BuildActionCard()
+	actionCard := feature.BuildActionCard(hCtx.Platform)
 
 	bot := h.botFromCtx(hCtx)
 	if bot == nil {
@@ -117,7 +116,7 @@ func (h *BotHandler) sendTextWithActionKeyboard(hCtx HandlerContext, text string
 		}
 		// Only attach keyboard to the last chunk
 		if i == len(chunks)-1 {
-			opts.Metadata = h.buildTrackedActionMenuMetadata(hCtx, tgKeyboard, actionCard)
+			opts.Metadata = h.buildTrackedActionMenuMetadata(hCtx, kb.Build(), actionCard)
 		}
 		// Forward context_token for Weixin
 		if contextToken != "" {

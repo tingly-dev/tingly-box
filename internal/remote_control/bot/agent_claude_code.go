@@ -203,14 +203,13 @@ func (e *ClaudeCodeExecutor) Execute(ctx context.Context, req PreparedRequest) (
 // sendTaskDoneCard emits the "Task done" action keyboard at the end of a
 // successful execution. Replaces the legacy CompletionCallback.OnComplete.
 func (e *ClaudeCodeExecutor) sendTaskDoneCard(hCtx HandlerContext, meta *ResponseMeta) {
-	kb := feature.BuildActionKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-	actionCard := feature.BuildActionCard()
+	kb := feature.BuildActionKeyboard(hCtx.Platform)
+	actionCard := feature.BuildActionCard(hCtx.Platform)
 
 	doneText := IconDone + " " + MsgTaskDone + ". " + MsgContinueOrHelp + BuildFooter(meta.AgentType, meta.ProjectPath)
 	if _, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:     doneText,
-		Metadata: buildTrackedActionMenuMetadata(hCtx, tgKeyboard, actionCard),
+		Metadata: buildTrackedActionMenuMetadata(hCtx, kb.Build(), actionCard),
 	}); err != nil {
 		logrus.WithError(err).Warn("ClaudeCodeExecutor: failed to send Task done card")
 	}

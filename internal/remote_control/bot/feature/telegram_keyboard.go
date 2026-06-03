@@ -21,32 +21,46 @@ type BindFlowState struct {
 	Dirs         []string // Current directory list (for navigation by index)
 }
 
-// BuildActionKeyboard builds the inline keyboard for actions (Clear/Bind)
-func BuildActionKeyboard() *imbot.KeyboardBuilder {
-	return imbot.NewKeyboardBuilder().
-		AddRow(
-			imbot.CallbackButton("🗑 Clear", imbot.FormatCallbackData("action", "clear")),
-			imbot.CallbackButton("📁 CD", imbot.FormatCallbackData("action", "bind")),
-			imbot.CallbackButton("🔧 Project", imbot.FormatCallbackData("action", "project")),
-		)
+// SupportsDirectoryBrowser reports whether the platform can drive the
+// directory-browser (the "CD"/bind flow), which relies on editing an inline
+// keyboard message in place. Only Telegram supports that today; on other
+// platforms each navigation step would post a new card, so the CD button is
+// omitted from the action menu.
+func SupportsDirectoryBrowser(platform imbot.Platform) bool {
+	return platform == imbot.PlatformTelegram
 }
 
-// BuildActionCard builds the generic action card for post-completion menu
-func BuildActionCard() imbot.Card {
-	return imbot.NewCard("remote_control_action_menu").
-		AddActions(
-			imbot.CallbackCardAction("clear", "🗑 Clear",
-				imbot.FormatCallbackData("action", "clear")).
-				WithStyle(imbot.CardActionStyleDanger).
-				Build(),
-			imbot.CallbackCardAction("bind", "📁 CD",
-				imbot.FormatCallbackData("action", "bind")).
-				Build(),
-			imbot.CallbackCardAction("project", "🔧 Project",
-				imbot.FormatCallbackData("action", "project")).
-				Build(),
-		).
-		Build()
+// BuildActionKeyboard builds the inline keyboard for post-completion actions.
+// The "CD" button is included only on platforms that support the directory browser.
+func BuildActionKeyboard(platform imbot.Platform) *imbot.KeyboardBuilder {
+	buttons := []imbot.InlineKeyboardButton{
+		imbot.CallbackButton("🗑 Clear", imbot.FormatCallbackData("action", "clear")),
+	}
+	if SupportsDirectoryBrowser(platform) {
+		buttons = append(buttons, imbot.CallbackButton("📁 CD", imbot.FormatCallbackData("action", "bind")))
+	}
+	buttons = append(buttons, imbot.CallbackButton("🔧 Project", imbot.FormatCallbackData("action", "project")))
+	return imbot.NewKeyboardBuilder().AddRow(buttons...)
+}
+
+// BuildActionCard builds the generic action card for the post-completion menu.
+// The "CD" action is included only on platforms that support the directory browser.
+func BuildActionCard(platform imbot.Platform) imbot.Card {
+	actions := []imbot.CardAction{
+		imbot.CallbackCardAction("clear", "🗑 Clear",
+			imbot.FormatCallbackData("action", "clear")).
+			WithStyle(imbot.CardActionStyleDanger).
+			Build(),
+	}
+	if SupportsDirectoryBrowser(platform) {
+		actions = append(actions, imbot.CallbackCardAction("bind", "📁 CD",
+			imbot.FormatCallbackData("action", "bind")).
+			Build())
+	}
+	actions = append(actions, imbot.CallbackCardAction("project", "🔧 Project",
+		imbot.FormatCallbackData("action", "project")).
+		Build())
+	return imbot.NewCard("remote_control_action_menu").AddActions(actions...).Build()
 }
 
 // BuildCancelKeyboard builds a simple cancel keyboard

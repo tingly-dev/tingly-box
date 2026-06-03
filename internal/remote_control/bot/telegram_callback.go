@@ -232,12 +232,11 @@ func (h *BotHandler) handleCustomPathPrompt(hCtx HandlerContext) {
 
 	// Send prompt with cancel keyboard
 	kb := feature.BuildCancelKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	result, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      BuildCustomPathPrompt(),
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata:  buildTrackedReplyMetadata(tgKeyboard),
+		Metadata:  buildTrackedReplyMetadata(hCtx.Platform, kb.Build()),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send custom path prompt")
@@ -362,16 +361,52 @@ func (h *BotHandler) handleCreateConfirm(hCtx HandlerContext, path string) {
 	h.directoryBrowser.SetWaitingInput(hCtx.ChatID, false, "")
 
 	kb, text := feature.BuildCreateConfirmKeyboard(path)
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:      text,
 		ParseMode: imbot.ParseModeMarkdown,
-		Metadata:  buildTrackedReplyMetadata(tgKeyboard),
+		Metadata:  buildTrackedReplyMetadata(hCtx.Platform, kb.Build()),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send create confirmation")
 	}
+}
+
+// platformSupportsEditing reports whether a platform can edit a message in place.
+func platformSupportsEditing(platform imbot.Platform) bool {
+	caps := imbot.GetPlatformCapabilities(string(platform))
+	return caps != nil && caps.SupportsFeature("messageEditing")
+}
+
+// stripKeyboardWithStatus retires a prior interactive message's inline keyboard
+// and shows statusText, using whichever capability the platform supports:
+//   - Telegram: remove the keyboard in place, then send the status as a new message
+//   - platforms reporting "messageEditing" (Feishu/Lark): patch the card to
+//     statusText, which drops the buttons in a single edit
+//   - otherwise: just send the status as a new message
+func (h *BotHandler) stripKeyboardWithStatus(hCtx HandlerContext, msg imbot.Message, statusText string) {
+	msgID, _ := msg.Metadata["message_id"].(string)
+	if msgID == "" {
+		msgID = msg.ID
+	}
+
+	if tgBot, ok := imbot.AsTelegramBot(hCtx.Bot); ok {
+		if msgID != "" {
+			if err := tgBot.RemoveMessageKeyboard(context.Background(), hCtx.ChatID, msgID); err != nil {
+				logrus.WithError(err).Debug("Failed to remove keyboard")
+			}
+		}
+		h.SendText(hCtx, statusText)
+		return
+	}
+
+	if msgID != "" && platformSupportsEditing(hCtx.Platform) {
+		if err := hCtx.Bot.EditMessage(context.Background(), msgID, statusText); err == nil {
+			return
+		}
+	}
+
+	h.SendText(hCtx, statusText)
 }
 
 // removeActionKeyboard removes the action keyboard menu from the chat

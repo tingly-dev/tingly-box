@@ -352,10 +352,9 @@ func newProjectCommand(adapter BotHandlerAdapter) imbot.Command {
 
 			if interactive && len(projectPaths) > 0 {
 				keyboard := buildProjectKeyboard(currentPath, projectPaths)
-				tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
 				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
 					Text:     text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
-					Metadata: buildTrackedReplyMetadata(tgKeyboard),
+					Metadata: buildTrackedReplyMetadata(ctx.Platform, keyboard),
 				})
 				if err != nil {
 					logrus.WithError(err).Error("Failed to send project list")
@@ -531,16 +530,46 @@ func newBashCommand(adapter BotHandlerAdapter) imbot.Command {
 		MustBuild()
 }
 
+// joinSupportedPlatforms lists the platforms where /join can whitelist a group.
+// Extend this (and resolveGroupChatID) as more platforms gain group support.
+var joinSupportedPlatforms = []imbot.Platform{
+	imbot.PlatformTelegram,
+	imbot.PlatformFeishu,
+	imbot.PlatformLark,
+}
+
+// resolveGroupChatID resolves the user-supplied group identifier into the chat ID
+// stored in the whitelist. Resolution is platform-specific:
+//   - Telegram: resolves @username / invite link / numeric ID to a chat ID.
+//   - Feishu/Lark: the group's chat_id (oc_...) is used directly; the bot learns
+//     it when added to a group (it is logged on the first group message).
+//
+// Add new platforms here as they gain group support.
+func resolveGroupChatID(ctx *imbot.HandlerContext, input string) (string, error) {
+	switch ctx.Platform {
+	case imbot.PlatformTelegram:
+		tgBot, ok := imbot.AsTelegramBot(ctx.Bot)
+		if !ok {
+			return "", fmt.Errorf("telegram bot unavailable")
+		}
+		return tgBot.ResolveChatID(input)
+	case imbot.PlatformFeishu, imbot.PlatformLark:
+		id := strings.TrimSpace(input)
+		if !strings.HasPrefix(id, "oc_") {
+			return "", fmt.Errorf("expected a Feishu/Lark chat id starting with \"oc_\"; send a message in the group so the bot logs its id, then use that")
+		}
+		return id, nil
+	default:
+		return "", fmt.Errorf("/join is not supported on %s yet", ctx.Platform)
+	}
+}
+
 func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
-	return imbot.NewCommand("cmd-join", "join", "Add group to whitelist (Telegram only)").
-		WithPlatforms(imbot.PlatformTelegram).
+	return imbot.NewCommand("cmd-join", "join", "Add a group to the whitelist").
+		WithPlatforms(joinSupportedPlatforms...).
 		WithHandler(func(ctx *imbot.HandlerContext, args []string) error {
 			if !ctx.IsDirectMessage {
-				return sendCommandText(adapter, ctx, "/join can only be used in general chat.")
-			}
-
-			if !ctx.IsPlatform(imbot.PlatformTelegram) {
-				return sendCommandText(adapter, ctx, "Join command is only supported for Telegram bot.")
+				return sendCommandText(adapter, ctx, "/join can only be used in a direct chat with the bot.")
 			}
 
 			input, ok := joinedArgs(args)
@@ -548,16 +577,10 @@ func newJoinCommand(adapter BotHandlerAdapter) imbot.Command {
 				return sendCommandText(adapter, ctx, usageJoin)
 			}
 
-			// Resolve the chat ID via Telegram bot
-			tgBot, ok := imbot.AsTelegramBot(ctx.Bot)
-			if !ok {
-				return sendCommandText(adapter, ctx, "Join command is only supported for Telegram bot.")
-			}
-
-			groupID, err := tgBot.ResolveChatID(input)
+			groupID, err := resolveGroupChatID(ctx, input)
 			if err != nil {
 				logrus.WithError(err).Error("Failed to resolve chat ID")
-				return sendCommandTextf(adapter, ctx, "Failed to resolve chat ID: %v\n\nNote: Bot must already be a member of the group to add it to whitelist.", err)
+				return sendCommandTextf(adapter, ctx, "Failed to resolve chat ID: %v\n\nNote: the bot must already be a member of the group.", err)
 			}
 
 			// Check if already whitelisted
@@ -769,10 +792,9 @@ func newResumeCommand(adapter BotHandlerAdapter) imbot.Command {
 			caps := imbot.GetPlatformCapabilities(string(ctx.Platform))
 			if ctx.IsDirectMessage && caps != nil && caps.SupportsInteraction() {
 				keyboard := buildResumeKeyboard(sessions)
-				tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
 				_, err := ctx.Bot.SendMessage(context.Background(), ctx.ChatID, &imbot.SendMessageOptions{
 					Text:     text + adapter.BuildReplyFooter(ctx.ChatID, string(ctx.Platform)),
-					Metadata: buildTrackedReplyMetadata(tgKeyboard),
+					Metadata: buildTrackedReplyMetadata(ctx.Platform, keyboard),
 				})
 				if err != nil {
 					logrus.WithError(err).Error("Failed to send resume list with keyboard")

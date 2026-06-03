@@ -187,6 +187,25 @@ func (h *BotHandler) HandleMessage(msg imbot.Message, platform imbot.Platform, b
 	}
 }
 
+// feishuResource extracts the Feishu resource coordinates (message id, file key,
+// resource type) from a media attachment produced by the Feishu adapter. Returns
+// ok=false for non-Feishu attachments.
+func feishuResource(att imbot.MediaAttachment) (messageID, fileKey, resType string, ok bool) {
+	if !strings.HasPrefix(att.URL, "feishu://") || att.Raw == nil {
+		return "", "", "", false
+	}
+	messageID, _ = att.Raw["feishu_message_id"].(string)
+	fileKey, _ = att.Raw["feishu_file_key"].(string)
+	resType, _ = att.Raw["feishu_res_type"].(string)
+	if fileKey == "" || messageID == "" {
+		return "", "", "", false
+	}
+	if resType == "" {
+		resType = "file"
+	}
+	return messageID, fileKey, resType, true
+}
+
 // handleMediaMessage handles messages with media attachments
 func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.MediaAttachment) {
 	// Get project path for storage, use default if not bound
@@ -204,6 +223,12 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.Media
 		}
 		if token != "" {
 			h.fileStore.SetTelegramToken(token)
+		}
+	}
+	// Feishu/Lark resources are fetched through the bot's authenticated client.
+	if len(media) > 0 && strings.HasPrefix(media[0].URL, "feishu://") {
+		if fb, ok := imbot.AsFeishuBot(hCtx.Bot); ok {
+			h.fileStore.SetFeishuDownloader(fb.DownloadMessageResource)
 		}
 	}
 
@@ -226,8 +251,14 @@ func (h *BotHandler) handleMediaMessage(hCtx HandlerContext, media []imbot.Media
 			return
 		}
 
-		// Download file to project's .download directory
-		storedFile, err := h.fileStore.DownloadFile(h.ctx, projectPath, attachment.URL, attachment.MimeType)
+		// Download file to project's .download directory.
+		var storedFile *StoredFile
+		var err error
+		if mid, fkey, rtype, ok := feishuResource(attachment); ok {
+			storedFile, err = h.fileStore.DownloadFeishuResource(h.ctx, projectPath, mid, fkey, rtype, attachment.MimeType, attachment.Filename)
+		} else {
+			storedFile, err = h.fileStore.DownloadFile(h.ctx, projectPath, attachment.URL, attachment.MimeType)
+		}
 		if err != nil {
 			h.SendText(hCtx, fmt.Sprintf("Failed to download file: %v", err))
 			return

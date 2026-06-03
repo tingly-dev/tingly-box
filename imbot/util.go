@@ -33,6 +33,23 @@ func ChunkText(platform string, text string) []string {
 	return core.ChunkTextForPlatform(core.Platform(platform), text)
 }
 
+// BuildKeyboardMetadata builds SendMessageOptions.Metadata carrying an inline keyboard
+// in the form each platform's send path understands:
+//   - Feishu/Lark: the neutral InlineKeyboardMarkup, which the Feishu bot renders into an
+//     interactive card via buildInteractiveCard.
+//   - Telegram / default: models.InlineKeyboardMarkup under "replyMarkup".
+//
+// Callers should pass the platform-neutral keyboard (kb.Build()) rather than a
+// pre-converted platform-specific struct.
+func BuildKeyboardMetadata(platform Platform, kb InlineKeyboardMarkup) map[string]interface{} {
+	switch platform {
+	case PlatformFeishu, PlatformLark:
+		return map[string]interface{}{"replyMarkup": kb}
+	default:
+		return map[string]interface{}{"replyMarkup": BuildTelegramActionKeyboard(kb)}
+	}
+}
+
 // BuildTelegramActionKeyboard converts imbot.InlineKeyboardMarkup to models.InlineKeyboardMarkup
 func BuildTelegramActionKeyboard(kb InlineKeyboardMarkup) models.InlineKeyboardMarkup {
 	var rows [][]models.InlineKeyboardButton

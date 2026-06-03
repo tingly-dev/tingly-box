@@ -163,11 +163,10 @@ func (c *SmartGuideCompletionCallback) OnComplete(result *smart_guide.Completion
 	}
 
 	// Send action keyboard on completion
-	kb := feature.BuildActionKeyboard()
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(kb.Build())
-	actionCard := feature.BuildActionCard()
+	kb := feature.BuildActionKeyboard(c.hCtx.Platform)
+	actionCard := feature.BuildActionCard(c.hCtx.Platform)
 
-	metadata := buildTrackedActionMenuMetadata(c.hCtx, tgKeyboard, actionCard)
+	metadata := buildTrackedActionMenuMetadata(c.hCtx, kb.Build(), actionCard)
 	// Forward context_token from incoming message metadata (required by Weixin)
 	if c.hCtx.Message.Metadata != nil {
 		if ct, ok := c.hCtx.Message.Metadata["context_token"].(string); ok {

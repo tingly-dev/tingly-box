@@ -39,12 +39,17 @@ var AllowedMIMETypes = map[string]string{
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "document",
 }
 
+// FeishuResourceDownloader fetches a message resource (image/file) by message id
+// and file key. resType is "image" or "file" per the Feishu resource API.
+type FeishuResourceDownloader func(ctx context.Context, messageID, fileKey, resType string) (io.Reader, error)
+
 // FileStore handles project-based file storage for bot media
 type FileStore struct {
-	maxImageSize  int64
-	maxDocSize    int64
-	httpClient    *http.Client
-	telegramToken string // For resolving Telegram file URLs
+	maxImageSize     int64
+	maxDocSize       int64
+	httpClient       *http.Client
+	telegramToken    string // For resolving Telegram file URLs
+	feishuDownloader FeishuResourceDownloader
 }
 
 // NewFileStore creates a new file store with default limits
@@ -99,6 +104,34 @@ func NewFileStoreWithLimits(maxImageSize, maxDocSize int64) *FileStore {
 // SetTelegramToken sets the Telegram bot token for resolving file URLs
 func (s *FileStore) SetTelegramToken(token string) {
 	s.telegramToken = token
+}
+
+// SetFeishuDownloader registers the function used to fetch Feishu message resources.
+func (s *FileStore) SetFeishuDownloader(fn FeishuResourceDownloader) {
+	s.feishuDownloader = fn
+}
+
+// DownloadFeishuResource fetches a Feishu image/file attachment via the registered
+// downloader and stores it under the project's download directory.
+func (s *FileStore) DownloadFeishuResource(ctx context.Context, projectPath, messageID, fileKey, resType, mimeType, filename string) (*StoredFile, error) {
+	if s.feishuDownloader == nil {
+		return nil, fmt.Errorf("feishu downloader not configured")
+	}
+	if !s.IsAllowedType(mimeType) {
+		return nil, fmt.Errorf("unsupported file type: %s", mimeType)
+	}
+
+	reader, err := s.feishuDownloader(ctx, messageID, fileKey, resType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download feishu resource: %w", err)
+	}
+
+	if filename == "" {
+		// No original name (e.g. images): synthesize one from the MIME type.
+		filename = s.generateFilename("", mimeType)
+	}
+
+	return s.StoreFile(ctx, projectPath, reader, filename, mimeType)
 }
 
 // StoredFile represents a stored file

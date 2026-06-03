@@ -172,9 +172,7 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 		ParseMode: imbot.ParseModeMarkdown,
 	}
 	if supportsKeyboard {
-		opts.Metadata = map[string]interface{}{
-			"replyMarkup": imbot.BuildTelegramActionKeyboard(keyboard),
-		}
+		opts.Metadata = imbot.BuildKeyboardMetadata(platform, keyboard)
 	}
 	msg, err := bot.SendMessage(context.Background(), chatID, opts)
 	if err != nil {
@@ -201,12 +199,12 @@ func (p *IMPrompter) Prompt(ctx context.Context, req ask.Request) (ask.Result, e
 	case result := <-responseChan:
 		p.cleanup(req.ID)
 		// Edit message to show result
-		p.editPromptToResult(bot, chatID, msg.MessageID, req, result.Approved)
+		p.editPromptToResult(bot, platform, chatID, msg.MessageID, req, result.Approved)
 		return result, nil
 
 	case <-time.After(timeout):
 		p.cleanup(req.ID)
-		p.editPromptToTimeout(bot, chatID, msg.MessageID, req)
+		p.editPromptToTimeout(bot, platform, chatID, msg.MessageID, req)
 
 		// For AskUserQuestion: auto-select first option (recommended strategy)
 		// For permission/approval requests: deny on timeout
@@ -527,34 +525,52 @@ func (p *IMPrompter) buildTextPermissionInstructions() string {
 }
 
 // editPromptToResult edits the prompt message to show the result
-func (p *IMPrompter) editPromptToResult(bot imbot.Bot, chatID, messageID string, req ask.Request, approved bool) {
+func (p *IMPrompter) editPromptToResult(bot imbot.Bot, platform imbot.Platform, chatID, messageID string, req ask.Request, approved bool) {
 	resultText := p.buildPromptText(req, true) // supportsKeyboard doesn't matter for result
 	if approved {
 		resultText += "\n\n✅ *Approved*"
 	} else {
 		resultText += "\n\n❌ *Denied*"
 	}
+	closePromptMessage(bot, platform, chatID, messageID, resultText, true)
+}
 
-	// Edit message to remove keyboard and show result
+// editPromptToTimeout edits the prompt message to show timeout
+func (p *IMPrompter) editPromptToTimeout(bot imbot.Bot, platform imbot.Platform, chatID, messageID string, req ask.Request) {
+	resultText := p.buildPromptText(req, true) // supportsKeyboard doesn't matter for timeout
+	resultText += "\n\n⏰ *Timed Out*"
+	closePromptMessage(bot, platform, chatID, messageID, resultText, false)
+}
+
+// closePromptMessage replaces an interactive prompt with its final text and
+// removes the inline keyboard so its buttons can't be tapped again. It uses
+// whichever in-place edit capability the platform supports:
+//   - Telegram: EditMessageWithKeyboard (text + drop keyboard)
+//   - platforms reporting "messageEditing" (Feishu/Lark): Bot.EditMessage, which
+//     patches the card to plain text, dropping the buttons
+//   - otherwise (or on edit failure when a new message is acceptable): post a new message
+func closePromptMessage(bot imbot.Bot, platform imbot.Platform, chatID, messageID, text string, sendFallback bool) {
 	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
-		_ = tgBot.EditMessageWithKeyboard(context.Background(), chatID, messageID, resultText, nil)
-	} else {
-		// Fallback: send a new message with the result
+		if err := tgBot.EditMessageWithKeyboard(context.Background(), chatID, messageID, text, nil); err == nil {
+			return
+		}
+	} else if messageID != "" && platformSupportsEditing(platform) {
+		if err := bot.EditMessage(context.Background(), messageID, text); err == nil {
+			return
+		}
+	}
+
+	if sendFallback {
 		_, _ = bot.SendMessage(context.Background(), chatID, &imbot.SendMessageOptions{
-			Text:      resultText,
+			Text:      text,
 			ParseMode: imbot.ParseModeMarkdown,
 		})
 	}
 }
 
-// editPromptToTimeout edits the prompt message to show timeout
-func (p *IMPrompter) editPromptToTimeout(bot imbot.Bot, chatID, messageID string, req ask.Request) {
-	resultText := p.buildPromptText(req, true) // supportsKeyboard doesn't matter for timeout
-	resultText += "\n\n⏰ *Timed Out*"
-
-	if tgBot, ok := imbot.AsTelegramBot(bot); ok {
-		_ = tgBot.EditMessageWithKeyboard(context.Background(), chatID, messageID, resultText, nil)
-	}
+func platformSupportsEditing(platform imbot.Platform) bool {
+	caps := imbot.GetPlatformCapabilities(string(platform))
+	return caps != nil && caps.SupportsFeature("messageEditing")
 }
 
 // cleanup removes a pending request and its response channel

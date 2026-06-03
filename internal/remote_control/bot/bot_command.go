@@ -218,11 +218,10 @@ func (h *BotHandler) handleBotProjectCommand(hCtx HandlerContext) {
 
 	text := buildProjectText(currentPath, projectPaths)
 	keyboard := buildProjectKeyboard(currentPath, projectPaths)
-	tgKeyboard := imbot.BuildTelegramActionKeyboard(keyboard)
 
 	_, err := hCtx.Bot.SendMessage(context.Background(), hCtx.ChatID, &imbot.SendMessageOptions{
 		Text:     text,
-		Metadata: buildTrackedReplyMetadata(tgKeyboard),
+		Metadata: buildTrackedReplyMetadata(hCtx.Platform, keyboard),
 	})
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send project list")
@@ -274,16 +273,8 @@ func (h *BotHandler) handleResumePick(hCtx HandlerContext, sessionID string, msg
 	}
 
 	// Strip the keyboard from the original listing message so the user can't
-	// double-tap into a stale state. Best-effort; ignore failures.
-	if msgID, _ := msg.Metadata["message_id"].(string); msgID != "" {
-		if tgBot, ok := imbot.AsTelegramBot(hCtx.Bot); ok {
-			if err := tgBot.RemoveMessageKeyboard(context.Background(), hCtx.ChatID, msgID); err != nil {
-				logrus.WithError(err).Debug("Failed to remove resume keyboard")
-			}
-		}
-	}
-
-	h.SendText(hCtx, fmt.Sprintf(
+	// double-tap into a stale state, and confirm the armed session.
+	h.stripKeyboardWithStatus(hCtx, msg, fmt.Sprintf(
 		"✅ Armed resume for session %s.\nSend your next message to continue, or /clear to abort.",
 		shortSessionID(sessionID)))
 }
@@ -291,12 +282,7 @@ func (h *BotHandler) handleResumePick(hCtx HandlerContext, sessionID string, msg
 // handleResumeCancel removes the resume keyboard and confirms cancellation.
 // No state to clean up — armed state only flips on `pick`.
 func (h *BotHandler) handleResumeCancel(hCtx HandlerContext, msg imbot.Message) {
-	if msgID, _ := msg.Metadata["message_id"].(string); msgID != "" {
-		if tgBot, ok := imbot.AsTelegramBot(hCtx.Bot); ok {
-			_ = tgBot.RemoveMessageKeyboard(context.Background(), hCtx.ChatID, msgID)
-		}
-	}
-	h.SendText(hCtx, "Resume cancelled.")
+	h.stripKeyboardWithStatus(hCtx, msg, "Resume cancelled.")
 }
 
 // normalizeAllowlistToMap converts a string slice to a map for O(1) lookups
