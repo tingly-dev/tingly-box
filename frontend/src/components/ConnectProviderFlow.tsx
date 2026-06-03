@@ -45,8 +45,8 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
             const lp = selection.provider;
             setIsLocalProvider(true);
             setProviderFormData({
-                name: lp.name, apiBase: lp.url, apiStyle: 'openai', token: lp.defaultApiKey ?? '',
-                enabled: true, noKeyRequired: !lp.defaultApiKey,
+                name: lp.name, apiBase: lp.baseUrlOpenAI || lp.baseUrlAnthropic || '', apiStyle: 'openai', token: '',
+                enabled: true, noKeyRequired: true,
             } as any);
             setApiKeyDialogOpen(true);
             return;
