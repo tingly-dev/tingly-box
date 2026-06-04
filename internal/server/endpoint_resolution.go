@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -31,6 +32,10 @@ const (
 //     EndpointModeResponses            → Responses
 //     EndpointModeBoth                 → mirror incoming
 //
+// Rule override is honored unconditionally (per design intent). When an override
+// conflicts with the provider's declared mode, a warning is logged but the override
+// takes effect. This allows explicit routing control for debugging and special cases.
+//
 // Defaulting unknown providers to Chat (not "mirror incoming") is intentional:
 // most OpenAI-compatible vendors implement only /chat/completions. Providers
 // that genuinely support Responses must declare it via template or OAuth.
@@ -48,18 +53,23 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 
 	mode := provider.OpenAIEndpointMode
 
-	// Overrides only apply when the provider supports both endpoints.
-	// A chat-only or responses-only declaration is authoritative; the rule
-	// override cannot force the unsupported path.
-	if mode == ai.EndpointModeBoth {
-		switch ParseEndpointOverride(flags.OpenAIEndpointOverride) {
-		case OverrideChat:
-			return protocol.TypeOpenAIChat, nil
-		case OverrideResponses:
-			return protocol.TypeOpenAIResponses, nil
+	// Rule override takes first priority (per design intent from .design/openai-endpoint-routing.md)
+	// Log warning when override conflicts with provider's declared mode
+	switch ParseEndpointOverride(flags.OpenAIEndpointOverride) {
+	case OverrideChat:
+		if mode == ai.EndpointModeResponses {
+			logrus.Warnf("Rule forces chat endpoint on responses-only provider %s", provider.UUID)
 		}
+		return protocol.TypeOpenAIChat, nil
+
+	case OverrideResponses:
+		if mode == ai.EndpointModeChat {
+			logrus.Warnf("Rule forces responses endpoint on chat-only provider %s", provider.UUID)
+		}
+		return protocol.TypeOpenAIResponses, nil
 	}
 
+	// Fall back to provider mode when no override specified
 	switch mode {
 	case ai.EndpointModeResponses:
 		return protocol.TypeOpenAIResponses, nil
