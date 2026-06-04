@@ -55,6 +55,7 @@ const CredentialPage = () => {
 
     const [isLocalProvider, setIsLocalProvider] = useState(false);
     const [fromConnectPicker, setFromConnectPicker] = useState(false);
+    const [isCustomMode, setIsCustomMode] = useState(false);
 
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
@@ -148,8 +149,13 @@ const CredentialPage = () => {
             setOAuthDialogOpen(true);
             return;
         }
+        if (selection.kind === 'import') {
+            setShowImportModal(true);
+            return;
+        }
         if (selection.kind === 'custom') {
             setFromConnectPicker(true);
+            setIsCustomMode(true);
             handleAddApiKey();
             return;
         }
@@ -613,7 +619,7 @@ const CredentialPage = () => {
                             description="Configure API keys to access AI services like OpenAI, Anthropic, etc."
                             showOAuthButton={false}
                             showHeroIcon={false}
-                            primaryButtonLabel="Add API Key"
+                            primaryButtonLabel="Connect AI"
                             onAddApiKeyClick={handleAddApiKey}
                         />
                     )}
@@ -624,7 +630,7 @@ const CredentialPage = () => {
             {/* API Key Provider Dialog */}
             <ProviderFormDialog
                 open={apiKeyDialogOpen}
-                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); }}
+                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); setIsCustomMode(false); }}
                 onBack={fromConnectPicker ? () => setConnectOpen(true) : undefined}
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
@@ -632,6 +638,7 @@ const CredentialPage = () => {
                 onChange={handleProviderFormChange}
                 mode={apiKeyDialogMode}
                 optionalEditableToken={isLocalProvider}
+                customMode={isCustomMode}
             />
 
             {/* Unified provider picker */}

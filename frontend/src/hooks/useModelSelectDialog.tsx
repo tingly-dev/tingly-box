@@ -317,7 +317,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 {mode === 'create-rule'
                     ? 'Select a model for your new rule'
                     : mode === 'add'
-                        ? 'Add API Key'
+                        ? 'Connect AI'
                         : 'Choose Model'}
             </DialogTitle>
             <DialogContent>

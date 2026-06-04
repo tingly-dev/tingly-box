@@ -282,7 +282,7 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 </Typography>
                             )}
                             {providerDone && onConnectProvider && (
-                                <Button size="small" variant="text" onClick={onConnectProvider} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>+ Add</Button>
+                                <Button size="small" variant="text" onClick={onConnectProvider} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>+ Connect</Button>
                             )}
                         </Stack>
                         <Collapse in={!providerDone && firstIncomplete === 0}>

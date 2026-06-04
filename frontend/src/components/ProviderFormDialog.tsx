@@ -13,9 +13,11 @@ import {
     DialogTitle,
     FormControlLabel,
     IconButton,
+    Link,
     Stack,
     Switch,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -70,6 +72,9 @@ interface PresetProviderFormDialogProps {
     isFirstProvider?: boolean;
     /** Pass true for local providers: token field stays editable but is not required. */
     optionalEditableToken?: boolean;
+    /** When true, the user entered via "Custom endpoint" — hide the provider
+     *  dropdown and show a plain URL text field instead. */
+    customMode?: boolean;
 }
 
 const ProviderFormDialog = ({
@@ -84,6 +89,7 @@ const ProviderFormDialog = ({
                                 submitText,
                                 isFirstProvider = false,
                                 optionalEditableToken = false,
+                                customMode = false,
                             }: PresetProviderFormDialogProps) => {
     const {t} = useTranslation();
     const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
@@ -563,6 +569,19 @@ const ProviderFormDialog = ({
 
     const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
 
+    // Persistent /v1 suffix hint: shown in custom mode when an OpenAI
+    // protocol is selected and the current URL doesn't already end with /v1.
+    const currentUrl = data.apiBase || providerInputValue;
+    const urlAlreadyHasV1 = /\/v1\/?$/.test(currentUrl);
+    const showV1Hint = customMode && protocolOpenAI && !urlAlreadyHasV1;
+    const applyV1Suffix = () => {
+        const base = currentUrl.replace(/\/+$/, '');
+        const newUrl = `${base}/v1`;
+        setProviderInputValue(newUrl);
+        onChangeRef.current('apiBase', newUrl);
+        setVerificationResult(null);
+    };
+
     // When both protocols are checked on a template that exposes two base URLs,
     // the outcome ("merge into one" vs "create two") is otherwise invisible.
     // Surface it as a one-line hint that tracks the fusion toggle.
@@ -599,17 +618,95 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        <ProviderAutocomplete
-                            options={allProviders}
-                            value={selectedProvider}
-                            inputValue={providerInputValue}
-                            onChange={handleProviderSelect}
-                            onInputChange={handleProviderInputChange}
-                            onBlur={handleProviderInputBlur}
-                            required
-                            error={baseUrlError}
-                            helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
-                        />
+                        {customMode ? (
+                            <Tooltip
+                                open={showV1Hint}
+                                title={
+                                    <Stack direction="row" alignItems="center" spacing={0.75}>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {t('providerDialog.v1Hint.message', {
+                                                defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
+                                            })}
+                                        </Typography>
+                                        <Link
+                                            component="button"
+                                            type="button"
+                                            variant="body2"
+                                            onClick={applyV1Suffix}
+                                            underline="always"
+                                            sx={{
+                                                fontWeight: 600,
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
+                                        </Link>
+                                    </Stack>
+                                }
+                                placement="top"
+                                arrow
+                                disableFocusListener
+                                disableHoverListener
+                                disableTouchListener
+                                slotProps={{
+                                    tooltip: {
+                                        sx: {
+                                            bgcolor: 'background.paper',
+                                            color: 'text.primary',
+                                            border: 1,
+                                            borderColor: 'divider',
+                                            boxShadow: 2,
+                                            px: 1.5,
+                                            py: 1,
+                                        },
+                                    },
+                                    arrow: {
+                                        sx: {
+                                            fontSize: 16,
+                                            color: 'background.paper',
+                                            '&::before': {
+                                                border: 1,
+                                                borderColor: 'divider',
+                                            },
+                                        },
+                                    },
+                                }}
+                            >
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    label={t('providerDialog.provider.label')}
+                                    placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
+                                    value={providerInputValue}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setProviderInputValue(val);
+                                        if (val.trim()) setBaseUrlError(false);
+                                    }}
+                                    onBlur={() => {
+                                        if (data.apiBase !== providerInputValue) {
+                                            onChangeRef.current('apiBase', providerInputValue);
+                                            onChangeRef.current('providerBaseUrls', undefined);
+                                        }
+                                    }}
+                                    required
+                                    error={baseUrlError}
+                                    helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
+                                />
+                            </Tooltip>
+                        ) : (
+                            <ProviderAutocomplete
+                                options={allProviders}
+                                value={selectedProvider}
+                                inputValue={providerInputValue}
+                                onChange={handleProviderSelect}
+                                onInputChange={handleProviderInputChange}
+                                onBlur={handleProviderInputBlur}
+                                required
+                                error={baseUrlError}
+                                helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
+                            />
+                        )}
 
                         <ApiKeyField
                             mode={mode}
@@ -699,6 +796,18 @@ const ProviderFormDialog = ({
                             <VerificationResultPanel
                                 result={verificationResult}
                                 onClose={() => setVerificationResult(null)}
+                                v1Hint={{
+                                    show: !verificationResult.success
+                                        && protocolOpenAI
+                                        && !(/\/v1\/?$/.test(data.apiBase || providerInputValue)),
+                                    onApply: () => {
+                                        const base = (data.apiBase || providerInputValue).replace(/\/+$/, '');
+                                        const newUrl = `${base}/v1`;
+                                        setProviderInputValue(newUrl);
+                                        onChangeRef.current('apiBase', newUrl);
+                                        setVerificationResult(null);
+                                    },
+                                }}
                             />
                         )}
 

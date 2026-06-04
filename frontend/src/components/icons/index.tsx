@@ -109,6 +109,8 @@ import {
     IconList,
     IconNavigation,
     IconBrain,
+    IconFoldDown,
+    IconFoldUp,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -220,6 +222,8 @@ export const DataUsage = tablerMui(IconChartDonut);
 export const Route = tablerMui(IconRoute);
 export const Router = tablerMui(IconRouter);
 export const UnfoldMore = tablerMui(IconSelector);
+export const FoldDown = tablerMui(IconFoldDown);
+export const FoldUp = tablerMui(IconFoldUp);
 export const Speed = tablerMui(IconGauge);
 export const Stream = tablerMui(IconActivity);
 export const Build = tablerMui(IconTool);

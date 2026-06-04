@@ -52,6 +52,7 @@ const Onboarding: React.FC = () => {
     const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
     const [providerFormData, setProviderFormData] = useState<ProviderFormData>(emptyForm());
     const [isLocalProvider, setIsLocalProvider] = useState(false);
+    const [isCustomMode, setIsCustomMode] = useState(false);
 
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
@@ -85,7 +86,12 @@ const Onboarding: React.FC = () => {
             return;
         }
 
+        if (selection.kind === 'import') {
+            return;
+        }
+
         if (selection.kind === 'custom') {
+            setIsCustomMode(true);
             openDialogWith(emptyForm());
             return;
         }
@@ -226,6 +232,7 @@ const Onboarding: React.FC = () => {
                 onClose={() => {
                     setApiKeyDialogOpen(false);
                     setIsLocalProvider(false);
+                    setIsCustomMode(false);
                 }}
                 onSubmit={handleSubmit}
                 onForceAdd={handleForceAdd}
@@ -234,6 +241,7 @@ const Onboarding: React.FC = () => {
                 mode="add"
                 isFirstProvider
                 optionalEditableToken={isLocalProvider}
+                customMode={isCustomMode}
             />
 
             {/* OAuth Add Dialog - now functional in onboarding */}

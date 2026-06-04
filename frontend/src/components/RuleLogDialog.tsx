@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@/components/icons';
 import LogExplorer from '@/components/LogExplorer';
+import { useTranslation } from 'react-i18next';
 
 interface ScenarioLogDialogProps {
     open: boolean;
@@ -17,12 +18,13 @@ interface ScenarioLogDialogProps {
 }
 
 const ScenarioLogDialog = ({ open, onClose, scenario, initialScenario }: ScenarioLogDialogProps) => {
+    const { t } = useTranslation();
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { height: '80vh' } }}>
             <DialogTitle sx={{ pb: 1 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Stack direction="row" alignItems="center" spacing={1}>
-                        <Typography variant="h6">Logs</Typography>
+                        <Typography variant="h6">{t('templateActions.troubleshoot')}</Typography>
                         <Chip label={scenario} size="small" variant="outlined" sx={{ fontSize: '0.72rem', height: 22 }} />
                     </Stack>
                     <IconButton size="small" onClick={onClose}>

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Add as AddIcon,
-    Article as LogsIcon,
-    ExpandMore as ExpandMoreIcon,
+    BugReport as TroubleshootIcon,
+    FoldUp as FoldUpIcon,
+    FoldDown as FoldDownIcon,
     Key as KeyIcon,
-    UnfoldMore as UnfoldMoreIcon,
-    Upload as ImportIcon,
     Speed as SpeedIcon,
 } from '@/components/icons';
-import { Button, Stack, Tooltip } from '@mui/material';
+import { Button, IconButton, Stack, Tooltip } from '@mui/material';
 import { ProbeMenu } from '@/components/probe';
 
 export interface TemplatePageActionsProps {
@@ -20,8 +20,6 @@ export interface TemplatePageActionsProps {
     allowAddRule: boolean;
     onCreateRule: () => void;
     showExpandCollapseButton?: boolean;
-    showImportButton?: boolean;
-    onImportFromClipboard?: () => void;
     onViewLogs?: () => void;
     // Probe V2 props
     scenario?: string;
@@ -36,11 +34,10 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     allowAddRule,
     onCreateRule,
     showExpandCollapseButton = true,
-    showImportButton = true,
-    onImportFromClipboard,
     onViewLogs,
     scenario,
 }) => {
+    const { t } = useTranslation();
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
     const probeMenuOpen = Boolean(probeAnchorEl);
 
@@ -54,63 +51,46 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     };
 
     return (
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
             {onViewLogs && (
                 <Button
                     variant="outlined"
-                    startIcon={<LogsIcon />}
+                    startIcon={<TroubleshootIcon />}
                     onClick={onViewLogs}
                     size="small"
                 >
-                    Logs
+                    {t('templateActions.troubleshoot')}
                 </Button>
             )}
-            {showExpandCollapseButton && collapsible && (
-                <Tooltip title={allExpanded ? "Collapse all rules" : "Expand all rules"}>
-                    <Button
-                        variant="outlined"
-                        startIcon={allExpanded ? <UnfoldMoreIcon/> : <ExpandMoreIcon/>}
-                        onClick={onToggleExpandAll}
-                        size="small"
-                    >
-                        {allExpanded ? "Collapse" : "Expand"}
-                    </Button>
-                </Tooltip>
-            )}
             {showAddApiKeyButton && (
-                <Tooltip title="Add new API Key">
+                <Tooltip title={t('templateActions.connectAI')}>
                     <Button
                         variant="outlined"
                         startIcon={<KeyIcon/>}
                         onClick={onAddApiKeyClick}
                         size="small"
                     >
-                        New Key
-                    </Button>
-                </Tooltip>
-            )}
-            {showImportButton && onImportFromClipboard && (
-                <Tooltip title="Import rule and keys from file or clipboard">
-                    <Button
-                        variant="outlined"
-                        startIcon={<ImportIcon/>}
-                        onClick={onImportFromClipboard}
-                        size="small"
-                    >
-                        Import
+                        {t('templateActions.connectAI')}
                     </Button>
                 </Tooltip>
             )}
             {allowAddRule && (
-                <Tooltip title="Create new routing rule">
+                <Tooltip title={t('templateActions.createNewRule')}>
                     <Button
                         variant="contained"
                         startIcon={<AddIcon/>}
                         onClick={onCreateRule}
                         size="small"
                     >
-                        New Rule
+                        {t('templateActions.newRule')}
                     </Button>
+                </Tooltip>
+            )}
+            {showExpandCollapseButton && collapsible && (
+                <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
+                    <IconButton size="small" onClick={onToggleExpandAll}>
+                        {allExpanded ? <FoldUpIcon fontSize="small" /> : <FoldDownIcon fontSize="small" />}
+                    </IconButton>
                 </Tooltip>
             )}
         </Stack>
