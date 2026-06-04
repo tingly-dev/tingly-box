@@ -662,6 +662,7 @@ const ProviderFormDialog = ({
                                     },
                                     arrow: {
                                         sx: {
+                                            fontSize: 16,
                                             color: 'background.paper',
                                             '&::before': {
                                                 border: 1,
