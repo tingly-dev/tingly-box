@@ -236,6 +236,12 @@ const (
 	// client's incoming API so native semantics (reasoning blocks,
 	// previous_response_id continuity, etc.) survive the round trip.
 	EndpointModeBoth OpenAIEndpointMode = "both"
+
+	// EndpointModeAuto is for third-party aggregator providers that host
+	// models with mixed endpoint support. The gateway tries the incoming
+	// protocol first; on failure it falls back to the alternate protocol
+	// and caches successful results per model.
+	EndpointModeAuto OpenAIEndpointMode = "auto"
 )
 
 // OpenAIEndpointModeForIssuer returns the OpenAIEndpointMode that an OAuth

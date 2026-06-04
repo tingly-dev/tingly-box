@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -188,6 +189,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 
 	// Determine target API type based on provider API style
 	target := protocol.TypeOpenAIResponses
+	autoFallbackEnabled := false
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
 		target = protocol.TypeAnthropicBeta
@@ -201,18 +203,30 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
-		if routeErr != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: routeErr.Error(),
-					Type:    "invalid_request_error",
-					Code:    "unsupported_endpoint",
-				},
-			})
-			return
+		tempFlags := resolveRuleFlags(c, rule)
+		if provider.OpenAIEndpointMode == ai.EndpointModeAuto {
+			if ov := ParseEndpointOverride(tempFlags.OpenAIEndpointOverride); ov == OverrideChat || ov == OverrideResponses {
+				target = overrideToTarget(ov)
+			} else if cached, ok := s.endpointCache.Get(provider.UUID, string(req.Model)); ok {
+				target = cached
+			} else {
+				target = incomingToTarget(IncomingAPIResponses)
+				autoFallbackEnabled = true
+			}
+		} else {
+			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIResponses)
+			if routeErr != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: routeErr.Error(),
+						Type:    "invalid_request_error",
+						Code:    "unsupported_endpoint",
+					},
+				})
+				return
+			}
+			target = resolvedTarget
 		}
-		target = resolvedTarget
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -223,24 +237,33 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	}
 
-	// Execute transform chain
-	ruleFlags := resolveRuleFlags(c, rule)
-	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Transform failed: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+	// === Build transform-and-dispatch closure ===
+	doTransformAndDispatch := func(t protocol.APIType, gate *firstChunkGate) bool {
+		ruleFlags := resolveRuleFlags(c, rule)
+		reqCtx, err := s.transformOpenAIResponses(c, req, t, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Transform failed: " + err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return false
+		}
+		s.dispatchWithPriorityFailoverGated(c, rule, provider, string(req.Model),
+			func(p *typ.Provider, _ string) {
+				s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
+			}, gate)
+		return true
+	}
+
+	if autoFallbackEnabled {
+		s.dispatchWithAutoFallback(c, provider, string(req.Model), target, doTransformAndDispatch)
 		return
 	}
 
-	// Use unified dispatch with mid-request failover (non-streaming only).
-	s.dispatchWithPriorityFailover(c, rule, provider, string(req.Model),
-		func(p *typ.Provider, _ string) {
-			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
-		})
+	// === Normal (non-auto) path ===
+	doTransformAndDispatch(target, nil)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format
