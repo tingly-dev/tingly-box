@@ -6,22 +6,46 @@
 //   - switching to separate mode needs a config-apply the mock can't do.
 // So we run the actual Go server, seed data via its API, and drive the real UI.
 //
-// Prereqs (see SKILL.md "Scenario routing graph" for the full walkthrough):
+// Prereqs:
 //   1. git submodule update --init --recursive   (libs/* must be checked out)
-//   2. go build -o /tmp/tingly-box ./cli/tingly-box
-//   3. /tmp/tingly-box --verbose start --debug --port 12580 --browser=false \
-//        > /tmp/tingly-server.log 2>&1 &
-//   4. cd frontend && npm run dev:real   (proxies /api + /tingly -> :12580;
-//        note vite may fall back to :3001 if :3000 is taken)
-//   5. Chrome-for-Testing at /tmp/chrome/... (see SKILL.md Setup)
+//   2. export TOKEN=$(python3 -c "import json; print(json.load(open('/root/.tingly-box/config.json'))['user_token'])")
+//   3. go build -o /tmp/tingly-box ./cli/tingly-box
+//      /tmp/tingly-box --verbose start --debug --port 12580 --browser=false \
+//        >> /tmp/tingly-server.log 2>&1 &
+//      until curl -fs http://localhost:12580/ >/dev/null; do sleep 1; done
+//   4. cd frontend && USE_MOCK= npm run dev:real > /tmp/vite-real.log 2>&1 &
+//      (vite may fall back to :3001 if :3000 is taken)
+//   5. npm i -D playwright   (from frontend/)
 //
-// Run from frontend/ so `playwright` resolves:
-//   API=http://localhost:12580 FE=http://localhost:3001 \
+// Run from frontend/:
+//   TOKEN=$TOKEN FE=http://localhost:3000 API=http://localhost:12580 \
 //   node ../.claude/skills/ui-preview/scenario-routing-graph.mjs
 //
-// TOKEN is read from $TOKEN, else parsed from /tmp/tingly-server.log
-// ("Login Token: tb-user-..."). Outputs /tmp/scenario-routing-{light,dark}.png
-// (full page) and /tmp/scenario-routing-smart-{light,dark}.png (smart card).
+// Outputs:
+//   /tmp/scenario-routing-{light,dark}.png       — full page, all rules
+//   /tmp/scenario-routing-smart-{light,dark}.png — smart-routing rule card
+//
+// Seeds two providers (glm, deepseek) and three claude_code rules; re-running
+// appends more rules — restart the server for a clean slate.
+// Cleanup: pkill -f "tingly-box.*start"; pkill -f "vite"
+//
+// ── Known issues ──────────────────────────────────────────────────────────
+//
+// recharts / es-toolkit vite error (require_isUnsafeProperty is not a function):
+//   recharts v3.x imports es-toolkit/compat/* CJS shims that Vite 8/rolldown
+//   inlines with broken IIFE helpers. Fix once per container before starting vite:
+//     for func in get isPlainObject last maxBy minBy omit range sortBy sumBy throttle uniqBy; do
+//       echo "export { ${func} as default } from '../dist/compat/index.mjs';" \
+//         > frontend/node_modules/es-toolkit/compat/${func}.js
+//     done
+//   Then: rm -rf frontend/node_modules/.vite
+//
+// "Separate Model" button not found:
+//   The script predates UnifiedRoutingGraph. The old RoutingGraph/SmartRoutingGraph
+//   had a "Separate Model" modal; the new inline EntryNode has a Direct/Smart
+//   toggle instead. Update the mode-switch section to click the Smart button
+//   on the EntryNode directly.
+
 
 // Resolve playwright from the cwd (run this from frontend/, where playwright
 // is installed) rather than from this file's location under .claude/.

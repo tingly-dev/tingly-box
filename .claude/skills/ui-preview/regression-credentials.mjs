@@ -8,10 +8,14 @@
 //      right:24), not a page-local bottom-right Snackbar.
 //   3. The submit button must show a spinner while the request is in flight.
 //
-// Setup (see SKILL.md): download Chrome for Testing to /tmp/chrome, then from
-// frontend/:  npm i -D playwright && npm i @emotion/react @emotion/styled
-// Run the mock dev server:  USE_MOCK=true npm run dev:mock   (serves :3000)
-// Then, from frontend/:     node ../.claude/skills/ui-preview/regression-credentials.mjs
+// Setup (from frontend/):
+//   npm i -D playwright && npm i @emotion/react @emotion/styled
+//   mkdir -p /tmp/chrome && curl -fsSL -o /tmp/chrome/chrome.zip \
+//     "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.96/linux64/chrome-linux64.zip" \
+//     && unzip -q /tmp/chrome/chrome.zip -d /tmp/chrome
+//   USE_MOCK=true node_modules/.bin/vite --mode mock --port 3000 &
+// Run from frontend/:
+//   node ../.claude/skills/ui-preview/regression-credentials.mjs
 //
 // Exits 0 on success, 1 on any failed assertion. Screenshot: /tmp/regression-credentials.png
 //
