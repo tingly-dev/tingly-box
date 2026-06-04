@@ -241,6 +241,7 @@ const CredentialPage = () => {
                 proxy_url: (fd as any).proxyUrl ?? '',
                 user_agent: (fd as any).userAgent ?? '',
                 auth_type: 'api_key',
+                openai_endpoint_mode: (fd as any).openaiEndpointMode || undefined,
             };
         }
 
@@ -283,6 +284,7 @@ const CredentialPage = () => {
             proxy_url: (fd as any).proxyUrl ?? '',
             user_agent: (fd as any).userAgent ?? '',
             auth_type: 'api_key',
+            openai_endpoint_mode: protocol === 'openai' ? ((fd as any).openaiEndpointMode || undefined) : undefined,
         };
     };
 
@@ -299,6 +301,7 @@ const CredentialPage = () => {
             user_agent: (fd as any).userAgent ?? '',
             api_base_openai: (fd as any).apiBaseOpenAI ?? '',
             api_base_anthropic: (fd as any).apiBaseAnthropic ?? '',
+            openai_endpoint_mode: (fd as any).openaiEndpointMode ?? '',
         };
     };
 
@@ -418,6 +421,7 @@ const CredentialPage = () => {
                     proxyUrl: provider.proxy_url || '',
                     userAgent: (provider as any).user_agent || '',
                     authType: provider.auth_type || 'api_key',
+                    openaiEndpointMode: (provider as any).openai_endpoint_mode || '',
                 } as any);
                 setApiKeyDialogOpen(true);
             }
