@@ -126,6 +126,9 @@ type Server struct {
 	scenarioRecordSinks   map[typ.RuleScenario]*obs.Sink
 	scenarioRecordSinksMu sync.RWMutex
 
+	// endpoint cache for auto endpoint mode (per provider+model → protocol)
+	endpointCache *EndpointCache
+
 	// affinity store for smart routing session-model locking
 	affinityStore *AffinityStore
 
@@ -278,6 +281,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	server.jwtManager = jwtManager
 	server.engine = gin.New()
 	server.clientPool = client.NewClientPool() // Initialize client pool (once mode with auto-cleanup via finalizer)
+	server.endpointCache = NewEndpointCache(defaultEndpointCacheTTL)
 	server.errorMW = errorMW
 	server.scenarioRecordSinks = make(map[typ.RuleScenario]*obs.Sink)
 	historyStore := guardrailsutils.NewStore(200, GetGuardrailsHistoryPath(cfg.ConfigDir))

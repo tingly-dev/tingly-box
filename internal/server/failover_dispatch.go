@@ -318,19 +318,37 @@ func (s *Server) dispatchWithPriorityFailover(
 	initialModel string,
 	attempt dispatchAttempt,
 ) {
+	s.dispatchWithPriorityFailoverGated(c, rule, initialProvider, initialModel, attempt, nil)
+}
+
+// dispatchWithPriorityFailoverGated is the gated variant. When
+// externalGate is non-nil the caller owns the gate lifecycle (install on
+// c.Writer, defer restore+commit); the function reuses it instead of
+// creating a new one. Pass nil for the original self-managed behavior.
+func (s *Server) dispatchWithPriorityFailoverGated(
+	c *gin.Context,
+	rule *typ.Rule,
+	initialProvider *typ.Provider,
+	initialModel string,
+	attempt dispatchAttempt,
+	externalGate *firstChunkGate,
+) {
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) <= 1 {
 		attempt(initialProvider, initialModel)
 		return
 	}
 
-	realWriter := c.Writer
-	gate := newFirstChunkGate(realWriter)
-	c.Writer = gate
-	defer func() {
-		c.Writer = realWriter
-		gate.CommitIfBuffered()
-	}()
+	gate := externalGate
+	if gate == nil {
+		realWriter := c.Writer
+		gate = newFirstChunkGate(realWriter)
+		c.Writer = gate
+		defer func() {
+			c.Writer = realWriter
+			gate.CommitIfBuffered()
+		}()
+	}
 
 	tried := map[string]bool{}
 	provider := initialProvider

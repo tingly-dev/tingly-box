@@ -107,6 +107,20 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 			incoming: IncomingAPIResponses,
 			want:     protocol.TypeOpenAIResponses,
 		},
+
+		// Auto mode — mirrors incoming (handler intercepts before this)
+		{
+			name:     "auto mode mirrors chat",
+			provider: &typ.Provider{UUID: "p-auto", OpenAIEndpointMode: ai.EndpointModeAuto},
+			incoming: IncomingAPIChat,
+			want:     protocol.TypeOpenAIChat,
+		},
+		{
+			name:     "auto mode mirrors responses",
+			provider: &typ.Provider{UUID: "p-auto", OpenAIEndpointMode: ai.EndpointModeAuto},
+			incoming: IncomingAPIResponses,
+			want:     protocol.TypeOpenAIResponses,
+		},
 	}
 
 	for _, tt := range tests {

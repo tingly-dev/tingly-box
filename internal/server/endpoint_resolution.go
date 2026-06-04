@@ -78,6 +78,14 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 			return protocol.TypeOpenAIResponses, nil
 		}
 		return protocol.TypeOpenAIChat, nil
+	case ai.EndpointModeAuto:
+		// Auto mode: the handler intercepts this before reaching here and
+		// manages cache lookup + fallback retry. If we get here anyway,
+		// mirror incoming protocol as the initial attempt.
+		if incoming == IncomingAPIResponses {
+			return protocol.TypeOpenAIResponses, nil
+		}
+		return protocol.TypeOpenAIChat, nil
 	default: // EndpointModeChat / zero value
 		return protocol.TypeOpenAIChat, nil
 	}
