@@ -13,6 +13,7 @@ func (e ResponsesStreamErrorEvent) EventType() string                { return e.
 func (e ResponsesCreatedEvent) EventType() string                    { return e.Type }
 func (e ResponsesInProgressEvent) EventType() string                 { return e.Type }
 func (e ResponsesCompletedEvent) EventType() string                  { return e.Type }
+func (e ResponsesIncompleteEvent) EventType() string                 { return e.Type }
 func (e ResponsesOutputItemAddedEvent) EventType() string            { return e.Type }
 func (e ResponsesOutputItemDoneEvent) EventType() string             { return e.Type }
 func (e ResponsesContentPartAddedEvent) EventType() string           { return e.Type }
@@ -51,15 +52,26 @@ type ResponsesCompletedEvent struct {
 	Response       ResponsesWireResponse `json:"response"`
 }
 
+type ResponsesIncompleteEvent struct {
+	Type           string               `json:"type"`
+	SequenceNumber int64                `json:"sequence_number"`
+	Response       ResponsesWireResponse `json:"response"`
+}
+
 type ResponsesWireResponse struct {
-	ID          string                   `json:"id"`
-	Object      string                   `json:"object"`
-	CreatedAt   int64                    `json:"created_at"`
-	Status      string                   `json:"status"`
-	Output      []ResponsesOutputItemWire `json:"output"`
-	Usage       *ResponsesUsageWire      `json:"usage,omitempty"`
-	Model       string                   `json:"model,omitempty"`
-	CompletedAt int64                    `json:"completed_at,omitempty"`
+	ID                string                          `json:"id"`
+	Object            string                          `json:"object"`
+	CreatedAt         int64                           `json:"created_at"`
+	Status            string                          `json:"status"`
+	Output            []ResponsesOutputItemWire       `json:"output"`
+	Usage             *ResponsesUsageWire             `json:"usage,omitempty"`
+	Model             string                          `json:"model,omitempty"`
+	CompletedAt       int64                           `json:"completed_at,omitempty"`
+	IncompleteDetails *ResponsesIncompleteDetailsWire `json:"incomplete_details,omitempty"`
+}
+
+type ResponsesIncompleteDetailsWire struct {
+	Reason string `json:"reason"`
 }
 
 type ResponsesUsageWire struct {

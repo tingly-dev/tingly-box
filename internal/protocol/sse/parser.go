@@ -292,9 +292,12 @@ func AssembleOpenAIResponsesStream(events []string) *ParsedResult {
 				name, _ := item["name"].(string)
 				r.ToolCalls = append(r.ToolCalls, ParsedToolCall{ID: id, Name: name})
 			}
-		case "response.completed":
+		case "response.completed", "response.incomplete":
 			resp, _ := m["response"].(map[string]interface{})
 			if resp != nil {
+				if status, ok := resp["status"].(string); ok {
+					r.FinishReason = status
+				}
 				if usage, ok := resp["usage"].(map[string]interface{}); ok {
 					r.Usage = &ParsedTokenUsage{
 						InputTokens:  parsedToInt(usage["input_tokens"]),

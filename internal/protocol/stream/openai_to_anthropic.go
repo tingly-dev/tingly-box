@@ -972,7 +972,30 @@ func handlerResponsesToAnthropicStream(c *gin.Context, stream ResponsesStreamIte
 		case "response.mcp_list_tools.failed":
 			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] MCP list tools failed")
 
-		case "error", "response.failed", "response.incomplete":
+		case "response.incomplete":
+			// response.incomplete is a terminal Responses status (max_output_tokens,
+			// content_filter), not a transport error. Preserve the partial output
+			// and map to Anthropic's max_tokens stop reason.
+			incomplete := currentEvent.AsResponseIncomplete()
+			state.cacheTokens = incomplete.Response.Usage.InputTokensDetails.CachedTokens
+			state.inputTokens = incomplete.Response.Usage.InputTokens - state.cacheTokens
+			state.outputTokens = incomplete.Response.Usage.OutputTokens
+			state.reasoningTokens = incomplete.Response.Usage.OutputTokensDetails.ReasoningTokens
+
+			senders.SendStopEvents(state, flusher)
+
+			stopReason := "max_tokens"
+			if incomplete.Response.IncompleteDetails.Reason == "content_filter" {
+				stopReason = "end_turn"
+			}
+
+			senders.SendMessageDelta(state, stopReason, flusher)
+			senders.SendMessageStop(messageID, responseModel, state, stopReason, flusher)
+
+			logrus.WithContext(c.Request.Context()).Debugf("[ResponsesAPI] Incomplete response: reason=%s, stop_reason=%s", incomplete.Response.IncompleteDetails.Reason, stopReason)
+			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
+
+		case "error", "response.failed":
 			logrus.WithContext(c.Request.Context()).Errorf("Responses API error event: %v", currentEvent)
 			errorEvent := map[string]interface{}{
 				"type": "error",

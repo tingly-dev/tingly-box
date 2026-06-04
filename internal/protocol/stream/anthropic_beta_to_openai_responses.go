@@ -110,6 +110,9 @@ func HandleAnthropicBetaToOpenAIResponsesStream(
 
 		case "message_delta":
 			acc.ConsumeBeta(&event)
+			if sr := string(event.Delta.StopReason); sr != "" {
+				state.stopReason = sr
+			}
 
 		case "message_stop":
 			sendCompletionEvent(c, state, flusher, acc.Result())
@@ -181,6 +184,7 @@ type responsesConverterState struct {
 	sequenceNumber   int
 	createdAt        int64
 	currentBlockType string // Track the type of the current block being processed
+	stopReason       string // Anthropic stop_reason from message_delta (e.g. "max_tokens")
 }
 
 // pendingResponseToolCall tracks a tool call being assembled from Anthropic stream chunks
@@ -493,8 +497,9 @@ func toResponsesUsageWire(u *protocol.TokenUsage) *wire.ResponsesUsageWire {
 	}
 }
 
-// sendCompletionEvent sends the response.completed event and the final [DONE] marker.
-// u carries the normalized token counts from the accumulator.
+// sendCompletionEvent sends the terminal response event and the final [DONE] marker.
+// When the Anthropic stop_reason indicates truncation (max_tokens), it emits
+// response.incomplete; otherwise response.completed.
 func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher http.Flusher, u *protocol.TokenUsage) {
 	if c == nil || c.Writer == nil || flusher == nil {
 		logrus.Warn("Cannot send completion event: connection is nil")
@@ -503,12 +508,18 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 
 	state.finished = true
 
+	isIncomplete, incompleteReason := anthropicStopReasonToIncomplete(state.stopReason)
+	itemStatus := "completed"
+	if isIncomplete {
+		itemStatus = "incomplete"
+	}
+
 	var output []wire.ResponsesOutputItemWire
 	if state.accumulatedText != "" {
 		output = append(output, wire.ResponsesOutputItemWire{
 			ID:     state.itemID,
 			Type:   "message",
-			Status: "completed",
+			Status: itemStatus,
 			Role:   "assistant",
 			Content: []wire.ResponsesContentPartWire{
 				{Type: "output_text", Text: state.accumulatedText},
@@ -527,22 +538,44 @@ func sendCompletionEvent(c *gin.Context, state *responsesConverterState, flusher
 		})
 	}
 
-	doneEvent := wire.ResponsesCompletedEvent{
-		Type:           "response.completed",
-		SequenceNumber: int64(state.nextSequenceNumber()),
-		Response: wire.ResponsesWireResponse{
-			ID:          state.responseID,
-			Object:      "response",
-			CreatedAt:   state.createdAt,
-			Status:      "completed",
-			CompletedAt: state.createdAt,
-			Model:       "",
-			Output:      output,
-			Usage: toResponsesUsageWire(u),
-		},
+	resp := wire.ResponsesWireResponse{
+		ID:          state.responseID,
+		Object:      "response",
+		CreatedAt:   state.createdAt,
+		CompletedAt: state.createdAt,
+		Model:       "",
+		Output:      output,
+		Usage:       toResponsesUsageWire(u),
 	}
-	sendResponsesEvent(c, doneEvent, flusher)
+
+	if isIncomplete {
+		resp.Status = "incomplete"
+		resp.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{Reason: incompleteReason}
+		event := wire.ResponsesIncompleteEvent{
+			Type:           "response.incomplete",
+			SequenceNumber: int64(state.nextSequenceNumber()),
+			Response:       resp,
+		}
+		sendResponsesEvent(c, event, flusher)
+	} else {
+		resp.Status = "completed"
+		event := wire.ResponsesCompletedEvent{
+			Type:           "response.completed",
+			SequenceNumber: int64(state.nextSequenceNumber()),
+			Response:       resp,
+		}
+		sendResponsesEvent(c, event, flusher)
+	}
 	OpenAISSEDone(c)
+}
+
+func anthropicStopReasonToIncomplete(stopReason string) (bool, string) {
+	switch stopReason {
+	case "max_tokens":
+		return true, "max_output_tokens"
+	default:
+		return false, ""
+	}
 }
 
 func newResponsesWireResponseFromState(state *responsesConverterState, status string, output []wire.ResponsesOutputItemWire) wire.ResponsesWireResponse {

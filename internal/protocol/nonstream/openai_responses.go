@@ -18,34 +18,54 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 		model = actualModel
 	}
 
+	finishReason := ""
 	messageContent := ""
 	if len(resp.Choices) > 0 {
 		messageContent = resp.Choices[0].Message.Content
+		finishReason = string(resp.Choices[0].FinishReason)
 	}
+
+	status, incompleteDetails := chatFinishReasonToResponsesStatus(finishReason)
+	itemStatus := status
 
 	output := []map[string]any{}
 	if messageContent != "" {
 		output = append(output, map[string]any{
 			"type":   "message",
 			"role":   "assistant",
-			"status": "completed",
+			"status": itemStatus,
 			"content": []map[string]any{
 				{"type": "output_text", "text": messageContent},
 			},
 		})
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"id":     resp.ID,
 		"object": "response",
 		"model":  model,
-		"status": "completed",
+		"status": status,
 		"output": output,
 		"usage": map[string]any{
 			"input_tokens":  resp.Usage.PromptTokens,
 			"output_tokens": resp.Usage.CompletionTokens,
 			"total_tokens":  resp.Usage.PromptTokens + resp.Usage.CompletionTokens,
 		},
+	}
+	if incompleteDetails != nil {
+		result["incomplete_details"] = incompleteDetails
+	}
+	return result
+}
+
+func chatFinishReasonToResponsesStatus(finishReason string) (string, map[string]any) {
+	switch finishReason {
+	case "length":
+		return "incomplete", map[string]any{"reason": "max_output_tokens"}
+	case "content_filter":
+		return "incomplete", map[string]any{"reason": "content_filter"}
+	default:
+		return "completed", nil
 	}
 }
 
@@ -55,6 +75,8 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 	if model == "" {
 		model = actualModel
 	}
+
+	status, incompleteDetails := anthropicStopReasonToResponsesStatus(string(resp.StopReason))
 
 	output := []map[string]any{}
 	outputIndex := 0
@@ -92,23 +114,36 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 		msgItem := map[string]any{
 			"type":    "message",
 			"role":    "assistant",
-			"status":  "completed",
+			"status":  status,
 			"content": textParts,
 		}
 		output = append([]map[string]any{msgItem}, output...)
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"id":     resp.ID,
 		"object": "response",
 		"model":  model,
-		"status": "completed",
+		"status": status,
 		"output": output,
 		"usage": map[string]any{
 			"input_tokens":  resp.Usage.InputTokens,
 			"output_tokens": resp.Usage.OutputTokens,
 			"total_tokens":  resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		},
+	}
+	if incompleteDetails != nil {
+		result["incomplete_details"] = incompleteDetails
+	}
+	return result
+}
+
+func anthropicStopReasonToResponsesStatus(stopReason string) (string, map[string]any) {
+	switch stopReason {
+	case "max_tokens":
+		return "incomplete", map[string]any{"reason": "max_output_tokens"}
+	default:
+		return "completed", nil
 	}
 }
 

@@ -73,6 +73,24 @@ func AssertFinishReason(expected string) Assertion {
 	}
 }
 
+// AssertFinishReasonOneOf returns an Assertion that the finish_reason matches any
+// of the accepted values. Useful for scenarios where the expected finish reason
+// varies by source protocol (e.g. "length" for Chat, "max_tokens" for Anthropic,
+// "incomplete" for Responses).
+func AssertFinishReasonOneOf(accepted ...string) Assertion {
+	return Assertion{
+		Name: fmt.Sprintf("finish_reason_one_of(%v)", accepted),
+		Check: func(r *RoundTripResult) error {
+			for _, a := range accepted {
+				if r.FinishReason == a {
+					return nil
+				}
+			}
+			return fmt.Errorf("finish_reason: got %q, want one of %v", r.FinishReason, accepted)
+		},
+	}
+}
+
 // AssertHasToolCalls returns an Assertion that exactly count tool calls are present.
 func AssertHasToolCalls(count int) Assertion {
 	return Assertion{

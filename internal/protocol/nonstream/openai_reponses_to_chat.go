@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/openai/openai-go/v3/responses"
+
+	usageconv "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 )
 
 type responsesToChatNonStreamState struct {
@@ -26,19 +28,25 @@ func OpenAIResponsesToChat(resp *responses.Response, responseModel string) map[s
 		},
 	}
 
-	usage := map[string]any{
-		"prompt_tokens":     resp.Usage.InputTokens,
-		"completion_tokens": resp.Usage.OutputTokens,
-		"total_tokens":      resp.Usage.InputTokens + resp.Usage.OutputTokens,
+	normalizedUsage := usageconv.FromOpenAIResponses(resp.Usage)
+	totalInputTokens := normalizedUsage.InputTokens + normalizedUsage.CacheInputTokens
+	totalTokens := int(resp.Usage.TotalTokens)
+	if totalTokens == 0 {
+		totalTokens = totalInputTokens + normalizedUsage.OutputTokens
 	}
-	if resp.Usage.InputTokensDetails.CachedTokens > 0 {
+	usage := map[string]any{
+		"prompt_tokens":     totalInputTokens,
+		"completion_tokens": normalizedUsage.OutputTokens,
+		"total_tokens":      totalTokens,
+	}
+	if normalizedUsage.CacheInputTokens > 0 {
 		usage["prompt_tokens_details"] = map[string]any{
-			"cached_tokens": resp.Usage.InputTokensDetails.CachedTokens,
+			"cached_tokens": normalizedUsage.CacheInputTokens,
 		}
 	}
-	if resp.Usage.OutputTokensDetails.ReasoningTokens > 0 {
+	if normalizedUsage.ReasoningTokens > 0 {
 		usage["completion_tokens_details"] = map[string]any{
-			"reasoning_tokens": resp.Usage.OutputTokensDetails.ReasoningTokens,
+			"reasoning_tokens": normalizedUsage.ReasoningTokens,
 		}
 	}
 
