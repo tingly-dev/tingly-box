@@ -73,73 +73,74 @@ func TestBreakerSuccessResetsCounter(t *testing.T) {
 	}
 }
 
+// windForward moves a breaker's openedAt backwards in time so the open
+// window appears to have elapsed, without any real time.Sleep.
+func windForward(b *Breaker, d time.Duration) {
+	b.mu.Lock()
+	b.openedAt = b.openedAt.Add(-d)
+	b.mu.Unlock()
+}
+
 func TestBreakerExponentialBackoff(t *testing.T) {
-	base := 20 * time.Millisecond
+	base := 100 * time.Millisecond
 	b := NewBreaker(1, base)
-	b.MaxOpenDuration = 200 * time.Millisecond
+	b.MaxOpenDuration = 500 * time.Millisecond
 
-	// Trip the breaker.
-	b.RecordFailure()
+	b.RecordFailure() // → open
 
-	// 1st open window: base (20 ms).
-	time.Sleep(base + 5*time.Millisecond)
+	// 1st window: base (100 ms). Fast-forward past it.
+	windForward(b, base)
 	if !b.Allow() {
 		t.Fatal("should allow probe after 1st open window")
 	}
 	b.RecordFailure() // half-open → open, halfOpenFails=1
 
-	// 2nd open window: 40 ms (base * 2^1).
-	time.Sleep(base + 5*time.Millisecond) // 25 ms — too early
+	// 2nd window: 200 ms. Advance only 150 ms — too early.
+	windForward(b, 150*time.Millisecond)
 	if b.Allow() {
-		t.Fatal("should NOT allow probe yet (backoff doubled to 40 ms)")
+		t.Fatal("should NOT allow probe yet (backoff doubled to 200 ms)")
 	}
-	time.Sleep(base) // total ~45 ms ≥ 40 ms
+	// Advance the remaining 50 ms.
+	windForward(b, 50*time.Millisecond)
 	if !b.Allow() {
 		t.Fatal("should allow probe after 2nd backoff window")
 	}
 	b.RecordFailure() // halfOpenFails=2
 
-	// 3rd open window: 80 ms (base * 2^2).
-	time.Sleep(60 * time.Millisecond) // too early for 80 ms
+	// 3rd window: 400 ms. Advance only 300 ms — too early.
+	windForward(b, 300*time.Millisecond)
 	if b.Allow() {
-		t.Fatal("should NOT allow probe yet (backoff at 80 ms)")
+		t.Fatal("should NOT allow probe yet (backoff at 400 ms)")
 	}
-	time.Sleep(25 * time.Millisecond) // total ~85 ms ≥ 80 ms
+	windForward(b, 100*time.Millisecond)
 	if !b.Allow() {
 		t.Fatal("should allow probe after 3rd backoff window")
 	}
-	b.RecordFailure() // halfOpenFails=3, next would be 160 ms
+	b.RecordFailure() // halfOpenFails=3, next would be 800 ms → capped at 500 ms
 
-	// 4th open window: 160 ms (base * 2^3).
-	time.Sleep(165 * time.Millisecond)
-	if !b.Allow() {
-		t.Fatal("should allow probe after 4th backoff window")
-	}
-	b.RecordFailure() // halfOpenFails=4, next would be 320 ms → capped at 200 ms
-
-	// 5th open window: capped at 200 ms.
-	time.Sleep(195 * time.Millisecond) // just under cap
+	// 4th window: capped at 500 ms. Advance only 450 ms — too early.
+	windForward(b, 450*time.Millisecond)
 	if b.Allow() {
-		t.Fatal("should NOT allow probe yet (capped at 200 ms)")
+		t.Fatal("should NOT allow probe yet (capped at 500 ms)")
 	}
-	time.Sleep(10 * time.Millisecond) // total ~205 ms ≥ 200 ms
+	windForward(b, 50*time.Millisecond)
 	if !b.Allow() {
 		t.Fatal("should allow probe after cap-limited window")
 	}
 }
 
 func TestBreakerBackoffResetsOnSuccess(t *testing.T) {
-	base := 20 * time.Millisecond
+	base := 100 * time.Millisecond
 	b := NewBreaker(1, base)
-	b.MaxOpenDuration = 500 * time.Millisecond
+	b.MaxOpenDuration = 5 * time.Second
 
 	// Build up backoff: trip → probe fail → trip → probe fail.
 	b.RecordFailure()
-	time.Sleep(base + 5*time.Millisecond)
+	windForward(b, base)
 	b.Allow()
-	b.RecordFailure() // halfOpenFails=1, next window=40 ms
+	b.RecordFailure() // halfOpenFails=1, next window=200 ms
 
-	time.Sleep(45 * time.Millisecond)
+	windForward(b, 200*time.Millisecond)
 	b.Allow()
 
 	// Probe succeeds → everything resets.
@@ -148,9 +149,9 @@ func TestBreakerBackoffResetsOnSuccess(t *testing.T) {
 		t.Fatal("should be closed after success")
 	}
 
-	// Trip again — backoff should be back to base, not 80 ms.
+	// Trip again — backoff should be back to base, not 400 ms.
 	b.RecordFailure()
-	time.Sleep(base + 5*time.Millisecond)
+	windForward(b, base)
 	if !b.Allow() {
 		t.Fatal("after success+retrip, should probe at base duration, not backed-off")
 	}
