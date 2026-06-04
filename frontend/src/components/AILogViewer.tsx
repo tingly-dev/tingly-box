@@ -135,7 +135,7 @@ const SUPPRESSED_FIELDS = new Set([
 const AILogViewer = ({ getRequests, getRequestDetail, initialScenario }: RequestsViewerProps) => {
     const [requests, setRequests] = useState<ModelRequestSummary[]>([]);
     const [loading, setLoading] = useState(false);
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [details, setDetails] = useState<Record<string, ModelRequestDetail>>({});
     const [error, setError] = useState<string | null>(null);

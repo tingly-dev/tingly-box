@@ -55,7 +55,7 @@ const SystemLogViewer = ({ getLogs, getRequestBody }: SystemLogViewerProps) => {
     // Multi-select level filter: empty set = show all
     const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
     // Sorting state
     const [sortField, setSortField] = useState<SortField>('time');
