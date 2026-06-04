@@ -1,23 +1,45 @@
 /**
- * Screenshot script for tingly-box docs/images
- * Run from frontend/: node screenshot.mjs
+ * Docs screenshot script — captures all docs/images/ product screenshots.
  *
- * Ordering (logical product story):
- *   1-dashboard.png      – Usage dashboard (today, hourly)
+ * Run from frontend/ (so node resolves playwright from node_modules):
+ *   node ../.claude/skills/ui-preview/docs-screenshots.mjs
+ *
+ * Prerequisites (run once per fresh container):
+ *   cd frontend && npm i -D playwright
+ *   mkdir -p /tmp/chrome && cd /tmp/chrome
+ *   curl -fsSL -o chrome.zip \
+ *     "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.96/linux64/chrome-linux64.zip"
+ *   unzip -q chrome.zip
+ *   cd <repo>/frontend && npm i @emotion/react @emotion/styled
+ *
+ * Dev server must be running on :3000:
+ *   USE_MOCK=true node_modules/.bin/vite --mode mock --port 3000 &
+ *
+ * Output ordering (logical product story):
+ *   1-dashboard.png      – Usage dashboard (today, minute-interval sparklines)
  *   2-agents.png         – Agent selection overview
  *   3-connect-ai.png     – Connect AI provider dialog
- *   4-model-select.png   – Model select dialog (from routing graph)
+ *   4-model-select.png   – Model select dialog (opened from routing graph → New Rule)
  *   5-claude-code.png    – Claude Code setup + routing rules
  *   6-routing.png        – OpenAI SDK smart routing
  *   7-remote.png         – Telegram remote control bot
  *   8-guardrails.png     – Guardrails policies
  *   9-heatmap.png        – Token heatmap (180d)
+ *   theme-preview/light-dashboard.png
+ *   theme-preview/dark-dashboard.png
+ *   theme-preview/claude-dashboard.png
  */
-import { chromium } from 'playwright';
+// playwright lives in frontend/node_modules; ESM bare-specifier resolution starts
+// from the *file* location, not cwd. createRequire with a cwd-based URL makes it
+// resolve from wherever the script is *run* from (i.e. frontend/).
+import { createRequire } from 'module';
 import path from 'path';
+const { chromium } = createRequire('file://' + process.cwd() + '/')('playwright');
 
 const CHROME = '/tmp/chrome/chrome-linux64/chrome';
 const BASE   = 'http://localhost:3000';
+// Script lives in .claude/skills/ui-preview/ but is run from frontend/,
+// so ../docs/images resolves to the repo docs/images/ directory.
 const OUTDIR = path.resolve('../docs/images');
 const VP     = { width: 1440, height: 900 };
 
@@ -68,27 +90,28 @@ await shoot(browser, '/credentials', '3-connect-ai.png', {
             await btn.waitFor({ timeout: 6000 });
             await btn.click();
             await page.waitForTimeout(1800);
-        } catch (e) { console.warn('  ⚠ dialog open failed:', e.message.slice(0, 80)); }
+        } catch (e) { console.warn('  ⚠ connect-ai dialog failed:', e.message.slice(0, 80)); }
     },
 });
 
-// ── 4: Model select dialog (from routing graph) ───────────────────────────
+// ── 4: Model select dialog ────────────────────────────────────────────────
+// Open the routing page, click "New Rule" to open the ModelSelectDialog,
+// then click the Anthropic provider tab so the right-side models panel loads.
+// The dialog takes ~3s to animate in; wait for its title text before clicking.
 await shoot(browser, '/agent/openai', '4-model-select.png', {
     settle: 3000,
     interact: async (page) => {
         try {
-            // Click an existing ServiceNode (shows provider + model) to open the model-select dialog.
-            // ServiceNode renders with onClick → openModelSelectDialog.
-            // The node is a styled MUI Box; click via aria-label or text content.
-            const serviceNode = page.getByRole('button', { name: /Test Service/i }).first();
-            // Instead: click the service container which is the styled card next to "Test Service".
-            // Use the "Edit model name" button area to find the rule row, then click the service node itself.
-            // Simplest: click the "New Rule" button which triggers openModelSelectForCreate → dialog open.
             const newRuleBtn = page.getByRole('button', { name: /Create new routing rule/i });
             await newRuleBtn.waitFor({ timeout: 6000 });
             await newRuleBtn.click();
+            // Wait for the dialog title to appear (dialog animates in after ~2-3s)
+            await page.getByText('Select a model for your new rule').waitFor({ timeout: 8000 });
+            await page.waitForTimeout(400);
+            // Click the first Anthropic tab to trigger model list fetch on the right panel
+            await page.getByRole('dialog').getByText('Anthropic').first().click();
             await page.waitForTimeout(2000);
-        } catch (e) { console.warn('  ⚠ model select open failed:', e.message.slice(0, 80)); }
+        } catch (e) { console.warn('  ⚠ model-select dialog failed:', e.message.slice(0, 80)); }
     },
 });
 

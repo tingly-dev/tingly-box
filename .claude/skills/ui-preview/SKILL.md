@@ -62,32 +62,72 @@ until curl -fs http://localhost:3000 >/dev/null; do sleep 1; done
 
 ## Take the screenshot
 
-Drop `screenshot.mjs` (template provided alongside this SKILL.md) into
-`frontend/` and run from `frontend/` so node resolves `playwright` from
-`node_modules`:
+### Ad-hoc (one-off change verification)
+
+Drop a throwaway `screenshot.mjs` into `frontend/` and run from there:
 
 ```bash
 node screenshot.mjs
 ```
 
-The template:
-- Launches the downloaded Chrome with `--no-sandbox --disable-dev-shm-usage`.
-- Seeds `localStorage.user_auth_token` via `addInitScript` so the app
-  skips the login screen (without this, every route lands on the login page).
-- Logs page errors / warnings to stdout for debugging blank-page issues.
-- Waits for `<nav>` + a 2.5s settle to let MUI finish painting.
-- Captures `/tmp/agent-full.png` (full viewport) and `/tmp/agent-sidebar.png`
-  (cropped to the activity-bar + secondary-sidebar region).
-- Tries to open any "Zen Mode" tooltip button and captures the open menu.
+Use the template in `screenshot.mjs` (same directory as this file) as a
+starting point. It captures a single route and writes PNGs to `/tmp/`.
 
-Adjust the `BASE` URL path, the crop rects, and the post-action interactions
-for the specific change you're verifying.
+Key patterns:
+- Launch Chrome with `executablePath: CHROME` + `--no-sandbox --disable-dev-shm-usage`.
+- Seed `localStorage.user_auth_token` via `addInitScript` (skips login gate).
+- `page.setViewportSize({ width: 1440, height: 900 })` for consistent dimensions.
+- Wait for `<nav>` + a settle timeout to let MUI finish painting.
+
+**After capturing:** `SendUserFile` the PNGs, then clean up:
+```bash
+git checkout -- frontend/package.json
+rm -f frontend/package-lock.json frontend/screenshot.mjs
+```
+Do **not** commit `frontend/screenshot.mjs`, `package.json`, or `package-lock.json`.
+
+### Docs screenshots (committed script)
+
+`docs-screenshots.mjs` (this directory) captures all 9 product screenshots
+for `docs/images/` plus theme previews. Run from `frontend/`:
+
+```bash
+node ../.claude/skills/ui-preview/docs-screenshots.mjs
+```
+
+Output files (all at 1440×900, logical product story order):
+
+| File | Route | Notes |
+|------|-------|-------|
+| `1-dashboard.png` | `/dashboard/today` | Minute-interval sparklines |
+| `2-agents.png` | `/agent` | Agent selection overview |
+| `3-connect-ai.png` | `/credentials` | Connect AI dialog open |
+| `4-model-select.png` | `/agent/openai` | New Rule → ModelSelectDialog |
+| `5-claude-code.png` | `/agent/claude_code` | Routing rules |
+| `6-routing.png` | `/agent/openai` | Smart routing diagram |
+| `7-remote.png` | `/remote-control/telegram` | Telegram bot |
+| `8-guardrails.png` | `/guardrails` | Policies |
+| `9-heatmap.png` | `/overview/180d` | Token heatmap |
+| `theme-preview/*.png` | `/dashboard/today` | light / dark / claude |
+
+After capturing, force-add the images (`docs/` is gitignored):
+```bash
+git add -f docs/images/*.png docs/images/theme-preview/*.png docs/images/output.gif
+```
+
+Regenerate the animated GIF:
+```bash
+cd docs/images
+python3 create_gif.py 1-dashboard.png 2-agents.png 3-connect-ai.png \
+  4-model-select.png 5-claude-code.png 6-routing.png 7-remote.png \
+  8-guardrails.png 9-heatmap.png -o output.gif -d 1800
+```
 
 ## After capturing
 
 1. `SendUserFile` the PNGs so the user sees them.
-2. Clean up local-only tooling (see "Setup" above) — the stop hook will
-   complain otherwise.
+2. For ad-hoc scripts: clean up local-only tooling (see "Setup" above) — the
+   stop hook will complain otherwise.
 3. Optionally `pkill -f "vite --mode mock"` to free the port.
 
 ## Regression tests (committed)

@@ -105,7 +105,7 @@ Any application is ready to use.
 
 > We've provided detailed config guide in application
 
-![Agent Integration Demo](./docs/images/4-model-select.png)
+![Agent Integration Demo](./docs/images/5-claude-code.png)
 
 </details>
 
