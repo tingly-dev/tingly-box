@@ -336,8 +336,6 @@ export default {
   },
   "templateActions": {
     "troubleshoot": "错误检查",
-    "collapse": "收起",
-    "expand": "展开",
     "collapseAllRules": "收起所有规则",
     "expandAllRules": "展开所有规则",
     "connectAI": "连接 AI",

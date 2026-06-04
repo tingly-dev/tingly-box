@@ -8,7 +8,7 @@ import {
     UnfoldMore as UnfoldMoreIcon,
     Speed as SpeedIcon,
 } from '@/components/icons';
-import { Button, Stack, Tooltip } from '@mui/material';
+import { Button, IconButton, Stack, Tooltip } from '@mui/material';
 import { ProbeMenu } from '@/components/probe';
 
 export interface TemplatePageActionsProps {
@@ -51,7 +51,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     };
 
     return (
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
             {onViewLogs && (
                 <Button
                     variant="outlined"
@@ -61,18 +61,6 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                 >
                     {t('templateActions.troubleshoot')}
                 </Button>
-            )}
-            {showExpandCollapseButton && collapsible && (
-                <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
-                    <Button
-                        variant="outlined"
-                        startIcon={allExpanded ? <UnfoldMoreIcon/> : <ExpandMoreIcon/>}
-                        onClick={onToggleExpandAll}
-                        size="small"
-                    >
-                        {allExpanded ? t('templateActions.collapse') : t('templateActions.expand')}
-                    </Button>
-                </Tooltip>
             )}
             {showAddApiKeyButton && (
                 <Tooltip title={t('templateActions.connectAI')}>
@@ -96,6 +84,13 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                     >
                         {t('templateActions.newRule')}
                     </Button>
+                </Tooltip>
+            )}
+            {showExpandCollapseButton && collapsible && (
+                <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
+                    <IconButton size="small" onClick={onToggleExpandAll}>
+                        {allExpanded ? <UnfoldMoreIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                    </IconButton>
                 </Tooltip>
             )}
         </Stack>

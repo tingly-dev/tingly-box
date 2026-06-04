@@ -335,8 +335,6 @@ export default {
   },
   "templateActions": {
     "troubleshoot": "Troubleshoot",
-    "collapse": "Collapse",
-    "expand": "Expand",
     "collapseAllRules": "Collapse all rules",
     "expandAllRules": "Expand all rules",
     "connectAI": "Connect AI",
