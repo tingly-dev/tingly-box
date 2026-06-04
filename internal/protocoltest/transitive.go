@@ -143,12 +143,18 @@ func (m *Matrix) RunTransitive(t *testing.T) {
 }
 
 // checkSemanticEquivalence verifies that two RoundTripResults carry the same
-// semantic payload despite being in different protocol formats. We compare
-// normalized fields rather than raw bytes.
+// semantic payload despite being in different protocol formats.
 func checkSemanticEquivalence(t *testing.T, chain TransitiveChain, r1, r2 *RoundTripResult) {
 	t.Helper()
+	assertSemanticEquivalence(t, chain.String(), r1, r2)
+}
 
-	label := chain.String()
+// assertSemanticEquivalence verifies that two RoundTripResults carry the same
+// semantic payload despite being in different protocol formats. We compare
+// normalized fields rather than raw bytes. label identifies the comparison in
+// failure messages.
+func assertSemanticEquivalence(t *testing.T, label string, r1, r2 *RoundTripResult) {
+	t.Helper()
 
 	// Role must match
 	if r1.Role != r2.Role {

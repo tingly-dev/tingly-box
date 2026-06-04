@@ -271,74 +271,41 @@ func (env *TestEnv) SendAs(t *testing.T, source, target protocol.APIType, s Scen
 		t.Fatalf("no route configured for source=%s target=%s scenario=%s — call SetupRoute first", source, target, s.Name)
 	}
 
-	path, body := buildRequest(source, requestModel, streaming)
-
-	result := &RoundTripResult{
-		SourceProtocol: source,
-		TargetProtocol: target,
-		ScenarioName:   s.Name,
-		IsStreaming:    streaming,
+	result, err := env.sendModel(source, target, s.Name, requestModel, streaming)
+	if err != nil {
+		t.Fatalf("send: %v", err)
 	}
-
-	if streaming {
-		url := env.gatewayServer.URL + path
-		req, err := http.NewRequest("POST", url, bytes.NewReader(body))
-		if err != nil {
-			t.Fatalf("new request: %v", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+env.modelToken)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("do streaming request: %v", err)
-		}
-		defer resp.Body.Close()
-
-		result.HTTPStatus = resp.StatusCode
-		result.StreamEvents, result.RawBody = sse.ReadSSELines(resp.Body)
-		fillFromParsedResult(result, sse.ParsedResult{}, sourceToStyle(source), true)
-		parsed := assembleFromEvents(result.StreamEvents, sourceToStyle(source))
-		fillFromParsedResult(result, parsed, sourceToStyle(source), true)
-	} else {
-		req, err := http.NewRequest("POST", path, bytes.NewReader(body))
-		if err != nil {
-			t.Fatalf("new request: %v", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+env.modelToken)
-
-		w := httptest.NewRecorder()
-		env.ginEngine.ServeHTTP(w, req)
-
-		result.HTTPStatus = w.Code
-		result.RawBody = w.Body.Bytes()
-		parsed := parseFromJSON(result.RawBody, sourceToStyle(source))
-		fillFromParsedResult(result, parsed, sourceToStyle(source), false)
-	}
-
 	return result
 }
 
 // SendAsCLI sends a request to the gateway as the given source protocol,
 // using the request model configured by SetupRoute, and returns the parsed result.
 // This version is for CLI use and returns errors instead of calling t.Fatalf.
-//
-// Streaming requests use the real httptest.Server (env.gatewayServer) because
-// httptest.ResponseRecorder does not support Gin's streaming/SSE machinery.
-// Non-streaming requests use the recorder for simplicity.
 func (env *TestEnv) SendAsCLI(source, target protocol.APIType, s Scenario, streaming bool) (*RoundTripResult, error) {
 	requestModel := env.findRouteModel(source, target, s.Name)
 	if requestModel == "" {
 		return nil, fmt.Errorf("no route configured for source=%s target=%s scenario=%s — call SetupRoute first", source, target, s.Name)
 	}
 
+	return env.sendModel(source, target, s.Name, requestModel, streaming)
+}
+
+// sendModel sends a request to the gateway as the given source protocol using
+// an explicit request model, and parses the response into a RoundTripResult.
+// It is the shared core behind SendAs / SendAsCLI and the idempotency harness,
+// which needs to drive different models (baseline vs. round-trip) through the
+// same gateway. The target/scenarioName arguments are response metadata only.
+//
+// Streaming requests use the real httptest.Server (env.gatewayServer) because
+// httptest.ResponseRecorder does not support Gin's streaming/SSE machinery.
+// Non-streaming requests use the recorder for simplicity.
+func (env *TestEnv) sendModel(source, target protocol.APIType, scenarioName, requestModel string, streaming bool) (*RoundTripResult, error) {
 	path, body := buildRequest(source, requestModel, streaming)
 
 	result := &RoundTripResult{
 		SourceProtocol: source,
 		TargetProtocol: target,
-		ScenarioName:   s.Name,
+		ScenarioName:   scenarioName,
 		IsStreaming:    streaming,
 	}
 
