@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Add as AddIcon,
     BugReport as TroubleshootIcon,
@@ -36,6 +37,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     onViewLogs,
     scenario,
 }) => {
+    const { t } = useTranslation();
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
     const probeMenuOpen = Boolean(probeAnchorEl);
 
@@ -57,42 +59,42 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                     onClick={onViewLogs}
                     size="small"
                 >
-                    Troubleshoot
+                    {t('templateActions.troubleshoot')}
                 </Button>
             )}
             {showExpandCollapseButton && collapsible && (
-                <Tooltip title={allExpanded ? "Collapse all rules" : "Expand all rules"}>
+                <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
                     <Button
                         variant="outlined"
                         startIcon={allExpanded ? <UnfoldMoreIcon/> : <ExpandMoreIcon/>}
                         onClick={onToggleExpandAll}
                         size="small"
                     >
-                        {allExpanded ? "Collapse" : "Expand"}
+                        {allExpanded ? t('templateActions.collapse') : t('templateActions.expand')}
                     </Button>
                 </Tooltip>
             )}
             {showAddApiKeyButton && (
-                <Tooltip title="Connect AI">
+                <Tooltip title={t('templateActions.connectAI')}>
                     <Button
                         variant="outlined"
                         startIcon={<KeyIcon/>}
                         onClick={onAddApiKeyClick}
                         size="small"
                     >
-                        Connect AI
+                        {t('templateActions.connectAI')}
                     </Button>
                 </Tooltip>
             )}
             {allowAddRule && (
-                <Tooltip title="Create new routing rule">
+                <Tooltip title={t('templateActions.createNewRule')}>
                     <Button
                         variant="contained"
                         startIcon={<AddIcon/>}
                         onClick={onCreateRule}
                         size="small"
                     >
-                        New Rule
+                        {t('templateActions.newRule')}
                     </Button>
                 </Tooltip>
             )}

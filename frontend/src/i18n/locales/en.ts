@@ -333,6 +333,16 @@ export default {
       "closeTooltip": "Close"
     }
   },
+  "templateActions": {
+    "troubleshoot": "Troubleshoot",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "collapseAllRules": "Collapse all rules",
+    "expandAllRules": "Expand all rules",
+    "connectAI": "Connect AI",
+    "newRule": "New Rule",
+    "createNewRule": "Create new routing rule"
+  },
   "rule": {
     "pageTitle": "Advanced Proxy Configuration",
     "subtitle": "Configure local models to forward requests to remote providers",

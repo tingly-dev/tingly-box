@@ -334,6 +334,16 @@ export default {
       "closeTooltip": "关闭"
     }
   },
+  "templateActions": {
+    "troubleshoot": "错误检查",
+    "collapse": "收起",
+    "expand": "展开",
+    "collapseAllRules": "收起所有规则",
+    "expandAllRules": "展开所有规则",
+    "connectAI": "连接 AI",
+    "newRule": "新建规则",
+    "createNewRule": "创建新的路由规则"
+  },
   "rule": {
     "pageTitle": "高级代理配置",
     "subtitle": "配置本地模型以将请求转发到远程提供商",
