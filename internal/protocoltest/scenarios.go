@@ -70,6 +70,7 @@ func AllScenarios() []Scenario {
 		MultiTurnScenario(),
 		StreamingTextScenario(),
 		StreamingToolUseScenario(),
+		IncompleteScenario(),
 		ErrorScenario(),
 	}
 }
@@ -445,6 +446,198 @@ func StreamingToolUseScenario() Scenario {
 // ─── Error ────────────────────────────────────────────────────────────────────
 
 // ErrorScenario tests that provider error responses are forwarded to the client.
+// ─── Incomplete ──────────────────────────────────────────────────────────────
+
+// IncompleteScenario exercises the max-output-tokens truncation path.
+// The provider returns a partial response that was cut short; the gateway
+// must preserve the partial content and map the finish reason correctly
+// (Chat → "length", Anthropic → "max_tokens", Responses → "incomplete").
+func IncompleteScenario() Scenario {
+	return Scenario{
+		Name:        "incomplete",
+		Description: "Provider truncated response due to max_output_tokens",
+		Tags:        []string{"incomplete", "length"},
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      openAIIncompleteResponse(),
+			FormatOpenAIResponses: openAIResponsesIncompleteResponse(),
+			FormatAnthropic:       anthropicIncompleteResponse(),
+			FormatGoogle:          googleIncompleteResponse(),
+		},
+		Assertions: []Assertion{
+			AssertHTTPStatus(200),
+			AssertRoleEquals("assistant"),
+			AssertContentContains("truncated"),
+			AssertContentNonEmpty(),
+			AssertUsageNonZero(),
+		},
+	}
+}
+
+func openAIIncompleteResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":      "chatcmpl-validate-incomplete",
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   "gpt-4o",
+		"choices": []map[string]interface{}{
+			{
+				"index": 0,
+				"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": "This response was truncated due to output limit.",
+				},
+				"finish_reason": "length",
+			},
+		},
+		"usage": map[string]interface{}{
+			"prompt_tokens":     10,
+			"completion_tokens": 50,
+			"total_tokens":      60,
+		},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    openAIIncompleteSSE,
+	}
+}
+
+func anthropicIncompleteResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":   "msg-validate-incomplete",
+		"type": "message",
+		"role": "assistant",
+		"content": []map[string]interface{}{
+			{"type": "text", "text": "This response was truncated due to output limit."},
+		},
+		"model":         "claude-3-5-sonnet-20241022",
+		"stop_reason":   "max_tokens",
+		"stop_sequence": nil,
+		"usage": map[string]interface{}{
+			"input_tokens":  10,
+			"output_tokens": 50,
+		},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    anthropicIncompleteSSE,
+	}
+}
+
+func googleIncompleteResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"candidates": []map[string]interface{}{
+			{
+				"content": map[string]interface{}{
+					"role": "model",
+					"parts": []map[string]interface{}{
+						{"text": "This response was truncated due to output limit."},
+					},
+				},
+				"finishReason": "MAX_TOKENS",
+				"index":        0,
+			},
+		},
+		"usageMetadata": map[string]interface{}{
+			"promptTokenCount":     10,
+			"candidatesTokenCount": 50,
+			"totalTokenCount":      60,
+		},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    googleIncompleteSSE,
+	}
+}
+
+func openAIResponsesIncompleteResponse() MockResponseBuilder {
+	body := map[string]interface{}{
+		"id":     "resp-validate-incomplete",
+		"object": "realtime.response",
+		"model":  "gpt-4o",
+		"status": "incomplete",
+		"incomplete_details": map[string]interface{}{
+			"reason": "max_output_tokens",
+		},
+		"output": []map[string]interface{}{
+			{
+				"id":     "item-validate-incomplete",
+				"type":   "message",
+				"role":   "assistant",
+				"status": "incomplete",
+				"content": []map[string]interface{}{
+					{"type": "output_text", "text": "This response was truncated due to output limit."},
+				},
+			},
+		},
+		"usage": map[string]interface{}{
+			"input_tokens":  10,
+			"output_tokens": 50,
+			"total_tokens":  60,
+		},
+	}
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+		Stream:    openAIResponsesIncompleteSSE,
+	}
+}
+
+func openAIIncompleteSSE() []string {
+	return []string{
+		`data: {"id":"chatcmpl-validate-incomplete","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-validate-incomplete","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"This response was truncated due to output limit."},"finish_reason":null}]}`,
+		`data: {"id":"chatcmpl-validate-incomplete","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":50,"total_tokens":60}}`,
+		`data: [DONE]`,
+	}
+}
+
+func anthropicIncompleteSSE() []string {
+	return []string{
+		`event: message_start`,
+		`data: {"type":"message_start","message":{"id":"msg-validate-incomplete","type":"message","role":"assistant","content":[],"model":"claude-3-5-sonnet-20241022","stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}`,
+		`event: content_block_start`,
+		`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+		`event: content_block_delta`,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"This response was truncated due to output limit."}}`,
+		`event: content_block_stop`,
+		`data: {"type":"content_block_stop","index":0}`,
+		`event: message_delta`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"max_tokens","stop_sequence":null},"usage":{"output_tokens":50}}`,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+	}
+}
+
+func googleIncompleteSSE() []string {
+	chunk := map[string]interface{}{
+		"candidates": []map[string]interface{}{
+			{
+				"content": map[string]interface{}{
+					"role":  "model",
+					"parts": []map[string]interface{}{{"text": "This response was truncated due to output limit."}},
+				},
+				"finishReason": "MAX_TOKENS",
+				"index":        0,
+			},
+		},
+	}
+	return []string{
+		"data: " + string(mustMarshal(chunk)),
+	}
+}
+
+func openAIResponsesIncompleteSSE() []string {
+	return []string{
+		`data: {"type":"response.created","response":{"id":"resp-validate-incomplete","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.output_item.added","response_id":"resp-validate-incomplete","item":{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
+		`data: {"type":"response.output_text.delta","response_id":"resp-validate-incomplete","item_id":"item-validate-incomplete","output_index":0,"content_index":0,"delta":"This response was truncated due to output limit."}`,
+		`data: {"type":"response.output_text.done","response_id":"resp-validate-incomplete","item_id":"item-validate-incomplete","output_index":0,"content_index":0,"text":"This response was truncated due to output limit."}`,
+		`data: {"type":"response.incomplete","response":{"id":"resp-validate-incomplete","object":"realtime.response","model":"gpt-4o","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"incomplete","content":[{"type":"output_text","text":"This response was truncated due to output limit."}]}],"usage":{"input_tokens":10,"output_tokens":50,"total_tokens":60}}}`,
+		`data: [DONE]`,
+	}
+}
+
+// ─── Error ───────────────────────────────────────────────────────────────────
+
 func ErrorScenario() Scenario {
 	return Scenario{
 		Name:        "error",
