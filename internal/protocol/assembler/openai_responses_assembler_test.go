@@ -315,17 +315,21 @@ func TestResponsesAssembler_Finish(t *testing.T) {
 		}
 	})
 
-	t.Run("incomplete response", func(t *testing.T) {
+	t.Run("incomplete response with upstream body", func(t *testing.T) {
 		assembler := NewResponsesAssembler()
 
 		event := responses.ResponseStreamEventUnion{
 			Type: "response.incomplete",
+			Response: responses.Response{
+				ID:     "resp-incomplete-test",
+				Status: "incomplete",
+			},
 		}
 		assembler.Accumulate(event)
 
 		result := assembler.Finish()
-		if result != nil {
-			t.Error("Finish should return nil for incomplete status")
+		if result == nil {
+			t.Error("Finish should return upstream incomplete response")
 		}
 	})
 
@@ -815,5 +819,32 @@ func TestResponsesAssembler_MultipleImages(t *testing.T) {
 	// Verify first call ID at index 0
 	if assembler.ImageCallIDAt(0) != "img-0" {
 		t.Errorf("expected 'img-0' at index 0, got '%s'", assembler.ImageCallIDAt(0))
+	}
+}
+
+func TestResponsesAssembler_FinishIncompleteWithAccumulatedOutput(t *testing.T) {
+	assembler := NewResponsesAssemblerWithID("resp-incomplete", "msg-incomplete")
+
+	events := []responses.ResponseStreamEventUnion{
+		{Type: "response.created", Response: responses.Response{ID: "resp-incomplete"}},
+		{Type: "response.output_text.delta", Delta: "partial answer"},
+		{Type: "response.incomplete", Response: responses.Response{ID: "resp-incomplete", Status: "incomplete"}},
+	}
+	for _, event := range events {
+		assembler.Accumulate(event)
+	}
+
+	result := assembler.Finish()
+	if result == nil {
+		t.Fatal("Finish should preserve incomplete responses with streamed output")
+	}
+	if result.Status != "incomplete" {
+		t.Errorf("expected incomplete status, got %q", result.Status)
+	}
+	if len(result.Output) != 1 {
+		t.Fatalf("expected one synthetic output item, got %d", len(result.Output))
+	}
+	if result.Output[0].Content[0].Text != "partial answer" {
+		t.Errorf("expected accumulated text, got %q", result.Output[0].Content[0].Text)
 	}
 }

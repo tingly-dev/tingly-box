@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	usageconv "github.com/tingly-dev/tingly-box/internal/protocol/usage"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -192,20 +193,21 @@ func HandleResponsesToOpenAIChatStream(
 			}
 
 		case "response.completed":
-			state.cacheTokens = evt.Response.Usage.InputTokensDetails.CachedTokens
-			state.inputTokens = evt.Response.Usage.InputTokens - state.cacheTokens
-			state.outputTokens = evt.Response.Usage.OutputTokens
-			state.reasoningTokens = evt.Response.Usage.OutputTokensDetails.ReasoningTokens
-			if evt.Response.Usage.TotalTokens != 0 {
-				state.totalTokens = evt.Response.Usage.TotalTokens
-			} else {
-				state.totalTokens = state.inputTokens + state.outputTokens
-			}
+			applyResponsesToChatUsage(state, evt.Response.Usage)
 			flushResponsesToChatCompletedOutput(c, flusher, state, responseModel, evt.Response.Output)
-			finishReason := "stop"
-			if state.hasToolCalls {
-				finishReason = openaiFinishReasonToolCalls
-			}
+			finishReason := responsesToChatFinishReason(&evt.Response, state.hasToolCalls)
+			writeResponsesToChatFinalChunk(c, flusher, state, responseModel, finishReason, !hc.DisableStreamUsage)
+			state.completed = true
+
+		case "response.incomplete":
+			// `response.incomplete` is a terminal Responses API event, not a
+			// transport interruption. Long Codex tasks can legitimately stop here
+			// because of max_output_tokens/content_filter while still carrying
+			// assistant output and final usage. Preserve it as a Chat terminal
+			// chunk instead of falling through to the post-loop usage=0 fallback.
+			applyResponsesToChatUsage(state, evt.Response.Usage)
+			flushResponsesToChatCompletedOutput(c, flusher, state, responseModel, evt.Response.Output)
+			finishReason := responsesToChatFinishReason(&evt.Response, state.hasToolCalls)
 			writeResponsesToChatFinalChunk(c, flusher, state, responseModel, finishReason, !hc.DisableStreamUsage)
 			state.completed = true
 
@@ -254,6 +256,37 @@ func HandleResponsesToOpenAIChatStream(
 	flusher.Flush()
 
 	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
+}
+
+func applyResponsesToChatUsage(state *responsesToChatState, responsesUsage responses.ResponseUsage) {
+	if state == nil {
+		return
+	}
+	usage := usageconv.FromOpenAIResponses(responsesUsage)
+	state.inputTokens = int64(usage.InputTokens)
+	state.outputTokens = int64(usage.OutputTokens)
+	state.cacheTokens = int64(usage.CacheInputTokens)
+	state.reasoningTokens = int64(usage.ReasoningTokens)
+	if responsesUsage.TotalTokens != 0 {
+		state.totalTokens = responsesUsage.TotalTokens
+	} else {
+		state.totalTokens = responsesUsage.InputTokens + responsesUsage.OutputTokens
+	}
+}
+
+func responsesToChatFinishReason(resp *responses.Response, hasToolCalls bool) string {
+	if hasToolCalls {
+		return openaiFinishReasonToolCalls
+	}
+	if resp != nil && resp.Status == responses.ResponseStatusIncomplete {
+		switch resp.IncompleteDetails.Reason {
+		case "max_output_tokens":
+			return "length"
+		case "content_filter":
+			return "content_filter"
+		}
+	}
+	return "stop"
 }
 
 func writeResponsesToChatRoleChunk(c *gin.Context, flusher http.Flusher, state *responsesToChatState, responseModel string) {

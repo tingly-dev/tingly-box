@@ -208,8 +208,15 @@ func (a *ResponsesAssembler) Accumulate(event responses.ResponseStreamEventUnion
 		return true
 
 	case "response.incomplete":
+		// Incomplete is a terminal Responses status for cases such as
+		// max_output_tokens/content_filter. It is not equivalent to a broken
+		// transport stream: the terminal event may contain valid output and
+		// final usage, and long Codex tasks rely on that partial response.
 		a.status = "incomplete"
 		a.finished = true
+		if responseHasPayload(&event.Response) {
+			a.response = &event.Response
+		}
 		return true
 
 	// Error event
@@ -341,14 +348,79 @@ func (a *ResponsesAssembler) Finish() *responses.Response {
 		return nil
 	}
 
-	// If we have a completed response, return it
+	// If the upstream sent a terminal response, preserve it. Incomplete
+	// Responses can still contain useful assistant output and usage; callers
+	// should inspect Status() instead of treating them as assembly failure.
 	if a.response != nil {
+		a.ensureResponseHasAccumulatedOutput(a.response)
 		return a.response
 	}
 
-	// For incomplete/failed streams, return nil
-	// The caller can check Status() to determine what happened
+	// Some providers emit text deltas and then terminate incomplete without a
+	// full response object. Return a best-effort incomplete response rather than
+	// discarding the already streamed assistant message; callers can still see
+	// Status()=="incomplete" and decide whether to continue/retry.
+	if a.IsIncomplete() && (a.accumulatedText != "" || a.currentRefusal != "") {
+		resp := a.syntheticResponse("incomplete")
+		a.response = resp
+		return resp
+	}
+
+	// Failed/error streams without a response body are not recoverable here.
 	return nil
+}
+
+func responseHasPayload(resp *responses.Response) bool {
+	if resp == nil {
+		return false
+	}
+	return resp.ID != "" || len(resp.Output) > 0 || resp.Usage.InputTokens != 0 || resp.Usage.OutputTokens != 0 || resp.Usage.TotalTokens != 0
+}
+
+func (a *ResponsesAssembler) ensureResponseHasAccumulatedOutput(resp *responses.Response) {
+	if resp == nil || len(resp.Output) > 0 {
+		return
+	}
+	if a.accumulatedText == "" && a.currentRefusal == "" {
+		return
+	}
+	resp.Output = a.syntheticOutputItems(resp.Status)
+}
+
+func (a *ResponsesAssembler) syntheticResponse(status string) *responses.Response {
+	return &responses.Response{
+		ID:        a.GetOrCreateResponseID(),
+		CreatedAt: float64(a.createdAt),
+		Status:    responses.ResponseStatus(status),
+		Output:    a.syntheticOutputItems(responses.ResponseStatus(status)),
+	}
+}
+
+func (a *ResponsesAssembler) syntheticOutputItems(status responses.ResponseStatus) []responses.ResponseOutputItemUnion {
+	itemStatus := "completed"
+	if status == responses.ResponseStatusIncomplete {
+		itemStatus = "incomplete"
+	}
+	content := make([]responses.ResponseOutputMessageContentUnion, 0, 2)
+	if a.accumulatedText != "" {
+		content = append(content, responses.ResponseOutputMessageContentUnion{
+			Type: "output_text",
+			Text: a.accumulatedText,
+		})
+	}
+	if a.currentRefusal != "" {
+		content = append(content, responses.ResponseOutputMessageContentUnion{
+			Type:    "refusal",
+			Refusal: a.currentRefusal,
+		})
+	}
+	return []responses.ResponseOutputItemUnion{{
+		ID:      a.GetOrCreateItemID(),
+		Type:    "message",
+		Role:    "assistant",
+		Status:  itemStatus,
+		Content: content,
+	}}
 }
 
 // GetOrCreateResponseID returns the response ID, generating one if not set.
