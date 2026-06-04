@@ -149,6 +149,10 @@ const CredentialPage = () => {
             setOAuthDialogOpen(true);
             return;
         }
+        if (selection.kind === 'import') {
+            setShowImportModal(true);
+            return;
+        }
         if (selection.kind === 'custom') {
             setFromConnectPicker(true);
             setIsCustomMode(true);

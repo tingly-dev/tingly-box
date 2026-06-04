@@ -6,6 +6,7 @@ import type { ConnectSelection } from '@/components/ConnectProviderDialog';
 interface UseProviderDialogOptions {
     defaultApiStyle?: 'openai' | 'anthropic' | undefined;
     onProviderAdded?: () => void;
+    onImport?: () => void;
 }
 
 interface UseProviderDialogReturn {
@@ -39,7 +40,7 @@ export const useProviderDialog = (
     showNotification: (message: string, severity: 'success' | 'error') => void,
     options: UseProviderDialogOptions = {}
 ): UseProviderDialogReturn => {
-    const { defaultApiStyle, onProviderAdded } = options;
+    const { defaultApiStyle, onProviderAdded, onImport } = options;
 
     const [providerDialogOpen, setProviderDialogOpen] = useState(false);
     const [connectDialogOpen, setConnectDialogOpen] = useState(false);
@@ -67,6 +68,11 @@ export const useProviderDialog = (
         setFromConnectPicker(true);
 
         if (selection.kind === 'oauth') {
+            return;
+        }
+
+        if (selection.kind === 'import') {
+            onImport?.();
             return;
         }
 

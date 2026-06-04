@@ -178,6 +178,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         onProviderAdded: () => {
             void onProvidersLoad?.();
         },
+        onImport: () => setShowImportModal(true),
     });
 
     const handleAddApiKeyClick = useCallback(() => {
@@ -336,8 +337,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
             allowAddRule={allowAddRule}
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
-            showImportButton={showImportButton}
-            onImportFromClipboard={handleImportFromClipboard}
             onViewLogs={scenario ? () => setLogDialogOpen(true) : undefined}
             scenario={scenario}
         />

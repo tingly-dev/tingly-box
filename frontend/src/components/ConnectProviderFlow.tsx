@@ -33,6 +33,9 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
             setOAuthDialogOpen(true);
             return;
         }
+        if (selection.kind === 'import') {
+            return;
+        }
         if (selection.kind === 'custom') {
             setIsLocalProvider(false);
             setProviderFormData({

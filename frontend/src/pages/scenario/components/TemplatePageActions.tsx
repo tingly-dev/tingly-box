@@ -5,7 +5,6 @@ import {
     ExpandMore as ExpandMoreIcon,
     Key as KeyIcon,
     UnfoldMore as UnfoldMoreIcon,
-    Upload as ImportIcon,
     Speed as SpeedIcon,
 } from '@/components/icons';
 import { Button, Stack, Tooltip } from '@mui/material';
@@ -20,8 +19,6 @@ export interface TemplatePageActionsProps {
     allowAddRule: boolean;
     onCreateRule: () => void;
     showExpandCollapseButton?: boolean;
-    showImportButton?: boolean;
-    onImportFromClipboard?: () => void;
     onViewLogs?: () => void;
     // Probe V2 props
     scenario?: string;
@@ -36,8 +33,6 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     allowAddRule,
     onCreateRule,
     showExpandCollapseButton = true,
-    showImportButton = true,
-    onImportFromClipboard,
     onViewLogs,
     scenario,
 }) => {
@@ -86,18 +81,6 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                         size="small"
                     >
                         Connect AI
-                    </Button>
-                </Tooltip>
-            )}
-            {showImportButton && onImportFromClipboard && (
-                <Tooltip title="Import rule and keys from file or clipboard">
-                    <Button
-                        variant="outlined"
-                        startIcon={<ImportIcon/>}
-                        onClick={onImportFromClipboard}
-                        size="small"
-                    >
-                        Import
                     </Button>
                 </Tooltip>
             )}

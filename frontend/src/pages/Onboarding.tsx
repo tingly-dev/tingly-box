@@ -86,6 +86,10 @@ const Onboarding: React.FC = () => {
             return;
         }
 
+        if (selection.kind === 'import') {
+            return;
+        }
+
         if (selection.kind === 'custom') {
             setIsCustomMode(true);
             openDialogWith(emptyForm());
