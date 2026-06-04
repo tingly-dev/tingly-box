@@ -365,11 +365,9 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     </>
                                 ) : (
                                     <>
-                                        <Alert severity="info" variant="outlined" sx={{ py: 0, px: 1, '& .MuiAlert-message': { py: 0.5 } }}>
-                                            <Typography variant="body2">
-                                                {installStepDescription || `Please install ${agentName} manually on your local machine.`} Copy the command below and run it in your terminal.
-                                            </Typography>
-                                        </Alert>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {installStepDescription || `Install ${agentName} on your local machine — copy and run the command below.`}
+                                        </Typography>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
                                             <Typography variant="body2" color="text.secondary" sx={{ minWidth: '80px' }}>npm official</Typography>
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
