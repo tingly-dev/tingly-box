@@ -10,7 +10,7 @@ import (
 // RunLoop drives a streaming response, handling client-disconnect detection,
 // first-chunk commitment, and per-step flushing. It is the shared primitive
 // used by both ProcessStream (typed-event hook pipeline) and raw-byte stream
-// handlers via stream.StreamLoop.
+// handlers.
 //
 // step should write to w and return true to continue or false to stop.
 // Returns true if the client disconnected mid-stream.
