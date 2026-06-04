@@ -655,3 +655,107 @@ func TestTierTactic_AllServicesHealthMonitorUnhealthy_AllBreakersOpen(t *testing
 	assert.Equal(t, 0, svc.Tier,
 		"all-open fallback should pick T0 to surface the real upstream error")
 }
+
+// TestTierTactic_AuthErrorStillFiltered verifies that auth errors (401/403)
+// are still filtered out for tier rules. Auth errors are permanent — a
+// revoked API key never self-heals — so the tier tactic should not keep
+// probing the broken service every 30 seconds via the breaker half-open cycle.
+func TestTierTactic_AuthErrorStillFiltered(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	broken := tierService("auth-broken", "m1", 0)
+	fallback := tierService("auth-fallback", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{broken, fallback},
+		Active:   true,
+	}
+
+	// T0 has a revoked API key → auth error.
+	hm.ReportAuthError(broken.ServiceID(), 401)
+
+	// The tier tactic should NOT pick T0 despite its breaker being closed.
+	for i := 0; i < 10; i++ {
+		svc, err := lb.SelectService(rule)
+		require.NoError(t, err)
+		require.NotNil(t, svc)
+		assert.Equal(t, fallback.Provider, svc.Provider,
+			fmt.Sprintf("attempt %d: auth-error service should be filtered", i))
+	}
+}
+
+// TestTierTactic_AuthErrorOnlyFiltersAuthNotRateLimit confirms the filter is
+// surgical: a T0 with a rate limit is kept (breaker handles it), while a T0
+// with an auth error is removed.
+func TestTierTactic_AuthErrorOnlyFiltersAuthNotRateLimit(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	rateLimited := tierService("auth-rl-p0", "m1", 0)
+	authBroken := tierService("auth-rl-p1", "m1", 0)
+	backup := tierService("auth-rl-p2", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{rateLimited, authBroken, backup},
+		Active:   true,
+	}
+
+	// One T0 is rate-limited (transient), the other has an auth error (permanent).
+	hm.ReportRateLimit(rateLimited.ServiceID())
+	hm.ReportAuthError(authBroken.ServiceID(), 403)
+
+	counts := map[string]int{}
+	for i := 0; i < 50; i++ {
+		svc, err := lb.SelectService(rule)
+		require.NoError(t, err)
+		require.NotNil(t, svc)
+		counts[svc.Provider]++
+	}
+
+	assert.Greater(t, counts[rateLimited.Provider], 0,
+		"rate-limited T0 should still be reachable (breaker handles transient failures)")
+	assert.Equal(t, 0, counts[authBroken.Provider],
+		"auth-error T0 should be filtered out")
+	assert.Equal(t, 0, counts[backup.Provider],
+		"T1 should not be picked while a healthy T0 exists")
+}
+
+// TestTierTactic_AllT0AuthError_FallsToT1 ensures that when every T0 service
+// has an auth error, the tier tactic falls to T1 via filtering, not via
+// breaker cycling.
+func TestTierTactic_AllT0AuthError_FallsToT1(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	t0a := tierService("allauth-a", "m1", 0)
+	t0b := tierService("allauth-b", "m1", 0)
+	t1 := tierService("allauth-c", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{t0a, t0b, t1},
+		Active:   true,
+	}
+
+	hm.ReportAuthError(t0a.ServiceID(), 401)
+	hm.ReportAuthError(t0b.ServiceID(), 403)
+
+	for i := 0; i < 10; i++ {
+		svc, err := lb.SelectService(rule)
+		require.NoError(t, err)
+		assert.Equal(t, t1.Provider, svc.Provider,
+			"all T0 auth errors should route to T1 immediately")
+	}
+}

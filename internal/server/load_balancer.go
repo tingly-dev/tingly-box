@@ -77,9 +77,10 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	}
 
 	// Tier tactic has its own circuit-breaker-based health management with
-	// fast recovery (30 s). Applying the HealthFilter here would hide
-	// services for the full monitor recovery window (5 min), defeating the
-	// tier tactic's quick failover/recovery design.
+	// fast recovery (30 s). The full HealthFilter would hide services for the
+	// monitor's recovery window (5 min), defeating the breaker's quick
+	// failover/recovery. However auth errors (401/403) are permanent — a
+	// revoked key never self-heals — so those must still be filtered out.
 	isTier := rule.LBTactic.Type == loadbalance.TacticTier
 
 	// Filter healthy services using health filter. When every active service is
@@ -91,7 +92,10 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	// real upstream error (e.g. 429) rather than a confusing routing error.
 	var healthyServices []*loadbalance.Service
 	if isTier {
-		healthyServices = activeServices
+		healthyServices = lb.healthFilter.FilterAuthErrors(activeServices)
+		if len(healthyServices) == 0 {
+			healthyServices = activeServices
+		}
 	} else {
 		healthyServices = lb.healthFilter.Filter(activeServices)
 		if len(healthyServices) == 0 {
