@@ -66,8 +66,14 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
     };
 
     return (
-        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-            <DialogTitle>Import Rule</DialogTitle>
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{sx: {maxHeight: '82vh', display: 'flex', flexDirection: 'column'}}}
+        >
+            <DialogTitle>Import</DialogTitle>
             <DialogContent>
                 <Tabs
                     value={tabValue}
