@@ -1019,6 +1019,54 @@ export const handlers = [
         })
     }),
 
+    // ── v1 provider models by UUID (used by ModelSelectDialog) ───────────────
+    http.get('/api/v1/provider-models/:uuid', ({ params }) => {
+        const { uuid } = params as { uuid: string }
+        const modelMap: Record<string, string[]> = {
+            'mock-provider-anthropic': [
+                'claude-opus-4-8',
+                'claude-sonnet-4-6',
+                'claude-sonnet-4-5',
+                'claude-haiku-4-5',
+                'claude-3-7-sonnet-latest',
+                'claude-3-5-haiku-latest',
+            ],
+            'mock-provider-openai': [
+                'gpt-4o',
+                'gpt-4o-mini',
+                'gpt-4-turbo',
+                'gpt-4.1',
+                'gpt-4.1-mini',
+                'o3',
+                'o4-mini',
+            ],
+            'mock-provider-openrouter': [
+                'deepseek/deepseek-r1',
+                'deepseek/deepseek-v3',
+                'google/gemini-2.5-pro',
+                'google/gemini-2.5-flash',
+                'meta-llama/llama-4-maverick',
+                'qwen/qwen3-235b-a22b',
+            ],
+            'mock-provider-deepseek': [
+                'deepseek-chat',
+                'deepseek-reasoner',
+            ],
+            'mock-provider-gemini': [
+                'gemini-2.5-pro',
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+            ],
+            'mock-provider-glm': [
+                'glm-4-plus',
+                'glm-4-air',
+                'glm-z1-flash',
+            ],
+        }
+        const models = modelMap[uuid] ?? []
+        return HttpResponse.json({ success: true, data: { models } })
+    }),
+
     http.get('/api/provider-models', () => {
         return HttpResponse.json({
             success: true,
