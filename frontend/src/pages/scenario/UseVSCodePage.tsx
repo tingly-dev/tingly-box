@@ -2,6 +2,7 @@ import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
 import AgentSetupCard, { hasModelOnAnyRule, scrollToModelsCard } from './components/AgentSetupCard';
+import ConnectProviderFlow from '@/components/ConnectProviderFlow';
 import { Box, Button, Tooltip, IconButton } from '@mui/material';
 import { Info as InfoIcon } from '@/components/icons';
 import { useState } from 'react';
@@ -20,12 +21,14 @@ const UseVSCodePageContent: React.FC = () => {
     const {
         isLoading,
         notification,
+        showNotification,
         copyToClipboard,
         baseUrl,
         rules,
     } = useScenarioPageInternal(scenario);
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [connectProviderOpen, setConnectProviderOpen] = useState(false);
 
     const handleOpenConfigModal = () => {
         setConfigModalOpen(true);
@@ -83,6 +86,7 @@ const UseVSCodePageContent: React.FC = () => {
                     viewConfigButtonLabel="Open Guide"
                     hasModelSelected={hasModelOnAnyRule(rules)}
                     onSelectModel={scrollToModelsCard}
+                    onConnectProvider={() => setConnectProviderOpen(true)}
                 />
 
                 <TemplatePage
@@ -95,6 +99,13 @@ const UseVSCodePageContent: React.FC = () => {
                 <VSCodeConfigModal
                     open={configModalOpen}
                     onClose={() => setConfigModalOpen(false)}
+                />
+
+                <ConnectProviderFlow
+                    open={connectProviderOpen}
+                    onClose={() => setConnectProviderOpen(false)}
+                    showNotification={showNotification}
+                    onProviderAdded={() => window.location.reload()}
                 />
             </CardGrid>
         </PageLayout>

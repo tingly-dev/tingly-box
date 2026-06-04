@@ -1,4 +1,5 @@
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
+import { CheckCircle as CheckCircleIcon } from '@/components/icons';
 import { ExpandLess as ExpandLessIcon } from '@/components/icons';
 import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import {
@@ -10,23 +11,17 @@ import {
     Collapse,
     IconButton,
     Stack,
-    Step,
-    StepLabel,
-    Stepper,
     Tooltip,
     Typography,
+    alpha,
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
 
 export interface AgentApplyResult {
     success: boolean;
     files?: string[];
-    // Optional structured breakdown for callers that want richer feedback
-    // (e.g. the Claude Code modal). Existing consumers can keep using
-    // `files` alone — these are additive and may be undefined.
     createdFiles?: string[];
     updatedFiles?: string[];
     backupPaths?: string[];
@@ -56,19 +51,15 @@ export interface AgentSetupCardProps {
     applyButtonLabel?: string;
     applySuccessLabel?: string;
     viewConfigButtonLabel?: string;
-    /** Whether at least one rule has a service with both a provider and model set. */
     hasModelSelected?: boolean;
-    /** Triggered when the user clicks the Step 4 CTA — usually scrolls the page to the rules card. */
     onSelectModel?: () => void;
+    onConnectProvider?: () => void;
 }
 
 const COLLAPSED_KEY = (agentKey: string) => `setup-card-collapsed-${agentKey}`;
-// Storage key names retain their `step2`/`step3` suffixes for backward compat
-// even though those steps moved to positions 3 and 4 in the UI.
 const INSTALL_DONE_KEY = (agentKey: string) => `setup-card-step2-done-${agentKey}`;
 const APPLY_DONE_KEY = (agentKey: string) => `setup-card-step3-done-${agentKey}`;
 const TOTAL_STEPS = 4;
-const STEP_LABELS = ['Provider', 'Model', 'Install', 'Apply'] as const;
 
 /** True iff at least one rule has a service with both a non-empty provider and model. */
 export const hasModelOnAnyRule = (rules: any[] | null | undefined): boolean =>
@@ -82,6 +73,22 @@ export const scrollToModelsCard = () => {
         block: 'start',
     });
 };
+
+const StepIndicator: React.FC<{ step: number; done: boolean; active: boolean }> = ({ step, done, active }) => (
+    done ? (
+        <CheckCircleIcon sx={{ fontSize: 22, color: 'success.main', flexShrink: 0 }} />
+    ) : (
+        <Box sx={{
+            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            bgcolor: active ? 'primary.main' : 'action.disabledBackground',
+            color: active ? 'primary.contrastText' : 'text.disabled',
+            fontSize: '0.7rem', fontWeight: 700,
+        }}>
+            {step}
+        </Box>
+    )
+);
 
 const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     agentKey,
@@ -101,9 +108,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     viewConfigButtonLabel = 'Config',
     hasModelSelected = false,
     onSelectModel,
+    onConnectProvider,
 }) => {
-    // We read the stored collapsed preference once on mount so the auto-collapse
-    // effect below can distinguish "user has not chosen" from "user chose expanded".
     const initialCollapsedPref = useRef<string | null>(localStorage.getItem(COLLAPSED_KEY(agentKey)));
     const [collapsed, setCollapsed] = useState(initialCollapsedPref.current === 'true');
     const [installDone, setInstallDone] = useState(
@@ -134,72 +140,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         return () => { cancelled = true; };
     }, []);
 
-    // Step order: 1) Provider, 2) Model, 3) Install, 4) Apply
     const providerDone = hasProvider;
     const modelDone = hasModelSelected;
     const allDone = providerDone && modelDone && installDone && applyDone;
     const doneCount = [providerDone, modelDone, installDone, applyDone].filter(Boolean).length;
-    const activeStep = !providerDone ? 0 : !modelDone ? 1 : !installDone ? 2 : !applyDone ? 3 : 3;
-    const [stepCursor, setStepCursor] = useState(activeStep);
-    const [skipped, setSkipped] = useState<Set<number>>(new Set());
 
-    useEffect(() => {
-        setStepCursor(prev => (prev < activeStep ? activeStep : prev));
-    }, [activeStep]);
-
-    const isStepSkipped = (step: number) => skipped.has(step);
-    const handleNext = () => {
-        const nextSkipped = new Set(skipped);
-        nextSkipped.delete(stepCursor);
-        setSkipped(nextSkipped);
-        if (stepCursor === 2) {
-            localStorage.setItem(INSTALL_DONE_KEY(agentKey), 'true');
-            setInstallDone(true);
-        }
-        if (stepCursor >= TOTAL_STEPS - 1) {
-            localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
-            setApplyDone(true);
-            setCollapsed(true);
-            localStorage.setItem(COLLAPSED_KEY(agentKey), 'true');
-            return;
-        }
-        setStepCursor(prev => Math.min(prev + 1, TOTAL_STEPS - 1));
-    };
-    const handleBack = () => setStepCursor(prev => Math.max(prev - 1, 0));
-    const handleSkip = () => {
-        const nextSkipped = new Set(skipped);
-        nextSkipped.add(stepCursor);
-        setSkipped(nextSkipped);
-        if (stepCursor === 2) {
-            localStorage.setItem(INSTALL_DONE_KEY(agentKey), 'true');
-            setInstallDone(true);
-        }
-        if (stepCursor >= TOTAL_STEPS - 1) {
-            localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
-            setApplyDone(true);
-            setCollapsed(true);
-            localStorage.setItem(COLLAPSED_KEY(agentKey), 'true');
-            return;
-        }
-        setStepCursor(prev => Math.min(prev + 1, TOTAL_STEPS - 1));
-    };
-    const handleReset = () => {
-        localStorage.removeItem(COLLAPSED_KEY(agentKey));
-        localStorage.removeItem(INSTALL_DONE_KEY(agentKey));
-        localStorage.removeItem(APPLY_DONE_KEY(agentKey));
-        setCollapsed(false);
-        setInstallDone(false);
-        setApplyDone(false);
-        setApplyResult(null);
-        setCopied(false);
-        setCopiedMirror(false);
-        setSkipped(new Set());
-        setStepCursor(!providerDone ? 0 : !modelDone ? 1 : 2);
-    };
-
-    // Auto-collapse on first visit when every step is already complete, but only
-    // when the user hasn't expressed a preference. We wait for providerLoading
-    // so step1Done has settled before we decide.
     const autoCollapsedRef = useRef(false);
     useEffect(() => {
         if (autoCollapsedRef.current) return;
@@ -218,11 +163,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         setCollapsed(next);
     };
 
-    const handleApplyDone = () => {
-        localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
-        setApplyDone(true);
-    };
-
     const handleCopy = async () => {
         await navigator.clipboard.writeText(installCommand);
         setCopied(true);
@@ -236,12 +176,18 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         setTimeout(() => setCopiedMirror(false), 1500);
     };
 
+    const markInstallDone = () => {
+        localStorage.setItem(INSTALL_DONE_KEY(agentKey), 'true');
+        setInstallDone(true);
+    };
+
     const handleApply = async () => {
         if (!onApply) return;
         const result = await onApply();
         setApplyResult(result);
         if (result.success) {
-            handleApplyDone();
+            localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
+            setApplyDone(true);
         }
     };
 
@@ -250,37 +196,63 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         const result = await onApplyWithStatusLine();
         setApplyResult(result);
         if (result.success) {
-            handleApplyDone();
+            localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
+            setApplyDone(true);
         }
+    };
+
+    const handleReset = () => {
+        localStorage.removeItem(COLLAPSED_KEY(agentKey));
+        localStorage.removeItem(INSTALL_DONE_KEY(agentKey));
+        localStorage.removeItem(APPLY_DONE_KEY(agentKey));
+        setCollapsed(false);
+        setInstallDone(false);
+        setApplyDone(false);
+        setApplyResult(null);
+        setCopied(false);
+        setCopiedMirror(false);
     };
 
     const progressLabel = allDone ? 'Done' : `${doneCount}/${TOTAL_STEPS}`;
     const progressColor = allDone ? 'success' : 'default';
 
     const collapsedHint = !providerDone
-        ? 'Add a provider to get started'
+        ? 'Connect an AI provider to get started'
         : !modelDone
-            ? 'Pick a model'
+            ? 'Choose a model to continue'
             : !installDone
-                ? `Install ${agentName}`
-                : `${applyStepLabel} to finish`;
+                ? `Install ${agentName} on your machine`
+                : `One-click ${applyStepLabel} to finish`;
+
+    // Which step is the first incomplete one (determines which expands)
+    const firstIncomplete = !providerDone ? 0 : !modelDone ? 1 : !installDone ? 2 : !applyDone ? 3 : -1;
+
+    const stepRowSx = (done: boolean, active: boolean) => ({
+        py: active ? 1.25 : 0.75,
+        px: 1.5,
+        borderRadius: 1.5,
+        transition: 'background-color 0.15s ease',
+        ...(active && !done ? {
+            bgcolor: (theme: any) => alpha(theme.palette.primary.main, 0.04),
+            border: 1,
+            borderColor: 'divider',
+        } : {}),
+    });
 
     return (
         <UnifiedCard
             size="full"
             title={
                 <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                        Quick Start
-                    </Typography>
+                    <Typography variant="subtitle1" fontWeight={600}>Quick Start</Typography>
                     <Chip
                         label={progressLabel}
                         size="small"
                         color={progressColor as any}
-                        sx={{ height: 20, fontSize: '0.7rem' }}
+                        sx={{ height: 20, fontSize: '0.75rem' }}
                     />
                     {collapsed && !allDone && (
-                        <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
                             {collapsedHint}
                         </Typography>
                     )}
@@ -295,125 +267,197 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
             }
         >
             <Collapse in={!collapsed} unmountOnExit={false}>
-                <Stack spacing={2.5}>
-                    <Box sx={{ width: '100%', px: { xs: 0, sm: 1 }, pt: 0.5 }}>
-                    <Stepper activeStep={stepCursor} orientation="horizontal" alternativeLabel>
-                            <Step completed={providerDone}>
-                                <StepLabel optional={isStepSkipped(0) ? <Typography variant="caption">Skipped</Typography> : undefined}>{STEP_LABELS[0]}</StepLabel>
-                            </Step>
-                            <Step completed={modelDone}>
-                                <StepLabel optional={isStepSkipped(1) ? <Typography variant="caption">Skipped</Typography> : undefined}>{STEP_LABELS[1]}</StepLabel>
-                            </Step>
-                            <Step completed={installDone}>
-                                <StepLabel optional={isStepSkipped(2) ? <Typography variant="caption">Skipped</Typography> : undefined}>{STEP_LABELS[2]}</StepLabel>
-                            </Step>
-                            <Step completed={applyDone}>
-                                <StepLabel optional={isStepSkipped(3) ? <Typography variant="caption">Skipped</Typography> : undefined}>{STEP_LABELS[3]}</StepLabel>
-                            </Step>
-                    </Stepper>
+                <Stack spacing={0.5}>
+
+                    {/* Step 1 — Provider */}
+                    <Box sx={stepRowSx(providerDone, firstIncomplete === 0)}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                            {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
+                            <Typography variant="body2" fontWeight={500} color={providerDone ? 'text.primary' : firstIncomplete === 0 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                                Connect AI Provider
+                            </Typography>
+                            {providerDone && (
+                                <Typography variant="body2" color="text.secondary">
+                                    {providerCount} provider{providerCount !== 1 ? 's' : ''}
+                                </Typography>
+                            )}
+                            {providerDone && onConnectProvider && (
+                                <Button size="small" variant="text" onClick={onConnectProvider} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>+ Add</Button>
+                            )}
+                        </Stack>
+                        <Collapse in={!providerDone && firstIncomplete === 0}>
+                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using {agentName}.
+                                </Typography>
+                                <Box>
+                                    <Button size="small" variant="contained" onClick={onConnectProvider} sx={{ py: 0.25 }}>
+                                        Connect AI
+                                    </Button>
+                                </Box>
+                            </Stack>
+                        </Collapse>
                     </Box>
 
-                    <Stack spacing={1.5} sx={{ width: '100%', minHeight: 160, justifyContent: 'space-between', border: 1, borderColor: 'divider', borderRadius: 2, p: 1.5 }}>
-                        <Box sx={{ flex: 1 }}>
-                        {stepCursor === 0 && (
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                            {providerLoading ? <CircularProgress size={20} sx={{ mt: 0.2, flexShrink: 0 }} /> : null}
-                            <Box sx={{ flex: 1 }}>
-                                <Typography variant="body2" fontWeight={500} color={providerDone ? 'text.primary' : 'primary.main'}>
-                                    Step 1 — Add a Provider
-                                </Typography>
-                                {providerDone ? (
-                                    <Typography variant="caption" color="text.secondary">
-                                        {providerCount === 1
-                                            ? `${providerCount} provider ready`
-                                            : `${providerCount} providers ready`}
-                                    </Typography>
-                                ) : (
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
-                                        <Typography variant="caption" color="text.secondary">
-                                            An AI provider is required to use {agentName}.
-                                        </Typography>
-                                        <Button component={Link} to="/onboarding" size="small" variant="outlined" sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem' }}>
-                                            Add Provider
-                                        </Button>
-                                    </Stack>
-                                )}
-                            </Box>
-                        </Stack>
-                        )}
-
-                        {stepCursor === 1 && (
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                            <Box sx={{ flex: 1 }}>
-                                <Typography variant="body2" fontWeight={500} color={!providerDone ? 'text.disabled' : modelDone ? 'text.primary' : 'primary.main'}>
-                                    Step 2 — Select a Model
-                                </Typography>
-                                {modelDone ? (
-                                    <Typography variant="caption" color="text.secondary">Model selected — you're ready to go.</Typography>
-                                ) : (
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap" gap={1}>
-                                        <Typography variant="caption" color="text.secondary">Pick a model in <em>Models and Forwarding Rules</em> to start routing requests.</Typography>
-                                        {onSelectModel && <Button size="small" variant="outlined" disabled={!providerDone} onClick={onSelectModel} sx={{ flexShrink: 0, py: 0, fontSize: '0.7rem' }}>Choose Model</Button>}
-                                    </Stack>
-                                )}
-                            </Box>
-                        </Stack>
-                        )}
-
-                        {stepCursor === 2 && (
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" fontWeight={500} color={!modelDone ? 'text.disabled' : installDone ? 'text.primary' : 'primary.main'}>Step 3 — Install {agentName}</Typography>
-                            {installStepDescription && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                                    {installStepDescription}
-                                </Typography>
+                    {/* Step 2 — Model */}
+                    <Box sx={stepRowSx(modelDone, firstIncomplete === 1)}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                            <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
+                            <Typography variant="body2" fontWeight={500} color={modelDone ? 'text.primary' : firstIncomplete === 1 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                                Select a Model
+                            </Typography>
+                            {modelDone && (
+                                <Typography variant="body2" color="text.secondary">Configured</Typography>
                             )}
-                            {installActions?.length ? (
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ maxWidth: 520 }}>
-                                    {installActions.map((action) => (
-                                        <Button
-                                            key={`${action.label}-${action.href}`}
-                                            href={action.href}
-                                            target={action.external ? '_blank' : undefined}
-                                            rel={action.external ? 'noopener noreferrer' : undefined}
-                                            variant={action.variant ?? 'outlined'}
-                                            size="small"
-                                            disabled={!modelDone}
-                                            sx={{ flex: 1 }}
-                                        >
-                                            {action.label}
-                                        </Button>
-                                    ))}
-                                </Stack>
-                            ) : (
-                                <>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}><Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>npm official</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}><Tooltip title={copied ? 'Copied!' : 'Copy'}><IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip><Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: 'monospace', flex: 1, fontSize: '0.8rem', color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography></Box></Box>
-                                    {installMirrorCommand && (<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800, mt: 0.75 }}><Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', minWidth: '80px' }}>npm mirror</Typography><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}><Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}><IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip><Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: 'monospace', flex: 1, fontSize: '0.8rem', color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography></Box></Box>)}
-                                </>
+                            {modelDone && onSelectModel && (
+                                <Button size="small" variant="text" onClick={onSelectModel} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>Change</Button>
                             )}
-                        </Box></Stack>
-                        )}
-
-                        {stepCursor === 3 && (
-                        <Stack direction="row" spacing={1.5} alignItems="flex-start"><Box sx={{ flex: 1 }}><Typography variant="body2" fontWeight={500} color={!installDone ? 'text.disabled' : applyDone ? 'text.primary' : 'primary.main'}>Step 4 — {applyStepLabel}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>{applyStepDescription ?? `Write the proxy configuration to ${agentName}'s settings file.`}</Typography><Collapse in={!applyDone}><Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>{onApply && <Button variant="contained" size="small" disabled={!installDone || isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>{applyButtonLabel}</Button>}{onApplyWithStatusLine && <Button variant="outlined" size="small" disabled={!installDone || isApplyLoading} onClick={handleApplyWithStatusLine}>Auto Config + Status Line</Button>}{onViewConfig && <Button variant={onApply ? "outlined" : "contained"} size="small" disabled={!installDone} onClick={onViewConfig}>{viewConfigButtonLabel}</Button>}</Stack></Collapse>{applyResult && (<Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 1, py: 0.5 }}>{applyResult.success ? (<Box><Typography variant="caption" fontWeight={600}>{applySuccessLabel}</Typography>{applyResult.files?.map(f => (<Typography key={f} variant="caption" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>))}</Box>) : (<Typography variant="caption">{applyResult.error ?? 'Apply failed'}</Typography>)}</Alert>)}</Box></Stack>
-                        )}
-
-                        </Box>
-
-                        <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            alignItems="center"
-                            sx={{ pt: 1, borderTop: 1, borderColor: 'divider' }}
-                        >
-                            <Button size="small" onClick={handleReset} disabled={stepCursor === 0 && !installDone && !applyDone && skipped.size === 0}>Reset</Button>
-                            <Stack direction="row" spacing={1}>
-                                <Button size="small" onClick={handleBack} disabled={stepCursor === 0}>Back</Button>
-                                <Button size="small" onClick={handleSkip}>Skip</Button>
-                                <Button size="small" variant="contained" onClick={handleNext}>{stepCursor >= TOTAL_STEPS - 1 ? 'Finish' : 'Next'}</Button>
+                        </Stack>
+                        <Collapse in={!modelDone && firstIncomplete === 1}>
+                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    Choose which model {agentName} will use in the <em>Models and Forwarding Rules</em> section below.
+                                </Typography>
+                                {onSelectModel && (
+                                    <Box>
+                                        <Button size="small" variant="contained" disabled={!providerDone} onClick={onSelectModel} sx={{ py: 0.25 }}>
+                                            Choose Model
+                                        </Button>
+                                    </Box>
+                                )}
                             </Stack>
+                        </Collapse>
+                    </Box>
+
+                    {/* Step 3 — Install */}
+                    <Box sx={stepRowSx(installDone, firstIncomplete === 2)}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                            <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
+                            <Typography variant="body2" fontWeight={500} color={installDone ? 'text.primary' : firstIncomplete === 2 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                                Install {agentName}
+                            </Typography>
+                            {installDone && (
+                                <Typography variant="body2" color="text.secondary">Installed</Typography>
+                            )}
                         </Stack>
-                    </Stack>
+                        <Collapse in={!installDone && firstIncomplete === 2}>
+                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
+                                {installActions?.length ? (
+                                    <>
+                                        {installStepDescription && (
+                                            <Typography variant="body2" color="text.secondary">{installStepDescription}</Typography>
+                                        )}
+                                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ maxWidth: 520 }}>
+                                            {installActions.map((action) => (
+                                                <Button
+                                                    key={`${action.label}-${action.href}`}
+                                                    href={action.href}
+                                                    target={action.external ? '_blank' : undefined}
+                                                    rel={action.external ? 'noopener noreferrer' : undefined}
+                                                    variant={action.variant ?? 'outlined'}
+                                                    size="small"
+                                                    sx={{ flex: 1 }}
+                                                >
+                                                    {action.label}
+                                                </Button>
+                                            ))}
+                                        </Stack>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {installStepDescription || `Install ${agentName} on your local machine — copy and run the command below.`}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
+                                            <Typography variant="body2" color="text.secondary" sx={{ minWidth: '80px' }}>npm official</Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                                <Tooltip title={copied ? 'Copied!' : 'Copy'}>
+                                                    <IconButton size="small" onClick={handleCopy} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
+                                                </Tooltip>
+                                                <Typography variant="body2" onClick={handleCopy} sx={{ fontFamily: 'monospace', flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installCommand}>{installCommand}</Typography>
+                                            </Box>
+                                        </Box>
+                                        {installMirrorCommand && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, maxWidth: 800 }}>
+                                                <Typography variant="body2" color="text.secondary" sx={{ minWidth: '80px' }}>npm mirror</Typography>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}>
+                                                    <Tooltip title={copiedMirror ? 'Copied!' : 'Copy'}>
+                                                        <IconButton size="small" onClick={handleCopyMirror} sx={{ flexShrink: 0, p: 0.25 }}><ContentCopyIcon sx={{ fontSize: 16 }} /></IconButton>
+                                                    </Tooltip>
+                                                    <Typography variant="body2" onClick={handleCopyMirror} sx={{ fontFamily: 'monospace', flex: 1, color: 'text.primary', cursor: 'pointer', '&:hover': { color: 'primary.main' }, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={installMirrorCommand}>{installMirrorCommand}</Typography>
+                                                </Box>
+                                            </Box>
+                                        )}
+                                    </>
+                                )}
+                                <Box>
+                                    <Button size="small" variant="text" onClick={markInstallDone} sx={{ py: 0, textTransform: 'none', color: 'text.secondary' }}>
+                                        I've installed it
+                                    </Button>
+                                </Box>
+                            </Stack>
+                        </Collapse>
+                    </Box>
+
+                    {/* Step 4 — Apply */}
+                    <Box sx={stepRowSx(applyDone, firstIncomplete === 3)}>
+                        <Stack direction="row" spacing={1.25} alignItems="center">
+                            <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
+                            <Typography variant="body2" fontWeight={500} color={applyDone ? 'text.primary' : firstIncomplete === 3 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
+                                {applyStepLabel}
+                            </Typography>
+                            {applyDone && (
+                                <Typography variant="body2" color="text.secondary">Applied</Typography>
+                            )}
+                        </Stack>
+                        <Collapse in={!applyDone && firstIncomplete === 3}>
+                            <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
+                                <Typography variant="body2" color="text.secondary">
+                                    {applyStepDescription ?? `One click to write the proxy configuration to ${agentName}'s settings file.`}
+                                </Typography>
+                                <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
+                                    {onApply && (
+                                        <Button variant="contained" size="small" disabled={isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
+                                            {applyButtonLabel}
+                                        </Button>
+                                    )}
+                                    {onApplyWithStatusLine && (
+                                        <Button variant="outlined" size="small" disabled={isApplyLoading} onClick={handleApplyWithStatusLine}>
+                                            Auto Config + Status Line
+                                        </Button>
+                                    )}
+                                    {onViewConfig && (
+                                        <Button variant="text" size="small" onClick={onViewConfig} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+                                            {viewConfigButtonLabel} (Advanced)
+                                        </Button>
+                                    )}
+                                </Stack>
+                                {applyResult && (
+                                    <Alert severity={applyResult.success ? 'success' : 'error'} sx={{ mt: 0.5, py: 0.5 }}>
+                                        {applyResult.success ? (
+                                            <Box>
+                                                <Typography variant="body2" fontWeight={600}>{applySuccessLabel}</Typography>
+                                                {applyResult.files?.map(f => (
+                                                    <Typography key={f} variant="body2" sx={{ display: 'block', fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>
+                                                ))}
+                                            </Box>
+                                        ) : (
+                                            <Typography variant="body2">{applyResult.error ?? 'Apply failed'}</Typography>
+                                        )}
+                                    </Alert>
+                                )}
+                            </Stack>
+                        </Collapse>
+                    </Box>
+
+                    {/* Reset link — only visible when something has been manually completed */}
+                    {(installDone || applyDone) && (
+                        <Box sx={{ pt: 0.5, pl: 1.5 }}>
+                            <Button size="small" variant="text" onClick={handleReset} sx={{ py: 0, textTransform: 'none', color: 'text.disabled', fontSize: '0.75rem' }}>
+                                Reset progress
+                            </Button>
+                        </Box>
+                    )}
                 </Stack>
             </Collapse>
         </UnifiedCard>
