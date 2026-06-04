@@ -92,6 +92,8 @@ func TextScenario() Scenario {
 			AssertHTTPStatus(200),
 			AssertRoleEquals("assistant"),
 			AssertContentContains("Paris"),
+			AssertContentNonEmpty(),
+			AssertUsageNonZero(),
 		},
 	}
 }
@@ -191,6 +193,7 @@ func ToolUseScenario() Scenario {
 			AssertHasToolCalls(1),
 			AssertToolCallName(0, "get_weather"),
 			AssertToolCallArgs(0, "location", "Paris"),
+			AssertUsageNonZero(),
 		},
 	}
 }
@@ -308,6 +311,8 @@ func ToolResultScenario() Scenario {
 			AssertHTTPStatus(200),
 			AssertRoleEquals("assistant"),
 			AssertContentContains("Paris"),
+			AssertContentNonEmpty(),
+			AssertUsageNonZero(),
 		},
 	}
 }
@@ -328,6 +333,10 @@ func ThinkingScenario() Scenario {
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
+			AssertRoleEquals("assistant"),
+			AssertContentContains("Paris"),
+			AssertContentNonEmpty(),
+			AssertUsageNonZero(),
 		},
 	}
 }
@@ -379,6 +388,8 @@ func MultiTurnScenario() Scenario {
 			AssertHTTPStatus(200),
 			AssertRoleEquals("assistant"),
 			AssertContentContains("Paris"),
+			AssertContentNonEmpty(),
+			AssertUsageNonZero(),
 		},
 	}
 }
@@ -400,7 +411,9 @@ func StreamingTextScenario() Scenario {
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
 			AssertStreamEventCount(3),
+			AssertRoleEquals("assistant"),
 			AssertContentContains("Paris"),
+			AssertContentNonEmpty(),
 		},
 	}
 }
@@ -422,6 +435,9 @@ func StreamingToolUseScenario() Scenario {
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
 			AssertStreamEventCount(3),
+			AssertHasToolCalls(1),
+			AssertToolCallName(0, "get_weather"),
+			AssertToolCallArgs(0, "location", "Paris"),
 		},
 	}
 }
@@ -440,7 +456,10 @@ func ErrorScenario() Scenario {
 			FormatAnthropic:       anthropicErrorResponse(),
 			FormatGoogle:          googleErrorResponse(),
 		},
-		Assertions: []Assertion{},
+		Assertions: []Assertion{
+			AssertHTTPStatusAtLeast(400),
+			AssertErrorMessageContains("Rate limit"),
+		},
 	}
 }
 

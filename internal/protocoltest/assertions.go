@@ -148,10 +148,15 @@ func AssertNoThinking() Assertion {
 }
 
 // AssertUsageNonZero returns an Assertion that at least one token count > 0.
+// For streaming responses, usage extraction is protocol-dependent and may not
+// be available, so this assertion is skipped in streaming mode.
 func AssertUsageNonZero() Assertion {
 	return Assertion{
 		Name: "usage_non_zero",
 		Check: func(r *RoundTripResult) error {
+			if r.IsStreaming {
+				return nil
+			}
 			if r.Usage == nil {
 				return fmt.Errorf("usage is nil")
 			}
@@ -183,6 +188,34 @@ func AssertStreamEventCount(min int) Assertion {
 		Check: func(r *RoundTripResult) error {
 			if len(r.StreamEvents) < min {
 				return fmt.Errorf("stream events: got %d, want >= %d", len(r.StreamEvents), min)
+			}
+			return nil
+		},
+	}
+}
+
+// AssertHTTPStatusAtLeast returns an Assertion that the HTTP status code is >= min.
+func AssertHTTPStatusAtLeast(min int) Assertion {
+	return Assertion{
+		Name: fmt.Sprintf("http_status(>=%d)", min),
+		Check: func(r *RoundTripResult) error {
+			if r.HTTPStatus < min {
+				return fmt.Errorf("http_status: got %d, want >= %d", r.HTTPStatus, min)
+			}
+			return nil
+		},
+	}
+}
+
+// AssertErrorMessageContains returns an Assertion that the raw response body
+// contains the given substring. Useful for validating error responses where
+// the semantic fields (Content, Role, etc.) are not populated.
+func AssertErrorMessageContains(substring string) Assertion {
+	return Assertion{
+		Name: fmt.Sprintf("error_message_contains(%q)", substring),
+		Check: func(r *RoundTripResult) error {
+			if !strings.Contains(string(r.RawBody), substring) {
+				return fmt.Errorf("raw body does not contain %q", substring)
 			}
 			return nil
 		},
