@@ -58,8 +58,8 @@ Three properties fall out:
 The breaker is a three-state machine (`Closed → Open → HalfOpen`):
 
 - **Closed** — normal. `Allow()` returns true, failures are counted.
-- **Open** — too many consecutive failures (`FailureThreshold`, default 3). `Allow()` returns false. After `OpenDuration` (default 30 s) the next `Allow()` call lazily flips to HalfOpen.
-- **HalfOpen** — exactly one probe is permitted. Success → Closed, failure → Open with a fresh timer.
+- **Open** — too many consecutive failures (`FailureThreshold`, default 3). `Allow()` returns false. After `OpenDuration` (default 60 s) the next `Allow()` call lazily flips to HalfOpen.
+- **HalfOpen** — exactly one probe is permitted. Success → Closed, failure → Open with exponential backoff (60 s → 120 s → 240 s → 5 min cap). Success resets backoff to the base duration.
 
 Recovery requires **no separate scheduler**. Selection re-evaluates the tier list every request, and the breaker's lazy state transition admits one probe naturally. Active probing was considered and rejected for v1 — for hot rules it's redundant, and for cold rules there is no one to serve anyway.
 

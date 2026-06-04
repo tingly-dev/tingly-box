@@ -17,7 +17,7 @@ const (
 // Default circuit breaker tunables.
 const (
 	DefaultBreakerFailureThreshold = 3
-	DefaultBreakerOpenDuration     = 30 * time.Second
+	DefaultBreakerOpenDuration     = 60 * time.Second
 	DefaultBreakerMaxOpenDuration  = 5 * time.Minute
 )
 
