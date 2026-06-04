@@ -51,11 +51,6 @@ func OpenAISSEDone(c *gin.Context) {
 	c.Writer.WriteString("data: [DONE]\n\n")
 }
 
-func nextSequenceNumber(state *chatToResponsesState) int64 {
-	state.sequenceNumber++
-	return state.sequenceNumber
-}
-
 // FilterSpecialFields removes special fields that have dedicated content blocks
 // e.g., reasoning_content is handled as thinking block, not merged into text_delta
 func FilterSpecialFields(extras map[string]interface{}) map[string]interface{} {

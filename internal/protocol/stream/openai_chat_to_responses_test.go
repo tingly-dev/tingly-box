@@ -74,7 +74,7 @@ func TestHandleOpenAIChatToResponsesStream_TextOnly(t *testing.T) {
 	assert.Equal(t, "completed", completedResponse["status"])
 
 	assert.Contains(t, body, "data: [DONE]")
-	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	assert.Equal(t, "text/event-stream; charset=utf-8", w.Header().Get("Content-Type"))
 }
 
 // TestHandleOpenAIChatToResponsesStream_WithToolCalls tests the Chat to Responses stream conversion
@@ -164,154 +164,143 @@ func TestSendChatToResponsesEvent(t *testing.T) {
 	assert.Contains(t, body, `"type":"response.created"`)
 }
 
-// TestSendResponsesCreatedEvent tests the response.created event helper
-func TestSendResponsesCreatedEvent(t *testing.T) {
+// TestResponsesSSEWriter tests the responsesSSEWriter helper.
+func TestResponsesSSEWriter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	state := &chatToResponsesState{
-		responseID: "resp_test_123",
-		createdAt:  1,
-	}
+	writer := responsesSSEWriter(c)
 
-	sendResponsesCreatedEvent(c, state, w)
+	evt := wire.ResponsesCreatedEvent{
+		Type:           "response.created",
+		SequenceNumber: 1,
+		Response: wire.ResponsesWireResponse{
+			ID:     "resp_test_123",
+			Object: "response",
+			Status: "in_progress",
+			Output: []wire.ResponsesOutputItemWire{},
+		},
+	}
+	err := writer(evt)
+	require.NoError(t, err)
 
 	body := w.Body.String()
 	assert.Contains(t, body, `"type":"response.created"`)
 	assert.Contains(t, body, `"id":"resp_test_123"`)
 }
 
-// TestSendResponsesOutputTextDelta tests the output_text.delta event helper
-func TestSendResponsesOutputTextDelta(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	state := &chatToResponsesState{
-		textItemID: "msg_test_1",
-	}
-	sendResponsesOutputTextDelta(c, state, "Hello, World!", w)
-
-	body := w.Body.String()
-	assert.Contains(t, body, `"type":"response.output_text.delta"`)
-	assert.Contains(t, body, `"delta":"Hello, World!"`)
-}
-
-// TestSendResponsesOutputItemAdded tests the output_item.added event helper
-func TestSendResponsesOutputItemAdded(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	state := &chatToResponsesState{}
-	sendResponsesOutputItemAdded(c, state, "fc_123", "call_123", "get_weather", 1, w)
-
-	body := w.Body.String()
-	assert.Contains(t, body, `"type":"response.output_item.added"`)
-	assert.Contains(t, body, `"name":"get_weather"`)
-}
-
-// TestSendResponsesFunctionCallArgumentsDelta tests the function_call_arguments.delta event helper
-func TestSendResponsesFunctionCallArgumentsDelta(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	state := &chatToResponsesState{}
-	sendResponsesFunctionCallArgumentsDelta(c, state, "fc_123", 1, `{"location":"London"}`, w)
-
-	body := w.Body.String()
-	assert.Contains(t, body, `"type":"response.function_call_arguments.delta"`)
-	assert.Contains(t, body, `"item_id":"fc_123"`)
-}
-
-// TestSendResponsesCompletedEvent tests the response.completed event helper
-func TestSendResponsesCompletedEvent(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	state := &chatToResponsesState{
-		responseID:      "resp_test_123",
-		createdAt:       1,
-		textItemID:      "msg_test_1",
-		accumulatedText: strings.Builder{},
-		pendingToolCalls: map[int]*pendingToolCallResponse{
-			0: {
-				itemID:    "fc_123",
-				callID:    "call_123",
-				outputIdx: 1,
-				name:      "get_weather",
-				arguments: strings.Builder{},
-			},
+// TestChatToResponsesConverter_TextDelta tests that the converter emits
+// the correct events for a text content delta.
+func TestChatToResponsesConverter_TextDelta(t *testing.T) {
+	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
+	// Simulate processing a chunk with text content
+	conv.processChunk(&openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{Delta: openai.ChatCompletionChunkChoiceDelta{Content: "Hello, World!"}},
 		},
-		inputTokens:  10,
-		outputTokens: 20,
-	}
+	})
 
-	sendResponsesCompletedEvent(c, state, "gpt-4o-mini", "stop", w)
+	// Should emit: response.created, output_item.added, output_text.delta
+	require.Len(t, conv.pending, 3)
+	assert.Equal(t, "response.created", conv.pending[0].(wire.ResponsesCreatedEvent).Type)
+	assert.Equal(t, "response.output_item.added", conv.pending[1].(wire.ResponsesOutputItemAddedEvent).Type)
+	assert.Equal(t, "response.output_text.delta", conv.pending[2].(wire.ResponsesOutputTextDeltaEvent).Type)
 
-	body := w.Body.String()
-	assert.Contains(t, body, `"type":"response.completed"`)
-	assert.Contains(t, body, `"status":"completed"`)
-	assert.Contains(t, body, `"input_tokens":10`)
-	assert.Contains(t, body, `"output_tokens":20`)
+	delta := conv.pending[2].(wire.ResponsesOutputTextDeltaEvent)
+	assert.Equal(t, "Hello, World!", delta.Delta)
 }
 
-// TestSendResponsesCompletedEvent_WithReasoningTokens verifies reasoning_tokens
+// TestChatToResponsesConverter_ToolCall tests that the converter emits
+// tool call events correctly.
+func TestChatToResponsesConverter_ToolCall(t *testing.T) {
+	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
+	conv.hasSentCreated = true // skip created event
+
+	conv.processChunk(&openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{Delta: openai.ChatCompletionChunkChoiceDelta{
+				ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
+					{
+						Index:    0,
+						ID:       "call_123",
+						Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{Name: "get_weather", Arguments: `{"loc`},
+					},
+				},
+			}},
+		},
+	})
+
+	require.Len(t, conv.pending, 2)
+	added := conv.pending[0].(wire.ResponsesOutputItemAddedEvent)
+	assert.Equal(t, "response.output_item.added", added.Type)
+	assert.Equal(t, "get_weather", added.Item.Name)
+
+	argsDelta := conv.pending[1].(wire.ResponsesFunctionCallArgumentsDeltaEvent)
+	assert.Equal(t, "response.function_call_arguments.delta", argsDelta.Type)
+	assert.Equal(t, `{"loc`, argsDelta.Delta)
+}
+
+// TestChatToResponsesConverter_CompletedEvent tests usage propagation
+// into the response.completed event.
+func TestChatToResponsesConverter_CompletedEvent(t *testing.T) {
+	conv := NewChatToResponsesConverter(nil, "gpt-4o-mini")
+	conv.hasSentCreated = true
+	conv.inputTokens = 10
+	conv.outputTokens = 20
+	conv.hasUsage = true
+
+	conv.processChunk(&openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{FinishReason: "stop"},
+		},
+	})
+
+	// Should emit response.completed
+	var completed *wire.ResponsesCompletedEvent
+	for _, evt := range conv.pending {
+		if ce, ok := evt.(wire.ResponsesCompletedEvent); ok {
+			completed = &ce
+		}
+	}
+	require.NotNil(t, completed, "should emit response.completed")
+	assert.Equal(t, "completed", completed.Response.Status)
+	assert.Equal(t, int64(10), completed.Response.Usage.InputTokens)
+	assert.Equal(t, int64(20), completed.Response.Usage.OutputTokens)
+}
+
+// TestChatToResponsesConverter_WithReasoningTokens verifies reasoning_tokens
 // are propagated into the wire response's output_tokens_details.
-func TestSendResponsesCompletedEvent_WithReasoningTokens(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
+func TestChatToResponsesConverter_WithReasoningTokens(t *testing.T) {
+	conv := NewChatToResponsesConverter(nil, "o3-mini")
+	conv.hasSentCreated = true
+	conv.inputTokens = 50
+	conv.outputTokens = 30
+	conv.cacheTokens = 5
+	conv.reasoningTokens = 12
+	conv.hasUsage = true
 
-	state := &chatToResponsesState{
-		responseID:       "resp_reasoning",
-		createdAt:        1,
-		textItemID:       "msg_1",
-		accumulatedText:  strings.Builder{},
-		pendingToolCalls: map[int]*pendingToolCallResponse{},
-		inputTokens:      50,
-		outputTokens:     30,
-		cacheTokens:      5,
-		reasoningTokens:  12,
-	}
+	conv.processChunk(&openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{FinishReason: "stop"},
+		},
+	})
 
-	sendResponsesCompletedEvent(c, state, "o3-mini", "stop", w)
-
-	body := w.Body.String()
-
-	// Find the response.completed event
-	var completedData map[string]interface{}
-	for _, line := range strings.Split(body, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-		raw := strings.TrimPrefix(line, "data: ")
-		var ev map[string]interface{}
-		if err := json.Unmarshal([]byte(raw), &ev); err != nil {
-			continue
-		}
-		if ev["type"] == "response.completed" {
-			completedData = ev
-			break
+	var completed *wire.ResponsesCompletedEvent
+	for _, evt := range conv.pending {
+		if ce, ok := evt.(wire.ResponsesCompletedEvent); ok {
+			completed = &ce
 		}
 	}
-	require.NotNil(t, completedData, "should have response.completed event")
+	require.NotNil(t, completed)
 
-	resp := completedData["response"].(map[string]interface{})
-	usage := resp["usage"].(map[string]interface{})
-	assert.Equal(t, float64(50), usage["input_tokens"])
-	assert.Equal(t, float64(30), usage["output_tokens"])
-	assert.Equal(t, float64(80), usage["total_tokens"])
-
-	inputDetails := usage["input_tokens_details"].(map[string]interface{})
-	assert.Equal(t, float64(5), inputDetails["cached_tokens"])
-
-	outputDetails := usage["output_tokens_details"].(map[string]interface{})
-	assert.Equal(t, float64(12), outputDetails["reasoning_tokens"])
+	usage := completed.Response.Usage
+	require.NotNil(t, usage)
+	assert.Equal(t, int64(50), usage.InputTokens)
+	assert.Equal(t, int64(30), usage.OutputTokens)
+	assert.Equal(t, int64(80), usage.TotalTokens)
+	assert.Equal(t, int64(5), usage.InputTokensDetails.CachedTokens)
+	assert.Equal(t, int64(12), usage.OutputTokensDetails.ReasoningTokens)
 }
 
 // TestChatStreamUsage_DetailFields verifies that wire.ChatStreamUsage
@@ -391,33 +380,4 @@ func parseResponsesSSEEvents(t *testing.T, body string) map[string]map[string]in
 	}
 
 	return events
-}
-
-// TestChatToResponsesState tests the state struct
-func TestChatToResponsesState(t *testing.T) {
-	state := &chatToResponsesState{
-		responseID:       "resp_test",
-		outputIndex:      0,
-		pendingToolCalls: make(map[int]*pendingToolCallResponse),
-		inputTokens:      100,
-		outputTokens:     200,
-		hasSentCreated:   false,
-	}
-
-	assert.Equal(t, "resp_test", state.responseID)
-	assert.Equal(t, 0, state.outputIndex)
-	assert.NotNil(t, state.pendingToolCalls)
-	assert.Equal(t, int64(100), state.inputTokens)
-	assert.Equal(t, int64(200), state.outputTokens)
-	assert.False(t, state.hasSentCreated)
-
-	state.pendingToolCalls[0] = &pendingToolCallResponse{
-		itemID:    "fc_1",
-		name:      "test_func",
-		arguments: strings.Builder{},
-	}
-
-	assert.Equal(t, 1, len(state.pendingToolCalls))
-	assert.Equal(t, "fc_1", state.pendingToolCalls[0].itemID)
-	assert.Equal(t, "test_func", state.pendingToolCalls[0].name)
 }
