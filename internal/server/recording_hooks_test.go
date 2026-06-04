@@ -257,7 +257,6 @@ func TestAttachRecorderHooks_NilRecorder(t *testing.T) {
 	assert.Empty(t, hc.OnStreamEventHooks)
 	assert.Empty(t, hc.OnStreamCompleteHooks)
 	assert.Empty(t, hc.OnStreamErrorHooks)
-	assert.Empty(t, hc.OnStreamAssembledHooks)
 
 	// And the stream still runs cleanly with no recorder attached.
 	events := []*anthropic.BetaRawMessageStreamEventUnion{

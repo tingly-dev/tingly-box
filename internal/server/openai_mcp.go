@@ -7,6 +7,7 @@ import (
 	"github.com/openai/openai-go/v3"
 	typ "github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/mcp/runtime"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 )
@@ -38,7 +39,8 @@ func (s *Server) streamOpenAIChatToAnthropicV1WithMCP(
 		if hasDeclaredMCPTools(req) && s.mcpEnabled() {
 			hooks = s.buildOpenAIToAnthropicMCPHooks(c.Request.Context(), provider.UUID, req)
 		}
-		usage, err := stream.HandleOpenAIToAnthropicStreamResponseWithMCPHooks(c, req, streamResp, responseModel, hooks)
+		hc := protocol.NewHandleContext(c, responseModel)
+		usage, err := stream.HandleOpenAIToAnthropicStreamResponseWithMCPHooks(hc, req, streamResp, responseModel, hooks)
 		if errors.Is(err, stream.ErrMCPStreamContinue) {
 			continue
 		}
@@ -91,7 +93,8 @@ func (s *Server) streamOpenAIChatToAnthropicBetaWithMCP(
 		if hasDeclaredMCPTools(req) && s.mcpEnabled() {
 			hooks = s.buildOpenAIToAnthropicMCPHooks(c.Request.Context(), provider.UUID, req)
 		}
-		usage, err := stream.HandleOpenAIToAnthropicBetaStreamWithMCPHooks(c, req, streamResp, responseModel, hooks)
+		hc := protocol.NewHandleContext(c, responseModel)
+		usage, err := stream.HandleOpenAIToAnthropicBetaStreamWithMCPHooks(hc, req, streamResp, responseModel, hooks)
 		if errors.Is(err, stream.ErrMCPStreamContinue) {
 			continue
 		}
