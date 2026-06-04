@@ -160,6 +160,67 @@ const mockV2Providers = [
         api_base_openai: null,
         api_base_anthropic: null,
     },
+    // ── Virtual-model (vmodel) providers ─────────────────────────────────
+    {
+        uuid: 'mock-vmodel-tingly',
+        name: 'tingly',
+        api_base: '',
+        api_style: 'anthropic',
+        auth_type: 'vmodel',
+        token: '',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+        vmodel_detail: {
+            models: ['claude-sonnet-4-5', 'claude-opus-4-5', 'gpt-4o', 'gpt-4o-mini', 'deepseek/deepseek-r1'],
+        },
+    },
+    {
+        uuid: 'mock-vmodel-tingly-openai',
+        name: 'tingly-openai',
+        api_base: '',
+        api_style: 'openai',
+        auth_type: 'vmodel',
+        token: '',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+        vmodel_detail: {
+            models: ['tingly', 'tingly-sonnet', 'tingly-opus', 'tingly-fast'],
+        },
+    },
+    {
+        uuid: 'mock-vmodel-tingly-anthropic',
+        name: 'tingly-anthropic',
+        api_base: '',
+        api_style: 'anthropic',
+        auth_type: 'vmodel',
+        token: '',
+        enabled: true,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+        vmodel_detail: {
+            models: ['claude-3-7-sonnet-latest', 'claude-opus-4-5', 'claude-haiku-4-5'],
+        },
+    },
+    {
+        uuid: 'mock-vmodel-tingly-gemini',
+        name: 'tingly-gemini',
+        api_base: '',
+        api_style: 'openai',
+        auth_type: 'vmodel',
+        token: '',
+        enabled: false,
+        proxy_url: '',
+        api_base_openai: null,
+        api_base_anthropic: null,
+        vmodel_detail: {
+            models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+        },
+    },
 ]
 
 // ============================================
@@ -1484,18 +1545,40 @@ export const handlers = [
     http.get('/api/v1/usage/timeseries', ({ request }) => {
         const url = new URL(request.url)
         const interval = url.searchParams.get('interval') || 'day'
+        const startTimeStr = url.searchParams.get('start_time')
+        const endTimeStr = url.searchParams.get('end_time')
         const now = new Date()
 
-        const generatePoints = (count: number, intervalMs: number) =>
-            Array.from({ length: count }, (_, i) => {
-                const ts = new Date(now.getTime() - (count - 1 - i) * intervalMs)
-                const base = 800000 + Math.sin(i * 0.8) * 300000 + Math.random() * 150000
+        // Determine count from start/end when present
+        const inferCount = (ms: number): number => {
+            if (startTimeStr && endTimeStr) {
+                const diff = new Date(endTimeStr).getTime() - new Date(startTimeStr).getTime()
+                return Math.max(1, Math.round(diff / ms))
+            }
+            return undefined as unknown as number
+        }
+
+        const generatePoints = (count: number, intervalMs: number, baseTokens = 800000, workdayBias = false) => {
+            const origin = startTimeStr ? new Date(startTimeStr) : new Date(now.getTime() - (count - 1) * intervalMs)
+            return Array.from({ length: count }, (_, i) => {
+                const ts = new Date(origin.getTime() + i * intervalMs)
+                // Weekend / off-hours reduction for realistic shape
+                const dow = ts.getDay()
+                const hour = ts.getHours()
+                const isWeekend = dow === 0 || dow === 6
+                const isOffHours = hour < 7 || hour > 22
+                const activityFactor = workdayBias
+                    ? (isWeekend ? 0.1 + Math.random() * 0.15 : isOffHours ? 0.2 + Math.random() * 0.2 : 1)
+                    : 1
+                const trend = 1 + (i / count) * 0.4  // gradual growth over time
+                const wave = Math.sin(i * 0.4) * 0.35
+                const base = baseTokens * (0.65 + wave + Math.random() * 0.3) * trend * activityFactor
                 const input = Math.round(base * 0.55)
                 const output = Math.round(base * 0.38)
                 const cache = Math.round(base * 0.07)
                 return {
                     timestamp: ts.toISOString(),
-                    request_count: Math.round(180 + Math.sin(i * 0.8) * 60 + Math.random() * 40),
+                    request_count: Math.round((180 + Math.sin(i * 0.4) * 70 + Math.random() * 50) * activityFactor * trend),
                     input_tokens: input,
                     output_tokens: output,
                     cache_input_tokens: cache,
@@ -1504,10 +1587,21 @@ export const handlers = [
                     avg_latency_ms: Math.round(900 + Math.random() * 600),
                 }
             })
+        }
 
-        const data = interval === 'hour'
-            ? generatePoints(24, 60 * 60 * 1000)
-            : generatePoints(7, 24 * 60 * 60 * 1000)
+        let data
+        if (interval === 'minute') {
+            // today / yesterday: one point per 15 minutes → 96 points
+            const count = inferCount(15 * 60 * 1000) || 96
+            data = generatePoints(Math.min(count, 96), 15 * 60 * 1000, 12000, true)
+        } else if (interval === 'hour') {
+            const count = inferCount(60 * 60 * 1000) || 24
+            data = generatePoints(Math.min(count, 48), 60 * 60 * 1000, 80000, true)
+        } else {
+            // day — may be 7d or 180d/365d for the heatmap
+            const count = inferCount(24 * 60 * 60 * 1000) || 180
+            data = generatePoints(Math.min(count, 366), 24 * 60 * 60 * 1000, 900000, true)
+        }
 
         return HttpResponse.json({ success: true, data })
     }),
