@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -19,8 +17,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
-// chatToResponsesState tracks the streaming conversion state from Chat Completions to Responses API
-type chatToResponsesState struct {
+// chatToResponsesConverter converts an OpenAI Chat Completions stream into
+// a sequence of Responses API events. It implements StreamConverter.
+type chatToResponsesConverter struct {
+	stream        *openaistream.Stream[openai.ChatCompletionChunk]
+	responseModel string
+
+	// internal state
 	responseID       string
 	createdAt        int64
 	sequenceNumber   int64
@@ -29,12 +32,18 @@ type chatToResponsesState struct {
 	hasTextItem      bool
 	pendingToolCalls map[int]*pendingToolCallResponse
 	accumulatedText  strings.Builder
-	promptTokensTotal int64 // Raw total prompt_tokens from OpenAI (cached + uncached)
+	promptTokensTotal int64
 	inputTokens       int64
 	outputTokens      int64
-	cacheTokens       int64 // Cached tokens from prompt
-	reasoningTokens   int64 // Reasoning tokens from output
+	cacheTokens       int64
+	reasoningTokens   int64
 	hasSentCreated   bool
+	hasUsage         bool
+	completedSent    bool
+	finishReason     string
+
+	// pending is an internal queue of events to yield one-by-one
+	pending []wire.ResponsesEvent
 }
 
 // pendingToolCallResponse tracks a tool call being assembled from stream chunks
@@ -46,407 +55,371 @@ type pendingToolCallResponse struct {
 	arguments strings.Builder
 }
 
-// HandleOpenAIChatToResponsesStream converts OpenAI Chat Completions streaming to Responses API format.
-// Returns UsageStat containing token usage information for tracking.
+// NewChatToResponsesConverter creates a converter that reads from an OpenAI
+// Chat Completions stream and yields Responses API wire events.
+func NewChatToResponsesConverter(stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) *chatToResponsesConverter {
+	return &chatToResponsesConverter{
+		stream:        stream,
+		responseModel: responseModel,
+		responseID:    fmt.Sprintf("resp_%d", time.Now().Unix()),
+		createdAt:     time.Now().Unix(),
+		textItemID:    fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+		pendingToolCalls: make(map[int]*pendingToolCallResponse),
+	}
+}
+
+func (c *chatToResponsesConverter) Next() (interface{}, bool, error) {
+	// Drain buffered events first
+	if len(c.pending) > 0 {
+		evt := c.pending[0]
+		c.pending = c.pending[1:]
+		return evt, false, nil
+	}
+
+	// Read upstream chunks until we have at least one event to yield
+	for {
+		if !c.stream.Next() {
+			// Stream ended — emit completion events if not yet sent
+			if err := c.stream.Err(); err != nil {
+				return nil, false, err
+			}
+			if !c.completedSent {
+				c.emitCompletionEvents()
+				if len(c.pending) > 0 {
+					evt := c.pending[0]
+					c.pending = c.pending[1:]
+					return evt, false, nil
+				}
+			}
+			return nil, true, nil
+		}
+
+		chunk := c.stream.Current()
+		c.processChunk(&chunk)
+
+		if len(c.pending) > 0 {
+			evt := c.pending[0]
+			c.pending = c.pending[1:]
+			return evt, false, nil
+		}
+	}
+}
+
+func (c *chatToResponsesConverter) Usage() *protocol.TokenUsage {
+	return protocol.NewTokenUsageFull(int(c.inputTokens), int(c.outputTokens), int(c.cacheTokens), int(c.reasoningTokens))
+}
+
+// processChunk handles a single upstream ChatCompletionChunk and appends
+// zero or more Responses API events to c.pending.
+func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChunk) {
+	// Emit response.created on first chunk
+	if !c.hasSentCreated {
+		c.pending = append(c.pending, wire.ResponsesCreatedEvent{
+			Type:           "response.created",
+			SequenceNumber: c.nextSeq(),
+			Response:       c.wireResponse("in_progress", nil),
+		})
+		c.hasSentCreated = true
+	}
+
+	// Track usage
+	if chunk.Usage.PromptTokens != 0 {
+		c.promptTokensTotal = int64(chunk.Usage.PromptTokens)
+		c.hasUsage = true
+	}
+	if chunk.Usage.CompletionTokens != 0 {
+		c.outputTokens = int64(chunk.Usage.CompletionTokens)
+		c.hasUsage = true
+	}
+	if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
+		c.cacheTokens = int64(chunk.Usage.PromptTokensDetails.CachedTokens)
+		c.hasUsage = true
+	}
+	if chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
+		c.reasoningTokens = int64(chunk.Usage.CompletionTokensDetails.ReasoningTokens)
+		c.hasUsage = true
+	}
+	if c.promptTokensTotal > 0 {
+		c.inputTokens = c.promptTokensTotal - c.cacheTokens
+	}
+
+	if len(chunk.Choices) == 0 {
+		return
+	}
+
+	choice := chunk.Choices[0]
+
+	// Handle content delta
+	if choice.Delta.Content != "" {
+		if !c.hasTextItem {
+			c.emitTextItemAdded()
+			c.hasTextItem = true
+		}
+		c.accumulatedText.WriteString(choice.Delta.Content)
+		c.pending = append(c.pending, wire.ResponsesOutputTextDeltaEvent{
+			Type:           "response.output_text.delta",
+			SequenceNumber: c.nextSeq(),
+			ItemID:         c.textItemID,
+			OutputIndex:    0,
+			ContentIndex:   0,
+			Delta:          choice.Delta.Content,
+			Logprobs:       []interface{}{},
+		})
+	}
+
+	// Handle tool_calls delta
+	for _, toolCall := range choice.Delta.ToolCalls {
+		openaiIndex := int(toolCall.Index)
+
+		if _, exists := c.pendingToolCalls[openaiIndex]; !exists {
+			itemID := fmt.Sprintf("fc_%d_%d", time.Now().Unix(), openaiIndex)
+			if toolCall.ID != "" {
+				itemID = truncateToolCallID(toolCall.ID)
+			}
+
+			toolOutputIndex := c.outputIndex
+			c.outputIndex++
+
+			c.pendingToolCalls[openaiIndex] = &pendingToolCallResponse{
+				itemID:    itemID,
+				callID:    toolCall.ID,
+				outputIdx: toolOutputIndex,
+				name:      toolCall.Function.Name,
+			}
+
+			callID := toolCall.ID
+			if callID == "" {
+				callID = itemID
+			}
+			c.pending = append(c.pending, wire.ResponsesOutputItemAddedEvent{
+				Type:           "response.output_item.added",
+				SequenceNumber: c.nextSeq(),
+				OutputIndex:    toolOutputIndex,
+				Item:           newResponsesFunctionCallItem(itemID, callID, toolCall.Function.Name, "", "in_progress"),
+			})
+		}
+
+		if toolCall.Function.Arguments != "" {
+			ptc := c.pendingToolCalls[openaiIndex]
+			ptc.arguments.WriteString(toolCall.Function.Arguments)
+			c.pending = append(c.pending, wire.ResponsesFunctionCallArgumentsDeltaEvent{
+				Type:           "response.function_call_arguments.delta",
+				SequenceNumber: c.nextSeq(),
+				ItemID:         ptc.itemID,
+				OutputIndex:    ptc.outputIdx,
+				Delta:          toolCall.Function.Arguments,
+			})
+		}
+	}
+
+	// Check for completion
+	if choice.FinishReason != "" {
+		c.finishReason = string(choice.FinishReason)
+
+		if !c.hasUsage && c.outputTokens == 0 {
+			c.outputTokens = int64(c.accumulatedText.Len() / 4)
+			for _, ptc := range c.pendingToolCalls {
+				c.outputTokens += int64(ptc.arguments.Len() / 4)
+			}
+		}
+
+		c.emitCompletionEvents()
+	}
+}
+
+// emitCompletionEvents appends the terminal sequence of events (text done,
+// tool call done, response.completed) to c.pending.
+func (c *chatToResponsesConverter) emitCompletionEvents() {
+	if c.completedSent {
+		return
+	}
+	c.completedSent = true
+
+	if !c.hasSentCreated {
+		c.pending = append(c.pending, wire.ResponsesCreatedEvent{
+			Type:           "response.created",
+			SequenceNumber: c.nextSeq(),
+			Response:       c.wireResponse("in_progress", nil),
+		})
+		c.hasSentCreated = true
+	}
+
+	if c.finishReason == "" {
+		c.finishReason = "stop"
+	}
+
+	if c.hasTextItem {
+		text := c.accumulatedText.String()
+		c.pending = append(c.pending, wire.ResponsesOutputTextDoneEvent{
+			Type:           "response.output_text.done",
+			SequenceNumber: c.nextSeq(),
+			ItemID:         c.textItemID,
+			OutputIndex:    0,
+			ContentIndex:   0,
+			Text:           text,
+			Logprobs:       []interface{}{},
+		})
+		c.pending = append(c.pending, wire.ResponsesOutputItemDoneEvent{
+			Type:           "response.output_item.done",
+			SequenceNumber: c.nextSeq(),
+			OutputIndex:    0,
+			Item:           newResponsesMessageItem(c.textItemID, "completed", text),
+		})
+	}
+
+	sortedIndexes := make([]int, 0, len(c.pendingToolCalls))
+	for idx := range c.pendingToolCalls {
+		sortedIndexes = append(sortedIndexes, idx)
+	}
+	sort.Ints(sortedIndexes)
+
+	for _, idx := range sortedIndexes {
+		ptc := c.pendingToolCalls[idx]
+		callID := ptc.callID
+		if callID == "" {
+			callID = ptc.itemID
+		}
+		arguments := ptc.arguments.String()
+		c.pending = append(c.pending, wire.ResponsesFunctionCallArgumentsDoneEvent{
+			Type:           "response.function_call_arguments.done",
+			SequenceNumber: c.nextSeq(),
+			ItemID:         ptc.itemID,
+			OutputIndex:    ptc.outputIdx,
+			Name:           ptc.name,
+			Arguments:      arguments,
+		})
+		c.pending = append(c.pending, wire.ResponsesOutputItemDoneEvent{
+			Type:           "response.output_item.done",
+			SequenceNumber: c.nextSeq(),
+			OutputIndex:    ptc.outputIdx,
+			Item:           newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, arguments, "completed"),
+		})
+	}
+
+	isIncomplete, incompleteReason := chatFinishReasonToIncomplete(c.finishReason)
+	itemStatus := "completed"
+	if isIncomplete {
+		itemStatus = "incomplete"
+	}
+
+	var output []wire.ResponsesOutputItemWire
+	if c.accumulatedText.Len() > 0 {
+		output = append(output, newResponsesMessageItem(c.textItemID, itemStatus, c.accumulatedText.String()))
+	}
+	for _, idx := range sortedIndexes {
+		ptc := c.pendingToolCalls[idx]
+		callID := ptc.callID
+		if callID == "" {
+			callID = ptc.itemID
+		}
+		output = append(output, newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, ptc.arguments.String(), itemStatus))
+	}
+
+	if isIncomplete {
+		resp := c.wireResponse("incomplete", output)
+		resp.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{Reason: incompleteReason}
+		c.pending = append(c.pending, wire.ResponsesIncompleteEvent{
+			Type:           "response.incomplete",
+			SequenceNumber: c.nextSeq(),
+			Response:       resp,
+		})
+	} else {
+		c.pending = append(c.pending, wire.ResponsesCompletedEvent{
+			Type:           "response.completed",
+			SequenceNumber: c.nextSeq(),
+			Response:       c.wireResponse("completed", output),
+		})
+	}
+}
+
+func (c *chatToResponsesConverter) emitTextItemAdded() {
+	if c.outputIndex == 0 {
+		c.outputIndex = 1
+	}
+	c.pending = append(c.pending, wire.ResponsesOutputItemAddedEvent{
+		Type:           "response.output_item.added",
+		SequenceNumber: c.nextSeq(),
+		OutputIndex:    0,
+		Item:           newResponsesMessageItem(c.textItemID, "in_progress", ""),
+	})
+}
+
+func (c *chatToResponsesConverter) nextSeq() int64 {
+	c.sequenceNumber++
+	return c.sequenceNumber
+}
+
+func (c *chatToResponsesConverter) wireResponse(status string, output []wire.ResponsesOutputItemWire) wire.ResponsesWireResponse {
+	if output == nil {
+		output = []wire.ResponsesOutputItemWire{}
+	}
+	return wire.ResponsesWireResponse{
+		ID:        c.responseID,
+		Object:    "response",
+		CreatedAt: c.createdAt,
+		Status:    status,
+		Output:    output,
+		Usage: &wire.ResponsesUsageWire{
+			InputTokens:  c.inputTokens,
+			OutputTokens: c.outputTokens,
+			TotalTokens:  c.inputTokens + c.outputTokens,
+			InputTokensDetails: wire.ResponsesInputTokensDetailsWire{
+				CachedTokens: c.cacheTokens,
+			},
+			OutputTokensDetails: wire.ResponsesOutputTokensDetailsWire{
+				ReasoningTokens: c.reasoningTokens,
+			},
+		},
+		Model: c.responseModel,
+	}
+}
+
+// HandleOpenAIChatToResponsesStream converts OpenAI Chat Completions streaming
+// to Responses API format using the chain pipeline architecture.
 func HandleOpenAIChatToResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
 	c := hc.GinContext
-	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI Chat to Responses streaming conversion handler")
 	defer func() {
-		if r := recover(); r != nil {
-			logrus.WithContext(c.Request.Context()).Errorf("Panic in Chat to Responses streaming handler: %v", r)
-			if c.Writer != nil {
-				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.Writer.Write([]byte("data: {\"error\":{\"message\":\"Internal streaming error\",\"type\":\"internal_error\"}}\n\n"))
-				if flusher, ok := c.Writer.(http.Flusher); ok {
-					flusher.Flush()
-				}
-			}
-		}
 		if stream != nil {
-			if err := stream.Close(); err != nil {
-				logrus.WithContext(c.Request.Context()).Errorf("Error closing Chat Completions stream: %v", err)
-			}
+			stream.Close()
 		}
-		logrus.WithContext(c.Request.Context()).Info("Finished Chat to Responses streaming conversion handler")
 	}()
 
-	// Set SSE headers for Responses API
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Access-Control-Allow-Origin", "*")
-	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+	conv := NewChatToResponsesConverter(stream, responseModel)
 
-	flusher, ok := c.Writer.(http.Flusher)
-	if !ok {
-		return protocol.ZeroTokenUsage(), errors.New("streaming not supported by this connection")
-	}
+	usage, err := RunConverter(hc, conv, responsesSSEWriter(c))
 
-	// Initialize conversion state
-	state := &chatToResponsesState{
-		responseID:       fmt.Sprintf("resp_%d", time.Now().Unix()),
-		createdAt:        time.Now().Unix(),
-		sequenceNumber:   0,
-		outputIndex:      0,
-		textItemID:       fmt.Sprintf("msg_%d", time.Now().UnixNano()),
-		hasTextItem:      false,
-		pendingToolCalls: make(map[int]*pendingToolCallResponse),
-		inputTokens:      0,
-		outputTokens:     0,
-		hasSentCreated:   false,
-	}
-
-	// Track text and usage for final completion
-	var finishReason string
-	var hasUsage bool
-	completedSent := false
-
-	// Process the stream
-	StreamLoop(c, func(w io.Writer) bool {
-		// Check context cancellation first
-		select {
-		case <-c.Request.Context().Done():
-			logrus.WithContext(c.Request.Context()).Debug("Client disconnected, stopping Chat to Responses stream")
-			return false
-		default:
-		}
-
-		// Try to get next chunk
-		if !stream.Next() {
-			return false
-		}
-
-		chunk := stream.Current()
-
-		// Send response.created on first meaningful chunk
-		if !state.hasSentCreated {
-			sendResponsesCreatedEvent(c, state, flusher)
-			state.hasSentCreated = true
-		}
-
-		// Track usage from chunks
-		if chunk.Usage.PromptTokens != 0 {
-			state.promptTokensTotal = int64(chunk.Usage.PromptTokens)
-			hasUsage = true
-		}
-		if chunk.Usage.CompletionTokens != 0 {
-			state.outputTokens = int64(chunk.Usage.CompletionTokens)
-			hasUsage = true
-		}
-		// Track cache tokens from prompt tokens details if available
-		if chunk.Usage.PromptTokensDetails.CachedTokens != 0 {
-			state.cacheTokens = int64(chunk.Usage.PromptTokensDetails.CachedTokens)
-			hasUsage = true
-		}
-		// Track reasoning tokens from completion tokens details if available
-		if chunk.Usage.CompletionTokensDetails.ReasoningTokens != 0 {
-			state.reasoningTokens = int64(chunk.Usage.CompletionTokensDetails.ReasoningTokens)
-			hasUsage = true
-		}
-		// Normalize after each usage update: uncached = total - cached
-		if state.promptTokensTotal > 0 {
-			state.inputTokens = state.promptTokensTotal - state.cacheTokens
-		}
-
-		// Skip empty chunks
-		if len(chunk.Choices) == 0 {
-			return true
-		}
-
-		choice := chunk.Choices[0]
-
-		// Handle content delta
-		if choice.Delta.Content != "" {
-			if !state.hasTextItem {
-				sendResponsesOutputTextItemAdded(c, state, flusher)
-				state.hasTextItem = true
-			}
-			state.accumulatedText.WriteString(choice.Delta.Content)
-			sendResponsesOutputTextDelta(c, state, choice.Delta.Content, flusher)
-		}
-
-		// Handle tool_calls delta
-		if len(choice.Delta.ToolCalls) > 0 {
-			for _, toolCall := range choice.Delta.ToolCalls {
-				openaiIndex := int(toolCall.Index)
-
-				// Check if this is a new tool call
-				if _, exists := state.pendingToolCalls[openaiIndex]; !exists {
-					// Generate item_id for Responses API
-					itemID := fmt.Sprintf("fc_%d_%d", time.Now().Unix(), openaiIndex)
-					if toolCall.ID != "" {
-						// Use OpenAI's ID if available (may need truncation)
-						itemID = truncateToolCallID(toolCall.ID)
-					}
-
-					// Start a new output_index for this tool call
-					// Text gets index 0, tool calls start from 1
-					toolOutputIndex := state.outputIndex
-					state.outputIndex++
-
-					state.pendingToolCalls[openaiIndex] = &pendingToolCallResponse{
-						itemID:    itemID,
-						callID:    toolCall.ID,
-						outputIdx: toolOutputIndex,
-						name:      toolCall.Function.Name,
-						arguments: strings.Builder{},
-					}
-
-					// Send output_item.added event
-					sendResponsesOutputItemAdded(c, state, itemID, toolCall.ID, toolCall.Function.Name, toolOutputIndex, flusher)
-				}
-
-				// Accumulate and send argument deltas
-				if toolCall.Function.Arguments != "" {
-					ptc := state.pendingToolCalls[openaiIndex]
-					ptc.arguments.WriteString(toolCall.Function.Arguments)
-					sendResponsesFunctionCallArgumentsDelta(c, state, ptc.itemID, ptc.outputIdx, toolCall.Function.Arguments, flusher)
-				}
-			}
-		}
-
-		// Check for completion
-		if choice.FinishReason != "" {
-			finishReason = string(choice.FinishReason)
-
-			// If no usage was provided, estimate it
-			if !hasUsage {
-				// Estimate tokens (would need request context for better estimation)
-				// For now, use what we accumulated
-				if state.outputTokens == 0 {
-					// Rough estimation: ~4 chars per token
-					state.outputTokens = int64(state.accumulatedText.Len() / 4)
-					for _, ptc := range state.pendingToolCalls {
-						state.outputTokens += int64(ptc.arguments.Len() / 4)
-					}
-				}
-			}
-
-			// Send response.completed event
-			sendResponsesCompletedEvent(c, state, responseModel, finishReason, flusher)
-			completedSent = true
-
-			// Send final [DONE] message
-			OpenAISSEDone(c)
-			return false
-		}
-
-		return true
-	})
-
-	// Check for stream errors
-	if err := stream.Err(); err != nil {
-		// Check if it was a client cancellation
+	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			logrus.WithContext(c.Request.Context()).Debug("Chat to Responses stream canceled by client")
-			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
+			return conv.Usage(), nil
 		}
+
 		logrus.WithContext(c.Request.Context()).Errorf("Chat to Responses stream error: %v", err)
 
-		// Stream failed before any content reached the client: surface a
-		// retryable 5xx so mid-request failover can try the next tier,
-		// instead of a 200 SSE error event.
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
-			return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
+			return conv.Usage(), err
 		}
 
 		errorEvent := wire.ResponsesStreamErrorEvent{
 			Type:           "error",
-			SequenceNumber: nextSequenceNumber(state),
+			SequenceNumber: conv.nextSeq(),
 			Error: wire.ResponsesStreamErrorBody{
 				Message: err.Error(),
 				Type:    "stream_error",
 			},
 		}
 		OpenAIResponsesEvent(c, errorEvent.EventType(), errorEvent)
-
-		return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), err
+		return conv.Usage(), err
 	}
 
-	// Some providers end the stream without emitting a final chunk with finish_reason.
-	// Ensure clients still receive response.completed and [DONE].
-	if !completedSent {
-		if !state.hasSentCreated {
-			sendResponsesCreatedEvent(c, state, flusher)
-			state.hasSentCreated = true
-		}
-
-		if finishReason == "" {
-			finishReason = "stop"
-		}
-
-		sendResponsesCompletedEvent(c, state, responseModel, finishReason, flusher)
-		OpenAISSEDone(c)
-	}
-
-	return protocol.NewTokenUsageFull(int(state.inputTokens), int(state.outputTokens), int(state.cacheTokens), int(state.reasoningTokens)), nil
+	OpenAISSEDone(c)
+	return usage, nil
 }
 
-// sendResponsesCreatedEvent sends the response.created event
-func sendResponsesCreatedEvent(c *gin.Context, state *chatToResponsesState, flusher http.Flusher) {
-	event := wire.ResponsesCreatedEvent{
-		Type:           "response.created",
-		SequenceNumber: nextSequenceNumber(state),
-		Response:       newResponsesWireResponse(state, "in_progress", nil, ""),
-	}
-	OpenAIResponsesEvent(c, event.EventType(), event)
-}
-
-func sendResponsesOutputTextItemAdded(c *gin.Context, state *chatToResponsesState, flusher http.Flusher) {
-	if state.outputIndex == 0 {
-		state.outputIndex = 1
-	}
-	event := wire.ResponsesOutputItemAddedEvent{
-		Type:           "response.output_item.added",
-		SequenceNumber: nextSequenceNumber(state),
-		OutputIndex:    0,
-		Item:           newResponsesMessageItem(state.textItemID, "in_progress", ""),
-	}
-	OpenAIResponsesEvent(c, event.EventType(), event)
-}
-
-// sendResponsesOutputTextDelta sends response.output_text.delta event
-func sendResponsesOutputTextDelta(c *gin.Context, state *chatToResponsesState, delta string, flusher http.Flusher) {
-	event := wire.ResponsesOutputTextDeltaEvent{
-		Type:           "response.output_text.delta",
-		SequenceNumber: nextSequenceNumber(state),
-		ItemID:         state.textItemID,
-		OutputIndex:    0,
-		ContentIndex:   0,
-		Delta:          delta,
-		Logprobs:       []interface{}{},
-	}
-	OpenAIResponsesEvent(c, event.EventType(), event)
-}
-
-// sendResponsesOutputItemAdded sends response.output_item.added event for tool calls
-func sendResponsesOutputItemAdded(c *gin.Context, state *chatToResponsesState, itemID, callID, name string, outputIndex int, flusher http.Flusher) {
-	if callID == "" {
-		callID = itemID
-	}
-	event := wire.ResponsesOutputItemAddedEvent{
-		Type:           "response.output_item.added",
-		SequenceNumber: nextSequenceNumber(state),
-		OutputIndex:    outputIndex,
-		Item:           newResponsesFunctionCallItem(itemID, callID, name, "", "in_progress"),
-	}
-	OpenAIResponsesEvent(c, event.EventType(), event)
-}
-
-// sendResponsesFunctionCallArgumentsDelta sends response.function_call_arguments.delta event
-func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToResponsesState, itemID string, outputIndex int, delta string, flusher http.Flusher) {
-	event := wire.ResponsesFunctionCallArgumentsDeltaEvent{
-		Type:           "response.function_call_arguments.delta",
-		SequenceNumber: nextSequenceNumber(state),
-		ItemID:         itemID,
-		OutputIndex:    outputIndex,
-		Delta:          delta,
-	}
-	OpenAIResponsesEvent(c, event.EventType(), event)
-}
-
-// sendResponsesCompletedEvent sends the terminal response event.
-// When finishReason indicates truncation ("length" / "content_filter"),
-// it emits response.incomplete with the appropriate reason; otherwise
-// it emits response.completed.
-func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, model, finishReason string, flusher http.Flusher) {
-	isIncomplete, incompleteReason := chatFinishReasonToIncomplete(finishReason)
-	itemStatus := "completed"
-	if isIncomplete {
-		itemStatus = "incomplete"
-	}
-
-	if state.hasTextItem {
-		text := state.accumulatedText.String()
-		textDone := wire.ResponsesOutputTextDoneEvent{
-			Type:           "response.output_text.done",
-			SequenceNumber: nextSequenceNumber(state),
-			ItemID:         state.textItemID,
-			OutputIndex:    0,
-			ContentIndex:   0,
-			Text:           text,
-			Logprobs:       []interface{}{},
-		}
-		OpenAIResponsesEvent(c, textDone.EventType(), textDone)
-
-		textItemDone := wire.ResponsesOutputItemDoneEvent{
-			Type:           "response.output_item.done",
-			SequenceNumber: nextSequenceNumber(state),
-			OutputIndex:    0,
-			Item:           newResponsesMessageItem(state.textItemID, itemStatus, text),
-		}
-		OpenAIResponsesEvent(c, textItemDone.EventType(), textItemDone)
-	}
-
-	sortedIndexes := make([]int, 0, len(state.pendingToolCalls))
-	for idx := range state.pendingToolCalls {
-		sortedIndexes = append(sortedIndexes, idx)
-	}
-	sort.Ints(sortedIndexes)
-
-	for _, idx := range sortedIndexes {
-		ptc := state.pendingToolCalls[idx]
-		callID := ptc.callID
-		if callID == "" {
-			callID = ptc.itemID
-		}
-		arguments := ptc.arguments.String()
-		argumentsDone := wire.ResponsesFunctionCallArgumentsDoneEvent{
-			Type:           "response.function_call_arguments.done",
-			SequenceNumber: nextSequenceNumber(state),
-			ItemID:         ptc.itemID,
-			OutputIndex:    ptc.outputIdx,
-			Name:           ptc.name,
-			Arguments:      arguments,
-		}
-		OpenAIResponsesEvent(c, argumentsDone.EventType(), argumentsDone)
-
-		itemDone := wire.ResponsesOutputItemDoneEvent{
-			Type:           "response.output_item.done",
-			SequenceNumber: nextSequenceNumber(state),
-			OutputIndex:    ptc.outputIdx,
-			Item:           newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, arguments, "completed"),
-		}
-		OpenAIResponsesEvent(c, itemDone.EventType(), itemDone)
-	}
-
-	var output []wire.ResponsesOutputItemWire
-	if state.accumulatedText.Len() > 0 {
-		output = append(output, newResponsesMessageItem(state.textItemID, itemStatus, state.accumulatedText.String()))
-	}
-
-	for _, idx := range sortedIndexes {
-		ptc := state.pendingToolCalls[idx]
-		callID := ptc.callID
-		if callID == "" {
-			callID = ptc.itemID
-		}
-		output = append(output, newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, ptc.arguments.String(), "completed"))
-	}
-
-	if isIncomplete {
-		resp := newResponsesWireResponse(state, "incomplete", output, model)
-		resp.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{Reason: incompleteReason}
-		event := wire.ResponsesIncompleteEvent{
-			Type:           "response.incomplete",
-			SequenceNumber: nextSequenceNumber(state),
-			Response:       resp,
-		}
-		OpenAIResponsesEvent(c, event.EventType(), event)
-	} else {
-		event := wire.ResponsesCompletedEvent{
-			Type:           "response.completed",
-			SequenceNumber: nextSequenceNumber(state),
-			Response:       newResponsesWireResponse(state, "completed", output, model),
-		}
-		OpenAIResponsesEvent(c, event.EventType(), event)
-	}
-}
-
-// chatFinishReasonToIncomplete maps a Chat finish_reason to the Responses
-// API incomplete status. Returns (true, reason) when the response should
-// be marked incomplete, or (false, "") for normal completion.
+// chatFinishReasonToIncomplete maps an OpenAI Chat finish_reason to the
+// Responses API incomplete status. Returns (true, reason) when the response
+// should be marked incomplete, or (false, "") for normal completion.
 func chatFinishReasonToIncomplete(finishReason string) (bool, string) {
 	switch finishReason {
 	case "length":
@@ -458,28 +431,16 @@ func chatFinishReasonToIncomplete(finishReason string) (bool, string) {
 	}
 }
 
-func newResponsesWireResponse(state *chatToResponsesState, status string, output []wire.ResponsesOutputItemWire, model string) wire.ResponsesWireResponse {
-	if output == nil {
-		output = []wire.ResponsesOutputItemWire{}
-	}
-	return wire.ResponsesWireResponse{
-		ID:        state.responseID,
-		Object:    "response",
-		CreatedAt: state.createdAt,
-		Status:    status,
-		Output:    output,
-		Usage: &wire.ResponsesUsageWire{
-			InputTokens:  state.inputTokens,
-			OutputTokens: state.outputTokens,
-			TotalTokens:  state.inputTokens + state.outputTokens,
-			InputTokensDetails: wire.ResponsesInputTokensDetailsWire{
-				CachedTokens: state.cacheTokens,
-			},
-			OutputTokensDetails: wire.ResponsesOutputTokensDetailsWire{
-				ReasoningTokens: state.reasoningTokens,
-			},
-		},
-		Model: model,
+// responsesSSEWriter returns a handleFunc that writes Responses API wire
+// events as SSE to the gin context.
+func responsesSSEWriter(c *gin.Context) func(event interface{}) error {
+	return func(event interface{}) error {
+		evt, ok := event.(wire.ResponsesEvent)
+		if !ok {
+			return fmt.Errorf("unexpected event type %T", event)
+		}
+		OpenAIResponsesEvent(c, evt.EventType(), evt)
+		return nil
 	}
 }
 
