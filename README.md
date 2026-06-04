@@ -105,7 +105,7 @@ Any application is ready to use.
 
 > We've provided detailed config guide in application
 
-![Agent Integration Demo](./docs/images/5-claude-code.png)
+![Agent Integration Demo](./docs/images/4-model-select.png)
 
 </details>
 
@@ -200,7 +200,7 @@ Requests route through your OAuth-authorized provider, using your existing Claud
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
-![OAuth Provider Demo](./docs/images/2-connect-ai.png)
+![OAuth Provider Demo](./docs/images/3-connect-ai.png)
 
 </details>
 

@@ -4,9 +4,9 @@
  *
  * Ordering (logical product story):
  *   1-dashboard.png      – Usage dashboard (today, hourly)
- *   2-connect-ai.png     – Connect AI provider dialog
- *   3-model-select.png   – Virtual Models / model selection
- *   4-agents.png         – Agent selection overview
+ *   2-agents.png         – Agent selection overview
+ *   3-connect-ai.png     – Connect AI provider dialog
+ *   4-model-select.png   – Model select dialog (from routing graph)
  *   5-claude-code.png    – Claude Code setup + routing rules
  *   6-routing.png        – OpenAI SDK smart routing
  *   7-remote.png         – Telegram remote control bot
@@ -56,8 +56,11 @@ await shoot(browser, '/dashboard/today', '1-dashboard.png', {
     waitFor: '.MuiGrid-root', settle: 3500,
 });
 
-// ── 2: Connect AI provider dialog ─────────────────────────────────────────
-await shoot(browser, '/credentials', '2-connect-ai.png', {
+// ── 2: Agent selection overview ───────────────────────────────────────────
+await shoot(browser, '/agent', '2-agents.png', { settle: 2500 });
+
+// ── 3: Connect AI provider dialog ─────────────────────────────────────────
+await shoot(browser, '/credentials', '3-connect-ai.png', {
     settle: 2500,
     interact: async (page) => {
         try {
@@ -69,13 +72,25 @@ await shoot(browser, '/credentials', '2-connect-ai.png', {
     },
 });
 
-// ── 3: Virtual Models / model selection ───────────────────────────────────
-await shoot(browser, '/credentials/virtual-models', '3-model-select.png', {
-    settle: 2500,
+// ── 4: Model select dialog (from routing graph) ───────────────────────────
+await shoot(browser, '/agent/openai', '4-model-select.png', {
+    settle: 3000,
+    interact: async (page) => {
+        try {
+            // Click an existing ServiceNode (shows provider + model) to open the model-select dialog.
+            // ServiceNode renders with onClick → openModelSelectDialog.
+            // The node is a styled MUI Box; click via aria-label or text content.
+            const serviceNode = page.getByRole('button', { name: /Test Service/i }).first();
+            // Instead: click the service container which is the styled card next to "Test Service".
+            // Use the "Edit model name" button area to find the rule row, then click the service node itself.
+            // Simplest: click the "New Rule" button which triggers openModelSelectForCreate → dialog open.
+            const newRuleBtn = page.getByRole('button', { name: /Create new routing rule/i });
+            await newRuleBtn.waitFor({ timeout: 6000 });
+            await newRuleBtn.click();
+            await page.waitForTimeout(2000);
+        } catch (e) { console.warn('  ⚠ model select open failed:', e.message.slice(0, 80)); }
+    },
 });
-
-// ── 4: Agent selection overview ───────────────────────────────────────────
-await shoot(browser, '/agent', '4-agents.png', { settle: 2500 });
 
 // ── 5: Claude Code – routing rules loaded ────────────────────────────────
 await shoot(browser, '/agent/claude_code', '5-claude-code.png', { settle: 3000 });
