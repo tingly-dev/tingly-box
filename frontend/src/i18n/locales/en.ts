@@ -297,6 +297,14 @@ export default {
         "helper": "Optional: Use a proxy to bypass region restrictions. Saved for future use.",
         "useGlobal": "Use quick proxy ({{url}})",
         "useGlobalNotSet": "Use quick proxy (not configured — set in System Settings)"
+      },
+      "endpointMode": {
+        "label": "OpenAI Endpoint Mode",
+        "default": "Default (Chat only)",
+        "auto": "Auto-detect per model",
+        "chat": "Chat Completions only",
+        "responses": "Responses API only",
+        "both": "Both (mirror incoming)"
       }
     },
     "verification": {

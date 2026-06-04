@@ -298,6 +298,14 @@ export default {
         "helper": "可选：使用代理绕过区域限制。将保存以供将来使用。",
         "useGlobal": "使用常用代理（{{url}}）",
         "useGlobalNotSet": "使用常用代理（未配置 — 请在系统设置中配置）"
+      },
+      "endpointMode": {
+        "label": "OpenAI 端点模式",
+        "default": "默认（仅 Chat）",
+        "auto": "按模型自动检测",
+        "chat": "仅 Chat Completions",
+        "responses": "仅 Responses API",
+        "both": "两者皆可（跟随客户端）"
       }
     },
     "verification": {
