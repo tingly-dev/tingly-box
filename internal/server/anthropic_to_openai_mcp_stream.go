@@ -40,7 +40,8 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 		}
 
 		hooks := s.buildAnthropicToOpenAIMCPHooks(c.Request.Context(), req)
-		inputTokens, outputTokens, err := stream.AnthropicToOpenAIStreamWithMCPHooks(c, req, streamResp, responseModel, disableStreamUsage, hooks)
+		hc := protocol.NewHandleContext(c, responseModel)
+		inputTokens, outputTokens, err := stream.AnthropicToOpenAIStreamWithMCPHooks(hc, req, streamResp, responseModel, disableStreamUsage, hooks)
 		if errors.Is(err, stream.ErrMCPStreamContinue) {
 			continue
 		}

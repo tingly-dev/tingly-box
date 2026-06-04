@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/gin-gonic/gin"
 	guardrailscore "github.com/tingly-dev/tingly-box/internal/guardrails/core"
-	"github.com/tingly-dev/tingly-box/internal/protocol/assembler"
 )
 
 // HandleContext provides dependencies for handle functions.
@@ -26,14 +25,9 @@ type HandleContext struct {
 	Guardrails *HandleGuardrails
 
 	// Hooks for stream processing (chainable - multiple hooks can be added)
-	OnStreamEventHooks     []func(event interface{}) error
-	OnStreamCompleteHooks  []func()
-	OnStreamErrorHooks     []func(err error)
-	OnStreamAssembledHooks []func(*anthropic.Message)
-
-	// streamAssembler accumulates Anthropic stream events into a final
-	// message. Created lazily by WithOnStreamAssembled; nil disables assembly.
-	streamAssembler *assembler.AnthropicStreamAssembler
+	OnStreamEventHooks    []func(event interface{}) error
+	OnStreamCompleteHooks []func()
+	OnStreamErrorHooks    []func(err error)
 
 	// Stream configuration flags
 	DisableStreamUsage bool // Don't include usage in streaming chunks
@@ -116,18 +110,6 @@ func (hc *HandleContext) WithOnStreamError(hook func(error)) *HandleContext {
 	return hc
 }
 
-// WithOnStreamAssembled adds a hook that receives the final assembled message
-// once an Anthropic stream completes successfully. Registering a hook enables
-// stream assembly: ProcessStream feeds every v1/v1beta event into an internal
-// assembler and invokes the hooks with the result before OnStreamComplete.
-func (hc *HandleContext) WithOnStreamAssembled(hook func(*anthropic.Message)) *HandleContext {
-	if hc.streamAssembler == nil {
-		hc.streamAssembler = assembler.NewAnthropicStreamAssembler()
-	}
-	hc.OnStreamAssembledHooks = append(hc.OnStreamAssembledHooks, hook)
-	return hc
-}
-
 // SetupSSEHeaders sets the standard SSE (Server-Sent Events) headers.
 func (hc *HandleContext) SetupSSEHeaders() {
 	c := hc.GinContext
@@ -140,17 +122,15 @@ func (hc *HandleContext) SetupSSEHeaders() {
 
 // ProcessStream provides a generic framework for processing streaming responses.
 // It handles context cancellation, error checking, and event processing.
+// Internally delegates loop infrastructure to RunLoop.
 //
 // nextFunc should return (true, nil, event) to continue, (false, nil, nil) to stop,
 // or (false, err, nil) on error.
 // handleFunc is called for each event after OnStreamEventHooks are invoked.
-// It can be used to send the event to the client.
 func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}), handleFunc func(interface{}) error) error {
 	c := hc.GinContext
 
-	// Check if streaming is supported
-	_, ok := c.Writer.(http.Flusher)
-	if !ok {
+	if _, ok := c.Writer.(http.Flusher); !ok {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Streaming not supported by this connection",
@@ -163,71 +143,40 @@ func (hc *HandleContext) ProcessStream(nextFunc func() (bool, error, interface{}
 
 	var processErr error
 
-	// Manual stream loop instead of gin's c.Stream: gin flushes after every
-	// step, and its Flush() calls WriteHeaderNow() — so a step that produced
-	// nothing (e.g. the stream failed before the first event) would lock in a
-	// 200, blocking the handler's post-loop error path from setting a
-	// retryable 5xx. We flush only after an event was actually handled.
-	flusher := c.Writer.(http.Flusher)
-	clientGone := c.Writer.CloseNotify()
-streamLoop:
-	for {
-		// Check cancellation (client disconnect or request context).
+	RunLoop(c, func(_ io.Writer) bool {
+		// RunLoop only watches clientGone; also check request context here.
 		select {
-		case <-clientGone:
-			break streamLoop
 		case <-c.Request.Context().Done():
-			break streamLoop
+			return false
 		default:
 		}
 
-		// Get next event
 		cont, err, event := nextFunc()
 		if err != nil {
 			processErr = err
-			break streamLoop
+			return false
 		}
 		if !cont {
-			break streamLoop
+			return false
 		}
 
-		// First real chunk: signal the failover gate (when one is wrapping
-		// c.Writer) to flush buffered output and switch to pass-through.
-		// Opportunistic assert keeps protocol free of any server dependency.
-		if cm, ok := c.Writer.(interface{ CommitFirstChunk() }); ok {
-			cm.CommitFirstChunk()
-		}
-
-		// Call OnStreamEvent hooks first
 		for _, hook := range hc.OnStreamEventHooks {
 			if hookErr := hook(event); hookErr != nil {
 				processErr = hookErr
-				break streamLoop
+				return false
 			}
 		}
 
-		// Feed the event into the stream assembler when assembly is enabled.
-		if hc.streamAssembler != nil {
-			switch evt := event.(type) {
-			case *anthropic.MessageStreamEventUnion:
-				hc.streamAssembler.RecordV1Event(evt)
-			case *anthropic.BetaRawMessageStreamEventUnion:
-				hc.streamAssembler.RecordV1BetaEvent(evt)
-			}
-		}
-
-		// Call the provided handler function (e.g., to send to client)
 		if handleFunc != nil {
 			if handleErr := handleFunc(event); handleErr != nil {
 				processErr = handleErr
-				break streamLoop
+				return false
 			}
 		}
 
-		flusher.Flush()
-	}
+		return true
+	})
 
-	// Call OnStreamError hooks if there was an error
 	if processErr != nil {
 		for _, hook := range hc.OnStreamErrorHooks {
 			hook(processErr)
@@ -235,21 +184,30 @@ streamLoop:
 		return processErr
 	}
 
-	// Deliver the assembled message before completion hooks run, so
-	// consumers can store it ahead of any finalisation.
-	if hc.streamAssembler != nil && len(hc.OnStreamAssembledHooks) > 0 {
-		assembled := hc.streamAssembler.Finish(hc.ResponseModel, 0, 0)
-		for _, hook := range hc.OnStreamAssembledHooks {
-			hook(assembled)
-		}
-	}
-
-	// Call OnStreamComplete hooks on success
 	for _, hook := range hc.OnStreamCompleteHooks {
 		hook()
 	}
 
 	return nil
+}
+
+// DispatchStreamEvent calls all OnStreamEvent hooks with the given event.
+// Used by raw-byte stream handlers that own their own loop but still want
+// to participate in the hook chain (e.g. for TTFT tracking).
+func (hc *HandleContext) DispatchStreamEvent(event interface{}) error {
+	for _, hook := range hc.OnStreamEventHooks {
+		if err := hook(event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DispatchStreamError calls all OnStreamError hooks.
+func (hc *HandleContext) DispatchStreamError(err error) {
+	for _, hook := range hc.OnStreamErrorHooks {
+		hook(err)
+	}
 }
 
 // CallOnStreamComplete calls all OnStreamComplete hooks.
