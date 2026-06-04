@@ -49,7 +49,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     active,
     warning = false,
     onAdd,
-    tooltip = 'Add provider',
+    tooltip = 'Add model',
 }) => {
     return (
         <NodeTooltip title={tooltip} placement="top">
@@ -60,7 +60,7 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
             >
                 <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ fontSize: '0.6rem', lineHeight: 1.1 }}>
-                    Add
+                    Add model
                 </Typography>
             </StyledAddProviderNode>
         </NodeTooltip>
