@@ -1,6 +1,7 @@
 package servertest
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -334,4 +335,323 @@ func TestHealthFilter_InactiveServices(t *testing.T) {
 		require.NotNil(t, service)
 		assert.Equal(t, "provider-active", service.Provider)
 	}
+}
+
+// --- Tier tactic vs health filter interaction tests ---
+
+// newTierTestLB creates a LoadBalancer with a health monitor that has a long
+// recovery timeout (simulating the production 5-min window) so we can verify
+// that tier rules bypass it while non-tier rules honour it.
+func newTierTestLB(t *testing.T) (*server.LoadBalancer, *loadbalance.HealthMonitor) {
+	t.Helper()
+	appConfig, err := config.NewAppConfig(config.WithConfigDir(t.TempDir()))
+	require.NoError(t, err)
+
+	healthConfig := loadbalance.HealthMonitorConfig{
+		ConsecutiveErrorThreshold: 3,
+		RecoveryTimeoutSeconds:    600, // 10 min — effectively "never recovers during this test"
+	}
+	hm := loadbalance.NewHealthMonitor(healthConfig)
+	hf := typ.NewHealthFilter(hm)
+	lb := server.NewLoadBalancer(appConfig.GetGlobalConfig(), hf)
+	t.Cleanup(lb.Stop)
+	return lb, hm
+}
+
+func tierService(provider, model string, tier int) *loadbalance.Service {
+	return &loadbalance.Service{
+		Provider: provider,
+		Model:    model,
+		Tier:     tier,
+		Active:   true,
+		Weight:   1,
+	}
+}
+
+// TestTierTactic_BypassesHealthFilter verifies that a tier-based rule still
+// sees all active services even when the HealthMonitor marks T0 as unhealthy.
+// Before the fix, the health filter would hide T0 for ~5 min, blocking the
+// tier tactic's 30-second breaker recovery.
+func TestTierTactic_BypassesHealthFilter(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	primary := tierService("tier-bypass-p1", "m1", 0)
+	backup := tierService("tier-bypass-p2", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{primary, backup},
+		Active:   true,
+	}
+
+	// Mark T0 as unhealthy via the HealthMonitor (rate limited).
+	hm.ReportRateLimit(primary.ServiceID())
+	assert.False(t, hm.IsHealthy(primary.ServiceID()))
+
+	// Even though the HealthMonitor says T0 is unhealthy, the tier tactic
+	// should still see it (breaker is closed) and pick it.
+	svc, err := lb.SelectService(rule)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	assert.Equal(t, primary.Provider, svc.Provider,
+		"tier tactic should bypass health filter and pick T0")
+}
+
+// TestNonTierTactic_StillUsesHealthFilter confirms that the fix only
+// bypasses the health filter for tier rules — other tactics still respect it.
+func TestNonTierTactic_StillUsesHealthFilter(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticRandom,
+			Params: nil,
+		},
+		Services: []*loadbalance.Service{
+			{Provider: "hf-rand-p1", Model: "m1", Active: true, Weight: 1},
+			{Provider: "hf-rand-p2", Model: "m1", Active: true, Weight: 1},
+		},
+		Active: true,
+	}
+
+	hm.ReportRateLimit(rule.Services[0].ServiceID())
+
+	counts := map[string]int{}
+	for i := 0; i < 20; i++ {
+		svc, err := lb.SelectService(rule)
+		require.NoError(t, err)
+		require.NotNil(t, svc)
+		counts[svc.Provider]++
+	}
+	assert.Equal(t, 0, counts["hf-rand-p1"],
+		"random tactic should still respect health filter")
+	assert.Equal(t, 20, counts["hf-rand-p2"])
+}
+
+// TestTierTactic_BreakerFallbackWhileHealthFilterWouldBlock demonstrates the
+// end-to-end scenario: T0 is both HealthMonitor-unhealthy (long timeout) and
+// breaker-open (short timeout). The tier tactic should fall to T1 via the
+// breaker — not because the health filter hid T0.
+func TestTierTactic_BreakerFallbackWhileHealthFilterWouldBlock(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	primary := tierService("brk-hf-p1", "m1", 0)
+	backup := tierService("brk-hf-p2", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{primary, backup},
+		Active:   true,
+	}
+
+	// Trip BOTH the health monitor and the circuit breaker for T0.
+	hm.ReportRateLimit(primary.ServiceID())
+	store := loadbalance.DefaultBreakerStore()
+	for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+		store.RecordFailure(primary.ServiceID())
+	}
+	defer store.RecordSuccess(primary.ServiceID())
+
+	// Breaker is open → tier tactic should fall to T1.
+	svc, err := lb.SelectService(rule)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	assert.Equal(t, backup.Provider, svc.Provider,
+		"breaker-open T0 should fall to T1")
+
+	// Now recover the breaker (simulating 30 s elapsed). The health monitor
+	// still says "unhealthy" (10-min window), but the tier tactic bypasses
+	// the filter, sees T0, checks the breaker, and routes back to T0.
+	store.RecordSuccess(primary.ServiceID())
+	assert.False(t, hm.IsHealthy(primary.ServiceID()),
+		"health monitor should still say unhealthy")
+
+	svc, err = lb.SelectService(rule)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	assert.Equal(t, primary.Provider, svc.Provider,
+		"breaker recovered T0 should be picked even though health monitor says unhealthy")
+}
+
+// TestTierTactic_MultiTierWaterfallWithUnhealthyServices tests a 3-tier
+// setup where tiers are selectively tripped via breakers while the health
+// monitor marks everything unhealthy. The tier tactic should waterfall
+// through breakers, not be blocked by the health filter.
+func TestTierTactic_MultiTierWaterfallWithUnhealthyServices(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	t0 := tierService("waterfall-p0", "m1", 0)
+	t1 := tierService("waterfall-p1", "m1", 1)
+	t2 := tierService("waterfall-p2", "m1", 2)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{t0, t1, t2},
+		Active:   true,
+	}
+
+	// Mark ALL services as unhealthy in HealthMonitor.
+	for _, svc := range rule.Services {
+		hm.ReportRateLimit(svc.ServiceID())
+	}
+
+	store := loadbalance.DefaultBreakerStore()
+	// Trip T0 and T1 breakers; leave T2 breaker closed.
+	for _, svc := range []*loadbalance.Service{t0, t1} {
+		for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+			store.RecordFailure(svc.ServiceID())
+		}
+	}
+	defer func() {
+		store.RecordSuccess(t0.ServiceID())
+		store.RecordSuccess(t1.ServiceID())
+	}()
+
+	svc, err := lb.SelectService(rule)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	assert.Equal(t, t2.Provider, svc.Provider,
+		"should waterfall to T2 via breakers despite health monitor blocking all")
+
+	// Recover T1 breaker — traffic should go to T1 (not stay on T2).
+	store.RecordSuccess(t1.ServiceID())
+	svc, err = lb.SelectService(rule)
+	require.NoError(t, err)
+	assert.Equal(t, t1.Provider, svc.Provider,
+		"T1 breaker recovery should route back to T1")
+
+	// Recover T0 breaker — traffic should return to T0.
+	store.RecordSuccess(t0.ServiceID())
+	svc, err = lb.SelectService(rule)
+	require.NoError(t, err)
+	assert.Equal(t, t0.Provider, svc.Provider,
+		"T0 breaker recovery should route back to T0")
+}
+
+// TestTierTactic_WithinTierLoadSharing verifies that when multiple services
+// share a tier, they still share load even when the health filter would
+// remove some of them.
+func TestTierTactic_WithinTierLoadSharing(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	a := tierService("share-a", "m1", 0)
+	b := tierService("share-b", "m1", 0)
+	backup := tierService("share-backup", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{a, b, backup},
+		Active:   true,
+	}
+
+	// Mark service A as unhealthy in the health monitor. Without the fix,
+	// only B would be visible and the backup would never get picked — but
+	// crucially, A's breaker is still closed, so the tier tactic should still
+	// pick it some of the time.
+	hm.ReportRateLimit(a.ServiceID())
+
+	counts := map[string]int{}
+	for i := 0; i < 200; i++ {
+		svc, err := lb.SelectService(rule)
+		require.NoError(t, err)
+		require.NotNil(t, svc)
+		counts[svc.Provider]++
+	}
+
+	assert.Greater(t, counts[a.Provider], 0,
+		"service A should still receive traffic despite health filter marking it unhealthy")
+	assert.Greater(t, counts[b.Provider], 0,
+		"service B should receive traffic")
+	assert.Equal(t, 0, counts[backup.Provider],
+		"T1 backup should not be picked when T0 breakers are all closed")
+}
+
+// TestTierTactic_RateLimitDoesNotStickFor5Min is the highest-level
+// reproduction of the original bug: a single 429 on T0 should not pin
+// traffic to T1 for the full health-monitor window.
+func TestTierTactic_RateLimitDoesNotStickFor5Min(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	primary := tierService("ratelim-p0", "m1", 0)
+	fallback := tierService("ratelim-p1", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{primary, fallback},
+		Active:   true,
+	}
+
+	// Simulate a 429 on the primary — HealthMonitor marks it unhealthy.
+	hm.ReportRateLimit(primary.ServiceID())
+
+	// Immediately after the 429, the tier tactic should still see T0
+	// (breaker is closed) and route there.
+	for i := 0; i < 10; i++ {
+		svc, err := lb.SelectService(rule)
+		require.NoError(t, err)
+		assert.Equal(t, primary.Provider, svc.Provider,
+			fmt.Sprintf("attempt %d: T0 breaker closed, should still pick T0", i))
+	}
+}
+
+// TestTierTactic_AllServicesHealthMonitorUnhealthy_AllBreakersOpen tests the
+// extreme case: every service is HealthMonitor-unhealthy AND breaker-open.
+// The tier tactic should still return a T0 service so the caller gets the
+// real upstream error.
+func TestTierTactic_AllServicesHealthMonitorUnhealthy_AllBreakersOpen(t *testing.T) {
+	lb, hm := newTierTestLB(t)
+
+	t0 := tierService("alldown-p0", "m1", 0)
+	t1 := tierService("alldown-p1", "m1", 1)
+	rule := &typ.Rule{
+		UUID:         uuid.New().String(),
+		RequestModel: "test-model",
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticTier,
+			Params: typ.DefaultTierParams(),
+		},
+		Services: []*loadbalance.Service{t0, t1},
+		Active:   true,
+	}
+
+	// Mark all as unhealthy + breakers open.
+	store := loadbalance.DefaultBreakerStore()
+	for _, svc := range rule.Services {
+		hm.ReportRateLimit(svc.ServiceID())
+		for i := 0; i < loadbalance.DefaultBreakerFailureThreshold; i++ {
+			store.RecordFailure(svc.ServiceID())
+		}
+	}
+	defer func() {
+		store.RecordSuccess(t0.ServiceID())
+		store.RecordSuccess(t1.ServiceID())
+	}()
+
+	svc, err := lb.SelectService(rule)
+	require.NoError(t, err)
+	require.NotNil(t, svc, "should still return a service for the upstream-error path")
+	assert.Equal(t, 0, svc.Tier,
+		"all-open fallback should pick T0 to surface the real upstream error")
 }
