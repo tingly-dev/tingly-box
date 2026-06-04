@@ -7,18 +7,34 @@ body:
     attributes:
       label: Version
       description: Which version of Tingly-Box are you using?
-      placeholder: "e.g. v0.1.0"
+      placeholder: "e.g. v0.260604.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: system
+    attributes:
+      label: System Information
+      description: OS and architecture
+      options:
+        - Windows amd64
+        - Windows arm64
+        - macOS amd64
+        - macOS arm64 (Apple Silicon)
+        - Linux amd64 (x86_64)
+        - Linux arm64
+        - Other
     validations:
       required: true
 
   - type: input
-    id: system
+    id: system_other
     attributes:
-      label: System Information
-      description: OS, architecture, and any relevant environment details
-      placeholder: "e.g. macOS 14.0 arm64 / Ubuntu 22.04 x86_64"
+      label: System Details (Other)
+      description: Please specify your system if you selected "Other"
+      placeholder: "e.g. FreeBSD 13 x86_64"
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: category
@@ -29,6 +45,8 @@ body:
         - Protocol
         - UI
         - Remote Control
+        - Agent
+        - CLI
         - Other
     validations:
       required: true
