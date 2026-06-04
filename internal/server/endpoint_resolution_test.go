@@ -62,20 +62,20 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 			want:     protocol.TypeOpenAIResponses,
 		},
 
-		// Rule overrides
+		// Rule overrides (override takes priority over provider mode)
 		{
-			name:     "override=responses on default chat-mode provider is ignored",
+			name:     "override=responses on default chat-mode provider forces responses",
 			provider: chatOnly,
 			flags:    typ.RuleFlags{OpenAIEndpointOverride: "responses"},
 			incoming: IncomingAPIChat,
-			want:     protocol.TypeOpenAIChat,
+			want:     protocol.TypeOpenAIResponses,
 		},
 		{
-			name:     "override=chat on responses-only provider is ignored",
+			name:     "override=chat on responses-only provider forces chat",
 			provider: responsesOnly,
 			flags:    typ.RuleFlags{OpenAIEndpointOverride: "chat"},
 			incoming: IncomingAPIChat,
-			want:     protocol.TypeOpenAIResponses,
+			want:     protocol.TypeOpenAIChat,
 		},
 		{
 			name:     "override=chat on both-mode provider forces chat",
