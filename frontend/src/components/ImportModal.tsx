@@ -87,7 +87,7 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
 
                 <TabPanel value={tabValue} index={0}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Paste the JSONL formatted rule export data below.
+                        Paste exported data in JSONL format below.
                     </Typography>
                     <TextField
                         fullWidth
@@ -103,7 +103,7 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
 
                 <TabPanel value={tabValue} index={1}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Paste the base64 encoded rule export data below.
+                        Paste exported data in Base64 format below.
                     </Typography>
                     <TextField
                         fullWidth
@@ -119,7 +119,7 @@ export const ImportModal = ({ open, onClose, onImport, loading = false }: Import
 
                 <TabPanel value={tabValue} index={2}>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Upload a file containing the rule export data (JSONL or Base64 format).
+                        Upload a file containing exported data (JSONL or Base64 format).
                     </Typography>
                     <Button
                         variant="outlined"
