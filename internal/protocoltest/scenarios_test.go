@@ -39,22 +39,22 @@ func TestScenario_ToolUse(t *testing.T) {
 	s := pt.ToolUseScenario()
 	assert.Equal(t, "tool_use", s.Name)
 	assert.Contains(t, s.Tags, "tool_use")
-	assert.NotNil(t, s.MockResponses["openai"])
-	assert.NotNil(t, s.MockResponses["anthropic"])
-	assert.NotNil(t, s.MockResponses["google"])
+	assert.NotNil(t, s.MockResponses["openai_chat"].NonStream)
+	assert.NotNil(t, s.MockResponses["anthropic"].NonStream)
+	assert.NotNil(t, s.MockResponses["google"].NonStream)
 }
 
 func TestScenario_Thinking(t *testing.T) {
 	s := pt.ThinkingScenario()
 	assert.Equal(t, "thinking", s.Name)
 	assert.Contains(t, s.Tags, "thinking")
-	assert.NotNil(t, s.MockResponses["anthropic"])
+	assert.NotNil(t, s.MockResponses["anthropic"].NonStream)
 }
 
 func TestScenario_Error(t *testing.T) {
 	s := pt.ErrorScenario()
 	assert.Equal(t, "error", s.Name)
-	status, _ := s.MockResponses["openai"].NonStream()
+	status, _ := s.MockResponses["openai_chat"].NonStream()
 	assert.NotEqual(t, 200, status)
 }
 
@@ -62,7 +62,7 @@ func TestScenario_Streaming_Text(t *testing.T) {
 	s := pt.StreamingTextScenario()
 	assert.Equal(t, "streaming_text", s.Name)
 	assert.Contains(t, s.Tags, "streaming")
-	events := s.MockResponses["openai"].Stream()
+	events := s.MockResponses["openai_chat"].Stream()
 	assert.Greater(t, len(events), 0)
 	last := events[len(events)-1]
 	assert.Contains(t, last, "[DONE]")
@@ -73,6 +73,6 @@ func TestScenario_Streaming_ToolUse(t *testing.T) {
 	assert.Equal(t, "streaming_tool_use", s.Name)
 	assert.Contains(t, s.Tags, "streaming")
 	assert.Contains(t, s.Tags, "tool_use")
-	events := s.MockResponses["openai"].Stream()
+	events := s.MockResponses["openai_chat"].Stream()
 	assert.Greater(t, len(events), 2)
 }
