@@ -64,6 +64,10 @@ func skipTransitiveKey(chain TransitiveChain, scenarioName string) (string, bool
 //
 // This catches information loss that single-hop tests miss: if A→B drops a
 // field that B→C needs, the results will diverge.
+//
+// A single TestEnv is shared per scenario to limit file descriptor usage;
+// chains within a scenario run sequentially to avoid "too many open files"
+// under heavy parallelism.
 func (m *Matrix) RunTransitive(t *testing.T) {
 	t.Helper()
 
@@ -74,66 +78,65 @@ func (m *Matrix) RunTransitive(t *testing.T) {
 
 	for _, scenario := range m.Scenarios {
 		scenario := scenario
-		// Skip error scenarios — error propagation is not expected to be transitive
 		if scenario.Name == "error" {
 			continue
 		}
 
 		t.Run(scenario.Name, func(t *testing.T) {
+			t.Parallel()
+
+			env := NewTestEnv(t)
+			defer env.Close()
+
 			for _, chain := range chains {
 				chain := chain
-				t.Run(chain.String(), func(t *testing.T) {
-					for _, streaming := range m.Streaming {
-						streaming := streaming
-						modeSuffix := "nonstream"
-						if streaming {
-							modeSuffix = "stream"
-						}
-						t.Run(modeSuffix, func(t *testing.T) {
-							t.Parallel()
-
-							if reason, skip := skipTransitiveKey(chain, scenario.Name); skip {
-								t.Skipf("skipped: %s", reason)
-								return
-							}
-
-							if streaming && !scenarioSupportsStreaming(scenario) {
-								t.Skip("scenario does not support streaming")
-								return
-							}
-							if !streaming && scenarioRequiresStreaming(scenario) {
-								t.Skip("scenario requires streaming mode")
-								return
-							}
-
-							env := NewTestEnv(t)
-							defer env.Close()
-
-							// Hop 1: A→B
-							env.SetupRoute(chain.First.Source, chain.First.Target, scenario)
-							result1 := env.SendAs(t, chain.First.Source, chain.First.Target, scenario, streaming)
-
-							// Hop 2: B→C
-							env.SetupRoute(chain.Second.Source, chain.Second.Target, scenario)
-							result2 := env.SendAs(t, chain.Second.Source, chain.Second.Target, scenario, streaming)
-
-							// Both hops must individually succeed
-							for _, a := range scenario.Assertions {
-								if err := a.Check(result1); err != nil {
-									t.Errorf("hop1 (%s→%s) assertion %q failed: %v",
-										chain.First.Source, chain.First.Target, a.Name, err)
-								}
-								if err := a.Check(result2); err != nil {
-									t.Errorf("hop2 (%s→%s) assertion %q failed: %v",
-										chain.Second.Source, chain.Second.Target, a.Name, err)
-								}
-							}
-
-							// Semantic equivalence between the two hops
-							checkSemanticEquivalence(t, chain, result1, result2)
-						})
+				for _, streaming := range m.Streaming {
+					streaming := streaming
+					modeSuffix := "nonstream"
+					if streaming {
+						modeSuffix = "stream"
 					}
-				})
+					label := fmt.Sprintf("%s/%s", chain, modeSuffix)
+
+					t.Run(label, func(t *testing.T) {
+						if reason, skip := skipTransitiveKey(chain, scenario.Name); skip {
+							t.Skipf("skipped: %s", reason)
+							return
+						}
+
+						if streaming && !scenarioSupportsStreaming(scenario) {
+							t.Skip("scenario does not support streaming")
+							return
+						}
+						if !streaming && scenarioRequiresStreaming(scenario) {
+							t.Skip("scenario requires streaming mode")
+							return
+						}
+
+						// Hop 1: A→B
+						env.SetupRoute(chain.First.Source, chain.First.Target, scenario)
+						result1 := env.SendAs(t, chain.First.Source, chain.First.Target, scenario, streaming)
+
+						// Hop 2: B→C
+						env.SetupRoute(chain.Second.Source, chain.Second.Target, scenario)
+						result2 := env.SendAs(t, chain.Second.Source, chain.Second.Target, scenario, streaming)
+
+						// Both hops must individually succeed
+						for _, a := range scenario.Assertions {
+							if err := a.Check(result1); err != nil {
+								t.Errorf("hop1 (%s→%s) assertion %q failed: %v",
+									chain.First.Source, chain.First.Target, a.Name, err)
+							}
+							if err := a.Check(result2); err != nil {
+								t.Errorf("hop2 (%s→%s) assertion %q failed: %v",
+									chain.Second.Source, chain.Second.Target, a.Name, err)
+							}
+						}
+
+						// Semantic equivalence between the two hops
+						checkSemanticEquivalence(t, chain, result1, result2)
+					})
+				}
 			}
 		})
 	}
