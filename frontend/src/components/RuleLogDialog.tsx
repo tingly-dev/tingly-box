@@ -22,7 +22,7 @@ const ScenarioLogDialog = ({ open, onClose, scenario, initialScenario }: Scenari
             <DialogTitle sx={{ pb: 1 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Stack direction="row" alignItems="center" spacing={1}>
-                        <Typography variant="h6">Logs</Typography>
+                        <Typography variant="h6">Troubleshoot</Typography>
                         <Chip label={scenario} size="small" variant="outlined" sx={{ fontSize: '0.72rem', height: 22 }} />
                     </Stack>
                     <IconButton size="small" onClick={onClose}>

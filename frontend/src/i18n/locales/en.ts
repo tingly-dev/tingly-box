@@ -121,7 +121,7 @@ export default {
     "system": "System",
     "general": "General",
     "experimental": "Experimental",
-    "logs": "Logs",
+    "logs": "Troubleshoot",
     "userRequest": "User Request",
     "skills": "Skills",
     "addProfile": "Add Profile",

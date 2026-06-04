@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
     Add as AddIcon,
-    Article as LogsIcon,
+    BugReport as TroubleshootIcon,
     ExpandMore as ExpandMoreIcon,
     Key as KeyIcon,
     UnfoldMore as UnfoldMoreIcon,
@@ -53,11 +53,11 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
             {onViewLogs && (
                 <Button
                     variant="outlined"
-                    startIcon={<LogsIcon />}
+                    startIcon={<TroubleshootIcon />}
                     onClick={onViewLogs}
                     size="small"
                 >
-                    Logs
+                    Troubleshoot
                 </Button>
             )}
             {showExpandCollapseButton && collapsible && (

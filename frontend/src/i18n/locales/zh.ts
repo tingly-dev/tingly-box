@@ -122,7 +122,7 @@ export default {
     "system": "系统",
     "general": "通用",
     "experimental": "实验功能",
-    "logs": "日志",
+    "logs": "错误检查",
     "userRequest": "用户请求",
     "skills": "技能",
     "addProfile": "添加配置文件",
