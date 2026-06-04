@@ -48,7 +48,8 @@ type pendingToolCallResponse struct {
 
 // HandleOpenAIChatToResponsesStream converts OpenAI Chat Completions streaming to Responses API format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIChatToResponsesStream(c *gin.Context, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
+func HandleOpenAIChatToResponsesStream(hc *protocol.HandleContext, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
+	c := hc.GinContext
 	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI Chat to Responses streaming conversion handler")
 	defer func() {
 		if r := recover(); r != nil {

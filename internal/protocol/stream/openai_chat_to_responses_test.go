@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
@@ -41,7 +42,7 @@ func TestHandleOpenAIChatToResponsesStream_TextOnly(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	usage, err := HandleOpenAIChatToResponsesStream(c, stream, model)
+	usage, err := HandleOpenAIChatToResponsesStream(protocol.NewHandleContext(c, model), stream, model)
 	require.NoError(t, err)
 
 	t.Logf("Usage stats: input=%d, output=%d", usage.InputTokens, usage.OutputTokens)
@@ -103,7 +104,7 @@ func TestHandleOpenAIChatToResponsesStream_WithToolCalls(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	usage, err := HandleOpenAIChatToResponsesStream(c, stream, model)
+	usage, err := HandleOpenAIChatToResponsesStream(protocol.NewHandleContext(c, model), stream, model)
 	require.NoError(t, err)
 
 	t.Logf("Usage stats: input=%d, output=%d", usage.InputTokens, usage.OutputTokens)
