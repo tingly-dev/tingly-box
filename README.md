@@ -105,7 +105,7 @@ Any application is ready to use.
 
 > We've provided detailed config guide in application
 
-![Agent Integration Demo](./docs/images/3-claude_code.png)
+![Agent Integration Demo](./docs/images/4-claude-code.png)
 
 </details>
 
@@ -137,7 +137,7 @@ Tingly Box now supports remote control through popular IM platforms. Interact wi
 - Team collaboration with shared agent access
 - Monitor and control agents while away from your workstation
 
-![Remote Control Demo](./docs/images/5-remote-control.png)
+![Remote Control Demo](./docs/images/6-remote.png)
 
 </details>
 
@@ -200,7 +200,7 @@ Requests route through your OAuth-authorized provider, using your existing Claud
 
 This works with any tool that supports OpenAI-compatible endpoints: Cherry Studio, VS Code extensions, or custom AI agents.
 
-![OAuth Provider Demo](./docs/images/6-oauth.png)
+![OAuth Provider Demo](./docs/images/2-credentials.png)
 
 </details>
 
@@ -215,7 +215,7 @@ npx tingly-box@latest
 
 Then open `http://localhost:12580` in your browser.
 
-![Dashboard](./docs/images/0-dashboard.png)
+![Dashboard](./docs/images/1-dashboard.png)
 
 </details>
 
