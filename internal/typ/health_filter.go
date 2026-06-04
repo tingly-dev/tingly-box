@@ -56,12 +56,22 @@ func (hf *HealthFilter) FilterAuthErrors(services []*loadbalance.Service) []*loa
 		return services
 	}
 	var out []*loadbalance.Service
-	for _, svc := range services {
-		if svc != nil && !hf.monitor.HasAuthError(svc.ServiceID()) {
+	for i, svc := range services {
+		if svc == nil || hf.monitor.HasAuthError(svc.ServiceID()) {
+			if out == nil {
+				out = make([]*loadbalance.Service, 0, len(services))
+				out = append(out, services[:i]...)
+			}
+			continue
+		}
+		if out != nil {
 			out = append(out, svc)
 		}
 	}
-	return out
+	if out != nil {
+		return out
+	}
+	return services
 }
 
 // IsHealthy checks if a specific service is healthy

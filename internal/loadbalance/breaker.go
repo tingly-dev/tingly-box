@@ -121,7 +121,7 @@ func (b *Breaker) RecordFailure() {
 }
 
 // currentOpenDuration returns the backoff-adjusted open duration.
-// Each consecutive half-open failure doubles the wait: 30s → 60s → 120s → 240s → cap.
+// Each consecutive half-open failure doubles the wait (e.g. 60s → 120s → 240s → cap).
 // Must be called with b.mu held.
 func (b *Breaker) currentOpenDuration() time.Duration {
 	d := b.OpenDuration
