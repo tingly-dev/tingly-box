@@ -345,8 +345,17 @@ func sendResponsesFunctionCallArgumentsDelta(c *gin.Context, state *chatToRespon
 	OpenAIResponsesEvent(c, event.EventType(), event)
 }
 
-// sendResponsesCompletedEvent sends the response.completed event
+// sendResponsesCompletedEvent sends the terminal response event.
+// When finishReason indicates truncation ("length" / "content_filter"),
+// it emits response.incomplete with the appropriate reason; otherwise
+// it emits response.completed.
 func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, model, finishReason string, flusher http.Flusher) {
+	isIncomplete, incompleteReason := chatFinishReasonToIncomplete(finishReason)
+	itemStatus := "completed"
+	if isIncomplete {
+		itemStatus = "incomplete"
+	}
+
 	if state.hasTextItem {
 		text := state.accumulatedText.String()
 		textDone := wire.ResponsesOutputTextDoneEvent{
@@ -364,7 +373,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 			Type:           "response.output_item.done",
 			SequenceNumber: nextSequenceNumber(state),
 			OutputIndex:    0,
-			Item:           newResponsesMessageItem(state.textItemID, "completed", text),
+			Item:           newResponsesMessageItem(state.textItemID, itemStatus, text),
 		}
 		OpenAIResponsesEvent(c, textItemDone.EventType(), textItemDone)
 	}
@@ -403,7 +412,7 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 
 	var output []wire.ResponsesOutputItemWire
 	if state.accumulatedText.Len() > 0 {
-		output = append(output, newResponsesMessageItem(state.textItemID, "completed", state.accumulatedText.String()))
+		output = append(output, newResponsesMessageItem(state.textItemID, itemStatus, state.accumulatedText.String()))
 	}
 
 	for _, idx := range sortedIndexes {
@@ -415,13 +424,37 @@ func sendResponsesCompletedEvent(c *gin.Context, state *chatToResponsesState, mo
 		output = append(output, newResponsesFunctionCallItem(ptc.itemID, callID, ptc.name, ptc.arguments.String(), "completed"))
 	}
 
-	event := wire.ResponsesCompletedEvent{
-		Type:           "response.completed",
-		SequenceNumber: nextSequenceNumber(state),
-		Response:       newResponsesWireResponse(state, "completed", output, model),
+	if isIncomplete {
+		resp := newResponsesWireResponse(state, "incomplete", output, model)
+		resp.IncompleteDetails = &wire.ResponsesIncompleteDetailsWire{Reason: incompleteReason}
+		event := wire.ResponsesIncompleteEvent{
+			Type:           "response.incomplete",
+			SequenceNumber: nextSequenceNumber(state),
+			Response:       resp,
+		}
+		OpenAIResponsesEvent(c, event.EventType(), event)
+	} else {
+		event := wire.ResponsesCompletedEvent{
+			Type:           "response.completed",
+			SequenceNumber: nextSequenceNumber(state),
+			Response:       newResponsesWireResponse(state, "completed", output, model),
+		}
+		OpenAIResponsesEvent(c, event.EventType(), event)
 	}
+}
 
-	OpenAIResponsesEvent(c, event.EventType(), event)
+// chatFinishReasonToIncomplete maps a Chat finish_reason to the Responses
+// API incomplete status. Returns (true, reason) when the response should
+// be marked incomplete, or (false, "") for normal completion.
+func chatFinishReasonToIncomplete(finishReason string) (bool, string) {
+	switch finishReason {
+	case "length":
+		return true, "max_output_tokens"
+	case "content_filter":
+		return true, "content_filter"
+	default:
+		return false, ""
+	}
 }
 
 func newResponsesWireResponse(state *chatToResponsesState, status string, output []wire.ResponsesOutputItemWire, model string) wire.ResponsesWireResponse {
