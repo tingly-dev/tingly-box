@@ -203,7 +203,8 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 			return
 		}
 
-		inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(c, req, streamResp, responseModel, disableStreamUsage)
+		hc := protocol.NewHandleContext(c, responseModel)
+		inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(hc, req, streamResp, responseModel, disableStreamUsage)
 		if err != nil {
 			if inputTokens > 0 || outputTokens > 0 {
 				tokenUsage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
@@ -910,7 +911,8 @@ func (s *Server) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.T
 		}
 		return
 	}
-	usage, err := stream.HandleOpenAIChatToResponsesStream(c, chatStream, responseModel)
+	hc := protocol.NewHandleContext(c, responseModel)
+	usage, err := stream.HandleOpenAIChatToResponsesStream(hc, chatStream, responseModel)
 	s.trackUsageWithTokenUsage(c, usage, err)
 }
 
@@ -1017,7 +1019,8 @@ func (s *Server) dispatchOpenAIChatToAnthropicBetaGeneric(
 
 	// Step 3: Convert Anthropic Beta stream back to OpenAI Chat format on-the-fly
 	// This achieves TRUE streaming with proper format conversion
-	inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(c, anthropicReq, anthropicStream, responseModel, false)
+	hc := protocol.NewHandleContext(c, responseModel)
+	inputTokens, outputTokens, err := stream.AnthropicToOpenAIStream(hc, anthropicReq, anthropicStream, responseModel, false)
 	if err != nil {
 		usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
 		s.trackUsageWithTokenUsage(c, usage, err)

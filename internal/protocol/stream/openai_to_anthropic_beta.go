@@ -22,28 +22,29 @@ import (
 
 // HandleOpenAIToAnthropicBetaStream processes OpenAI streaming events and converts them to Anthropic beta format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIToAnthropicBetaStream(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
-	return handleOpenAIToAnthropicBetaStream(c, req, stream, responseModel, nil)
+func HandleOpenAIToAnthropicBetaStream(hc *protocol.HandleContext, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
+	return handleOpenAIToAnthropicBetaStream(hc, req, stream, responseModel, nil)
 }
 
 // HandleOpenAIToAnthropicBetaStreamWithMCPHooks enables MCP-aware tool suppression/finalization during conversion.
 func HandleOpenAIToAnthropicBetaStreamWithMCPHooks(
-	c *gin.Context,
+	hc *protocol.HandleContext,
 	req *openai.ChatCompletionNewParams,
 	stream *openaistream.Stream[openai.ChatCompletionChunk],
 	responseModel string,
 	hooks *OpenAIToAnthropicMCPHooks,
 ) (*protocol.TokenUsage, error) {
-	return handleOpenAIToAnthropicBetaStream(c, req, stream, responseModel, hooks)
+	return handleOpenAIToAnthropicBetaStream(hc, req, stream, responseModel, hooks)
 }
 
 func handleOpenAIToAnthropicBetaStream(
-	c *gin.Context,
+	hc *protocol.HandleContext,
 	req *openai.ChatCompletionNewParams,
 	stream *openaistream.Stream[openai.ChatCompletionChunk],
 	responseModel string,
 	hooks *OpenAIToAnthropicMCPHooks,
 ) (*protocol.TokenUsage, error) {
+	c := hc.GinContext
 	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI to Anthropic beta streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {

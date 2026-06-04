@@ -37,28 +37,29 @@ var ErrMCPStreamContinue = errors.New("mcp stream should continue")
 
 // HandleOpenAIToAnthropicStreamResponse processes OpenAI streaming events and converts them to Anthropic format.
 // Returns UsageStat containing token usage information for tracking.
-func HandleOpenAIToAnthropicStreamResponse(c *gin.Context, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
-	return handleOpenAIToAnthropicStreamResponse(c, req, stream, responseModel, nil)
+func HandleOpenAIToAnthropicStreamResponse(hc *protocol.HandleContext, req *openai.ChatCompletionNewParams, stream *openaistream.Stream[openai.ChatCompletionChunk], responseModel string) (*protocol.TokenUsage, error) {
+	return handleOpenAIToAnthropicStreamResponse(hc, req, stream, responseModel, nil)
 }
 
 // HandleOpenAIToAnthropicStreamResponseWithMCPHooks enables MCP-aware tool suppression/finalization during conversion.
 func HandleOpenAIToAnthropicStreamResponseWithMCPHooks(
-	c *gin.Context,
+	hc *protocol.HandleContext,
 	req *openai.ChatCompletionNewParams,
 	stream *openaistream.Stream[openai.ChatCompletionChunk],
 	responseModel string,
 	hooks *OpenAIToAnthropicMCPHooks,
 ) (*protocol.TokenUsage, error) {
-	return handleOpenAIToAnthropicStreamResponse(c, req, stream, responseModel, hooks)
+	return handleOpenAIToAnthropicStreamResponse(hc, req, stream, responseModel, hooks)
 }
 
 func handleOpenAIToAnthropicStreamResponse(
-	c *gin.Context,
+	hc *protocol.HandleContext,
 	req *openai.ChatCompletionNewParams,
 	stream *openaistream.Stream[openai.ChatCompletionChunk],
 	responseModel string,
 	hooks *OpenAIToAnthropicMCPHooks,
 ) (*protocol.TokenUsage, error) {
+	c := hc.GinContext
 	logrus.WithContext(c.Request.Context()).Debug("Starting OpenAI to Anthropic streaming response handler")
 	defer func() {
 		if r := recover(); r != nil {

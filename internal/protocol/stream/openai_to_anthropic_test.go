@@ -16,6 +16,8 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
 type fakeOpenAIDecoder struct{}
@@ -73,7 +75,7 @@ func TestHandleOpenAIToAnthropicStreamResponse(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// the handler
-	usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, model)
+	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, model), nil, stream, model)
 	require.NoError(t, err)
 
 	// Verify usage stats
@@ -191,7 +193,7 @@ func TestHandleOpenAIToAnthropicStreamResponseWithThinking(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 
 	// Run the handler
-	usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, model)
+	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, model), nil, stream, model)
 	require.NoError(t, err)
 
 	t.Logf("Usage stats: input=%d, output=%d", usage.InputTokens, usage.OutputTokens)
@@ -278,7 +280,7 @@ func TestHandleOpenAIToAnthropicStreamResponse_ClientCanceled(t *testing.T) {
 
 	stream := openaistream.NewStream[openai.ChatCompletionChunk](&fakeOpenAIDecoder{}, nil)
 
-	usage, err := HandleOpenAIToAnthropicStreamResponse(c, nil, stream, "test-model")
+	usage, err := HandleOpenAIToAnthropicStreamResponse(protocol.NewHandleContext(c, "test-model"), nil, stream, "test-model")
 	require.ErrorIs(t, err, context.Canceled)
 	require.NotNil(t, usage)
 	assert.Equal(t, 0, usage.InputTokens)
