@@ -261,7 +261,7 @@ func HandleGoogleToAnthropicStreamResponse(c *gin.Context, stream iter.Seq2[*gen
 	}
 	// First SSE byte for this stream — open the failover gate so buffered
 	// output flushes and subsequent writes pass straight through.
-	CommitFirstChunk(c)
+	protocol.CommitFirstChunk(c)
 	sendAnthropicStreamEvent(c, "message_start", messageStartEvent, flusher)
 
 	// Process the stream
@@ -467,7 +467,7 @@ func HandleGoogleToAnthropicBetaStreamResponse(c *gin.Context, stream iter.Seq2[
 	}
 	// First SSE byte for this stream — open the failover gate so buffered
 	// output flushes and subsequent writes pass straight through.
-	CommitFirstChunk(c)
+	protocol.CommitFirstChunk(c)
 	sendAnthropicStreamEvent(c, eventTypeMessageStart, messageStartEvent, flusher)
 
 	// Process the stream
