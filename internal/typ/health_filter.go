@@ -47,6 +47,33 @@ func (hf *HealthFilter) FilterWithFallback(services []*loadbalance.Service) []*l
 	return healthy
 }
 
+// FilterAuthErrors removes only services with auth errors (401/403). Transient
+// states like rate limits and consecutive errors are kept so that callers with
+// their own recovery mechanisms (e.g. tier tactic's circuit breaker) can still
+// see those services.
+func (hf *HealthFilter) FilterAuthErrors(services []*loadbalance.Service) []*loadbalance.Service {
+	if hf.monitor == nil {
+		return services
+	}
+	var out []*loadbalance.Service
+	for i, svc := range services {
+		if svc == nil || hf.monitor.HasAuthError(svc.ServiceID()) {
+			if out == nil {
+				out = make([]*loadbalance.Service, 0, len(services))
+				out = append(out, services[:i]...)
+			}
+			continue
+		}
+		if out != nil {
+			out = append(out, svc)
+		}
+	}
+	if out != nil {
+		return out
+	}
+	return services
+}
+
 // IsHealthy checks if a specific service is healthy
 func (hf *HealthFilter) IsHealthy(serviceID string) bool {
 	if hf.monitor == nil {

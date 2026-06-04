@@ -317,6 +317,20 @@ func (hm *HealthMonitor) GetAllHealth() map[string]*ServiceHealth {
 	return result
 }
 
+// HasAuthError returns true if the service is currently marked with an auth
+// error (401/403). Auth errors are permanent until the key is fixed, so
+// callers that manage their own transient-failure recovery (e.g. circuit
+// breakers) can still exclude these.
+func (hm *HealthMonitor) HasAuthError(serviceID string) bool {
+	health := hm.getHealth(serviceID)
+	if health == nil {
+		return false
+	}
+	health.mutex.RLock()
+	defer health.mutex.RUnlock()
+	return health.AuthError
+}
+
 // ResetHealth manually resets a service's health to healthy
 func (hm *HealthMonitor) ResetHealth(serviceID string) {
 	hm.recoverService(serviceID)

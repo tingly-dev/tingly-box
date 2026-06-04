@@ -76,6 +76,13 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 		return nil, fmt.Errorf("no active services for rule %s", rule.RequestModel)
 	}
 
+	// Tier tactic has its own circuit-breaker-based health management with
+	// fast recovery (30 s). The full HealthFilter would hide services for the
+	// monitor's recovery window (5 min), defeating the breaker's quick
+	// failover/recovery. However auth errors (401/403) are permanent — a
+	// revoked key never self-heals — so those must still be filtered out.
+	isTier := rule.LBTactic.Type == loadbalance.TacticTier
+
 	// Filter healthy services using health filter. When every active service is
 	// currently marked unhealthy (e.g. a transient 429 on a single-service rule,
 	// or all services inside the recovery window at once), fall back to the full
@@ -83,11 +90,19 @@ func (lb *LoadBalancer) SelectService(rule *typ.Rule) (*loadbalance.Service, err
 	// is strictly better than a hard "no service available": the service may have
 	// already recovered, and if it really is still failing the caller gets the
 	// real upstream error (e.g. 429) rather than a confusing routing error.
-	healthyServices := lb.healthFilter.Filter(activeServices)
-	if len(healthyServices) == 0 {
-		logrus.Warnf("[load_balancer] all %d active services for rule %s are unhealthy; "+
-			"falling back to active set", len(activeServices), rule.RequestModel)
-		healthyServices = activeServices
+	var healthyServices []*loadbalance.Service
+	if isTier {
+		healthyServices = lb.healthFilter.FilterAuthErrors(activeServices)
+		if len(healthyServices) == 0 {
+			healthyServices = activeServices
+		}
+	} else {
+		healthyServices = lb.healthFilter.Filter(activeServices)
+		if len(healthyServices) == 0 {
+			logrus.Warnf("[load_balancer] all %d active services for rule %s are unhealthy; "+
+				"falling back to active set", len(activeServices), rule.RequestModel)
+			healthyServices = activeServices
+		}
 	}
 
 	// For single healthy service rules, return it directly

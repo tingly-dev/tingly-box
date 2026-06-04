@@ -17,7 +17,8 @@ const (
 // Default circuit breaker tunables.
 const (
 	DefaultBreakerFailureThreshold = 3
-	DefaultBreakerOpenDuration     = 30 * time.Second
+	DefaultBreakerOpenDuration     = 60 * time.Second
+	DefaultBreakerMaxOpenDuration  = 5 * time.Minute
 )
 
 // Breaker is a simple three-state circuit breaker for a single service.
@@ -37,9 +38,11 @@ type Breaker struct {
 	consecFails      int
 	openedAt         time.Time
 	halfOpenInFlight bool
+	halfOpenFails    int // consecutive half-open probe failures for backoff
 
 	FailureThreshold int
 	OpenDuration     time.Duration
+	MaxOpenDuration  time.Duration
 }
 
 // NewBreaker creates a breaker with the supplied thresholds. Zero values
@@ -55,6 +58,7 @@ func NewBreaker(failureThreshold int, openDuration time.Duration) *Breaker {
 		state:            BreakerClosed,
 		FailureThreshold: failureThreshold,
 		OpenDuration:     openDuration,
+		MaxOpenDuration:  DefaultBreakerMaxOpenDuration,
 	}
 }
 
@@ -69,7 +73,7 @@ func (b *Breaker) Allow() bool {
 	case BreakerClosed:
 		return true
 	case BreakerOpen:
-		if time.Since(b.openedAt) >= b.OpenDuration {
+		if time.Since(b.openedAt) >= b.currentOpenDuration() {
 			b.state = BreakerHalfOpen
 			b.halfOpenInFlight = true
 			return true
@@ -91,11 +95,13 @@ func (b *Breaker) RecordSuccess() {
 	defer b.mu.Unlock()
 	b.state = BreakerClosed
 	b.consecFails = 0
+	b.halfOpenFails = 0
 	b.halfOpenInFlight = false
 }
 
 // RecordFailure increments failure tracking and trips the breaker when
-// the threshold is reached. A failure during HalfOpen immediately re-opens.
+// the threshold is reached. A failure during HalfOpen immediately re-opens
+// and increases the backoff for the next open window.
 func (b *Breaker) RecordFailure() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -103,6 +109,7 @@ func (b *Breaker) RecordFailure() {
 	if b.state == BreakerHalfOpen {
 		b.state = BreakerOpen
 		b.openedAt = time.Now()
+		b.halfOpenFails++
 		b.halfOpenInFlight = false
 		return
 	}
@@ -113,12 +120,26 @@ func (b *Breaker) RecordFailure() {
 	}
 }
 
+// currentOpenDuration returns the backoff-adjusted open duration.
+// Each consecutive half-open failure doubles the wait (e.g. 60s → 120s → 240s → cap).
+// Must be called with b.mu held.
+func (b *Breaker) currentOpenDuration() time.Duration {
+	d := b.OpenDuration
+	for i := 0; i < b.halfOpenFails; i++ {
+		d *= 2
+		if d >= b.MaxOpenDuration {
+			return b.MaxOpenDuration
+		}
+	}
+	return d
+}
+
 // State returns the current breaker state. Intended for introspection / UI.
 func (b *Breaker) State() BreakerState {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	// Apply the lazy Open→HalfOpen transition for read consistency.
-	if b.state == BreakerOpen && time.Since(b.openedAt) >= b.OpenDuration {
+	if b.state == BreakerOpen && time.Since(b.openedAt) >= b.currentOpenDuration() {
 		return BreakerHalfOpen
 	}
 	return b.state
