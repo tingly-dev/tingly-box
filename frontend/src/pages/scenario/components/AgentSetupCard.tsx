@@ -124,6 +124,17 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
     const [applyResult, setApplyResult] = useState<AgentApplyResult | null>(null);
     const [copied, setCopied] = useState(false);
     const [copiedMirror, setCopiedMirror] = useState(false);
+    // Tracks which completed steps the user has manually expanded
+    const [expandedDoneSteps, setExpandedDoneSteps] = useState<Set<number>>(new Set());
+
+    const toggleDoneStep = (step: number) => {
+        setExpandedDoneSteps(prev => {
+            const next = new Set(prev);
+            if (next.has(step)) next.delete(step);
+            else next.add(step);
+            return next;
+        });
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -271,7 +282,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
 
                     {/* Step 1 — Provider */}
                     <Box sx={stepRowSx(providerDone, firstIncomplete === 0)}>
-                        <Stack direction="row" spacing={1.25} alignItems="center">
+                        <Stack
+                            direction="row" spacing={1.25} alignItems="center"
+                            onClick={providerDone ? () => toggleDoneStep(0) : undefined}
+                            sx={providerDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
+                        >
                             {providerLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : <StepIndicator step={1} done={providerDone} active={firstIncomplete === 0} />}
                             <Typography variant="body2" fontWeight={500} color={providerDone ? 'text.primary' : firstIncomplete === 0 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
                                 Connect AI Provider
@@ -282,10 +297,13 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 </Typography>
                             )}
                             {providerDone && onConnectProvider && (
-                                <Button size="small" variant="text" onClick={onConnectProvider} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>+ Connect</Button>
+                                <Button size="small" variant="text" onClick={(e) => { e.stopPropagation(); onConnectProvider(); }} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>+ Connect</Button>
+                            )}
+                            {providerDone && (
+                                expandedDoneSteps.has(0) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
                             )}
                         </Stack>
-                        <Collapse in={!providerDone && firstIncomplete === 0}>
+                        <Collapse in={(!providerDone && firstIncomplete === 0) || expandedDoneSteps.has(0)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 <Typography variant="body2" color="text.secondary">
                                     Connect an AI provider (e.g. OpenAI, Anthropic, DeepSeek) to start using {agentName}.
@@ -301,7 +319,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
 
                     {/* Step 2 — Model */}
                     <Box sx={stepRowSx(modelDone, firstIncomplete === 1)}>
-                        <Stack direction="row" spacing={1.25} alignItems="center">
+                        <Stack
+                            direction="row" spacing={1.25} alignItems="center"
+                            onClick={modelDone ? () => toggleDoneStep(1) : undefined}
+                            sx={modelDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
+                        >
                             <StepIndicator step={2} done={modelDone} active={firstIncomplete === 1} />
                             <Typography variant="body2" fontWeight={500} color={modelDone ? 'text.primary' : firstIncomplete === 1 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
                                 Select a Model
@@ -310,10 +332,13 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 <Typography variant="body2" color="text.secondary">Configured</Typography>
                             )}
                             {modelDone && onSelectModel && (
-                                <Button size="small" variant="text" onClick={onSelectModel} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>Change</Button>
+                                <Button size="small" variant="text" onClick={(e) => { e.stopPropagation(); onSelectModel(); }} sx={{ py: 0, textTransform: 'none', minWidth: 0 }}>Change</Button>
+                            )}
+                            {modelDone && (
+                                expandedDoneSteps.has(1) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
                             )}
                         </Stack>
-                        <Collapse in={!modelDone && firstIncomplete === 1}>
+                        <Collapse in={(!modelDone && firstIncomplete === 1) || expandedDoneSteps.has(1)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 <Typography variant="body2" color="text.secondary">
                                     Choose which model {agentName} will use in the <em>Models and Forwarding Rules</em> section below.
@@ -331,7 +356,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
 
                     {/* Step 3 — Install */}
                     <Box sx={stepRowSx(installDone, firstIncomplete === 2)}>
-                        <Stack direction="row" spacing={1.25} alignItems="center">
+                        <Stack
+                            direction="row" spacing={1.25} alignItems="center"
+                            onClick={installDone ? () => toggleDoneStep(2) : undefined}
+                            sx={installDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
+                        >
                             <StepIndicator step={3} done={installDone} active={firstIncomplete === 2} />
                             <Typography variant="body2" fontWeight={500} color={installDone ? 'text.primary' : firstIncomplete === 2 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
                                 Install {agentName}
@@ -339,8 +368,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             {installDone && (
                                 <Typography variant="body2" color="text.secondary">Installed</Typography>
                             )}
+                            {installDone && (
+                                expandedDoneSteps.has(2) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                            )}
                         </Stack>
-                        <Collapse in={!installDone && firstIncomplete === 2}>
+                        <Collapse in={(!installDone && firstIncomplete === 2) || expandedDoneSteps.has(2)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 {installActions?.length ? (
                                     <>
@@ -401,7 +433,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
 
                     {/* Step 4 — Apply */}
                     <Box sx={stepRowSx(applyDone, firstIncomplete === 3)}>
-                        <Stack direction="row" spacing={1.25} alignItems="center">
+                        <Stack
+                            direction="row" spacing={1.25} alignItems="center"
+                            onClick={applyDone ? () => toggleDoneStep(3) : undefined}
+                            sx={applyDone ? { cursor: 'pointer', '&:hover': { opacity: 0.8 } } : undefined}
+                        >
                             <StepIndicator step={4} done={applyDone} active={firstIncomplete === 3} />
                             <Typography variant="body2" fontWeight={500} color={applyDone ? 'text.primary' : firstIncomplete === 3 ? 'primary.main' : 'text.disabled'} sx={{ flex: 1 }}>
                                 {applyStepLabel}
@@ -409,8 +445,11 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                             {applyDone && (
                                 <Typography variant="body2" color="text.secondary">Applied</Typography>
                             )}
+                            {applyDone && (
+                                expandedDoneSteps.has(3) ? <ExpandLessIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} /> : <ExpandMoreIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+                            )}
                         </Stack>
-                        <Collapse in={!applyDone && firstIncomplete === 3}>
+                        <Collapse in={(!applyDone && firstIncomplete === 3) || expandedDoneSteps.has(3)}>
                             <Stack spacing={0.75} sx={{ mt: 0.75, pl: 4.25 }}>
                                 <Typography variant="body2" color="text.secondary">
                                     {applyStepDescription ?? `One click to write the proxy configuration to ${agentName}'s settings file.`}
@@ -429,6 +468,14 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                     {onViewConfig && (
                                         <Button variant="text" size="small" onClick={onViewConfig} sx={{ textTransform: 'none', color: 'text.secondary' }}>
                                             {viewConfigButtonLabel} (Advanced)
+                                        </Button>
+                                    )}
+                                    {!applyDone && (
+                                        <Button variant="text" size="small" onClick={() => {
+                                            localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
+                                            setApplyDone(true);
+                                        }} sx={{ textTransform: 'none', color: 'text.disabled' }}>
+                                            Skip
                                         </Button>
                                     )}
                                 </Stack>
