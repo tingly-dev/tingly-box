@@ -129,20 +129,9 @@ const ProviderCard: React.FC<{
                 >
                     {name}
                 </Typography>
-                <Stack direction="row" spacing={0.5} sx={{mt: 0.5}}>
-                    {showDetails ? (
-                        <>
-                            {/* Show protocol chips in details mode */}
-                            {meta.split(' · ').map((protocol, idx) => (
-                                <Chip key={idx} label={protocol} size="small" sx={{height: 18}}/>
-                            ))}
-                        </>
-                    ) : (
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{display: 'block'}}>
-                            {meta}
-                        </Typography>
-                    )}
-                </Stack>
+                <Typography variant="caption" color="text.disabled" noWrap sx={{display: 'block', mt: 0.25, fontSize: '0.68rem', letterSpacing: '0.01em'}}>
+                    {meta}
+                </Typography>
             </Box>
             {showDetails && (
                 <Stack direction="row" spacing={0.3} sx={{pr: 10}}>
@@ -172,14 +161,19 @@ const ProviderCard: React.FC<{
                     )}
                 </Stack>
             )}
-            <Chip
-                label={badge.label}
-                size="small"
+            <Typography
+                component="span"
                 sx={{
-                    position: 'absolute', top: 6, right: 6, height: 18,
-                    fontSize: '0.62rem', fontWeight: 700, color: badge.color, bgcolor: badge.bg,
+                    position: 'absolute', top: 6, right: 6,
+                    fontSize: '0.6rem', fontWeight: 600, lineHeight: 1,
+                    color: badge.color, opacity: 0.7,
+                    px: 0.5, py: 0.25,
+                    borderRadius: 0.5,
+                    bgcolor: badge.bg,
                 }}
-            />
+            >
+                {badge.label}
+            </Typography>
         </Card>
     );
 };
