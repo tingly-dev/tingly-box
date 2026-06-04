@@ -26,9 +26,12 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 	output := []map[string]any{}
 	if messageContent != "" {
 		output = append(output, map[string]any{
-			"type":         "output_text",
-			"text":         messageContent,
-			"output_index": 0,
+			"type":   "message",
+			"role":   "assistant",
+			"status": "completed",
+			"content": []map[string]any{
+				{"type": "output_text", "text": messageContent},
+			},
 		})
 	}
 
@@ -55,18 +58,18 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 
 	output := []map[string]any{}
 	outputIndex := 0
+
+	var textParts []map[string]any
 	for _, block := range resp.Content {
 		switch block.Type {
 		case "text":
 			if block.Text == "" {
 				continue
 			}
-			output = append(output, map[string]any{
-				"type":         "output_text",
-				"text":         block.Text,
-				"output_index": outputIndex,
+			textParts = append(textParts, map[string]any{
+				"type": "output_text",
+				"text": block.Text,
 			})
-			outputIndex++
 		case "tool_use":
 			argsJSON := "{}"
 			if block.Input != nil {
@@ -83,6 +86,16 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 			})
 			outputIndex++
 		}
+	}
+
+	if len(textParts) > 0 {
+		msgItem := map[string]any{
+			"type":    "message",
+			"role":    "assistant",
+			"status":  "completed",
+			"content": textParts,
+		}
+		output = append([]map[string]any{msgItem}, output...)
 	}
 
 	return map[string]any{

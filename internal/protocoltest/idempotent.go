@@ -30,12 +30,22 @@ type IdempotentCase struct {
 	Baseline protocol.APIType // A': passthrough target for the baseline (same API style as A)
 }
 
-// DefaultIdempotentCases returns the canonical round-trip idempotency cases.
-// They focus on cross-family conversions (Anthropic ↔ OpenAI Chat) where the
-// transform logic does real work in both directions, avoiding the
-// Chat-vs-Responses endpoint ambiguity and the v1/beta query nuances.
+// DefaultIdempotentCases returns the canonical round-trip idempotency cases:
+// every pair among the three first-class protocols (Anthropic, OpenAI Chat,
+// OpenAI Responses), in both directions. Chat and Responses are treated as
+// distinct protocols — the chain head sets OpenAIEndpointMode so a Responses
+// intermediate genuinely re-enters /responses, not /chat/completions.
+//
+// Baseline is the source's same-style passthrough target:
+//   - anthropic_v1   → anthropic_beta (Anthropic passthrough)
+//   - openai_chat    → openai_chat
+//   - openai_responses → openai_responses
+//
+// Google is omitted: the harness's virtual-provider plumbing does not yet
+// support Google as a target, so it cannot serve as an intermediate hop.
 func DefaultIdempotentCases() []IdempotentCase {
 	return []IdempotentCase{
+		// Anthropic ↔ OpenAI Chat
 		{
 			Name:     "openai_chat_via_anthropic",
 			Source:   protocol.TypeOpenAIChat,
@@ -47,6 +57,34 @@ func DefaultIdempotentCases() []IdempotentCase {
 			Source:   protocol.TypeAnthropicV1,
 			Mid:      protocol.TypeOpenAIChat,
 			Baseline: protocol.TypeAnthropicBeta,
+		},
+
+		// Anthropic ↔ OpenAI Responses
+		{
+			Name:     "openai_responses_via_anthropic",
+			Source:   protocol.TypeOpenAIResponses,
+			Mid:      protocol.TypeAnthropicV1,
+			Baseline: protocol.TypeOpenAIResponses,
+		},
+		{
+			Name:     "anthropic_via_openai_responses",
+			Source:   protocol.TypeAnthropicV1,
+			Mid:      protocol.TypeOpenAIResponses,
+			Baseline: protocol.TypeAnthropicBeta,
+		},
+
+		// OpenAI Chat ↔ OpenAI Responses
+		{
+			Name:     "openai_chat_via_responses",
+			Source:   protocol.TypeOpenAIChat,
+			Mid:      protocol.TypeOpenAIResponses,
+			Baseline: protocol.TypeOpenAIChat,
+		},
+		{
+			Name:     "openai_responses_via_chat",
+			Source:   protocol.TypeOpenAIResponses,
+			Mid:      protocol.TypeOpenAIChat,
+			Baseline: protocol.TypeOpenAIResponses,
 		},
 	}
 }
@@ -76,13 +114,14 @@ func (env *TestEnv) setupChainHopRoute(source, target protocol.APIType, s Scenar
 	providerName := fmt.Sprintf("chain-%s-%s-%s", source, target, s.Name)
 
 	provider := &typ.Provider{
-		UUID:     providerName,
-		Name:     providerName,
-		APIBase:  env.gatewayEntryBase(target),
-		APIStyle: targetToAPIStyle(target),
-		Token:    env.modelToken, // re-entry into the gateway must authenticate
-		Enabled:  true,
-		Timeout:  int64(constant.DefaultRequestTimeout),
+		UUID:               providerName,
+		Name:               providerName,
+		APIBase:            env.gatewayEntryBase(target),
+		APIStyle:           targetToAPIStyle(target),
+		OpenAIEndpointMode: targetToOpenAIEndpointMode(target), // re-enter the right OpenAI endpoint
+		Token:              env.modelToken,                     // re-entry into the gateway must authenticate
+		Enabled:            true,
+		Timeout:            int64(constant.DefaultRequestTimeout),
 	}
 	_ = env.appConfig.AddProvider(provider)
 
