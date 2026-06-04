@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import {
     Add as AddIcon,
     BugReport as TroubleshootIcon,
-    ExpandMore as ExpandMoreIcon,
+    FoldUp as FoldUpIcon,
+    FoldDown as FoldDownIcon,
     Key as KeyIcon,
-    UnfoldMore as UnfoldMoreIcon,
     Speed as SpeedIcon,
 } from '@/components/icons';
 import { Button, IconButton, Stack, Tooltip } from '@mui/material';
@@ -89,7 +89,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
             {showExpandCollapseButton && collapsible && (
                 <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
                     <IconButton size="small" onClick={onToggleExpandAll}>
-                        {allExpanded ? <UnfoldMoreIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                        {allExpanded ? <FoldUpIcon fontSize="small" /> : <FoldDownIcon fontSize="small" />}
                     </IconButton>
                 </Tooltip>
             )}
