@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/config"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -218,13 +219,14 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 	}
 
 	provider := &typ.Provider{
-		UUID:     providerName,
-		Name:     providerName,
-		APIBase:  providerAPIBase,
-		APIStyle: apiStyle,
-		Token:    "virtual-token",
-		Enabled:  true,
-		Timeout:  int64(constant.DefaultRequestTimeout),
+		UUID:               providerName,
+		Name:               providerName,
+		APIBase:            providerAPIBase,
+		APIStyle:           apiStyle,
+		OpenAIEndpointMode: targetToOpenAIEndpointMode(target),
+		Token:              "virtual-token",
+		Enabled:            true,
+		Timeout:            int64(constant.DefaultRequestTimeout),
 	}
 	_ = env.appConfig.AddProvider(provider)
 
@@ -421,6 +423,23 @@ func targetToAPIStyle(target protocol.APIType) protocol.APIStyle {
 		return protocol.APIStyleOpenAI // Responses API uses OpenAI style
 	default:
 		return protocol.APIStyleOpenAI
+	}
+}
+
+// targetToOpenAIEndpointMode tells the gateway which OpenAI endpoint a provider
+// exposes. Without this, ResolveOpenAIEndpoint falls back to chat for every
+// OpenAI-style provider, so a target=openai_responses route would silently
+// forward to /chat/completions instead of /responses. chat and responses are
+// two distinct protocols; this makes the harness route to the right one.
+// Non-OpenAI targets return the zero value (ignored for Anthropic/Google).
+func targetToOpenAIEndpointMode(target protocol.APIType) ai.OpenAIEndpointMode {
+	switch target {
+	case protocol.TypeOpenAIResponses:
+		return ai.EndpointModeResponses
+	case protocol.TypeOpenAIChat:
+		return ai.EndpointModeChat
+	default:
+		return ai.EndpointModeUnknown
 	}
 }
 

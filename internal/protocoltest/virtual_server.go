@@ -21,19 +21,33 @@ import (
 // **Provider Routes**: This server handles provider-native routes (/v1/chat/completions,
 // /v1/messages, /v1beta/models/...), NOT gateway routes (/tingly/{scenario}/v1/...).
 // The gateway transforms requests to provider format before forwarding to this server.
+// EndpointKind identifies which provider-native endpoint a request hit.
+// chat and responses are deliberately distinct: they are two different OpenAI
+// protocols, and tests assert which one the gateway actually forwarded to.
+type EndpointKind string
+
+const (
+	EndpointChat      EndpointKind = "chat"
+	EndpointResponses EndpointKind = "responses"
+	EndpointAnthropic EndpointKind = "anthropic"
+	EndpointGoogle    EndpointKind = "google"
+)
+
 type VirtualServer struct {
 	server    *httptest.Server
 	scenarios *vmodel.GenericRegistry[Scenario]
 
-	mu        sync.RWMutex
-	callCount int
+	mu           sync.RWMutex
+	callCount    int
+	endpointHits map[EndpointKind]int
 }
 
 // NewVirtualServer creates a new VirtualServer and registers cleanup with t.
 func NewVirtualServer(t *testing.T) *VirtualServer {
 	t.Helper()
 	vs := &VirtualServer{
-		scenarios: vmodel.NewGenericRegistry[Scenario](),
+		scenarios:    vmodel.NewGenericRegistry[Scenario](),
+		endpointHits: make(map[EndpointKind]int),
 	}
 
 	mux := http.NewServeMux()
@@ -55,7 +69,8 @@ func NewVirtualServer(t *testing.T) *VirtualServer {
 // requests to provider format before forwarding to this server.
 func NewVirtualServerForCLI() *VirtualServer {
 	vs := &VirtualServer{
-		scenarios: vmodel.NewGenericRegistry[Scenario](),
+		scenarios:    vmodel.NewGenericRegistry[Scenario](),
+		endpointHits: make(map[EndpointKind]int),
 	}
 
 	mux := http.NewServeMux()
@@ -100,12 +115,27 @@ func (vs *VirtualServer) CallCount() int {
 	return vs.callCount
 }
 
+// EndpointHits returns how many requests hit a specific provider endpoint.
+// Lets tests assert that, e.g., target=openai_responses actually forwarded to
+// /v1/responses rather than silently falling back to /v1/chat/completions.
+func (vs *VirtualServer) EndpointHits(kind EndpointKind) int {
+	vs.mu.RLock()
+	defer vs.mu.RUnlock()
+	return vs.endpointHits[kind]
+}
+
+// recordHit increments the total call count and the per-endpoint counter.
+func (vs *VirtualServer) recordHit(kind EndpointKind) {
+	vs.mu.Lock()
+	vs.callCount++
+	vs.endpointHits[kind]++
+	vs.mu.Unlock()
+}
+
 // ─── HTTP handlers ─────────────────────────────────────────────────────────────
 
 func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request) {
-	vs.mu.Lock()
-	vs.callCount++
-	vs.mu.Unlock()
+	vs.recordHit(EndpointChat)
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
@@ -135,9 +165,7 @@ func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request
 }
 
 func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Request) {
-	vs.mu.Lock()
-	vs.callCount++
-	vs.mu.Unlock()
+	vs.recordHit(EndpointResponses)
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
@@ -171,9 +199,7 @@ func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Re
 }
 
 func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.Request) {
-	vs.mu.Lock()
-	vs.callCount++
-	vs.mu.Unlock()
+	vs.recordHit(EndpointAnthropic)
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
@@ -203,9 +229,7 @@ func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.
 }
 
 func (vs *VirtualServer) handleGoogle(w http.ResponseWriter, r *http.Request) {
-	vs.mu.Lock()
-	vs.callCount++
-	vs.mu.Unlock()
+	vs.recordHit(EndpointGoogle)
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
