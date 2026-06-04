@@ -73,6 +73,89 @@ func TestBreakerSuccessResetsCounter(t *testing.T) {
 	}
 }
 
+func TestBreakerExponentialBackoff(t *testing.T) {
+	base := 20 * time.Millisecond
+	b := NewBreaker(1, base)
+	b.MaxOpenDuration = 200 * time.Millisecond
+
+	// Trip the breaker.
+	b.RecordFailure()
+
+	// 1st open window: base (20 ms).
+	time.Sleep(base + 5*time.Millisecond)
+	if !b.Allow() {
+		t.Fatal("should allow probe after 1st open window")
+	}
+	b.RecordFailure() // half-open → open, halfOpenFails=1
+
+	// 2nd open window: 40 ms (base * 2^1).
+	time.Sleep(base + 5*time.Millisecond) // 25 ms — too early
+	if b.Allow() {
+		t.Fatal("should NOT allow probe yet (backoff doubled to 40 ms)")
+	}
+	time.Sleep(base) // total ~45 ms ≥ 40 ms
+	if !b.Allow() {
+		t.Fatal("should allow probe after 2nd backoff window")
+	}
+	b.RecordFailure() // halfOpenFails=2
+
+	// 3rd open window: 80 ms (base * 2^2).
+	time.Sleep(60 * time.Millisecond) // too early for 80 ms
+	if b.Allow() {
+		t.Fatal("should NOT allow probe yet (backoff at 80 ms)")
+	}
+	time.Sleep(25 * time.Millisecond) // total ~85 ms ≥ 80 ms
+	if !b.Allow() {
+		t.Fatal("should allow probe after 3rd backoff window")
+	}
+	b.RecordFailure() // halfOpenFails=3, next would be 160 ms
+
+	// 4th open window: 160 ms (base * 2^3).
+	time.Sleep(165 * time.Millisecond)
+	if !b.Allow() {
+		t.Fatal("should allow probe after 4th backoff window")
+	}
+	b.RecordFailure() // halfOpenFails=4, next would be 320 ms → capped at 200 ms
+
+	// 5th open window: capped at 200 ms.
+	time.Sleep(195 * time.Millisecond) // just under cap
+	if b.Allow() {
+		t.Fatal("should NOT allow probe yet (capped at 200 ms)")
+	}
+	time.Sleep(10 * time.Millisecond) // total ~205 ms ≥ 200 ms
+	if !b.Allow() {
+		t.Fatal("should allow probe after cap-limited window")
+	}
+}
+
+func TestBreakerBackoffResetsOnSuccess(t *testing.T) {
+	base := 20 * time.Millisecond
+	b := NewBreaker(1, base)
+	b.MaxOpenDuration = 500 * time.Millisecond
+
+	// Build up backoff: trip → probe fail → trip → probe fail.
+	b.RecordFailure()
+	time.Sleep(base + 5*time.Millisecond)
+	b.Allow()
+	b.RecordFailure() // halfOpenFails=1, next window=40 ms
+
+	time.Sleep(45 * time.Millisecond)
+	b.Allow()
+
+	// Probe succeeds → everything resets.
+	b.RecordSuccess()
+	if b.State() != BreakerClosed {
+		t.Fatal("should be closed after success")
+	}
+
+	// Trip again — backoff should be back to base, not 80 ms.
+	b.RecordFailure()
+	time.Sleep(base + 5*time.Millisecond)
+	if !b.Allow() {
+		t.Fatal("after success+retrip, should probe at base duration, not backed-off")
+	}
+}
+
 func TestBreakerStoreLazyCreation(t *testing.T) {
 	store := NewBreakerStore(2, time.Second)
 	b1 := store.Get("svc:a")
