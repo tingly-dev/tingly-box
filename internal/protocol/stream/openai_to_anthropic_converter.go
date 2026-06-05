@@ -456,7 +456,10 @@ func (c *openAIToAnthropicConverter) emitMessageStop() {
 // c.SSEvent (no spaces after colons) and mirrors events to stream_event_recorder.
 func anthropicSSEWriter(c *gin.Context) func(interface{}) error {
 	return func(event interface{}) error {
-		e := event.(anthropicStreamEvent)
+		e, ok := event.(anthropicStreamEvent)
+		if !ok {
+			return nil
+		}
 		sendAnthropicStreamEvent(c, e.eventType, e.data, nopFlusher{})
 		return nil
 	}

@@ -109,7 +109,6 @@ func handleOpenAIToAnthropicBetaStream(
 		}, nil)
 		return conv.Usage(), streamErr
 	}
-	hc.CallOnStreamComplete()
 	return conv.Usage(), nil
 }
 

@@ -102,7 +102,6 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 	}
 
 	OpenAISSEDone(c)
-	hc.CallOnStreamComplete()
 	return in, out, nil
 }
 

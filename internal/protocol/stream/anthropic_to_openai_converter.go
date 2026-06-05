@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -235,11 +234,6 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 				return
 			}
 		}
-		if errors.Is(c.hookErr, ErrMCPStreamContinue) {
-			c.done = true
-			return
-		}
-
 		finishReason := "stop"
 		if c.hasToolCalls {
 			finishReason = openaiFinishReasonToolCalls

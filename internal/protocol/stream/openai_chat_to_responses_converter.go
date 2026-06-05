@@ -173,6 +173,10 @@ func (c *chatToResponsesConverter) processChunk(chunk *openai.ChatCompletionChun
 				itemID = truncateToolCallID(toolCall.ID)
 			}
 
+			// Reserve OutputIndex 0 for the text message item; tool calls start at 1.
+			if c.outputIndex == 0 {
+				c.outputIndex = 1
+			}
 			toolOutputIndex := c.outputIndex
 			c.outputIndex++
 
@@ -355,8 +359,9 @@ func (c *chatToResponsesConverter) emitTextItemAdded() {
 }
 
 func (c *chatToResponsesConverter) nextSeq() int64 {
+	seq := c.sequenceNumber
 	c.sequenceNumber++
-	return c.sequenceNumber
+	return seq
 }
 
 func (c *chatToResponsesConverter) wireResponse(status string, output []wire.ResponsesOutputItemWire) wire.ResponsesWireResponse {
