@@ -28,6 +28,7 @@ import {
 import { EntryNode } from '@/components/nodes';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
 import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
+import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import type { Provider } from '../types/provider';
 import type { ConfigRecord } from './RoutingGraphTypes';
 
@@ -195,6 +196,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Track which tier is being hovered
     const [hoveredTier, setHoveredTier] = React.useState<number | null>(null);
     const [showTierGuide, setShowTierGuide] = React.useState(false);
+    const [showEntryGuide, setShowEntryGuide] = React.useState(false);
+    const [entryGuideMode, setEntryGuideMode] = React.useState<'direct' | 'smart'>('direct');
 
     const handleShowGuide = () => {
         setShowTierGuide(true);
@@ -202,6 +205,20 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
     const handleGuideClose = () => {
         setShowTierGuide(false);
+    };
+
+    const handleShowDirectGuide = () => {
+        setEntryGuideMode('direct');
+        setShowEntryGuide(true);
+    };
+
+    const handleShowSmartGuide = () => {
+        setEntryGuideMode('smart');
+        setShowEntryGuide(true);
+    };
+
+    const handleEntryGuideClose = () => {
+        setShowEntryGuide(false);
     };
 
     // Determine effective mode
@@ -437,6 +454,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 onClose={handleGuideClose}
             />
 
+            {/* Entry Guide Dialog */}
+            <EntryGuideDialog
+                open={showEntryGuide}
+                onClose={handleEntryGuideClose}
+                mode={entryGuideMode}
+            />
+
             {/* Graph Content */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <CardContent sx={{ pt: 0, pb: 0.25, '&:last-child': { pb: 0.25 } }}>
@@ -458,6 +482,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                 smartEnabled={smartEnabled}
                                                 onSwitch={onSwitchRoutingMode}
                                                 switchDisabled={saving}
+                                                onShowDirectGuide={handleShowDirectGuide}
+                                                onShowSmartGuide={handleShowSmartGuide}
                                             />
                                         </Box>
 
