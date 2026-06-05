@@ -20,10 +20,9 @@ type MatrixCmd struct {
 	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
 	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
-	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
-	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Transitive bool     `kong:"name='transitive',help='Run only two-hop (A→B→C) transitive chain tests'"`
-	SingleHop  bool     `kong:"name='single-hop',help='Run only single-hop (A→B) tests'"`
+	Streaming  bool   `kong:"name='streaming',help='Run only streaming tests'"`
+	NonStream  bool   `kong:"name='non-streaming',help='Run only non-streaming tests'"`
+	Mode       string `kong:"name='mode',default='all',enum='all,single,transitive',help='Hop selection: all (default), single (A→B only), transitive (A→B→C only)'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
@@ -39,10 +38,10 @@ func (*MatrixCmd) Help() string {
   harness matrix
 
   # Run only two-hop (A→B→C) transitive chain tests
-  harness matrix --transitive
+  harness matrix --mode=transitive
 
   # Run only single-hop (A→B) tests
-  harness matrix --single-hop
+  harness matrix --mode=single
 
   # Run specific scenario only
   harness matrix --scenario text
@@ -81,9 +80,6 @@ func (m *MatrixCmd) Run() error {
 	if m.Streaming && m.NonStream {
 		return fmt.Errorf("cannot specify both --streaming and --non-streaming")
 	}
-	if m.Transitive && m.SingleHop {
-		return fmt.Errorf("cannot specify both --transitive and --single-hop")
-	}
 
 	// Build matrix with filters
 	matrix := protocoltest.DefaultMatrix()
@@ -116,22 +112,15 @@ func (m *MatrixCmd) Run() error {
 		matrix = matrix.WithMCPEnabled()
 	}
 
-	// Determine which sections to run:
-	//   default            → single-hop + two-hop
-	//   --single-hop       → single-hop only
-	//   --transitive       → two-hop only
-	runSingle := !m.Transitive
-	runTransitive := !m.SingleHop
-
-	var results []protocoltest.TestResult
-	if runSingle {
-		r := matrix.ExecuteAll()
-		results = append(results, filterResults(r, m)...)
+	// Collect results for selected hop sections (--mode controls which).
+	var combined []protocoltest.TestResult
+	if m.Mode != "transitive" {
+		combined = append(combined, matrix.ExecuteAll()...)
 	}
-	if runTransitive {
-		r := matrix.ExecuteAllTransitive()
-		results = append(results, filterResults(r, m)...)
+	if m.Mode != "single" {
+		combined = append(combined, matrix.ExecuteAllTransitive()...)
 	}
+	results := filterResults(combined, m)
 
 	// Output results
 	if m.JsonOutput {

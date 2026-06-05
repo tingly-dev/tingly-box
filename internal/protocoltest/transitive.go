@@ -79,7 +79,7 @@ func (m *Matrix) RunTransitive(t *testing.T) {
 
 	for _, scenario := range m.Scenarios {
 		scenario := scenario
-		if scenario.Name == "error" {
+		if scenario.SkipTransitive {
 			continue
 		}
 
@@ -151,49 +151,11 @@ func checkSemanticEquivalence(t *testing.T, chain TransitiveChain, r1, r2 *Round
 }
 
 // assertSemanticEquivalence verifies that two RoundTripResults carry the same
-// semantic payload despite being in different protocol formats. We compare
-// normalized fields rather than raw bytes. label identifies the comparison in
-// failure messages.
+// semantic payload despite being in different protocol formats.
 func assertSemanticEquivalence(t *testing.T, label string, r1, r2 *RoundTripResult) {
 	t.Helper()
-
-	// Role must match
-	if r1.Role != r2.Role {
-		t.Errorf("[%s] role mismatch: hop1=%q, hop2=%q", label, r1.Role, r2.Role)
-	}
-
-	// Content must match (normalize whitespace for minor formatting diffs)
-	c1 := strings.TrimSpace(r1.Content)
-	c2 := strings.TrimSpace(r2.Content)
-	if c1 != c2 {
-		t.Errorf("[%s] content mismatch:\n  hop1: %q\n  hop2: %q", label, truncate(c1, 200), truncate(c2, 200))
-	}
-
-	// Tool call count must match
-	if len(r1.ToolCalls) != len(r2.ToolCalls) {
-		t.Errorf("[%s] tool_call count mismatch: hop1=%d, hop2=%d", label, len(r1.ToolCalls), len(r2.ToolCalls))
-		return
-	}
-
-	// Each tool call's name and arguments must match
-	for i := range r1.ToolCalls {
-		tc1 := r1.ToolCalls[i]
-		tc2 := r2.ToolCalls[i]
-		if tc1.Name != tc2.Name {
-			t.Errorf("[%s] tool_call[%d].name mismatch: hop1=%q, hop2=%q", label, i, tc1.Name, tc2.Name)
-		}
-		if normalizeJSON(tc1.Arguments) != normalizeJSON(tc2.Arguments) {
-			t.Errorf("[%s] tool_call[%d].arguments mismatch:\n  hop1: %s\n  hop2: %s",
-				label, i, tc1.Arguments, tc2.Arguments)
-		}
-	}
-
-	// Usage: both should be present or both absent (for non-streaming)
-	if !r1.IsStreaming && !r2.IsStreaming {
-		if (r1.Usage == nil) != (r2.Usage == nil) {
-			t.Errorf("[%s] usage presence mismatch: hop1=%v, hop2=%v",
-				label, r1.Usage != nil, r2.Usage != nil)
-		}
+	for _, e := range semanticEquivalenceErrors(label, r1, r2) {
+		t.Errorf("%s: %s", e.Assertion, e.Error)
 	}
 }
 
@@ -211,7 +173,7 @@ func (m *Matrix) ExecuteAllTransitive() []TestResult {
 	chains := m.DefaultChains()
 
 	for _, scenario := range m.Scenarios {
-		if scenario.Name == "error" {
+		if scenario.SkipTransitive {
 			continue
 		}
 
@@ -220,7 +182,7 @@ func (m *Matrix) ExecuteAllTransitive() []TestResult {
 			for _, chain := range chains {
 				for _, streaming := range m.Streaming {
 					results = append(results, TestResult{
-						Name:      transitiveTestName(chain, scenario.Name, streaming),
+						Name:      chain.TestName(scenario.Name, streaming),
 						Scenario:  scenario.Name,
 						Source:    chain.First.Source,
 						Target:    chain.Second.Target,
@@ -246,7 +208,7 @@ func (m *Matrix) ExecuteAllTransitive() []TestResult {
 
 // executeTransitiveChain runs a single two-hop chain for a given scenario/mode.
 func (m *Matrix) executeTransitiveChain(env *TestEnv, scenario Scenario, chain TransitiveChain, streaming bool) TestResult {
-	name := transitiveTestName(chain, scenario.Name, streaming)
+	name := chain.TestName(scenario.Name, streaming)
 	base := TestResult{
 		Name:      name,
 		Scenario:  scenario.Name,
@@ -260,14 +222,9 @@ func (m *Matrix) executeTransitiveChain(env *TestEnv, scenario Scenario, chain T
 		base.SkipReason = reason
 		return base
 	}
-	if streaming && !scenarioSupportsStreaming(scenario) {
+	if reason, skip := streamingSkipReason(scenario, streaming); skip {
 		base.Skipped = true
-		base.SkipReason = "scenario does not support streaming"
-		return base
-	}
-	if !streaming && scenarioRequiresStreaming(scenario) {
-		base.Skipped = true
-		base.SkipReason = "scenario requires streaming mode"
+		base.SkipReason = reason
 		return base
 	}
 
@@ -353,11 +310,7 @@ func semanticEquivalenceErrors(label string, r1, r2 *RoundTripResult) []Assertio
 	return errs
 }
 
-// transitiveTestName builds a TestResult name for a chain combination.
-func transitiveTestName(chain TransitiveChain, scenario string, streaming bool) string {
-	mode := "nonstream"
-	if streaming {
-		mode = "stream"
-	}
-	return fmt.Sprintf("%s/%s/%s", scenario, chain, mode)
+// TestName builds a TestResult name for this chain in a given scenario/mode.
+func (c TransitiveChain) TestName(scenario string, streaming bool) string {
+	return fmt.Sprintf("%s/%s/%s", scenario, c, streamMode(streaming))
 }

@@ -292,6 +292,26 @@ func (m *Matrix) Run(t *testing.T) {
 	}
 }
 
+// streamMode returns "stream" or "nonstream" for use in test names.
+func streamMode(streaming bool) string {
+	if streaming {
+		return "stream"
+	}
+	return "nonstream"
+}
+
+// streamingSkipReason returns a non-empty reason string when a scenario/mode
+// combination should be skipped due to streaming incompatibility.
+func streamingSkipReason(scenario Scenario, streaming bool) (string, bool) {
+	if streaming && !scenarioSupportsStreaming(scenario) {
+		return "scenario does not support streaming", true
+	}
+	if !streaming && scenarioRequiresStreaming(scenario) {
+		return "scenario requires streaming mode", true
+	}
+	return "", false
+}
+
 // scenarioSupportsStreaming returns true if the scenario has streaming mock responses.
 func scenarioSupportsStreaming(s Scenario) bool {
 	for _, builder := range s.MockResponses {
@@ -477,8 +497,7 @@ func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target pro
 		}
 	}
 
-	// Check streaming compatibility
-	if streaming && !scenarioSupportsStreaming(scenario) {
+	if reason, skip := streamingSkipReason(scenario, streaming); skip {
 		return &TestResult{
 			Name:       m.buildTestName(scenario.Name, source, target, streaming),
 			Scenario:   scenario.Name,
@@ -486,19 +505,7 @@ func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target pro
 			Target:     target,
 			Streaming:  streaming,
 			Skipped:    true,
-			SkipReason: "scenario does not support streaming",
-		}
-	}
-
-	if !streaming && scenarioRequiresStreaming(scenario) {
-		return &TestResult{
-			Name:       m.buildTestName(scenario.Name, source, target, streaming),
-			Scenario:   scenario.Name,
-			Source:     source,
-			Target:     target,
-			Streaming:  streaming,
-			Skipped:    true,
-			SkipReason: "scenario requires streaming mode",
+			SkipReason: reason,
 		}
 	}
 
@@ -657,11 +664,7 @@ func (m *Matrix) executeOneWithEnv(env *TestEnv, s Scenario, source, target prot
 
 // buildTestName constructs a test name from its components.
 func (m *Matrix) buildTestName(scenario string, source, target protocol.APIType, streaming bool) string {
-	mode := "nonstream"
-	if streaming {
-		mode = "stream"
-	}
-	return fmt.Sprintf("%s/%s/%s/%s", scenario, source, target, mode)
+	return fmt.Sprintf("%s/%s/%s/%s", scenario, source, target, streamMode(streaming))
 }
 
 // executeBatch runs a test multiple times and aggregates the results.

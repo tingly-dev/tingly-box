@@ -37,6 +37,10 @@ type Scenario struct {
 	MockResponses map[ResponseFormat]MockResponseBuilder
 
 	Assertions []Assertion
+
+	// SkipTransitive marks scenarios that should be excluded from two-hop
+	// transitive tests (e.g. error scenarios that produce no comparable output).
+	SkipTransitive bool
 }
 
 var _ vmodel.VirtualModel = Scenario{}
@@ -640,9 +644,10 @@ func openAIResponsesIncompleteSSE() []string {
 
 func ErrorScenario() Scenario {
 	return Scenario{
-		Name:        "error",
-		Description: "Provider rate limit error (429) propagated to client",
-		Tags:        []string{"error"},
+		Name:           "error",
+		Description:    "Provider rate limit error (429) propagated to client",
+		Tags:           []string{"error"},
+		SkipTransitive: true,
 		MockResponses: map[ResponseFormat]MockResponseBuilder{
 			FormatOpenAIChat:      openAIErrorResponse(),
 			FormatOpenAIResponses: openAIErrorResponse(),
