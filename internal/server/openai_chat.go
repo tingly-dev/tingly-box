@@ -207,14 +207,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	case protocol.APIStyleOpenAI:
 		tempFlags := resolveRuleFlags(c, rule)
 		if provider.OpenAIEndpointMode == ai.EndpointModeAuto {
-			if ov := ParseEndpointOverride(tempFlags.OpenAIEndpointOverride); ov == OverrideChat || ov == OverrideResponses {
-				target = overrideToTarget(ov)
-			} else if cached, ok := s.endpointCache.Get(provider.UUID, actualModel); ok {
-				target = cached
-			} else {
-				target = incomingToTarget(IncomingAPIChat)
-				autoFallbackEnabled = true
-			}
+			target, autoFallbackEnabled = s.resolveAutoTarget(tempFlags, provider, actualModel, IncomingAPIChat)
 		} else {
 			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
 			if routeErr != nil {

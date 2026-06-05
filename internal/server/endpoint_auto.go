@@ -2,45 +2,13 @@ package server
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// isNonRetryableForProtocolFallback returns true for errors where switching
-// the OpenAI endpoint protocol (Chat ↔ Responses) would not help.
-// Uses an exclusion approach: listed errors are never retried, everything
-// else (404, 500, unknown) is eligible for fallback.
-func isNonRetryableForProtocolFallback(err error) bool {
-	if err == nil {
-		return true
-	}
-	s := strings.ToLower(err.Error())
-
-	// Auth errors — switching protocol won't fix credentials
-	if strings.Contains(s, "401") || strings.Contains(s, "403") ||
-		strings.Contains(s, "unauthorized") || strings.Contains(s, "forbidden") {
-		return true
-	}
-
-	// Rate limiting — switching protocol still hits the same quota
-	if strings.Contains(s, "429") || strings.Contains(s, "rate limit") ||
-		strings.Contains(s, "ratelimit") || strings.Contains(s, "1302") {
-		return true
-	}
-
-	// Content/model errors — the request itself is the problem
-	if strings.Contains(s, "context_length") || strings.Contains(s, "content_policy") ||
-		strings.Contains(s, "content_filter") || strings.Contains(s, "invalid_api_key") ||
-		strings.Contains(s, "model_not_found") || strings.Contains(s, "model not found") {
-		return true
-	}
-
-	return false
-}
 
 // alternateOpenAIProtocol returns the other OpenAI protocol type.
 func alternateOpenAIProtocol(current protocol.APIType) protocol.APIType {
@@ -82,6 +50,21 @@ func overrideToTarget(ov EndpointOverride) protocol.APIType {
 	return protocol.TypeOpenAIChat
 }
 
+// resolveAutoTarget handles the auto-mode target resolution shared by both
+// OpenAI Chat and Responses handlers. It checks override → cache → default.
+// Returns the resolved target and whether auto-fallback should be enabled.
+func (s *Server) resolveAutoTarget(
+	flags typ.RuleFlags, provider *typ.Provider, model string, incoming IncomingAPIType,
+) (target protocol.APIType, autoFallback bool) {
+	if ov := ParseEndpointOverride(flags.OpenAIEndpointOverride); ov == OverrideChat || ov == OverrideResponses {
+		return overrideToTarget(ov), false
+	}
+	if cached, ok := s.endpointCache.Get(provider.UUID, model); ok {
+		return cached, false
+	}
+	return incomingToTarget(incoming), true
+}
+
 // autoDispatchFn is the callback for dispatchWithAutoFallback.
 // It performs transform + dispatch for a given target protocol, using
 // the provided gate. Returns true if dispatch executed (even on error),
@@ -110,11 +93,7 @@ func (s *Server) dispatchWithAutoFallback(
 	// First attempt with preferred protocol
 	dispatch(preferredTarget, gate)
 
-	if gate.Committed() {
-		s.endpointCache.Set(provider.UUID, model, preferredTarget)
-		return
-	}
-	if gate.Status() > 0 && gate.Status() < http.StatusBadRequest {
+	if gate.Committed() || (gate.Status() > 0 && gate.Status() < http.StatusBadRequest) {
 		s.endpointCache.Set(provider.UUID, model, preferredTarget)
 		return
 	}
@@ -124,7 +103,7 @@ func (s *Server) dispatchWithAutoFallback(
 		return
 	}
 	lastErr := extractLastGinError(c)
-	if isNonRetryableForProtocolFallback(lastErr) {
+	if client.IsNonRetryableForProtocolSwitch(lastErr) {
 		return
 	}
 

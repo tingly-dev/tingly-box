@@ -208,14 +208,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	case protocol.APIStyleOpenAI:
 		tempFlags := resolveRuleFlags(c, rule)
 		if provider.OpenAIEndpointMode == ai.EndpointModeAuto {
-			if ov := ParseEndpointOverride(tempFlags.OpenAIEndpointOverride); ov == OverrideChat || ov == OverrideResponses {
-				target = overrideToTarget(ov)
-			} else if cached, ok := s.endpointCache.Get(provider.UUID, string(req.Model)); ok {
-				target = cached
-			} else {
-				target = incomingToTarget(IncomingAPIResponses)
-				autoFallbackEnabled = true
-			}
+			target, autoFallbackEnabled = s.resolveAutoTarget(tempFlags, provider, string(req.Model), IncomingAPIResponses)
 		} else {
 			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIResponses)
 			if routeErr != nil {
