@@ -394,7 +394,63 @@ export default {
       "nodeTooltipPrimaryBody": "Tried first on every request. Services here are load-balanced.",
       "nodeTooltipFallbackTitle": "T{{tier}} — Fallback tier",
       "nodeTooltipFallbackBody": "Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Services here are load-balanced.",
-      "nodeMoveHint": "↑ / ↓  on a service card to move it to a different tier"
+      "nodeMoveHint": "↑ / ↓  on a service card to move it to a different tier",
+      "nodeTooltipLearnMore": "Learn more about tiers",
+      "guideButtonAriaLabel": "Learn about tiers",
+      "guide": {
+        "title": "Understanding Tiers",
+        "subtitle": "Step {{current}} of {{total}}",
+        "previous": "Previous",
+        "next": "Next",
+        "gotIt": "Got it!",
+        "close": "Close",
+        "firstRunHint": "💡 You just added your second provider. Configure tiers to set up primary and fallback routing!",
+        "dontShowAgain": "Don't show this again",
+        "hoverHint": "Action buttons shown - try hovering over nodes!",
+        "steps": {
+          "1": {
+            "title": "What is a Tier?",
+            "content": "Tiers organize your services by priority. T0 (tier zero) is the highest priority tier — services here are tried first on every request. Lower tier numbers mean higher priority.",
+            "annotation": {
+              "tier": "T0 — Highest priority tier",
+              "service": "Your service card with model and provider info"
+            }
+          },
+          "2": {
+            "title": "Multiple Services in One Tier",
+            "content": "When you have multiple services in the same tier (like T0), they share the incoming traffic. This is called load balancing — requests are distributed across all services in the tier.",
+            "annotation": {
+              "loadBalance": "Same tier = load balanced",
+              "multiple": "Multiple services share traffic"
+            }
+          },
+          "3": {
+            "title": "Setting Up Primary and Fallback",
+            "content": "Use the ↑/↓ buttons on service cards to move them between tiers. Services in T0 are your primary choice. Services in T1, T2, etc. act as fallbacks — they only run when all higher-priority tiers fail.",
+            "annotation": {
+              "primary": "T0 — Primary services (tried first)",
+              "fallback": "T1 — Fallback services (used when T0 fails)",
+              "actionButtons": "↑/↓ buttons move services between tiers"
+            }
+          },
+          "4": {
+            "title": "Automatic Failover",
+            "content": "When all services in a tier fail (circuit breaker opens), traffic automatically falls back to the next tier. Once the tier recovers (circuit breaker closes), traffic returns to it automatically. You don't need to do anything — it just works.",
+            "annotation": {
+              "circuitBreaker": "Circuit breaker monitors service health",
+              "automaticFailover": "Automatic failover to next tier"
+            }
+          },
+          "5": {
+            "title": "Multi-Tier Fallback Chain",
+            "content": "You can create as many tiers as you need. T0 → T1 → T2 → ... Traffic cascades down until it finds a working tier. Use this for cost optimization (cheap first, expensive as backup) or regional failover (local first, remote as backup).",
+            "annotation": {
+              "priority": "Lower number = higher priority",
+              "cascade": "Traffic cascades down through tiers"
+            }
+          }
+        }
+      }
     },
     "menu": {
       "refreshModels": "Refresh Models",

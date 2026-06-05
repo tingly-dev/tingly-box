@@ -395,7 +395,63 @@ export default {
       "nodeTooltipPrimaryBody": "每次请求优先尝试，同层级内服务负载均衡。",
       "nodeTooltipFallbackTitle": "T{{tier}} — 后备层级",
       "nodeTooltipFallbackBody": "仅当更高优先级的层级（编号越小越优先）全部不可用时才启用，同层级内服务负载均衡。",
-      "nodeMoveHint": "↑ / ↓  拖动服务卡片可移动到其他层级"
+      "nodeMoveHint": "↑ / ↓  拖动服务卡片可移动到其他层级",
+      "nodeTooltipLearnMore": "了解更多层级信息",
+      "guideButtonAriaLabel": "了解层级配置",
+      "guide": {
+        "title": "了解层级",
+        "subtitle": "步骤 {{current}} / {{total}}",
+        "previous": "上一步",
+        "next": "下一步",
+        "gotIt": "明白了！",
+        "close": "关闭",
+        "firstRunHint": "💡 您刚刚添加了第二个提供商。配置层级以设置主备路由！",
+        "dontShowAgain": "不再显示",
+        "hoverHint": "操作按钮已显示 - 尝试悬停节点查看！",
+        "steps": {
+          "1": {
+            "title": "什么是层级？",
+            "content": "层级按优先级组织您的服务。T0（零层）是最高优先级层级——这里的服务会在每次请求时首先被尝试。层级编号越小，优先级越高。",
+            "annotation": {
+              "tier": "T0 — 最高优先级层级",
+              "service": "您的服务卡片，包含模型和提供商信息"
+            }
+          },
+          "2": {
+            "title": "同一层级的多个服务",
+            "content": "当同一层级（如 T0）中有多个服务时，它们会共享传入的流量。这称为负载均衡——请求会在该层级的所有服务之间分配。",
+            "annotation": {
+              "loadBalance": "同一层级 = 负载均衡",
+              "multiple": "多个服务共享流量"
+            }
+          },
+          "3": {
+            "title": "设置主备服务",
+            "content": "使用服务卡片上的 ↑/↓ 按钮在不同层级之间移动服务。T0 中的服务是您的首选。T1、T2 等层级中的服务作为备选——只有在所有更高优先级层级都失败时才会运行。",
+            "annotation": {
+              "primary": "T0 — 主服务（首先尝试）",
+              "fallback": "T1 — 备选服务（T0 失败时使用）",
+              "actionButtons": "↑/↓ 按钮在不同层级间移动服务"
+            }
+          },
+          "4": {
+            "title": "自动故障转移",
+            "content": "当一个层级中的所有服务都失败（熔断器打开）时，流量会自动降级到下一个层级。一旦层级恢复（熔断器关闭），流量会自动返回。您无需做任何操作——一切都是自动的。",
+            "annotation": {
+              "circuitBreaker": "熔断器监控服务健康状态",
+              "automaticFailover": "自动降级到下一层级"
+            }
+          },
+          "5": {
+            "title": "多层级故障转移链",
+            "content": "您可以根据需要创建任意数量的层级。T0 → T1 → T2 → ... 流量会级联下降，直到找到正常工作的层级。这可用于成本优化（先用便宜的，贵的作为备选）或区域故障转移（先用本地的，远程作为备选）。",
+            "annotation": {
+              "priority": "编号越小 = 优先级越高",
+              "cascade": "流量在层级间级联下降"
+            }
+          }
+        }
+      }
     },
     "menu": {
       "refreshModels": "刷新模型",

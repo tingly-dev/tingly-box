@@ -10,9 +10,10 @@ import {
     Collapse,
     IconButton,
     Stack,
+    Typography,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getRouteGraphActiveColor, SMART_NODE_STYLES, PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
 import {
@@ -26,6 +27,7 @@ import {
 } from '@/components/nodes';
 import { EntryNode } from '@/components/nodes';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
+import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
 import type { Provider } from '../types/provider';
 import type { ConfigRecord } from './RoutingGraphTypes';
 
@@ -82,6 +84,9 @@ export interface UnifiedRoutingGraphProps {
     saving?: boolean;
     expanded?: boolean;
     collapsible?: boolean;
+
+    // Guide mode - for demo/tier guide display
+    guideMode?: boolean;
 
     // Callbacks
     onUpdateRecord?: (field: keyof ConfigRecord, value: any) => void;
@@ -167,6 +172,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     saving = false,
     expanded = true,
     collapsible = false,
+    guideMode = false,
     onUpdateRecord,
     onProviderNodeClick,
     onTierChange,
@@ -185,6 +191,18 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 }) => {
     const { t } = useTranslation();
     const isExpanded = !collapsible || expanded;
+
+    // Track which tier is being hovered
+    const [hoveredTier, setHoveredTier] = React.useState<number | null>(null);
+    const [showTierGuide, setShowTierGuide] = React.useState(false);
+
+    const handleShowGuide = () => {
+        setShowTierGuide(true);
+    };
+
+    const handleGuideClose = () => {
+        setShowTierGuide(false);
+    };
 
     // Determine effective mode
     const smartEnabled = record.smartEnabled || false;
@@ -236,6 +254,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     const renderTierLayout = React.useCallback(() => {
         // Always show at least T0, even when no providers exist
         const groups = tierGroups.length > 0 ? tierGroups : [{ tier: 0, providers: [] as typeof sortedDefaultProviders }];
+
+        // In guide mode, always show action buttons on all services
+        const shouldShowActions = guideMode ? true : undefined;
+
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 {groups.map((group, idx) => (
@@ -243,7 +265,12 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                         key={group.tier}
                         sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
                     >
-                        <TierNode priority={group.tier} active={active} />
+                        <TierNode
+                            priority={group.tier}
+                            active={active}
+                            onHover={guideMode ? undefined : (hovering) => setHoveredTier(hovering ? group.tier : null)}
+                            onShowGuide={handleShowGuide}
+                        />
                         {group.providers.map((p) => (
                             <ServiceNode
                                 key={p.uuid}
@@ -254,6 +281,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                 onDelete={() => onDeleteProvider?.(p.uuid)}
                                 onNodeClick={() => onProviderNodeClick?.(p.uuid)}
                                 showTier={false}
+                                forceShowActions={shouldShowActions ?? (hoveredTier === group.tier)}
                                 onMoveTierUp={group.tier > 0 && onTierChange ? () => onTierChange(p.uuid, group.tier - 1) : undefined}
                                 onMoveTierDown={onTierChange ? () => onTierChange(p.uuid, group.tier + 1) : undefined}
                             />
@@ -272,7 +300,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 ))}
             </Box>
         );
-    }, [t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService]);
+    }, [t, tierGroups, active, saving, record.providers.length, getApiStyle, providers, onDeleteProvider, onProviderNodeClick, onTierChange, onAddService, hoveredTier, guideMode, handleShowGuide]);
 
     // Render smart rules section
     const renderSmartRules = () => {
@@ -401,6 +429,12 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 extraActions={extraActions}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
+            />
+
+            {/* Tier Guide Dialog */}
+            <TierGuideDialog
+                open={showTierGuide}
+                onClose={handleGuideClose}
             />
 
             {/* Graph Content */}
