@@ -15,6 +15,31 @@ import (
 	"github.com/google/uuid"
 )
 
+// Anthropic token response types
+// These types match the structure of Anthropic's OAuth token response
+
+// AnthropicTokenResponse represents the full token response from Anthropic OAuth
+type AnthropicTokenResponse struct {
+	AccessToken  string                `json:"access_token"`
+	RefreshToken string                `json:"refresh_token"`
+	TokenType    string                `json:"token_type"`
+	ExpiresIn    int                   `json:"expires_in"`
+	Organization AnthropicOrganization `json:"organization"`
+	Account      AnthropicAccount      `json:"account"`
+}
+
+// AnthropicOrganization represents organization information in token response
+type AnthropicOrganization struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
+// AnthropicAccount represents account information in token response
+type AnthropicAccount struct {
+	UUID         string `json:"uuid"`
+	EmailAddress string `json:"email_address"`
+}
+
 // RequestHook defines preprocessing and postprocessing hooks for OAuth requests.
 // Implementations can modify request parameters before they are sent and fetch additional metadata after token is obtained.
 type RequestHook interface {
@@ -74,6 +99,7 @@ func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, http
 		EmailAddress string `json:"email_address"`
 	}
 
+	// Try to get account info from Anthropic account endpoint
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.anthropic.com/v1/account", nil)
 	if err != nil {
 		return nil, nil
@@ -103,6 +129,7 @@ func (h *AnthropicHook) AfterToken(ctx context.Context, accessToken string, http
 	if account.UUID != "" {
 		metadata["account_id"] = account.UUID
 	}
+
 	return metadata, nil
 }
 

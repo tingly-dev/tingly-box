@@ -513,6 +513,30 @@ func (m *Manager) exchangeCodeForToken(ctx context.Context, config *ProviderConf
 		token.Expiry = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 	}
 
+	// For Anthropic/Claude providers, extract organization info from token response
+	// Use the pre-defined types from hook.go for consistency
+	if config.Type == ai.IssuerClaudeCode || config.Type == ai.IssuerAnthropic {
+		var anthropicResp AnthropicTokenResponse
+		if json.Unmarshal(rawBody, &anthropicResp) == nil {
+			// Extract metadata from token response
+			if token.Metadata == nil {
+				token.Metadata = make(map[string]any)
+			}
+			if anthropicResp.Organization.UUID != "" {
+				token.Metadata["organization_id"] = anthropicResp.Organization.UUID
+			}
+			if anthropicResp.Organization.Name != "" {
+				token.Metadata["organization_name"] = anthropicResp.Organization.Name
+			}
+			if anthropicResp.Account.UUID != "" {
+				token.Metadata["account_id"] = anthropicResp.Account.UUID
+			}
+			if anthropicResp.Account.EmailAddress != "" {
+				token.Metadata["email"] = anthropicResp.Account.EmailAddress
+			}
+		}
+	}
+
 	// For Codex provider, parse ID token to extract user info
 	if config.Type == ai.IssuerCodex && token.IDToken != "" {
 		if claims := parseIDToken(token.IDToken); claims != nil {

@@ -26,6 +26,7 @@ func DefaultRegistry() *Registry {
 		TokenRequestFormat: TokenRequestFormatJSON, // Anthropic requires JSON format
 		ConsoleURL:         "https://console.anthropic.com/",
 		Hook:               &AnthropicHook{},
+		CallbackPorts:      []int{54545}, // Anthropic CLI standard port (preferred but not required)
 	})
 
 	// OpenAI OAuth
