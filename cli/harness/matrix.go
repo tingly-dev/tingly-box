@@ -22,7 +22,8 @@ type MatrixCmd struct {
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
 	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
 	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Transitive bool     `kong:"name='transitive',help='Also run two-hop (A→B→C) transitive chain tests'"`
+	Transitive bool     `kong:"name='transitive',help='Run only two-hop (A→B→C) transitive chain tests'"`
+	SingleHop  bool     `kong:"name='single-hop',help='Run only single-hop (A→B) tests'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
@@ -34,11 +35,14 @@ type MatrixCmd struct {
 // Help returns extended help text shown by `harness matrix --help`.
 func (*MatrixCmd) Help() string {
 	return `Examples:
-  # Run all single-hop matrix tests
+  # Run everything: single-hop + two-hop (default)
   harness matrix
 
-  # Run single-hop + two-hop transitive chain tests
+  # Run only two-hop (A→B→C) transitive chain tests
   harness matrix --transitive
+
+  # Run only single-hop (A→B) tests
+  harness matrix --single-hop
 
   # Run specific scenario only
   harness matrix --scenario text
@@ -73,9 +77,12 @@ func (m *MatrixCmd) Run() error {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	// Resolve streaming filter conflict early.
+	// Resolve flag conflicts early.
 	if m.Streaming && m.NonStream {
 		return fmt.Errorf("cannot specify both --streaming and --non-streaming")
+	}
+	if m.Transitive && m.SingleHop {
+		return fmt.Errorf("cannot specify both --transitive and --single-hop")
 	}
 
 	// Build matrix with filters
@@ -109,15 +116,21 @@ func (m *MatrixCmd) Run() error {
 		matrix = matrix.WithMCPEnabled()
 	}
 
-	// Execute single-hop tests.
-	results := matrix.ExecuteAll()
-	results = filterResults(results, m)
+	// Determine which sections to run:
+	//   default            → single-hop + two-hop
+	//   --single-hop       → single-hop only
+	//   --transitive       → two-hop only
+	runSingle := !m.Transitive
+	runTransitive := !m.SingleHop
 
-	// Execute two-hop transitive chain tests when requested.
-	if m.Transitive {
-		transitiveResults := matrix.ExecuteAllTransitive()
-		transitiveResults = filterResults(transitiveResults, m)
-		results = append(results, transitiveResults...)
+	var results []protocoltest.TestResult
+	if runSingle {
+		r := matrix.ExecuteAll()
+		results = append(results, filterResults(r, m)...)
+	}
+	if runTransitive {
+		r := matrix.ExecuteAllTransitive()
+		results = append(results, filterResults(r, m)...)
 	}
 
 	// Output results
