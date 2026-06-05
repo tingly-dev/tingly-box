@@ -896,6 +896,8 @@ func ApplyOpenCodeConfig(payload map[string]interface{}) (*ApplyResult, error) {
 // tingly-served models.
 const codexModelCatalogFile = "tingly-model-catalog.json"
 
+const codexModelCatalogSchema = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/server/config/codex-model-catalog.schema.json"
+
 // CodexPrefs is the typed, user-tunable surface of Codex's config.toml.
 // JSON tags map 1:1 to the config.toml keys, so the frontend round-trips the
 // same field names. Values are kept as strings so empty = omit (let Codex use
@@ -1206,7 +1208,10 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 			"apply_patch_tool_type":            "freeform",
 		})
 	}
-	payload := map[string]interface{}{"models": entries}
+	payload := map[string]interface{}{
+		"$schema": codexModelCatalogSchema,
+		"models":  entries,
+	}
 	return json.MarshalIndent(payload, "", "  ")
 }
 

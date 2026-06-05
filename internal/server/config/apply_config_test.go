@@ -1086,10 +1086,14 @@ func TestApplyCodexConfig_WritesCatalogAndPointsConfigAtIt(t *testing.T) {
 		t.Fatalf("read catalog: %v", err)
 	}
 	var catalog struct {
+		Schema string                   `json:"$schema"`
 		Models []map[string]interface{} `json:"models"`
 	}
 	if err := json.Unmarshal(data, &catalog); err != nil {
 		t.Fatalf("unmarshal catalog: %v\n%s", err, data)
+	}
+	if catalog.Schema != codexModelCatalogSchema {
+		t.Errorf("$schema = %q, want %q", catalog.Schema, codexModelCatalogSchema)
 	}
 	if len(catalog.Models) != 2 {
 		t.Fatalf("len(models) = %d, want 2", len(catalog.Models))
