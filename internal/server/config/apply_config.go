@@ -896,6 +896,8 @@ func ApplyOpenCodeConfig(payload map[string]interface{}) (*ApplyResult, error) {
 // tingly-served models.
 const codexModelCatalogFile = "tingly-model-catalog.json"
 
+const codexModelCatalogSchema = "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/server/config/codex-model-catalog.schema.json"
+
 // CodexPrefs is the typed, user-tunable surface of Codex's config.toml.
 // JSON tags map 1:1 to the config.toml keys, so the frontend round-trips the
 // same field names. Values are kept as strings so empty = omit (let Codex use
@@ -1151,6 +1153,16 @@ func mergeCodexConfig(cfg map[string]interface{}, baseURL string, models []strin
 	}
 }
 
+const (
+	// The gateway only knows model slugs from routing rules, not provider-native
+	// capabilities. Keep tingly-managed catalog entries conservative and
+	// internally consistent until richer per-model metadata is available.
+	codexDefaultContextWindow            = 200000
+	codexDefaultMaxContextWindow         = 200000
+	codexEffectiveContextWindowPercent   = 92
+	codexDefaultAutoCompactTokenLimitPct = 85
+)
+
 // renderCodexModelCatalog produces the JSON payload for
 // ~/.codex/tingly-model-catalog.json. Each model becomes one ModelInfo entry
 // with the required fields populated using conservative defaults that match
@@ -1187,14 +1199,24 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 			"support_verbosity":                false,
 			"truncation_policy":                map[string]interface{}{"mode": "tokens", "limit": 10000},
 			"supports_parallel_tool_calls":     true,
-			"effective_context_window_percent": 100,
+			"context_window":                   codexDefaultContextWindow,
+			"max_context_window":               codexDefaultMaxContextWindow,
+			"auto_compact_token_limit":         codexAutoCompactTokenLimit(codexDefaultContextWindow),
+			"effective_context_window_percent": codexEffectiveContextWindowPercent,
 			"experimental_supported_tools":     []string{},
 			"input_modalities":                 []string{"text", "image"},
 			"apply_patch_tool_type":            "freeform",
 		})
 	}
-	payload := map[string]interface{}{"models": entries}
+	payload := map[string]interface{}{
+		"$schema": codexModelCatalogSchema,
+		"models":  entries,
+	}
 	return json.MarshalIndent(payload, "", "  ")
+}
+
+func codexAutoCompactTokenLimit(contextWindow int) int {
+	return contextWindow * codexDefaultAutoCompactTokenLimitPct / 100
 }
 
 var codexProfileKeyInvalid = regexp.MustCompile(`[^A-Za-z0-9_-]`)

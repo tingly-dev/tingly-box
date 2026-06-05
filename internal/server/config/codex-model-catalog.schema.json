@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/tingly-dev/tingly-box/main/internal/server/config/codex-model-catalog.schema.json",
+  "title": "Tingly Box Codex Model Catalog",
+  "description": "Schema for the JSON model catalog written to ~/.codex/tingly-model-catalog.json and referenced by Codex config.toml's model_catalog_json setting.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["models"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/modelInfo"
+      }
+    }
+  },
+  "definitions": {
+    "reasoningEffortPreset": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["effort", "description"],
+      "properties": {
+        "effort": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "truncationPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "modelInfo": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "slug",
+        "display_name",
+        "supported_reasoning_levels",
+        "shell_type",
+        "visibility",
+        "truncation_policy",
+        "input_modalities",
+        "context_window",
+        "max_context_window",
+        "auto_compact_token_limit",
+        "effective_context_window_percent"
+      ],
+      "properties": {
+        "slug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "supported_reasoning_levels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/reasoningEffortPreset"
+          }
+        },
+        "default_reasoning_level": {
+          "type": "string"
+        },
+        "shell_type": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string"
+        },
+        "supported_in_api": {
+          "type": "boolean"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "base_instructions": {
+          "type": "string"
+        },
+        "supports_reasoning_summaries": {
+          "type": "boolean"
+        },
+        "default_reasoning_summary": {
+          "type": "string"
+        },
+        "support_verbosity": {
+          "type": "boolean"
+        },
+        "truncation_policy": {
+          "$ref": "#/definitions/truncationPolicy"
+        },
+        "supports_parallel_tool_calls": {
+          "type": "boolean"
+        },
+        "context_window": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_context_window": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "auto_compact_token_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "effective_context_window_percent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "experimental_supported_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "input_modalities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "apply_patch_tool_type": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
