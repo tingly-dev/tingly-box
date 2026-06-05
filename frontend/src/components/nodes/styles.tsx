@@ -159,8 +159,8 @@ export const StyledModelNode = styled(Box, { shouldForwardProp: (prop) => prop !
 // are always readable regardless of node opacity or background content.
 export const ActionButtonsBox = styled(Box)(({ theme }: { theme: Theme }) => ({
     position: 'absolute',
-    top: -36,
-    right: 8,
+    top: 0,
+    right: 0,
     display: 'flex',
     gap: 2,
     opacity: 0,
