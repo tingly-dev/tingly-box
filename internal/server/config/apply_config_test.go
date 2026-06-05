@@ -1099,7 +1099,7 @@ func TestApplyCodexConfig_WritesCatalogAndPointsConfigAtIt(t *testing.T) {
 		gotSlugs[m["slug"].(string)] = true
 		// Spot-check a few required ModelInfo fields so a future refactor
 		// can't silently drop them and start tripping Codex's deserializer.
-		for _, key := range []string{"display_name", "supported_reasoning_levels", "shell_type", "visibility", "truncation_policy", "input_modalities"} {
+		for _, key := range []string{"display_name", "supported_reasoning_levels", "shell_type", "visibility", "truncation_policy", "input_modalities", "context_window", "max_context_window", "auto_compact_token_limit", "effective_context_window_percent"} {
 			if _, ok := m[key]; !ok {
 				t.Errorf("catalog entry %v missing required key %q", m["slug"], key)
 			}
@@ -1107,6 +1107,61 @@ func TestApplyCodexConfig_WritesCatalogAndPointsConfigAtIt(t *testing.T) {
 	}
 	if !gotSlugs["tingly-codex"] || !gotSlugs["tingly-gpt5"] {
 		t.Errorf("catalog slugs = %v, want tingly-codex+tingly-gpt5", gotSlugs)
+	}
+}
+
+func TestApplyCodexConfig_CatalogContextMetadataIsExplicit(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+
+	if _, err := ApplyCodexConfig("http://h/tingly/codex", []string{"tingly-codex", "tingly-gpt5"}, DefaultCodexPrefs(), true); err != nil {
+		t.Fatalf("ApplyCodexConfig: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(tempDir, ".codex", "tingly-model-catalog.json"))
+	if err != nil {
+		t.Fatalf("read catalog: %v", err)
+	}
+	var catalog struct {
+		Models []struct {
+			Slug                          string `json:"slug"`
+			ContextWindow                 int    `json:"context_window"`
+			MaxContextWindow              int    `json:"max_context_window"`
+			AutoCompactTokenLimit         int    `json:"auto_compact_token_limit"`
+			EffectiveContextWindowPercent int    `json:"effective_context_window_percent"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(data, &catalog); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, data)
+	}
+	if len(catalog.Models) != 2 {
+		t.Fatalf("models len = %d, want 2", len(catalog.Models))
+	}
+
+	bySlug := map[string]struct {
+		Slug                          string `json:"slug"`
+		ContextWindow                 int    `json:"context_window"`
+		MaxContextWindow              int    `json:"max_context_window"`
+		AutoCompactTokenLimit         int    `json:"auto_compact_token_limit"`
+		EffectiveContextWindowPercent int    `json:"effective_context_window_percent"`
+	}{}
+	for _, model := range catalog.Models {
+		bySlug[model.Slug] = model
+		if model.ContextWindow != codexDefaultContextWindow {
+			t.Errorf("%s context_window = %d, want %d", model.Slug, model.ContextWindow, codexDefaultContextWindow)
+		}
+		if model.AutoCompactTokenLimit != codexAutoCompactTokenLimit(model.ContextWindow) {
+			t.Errorf("%s auto_compact_token_limit = %d, want configured percentage of context_window", model.Slug, model.AutoCompactTokenLimit)
+		}
+		if model.EffectiveContextWindowPercent != codexEffectiveContextWindowPercent {
+			t.Errorf("%s effective_context_window_percent = %d, want %d", model.Slug, model.EffectiveContextWindowPercent, codexEffectiveContextWindowPercent)
+		}
+	}
+	if bySlug["tingly-codex"].MaxContextWindow != codexDefaultMaxContextWindow {
+		t.Errorf("tingly-codex max_context_window = %d, want %d", bySlug["tingly-codex"].MaxContextWindow, codexDefaultMaxContextWindow)
+	}
+	if bySlug["tingly-gpt5"].MaxContextWindow != codexDefaultMaxContextWindow {
+		t.Errorf("tingly-gpt5 max_context_window = %d, want %d", bySlug["tingly-gpt5"].MaxContextWindow, codexDefaultMaxContextWindow)
 	}
 }
 
