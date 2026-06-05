@@ -1,6 +1,8 @@
-package client
+package probe
 
-// ProbeResult represents the result of a probe operation (for both simple and streaming)
+// ProbeResult is the canonical SDK-level probe result, shared by the E2E and
+// lightweight probe strategies. It doubles as the JSON payload returned by the
+// probe HTTP endpoints (exposed under the E2EData alias).
 type ProbeResult struct {
 	// Basic fields
 	Success      bool   `json:"success"`
@@ -25,31 +27,16 @@ type ProbeResult struct {
 	RequestURL string `json:"request_url,omitempty"`
 }
 
-// ProbeToolCall represents a tool call in probe response
+// ProbeToolCall represents a tool call in a probe response.
 type ProbeToolCall struct {
 	ID    string                 `json:"id"`
 	Name  string                 `json:"name"`
 	Input map[string]interface{} `json:"input"`
 }
 
-// ProbeUsage represents token usage from a probe operation
-type ProbeUsage struct {
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
-}
-
-// ProbeMode defines the test mode for a probe request.
-type ProbeMode string
-
-const (
-	ProbeModeSimple    ProbeMode = "simple"
-	ProbeModeStreaming ProbeMode = "streaming"
-	ProbeModeTool      ProbeMode = "tool"
-)
-
-// ToProbeResult creates a ProbeResult with basic fields
-func ToProbeResult(content string, latencyMs int64, requestURL string, isStreaming bool) *ProbeResult {
+// toProbeResult builds a ProbeResult carrying the raw (JSON-marshaled)
+// upstream response for a successful probe.
+func toProbeResult(content string, latencyMs int64, requestURL string, isStreaming bool) *ProbeResult {
 	return &ProbeResult{
 		Content:    content,
 		LatencyMs:  latencyMs,

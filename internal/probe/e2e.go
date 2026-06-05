@@ -294,7 +294,7 @@ func (e *E2EService) resolveSmartRoutingForProbe(rule *typ.Rule) (*loadbalance.S
 // through the provider's real-traffic client methods. Public because the
 // server's provider onboarding path (testProviderConnectivity) reuses it.
 func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
-	mode := client.ProbeMode(testMode)
+	mode := testMode
 
 	switch provider.APIStyle {
 	case protocol.APIStyleOpenAI:
@@ -335,7 +335,7 @@ func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Pro
 // retryable failure. Successful protocol choices are cached per provider+model.
 func (e *E2EService) probeOpenAIAuto(
 	ctx context.Context, oc client.OpenAIClientInterface,
-	provider *typ.Provider, model, message string, mode client.ProbeMode,
+	provider *typ.Provider, model, message string, mode E2EMode,
 ) (*E2EData, error) {
 	// Cache hit short-circuits to the known-good protocol.
 	if e.endpointGet != nil {

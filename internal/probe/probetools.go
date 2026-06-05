@@ -1,4 +1,4 @@
-package client
+package probe
 
 import (
 	"github.com/anthropics/anthropic-sdk-go"
@@ -8,9 +8,9 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 )
 
-// GetProbeToolsAnthropic returns predefined tools in Anthropic format for probe testing
-// Uses bash tool to execute simple file system operations
-func GetProbeToolsAnthropic() []anthropic.ToolUnionParam {
+// getProbeToolsAnthropic returns predefined tools in Anthropic format for probe
+// testing. Uses a bash tool to execute simple file system operations.
+func getProbeToolsAnthropic() []anthropic.ToolUnionParam {
 	return []anthropic.ToolUnionParam{
 		{
 			OfTool: &anthropic.ToolParam{
@@ -44,9 +44,9 @@ func GetProbeToolsAnthropic() []anthropic.ToolUnionParam {
 	}
 }
 
-// GetProbeToolsOpenAI returns predefined tools in OpenAI format for probe testing
-// Uses bash tool to execute simple file system operations
-func GetProbeToolsOpenAI() []openai.ChatCompletionToolUnionParam {
+// getProbeToolsOpenAI returns predefined tools in OpenAI format for probe
+// testing. Uses a bash tool to execute simple file system operations.
+func getProbeToolsOpenAI() []openai.ChatCompletionToolUnionParam {
 	return []openai.ChatCompletionToolUnionParam{
 		openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
 			Name:        "bash",
@@ -80,9 +80,9 @@ func GetProbeToolsOpenAI() []openai.ChatCompletionToolUnionParam {
 	}
 }
 
-// GetProbeToolsResponses returns predefined tools in Responses API format for probe testing
-// Uses bash tool to execute simple file system operations
-func GetProbeToolsResponses() []responses.ToolUnionParam {
+// getProbeToolsResponses returns predefined tools in Responses API format for
+// probe testing. Uses a bash tool to execute simple file system operations.
+func getProbeToolsResponses() []responses.ToolUnionParam {
 	return []responses.ToolUnionParam{
 		responses.ToolParamOfFunction(
 			"bash",
@@ -116,8 +116,8 @@ func GetProbeToolsResponses() []responses.ToolUnionParam {
 	}
 }
 
-// GetProbeToolChoiceAutoAnthropic returns auto tool choice for testing
-func GetProbeToolChoiceAutoAnthropic() anthropic.ToolChoiceUnionParam {
+// getProbeToolChoiceAutoAnthropic returns auto tool choice for testing.
+func getProbeToolChoiceAutoAnthropic() anthropic.ToolChoiceUnionParam {
 	return anthropic.ToolChoiceUnionParam{
 		OfAuto: &anthropic.ToolChoiceAutoParam{},
 	}
