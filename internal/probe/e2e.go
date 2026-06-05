@@ -290,106 +290,94 @@ func (e *E2EService) resolveSmartRoutingForProbe(rule *typ.Rule) (*loadbalance.S
 	return selectedService, nil
 }
 
-// getClientForProvider returns a Prober for the given provider via the client pool.
-func (e *E2EService) getClientForProvider(provider *typ.Provider, model string) (client.Prober, error) {
+// ProbeProviderWithSDK runs an SDK probe by dispatching a minimal request
+// through the provider's real-traffic client methods. Public because the
+// server's provider onboarding path (testProviderConnectivity) reuses it.
+func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
+	mode := client.ProbeMode(testMode)
+
 	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		c := e.clientPool.GetAnthropicClient(context.Background(), provider, model)
-		if c == nil {
-			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
-		}
-		return c, nil
 	case protocol.APIStyleOpenAI:
-		c := e.clientPool.GetOpenAIClient(context.Background(), provider, model)
-		if c == nil {
+		oc := e.clientPool.GetOpenAIClient(ctx, provider, model)
+		if oc == nil {
 			return nil, fmt.Errorf("failed to get OpenAI client for provider: %s", provider.Name)
 		}
-		return c, nil
+		// Codex OAuth providers only speak the Responses API.
+		if isCodexOAuth(provider) {
+			return probeOpenAIResponses(ctx, oc, model, message, mode)
+		}
+		if provider.OpenAIEndpointMode == ai.EndpointModeAuto {
+			return e.probeOpenAIAuto(ctx, oc, provider, model, message, mode)
+		}
+		return probeOpenAIChat(ctx, oc, model, message, mode)
+
+	case protocol.APIStyleAnthropic:
+		ac := e.clientPool.GetAnthropicClient(ctx, provider, model)
+		if ac == nil {
+			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
+		}
+		return probeAnthropicMessages(ctx, ac, model, message, mode)
+
 	case protocol.APIStyleGoogle:
-		c := e.clientPool.GetGoogleClient(context.Background(), provider, model)
-		if c == nil {
+		gc := e.clientPool.GetGoogleClient(ctx, provider, model)
+		if gc == nil {
 			return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
 		}
-		return c, nil
+		return probeGoogleGenerate(ctx, gc, model, message, mode)
+
 	default:
 		return nil, fmt.Errorf("unsupported API style: %s", provider.APIStyle)
 	}
 }
 
-// ProbeProviderWithSDK runs a non-streaming SDK probe. Public because the
-// server's provider onboarding path (testProviderConnectivity) reuses it.
-func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
-	prober, err := e.getClientForProvider(provider, model)
-	if err != nil {
-		return nil, err
-	}
-
-	if provider.APIStyle == protocol.APIStyleOpenAI &&
-		provider.OpenAIEndpointMode == ai.EndpointModeAuto {
-		if ep, ok := prober.(client.EndpointProber); ok {
-			return e.probeWithAutoFallback(ctx, ep, provider, model, message, testMode)
-		}
-	}
-
-	clientMode := client.ProbeMode(testMode)
-	return prober.ProbeStream(ctx, model, message, clientMode)
-}
-
-// probeWithAutoFallback tries the preferred protocol (chat) first; on
-// retryable failure it falls back to the alternate protocol. Results are
-// cached via endpointGet/endpointSet when available.
-func (e *E2EService) probeWithAutoFallback(
-	ctx context.Context, ep client.EndpointProber,
-	provider *typ.Provider, model, message string, testMode E2EMode,
+// probeOpenAIAuto handles EndpointModeAuto providers: it consults the endpoint
+// cache, tries the chat protocol first, and falls back to responses on a
+// retryable failure. Successful protocol choices are cached per provider+model.
+func (e *E2EService) probeOpenAIAuto(
+	ctx context.Context, oc client.OpenAIClientInterface,
+	provider *typ.Provider, model, message string, mode client.ProbeMode,
 ) (*E2EData, error) {
-	opts := client.ProbeEndpointOptions{
-		Message: message,
-		Stream:  testMode == E2EModeStreaming,
-		Mode:    client.ProbeMode(testMode),
-	}
-
-	// Check cache first
+	// Cache hit short-circuits to the known-good protocol.
 	if e.endpointGet != nil {
 		if cached, ok := e.endpointGet(provider.UUID, model); ok {
 			if cached == protocol.TypeOpenAIResponses {
-				result, err := ep.ProbeResponsesEndpoint(ctx, model, opts)
-				if err == nil {
-					return result, nil
+				if r, err := probeOpenAIResponses(ctx, oc, model, message, mode); err == nil {
+					return r, nil
 				}
 			} else {
-				result, err := ep.ProbeChatEndpoint(ctx, model, opts)
-				if err == nil {
-					return result, nil
+				if r, err := probeOpenAIChat(ctx, oc, model, message, mode); err == nil {
+					return r, nil
 				}
 			}
-			// Cache hit but probe failed — fall through to try/fallback
+			// Cache hit but probe failed — fall through to try/fallback.
 		}
 	}
 
-	// Try chat first (most providers support it)
-	result, err := ep.ProbeChatEndpoint(ctx, model, opts)
+	// Try chat first (most providers support it).
+	result, err := probeOpenAIChat(ctx, oc, model, message, mode)
 	if err == nil && result != nil && result.Content != "" {
-		if e.endpointSet != nil {
-			e.endpointSet(provider.UUID, model, protocol.TypeOpenAIChat)
-		}
+		e.cacheEndpoint(provider.UUID, model, protocol.TypeOpenAIChat)
 		return result, nil
 	}
-
 	if err != nil && isProbeNonRetryable(err) {
 		return result, err
 	}
 
-	// Fallback to responses
+	// Fall back to responses.
 	logrus.Infof("[probe-auto] %s:%s chat probe failed, trying responses: %v", provider.Name, model, err)
-	result, err = ep.ProbeResponsesEndpoint(ctx, model, opts)
+	result, err = probeOpenAIResponses(ctx, oc, model, message, mode)
 	if err == nil && result != nil && result.Content != "" {
-		if e.endpointSet != nil {
-			e.endpointSet(provider.UUID, model, protocol.TypeOpenAIResponses)
-		}
+		e.cacheEndpoint(provider.UUID, model, protocol.TypeOpenAIResponses)
 		return result, nil
 	}
-
 	return result, err
+}
+
+// cacheEndpoint records a successful protocol choice when a cache is wired.
+func (e *E2EService) cacheEndpoint(providerUUID, model string, target protocol.APIType) {
+	if e.endpointSet != nil {
+		e.endpointSet(providerUUID, model, target)
+	}
 }
 
 // isProbeNonRetryable returns true for probe errors where switching protocol
@@ -412,10 +400,5 @@ func isProbeNonRetryable(err error) bool {
 }
 
 func (e *E2EService) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
-	prober, err := e.getClientForProvider(provider, model)
-	if err != nil {
-		return nil, err
-	}
-	clientMode := client.ProbeMode(testMode)
-	return prober.ProbeStream(ctx, model, message, clientMode)
+	return e.ProbeProviderWithSDK(ctx, provider, model, message, testMode)
 }

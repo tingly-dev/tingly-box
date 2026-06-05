@@ -98,39 +98,14 @@ type modelsReport struct {
 func (l *LightweightService) probeOptionsEndpoint(ctx context.Context, provider *typ.Provider) endpointReport {
 	startTime := time.Now()
 
-	var result client.ProbeResult
-
 	switch provider.APIStyle {
-	case protocol.APIStyleOpenAI:
-		c := l.pool.GetOpenAIClient(context.Background(), provider, "")
-		if c == nil {
-			return endpointReport{false, "Failed to create OpenAI client", 0}
-		}
-		openaiClient, ok := c.(*client.OpenAIClient)
-		if !ok {
-			return endpointReport{false, "OPTIONS probe not implemented for this client type", 0}
-		}
-		result = openaiClient.ProbeOptionsEndpoint(ctx)
-	case protocol.APIStyleAnthropic:
-		c := l.pool.GetAnthropicClient(context.Background(), provider, "")
-		if c == nil {
-			return endpointReport{false, "Failed to create Anthropic client", 0}
-		}
-		anthropicClient, ok := c.(*client.AnthropicClient)
-		if !ok {
-			return endpointReport{false, "OPTIONS probe not implemented for this client type", 0}
-		}
-		result = anthropicClient.ProbeOptionsEndpoint(ctx)
-	case protocol.APIStyleGoogle:
-		c := l.pool.GetGoogleClient(context.Background(), provider, "")
-		if c == nil {
-			return endpointReport{false, "Failed to create Google client", 0}
-		}
-		result = c.ProbeOptionsEndpoint(ctx)
+	case protocol.APIStyleOpenAI, protocol.APIStyleAnthropic, protocol.APIStyleGoogle:
+		// supported below
 	default:
 		return endpointReport{false, fmt.Sprintf("Unsupported API style: %s", provider.APIStyle), 0}
 	}
 
+	result := probeOptions(ctx, provider)
 	responseTime := time.Since(startTime).Milliseconds()
 	if result.Success {
 		return endpointReport{true, "OPTIONS request successful", responseTime}
@@ -210,11 +185,7 @@ func (l *LightweightService) probeChatEndpoint(ctx context.Context, provider *ty
 	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	result, err := c.ProbeChatEndpoint(probeCtx, "gpt-3.5-turbo", client.ProbeEndpointOptions{
-		Message: "Hi",
-		Stream:  false,
-		Mode:    client.ProbeModeSimple,
-	})
+	result, err := probeOpenAIChat(probeCtx, c, "gpt-3.5-turbo", "Hi", client.ProbeModeSimple)
 	responseTime := time.Since(startTime).Milliseconds()
 
 	if err != nil {
@@ -237,11 +208,7 @@ func (l *LightweightService) probeResponsesEndpoint(ctx context.Context, provide
 	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	result, err := c.ProbeResponsesEndpoint(probeCtx, "gpt-4o", client.ProbeEndpointOptions{
-		Message: "Hi",
-		Stream:  false,
-		Mode:    client.ProbeModeSimple,
-	})
+	result, err := probeOpenAIResponses(probeCtx, c, "gpt-4o", "Hi", client.ProbeModeSimple)
 	responseTime := time.Since(startTime).Milliseconds()
 
 	if err != nil {
