@@ -215,6 +215,25 @@ var skipSourceScenarios = map[string]string{
 	"openai_responses|streaming_tool_use": "Responses API source: streaming tool_use conversion incomplete",
 }
 
+// RunFull executes both single-hop and two-hop tests under t, organized as
+// two named sub-sections:
+//
+//   - "single_hop": every (source→target) pair × scenario × streaming mode
+//   - "two_hop":    every (A→B→C) transitive chain × scenario × streaming mode
+//
+// Run each section independently with -run TestFoo/single_hop or /two_hop.
+func (m *Matrix) RunFull(t *testing.T) {
+	t.Helper()
+	t.Run("single_hop", func(t *testing.T) {
+		t.Helper()
+		m.Run(t)
+	})
+	t.Run("two_hop", func(t *testing.T) {
+		t.Helper()
+		m.RunTransitive(t)
+	})
+}
+
 // Run executes all matrix combinations as subtests under t.
 // Each combination runs in its own TestEnv so state is isolated.
 func (m *Matrix) Run(t *testing.T) {
