@@ -94,7 +94,7 @@ func TestNewClaudeClient_StripV1FromBase(t *testing.T) {
 }
 
 // ===================================================================
-// ListModels / ProbeModelsEndpoint
+// ListModels
 // ===================================================================
 
 func TestClaudeClient_ListModels_ReturnsError(t *testing.T) {
@@ -109,16 +109,6 @@ func TestClaudeClient_ListModels_ReturnsError(t *testing.T) {
 	var modelsErr *ErrModelsEndpointNotSupported
 	require.ErrorAs(t, err, &modelsErr)
 	assert.Equal(t, provider.Name, modelsErr.Provider)
-}
-
-func TestClaudeClient_ProbeModelsEndpoint_ReturnsUnsupported(t *testing.T) {
-	provider := newOAuthProvider()
-	c, err := NewClaudeClient(provider, "", typ.SessionID{Value: "s"})
-	require.NoError(t, err)
-
-	result := c.ProbeModelsEndpoint(context.Background())
-	assert.False(t, result.Success)
-	assert.NotEmpty(t, result.ErrorMessage)
 }
 
 // ===================================================================

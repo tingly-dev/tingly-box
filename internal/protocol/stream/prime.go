@@ -9,10 +9,9 @@
 // event it reads is not discarded: it is replayed via
 // firstEventReplayStream so the handler sees a complete stream.
 //
-// NOTE: this is unrelated to client.ProbeResponsesStream, which issues a
-// separate synthetic health-check request. This one pulls the first
-// event of the real business stream and replays it — nothing extra is
-// sent.
+// NOTE: this is unrelated to the probe subsystem, which issues separate
+// synthetic health-check requests. This one pulls the first event of the
+// real business stream and replays it — nothing extra is sent.
 package stream
 
 import (
