@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/data/db"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -161,9 +160,8 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		Enabled:            true, // always make new provider enabled
 		ProxyURL:           req.ProxyURL,
 		UserAgent:          req.UserAgent,
-		AuthType:           typ.AuthType(req.AuthType),
-		Timeout:            constant.DefaultRequestTimeout,
-		OpenAIEndpointMode: ai.OpenAIEndpointMode(req.OpenAIEndpointMode),
+		AuthType: typ.AuthType(req.AuthType),
+		Timeout:  constant.DefaultRequestTimeout,
 	}
 
 	err = s.config.AddProvider(provider)
@@ -324,9 +322,6 @@ func (s *Server) UpdateProvider(c *gin.Context) {
 	}
 	if req.UserAgent != nil {
 		provider.UserAgent = *req.UserAgent
-	}
-	if req.OpenAIEndpointMode != nil {
-		provider.OpenAIEndpointMode = ai.OpenAIEndpointMode(*req.OpenAIEndpointMode)
 	}
 
 	// Fusion-mode constraints: dual base URLs are only valid for api_key auth,

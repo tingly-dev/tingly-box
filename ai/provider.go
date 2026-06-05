@@ -221,7 +221,7 @@ type OpenAIEndpointMode string
 const (
 	EndpointModeUnknown OpenAIEndpointMode = ""
 
-	// EndpointModeChat (the default) means the provider only exposes
+	// EndpointModeChat means the provider only exposes
 	// /chat/completions. An incoming Responses request will be downgraded
 	// to Chat if its features allow; otherwise the request is rejected.
 	EndpointModeChat OpenAIEndpointMode = "chat"
@@ -237,23 +237,30 @@ const (
 	// previous_response_id continuity, etc.) survive the round trip.
 	EndpointModeBoth OpenAIEndpointMode = "both"
 
-	// EndpointModeAuto is for third-party aggregator providers that host
-	// models with mixed endpoint support. The gateway tries the incoming
-	// protocol first; on failure it falls back to the alternate protocol
-	// and caches successful results per model.
+	// EndpointModeAuto is for providers where the gateway tries the
+	// incoming protocol first; on failure it falls back to the alternate
+	// protocol and caches successful results per model. This is also the
+	// default behavior when no mode is explicitly set (zero value).
 	EndpointModeAuto OpenAIEndpointMode = "auto"
 )
 
+// IsAutoEndpointMode reports whether the mode represents auto-detection
+// behavior. Both the explicit "auto" value and the zero value (no mode
+// set) are treated as auto.
+func IsAutoEndpointMode(mode OpenAIEndpointMode) bool {
+	return mode == EndpointModeAuto || mode == EndpointModeUnknown
+}
+
 // OpenAIEndpointModeForIssuer returns the OpenAIEndpointMode that an OAuth
 // provider should carry given its issuer. Currently only Codex needs a
-// non-default mode; other issuers fall through to EndpointModeChat (zero
-// value). Centralized so the OAuth web handler and the CLI flow agree on
+// non-default mode; other issuers use the zero value (auto).
+// Centralized so the OAuth web handler and the CLI flow agree on
 // the same mapping and future issuer-specific defaults land in one place.
 func OpenAIEndpointModeForIssuer(issuer Issuer) OpenAIEndpointMode {
 	if issuer == IssuerCodex {
 		return EndpointModeResponses
 	}
-	return EndpointModeChat
+	return EndpointModeUnknown
 }
 
 // IsVirtual reports whether this provider routes to the in-process vmodel

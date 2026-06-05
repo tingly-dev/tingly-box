@@ -226,8 +226,7 @@ type CreateProviderRequest struct {
 	Enabled            bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
 	ProxyURL           string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://localhost:7890"`
 	UserAgent          string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent; empty uses the built-in/default for this provider" example:"my-gateway/1.0"`
-	AuthType           string `json:"auth_type,omitempty" description:"Auth type: api_key or oauth (default: api_key)" example:"api_key"`
-	OpenAIEndpointMode string `json:"openai_endpoint_mode,omitempty" description:"OpenAI endpoint mode: chat, responses, both, or auto" example:"auto"`
+	AuthType string `json:"auth_type,omitempty" description:"Auth type: api_key or oauth (default: api_key)" example:"api_key"`
 }
 
 // CreateProviderResponse represents the response for adding a provider
@@ -248,8 +247,7 @@ type UpdateProviderRequest struct {
 	NoKeyRequired      *bool   `json:"no_key_required,omitempty" description:"Whether provider requires no API key"`
 	Enabled            *bool   `json:"enabled,omitempty" description:"New enabled status"`
 	ProxyURL           *string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL"`
-	UserAgent          *string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent (empty string clears it and reverts to default)"`
-	OpenAIEndpointMode *string `json:"openai_endpoint_mode,omitempty" description:"OpenAI endpoint mode: chat, responses, both, or auto"`
+	UserAgent *string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent (empty string clears it and reverts to default)"`
 }
 
 // UpdateProviderResponse represents the response for updating a provider

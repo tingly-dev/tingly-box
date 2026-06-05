@@ -206,7 +206,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
 		tempFlags := resolveRuleFlags(c, rule)
-		if provider.OpenAIEndpointMode == ai.EndpointModeAuto {
+		if ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
 			target, autoFallbackEnabled = s.resolveAutoTarget(tempFlags, provider, actualModel, IncomingAPIChat)
 		} else {
 			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)

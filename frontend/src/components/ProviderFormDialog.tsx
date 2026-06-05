@@ -11,13 +11,9 @@ import {
     DialogActions,
     DialogContent,
     DialogTitle,
-    FormControl,
     FormControlLabel,
     IconButton,
-    InputLabel,
     Link,
-    MenuItem,
-    Select,
     Stack,
     Switch,
     TextField,
@@ -56,7 +52,6 @@ export interface EnhancedProviderFormData {
     apiBaseOpenAI?: string;
     apiBaseAnthropic?: string;
     createFusionProvider?: boolean;
-    openaiEndpointMode?: string;
 }
 
 interface PresetProviderFormDialogProps {
@@ -900,23 +895,6 @@ const ProviderFormDialog = ({
                                             defaultValue: 'Custom outbound HTTP User-Agent. Empty falls back to the provider\'s built-in UA.',
                                         })}
                                     />
-
-                                    {protocolOpenAI && (
-                                        <FormControl size="small" fullWidth>
-                                            <InputLabel>{t('providerDialog.advanced.endpointMode.label', {defaultValue: 'OpenAI Endpoint Mode'})}</InputLabel>
-                                            <Select
-                                                value={data.openaiEndpointMode || ''}
-                                                label={t('providerDialog.advanced.endpointMode.label', {defaultValue: 'OpenAI Endpoint Mode'})}
-                                                onChange={(e) => onChange('openaiEndpointMode', e.target.value)}
-                                            >
-                                                <MenuItem value="">{t('providerDialog.advanced.endpointMode.default', {defaultValue: 'Default (Chat only)'})}</MenuItem>
-                                                <MenuItem value="auto">{t('providerDialog.advanced.endpointMode.auto', {defaultValue: 'Auto-detect per model'})}</MenuItem>
-                                                <MenuItem value="chat">{t('providerDialog.advanced.endpointMode.chat', {defaultValue: 'Chat Completions only'})}</MenuItem>
-                                                <MenuItem value="responses">{t('providerDialog.advanced.endpointMode.responses', {defaultValue: 'Responses API only'})}</MenuItem>
-                                                <MenuItem value="both">{t('providerDialog.advanced.endpointMode.both', {defaultValue: 'Both (mirror incoming)'})}</MenuItem>
-                                            </Select>
-                                        </FormControl>
-                                    )}
 
                                     {mode === 'edit' && (
                                         <FormControlLabel

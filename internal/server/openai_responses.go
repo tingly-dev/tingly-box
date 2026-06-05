@@ -207,7 +207,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	case protocol.APIStyleOpenAI:
 		tempFlags := resolveRuleFlags(c, rule)
-		if provider.OpenAIEndpointMode == ai.EndpointModeAuto {
+		if ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
 			target, autoFallbackEnabled = s.resolveAutoTarget(tempFlags, provider, string(req.Model), IncomingAPIResponses)
 		} else {
 			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIResponses)
