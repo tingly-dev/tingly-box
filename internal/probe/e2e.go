@@ -271,48 +271,43 @@ func (e *E2EService) resolveSmartRoutingForProbe(rule *typ.Rule) (*loadbalance.S
 	return selectedService, nil
 }
 
-// getClientForProvider returns a Prober for the given provider via the client pool.
-func (e *E2EService) getClientForProvider(provider *typ.Provider, model string) (client.Prober, error) {
+// ProbeProviderWithSDK runs an SDK probe by dispatching a minimal request
+// through the provider's real-traffic client methods. Public because the
+// server's provider onboarding path (testProviderConnectivity) reuses it.
+func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
+	mode := client.ProbeMode(testMode)
+
 	switch provider.APIStyle {
-	case protocol.APIStyleAnthropic:
-		c := e.clientPool.GetAnthropicClient(context.Background(), provider, model)
-		if c == nil {
-			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
-		}
-		return c, nil
 	case protocol.APIStyleOpenAI:
-		c := e.clientPool.GetOpenAIClient(context.Background(), provider, model)
-		if c == nil {
+		oc := e.clientPool.GetOpenAIClient(ctx, provider, model)
+		if oc == nil {
 			return nil, fmt.Errorf("failed to get OpenAI client for provider: %s", provider.Name)
 		}
-		return c, nil
+		// Codex OAuth providers only speak the Responses API.
+		if isCodexOAuth(provider) {
+			return probeOpenAIResponses(ctx, oc, model, message, mode)
+		}
+		return probeOpenAIChat(ctx, oc, model, message, mode)
+
+	case protocol.APIStyleAnthropic:
+		ac := e.clientPool.GetAnthropicClient(ctx, provider, model)
+		if ac == nil {
+			return nil, fmt.Errorf("failed to get Anthropic client for provider: %s", provider.Name)
+		}
+		return probeAnthropicMessages(ctx, ac, model, message, mode)
+
 	case protocol.APIStyleGoogle:
-		c := e.clientPool.GetGoogleClient(context.Background(), provider, model)
-		if c == nil {
+		gc := e.clientPool.GetGoogleClient(ctx, provider, model)
+		if gc == nil {
 			return nil, fmt.Errorf("failed to get Google client for provider: %s", provider.Name)
 		}
-		return c, nil
+		return probeGoogleGenerate(ctx, gc, model, message, mode)
+
 	default:
 		return nil, fmt.Errorf("unsupported API style: %s", provider.APIStyle)
 	}
 }
 
-// ProbeProviderWithSDK runs a non-streaming SDK probe. Public because the
-// server's provider onboarding path (testProviderConnectivity) reuses it.
-func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
-	prober, err := e.getClientForProvider(provider, model)
-	if err != nil {
-		return nil, err
-	}
-	clientMode := client.ProbeMode(testMode)
-	return prober.ProbeStream(ctx, model, message, clientMode)
-}
-
 func (e *E2EService) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {
-	prober, err := e.getClientForProvider(provider, model)
-	if err != nil {
-		return nil, err
-	}
-	clientMode := client.ProbeMode(testMode)
-	return prober.ProbeStream(ctx, model, message, clientMode)
+	return e.ProbeProviderWithSDK(ctx, provider, model, message, testMode)
 }
