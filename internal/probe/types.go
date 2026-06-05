@@ -8,7 +8,6 @@ package probe
 import (
 	"fmt"
 
-	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -115,11 +114,10 @@ type E2ERequest struct {
 	Message string `json:"message,omitempty"`
 }
 
-// E2EData is an alias to client.ProbeResult — the canonical SDK-level
-// probe result. Aliased so service-layer Response wrappers and swagger
-// registrations can reference a name in this package without re-importing
-// internal/client.
-type E2EData = client.ProbeResult
+// E2EData is an alias to ProbeResult — the canonical SDK-level probe result.
+// Aliased so service-layer Response wrappers and swagger registrations can
+// keep referring to the historical E2EData name.
+type E2EData = ProbeResult
 
 // E2EResponseChunk represents a streaming response chunk.
 type E2EResponseChunk struct {

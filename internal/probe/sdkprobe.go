@@ -32,7 +32,7 @@ const probeEchoInstruction = "work as `echo` if possible"
 // path. The client package therefore no longer owns any probe-specific code.
 
 // probeOpenAIChat builds and dispatches a minimal Chat Completions probe.
-func probeOpenAIChat(ctx context.Context, oc client.OpenAIClientInterface, model, message string, mode client.ProbeMode) (*client.ProbeResult, error) {
+func probeOpenAIChat(ctx context.Context, oc client.OpenAIClientInterface, model, message string, mode E2EMode) (*ProbeResult, error) {
 	start := time.Now()
 	params := openai.ChatCompletionNewParams{
 		Model: model,
@@ -41,19 +41,19 @@ func probeOpenAIChat(ctx context.Context, oc client.OpenAIClientInterface, model
 			openai.UserMessage(message),
 		},
 	}
-	if mode == client.ProbeModeTool {
-		params.Tools = client.GetProbeToolsOpenAI()
+	if mode == E2EModeTool {
+		params.Tools = getProbeToolsOpenAI()
 		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{OfAuto: openai.Opt("auto")}
 	}
 
 	url := oc.GetProvider().APIBase + "/chat/completions"
-	if mode == client.ProbeModeSimple {
+	if mode == E2EModeSimple {
 		resp, err := oc.ChatCompletionsNew(ctx, params)
 		if err != nil {
 			return nil, err
 		}
 		b, _ := json.Marshal(resp)
-		return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
+		return toProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
 	}
 
 	stream := oc.ChatCompletionsNewStreaming(ctx, params)
@@ -69,11 +69,11 @@ func probeOpenAIChat(ctx context.Context, oc client.OpenAIClientInterface, model
 		return nil, err
 	}
 	b, _ := json.Marshal(chunks)
-	return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
+	return toProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
 }
 
 // probeOpenAIResponses builds and dispatches a minimal Responses API probe.
-func probeOpenAIResponses(ctx context.Context, oc client.OpenAIClientInterface, model, message string, mode client.ProbeMode) (*client.ProbeResult, error) {
+func probeOpenAIResponses(ctx context.Context, oc client.OpenAIClientInterface, model, message string, mode E2EMode) (*ProbeResult, error) {
 	start := time.Now()
 	params := responses.ResponseNewParams{
 		Model:        model,
@@ -89,21 +89,21 @@ func probeOpenAIResponses(ctx context.Context, oc client.OpenAIClientInterface, 
 			},
 		},
 	}
-	if mode == client.ProbeModeTool {
-		params.Tools = client.GetProbeToolsResponses()
+	if mode == E2EModeTool {
+		params.Tools = getProbeToolsResponses()
 		params.ToolChoice = responses.ResponseNewParamsToolChoiceUnion{
 			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsAuto),
 		}
 	}
 
 	url := oc.GetProvider().APIBase + "/responses"
-	if mode == client.ProbeModeSimple {
+	if mode == E2EModeSimple {
 		resp, err := oc.ResponsesNew(ctx, params)
 		if err != nil {
 			return nil, err
 		}
 		b, _ := json.Marshal(resp)
-		return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
+		return toProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
 	}
 
 	stream := oc.ResponsesNewStreaming(ctx, params)
@@ -119,11 +119,11 @@ func probeOpenAIResponses(ctx context.Context, oc client.OpenAIClientInterface, 
 		return nil, err
 	}
 	b, _ := json.Marshal(chunks)
-	return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
+	return toProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
 }
 
 // probeAnthropicMessages builds and dispatches a minimal Messages probe.
-func probeAnthropicMessages(ctx context.Context, ac client.AnthropicClientInterface, model, message string, mode client.ProbeMode) (*client.ProbeResult, error) {
+func probeAnthropicMessages(ctx context.Context, ac client.AnthropicClientInterface, model, message string, mode E2EMode) (*ProbeResult, error) {
 	start := time.Now()
 	provider := ac.GetProvider()
 
@@ -141,19 +141,19 @@ func probeAnthropicMessages(ctx context.Context, ac client.AnthropicClientInterf
 			anthropic.NewUserMessage(anthropic.NewTextBlock(message)),
 		},
 	}
-	if mode == client.ProbeModeTool {
-		params.Tools = client.GetProbeToolsAnthropic()
-		params.ToolChoice = client.GetProbeToolChoiceAutoAnthropic()
+	if mode == E2EModeTool {
+		params.Tools = getProbeToolsAnthropic()
+		params.ToolChoice = getProbeToolChoiceAutoAnthropic()
 	}
 
 	url := provider.APIBase + "/v1/messages"
-	if mode == client.ProbeModeSimple {
+	if mode == E2EModeSimple {
 		resp, err := ac.MessagesNew(ctx, params)
 		if err != nil {
 			return nil, err
 		}
 		b, _ := json.Marshal(resp)
-		return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
+		return toProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
 	}
 
 	stream := ac.MessagesNewStreaming(ctx, params)
@@ -169,11 +169,11 @@ func probeAnthropicMessages(ctx context.Context, ac client.AnthropicClientInterf
 		return nil, err
 	}
 	b, _ := json.Marshal(chunks)
-	return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
+	return toProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
 }
 
 // probeGoogleGenerate builds and dispatches a minimal GenerateContent probe.
-func probeGoogleGenerate(ctx context.Context, gc *client.GoogleClient, model, message string, mode client.ProbeMode) (*client.ProbeResult, error) {
+func probeGoogleGenerate(ctx context.Context, gc *client.GoogleClient, model, message string, mode E2EMode) (*ProbeResult, error) {
 	start := time.Now()
 	contents := []*genai.Content{
 		{Role: "user", Parts: []*genai.Part{{Text: message}}},
@@ -181,13 +181,13 @@ func probeGoogleGenerate(ctx context.Context, gc *client.GoogleClient, model, me
 	config := &genai.GenerateContentConfig{MaxOutputTokens: 1024}
 	url := gc.GetProvider().APIBase
 
-	if mode == client.ProbeModeSimple {
+	if mode == E2EModeSimple {
 		resp, err := gc.GenerateContent(ctx, model, contents, config)
 		if err != nil {
 			return nil, err
 		}
 		b, _ := json.Marshal(resp)
-		return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
+		return toProbeResult(string(b), time.Since(start).Milliseconds(), url, false), nil
 	}
 
 	var chunks []interface{}
@@ -198,13 +198,13 @@ func probeGoogleGenerate(ctx context.Context, gc *client.GoogleClient, model, me
 		chunks = append(chunks, resp)
 	}
 	b, _ := json.Marshal(chunks)
-	return client.ToProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
+	return toProbeResult(string(b), time.Since(start).Milliseconds(), url, true), nil
 }
 
 // probeOptions issues a bare OPTIONS request to the provider base URL with the
 // auth headers appropriate for its API style. Used by the lightweight probe;
 // results are advisory.
-func probeOptions(ctx context.Context, provider *typ.Provider) client.ProbeResult {
+func probeOptions(ctx context.Context, provider *typ.Provider) ProbeResult {
 	start := time.Now()
 
 	url := provider.APIBase
@@ -229,7 +229,7 @@ func probeOptions(ctx context.Context, provider *typ.Provider) client.ProbeResul
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodOptions, url, nil)
 	if err != nil {
-		return client.ProbeResult{Success: false, ErrorMessage: fmt.Sprintf("Failed to create OPTIONS request: %v", err)}
+		return ProbeResult{Success: false, ErrorMessage: fmt.Sprintf("Failed to create OPTIONS request: %v", err)}
 	}
 	req.Header = header
 
@@ -237,14 +237,14 @@ func probeOptions(ctx context.Context, provider *typ.Provider) client.ProbeResul
 	resp, err := httpClient.Do(req)
 	latencyMs := time.Since(start).Milliseconds()
 	if err != nil {
-		return client.ProbeResult{Success: false, ErrorMessage: fmt.Sprintf("OPTIONS request failed: %v", err), LatencyMs: latencyMs}
+		return ProbeResult{Success: false, ErrorMessage: fmt.Sprintf("OPTIONS request failed: %v", err), LatencyMs: latencyMs}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return client.ProbeResult{Success: true, Message: "OPTIONS request successful", LatencyMs: latencyMs}
+		return ProbeResult{Success: true, Message: "OPTIONS request successful", LatencyMs: latencyMs}
 	}
-	return client.ProbeResult{Success: false, ErrorMessage: fmt.Sprintf("OPTIONS request failed with status: %d", resp.StatusCode), LatencyMs: latencyMs}
+	return ProbeResult{Success: false, ErrorMessage: fmt.Sprintf("OPTIONS request failed with status: %d", resp.StatusCode), LatencyMs: latencyMs}
 }
 
 // isCodexOAuth reports whether the provider is a Codex OAuth provider, which

@@ -185,7 +185,7 @@ func (l *LightweightService) probeChatEndpoint(ctx context.Context, provider *ty
 	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	result, err := probeOpenAIChat(probeCtx, c, "gpt-3.5-turbo", "Hi", client.ProbeModeSimple)
+	result, err := probeOpenAIChat(probeCtx, c, "gpt-3.5-turbo", "Hi", E2EModeSimple)
 	responseTime := time.Since(startTime).Milliseconds()
 
 	if err != nil {
@@ -208,7 +208,7 @@ func (l *LightweightService) probeResponsesEndpoint(ctx context.Context, provide
 	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	result, err := probeOpenAIResponses(probeCtx, c, "gpt-4o", "Hi", client.ProbeModeSimple)
+	result, err := probeOpenAIResponses(probeCtx, c, "gpt-4o", "Hi", E2EModeSimple)
 	responseTime := time.Since(startTime).Milliseconds()
 
 	if err != nil {
