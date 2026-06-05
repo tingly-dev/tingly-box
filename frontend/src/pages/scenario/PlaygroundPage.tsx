@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box,
     Button,
@@ -25,6 +25,15 @@ const IMAGE_SCENARIO = 'imagegen';
 
 type Quality = 'auto' | 'high' | 'medium' | 'low' | 'standard';
 
+
+const fileToDataURL = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+        reader.readAsDataURL(file);
+    });
+
 const extractModelsFromRules = (rules: any[] | undefined | null): string[] => {
     if (!Array.isArray(rules)) return [];
     const seen = new Set<string>();
@@ -45,6 +54,8 @@ const PlaygroundPage: React.FC = () => {
     const [models, setModels] = useState<string[]>([]);
     const [model, setModel] = useState<string>('');
     const [prompt, setPrompt] = useState<string>('');
+    const [imageRefs, setImageRefs] = useState<string>('');
+    const [uploadRefs, setUploadRefs] = useState<string[]>([]);
     const [size, setSize] = useState<string>('1024x1024');
     const [quality, setQuality] = useState<Quality>('auto');
     const [count, setCount] = useState<number>(1);
@@ -68,19 +79,38 @@ const PlaygroundPage: React.FC = () => {
         return () => { cancelled = true; };
     }, []);
 
+
+    const handleRefUpload = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files ?? []);
+        if (files.length === 0) return;
+
+        try {
+            const encoded = await Promise.all(files.map((f) => fileToDataURL(f)));
+            const valid = encoded.map((v) => v.trim()).filter(Boolean);
+            setUploadRefs((prev) => Array.from(new Set([...prev, ...valid])));
+        } catch (err: any) {
+            showNotification(err?.message || 'Failed to load reference image', 'error');
+        } finally {
+            e.target.value = '';
+        }
+    }, [showNotification]);
+
     const handleGenerate = useCallback(async () => {
         if (!prompt.trim() || !model) return;
         setSending(true);
         setResults([]);
         try {
             const client = await getOpenAIClient(IMAGE_SCENARIO);
+            const refs = imageRefs.split('\n').map((v) => v.trim()).filter(Boolean);
+            const mergedRefs = [...refs, ...uploadRefs];
             const resp = await client.images.generate({
                 model,
                 prompt: prompt.trim(),
                 n: count,
                 size: size as any,
                 quality,
-            });
+                ...(mergedRefs.length > 0 ? ({ extra_body: { input_image_refs: mergedRefs } } as any) : {}),
+            } as any);
             setResults(resp.data ?? []);
         } catch (err: any) {
             const status = err?.status ? `${err.status}: ` : '';
@@ -89,7 +119,7 @@ const PlaygroundPage: React.FC = () => {
         } finally {
             setSending(false);
         }
-    }, [prompt, model, count, size, quality, showNotification]);
+    }, [prompt, imageRefs, uploadRefs, model, count, size, quality, showNotification]);
 
     const noModels = useMemo(() => models.length === 0, [models]);
 
@@ -185,6 +215,57 @@ const PlaygroundPage: React.FC = () => {
                             onChange={(e) => setPrompt(e.target.value)}
                             disabled={noModels}
                         />
+
+
+                        <TextField
+                            multiline
+                            minRows={2}
+                            fullWidth
+                            placeholder={t('playground.refsPlaceholder', {
+                                defaultValue: 'Optional reference image URLs, one per line…',
+                            })}
+                            value={imageRefs}
+                            onChange={(e) => setImageRefs(e.target.value)}
+                            disabled={noModels}
+                        />
+
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                            <Button variant="outlined" component="label" disabled={noModels || sending}>
+                                {t('playground.uploadRefs', { defaultValue: 'Upload reference image(s)' })}
+                                <input hidden type="file" accept="image/*" multiple onChange={handleRefUpload} />
+                            </Button>
+                            {uploadRefs.length > 0 && (
+                                <Typography variant="body2" color="text.secondary">
+                                    {t('playground.uploadedCount', { defaultValue: "{{count}} uploaded reference image(s)", count: uploadRefs.length })}
+                                </Typography>
+                            )}
+                            {uploadRefs.length > 0 && (
+                                <Button size="small" onClick={() => setUploadRefs([])}>
+                                    {t('playground.clearUploads', { defaultValue: 'Clear uploads' })}
+                                </Button>
+                            )}
+                        </Stack>
+
+                        {uploadRefs.length > 0 && (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
+                                    gap: 1,
+                                }}
+                            >
+                                {uploadRefs.slice(0, 8).map((src, idx) => (
+                                    <Box
+                                        key={`ref-${idx}`}
+                                        component="img"
+                                        src={src}
+                                        alt={`reference-${idx}`}
+                                        sx={{ width: '100%', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}
+                                    />
+                                ))}
+                            </Box>
+                        )}
 
                         <Box>
                             <Button

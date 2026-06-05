@@ -369,8 +369,18 @@ func (c *CodexClient) buildImageGenerationResponsesRequest(req openai.ImageGener
 	params.Include = []responses.ResponseIncludable{responses.ResponseIncludable(reasoningMarker)}
 
 	// Build input content
-	contentItem := responses.ResponseInputContentParamOfInputText(string(req.Prompt))
-	contentItems := responses.ResponseInputMessageContentListParam{contentItem}
+	contentItems := responses.ResponseInputMessageContentListParam{
+		responses.ResponseInputContentParamOfInputText(string(req.Prompt)),
+	}
+
+	// Optional reference images (passed via extra body field input_image_refs / image_urls)
+	for _, imageRef := range extractImageReferencesFromImageGenerateRequest(req) {
+		contentItems = append(contentItems, responses.ResponseInputContentUnionParam{
+			OfInputImage: &responses.ResponseInputImageParam{
+				ImageURL: param.NewOpt(imageRef),
+			},
+		})
+	}
 
 	// Build input message
 	inputItem := responses.ResponseInputItemUnionParam{
@@ -635,4 +645,45 @@ func (c *CodexClient) ProbeResponsesStream(ctx context.Context, model, message s
 
 	chunksJSON, _ := json.Marshal(chunks)
 	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/responses", true), nil
+}
+
+func extractImageReferencesFromImageGenerateRequest(req openai.ImageGenerateParams) []string {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil
+	}
+
+	for _, key := range []string{"input_image_refs", "image_urls", "reference_images"} {
+		refs := normalizeStringSlice(payload[key])
+		if len(refs) > 0 {
+			return refs
+		}
+	}
+
+	return nil
+}
+
+func normalizeStringSlice(value any) []string {
+	list, ok := value.([]any)
+	if !ok || len(list) == 0 {
+		return nil
+	}
+
+	refs := make([]string, 0, len(list))
+	for _, item := range list {
+		str, ok := item.(string)
+		if !ok {
+			continue
+		}
+		str = strings.TrimSpace(str)
+		if str != "" {
+			refs = append(refs, str)
+		}
+	}
+	return refs
 }
