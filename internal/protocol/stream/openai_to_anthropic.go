@@ -86,7 +86,6 @@ func handleResponsesToAnthropicStream(hc *protocol.HandleContext, stream Respons
 		return conv.Usage(), streamErr
 	}
 
-	hc.CallOnStreamComplete()
 	return conv.Usage(), nil
 }
 
@@ -162,6 +161,7 @@ func handleOpenAIToAnthropicStreamResponse(
 			return conv.Usage(), nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", err)
+		hc.DispatchStreamError(err)
 		if !conv.MessageStarted() {
 			SendStreamingError(c, err)
 			return conv.Usage(), err
@@ -182,6 +182,7 @@ func handleOpenAIToAnthropicStreamResponse(
 			return conv.Usage(), nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("OpenAI stream error: %v", streamErr)
+		hc.DispatchStreamError(streamErr)
 		if !conv.MessageStarted() {
 			SendStreamingError(c, streamErr)
 			return conv.Usage(), streamErr
