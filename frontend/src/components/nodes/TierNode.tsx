@@ -83,40 +83,52 @@ export const TierNode: React.FC<TierNodeProps> = ({
                 onMouseEnter={() => onHover?.(true)}
                 onMouseLeave={() => onHover?.(false)}
             >
-                <Typography
+                <Box
                     sx={{
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        color: 'text.secondary',
-                        lineHeight: 1.15,
+                        position: 'relative',
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                     }}
                 >
-                    {`T${priority}`}
-                </Typography>
-                {onShowGuide && (
-                    <IconButton
-                        size="small"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onShowGuide();
-                        }}
+                    <Typography
                         sx={{
-                            position: 'absolute',
-                            top: -8,
-                            right: -8,
-                            p: 0.25,
-                            backgroundColor: 'background.paper',
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            '&:hover': {
-                                backgroundColor: 'action.hover',
-                            }
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            color: 'text.secondary',
+                            lineHeight: 1.15,
                         }}
-                        aria-label={t('rule.tier.guideButtonAriaLabel', { defaultValue: 'Learn about tiers' })}
                     >
-                        <Info sx={{ fontSize: '0.85rem' }} />
-                    </IconButton>
-                )}
+                        {`T${priority}`}
+                    </Typography>
+                    {onShowGuide && (
+                        <IconButton
+                            size="small"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onShowGuide();
+                            }}
+                            sx={{
+                                position: 'absolute',
+                                top: 2,
+                                right: 2,
+                                p: 0.25,
+                                minWidth: 20,
+                                minHeight: 20,
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                '&:hover': {
+                                    backgroundColor: 'action.hover',
+                                }
+                            }}
+                            aria-label={t('rule.tier.guideButtonAriaLabel', { defaultValue: 'Learn about tiers' })}
+                        >
+                            <Info sx={{ fontSize: '0.7rem' }} />
+                        </IconButton>
+                    )}
+                </Box>
             </Box>
         </NodeTooltip>
     );
