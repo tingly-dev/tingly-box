@@ -3,11 +3,13 @@ package probe
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/client"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -22,6 +24,13 @@ import (
 // internal/probe -> internal/server import cycle.
 type SelectServiceFn func(matched []*loadbalance.Service, rule *typ.Rule) (*loadbalance.Service, error)
 
+// EndpointCacheGetFn looks up a cached protocol for a provider+model pair.
+// Returns the cached APIType and true on hit, or ("", false) on miss.
+type EndpointCacheGetFn func(providerUUID, model string) (protocol.APIType, bool)
+
+// EndpointCacheSetFn writes a successful protocol result into the cache.
+type EndpointCacheSetFn func(providerUUID, model string, target protocol.APIType)
+
 // E2EService runs SDK-level end-to-end probes against a rule, a saved
 // provider, or an inline provider config. It is independent of *Server and
 // is wired in NewServer.
@@ -29,6 +38,8 @@ type E2EService struct {
 	config           *config.Config
 	clientPool       *client.ClientPool
 	selectFromRoutes SelectServiceFn
+	endpointGet      EndpointCacheGetFn
+	endpointSet      EndpointCacheSetFn
 }
 
 // NewE2EService constructs a E2EService. selectFromRoutes is required and
@@ -39,6 +50,14 @@ func NewE2EService(cfg *config.Config, pool *client.ClientPool, selectFromRoutes
 		clientPool:       pool,
 		selectFromRoutes: selectFromRoutes,
 	}
+}
+
+// SetEndpointCache wires the endpoint auto-detection cache into the probe
+// service. When set, ProbeProviderWithSDK uses the cache for providers with
+// EndpointModeAuto to avoid unnecessary fallback retries.
+func (e *E2EService) SetEndpointCache(get EndpointCacheGetFn, set EndpointCacheSetFn) {
+	e.endpointGet = get
+	e.endpointSet = set
 }
 
 // Probe performs a non-streaming probe against the target described by req.
@@ -304,8 +323,92 @@ func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Pro
 	if err != nil {
 		return nil, err
 	}
+
+	if provider.APIStyle == protocol.APIStyleOpenAI &&
+		provider.OpenAIEndpointMode == ai.EndpointModeAuto {
+		if ep, ok := prober.(client.EndpointProber); ok {
+			return e.probeWithAutoFallback(ctx, ep, provider, model, message, testMode)
+		}
+	}
+
 	clientMode := client.ProbeMode(testMode)
 	return prober.ProbeStream(ctx, model, message, clientMode)
+}
+
+// probeWithAutoFallback tries the preferred protocol (chat) first; on
+// retryable failure it falls back to the alternate protocol. Results are
+// cached via endpointGet/endpointSet when available.
+func (e *E2EService) probeWithAutoFallback(
+	ctx context.Context, ep client.EndpointProber,
+	provider *typ.Provider, model, message string, testMode E2EMode,
+) (*E2EData, error) {
+	opts := client.ProbeEndpointOptions{
+		Message: message,
+		Stream:  testMode == E2EModeStreaming,
+		Mode:    client.ProbeMode(testMode),
+	}
+
+	// Check cache first
+	if e.endpointGet != nil {
+		if cached, ok := e.endpointGet(provider.UUID, model); ok {
+			if cached == protocol.TypeOpenAIResponses {
+				result, err := ep.ProbeResponsesEndpoint(ctx, model, opts)
+				if err == nil {
+					return result, nil
+				}
+			} else {
+				result, err := ep.ProbeChatEndpoint(ctx, model, opts)
+				if err == nil {
+					return result, nil
+				}
+			}
+			// Cache hit but probe failed — fall through to try/fallback
+		}
+	}
+
+	// Try chat first (most providers support it)
+	result, err := ep.ProbeChatEndpoint(ctx, model, opts)
+	if err == nil && result != nil && result.Content != "" {
+		if e.endpointSet != nil {
+			e.endpointSet(provider.UUID, model, protocol.TypeOpenAIChat)
+		}
+		return result, nil
+	}
+
+	if err != nil && isProbeNonRetryable(err) {
+		return result, err
+	}
+
+	// Fallback to responses
+	logrus.Infof("[probe-auto] %s:%s chat probe failed, trying responses: %v", provider.Name, model, err)
+	result, err = ep.ProbeResponsesEndpoint(ctx, model, opts)
+	if err == nil && result != nil && result.Content != "" {
+		if e.endpointSet != nil {
+			e.endpointSet(provider.UUID, model, protocol.TypeOpenAIResponses)
+		}
+		return result, nil
+	}
+
+	return result, err
+}
+
+// isProbeNonRetryable returns true for probe errors where switching protocol
+// would not help (auth, rate limit, content policy).
+func isProbeNonRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	for _, keyword := range []string{
+		"401", "403", "unauthorized", "forbidden",
+		"429", "rate limit", "ratelimit",
+		"invalid_api_key",
+	} {
+		if strings.Contains(s, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *E2EService) probeProviderStream(ctx context.Context, provider *typ.Provider, model, message string, testMode E2EMode) (*E2EData, error) {

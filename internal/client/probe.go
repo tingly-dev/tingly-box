@@ -88,3 +88,11 @@ type ProbeEndpointOptions struct {
 	Stream  bool
 	Mode    ProbeMode
 }
+
+// EndpointProber extends Prober with endpoint-explicit probe methods
+// that target a specific OpenAI protocol (Chat vs Responses).
+type EndpointProber interface {
+	Prober
+	ProbeChatEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error)
+	ProbeResponsesEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error)
+}
