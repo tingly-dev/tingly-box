@@ -434,67 +434,20 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 
 	case "response.completed":
 		completed := currentEvent.AsResponseCompleted()
-		r.state.cacheTokens = completed.Response.Usage.InputTokensDetails.CachedTokens
-		r.state.inputTokens = completed.Response.Usage.InputTokens - r.state.cacheTokens
-		r.state.outputTokens = completed.Response.Usage.OutputTokens
-		r.state.reasoningTokens = completed.Response.Usage.OutputTokensDetails.ReasoningTokens
-		r.usage = protocol.NewTokenUsageFull(int(r.state.inputTokens), int(r.state.outputTokens), int(r.state.cacheTokens), int(r.state.reasoningTokens))
+		logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] Response completed")
+		r.finalize(&completed.Response, "")
 
-		logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] Response completed: input_tokens=%d, output_tokens=%d", r.state.inputTokens, r.state.outputTokens)
-
-		// Handle non-streamed tool calls from the final output array
-		for _, outputItem := range completed.Response.Output {
-			if outputItem.Type != "function_call" && outputItem.Type != "custom_tool_call" && outputItem.Type != "mcp_call" {
-				continue
-			}
-			itemID := outputItem.ID
-			if _, wasProcessed := r.toolCalls[itemID]; wasProcessed {
-				continue
-			}
-
-			truncatedID := truncateToolCallID(itemID)
-			blockIndex := r.state.nextBlockIndex
-			r.state.nextBlockIndex++
-
-			var toolName, arguments string
-			switch outputItem.Type {
-			case "function_call":
-				fn := outputItem.AsFunctionCall()
-				toolName = fn.Name
-				arguments = fn.Arguments
-			case "custom_tool_call":
-				cc := outputItem.AsCustomToolCall()
-				toolName = cc.Name
-				arguments = cc.Input
-			case "mcp_call":
-				mc := outputItem.AsMcpCall()
-				toolName = mc.Name
-				arguments = mc.Arguments
-			}
-
-			r.lastOutputItemType = "function_call"
-			r.emitContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
-				"id":    truncatedID,
-				"name":  toolName,
-				"input": map[string]interface{}{},
-			})
-			if arguments != "" {
-				r.emitContentBlockDelta(blockIndex, map[string]interface{}{
-					"type":         deltaTypeInputJSONDelta,
-					"partial_json": arguments,
-				})
-			}
-			r.emitContentBlockStop(blockIndex)
+	case "response.incomplete":
+		// response.incomplete is a terminal Responses status (max_output_tokens,
+		// content_filter), not a transport error. Preserve the partial output and
+		// map to Anthropic's stop reason (max_tokens, or end_turn for content_filter).
+		incomplete := currentEvent.AsResponseIncomplete()
+		stopReason := anthropicStopReasonMaxTokens
+		if incomplete.Response.IncompleteDetails.Reason == "content_filter" {
+			stopReason = anthropicStopReasonEndTurn
 		}
-
-		r.emitStopEvents()
-
-		stopReason := anthropicStopReasonEndTurn
-		if r.lastOutputItemType == "function_call" {
-			stopReason = anthropicStopReasonToolUse
-		}
-		r.emitMessageDelta(stopReason)
-		r.emitMessageStop() // sets r.done = true
+		logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] Response incomplete: reason=%s, stop_reason=%s", incomplete.Response.IncompleteDetails.Reason, stopReason)
+		r.finalize(&incomplete.Response, stopReason)
 
 	case "response.output_text.annotation.added":
 		// pass-through silently
@@ -595,7 +548,7 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 	case "response.mcp_list_tools.failed":
 		logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] MCP list tools failed")
 
-	case "error", "response.failed", "response.incomplete":
+	case "error", "response.failed":
 		logrus.WithContext(r.ctx).Errorf("Responses API error event: %v", currentEvent)
 		errMsg := fmt.Sprintf("Responses API error: %v", currentEvent)
 		r.emitAnthropic("error", map[string]interface{}{
@@ -611,4 +564,77 @@ func (r *responsesToAnthropicConverter) processEvent(currentEvent responses.Resp
 	default:
 		logrus.WithContext(r.ctx).Debugf("Unhandled Responses API event type: %s", currentEvent.Type)
 	}
+}
+
+// finalize emits the terminal Anthropic events for a completed or incomplete
+// Responses API response: it records usage, backfills any non-streamed tool
+// calls from the output array, closes open blocks, and sends message_delta +
+// message_stop. When stopReasonOverride is empty the stop reason is derived
+// from the streamed content (tool_use vs end_turn); otherwise the override is
+// used (e.g. max_tokens for an incomplete response).
+func (r *responsesToAnthropicConverter) finalize(resp *responses.Response, stopReasonOverride string) {
+	r.state.cacheTokens = resp.Usage.InputTokensDetails.CachedTokens
+	r.state.inputTokens = resp.Usage.InputTokens - r.state.cacheTokens
+	r.state.outputTokens = resp.Usage.OutputTokens
+	r.state.reasoningTokens = resp.Usage.OutputTokensDetails.ReasoningTokens
+	r.usage = protocol.NewTokenUsageFull(int(r.state.inputTokens), int(r.state.outputTokens), int(r.state.cacheTokens), int(r.state.reasoningTokens))
+
+	logrus.WithContext(r.ctx).Debugf("[ResponsesAPI] Finalize: input_tokens=%d, output_tokens=%d", r.state.inputTokens, r.state.outputTokens)
+
+	// Handle non-streamed tool calls from the final output array.
+	for _, outputItem := range resp.Output {
+		if outputItem.Type != "function_call" && outputItem.Type != "custom_tool_call" && outputItem.Type != "mcp_call" {
+			continue
+		}
+		itemID := outputItem.ID
+		if _, wasProcessed := r.toolCalls[itemID]; wasProcessed {
+			continue
+		}
+
+		truncatedID := truncateToolCallID(itemID)
+		blockIndex := r.state.nextBlockIndex
+		r.state.nextBlockIndex++
+
+		var toolName, arguments string
+		switch outputItem.Type {
+		case "function_call":
+			fn := outputItem.AsFunctionCall()
+			toolName = fn.Name
+			arguments = fn.Arguments
+		case "custom_tool_call":
+			cc := outputItem.AsCustomToolCall()
+			toolName = cc.Name
+			arguments = cc.Input
+		case "mcp_call":
+			mc := outputItem.AsMcpCall()
+			toolName = mc.Name
+			arguments = mc.Arguments
+		}
+
+		r.lastOutputItemType = "function_call"
+		r.emitContentBlockStart(blockIndex, blockTypeToolUse, map[string]interface{}{
+			"id":    truncatedID,
+			"name":  toolName,
+			"input": map[string]interface{}{},
+		})
+		if arguments != "" {
+			r.emitContentBlockDelta(blockIndex, map[string]interface{}{
+				"type":         deltaTypeInputJSONDelta,
+				"partial_json": arguments,
+			})
+		}
+		r.emitContentBlockStop(blockIndex)
+	}
+
+	r.emitStopEvents()
+
+	stopReason := stopReasonOverride
+	if stopReason == "" {
+		stopReason = anthropicStopReasonEndTurn
+		if r.lastOutputItemType == "function_call" {
+			stopReason = anthropicStopReasonToolUse
+		}
+	}
+	r.emitMessageDelta(stopReason)
+	r.emitMessageStop() // sets r.done = true
 }
