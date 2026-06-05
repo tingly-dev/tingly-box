@@ -395,8 +395,8 @@ export default {
       "nodeTooltipFallbackTitle": "T{{tier}} — Fallback tier",
       "nodeTooltipFallbackBody": "Tried only when all higher-priority tiers are unavailable (lower number = higher priority). Services here are load-balanced.",
       "nodeMoveHint": "↑ / ↓  on a service card to move it to a different tier",
-      "nodeTooltipLearnMore": "Learn more about tiers",
-      "guideButtonAriaLabel": "Learn about tiers",
+      "nodeTooltipLearnMore": "View tier guide →",
+      "guideButtonAriaLabel": "View tier guide",
       "guide": {
         "title": "Understanding Tiers",
         "subtitle": "Step {{current}} of {{total}}",
@@ -447,6 +447,80 @@ export default {
             "annotation": {
               "priority": "Lower number = higher priority",
               "cascade": "Traffic cascades down through tiers"
+            }
+          }
+        }
+      }
+    },
+    "routing": {
+      "directTooltipTitle": "Direct Routing",
+      "directTooltipBody": "Load balance across all services in tier order. Simple and predictable.",
+      "smartTooltipTitle": "Smart Routing",
+      "smartTooltipBody": "Route based on custom conditions like model name, token count, or user groups.",
+      "tooltipHint": "Click a button to switch modes",
+      "viewDirectGuide": "View direct routing guide →",
+      "viewSmartGuide": "View smart routing guide →",
+      "guide": {
+        "directTitle": "Direct Routing Guide",
+        "smartTitle": "Smart Routing Guide",
+        "subtitle": "Step {{current}} of {{total}}",
+        "previous": "Previous",
+        "next": "Next",
+        "gotIt": "Got it!",
+        "close": "Close",
+        "hoverHint": "Action buttons shown - try hovering over nodes!",
+        "steps": {
+          "1": {
+            "title": "What is Direct Routing?",
+            "content": "Direct routing is the simplest way to forward requests. Traffic flows through your tiers in order — T0 first, then T1, T2, and so on. Within each tier, services are load-balanced evenly. This works great when all your services are equivalent and you just need primary/fallback layers.",
+            "annotation": {
+              "entryNode": "Entry node - routing mode selector",
+              "directButton": "Direct mode selected"
+            }
+          },
+          "2": {
+            "title": "Load Balancing Within Tiers",
+            "content": "When multiple services are in the same tier, they share the incoming traffic evenly. This load balancing distributes requests across all services in the tier, preventing any single service from becoming overwhelmed.",
+            "annotation": {
+              "loadBalance": "Same tier = load balanced",
+              "services": "Multiple services share traffic"
+            }
+          },
+          "3": {
+            "title": "Tier-Based Fallback Chain",
+            "content": "Services in T0 are your primary choice. If all T0 services fail, traffic automatically falls back to T1, then T2, and so on. This creates a cascading failover chain that ensures high availability for your applications.",
+            "annotation": {
+              "primary": "T0 — Primary services (tried first)",
+              "fallback": "T1 — Fallback services (used when T0 fails)",
+              "tierBased": "Tier-based automatic failover"
+            }
+          },
+          "4": {
+            "title": "What is Smart Routing?",
+            "content": "Smart routing lets you define custom conditions to control which service handles each request. Route based on model name, token count, user groups, or any request parameter. This gives you fine-grained control without managing complex tier configurations.",
+            "annotation": {
+              "smartMode": "Smart mode selected",
+              "smartButton": "Smart routing button",
+              "conditional": "Conditional routing based on rules"
+            }
+          },
+          "5": {
+            "title": "Smart Routing Conditions",
+            "content": "Each smart rule has a condition that determines when it applies. Common conditions include: model name matching (e.g., 'contains claude'), token count (e.g., 'gt 4000' for large contexts), or custom fields. Rules are evaluated in order — the first matching rule wins.",
+            "annotation": {
+              "conditions": "Multiple smart rules with conditions",
+              "modelBased": "Route by model name",
+              "tokenBased": "Route by token count"
+            }
+          },
+          "6": {
+            "title": "Advanced Smart Routing",
+            "content": "Combine multiple smart rules to create sophisticated routing strategies. For example: route Claude requests to one service, large contexts to another, and premium users to a third. The default service handles everything that doesn't match any rule.",
+            "annotation": {
+              "complex": "Complex routing with multiple conditions",
+              "defaultRoute": "Default route for unmatched requests",
+              "claudeRoute": "Route for Claude models",
+              "largeContext": "Route for large context windows"
             }
           }
         }

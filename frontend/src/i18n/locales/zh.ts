@@ -396,8 +396,8 @@ export default {
       "nodeTooltipFallbackTitle": "T{{tier}} — 后备层级",
       "nodeTooltipFallbackBody": "仅当更高优先级的层级（编号越小越优先）全部不可用时才启用，同层级内服务负载均衡。",
       "nodeMoveHint": "↑ / ↓  拖动服务卡片可移动到其他层级",
-      "nodeTooltipLearnMore": "了解更多层级信息",
-      "guideButtonAriaLabel": "了解层级配置",
+      "nodeTooltipLearnMore": "查看层级图解 →",
+      "guideButtonAriaLabel": "查看层级图解",
       "guide": {
         "title": "了解层级",
         "subtitle": "步骤 {{current}} / {{total}}",
@@ -448,6 +448,80 @@ export default {
             "annotation": {
               "priority": "编号越小 = 优先级越高",
               "cascade": "流量在层级间级联下降"
+            }
+          }
+        }
+      }
+    },
+    "routing": {
+      "directTooltipTitle": "直接路由",
+      "directTooltipBody": "按层级顺序在所有服务间负载均衡。简单可预测。",
+      "smartTooltipTitle": "智能路由",
+      "smartTooltipBody": "基于自定义条件路由，如模型名称、令牌数量或用户组。",
+      "tooltipHint": "点击按钮切换模式",
+      "viewDirectGuide": "查看直接路由图解 →",
+      "viewSmartGuide": "查看智能路由图解 →",
+      "guide": {
+        "directTitle": "直接路由指南",
+        "smartTitle": "智能路由指南",
+        "subtitle": "步骤 {{current}} / {{total}}",
+        "previous": "上一步",
+        "next": "下一步",
+        "gotIt": "明白了！",
+        "close": "关闭",
+        "hoverHint": "操作按钮已显示 - 尝试悬停节点查看！",
+        "steps": {
+          "1": {
+            "title": "什么是直接路由？",
+            "content": "直接路由是最简单的请求转发方式。流量按层级顺序流动——首先是 T0，然后是 T1、T2，依此类推。在每个层级内，服务之间均匀负载均衡。当您的所有服务等效且只需要主备层级时，这非常适用。",
+            "annotation": {
+              "entryNode": "入口节点 - 路由模式选择器",
+              "directButton": "已选择直接模式"
+            }
+          },
+          "2": {
+            "title": "层级内负载均衡",
+            "content": "当同一层级中有多个服务时，它们会均匀共享传入流量。这种负载均衡将请求分配给该层级中的所有服务，防止任何一个服务过载。",
+            "annotation": {
+              "loadBalance": "同一层级 = 负载均衡",
+              "services": "多个服务共享流量"
+            }
+          },
+          "3": {
+            "title": "基于层级的故障转移链",
+            "content": "T0 中的服务是您的首选。如果所有 T0 服务都失败，流量会自动降级到 T1，然后是 T2，依此类推。这创建了一个级联故障转移链，确保您的应用程序具有高可用性。",
+            "annotation": {
+              "primary": "T0 — 主服务（首先尝试）",
+              "fallback": "T1 — 备选服务（T0 失败时使用）",
+              "tierBased": "基于层级的自动故障转移"
+            }
+          },
+          "4": {
+            "title": "什么是智能路由？",
+            "content": "智能路由让您定义自定义条件来控制哪个服务处理每个请求。可以基于模型名称、令牌数量、用户组或任何请求参数进行路由。这为您提供精细控制，而无需管理复杂的层级配置。",
+            "annotation": {
+              "smartMode": "已选择智能模式",
+              "smartButton": "智能路由按钮",
+              "conditional": "基于规则的条件路由"
+            }
+          },
+          "5": {
+            "title": "智能路由条件",
+            "content": "每个智能规则都有一个条件，决定何时应用。常见条件包括：模型名称匹配（例如「包含 claude」）、令牌数量（例如「大于 4000」用于大上下文）或自定义字段。规则按顺序评估——第一个匹配的规则获胜。",
+            "annotation": {
+              "conditions": "多个带有条件的智能规则",
+              "modelBased": "按模型名称路由",
+              "tokenBased": "按令牌数量路由"
+            }
+          },
+          "6": {
+            "title": "高级智能路由",
+            "content": "组合多个智能规则以创建复杂的路由策略。例如：将 Claude 请求路由到一个服务，大上下文路由到另一个服务，高级用户路由到第三个服务。默认服务处理不匹配任何规则的所有内容。",
+            "annotation": {
+              "complex": "带有多个条件的复杂路由",
+              "defaultRoute": "不匹配请求的默认路由",
+              "claudeRoute": "Claude 模型的路由",
+              "largeContext": "大上下文窗口的路由"
             }
           }
         }
