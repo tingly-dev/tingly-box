@@ -192,12 +192,13 @@ export const darkComponents: ThemeOptions['components'] = {
   MuiTooltip: {
     styleOverrides: {
       tooltip: {
-        backgroundColor: 'rgba(40, 44, 56, 0.96)',
-        color: '#f8fafc',
+        backgroundColor: darkBgRaised,
+        color: '#f3f5f9',
         fontSize: '0.75rem',
         border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
       },
-      arrow: { color: 'rgba(40, 44, 56, 0.96)' },
+      arrow: { color: darkBgRaised },
     },
   },
   MuiDivider: {

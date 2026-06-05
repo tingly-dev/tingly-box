@@ -223,12 +223,13 @@ export const sunlitComponents: ThemeOptions['components'] = {
   MuiTooltip: {
     styleOverrides: {
       tooltip: {
-        backgroundColor: 'rgba(15, 23, 42, 0.92)',
-        color: '#f8fafc',
+        backgroundColor: '#ffffff',
+        color: '#1e293b',
         fontSize: '0.75rem',
-        border: 'none',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
       },
-      arrow: { color: 'rgba(15, 23, 42, 0.92)' },
+      arrow: { color: '#ffffff' },
     },
   },
   MuiDivider: {

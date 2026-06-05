@@ -178,12 +178,13 @@ export const claudeComponents: ThemeOptions['components'] = {
   MuiTooltip: {
     styleOverrides: {
       tooltip: {
-        backgroundColor: 'rgba(20, 20, 19, 0.92)',
-        color: '#FAF9F5',
+        backgroundColor: '#FFFFFF',
+        color: '#141413',
         fontSize: '0.75rem',
-        border: 'none',
+        border: '1px solid #E8E6DC',
+        boxShadow: '0 4px 12px rgba(20, 20, 19, 0.08)',
       },
-      arrow: { color: 'rgba(20, 20, 19, 0.92)' },
+      arrow: { color: '#FFFFFF' },
     },
   },
   MuiDivider: {
