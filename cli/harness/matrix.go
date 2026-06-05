@@ -22,6 +22,7 @@ type MatrixCmd struct {
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
 	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
 	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
+	Transitive bool     `kong:"name='transitive',help='Also run two-hop (A→B→C) transitive chain tests'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
@@ -33,8 +34,11 @@ type MatrixCmd struct {
 // Help returns extended help text shown by `harness matrix --help`.
 func (*MatrixCmd) Help() string {
 	return `Examples:
-  # Run all matrix tests
+  # Run all single-hop matrix tests
   harness matrix
+
+  # Run single-hop + two-hop transitive chain tests
+  harness matrix --transitive
 
   # Run specific scenario only
   harness matrix --scenario text
@@ -105,11 +109,16 @@ func (m *MatrixCmd) Run() error {
 		matrix = matrix.WithMCPEnabled()
 	}
 
-	// Execute tests (only filtered combinations).
+	// Execute single-hop tests.
 	results := matrix.ExecuteAll()
-
-	// Filter results for backward compatibility (skipPairs etc.).
 	results = filterResults(results, m)
+
+	// Execute two-hop transitive chain tests when requested.
+	if m.Transitive {
+		transitiveResults := matrix.ExecuteAllTransitive()
+		transitiveResults = filterResults(transitiveResults, m)
+		results = append(results, transitiveResults...)
+	}
 
 	// Output results
 	if m.JsonOutput {
