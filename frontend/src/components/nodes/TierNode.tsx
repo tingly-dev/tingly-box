@@ -1,7 +1,6 @@
-import { Box, IconButton, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info } from '@/components/icons';
 import NodeTooltip from './NodeTooltip.tsx';
 import { getRouteGraphBorderColor, PROVIDER_NODE_STYLES } from './styles.tsx';
 
@@ -64,13 +63,14 @@ export const TierNode: React.FC<TierNodeProps> = ({
         <NodeTooltip title={tooltipContent} placement="left" enterDelay={400}>
             <Box
                 sx={(theme) => ({
-                    position: 'relative',
                     width: TIER_NODE_WIDTH,
                     height: PROVIDER_NODE_STYLES.height,
                     flexShrink: 0,
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    gap: 0.5,
                     borderRadius: `${theme.shape.borderRadius}px`,
                     border: '1px solid',
                     borderColor: getRouteGraphBorderColor(theme),
@@ -83,52 +83,16 @@ export const TierNode: React.FC<TierNodeProps> = ({
                 onMouseEnter={() => onHover?.(true)}
                 onMouseLeave={() => onHover?.(false)}
             >
-                <Box
+                <Typography
                     sx={{
-                        position: 'relative',
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        color: 'text.secondary',
+                        lineHeight: 1.15,
                     }}
                 >
-                    <Typography
-                        sx={{
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            color: 'text.secondary',
-                            lineHeight: 1.15,
-                        }}
-                    >
-                        {`T${priority}`}
-                    </Typography>
-                    {onShowGuide && (
-                        <IconButton
-                            size="small"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onShowGuide();
-                            }}
-                            sx={{
-                                position: 'absolute',
-                                top: 2,
-                                right: 2,
-                                p: 0.25,
-                                minWidth: 20,
-                                minHeight: 20,
-                                backgroundColor: 'transparent',
-                                border: 'none',
-                                '&:hover': {
-                                    backgroundColor: 'action.hover',
-                                }
-                            }}
-                            aria-label={t('rule.tier.guideButtonAriaLabel', { defaultValue: 'Learn about tiers' })}
-                        >
-                            <Info sx={{ fontSize: '0.7rem' }} />
-                        </IconButton>
-                    )}
-                </Box>
+                    {`T${priority}`}
+                </Typography>
             </Box>
         </NodeTooltip>
     );
