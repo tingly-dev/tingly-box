@@ -434,6 +434,7 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// E2E probe service handles /api/v2/probe end-to-end without touching *Server.
 	server.probeE2EService = probe.NewE2EService(cfg, server.clientPool)
+	server.probeE2EService.SetEndpointCache(server.endpointCache.Get, server.endpointCache.Set)
 	server.probeLightweight = probe.NewLightweightService(server.clientPool)
 
 	// Initialize OTel meter setup for token tracking
