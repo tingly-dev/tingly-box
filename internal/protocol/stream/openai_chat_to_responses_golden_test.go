@@ -128,9 +128,9 @@ func TestChatToResponsesConverter_GoldenSequence(t *testing.T) {
 	}
 	require.Equal(t, want, gotTypes, "ordered Responses event sequence")
 
-	// 2. Monotonically increasing sequence numbers 1..N (no gaps/dupes).
+	// 2. Monotonically increasing sequence numbers 0..N-1 (no gaps/dupes).
 	for i, e := range got {
-		assert.Equal(t, int64(i+1), seqOf(t, e), "sequence number at position %d", i)
+		assert.Equal(t, int64(i), seqOf(t, e), "sequence number at position %d", i)
 	}
 
 	// 3. Spot-check key payloads.
