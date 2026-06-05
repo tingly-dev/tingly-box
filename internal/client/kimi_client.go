@@ -278,38 +278,3 @@ func (c *KimiClient) ResponsesNewStreaming(ctx context.Context, req responses.Re
 func (c *KimiClient) ListModels(ctx context.Context) ([]string, error) {
 	return c.OpenAIClient.ListModels(ctx)
 }
-
-// Probe tests the chat endpoint for Kimi provider.
-func (c *KimiClient) Probe(ctx context.Context, model string) ProbeResult {
-	return c.OpenAIClient.Probe(ctx, model)
-}
-
-// ProbeStream performs a streaming probe with Kimi model normalization.
-func (c *KimiClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-	// Apply Kimi-specific model name normalization
-	normalizedModel := c.stripKimiPrefix(model)
-	return c.OpenAIClient.ProbeStream(ctx, normalizedModel, message, testMode)
-}
-
-// ProbeResponsesStream performs a streaming Responses API probe with Kimi model normalization.
-func (c *KimiClient) ProbeResponsesStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-	return nil, &ErrKimiNotSupported{
-		Operation: "Responses API",
-		Reason:    "Kimi Code API does not support /responses endpoint",
-	}
-}
-
-// ProbeChatEndpoint tests the chat endpoint with Kimi model normalization.
-func (c *KimiClient) ProbeChatEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error) {
-	// Apply Kimi-specific model name normalization
-	normalizedModel := c.stripKimiPrefix(model)
-	return c.OpenAIClient.ProbeChatEndpoint(ctx, normalizedModel, opts)
-}
-
-// ProbeResponsesEndpoint tests the Responses endpoint with Kimi model normalization.
-func (c *KimiClient) ProbeResponsesEndpoint(ctx context.Context, model string, opts ProbeEndpointOptions) (*ProbeResult, error) {
-	return nil, &ErrKimiNotSupported{
-		Operation: "Responses API",
-		Reason:    "Kimi Code API does not support /responses endpoint",
-	}
-}

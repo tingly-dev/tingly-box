@@ -1,9 +1,5 @@
 package client
 
-import (
-	"context"
-)
-
 // ProbeResult represents the result of a probe operation (for both simple and streaming)
 type ProbeResult struct {
 	// Basic fields
@@ -43,7 +39,7 @@ type ProbeUsage struct {
 	TotalTokens      int
 }
 
-// ProbeMode defines the test mode for probeStream
+// ProbeMode defines the test mode for a probe request.
 type ProbeMode string
 
 const (
@@ -51,18 +47,6 @@ const (
 	ProbeModeStreaming ProbeMode = "streaming"
 	ProbeModeTool      ProbeMode = "tool"
 )
-
-// Prober defines the interface for client probe capabilities
-type Prober interface {
-	// Probe tests the chat/messages endpoint with a minimal request
-	// Returns a ProbeResult with success status, latency, and any response content
-	Probe(ctx context.Context, model string) ProbeResult
-
-	// ProbeStream performs a streaming probe with configurable test mode.
-	// Deprecated for endpoint capability routing: use endpoint-explicit probe methods
-	// such as OpenAIClient.ProbeChatEndpoint and OpenAIClient.ProbeResponsesEndpoint.
-	ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error)
-}
 
 // ToProbeResult creates a ProbeResult with basic fields
 func ToProbeResult(content string, latencyMs int64, requestURL string, isStreaming bool) *ProbeResult {
@@ -72,19 +56,4 @@ func ToProbeResult(content string, latencyMs int64, requestURL string, isStreami
 		RequestURL: requestURL,
 		Stream:     isStreaming,
 	}
-}
-
-// ProbeEndpointType identifies which OpenAI-compatible endpoint a probe must hit.
-type ProbeEndpointType string
-
-const (
-	ProbeEndpointChat      ProbeEndpointType = "chat"
-	ProbeEndpointResponses ProbeEndpointType = "responses"
-)
-
-// ProbeEndpointOptions controls endpoint-explicit probing.
-type ProbeEndpointOptions struct {
-	Message string
-	Stream  bool
-	Mode    ProbeMode
 }

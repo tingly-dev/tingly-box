@@ -2,11 +2,9 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -551,88 +549,4 @@ func (c *CodexClient) SetRecordSink(sink *obs.Sink) {
 // For CodexClient, we delegate to the embedded OpenAIClient.
 func (c *CodexClient) Client() *openai.Client {
 	return c.OpenAIClient.Client()
-}
-
-// ProbeChatEndpoint tests the chat endpoint.
-// For Codex, this delegates to the embedded OpenAIClient's probeResponsesEndpoint.
-func (c *CodexClient) Probe(ctx context.Context, model string) ProbeResult {
-	startTime := time.Now()
-	r, err := c.ProbeStream(ctx, model, "hi", ProbeModeTool)
-	latencyMs := time.Since(startTime).Milliseconds()
-	if err != nil {
-		return ProbeResult{
-			Success:      false,
-			ErrorMessage: err.Error(),
-			LatencyMs:    latencyMs,
-		}
-	}
-
-	return ProbeResult{
-		Success:          true,
-		Message:          "Responses endpoint is accessible",
-		Content:          r.Content,
-		LatencyMs:        r.LatencyMs,
-		PromptTokens:     r.PromptTokens,
-		CompletionTokens: r.CompletionTokens,
-		TotalTokens:      r.TotalTokens,
-	}
-}
-
-// ProbeStream performs a streaming probe with configurable test mode (public interface)
-// Codex uses the Responses API with proper beta headers
-func (c *CodexClient) ProbeStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-	return c.probeChatStream(ctx, model, message, testMode)
-}
-
-// probeChatStream performs a streaming probe using Codex's Responses API
-// Codex requires special handling:
-// - Uses Responses API (not Chat Completions)
-// - Applies beta headers for responses API
-// - Proper session ID injection
-func (c *CodexClient) probeChatStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-	return nil, fmt.Errorf("Codex do not support chat complement")
-}
-
-func (c *CodexClient) ProbeResponsesStream(ctx context.Context, model, message string, testMode ProbeMode) (*ProbeResult, error) {
-	startTime := time.Now()
-
-	// Build Responses API request
-	params := responses.ResponseNewParams{
-		Model:        model,
-		Instructions: param.NewOpt("work as `echo` if possible"),
-		Input: responses.ResponseNewParamsInputUnion{
-			OfInputItemList: []responses.ResponseInputItemUnionParam{
-				responses.ResponseInputItemParamOfMessage(
-					responses.ResponseInputMessageContentListParam{
-						responses.ResponseInputContentParamOfInputText(message),
-					},
-					responses.EasyInputMessageRoleUser,
-				),
-			},
-		},
-	}
-
-	// Add tools for tool mode
-	if testMode == ProbeModeTool {
-		params.Tools = GetProbeToolsResponses()
-		params.ToolChoice = responses.ResponseNewParamsToolChoiceUnion{
-			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsAuto),
-		}
-	}
-
-	// Use ResponsesNewStreaming with proper beta headers
-	stream := c.ResponsesNewStreaming(ctx, params)
-	defer stream.Close()
-
-	var chunks []interface{}
-	for stream.Next() {
-		chunks = append(chunks, stream.Current())
-	}
-
-	if err := stream.Err(); err != nil {
-		return nil, err
-	}
-
-	chunksJSON, _ := json.Marshal(chunks)
-	return ToProbeResult(string(chunksJSON), time.Since(startTime).Milliseconds(), c.provider.APIBase+"/responses", true), nil
 }

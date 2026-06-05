@@ -497,11 +497,5 @@ func TestClaudeRealE2E_ModelsEndpoint_Rejection(t *testing.T) {
 	assert.Error(t, err, "NEW should return error for ListModels")
 	t.Log("  ✅ NEW correctly rejects /models with error")
 
-	// Also test ProbeModelsEndpoint
-	probeResult := newClient.ProbeModelsEndpoint(context.Background())
-	t.Logf("  Probe Result: Success=%v, Error=%s", probeResult.Success, probeResult.ErrorMessage)
-	assert.False(t, probeResult.Success, "ProbeModelsEndpoint should fail")
-	t.Log("  ✅ NEW ProbeModelsEndpoint correctly returns failure")
-
 	t.Log("\n✅ Both implementations properly reject /models endpoint")
 }
