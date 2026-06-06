@@ -324,6 +324,105 @@ func (h *Handler) SetScenarioStringFlag(c *gin.Context) {
 	})
 }
 
+// GetScenarioIntFlag returns a specific integer flag value for a scenario
+func (h *Handler) GetScenarioIntFlag(c *gin.Context) {
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	if scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Scenario parameter is required",
+		})
+		return
+	}
+
+	flag := c.Param("flag")
+	if flag == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Flag parameter is required",
+		})
+		return
+	}
+
+	if h.config == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	value := h.config.GetScenarioIntFlag(scenario, flag)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"scenario": scenario,
+			"flag":     flag,
+			"value":    value,
+		},
+	})
+}
+
+// SetScenarioIntFlag sets a specific integer flag value for a scenario
+func (h *Handler) SetScenarioIntFlag(c *gin.Context) {
+	scenario := typ.RuleScenario(c.Param("scenario"))
+	if scenario == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Scenario parameter is required",
+		})
+		return
+	}
+
+	flag := c.Param("flag")
+	if flag == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Flag parameter is required",
+		})
+		return
+	}
+
+	request := new(ScenarioIntFlagUpdateRequest)
+	if err := c.ShouldBindJSON(&request); err != nil {
+		logrus.Printf("[ERROR] SetScenarioIntFlag ShouldBindJSON failed: %v, scenario=%s, flag=%s", err, scenario, flag)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	logrus.Printf("[DEBUG] SetScenarioIntFlag: scenario=%s, flag=%s, value=%d", scenario, flag, request.Value)
+
+	if h.config == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Global config not available",
+		})
+		return
+	}
+
+	if err := h.config.SetScenarioIntFlag(scenario, flag, request.Value); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to save scenario flag: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Scenario flag saved successfully",
+		"data": gin.H{
+			"scenario": scenario,
+			"flag":     flag,
+			"value":    request.Value,
+		},
+	})
+}
+
 // GetProfiles returns all profiles for a base scenario
 func (h *Handler) GetProfiles(c *gin.Context) {
 	scenario := typ.RuleScenario(c.Param("scenario"))
