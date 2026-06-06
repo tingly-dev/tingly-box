@@ -263,31 +263,6 @@ func TestConsistencyTransform_applyScenarioFlags_NonStreaming(t *testing.T) {
 	assert.True(t, req.StreamOptions.IncludeUsage.Value) // Should not modify
 }
 
-func TestConsistencyTransform_applyScenarioFlags_StoresInExtraFields(t *testing.T) {
-	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
-	flags := &typ.ScenarioFlags{DisableStreamUsage: true}
-
-	req := newOpenAIRequest("gpt-4", 1024)
-	req.StreamOptions = openai.ChatCompletionStreamOptionsParam{
-		IncludeUsage: param.Opt[bool]{Value: true},
-	}
-
-	ctx := &TransformContext{
-		Request:       req,
-		ScenarioFlags: flags,
-		IsStreaming:   true,
-	}
-
-	err := ct.Apply(ctx)
-	require.NoError(t, err)
-
-	extraFields := req.ExtraFields()
-	require.NotNil(t, extraFields)
-	storedFlags, ok := extraFields["scenario_flags"].(*typ.ScenarioFlags)
-	require.True(t, ok)
-	assert.Equal(t, flags, storedFlags)
-}
-
 func TestConsistencyTransform_normalizeMessages_NoMessages(t *testing.T) {
 	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 	req := newOpenAIRequest("gpt-4", 1024)

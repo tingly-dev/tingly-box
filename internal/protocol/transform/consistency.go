@@ -143,14 +143,8 @@ func (t *ConsistencyTransform) applyScenarioFlags(req *openai.ChatCompletionNewP
 			req.StreamOptions.IncludeUsage.Value = false
 		}
 	}
-
-	// Store scenario flags in ExtraFields for downstream use
-	extraFields := req.ExtraFields()
-	if extraFields == nil {
-		extraFields = map[string]any{}
-	}
-	extraFields["scenario_flags"] = flags
-	req.SetExtraFields(extraFields)
+	// Note: ScenarioFlags are already passed via TransformContext.ScenarioFlags
+	// and should NOT be stored in ExtraFields to avoid leaking into upstream requests
 }
 
 // normalizeMessages normalizes message fields for cross-provider compatibility.
@@ -405,14 +399,8 @@ func (t *ConsistencyTransform) applyResponseScenarioFlags(req *responses.Respons
 			req.StreamOptions.IncludeObfuscation.Value = false
 		}
 	}
-
-	// Store scenario flags in ExtraFields for downstream use
-	extraFields := req.ExtraFields()
-	if extraFields == nil {
-		extraFields = map[string]any{}
-	}
-	extraFields["scenario_flags"] = flags
-	req.SetExtraFields(extraFields)
+	// Note: ScenarioFlags are already passed via TransformContext.ScenarioFlags
+	// and should NOT be stored in ExtraFields to avoid leaking into upstream requests
 }
 
 // validateResponses validates request parameters against OpenAI Responses API constraints.
