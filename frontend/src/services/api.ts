@@ -561,6 +561,17 @@ export const api = {
         });
     },
 
+    getScenarioIntFlag: async (scenario: string, flag: string): Promise<any> => {
+        return uiAPI(`/scenario/${scenario}/int-flag/${flag}`);
+    },
+
+    setScenarioIntFlag: async (scenario: string, flag: string, value: number): Promise<any> => {
+        return uiAPI(`/scenario/${scenario}/int-flag/${flag}`, {
+            method: 'PUT',
+            body: JSON.stringify({value}),
+        });
+    },
+
     // Profile API
     getProfiles: async (scenario: string): Promise<any> => {
         return uiAPI(`/scenario/${scenario}/profiles`);

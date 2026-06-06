@@ -20,6 +20,7 @@ import type { SelectChangeEvent } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { ConfigRow } from './ConfigRow';
+import { SessionAffinityControl } from './flags';
 import ModelSelectDialog from './ModelSelectDialog';
 import type { ProviderSelectTabOption } from './ModelSelectDialog';
 import type { Provider } from '@/types/provider';
@@ -66,6 +67,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [effort, setEffort] = useState<string>('');
     const [recordV2Mode, setRecordV2Mode] = useState<string>('');
+    const [sessionAffinity, setSessionAffinity] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<Record<string, boolean>>({});
     const [menuAnchor, setMenuAnchor] = useState<Record<string, HTMLElement | null>>({});
@@ -102,6 +104,11 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             const recordV2Result = await api.getScenarioStringFlag(scenario, 'recording_v2');
             if (recordV2Result?.success && recordV2Result?.data?.value !== undefined) {
                 setRecordV2Mode(recordV2Result.data.value);
+            }
+
+            const affinityResult = await api.getScenarioIntFlag(scenario, 'session_affinity');
+            if (affinityResult?.success && affinityResult?.data?.value !== undefined) {
+                setSessionAffinity(affinityResult.data.value);
             }
 
             // Vision proxy service (provider + model) lives in ScenarioConfig.Extensions
@@ -202,6 +209,21 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             })
             .catch(() => loadData())
             .finally(() => setUpdating(prev => ({ ...prev, recordV2: false })));
+    };
+
+    const handleSessionAffinityChange = async (value: number) => {
+        if (updating.session_affinity || value === sessionAffinity) return;
+        setUpdating(prev => ({ ...prev, session_affinity: true }));
+        api.setScenarioIntFlag(scenario, 'session_affinity', value)
+            .then((result) => {
+                if (result.success) {
+                    setSessionAffinity(value);
+                } else {
+                    loadData();
+                }
+            })
+            .catch(() => loadData())
+            .finally(() => setUpdating(prev => ({ ...prev, session_affinity: false })));
     };
 
     useEffect(() => {
@@ -348,6 +370,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         );
     };
 
+
     if (loading) {
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', py: 2, gap: 2, alignItems: 'center', justifyContent: 'center', minHeight: 100 }}>
@@ -366,11 +389,16 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                         key: 'plugin',
                         label: 'Plugin',
                         content: (
-                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1, width: '100%' }}>
                                 {renderEffortButton()}
                                 {renderPluginButtons()}
                                 {renderVisionProxyButton()}
                                 {renderRecordV2Button()}
+                                <SessionAffinityControl
+                                    value={sessionAffinity}
+                                    onChange={handleSessionAffinityChange}
+                                    disabled={updating.session_affinity || false}
+                                />
                             </Box>
                         ),
                     },
@@ -517,6 +545,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                     </MenuItem>
                 ))}
             </Menu>
+
         </Box>
     );
 };
