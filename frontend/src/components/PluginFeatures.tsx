@@ -377,6 +377,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                 ]}
                 activeTab="plugin"
                 onTabChange={() => {}}
+                maxWidth="responsive"
             />
 
             {/* Effort Menu */}
