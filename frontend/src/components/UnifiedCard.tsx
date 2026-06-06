@@ -7,7 +7,7 @@ interface UnifiedCardProps {
   title?: string | ReactNode;
   subtitle?: string;
   children: ReactNode;
-  size?: 'small' | 'medium' | 'large' | 'full' | 'header';
+  size?: 'small' | 'medium' | 'large' | 'full' | 'header' | 'footer';
   variant?: 'default' | 'outlined' | 'elevated';
   // Custom width, prioritized if provided
   width?: number | string;
@@ -50,7 +50,6 @@ const presetCardDimensions: Record<string, PresetDimensions> = {
   },
   header: {
     width: '100%',
-    minHeight: '160px',
   },
 };
 
