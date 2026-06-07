@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 
@@ -98,10 +99,10 @@ func (e *E2EService) resolveVModelLoopbackTarget(ctx context.Context, provider *
 	if !ok {
 		return nil, "", fmt.Errorf("vmodel probe unsupported for APIStyle %q", provider.APIStyle)
 	}
-	_, apiStyle := ScenarioEndpoint(string(scenario))
+	apiBase, apiStyle := loopbackAPIBase(port, scenario)
 	return e.resolveProviderConfigTarget(ctx, &E2ERequest{
 		Name:     provider.Name,
-		APIBase:  loopbackAPIBase(port, scenario),
+		APIBase:  apiBase,
 		APIStyle: string(apiStyle),
 		Token:    e.config.GetModelToken(),
 		Model:    model,
@@ -154,8 +155,7 @@ func (e *E2EService) resolveProviderTarget(ctx context.Context, req *E2ERequest)
 	}
 
 	scenario, _ := defaultScenarioForAPIStyle(provider.APIStyle)
-	_, apiStyle := ScenarioEndpoint(string(scenario))
-	apiBase := loopbackAPIBase(port, scenario)
+	apiBase, apiStyle := loopbackAPIBase(port, scenario)
 	probeHeaders := map[string]string{
 		"X-Tingly-Probe-Service": req.ProviderUUID + ":" + model,
 		"X-Tingly-Debug-Routing":   "1",
@@ -179,9 +179,9 @@ func (e *E2EService) resolveProviderTarget(ctx context.Context, req *E2ERequest)
 // TB registers both /tingly/:scenario and /tingly/:scenario/v1 with identical
 // handlers, so the base URL needs no /v1 suffix — each SDK appends its own
 // operation path (e.g. /chat/completions, /messages).
-func loopbackAPIBase(port int, scenario typ.RuleScenario) string {
-	path, _ := ScenarioEndpoint(string(scenario))
-	return fmt.Sprintf("http://localhost:%d%s", port, path)
+func loopbackAPIBase(port int, scenario typ.RuleScenario) (apiBase string, apiStyle protocol.APIStyle) {
+	path, apiStyle := ScenarioEndpoint(string(scenario))
+	return fmt.Sprintf("http://localhost:%d%s", port, path), apiStyle
 }
 
 // defaultScenarioForAPIStyle returns the default TB scenario for provider-level
@@ -249,8 +249,7 @@ func (e *E2EService) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*t
 		scenario = typ.ScenarioOpenAI
 	}
 
-	_, apiStyle := ScenarioEndpoint(string(scenario))
-	apiBase := loopbackAPIBase(port, scenario)
+	apiBase, apiStyle := loopbackAPIBase(port, scenario)
 
 	logrus.Debugf("[probe-e2e] rule %s -> TB loopback %s (model=%s)", rule.UUID, apiBase, rule.RequestModel)
 
@@ -345,8 +344,8 @@ func applyRoutingCapture(result *E2EData, cap *client.RoutingCapture) {
 	result.SelectedProviderUUID = cap.SelectedProviderUUID
 	result.SelectedModel = cap.SelectedModel
 	result.RoutingSource = cap.RoutingSource
-	if cap.MatchedSmartRule != "" {
-		fmt.Sscanf(cap.MatchedSmartRule, "%d", &result.MatchedSmartRule)
+	if n, err := strconv.Atoi(cap.MatchedSmartRule); err == nil {
+		result.MatchedSmartRule = &n
 	}
 	result.UpstreamAPI = cap.UpstreamAPI
 	result.UpstreamURL = cap.UpstreamURL

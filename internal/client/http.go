@@ -131,17 +131,22 @@ func GetProbeHeaders(ctx context.Context) (map[string]string, bool) {
 	return h, ok && len(h) > 0
 }
 
-// ApplyProbeHeadersToClient wraps the HTTP transport of a client so that
-// probe headers from the context are forwarded on every outgoing request.
+// applyTransportWrap layers wrap() onto the HTTP transport of a probe client.
 // Accepts *OpenAIClient or *AnthropicClient; no-op for any other type.
-// Call this only on probe clients — not on production client instances.
-func ApplyProbeHeadersToClient(c interface{}) {
+func applyTransportWrap(c interface{}, wrap func(http.RoundTripper) http.RoundTripper) {
 	switch tc := c.(type) {
 	case *OpenAIClient:
-		tc.HttpClient.Transport = wrapWithProbeHeaders(tc.HttpClient.Transport)
+		tc.HttpClient.Transport = wrap(tc.HttpClient.Transport)
 	case *AnthropicClient:
-		tc.httpClient.Transport = wrapWithProbeHeaders(tc.httpClient.Transport)
+		tc.httpClient.Transport = wrap(tc.httpClient.Transport)
 	}
+}
+
+// ApplyProbeHeadersToClient wraps the HTTP transport of a client so that
+// probe headers from the context are forwarded on every outgoing request.
+// Call this only on probe clients — not on production client instances.
+func ApplyProbeHeadersToClient(c interface{}) {
+	applyTransportWrap(c, wrapWithProbeHeaders)
 }
 
 // RoutingCapture holds routing-decision headers captured from a TB-loopback
@@ -163,7 +168,7 @@ type RoutingCapture struct {
 	AppliedFlags    string // compact "endpoint=responses, thinking=high"
 }
 
-// captureRoutingRoundTripper reads X-TBE-Selected-* headers from every
+// captureRoutingRoundTripper reads X-Tingly-* routing headers from every
 // response and records them in the shared RoutingCapture. It is layered
 // outermost on probe clients so it sees the loopback response before the SDK.
 type captureRoutingRoundTripper struct {
@@ -195,15 +200,9 @@ func (t *captureRoutingRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 // call completes. Returns the capture so the caller can read the result.
 func ApplyRoutingCaptureToClient(c interface{}) *RoutingCapture {
 	cap := &RoutingCapture{}
-	wrap := func(inner http.RoundTripper) http.RoundTripper {
+	applyTransportWrap(c, func(inner http.RoundTripper) http.RoundTripper {
 		return &captureRoutingRoundTripper{inner: inner, capture: cap}
-	}
-	switch tc := c.(type) {
-	case *OpenAIClient:
-		tc.HttpClient.Transport = wrap(tc.HttpClient.Transport)
-	case *AnthropicClient:
-		tc.httpClient.Transport = wrap(tc.httpClient.Transport)
-	}
+	})
 	return cap
 }
 

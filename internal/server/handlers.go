@@ -307,6 +307,10 @@ func isEnterpriseContextPresent(c *gin.Context) bool {
 	return strings.TrimSpace(c.GetString("enterprise_user_id")) != ""
 }
 
+// probeSyntheticRuleUUID marks the throwaway rule built for an
+// X-Tingly-Probe-Service request — it has no persisted identity.
+const probeSyntheticRuleUUID = "probe-synthetic"
+
 func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
 	// X-Tingly-Probe-Rule: load a specific rule by UUID (for applying its flags
 	// while service selection is overridden by X-Tingly-Probe-Service).
@@ -323,7 +327,7 @@ func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleSc
 		if providerUUID, model, ok := strings.Cut(probeService, ":"); ok {
 			svc := &loadbalance.Service{Provider: providerUUID, Model: model, Active: true}
 			return &typ.Rule{
-				UUID:         "probe-synthetic",
+				UUID:         probeSyntheticRuleUUID,
 				Scenario:     scenario,
 				RequestModel: model,
 				Services:     []*loadbalance.Service{svc},

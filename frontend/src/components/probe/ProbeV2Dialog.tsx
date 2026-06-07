@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useCallback } from 'react';
+import React, { useState, useEffect, memo, useCallback, useMemo } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -366,7 +366,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     };
 
     const bypassed = targetType === 'provider' && direct;
-    const extracted = extractText(result?.data?.content);
+    const extracted = useMemo(() => extractText(result?.data?.content), [result?.data?.content]);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { minHeight: 420 } }}>

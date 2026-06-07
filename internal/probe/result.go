@@ -32,7 +32,7 @@ type ProbeResult struct {
 	SelectedProviderUUID string `json:"selected_provider_uuid,omitempty"`
 	SelectedModel        string `json:"selected_model,omitempty"`
 	RoutingSource        string `json:"routing_source,omitempty"`
-	MatchedSmartRule     int    `json:"matched_smart_rule,omitempty"` // -1 = none, ≥0 = index
+	MatchedSmartRule     *int   `json:"matched_smart_rule,omitempty"` // nil = none, ≥0 = index
 
 	// Execution-level facts — the real upstream endpoint TB used, the matched
 	// rule, and the flags it applied. Populated for TB-loopback probes.

@@ -168,7 +168,7 @@ func setProbeUpstreamHeaders(c *gin.Context, reqCtx *transform.TransformContext,
 		c.Header("X-Tingly-Upstream-URL", upstreamURLFor(provider, reqCtx.TargetAPI))
 	}
 	// Synthetic rules (provider probes) carry no meaningful rule identity.
-	if rule != nil && rule.UUID != "probe-synthetic" {
+	if rule != nil && rule.UUID != probeSyntheticRuleUUID {
 		c.Header("X-Tingly-Matched-Rule", rule.UUID)
 		if rule.Description != "" {
 			// Descriptions may be non-ASCII; percent-encode for header safety.
