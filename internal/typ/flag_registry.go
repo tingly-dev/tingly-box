@@ -117,13 +117,6 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryResponse,
 		},
-		{
-			Key:         "disable_stream_usage",
-			Label:       "Disable stream usage",
-			Description: "Strip usage fields from streaming chunks (SSE deltas) only. Unlike skip_usage, the final non-streaming response still carries usage. Use for clients that cannot parse usage embedded in SSE events (e.g. Xcode).",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryResponse,
-		},
 		// ── Reasoning ──────────────────────────────────────────────────────
 		{
 			Key:         "thinking_effort",

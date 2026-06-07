@@ -236,11 +236,6 @@ type RuleFlags struct {
 	// smart routing. Supersedes the legacy top-level Rule.SmartAffinity field.
 	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
 
-	// DisableStreamUsage strips usage fields from streaming chunks (SSE deltas).
-	// Equivalent to the scenario-level disable_stream_usage but scoped to this rule.
-	// When both are set the rule-level value takes precedence (ORed together at dispatch).
-	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"`
-
 	// VisionProxyService enables the rule-scoped vision proxy when set. When a
 	// request matched by this rule carries an image, the configured service
 	// describes it and the image block is replaced with text before the

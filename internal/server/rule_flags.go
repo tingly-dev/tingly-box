@@ -124,8 +124,10 @@ func resolveRuleFlagsWithScenario(
 		// Inject scenario-level ClaudeCodeCompat if not already set at rule level
 		flags.ClaudeCodeCompat = flags.ClaudeCodeCompat || scenarioConfig.Flags.ClaudeCodeCompat
 
-		// Inject scenario-level DisableStreamUsage if not already set at rule level
-		flags.DisableStreamUsage = flags.DisableStreamUsage || scenarioConfig.Flags.DisableStreamUsage
+		// Scenario-level DisableStreamUsage is equivalent to rule-level SkipUsage:
+		// both strip usage from stream chunks. Fold scenario setting into SkipUsage
+		// so the existing shouldStripUsage path handles it uniformly.
+		flags.SkipUsage = flags.SkipUsage || scenarioConfig.Flags.DisableStreamUsage
 
 		// Inject scenario-level SessionAffinity if rule hasn't set one explicitly
 		if flags.SessionAffinity == 0 && scenarioConfig.Flags.SessionAffinity > 0 {
@@ -156,11 +158,6 @@ func shouldStripUsage(extra map[string]interface{}) bool {
 		}
 	}
 	if v, ok := extra["skip_usage"]; ok {
-		if b, _ := v.(bool); b {
-			return true
-		}
-	}
-	if v, ok := extra["disable_stream_usage"]; ok {
 		if b, _ := v.(bool); b {
 			return true
 		}
