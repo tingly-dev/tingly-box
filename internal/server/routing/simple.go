@@ -2,6 +2,7 @@ package routing
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -41,6 +42,26 @@ func (s *SimpleSelector) SelectService(
 	rule *typ.Rule,
 	req interface{},
 ) (*typ.Provider, *loadbalance.Service, error) {
+	// X-Tingly-Probe-Service: {provider_uuid}:{model} — bypass all pipeline
+	// stages and pin to the specified service. Used by service-target probes
+	// that need to route through TB's middleware stack (for flag application)
+	// while targeting a specific provider+model.
+	if probeService := c.GetHeader("X-Tingly-Probe-Service"); probeService != "" {
+		parts := strings.SplitN(probeService, ":", 2)
+		if len(parts) == 2 {
+			provider, err := s.selector.config.GetProviderByUUID(parts[0])
+			if err != nil || provider == nil {
+				return nil, nil, fmt.Errorf("probe service provider not found: %s", parts[0])
+			}
+			if !provider.Enabled {
+				return nil, nil, fmt.Errorf("probe service provider disabled: %s", parts[0])
+			}
+			svc := &loadbalance.Service{Provider: parts[0], Model: parts[1], Active: true}
+			logrus.Debugf("[routing] probe service pin: provider=%s model=%s", provider.Name, parts[1])
+			return provider, svc, nil
+		}
+	}
+
 	// Build context (session ID resolved internally)
 	ctx := NewSelectionContext(rule, req, c, scenario)
 

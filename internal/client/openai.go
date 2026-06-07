@@ -75,6 +75,7 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	transport = &customUserAgentTransport{base: base}
 	transport = wrapWithUserAgent(transport, provider)
 	transport = wrapWithLogging(transport, provider)
+	transport = wrapWithProbeHeaders(transport)
 
 	httpClient := &http.Client{
 		Transport: transport,

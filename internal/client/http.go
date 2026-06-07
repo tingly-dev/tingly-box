@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -86,6 +87,42 @@ func CreateHTTPClientWithProxy(proxyURL string) *http.Client {
 	return &http.Client{
 		Transport: transport,
 	}
+}
+
+// probeHeadersKey is a context key for probe-only HTTP headers.
+// Headers stored here are injected by probeHeaderRoundTripper into every
+// outgoing request that carries this context. Only set by probe code;
+// production traffic never touches this key.
+type probeHeadersKey struct{}
+
+// WithProbeHeaders stores headers in ctx so that clients using
+// probeHeaderRoundTripper inject them into each SDK HTTP call.
+func WithProbeHeaders(ctx context.Context, headers map[string]string) context.Context {
+	return context.WithValue(ctx, probeHeadersKey{}, headers)
+}
+
+// probeHeaderRoundTripper sits at the outermost layer of a transport chain and
+// adds probe-specific headers (stored in the request context by probe code)
+// to each outbound request. It is a no-op for non-probe requests.
+type probeHeaderRoundTripper struct {
+	inner http.RoundTripper
+}
+
+func (t *probeHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if headers, ok := req.Context().Value(probeHeadersKey{}).(map[string]string); ok && len(headers) > 0 {
+		req = req.Clone(req.Context())
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+	}
+	return t.inner.RoundTrip(req)
+}
+
+// wrapWithProbeHeaders wraps a transport so probe headers stored in request
+// contexts are injected into outgoing requests. Always applied; no-op cost
+// on non-probe requests.
+func wrapWithProbeHeaders(inner http.RoundTripper) http.RoundTripper {
+	return &probeHeaderRoundTripper{inner: inner}
 }
 
 // TransportPoolInterface defines the interface for transport pools.

@@ -308,6 +308,31 @@ func isEnterpriseContextPresent(c *gin.Context) bool {
 }
 
 func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
+	// X-Tingly-Probe-Rule: load a specific rule by UUID (for applying its flags
+	// while service selection is overridden by X-Tingly-Probe-Service).
+	if ruleUUID := ctx.GetHeader("X-Tingly-Probe-Rule"); ruleUUID != "" {
+		if rule := s.config.GetRuleByUUID(ruleUUID); rule != nil {
+			return rule, nil
+		}
+		return nil, fmt.Errorf("probe rule not found: %s", ruleUUID)
+	}
+
+	// X-Tingly-Probe-Service: no matching rule needed — build a minimal synthetic
+	// rule so the handler can proceed with service selection pinned by the header.
+	if probeService := ctx.GetHeader("X-Tingly-Probe-Service"); probeService != "" {
+		parts := strings.SplitN(probeService, ":", 2)
+		if len(parts) == 2 {
+			svc := &loadbalance.Service{Provider: parts[0], Model: parts[1], Active: true}
+			return &typ.Rule{
+				UUID:         "probe-synthetic",
+				Scenario:     scenario,
+				RequestModel: parts[1],
+				Services:     []*loadbalance.Service{svc},
+				Active:       true,
+			}, nil
+		}
+	}
+
 	cfg := s.config
 	if cfg != nil {
 		// Use the new MatchRuleByModelAndScenario which supports wildcard matching

@@ -30,52 +30,61 @@ func NewE2EService(cfg *config.Config, pool *client.ClientPool) *E2EService {
 
 // Probe performs a non-streaming probe against the target described by req.
 func (e *E2EService) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error) {
-	provider, model, err := e.resolveTargetToProviderModel(ctx, req)
+	provider, model, probeHeaders, err := e.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
+	if len(probeHeaders) > 0 {
+		ctx = client.WithProbeHeaders(ctx, probeHeaders)
+	}
 	message := E2EMessage(req.TestMode, req.Message)
 	return e.ProbeProviderWithSDK(ctx, provider, model, message, req.TestMode)
 }
 
 // ProbeStream performs a streaming probe against the target described by req.
 func (e *E2EService) ProbeStream(ctx context.Context, req *E2ERequest) (*E2EData, error) {
-	provider, model, err := e.resolveTargetToProviderModel(ctx, req)
+	provider, model, probeHeaders, err := e.resolveTargetToProviderModel(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
+	if len(probeHeaders) > 0 {
+		ctx = client.WithProbeHeaders(ctx, probeHeaders)
+	}
 	message := E2EMessage(req.TestMode, req.Message)
 	return e.probeProviderStream(ctx, provider, model, message, req.TestMode)
 }
 
-func (e *E2EService) resolveTargetToProviderModel(ctx context.Context, req *E2ERequest) (*typ.Provider, string, error) {
+// resolveTargetToProviderModel resolves an E2ERequest to a provider, model,
+// and optional probe headers. Probe headers are injected into SDK HTTP calls
+// via probeHeaderRoundTripper so that TB's own loopback endpoint can read them.
+func (e *E2EService) resolveTargetToProviderModel(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
 	var (
-		provider *typ.Provider
-		model    string
-		err      error
+		provider     *typ.Provider
+		model        string
+		probeHeaders map[string]string
+		err          error
 	)
 	switch req.TargetType {
 	case E2ETargetProvider:
-		provider, model, err = e.resolveProviderTarget(ctx, req)
+		provider, model, probeHeaders, err = e.resolveProviderTarget(ctx, req)
 	case E2ETargetProviderConfig:
 		provider, model, err = e.resolveProviderConfigTarget(ctx, req)
 	case E2ETargetRule:
 		provider, model, err = e.resolveRuleTarget(ctx, req)
 	default:
-		return nil, "", fmt.Errorf("invalid target type: %s", req.TargetType)
+		return nil, "", nil, fmt.Errorf("invalid target type: %s", req.TargetType)
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	if provider.IsVirtual() {
 		// vmodel://local can't be dialed; reroute through loopback so the
 		// probe exercises the in-process handler end-to-end without mutating
 		// the stored provider record.
-		return e.resolveVModelLoopbackTarget(ctx, provider, model)
+		p, m, e2 := e.resolveVModelLoopbackTarget(ctx, provider, model)
+		return p, m, nil, e2
 	}
-	return provider, model, nil
+	return provider, model, probeHeaders, nil
 }
 
 func (e *E2EService) resolveVModelLoopbackTarget(ctx context.Context, provider *typ.Provider, model string) (*typ.Provider, string, error) {
@@ -106,14 +115,14 @@ func (e *E2EService) resolveVModelLoopbackTarget(ctx context.Context, provider *
 	})
 }
 
-func (e *E2EService) resolveProviderTarget(_ context.Context, req *E2ERequest) (*typ.Provider, string, error) {
+func (e *E2EService) resolveProviderTarget(ctx context.Context, req *E2ERequest) (*typ.Provider, string, map[string]string, error) {
 	provider, err := e.config.GetProviderByUUID(req.ProviderUUID)
 	if err != nil || provider == nil {
-		return nil, "", fmt.Errorf("provider not found: %s", req.ProviderUUID)
+		return nil, "", nil, fmt.Errorf("provider not found: %s", req.ProviderUUID)
 	}
 
 	if !provider.Enabled {
-		return nil, "", fmt.Errorf("provider is disabled: %s", req.ProviderUUID)
+		return nil, "", nil, fmt.Errorf("provider is disabled: %s", req.ProviderUUID)
 	}
 
 	model := req.Model
@@ -127,7 +136,58 @@ func (e *E2EService) resolveProviderTarget(_ context.Context, req *E2ERequest) (
 		}
 	}
 
-	return provider, model, nil
+	// Google providers don't have a matching /tingly/{scenario} endpoint;
+	// probe them directly via SDK.
+	if provider.APIStyle == protocol.APIStyleGoogle {
+		return provider, model, nil, nil
+	}
+
+	// Route through TB's own loopback endpoint so request-level flags
+	// (openai_endpoint_override, thinking_effort, etc.) can be applied when
+	// a rule is also specified via X-Tingly-Probe-Rule.
+	port := e.config.GetServerPort()
+	if port == 0 {
+		// Server port unknown — fall back to direct SDK probe.
+		logrus.Debugf("[probe-e2e] server port unknown, falling back to direct SDK for provider %s", provider.UUID)
+		return provider, model, nil, nil
+	}
+
+	_, apiStyle := ScenarioEndpoint(deriveScenarioForAPIStyle(provider.APIStyle))
+	var apiBase string
+	switch apiStyle {
+	case protocol.APIStyleAnthropic:
+		apiBase = fmt.Sprintf("http://localhost:%d/tingly/%s", port, typ.ScenarioAnthropic)
+	default:
+		apiBase = fmt.Sprintf("http://localhost:%d/tingly/%s/v1", port, typ.ScenarioOpenAI)
+	}
+
+	probeHeaders := map[string]string{
+		"X-Tingly-Probe-Service": req.ProviderUUID + ":" + model,
+	}
+	logrus.Debugf("[probe-e2e] provider %s -> TB loopback %s (service pin=%s:%s)", provider.UUID, apiBase, req.ProviderUUID, model)
+
+	loopbackProvider, loopbackModel, err := e.resolveProviderConfigTarget(ctx, &E2ERequest{
+		Name:     provider.Name,
+		APIBase:  apiBase,
+		APIStyle: string(apiStyle),
+		Token:    e.config.GetModelToken(),
+		Model:    model,
+	})
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return loopbackProvider, loopbackModel, probeHeaders, nil
+}
+
+// deriveScenarioForAPIStyle maps a provider API style to a default scenario name
+// used when routing service probes through the TB loopback.
+func deriveScenarioForAPIStyle(style protocol.APIStyle) string {
+	switch style {
+	case protocol.APIStyleAnthropic:
+		return string(typ.ScenarioAnthropic)
+	default:
+		return string(typ.ScenarioOpenAI)
+	}
 }
 
 func (e *E2EService) resolveProviderConfigTarget(_ context.Context, req *E2ERequest) (*typ.Provider, string, error) {
