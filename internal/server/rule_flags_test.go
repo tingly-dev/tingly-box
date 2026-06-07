@@ -254,6 +254,16 @@ func TestIsBillingHeaderScenario(t *testing.T) {
 			scenario: typ.ScenarioAnthropic,
 			want:     false,
 		},
+		{
+			name:     "Claude Code profiled scenario",
+			scenario: typ.RuleScenario("claude_code:p1"),
+			want:     true,
+		},
+		{
+			name:     "Claude Desktop profiled scenario",
+			scenario: typ.RuleScenario("claude_desktop:p1"),
+			want:     true,
+		},
 	}
 
 	for _, tt := range tests {

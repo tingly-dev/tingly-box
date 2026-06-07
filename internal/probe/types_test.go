@@ -150,6 +150,7 @@ func TestScenarioEndpoint(t *testing.T) {
 	}{
 		{"anthropic", "/tingly/anthropic", protocol.APIStyleAnthropic},
 		{"claude_code", "/tingly/claude_code", protocol.APIStyleAnthropic},
+		{"claude_code:p1", "/tingly/claude_code:p1", protocol.APIStyleAnthropic},
 		{"opencode", "/tingly/opencode", protocol.APIStyleAnthropic},
 		{"openai", "/tingly/openai", protocol.APIStyleOpenAI},
 		{"unknown-scenario", "/tingly/unknown-scenario", protocol.APIStyleOpenAI},

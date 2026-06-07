@@ -280,3 +280,27 @@ func TestGetClaudeCodeEnv_RoutesThroughGateway(t *testing.T) {
 	_, hasToken := kv["ANTHROPIC_AUTH_TOKEN"]
 	assert.True(t, hasToken)
 }
+
+func TestGetScenarioEndpointPath(t *testing.T) {
+	client := NewTBClient(&serverconfig.Config{}, nil)
+	tests := []struct {
+		scenario typ.RuleScenario
+		want     string
+	}{
+		{typ.ScenarioClaudeCode, "/tingly/claude_code"},
+		{"claude_code:p1", "/tingly/claude_code"},
+		{"claude_code:profile-abc", "/tingly/claude_code"},
+		{typ.ScenarioOpenCode, "/tingly/opencode"},
+		{"opencode:p1", "/tingly/opencode"},
+		{typ.ScenarioXcode, "/tingly/xcode"},
+		{typ.ScenarioVSCode, "/tingly/vscode"},
+		{typ.ScenarioSmartGuide, "/tingly/_smart_guide"},
+		{typ.ScenarioOpenAI, "/tingly/openai"},
+	}
+	for _, tt := range tests {
+		got := client.GetScenarioEndpointPath(tt.scenario)
+		if got != tt.want {
+			t.Errorf("GetScenarioEndpointPath(%q) = %q, want %q", tt.scenario, got, tt.want)
+		}
+	}
+}

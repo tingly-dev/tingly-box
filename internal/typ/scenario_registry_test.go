@@ -73,6 +73,67 @@ func TestScenarioSupportsTransport_UnknownScenario(t *testing.T) {
 	}
 }
 
+func TestRuleScenario_Base(t *testing.T) {
+	tests := []struct {
+		input RuleScenario
+		want  RuleScenario
+	}{
+		{ScenarioClaudeCode, ScenarioClaudeCode},
+		{"claude_code:p1", ScenarioClaudeCode},
+		{"claude_code:profile-abc", ScenarioClaudeCode},
+		{ScenarioOpenAI, ScenarioOpenAI},
+		{"openai:p2", ScenarioOpenAI},
+	}
+	for _, tt := range tests {
+		if got := tt.input.Base(); got != tt.want {
+			t.Errorf("(%q).Base() = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestRuleScenario_Is(t *testing.T) {
+	tests := []struct {
+		scenario RuleScenario
+		base     RuleScenario
+		want     bool
+	}{
+		{ScenarioClaudeCode, ScenarioClaudeCode, true},
+		{"claude_code:p1", ScenarioClaudeCode, true},
+		{"claude_code:profile-abc", ScenarioClaudeCode, true},
+		{ScenarioOpenAI, ScenarioClaudeCode, false},
+		{"openai:p1", ScenarioClaudeCode, false},
+		{ScenarioAnthropic, ScenarioAnthropic, true},
+		{"anthropic:p1", ScenarioAnthropic, true},
+	}
+	for _, tt := range tests {
+		if got := tt.scenario.Is(tt.base); got != tt.want {
+			t.Errorf("(%q).Is(%q) = %v, want %v", tt.scenario, tt.base, got, tt.want)
+		}
+	}
+}
+
+func TestClaudeCodeSupportsProfiles(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioClaudeCode)
+	if !ok {
+		t.Fatal("claude_code descriptor not found")
+	}
+	if !d.SupportsProfiles {
+		t.Error("claude_code should have SupportsProfiles=true")
+	}
+}
+
+func TestNonProfileScenariosDoNotSupportProfiles(t *testing.T) {
+	for _, s := range []RuleScenario{ScenarioOpenAI, ScenarioAnthropic, ScenarioAgent} {
+		d, ok := GetScenarioDescriptor(s)
+		if !ok {
+			continue
+		}
+		if d.SupportsProfiles {
+			t.Errorf("scenario %q should not have SupportsProfiles=true", s)
+		}
+	}
+}
+
 func TestRegisterScenario_RejectsConflictingDescriptor(t *testing.T) {
 	scenario := RuleScenario("test_registry_conflict")
 
