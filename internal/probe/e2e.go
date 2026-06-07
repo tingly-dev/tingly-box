@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/sirupsen/logrus"
 
@@ -339,6 +340,16 @@ func applyRoutingCapture(result *E2EData, cap *client.RoutingCapture) {
 	result.RoutingSource = cap.RoutingSource
 	if cap.MatchedSmartRule != "" {
 		fmt.Sscanf(cap.MatchedSmartRule, "%d", &result.MatchedSmartRule)
+	}
+	result.UpstreamAPI = cap.UpstreamAPI
+	result.UpstreamURL = cap.UpstreamURL
+	result.MatchedRule = cap.MatchedRule
+	result.AppliedFlags = cap.AppliedFlags
+	// Description was percent-encoded server-side for header safety.
+	if desc, err := url.QueryUnescape(cap.MatchedRuleDesc); err == nil {
+		result.MatchedRuleDesc = desc
+	} else {
+		result.MatchedRuleDesc = cap.MatchedRuleDesc
 	}
 }
 

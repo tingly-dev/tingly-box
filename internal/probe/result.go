@@ -33,6 +33,14 @@ type ProbeResult struct {
 	SelectedModel        string `json:"selected_model,omitempty"`
 	RoutingSource        string `json:"routing_source,omitempty"`
 	MatchedSmartRule     int    `json:"matched_smart_rule,omitempty"` // -1 = none, ≥0 = index
+
+	// Execution-level facts — the real upstream endpoint TB used, the matched
+	// rule, and the flags it applied. Populated for TB-loopback probes.
+	UpstreamAPI     string `json:"upstream_api,omitempty"`
+	UpstreamURL     string `json:"upstream_url,omitempty"`
+	MatchedRule     string `json:"matched_rule,omitempty"`
+	MatchedRuleDesc string `json:"matched_rule_desc,omitempty"`
+	AppliedFlags    string `json:"applied_flags,omitempty"`
 }
 
 // ProbeToolCall represents a tool call in a probe response.

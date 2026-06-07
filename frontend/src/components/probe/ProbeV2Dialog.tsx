@@ -44,6 +44,12 @@ interface ProbeResultData {
     selected_model?: string;
     routing_source?: string;
     matched_smart_rule?: number;
+    // Execution-level facts (real upstream endpoint, matched rule, applied flags).
+    upstream_api?: string;
+    upstream_url?: string;
+    matched_rule?: string;
+    matched_rule_desc?: string;
+    applied_flags?: string;
 }
 
 interface ProbeResult {
@@ -79,6 +85,15 @@ const ROUTING_SOURCE_LABELS: Record<string, string> = {
     smart_routing: 'Smart Routing',
     load_balancer: 'Load Balancer',
     probe_pin: 'Pinned (probe)',
+};
+
+// Human-friendly labels for the resolved upstream API type.
+const UPSTREAM_API_LABELS: Record<string, string> = {
+    openai_chat: 'Chat Completions',
+    openai_responses: 'Responses',
+    anthropic_v1: 'Messages',
+    anthropic_beta: 'Messages (beta)',
+    google: 'GenerateContent',
 };
 
 const PLACEHOLDER = '— 待补';
@@ -218,12 +233,16 @@ const Journey = memo(
         const isRule = targetType === 'rule';
         const provider = d?.selected_provider || (isRule ? '' : targetName);
         const routedModel = d?.selected_model || model || '';
+        const ruleLabel = d?.matched_rule_desc || targetName;
+        const endpoint = d?.upstream_api ? UPSTREAM_API_LABELS[d.upstream_api] || d.upstream_api : '';
 
         return (
             <Box>
                 <SectionTitle>请求旅程</SectionTitle>
-                {isRule && <JourneyRow label="Rule" value={`${targetName}${scenario ? `  ·  ${scenario}` : ''}`} />}
-                {isRule && <JourneyRow label="Flags" value={PLACEHOLDER} muted />}
+                {isRule && <JourneyRow label="Rule" value={`${ruleLabel}${scenario ? `  ·  ${scenario}` : ''}`} />}
+                {isRule && (
+                    <JourneyRow label="Flags" value={d?.applied_flags || '（无）'} muted={!d?.applied_flags} />
+                )}
                 {bypassed ? (
                     <JourneyRow label="范围" value="直连上游（已绕过 TB）" />
                 ) : (
@@ -246,8 +265,8 @@ const Journey = memo(
                     value={provider ? `${provider}${routedModel ? `  →  ${routedModel}` : ''}` : PLACEHOLDER}
                     muted={!provider}
                 />
-                <JourneyRow label="Endpoint" value={PLACEHOLDER} muted />
-                <JourneyRow label="上游 URL" value={PLACEHOLDER} muted />
+                <JourneyRow label="Endpoint" value={endpoint || PLACEHOLDER} muted={!endpoint} />
+                <JourneyRow label="上游 URL" value={d?.upstream_url || PLACEHOLDER} muted={!d?.upstream_url} />
                 {d?.request_url && <JourneyRow label="请求 URL" value={d.request_url} />}
             </Box>
         );

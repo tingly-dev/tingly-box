@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -82,6 +83,13 @@ func (s *Server) dispatchChainResult(
 ) {
 	actualModel, responseModel := reqCtx.RequestModel, reqCtx.ResponseModel
 
+	// Bubble up the execution-level routing decision for probes. This is the
+	// single chokepoint where the resolved upstream API + provider + matched
+	// rule + applied flags are all known, before any response byte is written.
+	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
+		setProbeUpstreamHeaders(c, reqCtx, rule, provider)
+	}
+
 	switch reqCtx.TargetAPI {
 	case protocol.TypeOpenAIChat:
 		s.dispatchOpenAIChat(c, reqCtx, rule, provider, isStreaming, recorder)
@@ -149,6 +157,88 @@ func (s *Server) dispatchChainResult(
 			recorder.RecordError(fmt.Errorf("invalid api style: %s", provider.APIStyle))
 		}
 	}
+}
+
+// setProbeUpstreamHeaders writes the execution-level routing decision as
+// X-Tingly-* response headers, consumed by the probe's captureRoutingRoundTripper.
+// Gated by the caller on X-Tingly-Debug-Routing so production traffic is untouched.
+func setProbeUpstreamHeaders(c *gin.Context, reqCtx *transform.TransformContext, rule *typ.Rule, provider *typ.Provider) {
+	c.Header("X-Tingly-Upstream-API", string(reqCtx.TargetAPI))
+	if provider != nil {
+		c.Header("X-Tingly-Upstream-URL", upstreamURLFor(provider, reqCtx.TargetAPI))
+	}
+	// Synthetic rules (provider probes) carry no meaningful rule identity.
+	if rule != nil && rule.UUID != "probe-synthetic" {
+		c.Header("X-Tingly-Matched-Rule", rule.UUID)
+		if rule.Description != "" {
+			// Descriptions may be non-ASCII; percent-encode for header safety.
+			c.Header("X-Tingly-Matched-Rule-Desc", url.QueryEscape(rule.Description))
+		}
+	}
+	if rule != nil {
+		if flags := formatAppliedFlags(rule.Flags); flags != "" {
+			c.Header("X-Tingly-Applied-Flags", flags)
+		}
+	}
+}
+
+// upstreamURLFor reconstructs the real upstream endpoint TB forwards to, mirroring
+// the path each SDK appends to provider.APIBase.
+func upstreamURLFor(provider *typ.Provider, target protocol.APIType) string {
+	base := strings.TrimSuffix(provider.APIBase, "/")
+	switch target {
+	case protocol.TypeOpenAIChat:
+		return base + "/chat/completions"
+	case protocol.TypeOpenAIResponses:
+		return base + "/responses"
+	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
+		return base + "/v1/messages"
+	default:
+		return base
+	}
+}
+
+// formatAppliedFlags renders the non-default rule flags as a compact,
+// human-readable string (e.g. "endpoint=responses, thinking=high").
+func formatAppliedFlags(f typ.RuleFlags) string {
+	var parts []string
+	if f.OpenAIEndpointOverride != "" && f.OpenAIEndpointOverride != "auto" {
+		parts = append(parts, "endpoint="+f.OpenAIEndpointOverride)
+	}
+	if f.ThinkingEffort != "" {
+		parts = append(parts, "thinking="+string(f.ThinkingEffort))
+	}
+	if f.UseMaxCompletionTokens {
+		parts = append(parts, "max_completion_tokens")
+	}
+	if f.UseMaxTokens {
+		parts = append(parts, "max_tokens")
+	}
+	if f.BlockTools != "" {
+		parts = append(parts, "block_tools="+f.BlockTools)
+	}
+	if f.SkipUsage {
+		parts = append(parts, "skip_usage")
+	}
+	if f.CursorCompat {
+		parts = append(parts, "cursor_compat")
+	}
+	if f.CleanHeader {
+		parts = append(parts, "clean_header")
+	}
+	if f.ClaudeCodeCompat {
+		parts = append(parts, "claude_code_compat")
+	}
+	if f.CustomUserAgent != "" {
+		parts = append(parts, "custom_ua")
+	}
+	if f.SessionAffinity > 0 {
+		parts = append(parts, fmt.Sprintf("session_affinity=%ds", f.SessionAffinity))
+	}
+	if f.VisionProxyService != nil {
+		parts = append(parts, "vision_proxy")
+	}
+	return strings.Join(parts, ", ")
 }
 
 // passthroughAnthropicV1 handles Anthropic→Anthropic v1 passthrough (original behavior)

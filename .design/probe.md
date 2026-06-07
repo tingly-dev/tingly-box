@@ -84,7 +84,9 @@ Always injected by loopback probes (both provider and rule). Causes `SimpleSelec
 
 ## Routing Trace (response headers → ProbeResult)
 
-When `X-Tingly-Debug-Routing: 1` is present, `SimpleSelector.SelectService` appends these headers to the loopback HTTP response:
+When `X-Tingly-Debug-Routing: 1` is present, the routing decision is emitted across two chokepoints.
+
+**Selection stage** — `SimpleSelector.SelectService` (routing/simple.go):
 
 | Header                          | Content                                      |
 |---------------------------------|----------------------------------------------|
@@ -94,6 +96,16 @@ When `X-Tingly-Debug-Routing: 1` is present, `SimpleSelector.SelectService` appe
 | `X-Tingly-Routing-Source`       | `affinity`, `smart_routing`, `load_balancer`, or `probe_pin` |
 | `X-Tingly-Matched-Smart-Rule`   | Index of matched smart rule (omitted if none) |
 
+**Dispatch stage** — `setProbeUpstreamHeaders` in `dispatchChainResult` (protocol_dispatch.go), the single point where the resolved upstream API + matched rule + applied flags are all known, before any response byte is written:
+
+| Header                        | Content                                                        |
+|-------------------------------|---------------------------------------------------------------|
+| `X-Tingly-Upstream-API`       | Resolved upstream API type (`openai_chat`, `openai_responses`, `anthropic_v1`, …) — answers chat-vs-responses |
+| `X-Tingly-Upstream-URL`       | Real upstream endpoint TB forwarded to (`provider.APIBase` + path) |
+| `X-Tingly-Matched-Rule`       | Matched rule UUID (omitted for synthetic provider probes)     |
+| `X-Tingly-Matched-Rule-Desc`  | Matched rule description, percent-encoded (decoded probe-side) |
+| `X-Tingly-Applied-Flags`      | Compact non-default flags, e.g. `endpoint=responses, thinking=high` |
+
 `captureRoutingRoundTripper` (`client.ApplyRoutingCaptureToClient`) is layered on the probe client transport. After the SDK call completes, `applyRoutingCapture` copies these into `ProbeResult`:
 
 ```go
@@ -102,7 +114,14 @@ ProbeResult.SelectedProviderUUID // provider UUID
 ProbeResult.SelectedModel        // model
 ProbeResult.RoutingSource        // how the service was selected
 ProbeResult.MatchedSmartRule     // smart rule index (-1 = none)
+ProbeResult.UpstreamAPI          // resolved upstream API type
+ProbeResult.UpstreamURL          // real upstream endpoint
+ProbeResult.MatchedRule          // matched rule UUID
+ProbeResult.MatchedRuleDesc      // matched rule description (decoded)
+ProbeResult.AppliedFlags         // compact applied-flags string
 ```
+
+The frontend dialog renders these as the "请求旅程" (request journey): Rule → Flags → Routing → Provider→Model → Endpoint → Upstream URL.
 
 Direct probes (`req.Direct = true`) skip the loopback entirely, so these fields are empty.
 

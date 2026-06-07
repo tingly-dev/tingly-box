@@ -154,6 +154,13 @@ type RoutingCapture struct {
 	SelectedModel        string
 	RoutingSource        string
 	MatchedSmartRule     string // raw header value; "-1" or index string
+
+	// Execution-level facts (set at dispatch, after endpoint resolution).
+	UpstreamAPI     string // e.g. "openai_chat", "openai_responses", "anthropic_v1"
+	UpstreamURL     string // real upstream endpoint TB forwarded to
+	MatchedRule     string // matched rule UUID (empty for synthetic provider probes)
+	MatchedRuleDesc string // percent-encoded; decoded by the probe layer
+	AppliedFlags    string // compact "endpoint=responses, thinking=high"
 }
 
 // captureRoutingRoundTripper reads X-TBE-Selected-* headers from every
@@ -173,6 +180,11 @@ func (t *captureRoutingRoundTripper) RoundTrip(req *http.Request) (*http.Respons
 		t.capture.SelectedModel = resp.Header.Get("X-Tingly-Selected-Model")
 		t.capture.RoutingSource = resp.Header.Get("X-Tingly-Routing-Source")
 		t.capture.MatchedSmartRule = resp.Header.Get("X-Tingly-Matched-Smart-Rule")
+		t.capture.UpstreamAPI = resp.Header.Get("X-Tingly-Upstream-API")
+		t.capture.UpstreamURL = resp.Header.Get("X-Tingly-Upstream-URL")
+		t.capture.MatchedRule = resp.Header.Get("X-Tingly-Matched-Rule")
+		t.capture.MatchedRuleDesc = resp.Header.Get("X-Tingly-Matched-Rule-Desc")
+		t.capture.AppliedFlags = resp.Header.Get("X-Tingly-Applied-Flags")
 		t.capture.Mu.Unlock()
 	}
 	return resp, err
