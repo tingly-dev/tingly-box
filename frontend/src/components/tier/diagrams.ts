@@ -70,6 +70,15 @@ const MOCK_PROVIDERS: Provider[] = [
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
     },
+    {
+        uuid: 'provider-4',
+        name: 'DeepSeek',
+        api_base: 'https://api.deepseek.com',
+        api_key: 'sk-ds-***',
+        api_style: 'openai',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+    },
 ];
 
 /**
@@ -324,12 +333,24 @@ export const TIER_DIAGRAM_DATA: Record<string, {
             smartEnabled: true,
             smartRouting: [
                 {
-                    service: 'svc-2',
-                    condition: {
-                        field: 'request_model',
-                        op: 'contains',
-                        value: 'claude',
-                    },
+                    uuid: 'smart-rule-1',
+                    description: 'Route Claude requests to Anthropic',
+                    ops: [
+                        {
+                            uuid: 'op-1',
+                            position: 'model',
+                            operation: 'contains',
+                            value: 'claude',
+                        },
+                    ],
+                    services: [
+                        {
+                            uuid: 'svc-2',
+                            provider: 'provider-2',
+                            model: 'claude-3-5-sonnet-20241022',
+                            active: true,
+                        },
+                    ],
                 },
             ],
         },
@@ -369,20 +390,44 @@ export const TIER_DIAGRAM_DATA: Record<string, {
             smartEnabled: true,
             smartRouting: [
                 {
-                    service: 'svc-2',
-                    condition: {
-                        field: 'request_model',
-                        op: 'contains',
-                        value: 'claude',
-                    },
+                    uuid: 'smart-rule-1',
+                    description: 'Route Claude requests to Anthropic',
+                    ops: [
+                        {
+                            uuid: 'op-1',
+                            position: 'model',
+                            operation: 'contains',
+                            value: 'claude',
+                        },
+                    ],
+                    services: [
+                        {
+                            uuid: 'svc-2',
+                            provider: 'provider-2',
+                            model: 'claude-3-5-sonnet-20241022',
+                            active: true,
+                        },
+                    ],
                 },
                 {
-                    service: 'svc-3',
-                    condition: {
-                        field: 'max_tokens',
-                        op: 'gt',
-                        value: '4000',
-                    },
+                    uuid: 'smart-rule-2',
+                    description: 'Route large token requests to Azure',
+                    ops: [
+                        {
+                            uuid: 'op-2',
+                            position: 'token',
+                            operation: 'gt',
+                            value: '4000',
+                        },
+                    ],
+                    services: [
+                        {
+                            uuid: 'svc-3',
+                            provider: 'provider-3',
+                            model: 'gpt-4',
+                            active: true,
+                        },
+                    ],
                 },
             ],
         },
@@ -417,33 +462,76 @@ export const TIER_DIAGRAM_DATA: Record<string, {
                     tier: 1,
                     active: true,
                 },
+                {
+                    uuid: 'svc-4',
+                    provider: 'provider-4',
+                    model: 'deepseek-chat',
+                    tier: 1,
+                    active: true,
+                },
             ],
             lbTactic: { type: 'smart', params: {} },
             smartEnabled: true,
             smartRouting: [
                 {
-                    service: 'svc-2',
-                    condition: {
-                        field: 'request_model',
-                        op: 'contains',
-                        value: 'claude',
-                    },
+                    uuid: 'smart-rule-1',
+                    description: 'Route Claude requests to Anthropic',
+                    ops: [
+                        {
+                            uuid: 'op-1',
+                            position: 'model',
+                            operation: 'contains',
+                            value: 'claude',
+                        },
+                    ],
+                    services: [
+                        {
+                            uuid: 'svc-2',
+                            provider: 'provider-2',
+                            model: 'claude-3-5-sonnet-20241022',
+                            active: true,
+                        },
+                    ],
                 },
                 {
-                    service: 'svc-3',
-                    condition: {
-                        field: 'max_tokens',
-                        op: 'gt',
-                        value: '4000',
-                    },
+                    uuid: 'smart-rule-2',
+                    description: 'Route large token requests to Azure',
+                    ops: [
+                        {
+                            uuid: 'op-2',
+                            position: 'token',
+                            operation: 'gt',
+                            value: '4000',
+                        },
+                    ],
+                    services: [
+                        {
+                            uuid: 'svc-3',
+                            provider: 'provider-3',
+                            model: 'gpt-4',
+                            active: true,
+                        },
+                    ],
                 },
                 {
-                    service: 'svc-1',
-                    condition: {
-                        field: 'user_group',
-                        op: 'eq',
-                        value: 'premium',
-                    },
+                    uuid: 'smart-rule-3',
+                    description: 'Route @@@ds commands to DeepSeek',
+                    ops: [
+                        {
+                            uuid: 'op-3',
+                            position: 'latest_user',
+                            operation: 'contains',
+                            value: '@@@ds',
+                        },
+                    ],
+                    services: [
+                        {
+                            uuid: 'svc-4',
+                            provider: 'provider-4',
+                            model: 'deepseek-chat',
+                            active: true,
+                        },
+                    ],
                 },
             ],
         },
