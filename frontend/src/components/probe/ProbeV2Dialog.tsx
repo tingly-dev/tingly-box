@@ -16,6 +16,8 @@ import {
     AccordionDetails,
     AccordionSummary,
     Tooltip,
+    FormControlLabel,
+    Switch,
 } from '@mui/material';
 import {
     CheckCircle as CheckIcon,
@@ -136,6 +138,40 @@ const StatusResponseCard = memo(({
         </AccordionSummary>
         <AccordionDetails sx={{ p: 0 }}>
             <Box>
+                {/* Routing Trace — which provider/model TB actually selected */}
+                {result.data?.selected_provider && (
+                    <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
+                            Routing
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Chip
+                                label={`${result.data.selected_provider}${result.data.selected_model ? ` | ${result.data.selected_model}` : ''}`}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+                            />
+                            {result.data.routing_source && (
+                                <Chip
+                                    label={`via ${ROUTING_SOURCE_LABELS[result.data.routing_source] || result.data.routing_source}`}
+                                    size="small"
+                                    color="info"
+                                    variant="filled"
+                                    sx={{ height: 24 }}
+                                />
+                            )}
+                            {result.data.matched_smart_rule !== undefined && result.data.matched_smart_rule >= 0 && (
+                                <Chip
+                                    label={`smart rule #${result.data.matched_smart_rule}`}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ height: 24 }}
+                                />
+                            )}
+                        </Box>
+                    </Box>
+                )}
+
                 {/* Response Content */}
                 {result.data?.content && (
                     <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
@@ -243,8 +279,22 @@ interface ProbeV2Response {
             name: string;
             input: Record<string, unknown>;
         }>;
+        // Routing trace (TB-loopback probes only)
+        selected_provider?: string;
+        selected_provider_uuid?: string;
+        selected_model?: string;
+        routing_source?: string;
+        matched_smart_rule?: number;
     };
 }
+
+// Human-friendly labels for the routing_source values emitted by the backend.
+const ROUTING_SOURCE_LABELS: Record<string, string> = {
+    affinity: 'Session Affinity',
+    smart_routing: 'Smart Routing',
+    load_balancer: 'Load Balancer',
+    probe_pin: 'Pinned (probe)',
+};
 
 export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     open,
@@ -261,6 +311,9 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     const [result, setResult] = useState<ProbeV2Response | null>(null);
     const [detailsExpanded, setDetailsExpanded] = useState(false);
     const [copyTooltipOpen, setCopyTooltipOpen] = useState(false);
+    // Direct mode (provider targets only): bypass the TB pipeline and hit the
+    // upstream provider directly. Lets the user bisect upstream vs TB failures.
+    const [directMode, setDirectMode] = useState(false);
 
     // Reset state when dialog opens
     useEffect(() => {
@@ -272,7 +325,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
             // Auto-start test
             runTest();
         }
-    }, [open, testMode]);
+    }, [open, testMode, directMode]);
 
     const runTest = async () => {
         setIsLoading(true);
@@ -286,6 +339,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
             } : {
                 provider_uuid: targetId,
                 model: model || '',
+                direct: directMode,
             }),
             test_mode: testMode,
             message: getDefaultMessage(testMode),
@@ -396,6 +450,25 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                             variant="outlined"
                             sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
                         />
+                    )}
+                    {targetType === 'provider' && (
+                        <Tooltip title="Bypass the Tingly-Box pipeline and call the upstream provider directly. Use this to tell whether a failure is upstream or inside TB.">
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        size="small"
+                                        checked={directMode}
+                                        onChange={(e) => setDirectMode(e.target.checked)}
+                                    />
+                                }
+                                label={
+                                    <Typography variant="caption" color="text.secondary">
+                                        Direct
+                                    </Typography>
+                                }
+                                sx={{ ml: 0.5, mr: 0 }}
+                            />
+                        </Tooltip>
                     )}
 
                 </Box>

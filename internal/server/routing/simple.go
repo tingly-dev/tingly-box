@@ -57,6 +57,7 @@ func (s *SimpleSelector) SelectService(
 			}
 			svc := &loadbalance.Service{Provider: providerUUID, Model: model, Active: true}
 			logrus.Debugf("[routing] probe service pin: provider=%s model=%s", provider.Name, model)
+			setRoutingDebugHeaders(c, provider.Name, provider.UUID, model, "probe_pin", -1)
 			return provider, svc, nil
 		}
 	}
@@ -80,18 +81,25 @@ func (s *SimpleSelector) SelectService(
 	// Store result metadata for observability
 	c.Set("routing_source", result.Source)
 
-	// Add debug headers when X-Tingly-Debug-Routing is enabled
-	if c.GetHeader("X-Tingly-Debug-Routing") == "1" {
-		c.Header("X-Tingly-Selected-Provider", result.Provider.Name)
-		c.Header("X-Tingly-Selected-Provider-UUID", result.Provider.UUID)
-		c.Header("X-Tingly-Selected-Model", result.Service.Model)
-		c.Header("X-Tingly-Routing-Source", result.Source)
-		if result.MatchedSmartRuleIndex >= 0 {
-			c.Header("X-Tingly-Matched-Smart-Rule", fmt.Sprintf("%d", result.MatchedSmartRuleIndex))
-		}
-	}
+	setRoutingDebugHeaders(c, result.Provider.Name, result.Provider.UUID, result.Service.Model, result.Source, result.MatchedSmartRuleIndex)
 
 	return result.Provider, result.Service, nil
+}
+
+// setRoutingDebugHeaders emits X-Tingly-Selected-* response headers describing
+// the routing decision, but only when the request opted in via
+// X-Tingly-Debug-Routing: 1 (set by probes). matchedSmartRule < 0 means none.
+func setRoutingDebugHeaders(c *gin.Context, providerName, providerUUID, model, source string, matchedSmartRule int) {
+	if c.GetHeader("X-Tingly-Debug-Routing") != "1" {
+		return
+	}
+	c.Header("X-Tingly-Selected-Provider", providerName)
+	c.Header("X-Tingly-Selected-Provider-UUID", providerUUID)
+	c.Header("X-Tingly-Selected-Model", model)
+	c.Header("X-Tingly-Routing-Source", source)
+	if matchedSmartRule >= 0 {
+		c.Header("X-Tingly-Matched-Smart-Rule", fmt.Sprintf("%d", matchedSmartRule))
+	}
 }
 
 // SelectServiceForEmbeddings is a variant of SelectService for embedding requests.
