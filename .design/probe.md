@@ -17,6 +17,17 @@ An `E2ERequest` has three `target_type` values:
 | `rule`            | A rule by UUID — exercises all TB middleware for that rule's scenario         |
 | `provider_config` | An inline provider config (name, api_base, api_style, token) — used during onboarding before the provider is saved |
 
+### Direct vs Through-TB (provider probes)
+
+Provider probes have two modes controlled by `E2ERequest.Direct`:
+
+| Mode             | `direct` field | What it does                                                        | Use case                                               |
+|------------------|----------------|---------------------------------------------------------------------|--------------------------------------------------------|
+| Through-TB (default) | `false`    | Routes through `http://localhost:{port}/tingly/{scenario}` loopback | Tests the full TB pipeline — flags, routing, middleware |
+| Direct           | `true`         | Calls the upstream SDK without any loopback                         | Isolates whether a failure is upstream vs TB-internal  |
+
+When a through-TB probe fails and a direct probe succeeds, the problem is in TB's middleware stack. When both fail, the upstream itself is the cause. This is the primary diagnostic value of the distinction.
+
 ### Test Modes
 
 `test_mode` controls the shape of the probe request:
@@ -29,15 +40,17 @@ An `E2ERequest` has three `target_type` values:
 
 ## TB Loopback Pattern
 
-Provider and rule probes route through TB's own HTTP endpoint (`http://localhost:{port}/tingly/{scenario}[/v1]`) rather than going directly to the upstream API. This ensures that rule flags (`openai_endpoint_override`, thinking effort, etc.), smart routing, and load balancing all execute exactly as they would for production traffic.
+Provider (non-direct) and rule probes route through TB's own HTTP endpoint (`http://localhost:{port}/tingly/{scenario}`) rather than going directly to the upstream API. This ensures that rule flags (`openai_endpoint_override`, thinking effort, etc.), smart routing, and load balancing all execute exactly as they would for production traffic.
 
 ```
 Probe code
-  → SDK client (with probeHeaderRoundTripper)
+  → SDK client (probeHeaderRoundTripper + captureRoutingRoundTripper)
     → TB loopback /tingly/{scenario}/chat/completions (or /messages)
       → determineRuleWithScenario (reads X-Tingly-Probe-* headers)
-        → SimpleSelector.SelectService (pins service if header present)
-          → upstream provider
+        → SimpleSelector.SelectService (pins service or runs normal pipeline)
+          → responds with X-Tingly-Selected-* headers
+        → upstream provider
+    ← response headers captured → ProbeResult.RoutingTrace fields
 ```
 
 ### URL conventions
@@ -50,7 +63,7 @@ Probe code
 
 Virtual model providers (`provider.IsVirtual()`) are also resolved to the TB loopback via `resolveVModelLoopbackTarget`, sharing the same `loopbackAPIBase` helper.
 
-## Probe Headers
+## Probe Headers (outgoing)
 
 Two request headers let the probe subsystem control TB routing without modifying the stored rule or provider configuration.
 
@@ -65,31 +78,63 @@ Injected by `resolveProviderTarget` on the SDK client transport. Two TB layers c
 
 Optionally injected by callers that want to apply a specific rule's flags while overriding service selection via `X-Tingly-Probe-Service`. `determineRuleWithScenario` loads the named rule and returns it; the `SelectService` probe pin still applies.
 
-### Transport wiring
+### `X-Tingly-Debug-Routing: 1`
 
-Headers are stored in the `context.Context` via `client.WithProbeHeaders(ctx, headers)`. `probeHeaderRoundTripper` (in `internal/client/http.go`) reads the context on every `RoundTrip` and injects the headers into the outgoing request.
+Always injected by loopback probes (both provider and rule). Causes `SimpleSelector.SelectService` to append routing-decision headers to the response (see below).
 
-This round tripper is **not** installed on production clients. `ProbeProviderWithSDK` calls `client.ApplyProbeHeadersToClient(c)` only when `client.GetProbeHeaders(ctx)` returns true — i.e., only for probe-path clients.
+## Routing Trace (response headers → ProbeResult)
+
+When `X-Tingly-Debug-Routing: 1` is present, `SimpleSelector.SelectService` appends these headers to the loopback HTTP response:
+
+| Header                          | Content                                      |
+|---------------------------------|----------------------------------------------|
+| `X-Tingly-Selected-Provider`    | Provider name                                |
+| `X-Tingly-Selected-Provider-UUID` | Provider UUID                              |
+| `X-Tingly-Selected-Model`       | Model name actually used                     |
+| `X-Tingly-Routing-Source`       | `affinity`, `smart_routing`, `load_balancer`, or `probe_pin` |
+| `X-Tingly-Matched-Smart-Rule`   | Index of matched smart rule (omitted if none) |
+
+`captureRoutingRoundTripper` (`client.ApplyRoutingCaptureToClient`) is layered on the probe client transport. After the SDK call completes, `applyRoutingCapture` copies these into `ProbeResult`:
+
+```go
+ProbeResult.SelectedProvider     // provider name
+ProbeResult.SelectedProviderUUID // provider UUID
+ProbeResult.SelectedModel        // model
+ProbeResult.RoutingSource        // how the service was selected
+ProbeResult.MatchedSmartRule     // smart rule index (-1 = none)
+```
+
+Direct probes (`req.Direct = true`) skip the loopback entirely, so these fields are empty.
+
+## Transport wiring
+
+Probe headers are stored in the `context.Context` via `client.WithProbeHeaders(ctx, headers)`. `probeHeaderRoundTripper` reads the context on every `RoundTrip` and injects the headers into outgoing requests.
+
+`captureRoutingRoundTripper` wraps the same transport chain and reads routing headers from each response.
+
+Neither round tripper is installed on production clients. `ProbeProviderWithSDK` calls `ApplyProbeHeadersToClient` and `ApplyRoutingCaptureToClient` only when `GetProbeHeaders(ctx)` returns true.
 
 ## Code layout
 
 ```
 internal/probe/
-  types.go        — E2ERequest/E2EData/E2EMode/E2ETarget types, ScenarioEndpoint()
-  e2e.go          — E2EService: resolveTargetToProviderModel, loopbackAPIBase, ProbeProviderWithSDK
+  types.go        — E2ERequest (incl. Direct field) / E2EData / E2EMode / E2ETarget, ScenarioEndpoint()
+  result.go       — ProbeResult (incl. routing trace fields)
+  e2e.go          — E2EService: resolveTargetToProviderModel, loopbackAPIBase,
+                    ProbeProviderWithSDK, applyRoutingCapture
   sdkprobe.go     — SDK dispatch helpers: probeOpenAIChat, probeAnthropicMessages, probeGoogleGenerate, …
   lightweight.go  — LightweightProbeService (HTTP-level, no SDK)
   probetools.go   — Tool definitions used by E2EModeTool
-  result.go       — ProbeResult type, cache
 
 internal/client/
   http.go         — probeHeadersKey, WithProbeHeaders, GetProbeHeaders,
-                    probeHeaderRoundTripper, wrapWithProbeHeaders, ApplyProbeHeadersToClient
+                    probeHeaderRoundTripper, ApplyProbeHeadersToClient
+                    RoutingCapture, captureRoutingRoundTripper, ApplyRoutingCaptureToClient
 
 internal/server/
   handlers.go     — determineRuleWithScenario: X-Tingly-Probe-Rule / X-Tingly-Probe-Service handling
   routing/
-    simple.go     — SimpleSelector.SelectService: X-Tingly-Probe-Service service pin
+    simple.go     — SelectService: X-Tingly-Probe-Service pin + X-Tingly-Debug-Routing response headers
 ```
 
 ## Trade-offs and constraints
@@ -98,3 +143,4 @@ internal/server/
 - **Rule probe requires a running server**: `resolveRuleTarget` fails fast if `ServerPort == 0`. There is no direct fallback for rule probes because the whole point is to exercise TB middleware.
 - **Probe headers are not authenticated**: Any caller that can reach the TB HTTP port can send `X-Tingly-Probe-Service` and bypass load balancing. This is intentional — probe endpoints are admin-only behind TB's own auth layer.
 - **`probe-synthetic` rule UUID**: The synthetic rule created from `X-Tingly-Probe-Service` (when no probe rule header is present) carries `UUID: "probe-synthetic"`. This is a sentinel value, not a persisted rule; it exists only for the duration of the request.
+- **Routing trace is empty for direct and provider_config probes**: Only loopback probes emit `X-Tingly-Selected-*` headers. Direct probes and `provider_config` probes have no routing pipeline, so those fields stay empty.
