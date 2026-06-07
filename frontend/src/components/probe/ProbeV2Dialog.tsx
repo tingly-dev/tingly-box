@@ -1,40 +1,56 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect, memo, useCallback } from 'react';
 import {
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions,
-    Button,
     Box,
     Typography,
     Chip,
     LinearProgress,
     Alert,
-    Paper,
     IconButton,
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
     Tooltip,
-    FormControlLabel,
-    Switch,
+    Button,
+    ToggleButton,
+    ToggleButtonGroup,
+    Collapse,
 } from '@mui/material';
 import {
     CheckCircle as CheckIcon,
     Error as ErrorIcon,
-    ExpandMore as ExpandMoreIcon,
     Speed as SpeedIcon,
     Token as TokenIcon,
     ContentCopy as CopyIcon,
     Refresh as RefreshIcon,
+    PlayArrow as RunIcon,
 } from '@/components/icons';
 import { useTheme } from '@mui/material/styles';
 import type { ProbeV2TestMode, ProbeV2TargetType } from '@/types/probe-v2.ts';
 
-// Get user auth token from localStorage
-const getUserAuthToken = (): string | null => {
-    return localStorage.getItem('user_auth_token');
-};
+// ── Types ────────────────────────────────────────────────────────────────
+
+interface ProbeResultData {
+    content?: string;
+    latency_ms: number;
+    request_url?: string;
+    stream?: boolean;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    tool_calls?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
+    // Routing trace — populated for TB-loopback probes.
+    selected_provider?: string;
+    selected_provider_uuid?: string;
+    selected_model?: string;
+    routing_source?: string;
+    matched_smart_rule?: number;
+}
+
+interface ProbeResult {
+    success: boolean;
+    error?: { message: string; type: string };
+    data?: ProbeResultData;
+}
 
 interface ProbeV2DialogProps {
     open: boolean;
@@ -44,257 +60,201 @@ interface ProbeV2DialogProps {
     targetName: string;
     scenario?: string;
     model?: string;
-    testMode: ProbeV2TestMode;
+    /** Initial request shape; can be changed inside the dialog. Defaults to stream. */
+    testMode?: ProbeV2TestMode;
 }
 
-const TEST_MODE_LABELS: Record<ProbeV2TestMode, string> = {
-    simple: 'Direct Request',
-    streaming: 'Streaming Request',
-};
+// ── Constants / helpers ────────────────────────────────────────────────────
 
-const TEST_MODE_ICONS: Record<ProbeV2TestMode, React.ReactElement> = {
-    simple: <SpeedIcon fontSize="small" />,
-    streaming: <SpeedIcon fontSize="small" />,
-};
+// Request shapes the probe exercises (the "形态" dimension): we only need
+// non-streaming vs streaming. ('simple' is the backend's value for nonstream.)
+const MODES: { value: ProbeV2TestMode; label: string }[] = [
+    { value: 'simple', label: 'Nonstream' },
+    { value: 'streaming', label: 'Stream' },
+];
 
-// Preset messages
-const getDefaultMessage = (mode: ProbeV2TestMode): string => {
-    return 'Hello, this is a test message. Please respond with a short greeting.';
-};
-
-// Status Response Card Component
-const StatusResponseCard = memo(({
-    result,
-    isExpanded,
-    onToggleDetails,
-    theme
-}: {
-    result: ProbeV2Response;
-    isExpanded: boolean;
-    onToggleDetails: () => void;
-    theme: any;
-}) => (
-    <Accordion
-        expanded={isExpanded}
-        onChange={(_, isExpanded) => onToggleDetails()}
-        disableGutters
-        elevation={0}
-        sx={{
-            '&:before': { display: 'none' },
-            border: `1px solid ${result.success ? theme.palette.success.main : theme.palette.error.main}30`,
-            borderRadius: 2,
-            overflow: 'hidden'
-        }}
-    >
-        <AccordionSummary
-            expandIcon={<ExpandMoreIcon />}
-            sx={{
-                px: 2,
-                py: 1.5,
-                bgcolor: `${result.success ? theme.palette.success.main : theme.palette.error.main}04`,
-                '&:hover': { bgcolor: `${result.success ? theme.palette.success.main : theme.palette.error.main}08` }
-            }}
-        >
-            <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Box>
-                        {result.success ?
-                            <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 24 }} /> :
-                            <ErrorIcon sx={{ color: theme.palette.error.main, fontSize: 24 }} />
-                        }
-                    </Box>
-                    <Box>
-                        <Typography variant="subtitle2" fontWeight={600} color="text.primary">
-                            {result.success ? 'Success' : 'Failed'}
-                        </Typography>
-                        {result.data && (
-                            <Box sx={{ display: 'flex', gap: 1.5, mt: 0.5, flexWrap: 'wrap' }}>
-                                {result.data.latency_ms !== undefined && result.data.latency_ms > 0 && (
-                                    <Chip
-                                        icon={<SpeedIcon sx={{ fontSize: 14 }} />}
-                                        label={`${result.data.latency_ms}ms`}
-                                        size="small"
-                                        variant="filled"
-                                        sx={{ height: 24, minWidth: 'auto' }}
-                                    />
-                                )}
-                                {result.data.total_tokens && (
-                                    <Chip
-                                        icon={<TokenIcon sx={{ fontSize: 14 }} />}
-                                        label={`${result.data.total_tokens} tokens`}
-                                        size="small"
-                                        variant="outlined"
-                                        sx={{ height: 24, minWidth: 'auto' }}
-                                    />
-                                )}
-                            </Box>
-                        )}
-                    </Box>
-                </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-                    details
-                </Typography>
-            </Box>
-        </AccordionSummary>
-        <AccordionDetails sx={{ p: 0 }}>
-            <Box>
-                {/* Routing Trace — which provider/model TB actually selected */}
-                {result.data?.selected_provider && (
-                    <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
-                            Routing
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Chip
-                                label={`${result.data.selected_provider}${result.data.selected_model ? ` | ${result.data.selected_model}` : ''}`}
-                                size="small"
-                                variant="outlined"
-                                sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                            />
-                            {result.data.routing_source && (
-                                <Chip
-                                    label={`via ${ROUTING_SOURCE_LABELS[result.data.routing_source] || result.data.routing_source}`}
-                                    size="small"
-                                    color="info"
-                                    variant="filled"
-                                    sx={{ height: 24 }}
-                                />
-                            )}
-                            {result.data.matched_smart_rule !== undefined && result.data.matched_smart_rule >= 0 && (
-                                <Chip
-                                    label={`smart rule #${result.data.matched_smart_rule}`}
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ height: 24 }}
-                                />
-                            )}
-                        </Box>
-                    </Box>
-                )}
-
-                {/* Response Content */}
-                {result.data?.content && (
-                    <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: 'primary.main' }}>
-                            Response
-                        </Typography>
-                        <Paper
-                            variant="outlined"
-                            sx={{
-                                p: 2,
-                                fontFamily: 'monospace',
-                                fontSize: '0.8rem',
-                                bgcolor: 'grey.50',
-                                maxHeight: 200,
-                                overflow: 'auto',
-                                borderRadius: 1.5
-                            }}
-                        >
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
-                                {result.data.content}
-                            </pre>
-                        </Paper>
-                    </Box>
-                )}
-
-                {/* Token Usage */}
-                {result.data?.total_tokens && (
-                    <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
-                            Token Usage
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 2 }}>
-                            <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Prompt: {result.data.prompt_tokens}
-                            </Typography>
-                            <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Completion: {result.data.completion_tokens}
-                            </Typography>
-                            <Typography variant="body2" sx={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                                Total: {result.data.total_tokens}
-                            </Typography>
-                        </Box>
-                    </Box>
-                )}
-
-                {/* Request URL (debug info) */}
-                {result.data?.request_url && (
-                    <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>
-                            Request URL
-                        </Typography>
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', wordBreak: 'break-all' }}>
-                            {result.data.request_url}
-                        </Typography>
-                    </Box>
-                )}
-            </Box>
-        </AccordionDetails>
-    </Accordion>
-));
-
-// Error Details Component
-const ErrorDetails = memo(({ result }: { result: ProbeV2Response }) => (
-    <Alert
-        severity="error"
-        variant="outlined"
-        sx={{
-            mt: 2,
-            borderRadius: 2,
-            '& .MuiAlert-message': { width: '100%' }
-        }}
-    >
-        <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-            Error Details
-        </Typography>
-        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-            {result.error?.message || 'Unknown error occurred'}
-        </Typography>
-        {result.error?.type && (
-            <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
-                Type: {result.error.type}
-            </Typography>
-        )}
-    </Alert>
-));
-
-interface ProbeV2Response {
-    success: boolean;
-    error?: {
-        message: string;
-        type: string;
-    };
-    data?: {
-        content?: string;
-        latency_ms: number;
-        request_url?: string;
-        stream?: boolean;
-        // Token usage (flattened)
-        prompt_tokens?: number;
-        completion_tokens?: number;
-        total_tokens?: number;
-        // Tool calls
-        tool_calls?: Array<{
-            id: string;
-            name: string;
-            input: Record<string, unknown>;
-        }>;
-        // Routing trace (TB-loopback probes only)
-        selected_provider?: string;
-        selected_provider_uuid?: string;
-        selected_model?: string;
-        routing_source?: string;
-        matched_smart_rule?: number;
-    };
-}
-
-// Human-friendly labels for the routing_source values emitted by the backend.
+// Human-friendly labels for routing_source values from the backend.
 const ROUTING_SOURCE_LABELS: Record<string, string> = {
     affinity: 'Session Affinity',
     smart_routing: 'Smart Routing',
     load_balancer: 'Load Balancer',
     probe_pin: 'Pinned (probe)',
 };
+
+const PLACEHOLDER = '— 待补';
+
+const getUserAuthToken = (): string | null => localStorage.getItem('user_auth_token');
+
+const defaultMessage = (mode: ProbeV2TestMode): string =>
+    mode === 'tool'
+        ? "Please use the bash tool to list the current directory contents with 'ls -la'."
+        : 'Hello, this is a test message. Please respond with a short greeting.';
+
+// extractText pulls the assistant's text out of the raw (JSON-marshaled) SDK
+// response so the user sees plain words instead of a serialized object. Returns
+// '' when the shape isn't recognized — the caller falls back to raw JSON.
+const extractText = (content?: string): string => {
+    if (!content) return '';
+    try {
+        const data = JSON.parse(content);
+        if (Array.isArray(data)) {
+            // Streaming: concat OpenAI chat deltas and/or Anthropic text deltas.
+            let text = '';
+            for (const ch of data) {
+                text += ch?.choices?.[0]?.delta?.content ?? '';
+                text += ch?.delta?.text ?? '';
+            }
+            return text;
+        }
+        // OpenAI chat (non-stream)
+        if (data?.choices?.[0]?.message?.content) return data.choices[0].message.content;
+        // Anthropic messages
+        if (Array.isArray(data?.content)) {
+            return data.content
+                .filter((b: any) => b?.type === 'text')
+                .map((b: any) => b.text)
+                .join('');
+        }
+        // OpenAI Responses
+        if (Array.isArray(data?.output)) {
+            let t = '';
+            for (const o of data.output) {
+                if (Array.isArray(o?.content)) {
+                    t += o.content
+                        .filter((c: any) => c?.text)
+                        .map((c: any) => c.text)
+                        .join('');
+                }
+            }
+            return t;
+        }
+    } catch {
+        // not JSON — fall through
+    }
+    return '';
+};
+
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+const JourneyRow = memo(({ label, value, muted }: { label: string; value: React.ReactNode; muted?: boolean }) => {
+    const theme = useTheme();
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'baseline', py: 0.75, borderBottom: `1px solid ${theme.palette.divider}` }}>
+            <Typography sx={{ width: 92, flexShrink: 0, color: 'text.secondary', fontSize: '0.78rem' }}>
+                {label}
+            </Typography>
+            <Box
+                sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontFamily: 'monospace',
+                    fontSize: '0.78rem',
+                    color: muted ? 'text.disabled' : 'text.primary',
+                    wordBreak: 'break-all',
+                }}
+            >
+                {value}
+            </Box>
+        </Box>
+    );
+});
+
+const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+    <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', mt: 2, mb: 0.5 }}>
+        {children}
+    </Typography>
+);
+
+// StatusBar: the one-glance verdict — success/failure, latency, tokens.
+const StatusBar = memo(({ result }: { result: ProbeResult }) => {
+    const theme = useTheme();
+    const ok = result.success;
+    const d = result.data;
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {ok ? (
+                <CheckIcon sx={{ color: theme.palette.success.main, fontSize: 24 }} />
+            ) : (
+                <ErrorIcon sx={{ color: theme.palette.error.main, fontSize: 24 }} />
+            )}
+            <Typography variant="subtitle2" fontWeight={600}>
+                {ok ? '成功' : '失败'}
+            </Typography>
+            {d?.latency_ms ? (
+                <Chip icon={<SpeedIcon sx={{ fontSize: 14 }} />} label={`${d.latency_ms}ms`} size="small" sx={{ height: 24 }} />
+            ) : null}
+            {d?.total_tokens ? (
+                <Chip
+                    icon={<TokenIcon sx={{ fontSize: 14 }} />}
+                    label={`${d.total_tokens} tokens`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ height: 24 }}
+                />
+            ) : null}
+        </Box>
+    );
+});
+
+// Journey: the request's path through TB — rule, routing, provider, endpoint.
+// Fields the backend doesn't yet bubble up render as greyed placeholders.
+const Journey = memo(
+    ({
+        result,
+        targetType,
+        targetName,
+        scenario,
+        model,
+        bypassed,
+    }: {
+        result: ProbeResult;
+        targetType: ProbeV2TargetType;
+        targetName: string;
+        scenario?: string;
+        model?: string;
+        bypassed: boolean;
+    }) => {
+        const d = result.data;
+        const isRule = targetType === 'rule';
+        const provider = d?.selected_provider || (isRule ? '' : targetName);
+        const routedModel = d?.selected_model || model || '';
+
+        return (
+            <Box>
+                <SectionTitle>请求旅程</SectionTitle>
+                {isRule && <JourneyRow label="Rule" value={`${targetName}${scenario ? `  ·  ${scenario}` : ''}`} />}
+                {isRule && <JourneyRow label="Flags" value={PLACEHOLDER} muted />}
+                {bypassed ? (
+                    <JourneyRow label="范围" value="直连上游（已绕过 TB）" />
+                ) : (
+                    <JourneyRow
+                        label="Routing"
+                        value={
+                            d?.routing_source
+                                ? `${ROUTING_SOURCE_LABELS[d.routing_source] || d.routing_source}${
+                                      d.matched_smart_rule !== undefined && d.matched_smart_rule >= 0
+                                          ? `  ·  smart rule #${d.matched_smart_rule}`
+                                          : ''
+                                  }`
+                                : PLACEHOLDER
+                        }
+                        muted={!d?.routing_source}
+                    />
+                )}
+                <JourneyRow
+                    label="Provider"
+                    value={provider ? `${provider}${routedModel ? `  →  ${routedModel}` : ''}` : PLACEHOLDER}
+                    muted={!provider}
+                />
+                <JourneyRow label="Endpoint" value={PLACEHOLDER} muted />
+                <JourneyRow label="上游 URL" value={PLACEHOLDER} muted />
+                {d?.request_url && <JourneyRow label="请求 URL" value={d.request_url} />}
+            </Box>
+        );
+    }
+);
+
+// ── Main dialog ──────────────────────────────────────────────────────────
 
 export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     open,
@@ -304,231 +264,253 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     targetName,
     scenario,
     model,
-    testMode,
+    testMode = 'streaming',
 }) => {
-    const theme = useTheme();
+    const [mode, setMode] = useState<ProbeV2TestMode>(testMode);
+    // 范围: false = 经过 TB (default), true = 直连上游. Provider targets only.
+    const [direct, setDirect] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [result, setResult] = useState<ProbeV2Response | null>(null);
-    const [detailsExpanded, setDetailsExpanded] = useState(false);
+    const [result, setResult] = useState<ProbeResult | null>(null);
+    const [rawExpanded, setRawExpanded] = useState(false);
     const [copyTooltipOpen, setCopyTooltipOpen] = useState(false);
-    // Direct mode (provider targets only): bypass the TB pipeline and hit the
-    // upstream provider directly. Lets the user bisect upstream vs TB failures.
-    const [directMode, setDirectMode] = useState(false);
 
-    // Reset state when dialog opens
+    // Reset on open — do NOT auto-run; the user clicks 运行测试.
     useEffect(() => {
         if (open) {
-            setIsLoading(false);
+            setMode(testMode);
+            setDirect(false);
             setResult(null);
-            setDetailsExpanded(false);
-
-            // Auto-start test
-            runTest();
+            setIsLoading(false);
+            setRawExpanded(false);
         }
-    }, [open, testMode, directMode]);
+    }, [open, testMode]);
 
-    const runTest = async () => {
+    const runTest = useCallback(async () => {
         setIsLoading(true);
         setResult(null);
+        setRawExpanded(false);
 
-        const requestBody = {
+        const body = {
             target_type: targetType,
-            ...(targetType === 'rule' ? {
-                scenario: scenario || 'openai',
-                rule_uuid: targetId,
-            } : {
-                provider_uuid: targetId,
-                model: model || '',
-                direct: directMode,
-            }),
-            test_mode: testMode,
-            message: getDefaultMessage(testMode),
+            ...(targetType === 'rule'
+                ? { scenario: scenario || 'openai', rule_uuid: targetId }
+                : { provider_uuid: targetId, model: model || '', direct }),
+            test_mode: mode,
+            message: defaultMessage(mode),
         };
 
+        const token = getUserAuthToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         try {
-            await runProbe(requestBody);
-        } catch (err: any) {
-            setResult({
-                success: false,
-                error: {
-                    message: err.message || 'Probe failed',
-                    type: 'client_error',
-                },
+            const response = await fetch('/api/v2/probe', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
             });
+            if (!response.ok) {
+                let message = `HTTP ${response.status}`;
+                try {
+                    const e = await response.json();
+                    message = e.error?.message || message;
+                } catch {
+                    /* ignore */
+                }
+                setResult({ success: false, error: { message, type: 'http_error' } });
+                return;
+            }
+            setResult(await response.json());
+        } catch (err: any) {
+            setResult({ success: false, error: { message: err?.message || 'Probe failed', type: 'client_error' } });
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [targetType, scenario, targetId, model, direct, mode]);
 
-    const runProbe = async (requestBody: any) => {
-        const token = getUserAuthToken();
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const response = await fetch('/api/v2/probe', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-            let errorMessage = `HTTP ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.error?.message || errorMessage;
-            } catch (e) {
-                // Ignore parse error
-            }
-            setResult({
-                success: false,
-                error: {
-                    message: errorMessage,
-                    type: 'http_error',
-                },
-            });
-            return;
-        }
-
-        const data = await response.json();
-        setResult(data);
-    };
-
-    const getTargetTypeLabel = () => {
-        switch (targetType) {
-            case 'provider':
-                return 'Provider';
-            case 'rule':
-                return 'Rule';
-            default:
-                return 'Target';
-        }
-    };
-
-    const handleReRun = () => {
-        runTest();
-    };
-
-    const handleCopyResponse = () => {
+    const handleCopy = () => {
         if (!result) return;
-
-        const responseText = JSON.stringify(result, null, 2);
-        navigator.clipboard.writeText(responseText).then(() => {
+        navigator.clipboard.writeText(JSON.stringify(result, null, 2)).then(() => {
             setCopyTooltipOpen(true);
             setTimeout(() => setCopyTooltipOpen(false), 2000);
         });
     };
 
-    return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            maxWidth="md"
-            fullWidth
-            PaperProps={{
-                sx: { minHeight: '400px' }
-            }}
-        >
-            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    {/*<Typography variant="h6">*/}
-                    {/*    Test {getTargetTypeLabel()}*/}
-                    {/*</Typography>*/}
-                    <Chip
-                        label={TEST_MODE_LABELS[testMode]}
-                        icon={TEST_MODE_ICONS[testMode]}
-                        color="info"
-                        size="small"
-                    />
-                    {model && (
-                        <Chip
-                            label={`${targetName} | ${model}`}
-                            size="small"
-                            variant="outlined"
-                            sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
-                        />
-                    )}
-                    {targetType === 'provider' && (
-                        <Tooltip title="Bypass the Tingly-Box pipeline and call the upstream provider directly. Use this to tell whether a failure is upstream or inside TB.">
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        size="small"
-                                        checked={directMode}
-                                        onChange={(e) => setDirectMode(e.target.checked)}
-                                    />
-                                }
-                                label={
-                                    <Typography variant="caption" color="text.secondary">
-                                        Direct
-                                    </Typography>
-                                }
-                                sx={{ ml: 0.5, mr: 0 }}
-                            />
-                        </Tooltip>
-                    )}
+    const bypassed = targetType === 'provider' && direct;
+    const extracted = extractText(result?.data?.content);
 
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { minHeight: 420 } }}>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                        测试 {targetType === 'rule' ? '规则' : '服务'}
+                    </Typography>
+                    <Chip
+                        label={model ? `${targetName} | ${model}` : targetName}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontFamily: 'monospace', fontSize: '0.75rem', maxWidth: 360 }}
+                    />
                 </Box>
-                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    {!isLoading && result && (
-                        <>
-                            <Tooltip
-                                title={copyTooltipOpen ? 'Copied!' : 'Copy response'}
-                                open={copyTooltipOpen}
-                                onClose={() => setCopyTooltipOpen(false)}
-                                disableHoverListener
-                            >
-                                <IconButton
-                                    onClick={handleCopyResponse}
-                                    size="small"
-                                    sx={{ color: 'text.secondary' }}
-                                >
-                                    <CopyIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Re-run">
-                                <IconButton
-                                    onClick={handleReRun}
-                                    size="small"
-                                    sx={{ color: 'text.secondary' }}
-                                >
-                                    <RefreshIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </>
-                    )}
-                </Box>
+                {result && (
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip
+                            title={copyTooltipOpen ? '已复制!' : '复制响应'}
+                            open={copyTooltipOpen || undefined}
+                            disableHoverListener={copyTooltipOpen}
+                        >
+                            <IconButton onClick={handleCopy} size="small" sx={{ color: 'text.secondary' }}>
+                                <CopyIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="重新测试">
+                            <IconButton onClick={runTest} size="small" sx={{ color: 'text.secondary' }} disabled={isLoading}>
+                                <RefreshIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                )}
             </DialogTitle>
 
             <DialogContent>
-                {isLoading ? (
-                    <Box sx={{ textAlign: 'center', py: 8 }}>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            Running test...
+                {/* Controls: 形态 (request shape) + 范围 (scope) + run */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                            形态
                         </Typography>
-                        <LinearProgress sx={{ height: 6, borderRadius: 3 }} />
+                        <ToggleButtonGroup
+                            size="small"
+                            exclusive
+                            value={mode}
+                            onChange={(_, v) => v && setMode(v)}
+                        >
+                            {MODES.map((m) => (
+                                <ToggleButton key={m.value} value={m.value} sx={{ textTransform: 'none', py: 0.25, px: 1.5 }}>
+                                    {m.label}
+                                </ToggleButton>
+                            ))}
+                        </ToggleButtonGroup>
                     </Box>
-                ) : result ? (
-                    <Box>
-                        {result.success ? (
-                            <StatusResponseCard
-                                result={result}
-                                isExpanded={detailsExpanded}
-                                onToggleDetails={() => setDetailsExpanded(!detailsExpanded)}
-                                theme={theme}
-                            />
-                        ) : (
-                            <ErrorDetails result={result} />
-                        )}
-                    </Box>
-                ) : (
+
+                    {targetType === 'provider' && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Tooltip title="直连上游会绕过 Tingly-Box 的路由与中间件,用于判断故障在上游还是 TB 内部。">
+                                <Typography variant="caption" color="text.secondary">
+                                    范围
+                                </Typography>
+                            </Tooltip>
+                            <ToggleButtonGroup
+                                size="small"
+                                exclusive
+                                value={direct ? 'direct' : 'tb'}
+                                onChange={(_, v) => v && setDirect(v === 'direct')}
+                            >
+                                <ToggleButton value="tb" sx={{ textTransform: 'none', py: 0.25, px: 1.5 }}>
+                                    经过 TB
+                                </ToggleButton>
+                                <ToggleButton value="direct" sx={{ textTransform: 'none', py: 0.25, px: 1.5 }}>
+                                    直连上游
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                        </Box>
+                    )}
+
+                    <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<RunIcon fontSize="small" />}
+                        onClick={runTest}
+                        disabled={isLoading}
+                        sx={{ ml: 'auto' }}
+                    >
+                        {isLoading ? '测试中…' : '运行测试'}
+                    </Button>
+                </Box>
+
+                {isLoading && <LinearProgress sx={{ height: 6, borderRadius: 3, mt: 1 }} />}
+
+                {!isLoading && !result && (
                     <Box sx={{ textAlign: 'center', py: 8 }}>
                         <Typography variant="body2" color="text.secondary">
-                            Initializing test...
+                            选择形态后点击「运行测试」
                         </Typography>
+                    </Box>
+                )}
+
+                {!isLoading && result && (
+                    <Box>
+                        <Box sx={{ mt: 1 }}>
+                            <StatusBar result={result} />
+                        </Box>
+
+                        {!result.success && result.error && (
+                            <Alert severity="error" variant="outlined" sx={{ mt: 2, borderRadius: 2 }}>
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                                    {result.error.message}
+                                </Typography>
+                                {result.error.type && (
+                                    <Typography variant="caption" color="text.secondary">
+                                        Type: {result.error.type}
+                                    </Typography>
+                                )}
+                            </Alert>
+                        )}
+
+                        <Journey
+                            result={result}
+                            targetType={targetType}
+                            targetName={targetName}
+                            scenario={scenario}
+                            model={model}
+                            bypassed={bypassed}
+                        />
+
+                        {result.success && (
+                            <Box>
+                                <SectionTitle>响应</SectionTitle>
+                                <Box
+                                    sx={{
+                                        p: 1.5,
+                                        bgcolor: 'grey.50',
+                                        borderRadius: 1.5,
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.8rem',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        maxHeight: 180,
+                                        overflow: 'auto',
+                                    }}
+                                >
+                                    {extracted || '（无法提取文本,见原始 JSON）'}
+                                </Box>
+                                {result.data?.content && (
+                                    <>
+                                        <Button size="small" onClick={() => setRawExpanded((v) => !v)} sx={{ mt: 0.5, textTransform: 'none' }}>
+                                            {rawExpanded ? '收起原始 JSON' : '原始 JSON'}
+                                        </Button>
+                                        <Collapse in={rawExpanded}>
+                                            <Box
+                                                sx={{
+                                                    p: 1.5,
+                                                    bgcolor: 'grey.50',
+                                                    borderRadius: 1.5,
+                                                    fontFamily: 'monospace',
+                                                    fontSize: '0.72rem',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-all',
+                                                    maxHeight: 240,
+                                                    overflow: 'auto',
+                                                }}
+                                            >
+                                                {result.data.content}
+                                            </Box>
+                                        </Collapse>
+                                    </>
+                                )}
+                            </Box>
+                        )}
                     </Box>
                 )}
             </DialogContent>
