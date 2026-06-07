@@ -237,7 +237,14 @@ func (e *E2EService) resolveRuleTarget(ctx context.Context, req *E2ERequest) (*t
 		return nil, "", nil, fmt.Errorf("server port unknown; cannot probe rule %q via TB interface", rule.UUID)
 	}
 
-	scenario := rule.Scenario
+	// Prefer the scenario the caller is probing under (the page's scenario,
+	// which may carry a profile suffix like "claude_code:p1") so the loopback
+	// hits the exact /tingly/{scenario} endpoint. Fall back to the rule's own
+	// scenario, then to OpenAI.
+	scenario := typ.RuleScenario(req.Scenario)
+	if scenario == "" {
+		scenario = rule.Scenario
+	}
 	if scenario == "" {
 		scenario = typ.ScenarioOpenAI
 	}

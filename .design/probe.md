@@ -57,7 +57,7 @@ Probe code
 
 `loopbackAPIBase(port, scenario)` delegates to `ScenarioEndpoint(scenario)` for the canonical `/tingly/{scenario}` path — no `/v1` suffix. TB registers both `/tingly/:scenario` and `/tingly/:scenario/v1` with identical handlers, so each SDK appends its own operation path (`/chat/completions`, `/messages`) without needing the prefix to carry a version segment.
 
-`resolveRuleTarget` passes `rule.Scenario` directly to `loopbackAPIBase`. If `ServerPort == 0` (unknown), it returns an error rather than falling back to direct (rule probes have no meaningful fallback).
+`resolveRuleTarget` prefers the request's `scenario` (the page's scenario, which may carry a profile suffix like `claude_code:p1`), falling back to `rule.Scenario` then OpenAI, and passes it to `loopbackAPIBase` — so the loopback hits the exact `/tingly/{scenario}` endpoint including any profile. `ScenarioEndpoint` keeps the full scenario in the path but resolves the api-style from the *base* scenario (via `ParseScenarioProfile`), so `claude_code:p1` still maps to the Anthropic SDK. If `ServerPort == 0` (unknown), it returns an error rather than falling back to direct (rule probes have no meaningful fallback).
 
 `resolveProviderTarget` calls `defaultScenarioForAPIStyle(provider.APIStyle)` to get the canonical scenario for the provider, then passes it to `loopbackAPIBase`. Google providers and the `port == 0` case fall back to direct SDK calls.
 
