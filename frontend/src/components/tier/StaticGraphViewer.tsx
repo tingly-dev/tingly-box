@@ -72,6 +72,7 @@ export const StaticGraphViewer: React.FC<StaticGraphViewerProps> = ({
                 expanded={true}
                 collapsible={false}
                 guideMode={true}
+                autoScroll={true}
                 onUpdateRecord={handleUpdateRecord}
                 onProviderNodeClick={handleProviderNodeClick}
                 onTierChange={handleTierChange}

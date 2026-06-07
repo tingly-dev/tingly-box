@@ -1,36 +1,29 @@
+import {Add as AddIcon,} from '@/components/icons';
+import {Box, Button, Card, CardContent, Collapse, Stack,} from '@mui/material';
+import {alpha, styled} from '@mui/material/styles';
+import React, {useEffect, useRef} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
-    Add as AddIcon,
-    ExpandMore as ExpandMoreIcon,
-} from '@/components/icons';
-import {
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Collapse,
-    IconButton,
-    Stack,
-    Typography,
-} from '@mui/material';
-import { alpha, styled } from '@mui/material/styles';
-import React, { useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import { getRouteGraphActiveColor, SMART_NODE_STYLES, PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
+    getRouteGraphActiveColor,
+    PROVIDER_NODE_STYLES,
+    SMALL_NODE_STYLES,
+    SMART_NODE_STYLES
+} from '@/components/nodes/styles';
 import {
     ActionAddNode,
     ArrowNode,
+    EntryNode,
     NodeContainer,
-    TierNode,
+    ServiceEntryNode,
     ServiceNode,
     SmartOpNode,
-    ServiceEntryNode,
+    TierNode,
 } from '@/components/nodes';
-import { EntryNode } from '@/components/nodes';
 import ModelRequestHeader from '@/components/ModelRequestHeader';
-import { TierGuideDialog } from '@/components/tier/TierGuideDialog';
-import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
-import type { Provider } from '../types/provider';
-import type { ConfigRecord } from './RoutingGraphTypes';
+import {TierGuideDialog} from '@/components/tier/TierGuideDialog';
+import {EntryGuideDialog} from '@/components/tier/EntryGuideDialog';
+import type {Provider} from '../types/provider';
+import type {ConfigRecord} from './RoutingGraphTypes';
 
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
@@ -70,7 +63,7 @@ const RULE_GRAPH_STYLES = {
     },
 } as const;
 
-const { header, graphContainer, graph } = RULE_GRAPH_STYLES;
+const {header, graphContainer, graph} = RULE_GRAPH_STYLES;
 
 export interface UnifiedRoutingGraphProps {
     // Mode control
@@ -111,12 +104,15 @@ export interface UnifiedRoutingGraphProps {
     // Slots
     extraActions?: React.ReactNode;
     extensionsCard?: React.ReactNode;
+
+    // Scroll control: when true, auto-scroll to 80% position (for guide mode)
+    autoScroll?: boolean;
 }
 
 // Styled components
 const StyledCard = styled(Card, {
     shouldForwardProp: (prop) => prop !== 'active',
-})<{ active: boolean }>(({ active, theme }) => ({
+})<{ active: boolean }>(({active, theme}) => ({
     transition: 'border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease, box-shadow 0.18s ease',
     opacity: active ? 1 : 0.6,
     filter: active ? 'none' : 'grayscale(0.3)',
@@ -146,13 +142,13 @@ const StyledCard = styled(Card, {
     },
 }));
 
-const GraphContainer = styled(Box)(({ theme }) => ({
+const GraphContainer = styled(Box)(({theme}) => ({
     padding: `${graphContainer.paddingY}px ${graphContainer.paddingX}px`,
     borderRadius: theme.shape.borderRadius,
     margin: `${graphContainer.marginY}px ${graphContainer.marginX}px 0`,
 }));
 
-const GraphRow = styled(Box)(({ theme }) => ({
+const GraphRow = styled(Box)(({theme}) => ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
@@ -166,48 +162,49 @@ const GraphRow = styled(Box)(({ theme }) => ({
  * Replaces SmartRoutingGraph and RoutingGraph with mode-based display control.
  */
 export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
-    mode = 'auto',
-    record,
-    providers,
-    active = true,
-    saving = false,
-    expanded = true,
-    collapsible = false,
-    guideMode = false,
-    onUpdateRecord,
-    onProviderNodeClick,
-    onTierChange,
-    onDeleteProvider,
-    onAddService,
-    onToggleExpanded,
-    onAddSmartRule,
-    onEditSmartRule,
-    onDeleteSmartRule,
-    onMoveSmartRule,
-    onAddServiceToSmartRule,
-    onDeleteServiceFromSmartRule,
-    onSwitchRoutingMode,
-    extraActions,
-    extensionsCard,
-}) => {
-    const { t } = useTranslation();
+                                                                            mode = 'auto',
+                                                                            record,
+                                                                            providers,
+                                                                            active = true,
+                                                                            saving = false,
+                                                                            expanded = true,
+                                                                            collapsible = false,
+                                                                            guideMode = false,
+                                                                            onUpdateRecord,
+                                                                            onProviderNodeClick,
+                                                                            onTierChange,
+                                                                            onDeleteProvider,
+                                                                            onAddService,
+                                                                            onToggleExpanded,
+                                                                            onAddSmartRule,
+                                                                            onEditSmartRule,
+                                                                            onDeleteSmartRule,
+                                                                            onMoveSmartRule,
+                                                                            onAddServiceToSmartRule,
+                                                                            onDeleteServiceFromSmartRule,
+                                                                            onSwitchRoutingMode,
+                                                                            extraActions,
+                                                                            extensionsCard,
+                                                                            autoScroll,
+                                                                        }) => {
+    const {t} = useTranslation();
     const isExpanded = !collapsible || expanded;
 
     // Ref for the scrollable container
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    // Scroll to show the right portion of the graph on mount and when expanded
+    // Scroll to show the right portion of the graph when scrollAt is true
     useEffect(() => {
-        if (isExpanded && scrollContainerRef.current) {
+        if (isExpanded && autoScroll && scrollContainerRef.current) {
             const container = scrollContainerRef.current;
             // Scroll to show 80% of the content (right portion but not extreme edge)
-            const scrollTarget = container.scrollWidth * 0.8 - container.clientWidth;
+            const scrollTarget = SMALL_NODE_STYLES.width;
             container.scrollTo({
                 left: Math.max(0, scrollTarget),
                 behavior: 'smooth',
             });
         }
-    }, [isExpanded]);
+    }, [isExpanded, autoScroll]);
 
     // Track which tier is being hovered
     const [hoveredTier, setHoveredTier] = React.useState<number | null>(null);
@@ -268,7 +265,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
             if (!groups.has(tier)) groups.set(tier, []);
             groups.get(tier)!.push(p);
         }
-        return [...groups.entries()].map(([tier, providers]) => ({ tier, providers }));
+        return [...groups.entries()].map(([tier, providers]) => ({tier, providers}));
     }, [sortedDefaultProviders]);
 
     // Handle add service to smart rule
@@ -286,17 +283,17 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Each service has up/down arrows; up from T0 is hidden (already highest).
     const renderTierLayout = React.useCallback(() => {
         // Always show at least T0, even when no providers exist
-        const groups = tierGroups.length > 0 ? tierGroups : [{ tier: 0, providers: [] as typeof sortedDefaultProviders }];
+        const groups = tierGroups.length > 0 ? tierGroups : [{tier: 0, providers: [] as typeof sortedDefaultProviders}];
 
         // In guide mode, always show action buttons on all services
         const shouldShowActions = guideMode ? true : undefined;
 
         return (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box sx={{display: 'flex', flexDirection: 'column', gap: 1.5}}>
                 {groups.map((group, idx) => (
                     <Box
                         key={group.tier}
-                        sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}
+                        sx={{display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap'}}
                     >
                         <TierNode
                             priority={group.tier}
@@ -359,7 +356,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                     />
                                 </NodeContainer>
 
-                                <ArrowNode direction="forward" />
+                                <ArrowNode direction="forward"/>
 
                                 {rule.services && rule.services.length > 0 ? (
                                     <Box sx={{
@@ -400,10 +397,10 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 ) : null}
 
                 {/* Add Smart Rule Button */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-start', py: 2 }}>
+                <Box sx={{display: 'flex', justifyContent: 'flex-start', py: 2}}>
                     <Button
                         variant="outlined"
-                        startIcon={<AddIcon />}
+                        startIcon={<AddIcon/>}
                         onClick={onAddSmartRule}
                         disabled={!active || saving}
                         sx={(theme) => ({
@@ -432,17 +429,17 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
     // Render default providers section
     const renderDefaultProviders = () => {
         return (
-            <GraphRow sx={{ alignItems: 'flex-start' }}>
+            <GraphRow sx={{alignItems: 'flex-start'}}>
                 {/* Fixed height matches the tier row height so ServiceEntryNode centres vertically */}
-                <NodeContainer sx={{ height: PROVIDER_NODE_STYLES.height, justifyContent: 'center' }}>
+                <NodeContainer sx={{height: PROVIDER_NODE_STYLES.height, justifyContent: 'center'}}>
                     <ServiceEntryNode
                         providersCount={record.providers.length}
                         active={active}
                     />
                 </NodeContainer>
 
-                <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height }}>
-                    <ArrowNode direction="forward" />
+                <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: PROVIDER_NODE_STYLES.height}}>
+                    <ArrowNode direction="forward"/>
                 </Box>
 
                 {renderTierLayout()}
@@ -481,13 +478,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 
             {/* Graph Content */}
             <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                <CardContent sx={{ pt: 0, pb: 0.25, '&:last-child': { pb: 0.25 } }}>
+                <CardContent sx={{pt: 0, pb: 0.25, '&:last-child': {pb: 0.25}}}>
                     <Stack spacing={graph.stackSpacing}>
                         {/* Graph row: scrollable graph + pinned extensions card */}
-                        <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 0 }}>
-                            <Box ref={scrollContainerRef} sx={{ flexGrow: 1, minWidth: 0, overflowX: 'auto' }}>
+                        <Box sx={{display: 'flex', alignItems: 'stretch', minWidth: 0}}>
+                            <Box ref={scrollContainerRef} sx={{flexGrow: 1, minWidth: 0, overflowX: 'auto'}}>
                                 <GraphContainer>
-                                    <GraphRow sx={{ alignItems: 'flex-start' }}>
+                                    <GraphRow sx={{alignItems: 'flex-start'}}>
                                         {/* EntryNode - Direct/Smart mode selector */}
                                         <Box sx={{
                                             display: 'flex',
@@ -506,8 +503,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                         </Box>
 
                                         {/* Arrow - height matches EntryNode so it stays centered under flex-start */}
-                                        <Box sx={{ flex: 0, display: 'flex', alignItems: 'center', height: 72 }}>
-                                            <ArrowNode direction="forward" />
+                                        <Box sx={{flex: 0, display: 'flex', alignItems: 'center', height: 72}}>
+                                            <ArrowNode direction="forward"/>
                                         </Box>
 
                                         {/* Smart Routing Section (conditional) */}
