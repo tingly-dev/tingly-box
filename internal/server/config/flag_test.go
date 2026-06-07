@@ -30,7 +30,7 @@ func TestScenarioFlags_SessionAffinity(t *testing.T) {
 			flags: typ.ScenarioFlags{
 				Unified:          true,
 				SessionAffinity:  7200,
-				DisableStreamUsage: true,
+				SkipUsage: true,
 			},
 			expected: 7200,
 		},

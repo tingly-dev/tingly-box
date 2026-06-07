@@ -21,7 +21,7 @@ func TestScenarioFlags_NotLeakedToJSON(t *testing.T) {
 
 	// Create scenario flags
 	flags := &typ.ScenarioFlags{
-		DisableStreamUsage: true,
+		SkipUsage: true,
 		SessionAffinity:    1800,
 	}
 
@@ -52,7 +52,7 @@ func TestScenarioFlags_NotLeakedToJSON(t *testing.T) {
 
 	// Verify flags were applied (DisableStreamUsage should have turned off IncludeUsage)
 	if req.StreamOptions.IncludeUsage.Value {
-		t.Error("IncludeUsage should be false after applying DisableStreamUsage flag")
+		t.Error("IncludeUsage should be false after applying SkipUsage flag")
 	}
 }
 

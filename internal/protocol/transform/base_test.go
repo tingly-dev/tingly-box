@@ -16,7 +16,7 @@ import (
 func newBaseContext() *TransformContext {
 	return &TransformContext{
 		Extra:         make(map[string]interface{}),
-		ScenarioFlags: &typ.ScenarioFlags{DisableStreamUsage: false},
+		ScenarioFlags: &typ.ScenarioFlags{SkipUsage: false},
 	}
 }
 
@@ -102,13 +102,13 @@ func TestBaseTransform_AlreadyOpenAIChat(t *testing.T) {
 	assert.Equal(t, "", string(config.ReasoningEffort))
 }
 
-func TestBaseTransform_DisableStreamUsage(t *testing.T) {
+func TestBaseTransform_SkipUsage(t *testing.T) {
 	bt := NewBaseTransform(protocol.TypeOpenAIChat)
 
 	ctx := newBaseContext()
 	ctx.Request = newAnthropicV1Request("claude-3-5-sonnet-20241022", 1024)
 	ctx.IsStreaming = true
-	ctx.ScenarioFlags.DisableStreamUsage = true
+	ctx.ScenarioFlags.SkipUsage = true
 
 	err := bt.Apply(ctx)
 	require.NoError(t, err)

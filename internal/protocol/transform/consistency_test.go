@@ -225,7 +225,7 @@ func TestConsistencyTransform_validateChat(t *testing.T) {
 	}
 }
 
-func TestConsistencyTransform_applyScenarioFlags_DisableStreamUsage(t *testing.T) {
+func TestConsistencyTransform_applyScenarioFlags_SkipUsage(t *testing.T) {
 	ct := NewConsistencyTransform(protocol.TypeOpenAIChat)
 
 	req := newOpenAIRequest("gpt-4", 1024)
@@ -235,7 +235,7 @@ func TestConsistencyTransform_applyScenarioFlags_DisableStreamUsage(t *testing.T
 
 	ctx := &TransformContext{
 		Request:       req,
-		ScenarioFlags: &typ.ScenarioFlags{DisableStreamUsage: true},
+		ScenarioFlags: &typ.ScenarioFlags{SkipUsage: true},
 		IsStreaming:   true,
 	}
 
@@ -254,7 +254,7 @@ func TestConsistencyTransform_applyScenarioFlags_NonStreaming(t *testing.T) {
 
 	ctx := &TransformContext{
 		Request:       req,
-		ScenarioFlags: &typ.ScenarioFlags{DisableStreamUsage: true},
+		ScenarioFlags: &typ.ScenarioFlags{SkipUsage: true},
 		IsStreaming:   false,
 	}
 
