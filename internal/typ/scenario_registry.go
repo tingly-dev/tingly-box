@@ -25,6 +25,8 @@ type ScenarioDescriptor struct {
 	AllowRuleBinding bool `json:"allow_rule_binding" yaml:"allow_rule_binding"`
 	// AllowDirectPathUse controls whether scenario-scoped HTTP paths like /openai/{scenario}/... are valid.
 	AllowDirectPathUse bool `json:"allow_direct_path_use" yaml:"allow_direct_path_use"`
+	// SupportsProfiles indicates whether this scenario supports named profiles.
+	SupportsProfiles bool `json:"supports_profiles" yaml:"supports_profiles"`
 }
 
 var (
@@ -79,7 +81,14 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
-	case ScenarioAgent, ScenarioCodex, ScenarioOpenCode, ScenarioXcode, ScenarioVSCode, ScenarioClaudeDesktop, ScenarioSmartGuide:
+	case ScenarioAgent, ScenarioClaudeDesktop, ScenarioSmartGuide:
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportOpenAI},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
+	case ScenarioCodex, ScenarioOpenCode, ScenarioXcode, ScenarioVSCode:
 		return ScenarioDescriptor{
 			ID:                 scenario,
 			SupportedTransport: []ScenarioTransport{TransportOpenAI},
@@ -92,6 +101,7 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			SupportedTransport: []ScenarioTransport{TransportAnthropic},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
+			SupportsProfiles:   true,
 		}
 	case ScenarioGlobal:
 		return ScenarioDescriptor{
@@ -189,6 +199,19 @@ func ScenarioSupportsTransport(scenario RuleScenario, transport ScenarioTranspor
 		return false
 	}
 	return slices.Contains(descriptor.SupportedTransport, transport)
+}
+
+// Base returns the base scenario, stripping any profile suffix.
+// "claude_code:p1".Base() == "claude_code"; "claude_code".Base() == "claude_code".
+func (s RuleScenario) Base() RuleScenario {
+	base, _ := ParseScenarioProfile(s)
+	return base
+}
+
+// Is reports whether the scenario's base equals the given base scenario.
+// Equivalent to s.Base() == base, but reads more naturally at call sites.
+func (s RuleScenario) Is(base RuleScenario) bool {
+	return s.Base() == base
 }
 
 // ProfileSeparator is used to split "scenario:profile_id" strings.

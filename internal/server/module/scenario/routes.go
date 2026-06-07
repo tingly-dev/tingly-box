@@ -4,6 +4,13 @@ import "github.com/tingly-dev/tingly-box/pkg/swagger"
 
 // RegisterRoutes registers all scenario routes with swagger documentation
 func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
+	// GET /scenario-descriptors - List all registered scenario descriptors (including SupportsProfiles)
+	router.GET("/scenario-descriptors", handler.GetScenarioDescriptors,
+		swagger.WithDescription("List all registered scenario descriptors"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ScenarioDescriptorsResponse{}),
+	)
+
 	// GET /scenarios - Get all scenario configurations
 	router.GET("/scenarios", handler.GetScenarios,
 		swagger.WithDescription("Get all scenario configurations"),

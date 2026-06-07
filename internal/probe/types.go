@@ -199,10 +199,8 @@ func E2EMessage(mode E2EMode, customMsg string) string {
 // ScenarioEndpoint returns the API endpoint and api-style for a scenario name.
 func ScenarioEndpoint(scenario string) (endpoint string, apiStyle protocol.APIStyle) {
 	endpoint = fmt.Sprintf("/tingly/%s", scenario)
-	switch typ.RuleScenario(scenario) {
-	case typ.ScenarioAnthropic:
-		fallthrough
-	case typ.ScenarioOpenCode, typ.ScenarioClaudeCode:
+	switch typ.RuleScenario(scenario).Base() {
+	case typ.ScenarioAnthropic, typ.ScenarioOpenCode, typ.ScenarioClaudeCode:
 		apiStyle = protocol.APIStyleAnthropic
 	default:
 		apiStyle = protocol.APIStyleOpenAI

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PROFILE_SCENARIOS, type ProfileScenario } from '@/constants/profileScenarios';
 
 /**
  * Zen agent types that support zen mode
@@ -115,19 +116,13 @@ export function useZenMode(): UseZenModeResult {
  * Check if an agent supports zen mode profiles
  */
 export function agentSupportsProfiles(agent: string): boolean {
-  return ['claude_code', 'codex', 'opencode', 'xcode', 'vscode'].includes(agent);
+  return PROFILE_SCENARIOS.includes(agent as ProfileScenario);
 }
 
 /**
- * Get the scenario key for profile API calls
+ * Get the scenario key for profile API calls.
+ * For built-in profile scenarios the agent name equals the scenario name.
  */
 export function getProfileScenario(agent: string): string {
-  const scenarioMap: Record<string, string> = {
-    claude_code: 'claude_code',
-    codex: 'codex',
-    opencode: 'opencode',
-    xcode: 'xcode',
-    vscode: 'vscode',
-  };
-  return scenarioMap[agent] || agent;
+  return agent;
 }

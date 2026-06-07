@@ -167,15 +167,10 @@ func shouldStripUsage(extra map[string]interface{}) bool {
 // into system messages. These scenarios require the CleanHeader transform when doing
 // protocol transformation (e.g., Anthropic → OpenAI).
 func isBillingHeaderScenario(scenario typ.RuleScenario) bool {
-	switch scenario {
+	switch scenario.Base() {
 	case typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
 		return true
 	default:
-		// for profile
-		if strings.HasPrefix(string(scenario), string(typ.ScenarioClaudeCode)) {
-			return true
-		}
-
 		return false
 	}
 }

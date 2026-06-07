@@ -180,7 +180,7 @@ func (s *SmartRoutingStage) Evaluate(ctx *SelectionContext, state *selectionStat
 	// Annotate the request context with the agent.claude_code request kind when
 	// the scenario is claude_code. Other scenarios leave the field empty so the
 	// agent.claude_code SmartOp simply does not match.
-	if ctx.Scenario == typ.ScenarioClaudeCode {
+	if ctx.Scenario.Is(typ.ScenarioClaudeCode) {
 		reqCtx.ClaudeCodeRequestKind = smartrouting.DetectClaudeCodeRequestKind(reqCtx)
 	}
 

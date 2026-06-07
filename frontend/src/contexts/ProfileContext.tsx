@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '@/services/api';
+import { PROFILE_SCENARIOS } from '@/constants/profileScenarios';
 
 export interface ProfileInfo {
     id: string;
@@ -21,6 +22,8 @@ interface ProfileContextType {
     refresh: () => void;
     /** Convenience: get profiles for a specific scenario */
     getProfiles: (scenario: string) => ProfileInfo[];
+    /** Scenarios that support profiles, from backend descriptors */
+    profileScenarios: string[];
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -40,13 +43,30 @@ interface ProfileProviderProps {
 export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) => {
     const [profiles, setProfiles] = useState<ScenarioProfiles>({});
     const [loading, setLoading] = useState(true);
+    const [profileScenarios, setProfileScenarios] = useState<string[]>([...PROFILE_SCENARIOS]);
 
     const loadProfiles = useCallback(async () => {
         setLoading(true);
         try {
-            const SCENARIOS = ['openai', 'anthropic', 'agent', 'claude_code', 'codex', 'opencode', 'xcode', 'vscode'];
+            // Fetch descriptor list from backend; fall back to static list on error
+            let scenarios: string[] = [...PROFILE_SCENARIOS];
+            try {
+                const descriptorResult = await api.getScenarioDescriptors();
+                if (descriptorResult.success && Array.isArray(descriptorResult.data)) {
+                    const fromBackend = (descriptorResult.data as Array<{ id: string; supports_profiles?: boolean }>)
+                        .filter(d => d.supports_profiles)
+                        .map(d => d.id);
+                    if (fromBackend.length > 0) {
+                        scenarios = fromBackend;
+                    }
+                }
+            } catch {
+                // Keep static fallback
+            }
+            setProfileScenarios(scenarios);
+
             const results = await Promise.allSettled(
-                SCENARIOS.map(async (scenario) => {
+                scenarios.map(async (scenario) => {
                     const result = await api.getProfiles(scenario);
                     if (result.success && Array.isArray(result.data) && result.data.length > 0) {
                         return { scenario, data: result.data as ProfileInfo[] };
@@ -77,7 +97,7 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
     }, [profiles]);
 
     return (
-        <ProfileContext.Provider value={{ profiles, loading, refresh: loadProfiles, getProfiles }}>
+        <ProfileContext.Provider value={{ profiles, loading, refresh: loadProfiles, getProfiles, profileScenarios }}>
             {children}
         </ProfileContext.Provider>
     );
