@@ -314,6 +314,14 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+
+				// Run migration on fresh install to set up scenario defaults
+				if !options.enableMigration {
+					logrus.Warnf("migration disabled")
+				} else {
+					Migrate(cfg)
+					cfg.Save()
+				}
 		} else {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
@@ -335,9 +343,6 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 		cfg.InsertDefaultRule()
 	}
 
-	// Ensure default scenario configs are set
-	cfg.EnsureDefaultScenarioConfigs()
-	cfg.Save()
 
 	// Ensure tokens exist even for existing configs
 	updated := false
@@ -578,6 +583,31 @@ func (c *Config) SaveCurrentServiceID(ruleUUID string, serviceID string) error {
 		return nil
 	}
 	return c.ruleStateStore.SetServiceID(ruleUUID, serviceID)
+}
+
+// GetEffectiveAffinity returns the effective affinity TTL for a rule,
+// considering both scenario default and rule override. Returns 0 if disabled.
+// Resolution order:
+// 1. Rule explicit SessionAffinity (> 0)
+// 2. Scenario SessionAffinity (> 0)
+// 3. Disabled (0)
+func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
+	// 1. Rule explicit value
+	if rule.Flags.SessionAffinity > 0 {
+		return time.Duration(rule.Flags.SessionAffinity) * time.Second
+	}
+
+	// 2. Scenario default
+	c.mu.RLock()
+	scenarioConfig := c.scenarioConfigLocked(rule.GetScenario())
+	c.mu.RUnlock()
+
+	if scenarioConfig != nil && scenarioConfig.Flags.SessionAffinity > 0 {
+		return time.Duration(scenarioConfig.Flags.SessionAffinity) * time.Second
+	}
+
+	// 3. Disabled
+	return 0
 }
 
 // AddRule updates the default Rule
@@ -1326,12 +1356,27 @@ func (c *Config) GetScenarioConfig(scenario typ.RuleScenario) *typ.ScenarioConfi
 
 // scenarioConfigLocked returns the scenario config without acquiring the mutex.
 // Callers must hold at least a read lock.
+// For profiled scenarios (e.g., "claude_code:p1"):
+// 1. First looks for profiled scenario's own config
+// 2. Falls back to base scenario config if profiled config not found
 func (c *Config) scenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioConfig {
+	// Try exact match first (for profiled scenarios with their own config)
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == scenario {
 			return &c.Scenarios[i]
 		}
 	}
+
+	// For profiled scenarios, fallback to base scenario config
+	baseScenario, profileID := typ.ParseScenarioProfile(scenario)
+	if profileID != "" {
+		for i := range c.Scenarios {
+			if c.Scenarios[i].Scenario == baseScenario {
+				return &c.Scenarios[i]
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -1548,6 +1593,11 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 		return r.Scenario == profiledScenario
 	})
 
+	// Remove scenario config for this profile (if it exists)
+	c.Scenarios = slices.DeleteFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool {
+		return sc.Scenario == profiledScenario
+	})
+
 	return c.Save()
 }
 
@@ -1725,6 +1775,61 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		config.Flags.RecordingV2 = typ.RecordingMode(value)
 	default:
 		return fmt.Errorf("unknown string flag name: %s", flagName)
+	}
+
+	return c.Save()
+}
+
+// GetScenarioIntFlag returns an integer flag value for a scenario
+func (c *Config) GetScenarioIntFlag(scenario typ.RuleScenario, flagName string) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.scenarioConfigLocked(scenario)
+	if config == nil {
+		return 0
+	}
+	switch flagName {
+	case FlagSessionAffinity:
+		return config.Flags.SessionAffinity
+	default:
+		return 0
+	}
+}
+
+// SetScenarioIntFlag sets an integer flag value for a scenario
+func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, value int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Find or create scenario config
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
+			break
+		}
+	}
+
+	if config == nil {
+		// Create new scenario config
+		newConfig := typ.ScenarioConfig{
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	// Set the specific flag
+	switch flagName {
+	case FlagSessionAffinity:
+		if value < 0 {
+			return fmt.Errorf("session_affinity must be >= 0, got %d", value)
+		}
+		config.Flags.SessionAffinity = value
+	default:
+		return fmt.Errorf("unknown int flag name: %s", flagName)
 	}
 
 	return c.Save()
@@ -2029,41 +2134,6 @@ func (c *Config) InsertDefaultRule() error {
 	return nil
 }
 
-// EnsureDefaultScenarioConfigs ensures that all scenarios have default config with appropriate flags
-func (c *Config) EnsureDefaultScenarioConfigs() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Define default scenario configs
-	// xcode: DisableStreamUsage = true (to fix compatibility with Xcode client)
-	// others: DisableStreamUsage = false (default behavior, include usage in streaming)
-	defaultScenarios := []typ.ScenarioConfig{
-		{
-			Scenario: typ.ScenarioXcode,
-			Flags: typ.ScenarioFlags{
-				DisableStreamUsage: true, // Xcode client cannot handle usage in streaming chunks
-			},
-		},
-	}
-
-	// Add or update scenario configs
-	for _, defaultConfig := range defaultScenarios {
-		found := false
-		for i := range c.Scenarios {
-			if c.Scenarios[i].Scenario == defaultConfig.Scenario {
-				// Update existing config if flags are not set
-				if !c.Scenarios[i].Flags.DisableStreamUsage {
-					c.Scenarios[i].Flags.DisableStreamUsage = defaultConfig.Flags.DisableStreamUsage
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			c.Scenarios = append(c.Scenarios, defaultConfig)
-		}
-	}
-}
 
 // logProxyEnvironment logs proxy-related environment variables and the
 // RespectEnvProxy config value so operators can diagnose unexpected proxy usage

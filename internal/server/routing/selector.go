@@ -15,6 +15,9 @@ import (
 type ProviderResolver interface {
 	GetProviderByUUID(uuid string) (*typ.Provider, error)
 	SaveCurrentServiceID(ruleUUID string, serviceID string) error
+	// GetEffectiveAffinity returns the effective affinity TTL for a rule,
+	// considering both scenario default and rule override. Returns 0 if disabled.
+	GetEffectiveAffinity(rule *typ.Rule) time.Duration
 }
 
 // LoadBalancer defines the interface for load balancing operations.
@@ -257,14 +260,14 @@ func (s *ServiceSelector) getHealthFilter() *typ.HealthFilter {
 // Locks affinity whenever affinity is enabled and the source is not "affinity"
 // (i.e., don't re-lock an already-locked entry).
 func (s *ServiceSelector) postProcess(ctx *SelectionContext, result *SelectionResult) {
-	if result.Source == "affinity" || !ctx.Rule.AffinityEnabled() || ctx.SessionID.IsEmpty() {
+	if result.Source == "affinity" || ctx.SessionID.IsEmpty() {
 		return
 	}
 
-	ttl := ctx.Rule.AffinityTTL()
+	ttl := s.config.GetEffectiveAffinity(ctx.Rule)
 	if ttl == 0 {
-		// Legacy SmartAffinity bool — use a sensible default.
-		ttl = 2 * time.Hour
+		// Affinity disabled (no rule value, no scenario value, no legacy bool)
+		return
 	}
 	s.affinityStore.Set(ctx.Rule.UUID, ctx.SessionID.String(), &AffinityEntry{
 		Service:   result.Service,

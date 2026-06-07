@@ -129,6 +129,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
 | `block_tools` | string (逗号分隔) | request | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre：pre-Base chain stage）|
 | `claude_code_compat` | bool | app | 把 `messages` 数组中 `role == "system"` 的条目重写为 `"user"`。Claude Code 会在 messages 中写入 system role（非标准扩展），严格遵守规范的第三方 Anthropic 兼容 Provider 会拒绝该字段；此 flag 在转发前归一化。同时作为 `ScenarioFlags.ClaudeCodeCompat` 存在，场景级启用后自动注入到该场景所有 rule（同 `CleanHeader` 模式）。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite` / `ops.ApplyClaudeCodeBetaCompatRoleRewrite`（Type 1b-pre：pre-Base chain stage，仅对 Anthropic 入站形态生效）|
+| `session_affinity` | int (seconds) | routing | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率 → 更快响应 + 更低 token 成本。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。支持 rule 级覆盖（显式设置 rule.Flags.SessionAffinity > 0 时优先）和 scenario 级继承（rule 未设置时继承 ScenarioFlags.SessionAffinity）。| `internal/server/routing/selector.go::ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5：路由层决策）|
 
 ---
 
@@ -163,6 +164,12 @@ Type 4   Routing-decision input
          的 OpenAIEndpointMode 优先于 rule flag 冲突时（详见
          .design/openai-endpoint-routing.md）。不进 ExtraFields、不进
          ctx。例：openai_endpoint_override。
+
+Type 5   Routing behavior (service selection)
+         路由层在 PostProcess() 时读取 flag 影响服务选择逻辑。例：
+         session_affinity 通过 Config.GetEffectiveAffinity(rule) 解析
+         继承链（rule explicit > scenario default > disabled），然后在
+         ProviderResolver.PostProcess() 中应用会话亲和策略。
 ```
 
 任何新 flag 都应归入这几类之一。pre-Base 和 post-Base Transform 都是同一
@@ -440,7 +447,73 @@ Extensions Card 操作。
 
 ---
 
-## 12. 未做 / 后续可做
+## 12. Scenario-level Flags（场景级 Flag）
+
+部分 flag 不仅存在于 RuleFlags，也存在于 ScenarioFlags：
+
+| Flag | Rule级 | Scenario级 | 继承行为 |
+|------|--------|------------|----------|
+| `session_affinity` | ✅ | ✅ | Rule 显式设置 > Scenario 默认 > 禁用（0） |
+| `claude_code_compat` | ✅ | ✅ | Scenario 启用时自动注入到该场景所有 rule |
+
+**继承逻辑实现**：
+
+```go
+// session_affinity 解析顺序
+func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
+    // 1. Rule 显式设置
+    if rule.Flags.SessionAffinity > 0 {
+        return time.Duration(rule.Flags.SessionAffinity) * time.Second
+    }
+
+    // 2. Scenario 默认（profiled scenario 先找自己，没有则 fallback 到 base）
+    scenarioConfig := c.scenarioConfigLocked(rule.GetScenario())
+    if scenarioConfig != nil && scenarioConfig.Flags.SessionAffinity > 0 {
+        return time.Duration(scenarioConfig.Flags.SessionAffinity) * time.Second
+    }
+
+    // 3. 禁用
+    return 0
+}
+
+// scenarioConfigLocked 的查找顺序
+func (c *Config) scenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioConfig {
+    // 1. 精确匹配 profiled scenario（如 claude_code:p1）
+    for i := range c.Scenarios {
+        if c.Scenarios[i].Scenario == scenario {
+            return &c.Scenarios[i]
+        }
+    }
+
+    // 2. Profile fallback 到 base scenario
+    baseScenario, profileID := typ.ParseScenarioProfile(scenario)
+    if profileID != "" {
+        for i := range c.Scenarios {
+            if c.Scenarios[i].Scenario == baseScenario {
+                return &c.Scenarios[i]
+            }
+        }
+    }
+
+    return nil
+}
+```
+
+**默认值策略**：
+
+- IDE/Agent 场景（claude_code, claude_desktop, vscode, xcode, agent, codex, opencode）：默认 1800 秒（30 分钟）
+- API 场景（openai, anthropic, embed, imagegen）：默认禁用（0）
+- Profile（如 claude_code:p1）：继承 base scenario 默认，可独立配置覆盖
+
+**持久化语义**：
+
+- Scenario 配置**只在不存在时创建默认**，用户配置后不会被覆盖
+- Rule 的 `0` 值表示"未设置"而非"禁用"，通过继承链决定实际值
+- Profile 删除时清理独立的 scenario config（防止遗留）
+
+---
+
+## 13. 未做 / 后续可做
 
 - **UI**：string flag 加独立 enable Switch，让"空"与"未启用"可区分。
 - **UI**：Catalog 加搜索框 / category collapse（flag 数量超过 ~8 个时

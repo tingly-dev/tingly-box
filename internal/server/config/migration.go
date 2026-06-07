@@ -48,6 +48,7 @@ func Migrate(c *Config) error {
 	migrate20260521(c) // Add Claude Desktop haiku-4-5 built-in rule
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
+	migrate20260606(c) // Add default scenario configs with session affinity
 	return nil
 }
 
@@ -569,4 +570,85 @@ func migrate20260521(c *Config) {
 	c.Rules = append(c.Rules, newRule)
 	_ = c.Save()
 	logrus.Info("Migration 2026-05-21 completed: added Claude Desktop haiku-4-5 rule")
+}
+
+func migrate20260606(c *Config) {
+	if c.hasMigrationCompleted("20260606") {
+		return
+	}
+
+	// Track if we need to save
+	needsSave := false
+
+	// IDE and Agent scenarios that should get 1800s session affinity by default
+	ideAgentScenarios := []typ.RuleScenario{
+		typ.ScenarioClaudeCode,
+		typ.ScenarioClaudeDesktop,
+		typ.ScenarioVSCode,
+		typ.ScenarioAgent,
+		typ.ScenarioCodex,
+		typ.ScenarioOpenCode,
+	}
+
+	// xcode scenario needs DisableStreamUsage=true + affinity
+	xcodeConfig := typ.ScenarioConfig{
+		Scenario: typ.ScenarioXcode,
+		Flags: typ.ScenarioFlags{
+			DisableStreamUsage: true, // Xcode client cannot handle usage in streaming chunks
+			SessionAffinity:     1800, // 30-minute affinity for cache optimization
+		},
+	}
+
+	// Add or update xcode config
+	found := false
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == typ.ScenarioXcode {
+			// Set DisableStreamUsage if user hasn't explicitly set it
+			// Note: false means "not set" due to omitempty, true means explicitly enabled
+			if !c.Scenarios[i].Flags.DisableStreamUsage {
+				c.Scenarios[i].Flags.DisableStreamUsage = true
+				needsSave = true
+			}
+			// Set SessionAffinity if user hasn't set it (0 means not set)
+			if c.Scenarios[i].Flags.SessionAffinity == 0 {
+				c.Scenarios[i].Flags.SessionAffinity = 1800
+				needsSave = true
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		c.Scenarios = append(c.Scenarios, xcodeConfig)
+		needsSave = true
+	}
+	// Add or update IDE/Agent scenarios with 1800s affinity
+	for _, scenario := range ideAgentScenarios {
+		found := false
+		for i := range c.Scenarios {
+			if c.Scenarios[i].Scenario == scenario {
+				// Only set affinity if not already configured by user
+				if c.Scenarios[i].Flags.SessionAffinity == 0 {
+					c.Scenarios[i].Flags.SessionAffinity = 1800
+					needsSave = true
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Add new scenario config with default affinity
+			c.Scenarios = append(c.Scenarios, typ.ScenarioConfig{
+				Scenario: scenario,
+				Flags:    typ.ScenarioFlags{SessionAffinity: 1800},
+			})
+			needsSave = true
+		}
+	}
+
+	c.markMigrationCompleted("20260606")
+	if needsSave {
+		_ = c.Save()
+		logrus.Info("Migration 2026-06-06 completed: added default scenario configs with session affinity")
+	}
 }

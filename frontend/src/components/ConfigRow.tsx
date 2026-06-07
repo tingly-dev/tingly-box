@@ -21,8 +21,8 @@ interface ConfigRowProps {
     activeTab: TabKey;
     /** Callback when tab changes */
     onTabChange: (tabKey: TabKey) => void;
-    /** Maximum width of the row (default: 700) */
-    maxWidth?: number;
+    /** Maximum width of the row (default: responsive - no fixed limit) */
+    maxWidth?: number | 'responsive';
 }
 
 // ============================================================================
@@ -76,7 +76,7 @@ export const ConfigRow: React.FC<ConfigRowProps> = ({
                                                         tabs,
                                                         activeTab,
                                                         onTabChange,
-                                                        maxWidth = 700,
+                                                        maxWidth = 'responsive',
                                                     }) => {
     // Get current tab data
     const currentTab = tabs.find(t => t.key === activeTab) || tabs[0];
@@ -99,10 +99,18 @@ export const ConfigRow: React.FC<ConfigRowProps> = ({
         </Box>
     );
 
+    // Responsive width: use maxWidth if provided as number, otherwise use 100% with breakpoints
+    const widthStyle = maxWidth === 'responsive'
+        ? {
+            width: '100%',
+            maxWidth: { xs: '100%', sm: '100%', md: '100%', lg: '100%', xl: 1200 }
+          }
+        : { maxWidth };
+
     return (
-        <Box sx={{display: 'flex', alignItems: 'center', gap: 3, maxWidth}}>
+        <Box sx={{display: 'flex', alignItems: 'center', gap: 3, ...widthStyle}}>
             {/* Left: Tabs (with | separator if multiple) */}
-            <Box sx={{minWidth: "200px"}}>
+            <Box sx={{minWidth: { xs: 80, sm: 120, md: 150, lg: 200 }}}>
                 {leftContent}
             </Box>
 

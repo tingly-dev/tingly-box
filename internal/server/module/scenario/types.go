@@ -12,6 +12,11 @@ type ScenarioStringFlagUpdateRequest struct {
 	Value string `json:"value"`
 }
 
+// ScenarioIntFlagUpdateRequest represents the request to update an integer flag
+type ScenarioIntFlagUpdateRequest struct {
+	Value int `json:"value"`
+}
+
 // ScenarioUpdateRequest represents the request to update a scenario
 type ScenarioUpdateRequest struct {
 	Scenario typ.RuleScenario  `json:"scenario" binding:"required" example:"claude_code"`

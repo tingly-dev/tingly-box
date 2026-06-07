@@ -18,3 +18,9 @@ const (
 	FlagThinkingEffort = "thinking_effort"
 	FlagRecordingV2    = "recording_v2"
 )
+
+// ScenarioFlags int field keys. Same contract as above but for
+// GetScenarioIntFlag / SetScenarioIntFlag.
+const (
+	FlagSessionAffinity = "session_affinity"
+)

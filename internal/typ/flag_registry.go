@@ -145,7 +145,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "session_affinity",
 			Label:       "Session affinity",
-			Description: "TTL in seconds for session-to-service pinning. Once a session lands on a service, follow-up requests in the same session keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP.",
+			Description: "TTL in seconds for session-to-service pinning. Pinning improves cache hit rate → faster responses + lower token costs. Once a session lands on a service, follow-up requests keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP.",
 			Type:        FlagTypeInt,
 			Category:    FlagCategoryRouting,
 			Placeholder: "e.g. 3600",

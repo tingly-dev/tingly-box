@@ -56,6 +56,21 @@ func RegisterRoutes(router *swagger.RouteGroup, handler *Handler) {
 		swagger.WithResponseModel(ScenarioFlagResponse{}),
 	)
 
+	// GET /scenario/:scenario/int-flag/:flag - Get a specific integer flag value for a scenario
+	router.GET("/scenario/:scenario/int-flag/:flag", handler.GetScenarioIntFlag,
+		swagger.WithDescription("Get a specific integer flag value for a scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithResponseModel(ScenarioFlagResponse{}),
+	)
+
+	// PUT /scenario/:scenario/int-flag/:flag - Set a specific integer flag value for a scenario
+	router.PUT("/scenario/:scenario/int-flag/:flag", handler.SetScenarioIntFlag,
+		swagger.WithDescription("Set a specific integer flag value for a scenario"),
+		swagger.WithTags("scenarios"),
+		swagger.WithRequestModel(ScenarioIntFlagUpdateRequest{}),
+		swagger.WithResponseModel(ScenarioFlagResponse{}),
+	)
+
 	// --- Profile endpoints ---
 
 	// GET /scenario/:scenario/profiles - List profiles for a scenario
