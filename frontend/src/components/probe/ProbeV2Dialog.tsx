@@ -25,6 +25,8 @@ import {
     PlayArrow as RunIcon,
 } from '@/components/icons';
 import { useTheme } from '@mui/material/styles';
+import { useTranslation } from 'react-i18next';
+import { toggleButtonGroupStyle } from '@/styles/toggleStyles';
 import type { ProbeV2TestMode, ProbeV2TargetType } from '@/types/probe-v2.ts';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -74,9 +76,9 @@ interface ProbeV2DialogProps {
 
 // Request shapes the probe exercises (the "形态" dimension): we only need
 // non-streaming vs streaming. ('simple' is the backend's value for nonstream.)
-const MODES: { value: ProbeV2TestMode; label: string }[] = [
-    { value: 'simple', label: 'Nonstream' },
-    { value: 'streaming', label: 'Stream' },
+const MODES: { value: ProbeV2TestMode; tKey: string }[] = [
+    { value: 'simple', tKey: 'probe.nonstream' },
+    { value: 'streaming', tKey: 'probe.stream' },
 ];
 
 // Human-friendly labels for routing_source values from the backend.
@@ -95,8 +97,6 @@ const UPSTREAM_API_LABELS: Record<string, string> = {
     anthropic_beta: 'Messages (beta)',
     google: 'GenerateContent',
 };
-
-const PLACEHOLDER = '— 待补';
 
 const getUserAuthToken = (): string | null => localStorage.getItem('user_auth_token');
 
@@ -183,6 +183,7 @@ const SectionTitle = ({ children }: { children: React.ReactNode }) => (
 // StatusBar: the one-glance verdict — success/failure, latency, tokens.
 const StatusBar = memo(({ result }: { result: ProbeResult }) => {
     const theme = useTheme();
+    const { t } = useTranslation();
     const ok = result.success;
     const d = result.data;
     return (
@@ -193,7 +194,7 @@ const StatusBar = memo(({ result }: { result: ProbeResult }) => {
                 <ErrorIcon sx={{ color: theme.palette.error.main, fontSize: 24 }} />
             )}
             <Typography variant="subtitle2" fontWeight={600}>
-                {ok ? '成功' : '失败'}
+                {ok ? t('probe.success') : t('probe.failed')}
             </Typography>
             {d?.latency_ms ? (
                 <Chip icon={<SpeedIcon sx={{ fontSize: 14 }} />} label={`${d.latency_ms}ms`} size="small" sx={{ height: 24 }} />
@@ -229,25 +230,33 @@ const Journey = memo(
         model?: string;
         bypassed: boolean;
     }) => {
+        const { t } = useTranslation();
         const d = result.data;
         const isRule = targetType === 'rule';
         const provider = d?.selected_provider || (isRule ? '' : targetName);
         const routedModel = d?.selected_model || model || '';
         const ruleLabel = d?.matched_rule_desc || targetName;
         const endpoint = d?.upstream_api ? UPSTREAM_API_LABELS[d.upstream_api] || d.upstream_api : '';
+        const pending = t('probe.pending');
 
         return (
             <Box>
-                <SectionTitle>请求旅程</SectionTitle>
-                {isRule && <JourneyRow label="Rule" value={`${ruleLabel}${scenario ? `  ·  ${scenario}` : ''}`} />}
+                <SectionTitle>{t('probe.journey')}</SectionTitle>
                 {isRule && (
-                    <JourneyRow label="Flags" value={d?.applied_flags || '（无）'} muted={!d?.applied_flags} />
+                    <JourneyRow label={t('probe.row.rule')} value={`${ruleLabel}${scenario ? `  ·  ${scenario}` : ''}`} />
+                )}
+                {isRule && (
+                    <JourneyRow
+                        label={t('probe.row.flags')}
+                        value={d?.applied_flags || t('probe.flagsNone')}
+                        muted={!d?.applied_flags}
+                    />
                 )}
                 {bypassed ? (
-                    <JourneyRow label="范围" value="直连上游（已绕过 TB）" />
+                    <JourneyRow label={t('probe.scope')} value={t('probe.directValue')} />
                 ) : (
                     <JourneyRow
-                        label="Routing"
+                        label={t('probe.row.routing')}
                         value={
                             d?.routing_source
                                 ? `${ROUTING_SOURCE_LABELS[d.routing_source] || d.routing_source}${
@@ -255,19 +264,19 @@ const Journey = memo(
                                           ? `  ·  smart rule #${d.matched_smart_rule}`
                                           : ''
                                   }`
-                                : PLACEHOLDER
+                                : pending
                         }
                         muted={!d?.routing_source}
                     />
                 )}
                 <JourneyRow
-                    label="Provider"
-                    value={provider ? `${provider}${routedModel ? `  →  ${routedModel}` : ''}` : PLACEHOLDER}
+                    label={t('probe.row.provider')}
+                    value={provider ? `${provider}${routedModel ? `  →  ${routedModel}` : ''}` : pending}
                     muted={!provider}
                 />
-                <JourneyRow label="Endpoint" value={endpoint || PLACEHOLDER} muted={!endpoint} />
-                <JourneyRow label="上游 URL" value={d?.upstream_url || PLACEHOLDER} muted={!d?.upstream_url} />
-                {d?.request_url && <JourneyRow label="请求 URL" value={d.request_url} />}
+                <JourneyRow label={t('probe.row.endpoint')} value={endpoint || pending} muted={!endpoint} />
+                <JourneyRow label={t('probe.row.upstreamUrl')} value={d?.upstream_url || pending} muted={!d?.upstream_url} />
+                {d?.request_url && <JourneyRow label={t('probe.row.requestUrl')} value={d.request_url} />}
             </Box>
         );
     }
@@ -285,6 +294,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
     model,
     testMode = 'streaming',
 }) => {
+    const { t } = useTranslation();
     const [mode, setMode] = useState<ProbeV2TestMode>(testMode);
     // 范围: false = 经过 TB (default), true = 直连上游. Provider targets only.
     const [direct, setDirect] = useState(false);
@@ -363,7 +373,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
             <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
                     <Typography variant="subtitle1" fontWeight={600}>
-                        测试 {targetType === 'rule' ? '规则' : '服务'}
+                        {targetType === 'rule' ? t('probe.testRule') : t('probe.testProvider')}
                     </Typography>
                     <Chip
                         label={model ? `${targetName} | ${model}` : targetName}
@@ -375,7 +385,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                 {result && (
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <Tooltip
-                            title={copyTooltipOpen ? '已复制!' : '复制响应'}
+                            title={copyTooltipOpen ? t('probe.copied') : t('probe.copyResponse')}
                             open={copyTooltipOpen || undefined}
                             disableHoverListener={copyTooltipOpen}
                         >
@@ -383,7 +393,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                                 <CopyIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="重新测试">
+                        <Tooltip title={t('probe.rerun')}>
                             <IconButton onClick={runTest} size="small" sx={{ color: 'text.secondary' }} disabled={isLoading}>
                                 <RefreshIcon fontSize="small" />
                             </IconButton>
@@ -397,17 +407,18 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap', mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="caption" color="text.secondary">
-                            形态
+                            {t('probe.shape')}
                         </Typography>
                         <ToggleButtonGroup
                             size="small"
                             exclusive
                             value={mode}
                             onChange={(_, v) => v && setMode(v)}
+                            sx={toggleButtonGroupStyle}
                         >
                             {MODES.map((m) => (
-                                <ToggleButton key={m.value} value={m.value} sx={{ textTransform: 'none', py: 0.25, px: 1.5 }}>
-                                    {m.label}
+                                <ToggleButton key={m.value} value={m.value}>
+                                    {t(m.tKey)}
                                 </ToggleButton>
                             ))}
                         </ToggleButtonGroup>
@@ -415,9 +426,9 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
 
                     {targetType === 'provider' && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Tooltip title="直连上游会绕过 Tingly-Box 的路由与中间件,用于判断故障在上游还是 TB 内部。">
+                            <Tooltip title={t('probe.scopeHint')}>
                                 <Typography variant="caption" color="text.secondary">
-                                    范围
+                                    {t('probe.scope')}
                                 </Typography>
                             </Tooltip>
                             <ToggleButtonGroup
@@ -425,13 +436,10 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                                 exclusive
                                 value={direct ? 'direct' : 'tb'}
                                 onChange={(_, v) => v && setDirect(v === 'direct')}
+                                sx={toggleButtonGroupStyle}
                             >
-                                <ToggleButton value="tb" sx={{ textTransform: 'none', py: 0.25, px: 1.5 }}>
-                                    经过 TB
-                                </ToggleButton>
-                                <ToggleButton value="direct" sx={{ textTransform: 'none', py: 0.25, px: 1.5 }}>
-                                    直连上游
-                                </ToggleButton>
+                                <ToggleButton value="tb">{t('probe.throughTB')}</ToggleButton>
+                                <ToggleButton value="direct">{t('probe.direct')}</ToggleButton>
                             </ToggleButtonGroup>
                         </Box>
                     )}
@@ -444,7 +452,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                         disabled={isLoading}
                         sx={{ ml: 'auto' }}
                     >
-                        {isLoading ? '测试中…' : '运行测试'}
+                        {isLoading ? t('probe.running') : t('probe.run')}
                     </Button>
                 </Box>
 
@@ -453,7 +461,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                 {!isLoading && !result && (
                     <Box sx={{ textAlign: 'center', py: 8 }}>
                         <Typography variant="body2" color="text.secondary">
-                            选择形态后点击「运行测试」
+                            {t('probe.runHint')}
                         </Typography>
                     </Box>
                 )}
@@ -488,7 +496,7 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
 
                         {result.success && (
                             <Box>
-                                <SectionTitle>响应</SectionTitle>
+                                <SectionTitle>{t('probe.response')}</SectionTitle>
                                 <Box
                                     sx={{
                                         p: 1.5,
@@ -502,12 +510,12 @@ export const ProbeV2Dialog: React.FC<ProbeV2DialogProps> = ({
                                         overflow: 'auto',
                                     }}
                                 >
-                                    {extracted || '（无法提取文本,见原始 JSON）'}
+                                    {extracted || t('probe.noText')}
                                 </Box>
                                 {result.data?.content && (
                                     <>
                                         <Button size="small" onClick={() => setRawExpanded((v) => !v)} sx={{ mt: 0.5, textTransform: 'none' }}>
-                                            {rawExpanded ? '收起原始 JSON' : '原始 JSON'}
+                                            {rawExpanded ? t('probe.rawJsonHide') : t('probe.rawJson')}
                                         </Button>
                                         <Collapse in={rawExpanded}>
                                             <Box
