@@ -8,7 +8,7 @@ const (
 	FlagSeparate           = "separate"
 	FlagSmart              = "smart"
 	FlagSmartCompact       = "smart_compact"
-	FlagDisableStreamUsage = "disable_stream_usage"
+	FlagSkipUsage = "skip_usage"
 	FlagCleanHeader        = "clean_header"
 )
 

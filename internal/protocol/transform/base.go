@@ -45,7 +45,7 @@ func (t *BaseTransform) Apply(ctx *TransformContext) error {
 	// Get disableStreamUsage from scenario flags
 	disableStreamUsage := false
 	if ctx.ScenarioFlags != nil {
-		disableStreamUsage = ctx.ScenarioFlags.DisableStreamUsage
+		disableStreamUsage = ctx.ScenarioFlags.SkipUsage
 	}
 
 	// Determine if conversion is needed by checking BOTH input type AND target type

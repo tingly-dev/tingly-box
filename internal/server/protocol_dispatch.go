@@ -182,7 +182,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 	if isStreaming {
 		disableStreamUsage := shouldStripUsage(reqCtx.Extra)
 		if reqCtx.ScenarioFlags != nil {
-			disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
+			disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.SkipUsage
 		}
 
 		if hasDeclaredMCPAnthropicBetaTools(req) && s.mcpEnabled() {
@@ -642,7 +642,7 @@ func (s *Server) dispatchOpenAIChat(
 			// OpenAI passthrough: source and target are both OpenAI Chat format
 			disableStreamUsage := shouldStripUsage(reqCtx.Extra)
 			if reqCtx.ScenarioFlags != nil {
-				disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.DisableStreamUsage
+				disableStreamUsage = disableStreamUsage || reqCtx.ScenarioFlags.SkipUsage
 			}
 
 			if hasDeclaredMCPTools(req) && s.mcpEnabled() {

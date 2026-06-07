@@ -134,11 +134,11 @@ func (t *ConsistencyTransform) normalizeToolSchemas(req *openai.ChatCompletionNe
 // This applies to ALL providers.
 //
 // Scenario flags handled:
-//   - DisableStreamUsage: Don't include usage in streaming chunks (for incompatible clients)
+//   - SkipUsage: Don't include usage in streaming chunks (for incompatible clients)
 //   - ThinkingEffort/ThinkingMode: Override thinking mode (via OpenAIConfig in ExtraFields)
 func (t *ConsistencyTransform) applyScenarioFlags(req *openai.ChatCompletionNewParams, flags *typ.ScenarioFlags, isStreaming bool) {
 	// Handle stream_options - disable usage in streaming if requested
-	if isStreaming && flags.DisableStreamUsage {
+	if isStreaming && flags.SkipUsage {
 		if req.StreamOptions.IncludeUsage.Value {
 			req.StreamOptions.IncludeUsage.Value = false
 		}
@@ -391,10 +391,10 @@ func (t *ConsistencyTransform) normalizeResponseToolSchemas(req *responses.Respo
 // This applies to ALL providers.
 //
 // Scenario flags handled:
-//   - DisableStreamUsage: Don't include obfuscation in streaming chunks (for incompatible clients)
+//   - SkipUsage: Don't include obfuscation in streaming chunks (for incompatible clients)
 func (t *ConsistencyTransform) applyResponseScenarioFlags(req *responses.ResponseNewParams, flags *typ.ScenarioFlags, isStreaming bool) {
 	// Handle stream_options - disable obfuscation in streaming if requested
-	if isStreaming && flags.DisableStreamUsage {
+	if isStreaming && flags.SkipUsage {
 		if req.StreamOptions.IncludeObfuscation.Value {
 			req.StreamOptions.IncludeObfuscation.Value = false
 		}

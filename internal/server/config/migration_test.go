@@ -51,8 +51,8 @@ func TestMigrate20260606(t *testing.T) {
 		t.Error("Xcode scenario config not found")
 		return
 	}
-	if !xcodeConfig.Flags.DisableStreamUsage {
-		t.Error("Xcode should have DisableStreamUsage = true")
+	if !xcodeConfig.Flags.SkipUsage {
+		t.Error("Xcode should have SkipUsage = true")
 	}
 	if xcodeConfig.Flags.SessionAffinity != 1800 {
 		t.Errorf("Xcode: expected SessionAffinity = 1800, got %d",
@@ -126,16 +126,16 @@ func TestMigrate20260606_Idempotent(t *testing.T) {
 func TestMigrate20260606_PartialCustomization(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create config with xcode scenario that has DisableStreamUsage=false (user override)
+	// Create config with xcode scenario that has SkipUsage=false (user override)
 	cfg, err := NewConfig(WithConfigDir(tmpDir))
 	if err != nil {
 		t.Fatalf("NewConfig error: %v", err)
 	}
 
-	// Manually set xcode DisableStreamUsage to false (user explicitly disabled it)
+	// Manually set xcode SkipUsage to false (user explicitly disabled it)
 	for i := range cfg.Scenarios {
 		if cfg.Scenarios[i].Scenario == typ.ScenarioXcode {
-			cfg.Scenarios[i].Flags.DisableStreamUsage = false
+			cfg.Scenarios[i].Flags.SkipUsage = false
 			cfg.Save()
 			break
 		}
@@ -152,20 +152,20 @@ func TestMigrate20260606_PartialCustomization(t *testing.T) {
 		t.Error("Migration should still be marked as completed")
 	}
 
-	// Verify that user's DisableStreamUsage=false is preserved
+	// Verify that user's SkipUsage=false is preserved
 	xcodeConfig := cfg2.GetScenarioConfig(typ.ScenarioXcode)
 	if xcodeConfig == nil {
 		t.Fatal("Xcode scenario config should exist")
 	}
 
-	if xcodeConfig.Flags.DisableStreamUsage != false {
-		t.Errorf("Expected user's DisableStreamUsage=false to be preserved, got %v",
-			xcodeConfig.Flags.DisableStreamUsage)
+	if xcodeConfig.Flags.SkipUsage != false {
+		t.Errorf("Expected user's SkipUsage=false to be preserved, got %v",
+			xcodeConfig.Flags.SkipUsage)
 	}
 
 	// Verify that SessionAffinity still got the default value
 	if xcodeConfig.Flags.SessionAffinity != 1800 {
-		t.Errorf("Expected SessionAffinity=1800 to be set even with customized DisableStreamUsage, got %d",
+		t.Errorf("Expected SessionAffinity=1800 to be set even with customized SkipUsage, got %d",
 			xcodeConfig.Flags.SessionAffinity)
 	}
 }

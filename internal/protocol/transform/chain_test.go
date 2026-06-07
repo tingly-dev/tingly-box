@@ -194,12 +194,12 @@ func TestTransformChain_ContextPreservation(t *testing.T) {
 			setupCtx: func() *TransformContext {
 				return &TransformContext{
 					Request:       &openai.ChatCompletionNewParams{},
-					ScenarioFlags: &typ.ScenarioFlags{DisableStreamUsage: true},
+					ScenarioFlags: &typ.ScenarioFlags{SkipUsage: true},
 				}
 			},
 			verifyCtx: func(t *testing.T, result *TransformContext) {
 				require.NotNil(t, result.ScenarioFlags)
-				assert.True(t, result.ScenarioFlags.DisableStreamUsage)
+				assert.True(t, result.ScenarioFlags.SkipUsage)
 			},
 		},
 		{
@@ -303,7 +303,7 @@ func TestTransformChain_Integration_RealTransforms(t *testing.T) {
 }
 
 func TestTransformChain_Integration_WithScenarioFlags(t *testing.T) {
-	flags := &typ.ScenarioFlags{DisableStreamUsage: true}
+	flags := &typ.ScenarioFlags{SkipUsage: true}
 
 	baseTransform := NewBaseTransform(protocol.TypeOpenAIChat)
 	consistencyTransform := NewConsistencyTransform(protocol.TypeOpenAIChat)
@@ -326,7 +326,7 @@ func TestTransformChain_Integration_WithScenarioFlags(t *testing.T) {
 	result, err := chain.Execute(ctx)
 
 	require.NoError(t, err)
-	assert.True(t, result.ScenarioFlags.DisableStreamUsage)
+	assert.True(t, result.ScenarioFlags.SkipUsage)
 	assert.False(t, req.StreamOptions.IncludeUsage.Value)
 }
 

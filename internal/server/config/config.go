@@ -1641,8 +1641,8 @@ func (c *Config) GetScenarioFlag(scenario typ.RuleScenario, flagName string) boo
 		return flags.Smart
 	case FlagSmartCompact:
 		return flags.SmartCompact
-	case FlagDisableStreamUsage:
-		return flags.DisableStreamUsage
+	case FlagSkipUsage:
+		return flags.SkipUsage
 	case FlagCleanHeader:
 		return flags.CleanHeader
 	default:
@@ -1689,8 +1689,8 @@ func (c *Config) SetScenarioFlag(scenario typ.RuleScenario, flagName string, val
 		config.Flags.Smart = value
 	case FlagSmartCompact:
 		config.Flags.SmartCompact = value
-	case FlagDisableStreamUsage:
-		config.Flags.DisableStreamUsage = value
+	case FlagSkipUsage:
+		config.Flags.SkipUsage = value
 	case FlagCleanHeader:
 		config.Flags.CleanHeader = value
 	case ExtensionSkillUser:

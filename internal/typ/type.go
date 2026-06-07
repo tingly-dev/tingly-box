@@ -152,10 +152,10 @@ type ScenarioFlags struct {
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
 	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`     // Enable scenario recording V2 (request/request_response/staged_request_response)
-	Beta         bool          `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
-
-	// Stream configuration flags
-	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
+	// SkipUsage strips usage fields from streaming chunks and responses.
+	// Use for clients that cannot handle usage data (e.g. Xcode). Equivalent
+	// to the rule-level skip_usage flag but applied as a scenario-wide default.
+	SkipUsage bool `json:"skip_usage,omitempty" yaml:"skip_usage,omitempty"`
 
 	// ThinkingEffort is the unified extended-thinking control. Recognized
 	// values: "" (by client, default), "off" (force disabled), or one of

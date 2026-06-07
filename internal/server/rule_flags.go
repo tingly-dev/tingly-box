@@ -123,6 +123,14 @@ func resolveRuleFlagsWithScenario(
 
 		// Inject scenario-level ClaudeCodeCompat if not already set at rule level
 		flags.ClaudeCodeCompat = flags.ClaudeCodeCompat || scenarioConfig.Flags.ClaudeCodeCompat
+
+		// Inject scenario-level SkipUsage if not already set at rule level
+		flags.SkipUsage = flags.SkipUsage || scenarioConfig.Flags.SkipUsage
+
+		// Inject scenario-level SessionAffinity if rule hasn't set one explicitly
+		if flags.SessionAffinity == 0 && scenarioConfig.Flags.SessionAffinity > 0 {
+			flags.SessionAffinity = scenarioConfig.Flags.SessionAffinity
+		}
 	}
 
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios

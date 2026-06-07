@@ -590,12 +590,12 @@ func migrate20260606(c *Config) {
 		typ.ScenarioOpenCode,
 	}
 
-	// xcode scenario needs DisableStreamUsage=true + affinity
+	// xcode scenario needs SkipUsage=true + affinity
 	xcodeConfig := typ.ScenarioConfig{
 		Scenario: typ.ScenarioXcode,
 		Flags: typ.ScenarioFlags{
-			DisableStreamUsage: true, // Xcode client cannot handle usage in streaming chunks
-			SessionAffinity:     1800, // 30-minute affinity for cache optimization
+			SkipUsage:       true, // Xcode client cannot handle usage in streaming chunks
+			SessionAffinity: 1800, // 30-minute affinity for cache optimization
 		},
 	}
 
@@ -603,10 +603,10 @@ func migrate20260606(c *Config) {
 	found := false
 	for i := range c.Scenarios {
 		if c.Scenarios[i].Scenario == typ.ScenarioXcode {
-			// Set DisableStreamUsage if user hasn't explicitly set it
+			// Set SkipUsage if user hasn't explicitly set it
 			// Note: false means "not set" due to omitempty, true means explicitly enabled
-			if !c.Scenarios[i].Flags.DisableStreamUsage {
-				c.Scenarios[i].Flags.DisableStreamUsage = true
+			if !c.Scenarios[i].Flags.SkipUsage {
+				c.Scenarios[i].Flags.SkipUsage = true
 				needsSave = true
 			}
 			// Set SessionAffinity if user hasn't set it (0 means not set)
