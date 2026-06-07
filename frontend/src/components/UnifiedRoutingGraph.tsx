@@ -13,7 +13,7 @@ import {
     Typography,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getRouteGraphActiveColor, SMART_NODE_STYLES, PROVIDER_NODE_STYLES } from '@/components/nodes/styles';
 import {
@@ -192,6 +192,22 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
 }) => {
     const { t } = useTranslation();
     const isExpanded = !collapsible || expanded;
+
+    // Ref for the scrollable container
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Scroll to show the right portion of the graph on mount and when expanded
+    useEffect(() => {
+        if (isExpanded && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            // Scroll to show 80% of the content (right portion but not extreme edge)
+            const scrollTarget = container.scrollWidth * 0.8 - container.clientWidth;
+            container.scrollTo({
+                left: Math.max(0, scrollTarget),
+                behavior: 'smooth',
+            });
+        }
+    }, [isExpanded]);
 
     // Track which tier is being hovered
     const [hoveredTier, setHoveredTier] = React.useState<number | null>(null);
@@ -467,7 +483,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     <Stack spacing={graph.stackSpacing}>
                         {/* Graph row: scrollable graph + pinned extensions card */}
                         <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 0 }}>
-                            <Box sx={{ flexGrow: 1, minWidth: 0, overflowX: 'auto' }}>
+                            <Box ref={scrollContainerRef} sx={{ flexGrow: 1, minWidth: 0, overflowX: 'auto' }}>
                                 <GraphContainer>
                                     <GraphRow sx={{ alignItems: 'flex-start' }}>
                                         {/* EntryNode - Direct/Smart mode selector */}
