@@ -171,7 +171,7 @@ func (h *Handler) ApplyClaudeConfig(c *gin.Context) {
 	rules := cfg.GetRequestConfigs()
 	var claudeRules []typ.Rule
 	for _, rule := range rules {
-		if rule.GetScenario() == typ.ScenarioClaudeCode && rule.Active {
+		if rule.GetScenario().Is(typ.ScenarioClaudeCode) && rule.Active {
 			claudeRules = append(claudeRules, rule)
 		}
 	}

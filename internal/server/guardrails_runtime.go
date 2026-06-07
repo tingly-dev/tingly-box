@@ -99,8 +99,9 @@ func hasActiveGuardrailsPolicies(cfg guardrailscore.Config) bool {
 }
 
 func (s *Server) guardrailsSupportsScenario(scenario string) bool {
+	base := typ.RuleScenario(scenario).Base()
 	for _, supported := range guardrailsSupportedScenarios {
-		if scenario == supported {
+		if base == typ.RuleScenario(supported) {
 			return true
 		}
 	}

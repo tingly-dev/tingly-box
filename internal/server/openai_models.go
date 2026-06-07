@@ -114,7 +114,7 @@ func (s *Server) ListModelsByScenario(c *gin.Context) {
 	}
 
 	// Route to appropriate handler based on scenario
-	switch scenarioType {
+	switch scenarioType.Base() {
 	case typ.ScenarioAnthropic, typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
 		s.AnthropicListModelsForScenario(c, scenarioType)
 	default:

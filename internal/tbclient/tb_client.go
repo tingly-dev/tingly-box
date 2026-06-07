@@ -340,7 +340,7 @@ func (c *TBClientImpl) GetHTTPEndpointForScenario(ctx context.Context, scenario 
 
 // GetScenarioEndpointPath returns the endpoint path for a scenario
 func (c *TBClientImpl) GetScenarioEndpointPath(scenario typ.RuleScenario) string {
-	switch scenario {
+	switch scenario.Base() {
 	case typ.ScenarioSmartGuide:
 		return "/tingly/_smart_guide"
 	case typ.ScenarioClaudeCode:

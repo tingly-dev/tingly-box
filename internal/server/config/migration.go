@@ -489,7 +489,7 @@ func migrate20260513(c *Config) {
 	var referenceRule *typ.Rule
 	for i := range c.Rules {
 		rule := &c.Rules[i]
-		if rule.Scenario == typ.ScenarioClaudeCode || rule.Scenario == typ.ScenarioCodex {
+		if rule.Scenario.Is(typ.ScenarioClaudeCode) || rule.Scenario.Is(typ.ScenarioCodex) {
 			if len(rule.Services) > 0 {
 				referenceRule = rule
 				break
@@ -544,7 +544,7 @@ func migrate20260521(c *Config) {
 	var referenceRule *typ.Rule
 	for i := range c.Rules {
 		rule := &c.Rules[i]
-		if rule.Scenario == typ.ScenarioClaudeDesktop && len(rule.Services) > 0 {
+		if rule.Scenario.Is(typ.ScenarioClaudeDesktop) && len(rule.Services) > 0 {
 			referenceRule = rule
 			break
 		}

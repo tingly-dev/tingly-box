@@ -201,6 +201,19 @@ func ScenarioSupportsTransport(scenario RuleScenario, transport ScenarioTranspor
 	return slices.Contains(descriptor.SupportedTransport, transport)
 }
 
+// Base returns the base scenario, stripping any profile suffix.
+// "claude_code:p1".Base() == "claude_code"; "claude_code".Base() == "claude_code".
+func (s RuleScenario) Base() RuleScenario {
+	base, _ := ParseScenarioProfile(s)
+	return base
+}
+
+// Is reports whether the scenario's base equals the given base scenario.
+// Equivalent to s.Base() == base, but reads more naturally at call sites.
+func (s RuleScenario) Is(base RuleScenario) bool {
+	return s.Base() == base
+}
+
 // ProfileSeparator is used to split "scenario:profile_id" strings.
 const ProfileSeparator = ":"
 
