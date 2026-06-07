@@ -21,12 +21,12 @@ import (
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
-// Built-in failing mock IDs registered by vmodel.RegisterErrorMocks. Tests
+// Built-in failing mock IDs registered by vmodel.SharedDefaultMocks. Tests
 // pass one of these as the primary tier to drive a deterministic failure
 // without writing handler scaffolding.
 const (
-	FailMockPreContent429 = "virtual-fail-precontent-429"
-	FailMockPreContent500 = "virtual-fail-precontent-500"
+	FailMockPreContent429 = "virtual-fail-429"
+	FailMockPreContent500 = "virtual-fail-500"
 	FailMockMidStreamCut  = "virtual-fail-midstream-close"
 	FailMockMidStreamErr  = "virtual-fail-midstream-event"
 )
@@ -45,7 +45,7 @@ type FailoverRoute struct {
 
 // SetupFailoverRoute wires a two-tier rule using vmodel's pre-registered error
 // mocks for the primary tier. Both tiers run inside httptest servers; the
-// primary always trips the named injection (RegisterErrorMocks IDs above), the
+// primary always trips the named injection (SharedDefaultMocks IDs above), the
 // fallback serves successScenario via env.virtual.
 //
 // The orchestrator dispatches under TacticTier; the primary (Tier 0) is tried
@@ -175,18 +175,19 @@ func (env *TestEnv) SetupBothFailingRoute(
 }
 
 // startFailingProvider spins up a vmodel-backed httptest.Server with both
-// per-protocol registries populated by RegisterErrorMocks, wrapped with a
-// per-request counter. Caller selects the desired failure shape via the
-// Service.Model field on the rule (e.g. virtual-fail-precontent-429). Both
-// registries are populated, so the same server serves either OpenAI Chat or
-// Anthropic Messages depending on the route the gateway picks.
+// per-protocol registries populated by RegisterDefaults (which includes error models),
+// wrapped with a per-request counter. Caller selects the desired failure shape via the
+// Service.Model field on the rule (e.g. virtual-fail-429). Both registries are populated,
+// so the same server serves either OpenAI Chat or Anthropic Messages depending on the
+// route the gateway picks.
 func startFailingProvider(t *testing.T) (*httptest.Server, *atomic.Int64) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	svc := virtualserver.NewService()
-	openaivm.RegisterErrorMocks(svc.GetOpenAIRegistry())
-	anthropicvm.RegisterErrorMocks(svc.GetAnthropicRegistry())
+	// Error models are now in SharedDefaultMocks, registered by default
+	openaivm.RegisterDefaults(svc.GetOpenAIRegistry())
+	anthropicvm.RegisterDefaults(svc.GetAnthropicRegistry())
 
 	var count atomic.Int64
 	engine := gin.New()
