@@ -63,3 +63,9 @@ type ScenarioUpdateResponse struct {
 	Message string             `json:"message" example:"Scenario config saved successfully"`
 	Data    typ.ScenarioConfig `json:"data"`
 }
+
+// ScenarioDescriptorsResponse represents the response for listing scenario descriptors
+type ScenarioDescriptorsResponse struct {
+	Success bool                      `json:"success" example:"true"`
+	Data    []typ.ScenarioDescriptor  `json:"data"`
+}

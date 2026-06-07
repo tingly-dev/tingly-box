@@ -572,6 +572,11 @@ export const api = {
         });
     },
 
+    // Scenario descriptors (includes supports_profiles flag)
+    getScenarioDescriptors: async (): Promise<any> => {
+        return uiAPI('/scenario-descriptors');
+    },
+
     // Profile API
     getProfiles: async (scenario: string): Promise<any> => {
         return uiAPI(`/scenario/${scenario}/profiles`);

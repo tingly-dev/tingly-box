@@ -33,6 +33,12 @@ func NewHandler(cfg *config.Config, rcControl RemoteControlController) *Handler 
 }
 
 // GetScenarios returns all scenario configurations
+// GetScenarioDescriptors returns all registered scenario descriptors from the registry.
+func (h *Handler) GetScenarioDescriptors(c *gin.Context) {
+	descriptors := typ.RegisteredScenarioDescriptors()
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": descriptors})
+}
+
 func (h *Handler) GetScenarios(c *gin.Context) {
 	if h.config == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -493,19 +499,14 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	// If name is not provided, fetch existing profile name
+	// If name is not provided, preserve existing profile name
 	if req.Name == "" {
-		profiles := h.config.GetProfiles(scenario)
-		for _, p := range profiles {
-			if p.ID == profileID {
-				req.Name = p.Name
-				break
-			}
-		}
-		if req.Name == "" {
+		existing, ok := h.config.GetProfile(scenario, profileID)
+		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile not found"})
 			return
 		}
+		req.Name = existing.Name
 	}
 
 	if err := h.config.UpdateProfile(scenario, profileID, req.Name, req.Unified); err != nil {
@@ -513,17 +514,8 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	// Fetch updated profile to return in response
-	profiles := h.config.GetProfiles(scenario)
-	var updatedProfile *typ.ProfileMeta
-	for i := range profiles {
-		if profiles[i].ID == profileID {
-			updatedProfile = &profiles[i]
-			break
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile updated", "data": updatedProfile})
+	updated, _ := h.config.GetProfile(scenario, profileID)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "profile updated", "data": updated})
 }
 
 // DeleteProfile deletes a profile by ID
