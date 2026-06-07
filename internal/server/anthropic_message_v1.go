@@ -96,6 +96,7 @@ func (s *Server) AnthropicMessagesV1(c *gin.Context, req protocol.AnthropicMessa
 
 	reqCtx.RequestModel = actualModel
 	reqCtx.ResponseModel = proxyModel
+	reqCtx.Extra["disable_stream_usage"] = ruleFlags.DisableStreamUsage
 
 	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
 		func(p *typ.Provider, _ string) {

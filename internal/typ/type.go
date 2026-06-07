@@ -152,8 +152,6 @@ type ScenarioFlags struct {
 	// Experimental feature flags (scenario-based opt-in)
 	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
 	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`     // Enable scenario recording V2 (request/request_response/staged_request_response)
-	Beta         bool          `json:"anthropic_beta,omitempty" yaml:"anthropic_beta,omitempty"` // Enable Anthropic beta features (e.g. extended thinking)
-
 	// Stream configuration flags
 	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"` // Don't include usage in streaming chunks (for incompatible clients like xcode)
 
@@ -237,6 +235,11 @@ type RuleFlags struct {
 	// expires. This is a load-balancing concern and works independently of
 	// smart routing. Supersedes the legacy top-level Rule.SmartAffinity field.
 	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
+
+	// DisableStreamUsage strips usage fields from streaming chunks (SSE deltas).
+	// Equivalent to the scenario-level disable_stream_usage but scoped to this rule.
+	// When both are set the rule-level value takes precedence (ORed together at dispatch).
+	DisableStreamUsage bool `json:"disable_stream_usage,omitempty" yaml:"disable_stream_usage,omitempty"`
 
 	// VisionProxyService enables the rule-scoped vision proxy when set. When a
 	// request matched by this rule carries an image, the configured service

@@ -240,6 +240,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	}
 	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
 	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
+	reqCtx.Extra["disable_stream_usage"] = ruleFlags.DisableStreamUsage
 
 	// === Dispatch via transform chain ===
 	reqCtx.RequestModel = actualModel

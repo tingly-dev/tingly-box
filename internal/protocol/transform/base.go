@@ -42,10 +42,15 @@ func (t *BaseTransform) Apply(ctx *TransformContext) error {
 		ctx.Extra = make(map[string]interface{})
 	}
 
-	// Get disableStreamUsage from scenario flags
+	// Get disableStreamUsage: scenario flags first, then rule-level Extra override
 	disableStreamUsage := false
 	if ctx.ScenarioFlags != nil {
 		disableStreamUsage = ctx.ScenarioFlags.DisableStreamUsage
+	}
+	if v, ok := ctx.Extra["disable_stream_usage"]; ok {
+		if b, _ := v.(bool); b {
+			disableStreamUsage = true
+		}
 	}
 
 	// Determine if conversion is needed by checking BOTH input type AND target type
