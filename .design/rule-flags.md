@@ -12,7 +12,7 @@
 | 维度 | 粒度 | 例子 |
 |------|------|------|
 | Provider | provider 实例 | `user_agent`、`api_base`、`proxy_url`、`timeout` |
-| Scenario flags | scenario | `disable_stream_usage` 等 |
+| Scenario flags | scenario | `skip_usage`（场景级默认）、`smart_compact`、`recording_v2` 等 |
 | **Rule flags** | **单条 rule** | **`cursor_compat`、`skip_usage`、`use_max_completion_tokens`、`use_max_tokens`、`custom_user_agent` …** |
 
 很多行为只对**某类客户端 / 某类模型 / 某种调试目的**有意义。塞到 Provider
@@ -449,17 +449,53 @@ Extensions Card 操作。
 
 ## 12. Scenario-level Flags（场景级 Flag）
 
-部分 flag 不仅存在于 RuleFlags，也存在于 ScenarioFlags：
+ScenarioFlags 是 RuleFlags 的特殊子集：Scenario flag 设置场景级默认值，
+rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`internal/server/rule_flags.go`）
+是这条继承链的唯一落地点。
 
 | Flag | Rule级 | Scenario级 | 继承行为 |
 |------|--------|------------|----------|
-| `session_affinity` | ✅ | ✅ | Rule 显式设置 > Scenario 默认 > 禁用（0） |
-| `claude_code_compat` | ✅ | ✅ | Scenario 启用时自动注入到该场景所有 rule |
+| `skip_usage` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `SkipUsage`（rule 未禁用即生效）|
+| `thinking_effort` | ✅ | ✅ | Rule 显式设置 > Scenario 默认 > By Client（空字符串）|
+| `clean_header` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `CleanHeader`；billing 场景协议转换时自动启用 |
+| `claude_code_compat` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `ClaudeCodeCompat` |
+| `session_affinity` | ✅ | ✅ | Rule 显式设置（>0）> Scenario 默认 > 禁用（0）|
+
+**Scenario-only flags**（无 rule 级对应，只存在于 ScenarioFlags）：
+
+| Flag | 作用 |
+|------|------|
+| `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context |
+| `recording_v2` | 控制请求/响应录制模式（off / request / request_response / staged） |
+| `unified` / `separate` / `smart` | 路由模式开关 |
 
 **继承逻辑实现**：
 
 ```go
-// session_affinity 解析顺序
+// resolveRuleFlagsWithScenario 的继承顺序（internal/server/rule_flags.go）
+func resolveRuleFlagsWithScenario(...) typ.RuleFlags {
+    flags := resolveRuleFlags(c, rule) // 含 cursor_compat_auto 折叠
+
+    if scenarioConfig != nil {
+        // ThinkingEffort：rule 未设置时继承 scenario 值
+        if flags.ThinkingEffort == "" && scenarioConfig.Flags.ThinkingEffort != "" {
+            flags.ThinkingEffort = scenarioConfig.Flags.ThinkingEffort
+        }
+        // CleanHeader / ClaudeCodeCompat / SkipUsage：OR 语义（任一启用即生效）
+        flags.CleanHeader      = flags.CleanHeader || scenarioConfig.Flags.CleanHeader
+        flags.ClaudeCodeCompat = flags.ClaudeCodeCompat || scenarioConfig.Flags.ClaudeCodeCompat
+        flags.SkipUsage        = flags.SkipUsage || scenarioConfig.Flags.SkipUsage
+        // SessionAffinity：rule 显式设置（>0）优先
+        if flags.SessionAffinity == 0 && scenarioConfig.Flags.SessionAffinity > 0 {
+            flags.SessionAffinity = scenarioConfig.Flags.SessionAffinity
+        }
+    }
+    // billing 场景协议转换时自动启用 CleanHeader
+    flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
+    return flags
+}
+
+// session_affinity 路由层解析顺序（Config.GetEffectiveAffinity）
 func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
     // 1. Rule 显式设置
     if rule.Flags.SessionAffinity > 0 {
@@ -522,14 +558,22 @@ func (c *Config) scenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioCo
   **已完成**：cursor_compat 现在是 Type 1b-pre（pre-Base Transform，
   `transform.OpenAICursorCompatTransform`），通过
   `rulePreBaseTransforms` prepend 到 chain 最前；handler 入口的 pre-chain
-  mutation 已移除。Inbound 形态非 OpenAI Chat 时 type-switch 自然 no-op，
-  与 "cursor 归一化只对 OpenAI 入站才有意义" 的设计意图一致。
+  mutation 已移除。
+- ~~**后端**：部分 ScenarioFlags 可下沉成 rule flag（`disable_stream_usage`
+  与 `skip_usage` 高度重叠）~~。**已完成**：`ScenarioFlags.DisableStreamUsage`
+  已移除并统一为 `SkipUsage`（json: `skip_usage`）。Xcode 场景的默认值
+  通过 migration 改为 `SkipUsage: true`；继承逻辑在
+  `resolveRuleFlagsWithScenario` 中 OR 合并。`ScenarioFlags` 与 `RuleFlags`
+  共享 flag 时统一通过该函数注入，不再双轨维护。
+- ~~**前端**：`PluginFeatures.tsx` 混合了多个 flag 的状态管理+渲染~~。
+  **已完成**：拆分为独立子组件（`ThinkingEffortControl`、`RecordingV2Control`、
+  `VisionProxyControl`、`PluginToggleButton`），均放在
+  `frontend/src/components/flags/`。`PluginFeatures` 自身缩减为薄编排层，
+  一次 `Promise.all` 加载后将数据+回调传给各子组件。
 - **后端**：`internal/client/openai.go` 通用 OpenAI client 用
   `http.DefaultTransport` 而非 `createSessionBoundTransport`，没有走
   transport pool / session 隔离——独立问题，不在 rule flag 范畴，但
   补齐时记得保留 §8 的两层 UA 包装顺序。
-- **后端**：部分 ScenarioFlags 可下沉成 rule flag（例如
-  `disable_stream_usage` 已与 `skip_usage` 高度重叠）。
 - **测试**：当前覆盖 op / Transform / handler helper / wire 序列化四
   层，缺一个 "rule 配了 skip_usage → 真实 HTTP 响应里没有 usage" 的端
   到端 case，待 mock provider fixture 成熟后补。
