@@ -32,6 +32,11 @@ type SharedMockSpec struct {
 	Delay    time.Duration
 	Usage    *MockUsage      // optional explicit usage to advertise in the stream
 	Error    *ErrorInjection // optional synthetic failure for error-injection mocks
+
+	// Error metadata (only meaningful when Error != nil)
+	ErrorCategory ErrorCategory // Category of error (rate_limit, upstream, etc.)
+	IsRetryable   bool          // Whether failover should retry this error
+	Severity      string        // "low", "medium", "high" - for filtering/sorting
 }
 
 // SharedDefaultMocks returns the mocks registered by BOTH the Anthropic and
@@ -85,6 +90,63 @@ func SharedDefaultMocks() []SharedMockSpec {
 			},
 			Delay: 50 * time.Millisecond,
 		},
+		// Error models - always fail for testing failover and error handling
+		{
+			ID:      "virtual-fail-429",
+			Name:    "Virtual Fail 429",
+			Content: "unreachable",
+			Error: &ErrorInjection{
+				Stage:   ErrorStagePreContent,
+				Status:  429,
+				Message: "simulated rate limit",
+				Type:    "rate_limit_error",
+			},
+			ErrorCategory: ErrorCategoryRateLimit,
+			IsRetryable:   true,
+			Severity:      "medium",
+		},
+		{
+			ID:      "virtual-fail-500",
+			Name:    "Virtual Fail 500",
+			Content: "unreachable",
+			Error: &ErrorInjection{
+				Stage:   ErrorStagePreContent,
+				Status:  500,
+				Message: "simulated upstream error",
+				Type:    "api_error",
+			},
+			ErrorCategory: ErrorCategoryUpstream,
+			IsRetryable:   true,
+			Severity:      "high",
+		},
+		{
+			ID:      "virtual-fail-midstream-close",
+			Name:    "Virtual Fail Midstream Close",
+			Content: "hello world this stream will be truncated",
+			Error: &ErrorInjection{
+				Stage:         ErrorStageMidStream,
+				AfterEvents:   1,
+				MidStreamMode: MidStreamModeConnectionClose,
+			},
+			ErrorCategory: ErrorCategoryNetwork,
+			IsRetryable:   false,
+			Severity:      "high",
+		},
+		{
+			ID:      "virtual-fail-midstream-event",
+			Name:    "Virtual Fail Midstream Event",
+			Content: "hello world this stream will end with an error",
+			Error: &ErrorInjection{
+				Stage:         ErrorStageMidStream,
+				AfterEvents:   1,
+				MidStreamMode: MidStreamModeErrorEvent,
+				Message:       "simulated mid-stream error",
+				Type:          "api_error",
+			},
+			ErrorCategory: ErrorCategoryUpstream,
+			IsRetryable:   false,
+			Severity:      "medium",
+		},
 	}
 }
 
@@ -121,64 +183,80 @@ func StreamTestMockSpecs() []SharedMockSpec {
 	}
 }
 
-// ErrorMockSpecs returns opt-in fixtures that always fail. They exist so a
-// consumer (priority-routing failover tests, gateway integration tests, demos)
-// can register a "broken upstream" mock by name instead of standing up an
-// ad-hoc httptest.Server. Each spec covers one of the two failover-relevant
-// stages:
-//
-//   - virtual-fail-precontent-429 / -500: pre-content failures the failover
-//     orchestrator MUST retry (gate stays buffered, retryable status).
-//   - virtual-fail-midstream-close / -event: mid-stream failures the
-//     orchestrator MUST NOT retry (gate committed, bytes on the wire).
-//
-// Like StreamTestMockSpecs, these are intentionally NOT in SharedDefaultMocks
-// so production registries stay clean — register via RegisterErrorMocks.
-func ErrorMockSpecs() []SharedMockSpec {
+// ExtendedErrorSpecs returns additional error scenarios for testing.
+// These are opt-in - register via RegisterExtendedErrorMocks in per-protocol packages.
+func ExtendedErrorSpecs() []SharedMockSpec {
 	return []SharedMockSpec{
 		{
-			ID:      "virtual-fail-precontent-429",
-			Name:    "Virtual Fail (Pre-Content 429)",
+			ID:      "virtual-fail-auth-401",
+			Name:    "Virtual Fail Auth 401",
 			Content: "unreachable",
 			Error: &ErrorInjection{
 				Stage:   ErrorStagePreContent,
-				Status:  429,
-				Message: "simulated rate limit",
-				Type:    "rate_limit_error",
+				Status:  401,
+				Message: "authentication failed",
+				Type:    "authentication_error",
 			},
+			ErrorCategory: ErrorCategoryAuth,
+			IsRetryable:   false,
+			Severity:      "high",
 		},
 		{
-			ID:      "virtual-fail-precontent-500",
-			Name:    "Virtual Fail (Pre-Content 500)",
+			ID:      "virtual-fail-502",
+			Name:    "Virtual Fail 502",
 			Content: "unreachable",
 			Error: &ErrorInjection{
 				Stage:   ErrorStagePreContent,
-				Status:  500,
-				Message: "simulated upstream error",
+				Status:  502,
+				Message: "bad gateway",
 				Type:    "api_error",
 			},
+			ErrorCategory: ErrorCategoryUpstream,
+			IsRetryable:   true,
+			Severity:      "high",
 		},
 		{
-			ID:      "virtual-fail-midstream-close",
-			Name:    "Virtual Fail (Mid-Stream Connection Close)",
-			Content: "hello world this stream will be truncated",
+			ID:      "virtual-fail-503",
+			Name:    "Virtual Fail 503",
+			Content: "unreachable",
+			Error: &ErrorInjection{
+				Stage:   ErrorStagePreContent,
+				Status:  503,
+				Message: "service unavailable",
+				Type:    "overloaded_error",
+			},
+			ErrorCategory: ErrorCategoryOverloaded,
+			IsRetryable:   true,
+			Severity:      "medium",
+		},
+		{
+			ID:      "virtual-fail-400",
+			Name:    "Virtual Fail 400",
+			Content: "unreachable",
+			Error: &ErrorInjection{
+				Stage:   ErrorStagePreContent,
+				Status:  400,
+				Message: "invalid request",
+				Type:    "invalid_request_error",
+			},
+			ErrorCategory: ErrorCategoryInvalid,
+			IsRetryable:   false,
+			Severity:      "low",
+		},
+		{
+			ID:      "virtual-fail-timeout",
+			Name:    "Virtual Fail Timeout",
+			Content: "hello world this stream will timeout",
 			Error: &ErrorInjection{
 				Stage:         ErrorStageMidStream,
-				AfterEvents:   1,
+				AfterEvents:   2,
 				MidStreamMode: MidStreamModeConnectionClose,
+				Message:       "timeout",
+				Type:          "timeout_error",
 			},
-		},
-		{
-			ID:      "virtual-fail-midstream-event",
-			Name:    "Virtual Fail (Mid-Stream Error Event)",
-			Content: "hello world this stream will end with an error",
-			Error: &ErrorInjection{
-				Stage:         ErrorStageMidStream,
-				AfterEvents:   1,
-				MidStreamMode: MidStreamModeErrorEvent,
-				Message:       "simulated mid-stream error",
-				Type:          "api_error",
-			},
+			ErrorCategory: ErrorCategoryTimeout,
+			IsRetryable:   false,
+			Severity:      "high",
 		},
 	}
 }

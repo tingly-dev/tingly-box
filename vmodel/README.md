@@ -19,7 +19,7 @@ vmodel/
 ├── registry.go         // GenericRegistry[T] — shared thread-safe registry
 ├── base_mock.go        // BaseMockModel — shared identity/metadata methods
 ├── stream.go           // ResolveChunkDelay, EmitChunks — shared stream helpers
-├── defaults_shared.go  // SharedDefaultMocks() + ErrorMockSpecs() — shared specs
+├── defaults_shared.go  // SharedDefaultMocks() + ExtendedErrorSpecs() — shared specs
 ├── error_injection.go  // ErrorInjection, ErrorInjectingModel, EmitGate
 ├── README.md
 ├── anthropic/          // Anthropic-protocol models + Registry alias
@@ -59,7 +59,7 @@ that need bespoke synthetic models should construct their own
 `GenericRegistry[T]` (the way `protocoltest` does for `Scenario`) and
 register fixtures there — keeping the production defaults clean.
 
-**Opt-in fixture sets.** Two named registration helpers ship alongside
+**Opt-in fixture sets.** Three named registration helpers ship alongside
 `RegisterDefaults` for callers that want pre-built fixtures without polluting
 the production endpoint:
 
@@ -67,10 +67,12 @@ the production endpoint:
 |--------|-------------------|--------------|
 | `RegisterStreamTestMocks(reg)` | `virtual-stream-test`, `virtual-stream-test-tool` — advertise the full usage shape (prompt / completion / cached / cache-creation / reasoning) | Streaming-converter tests that need deterministic usage emission |
 | `RegisterErrorMocks(reg)`      | `virtual-fail-precontent-{429,500}`, `virtual-fail-midstream-{close,event}` — always fail per the configured stage | Failover / resilience tests that need a deterministic broken upstream |
+| `RegisterExtendedErrorMocks(reg)` | `virtual-fail-auth-{401,403}`, `virtual-fail-upstream-{502,503,504}`, `virtual-fail-invalid-400`, etc. — comprehensive error scenarios | Advanced testing with full error catalog |
+| `RegisterAllErrorMocks(reg)` | Combines both basic and extended error models | Convenience helper for full error catalog |
 
 Both helpers live in each per-protocol sub-package (`anthropic.Register…` and
-`openai.Register…`), source their specs from the root `defaults_shared.go`, and
-are kept out of `RegisterDefaults` so production registries stay clean.
+`openai.Register…`), source their specs from the root `defaults_shared.go`,
+and are kept out of `RegisterDefaults` so production registries stay clean.
 
 ## Design
 
@@ -210,6 +212,98 @@ extension UI and registry consumers can group by behavior:
 | `tool`   | Returns a `tool_use` / `tool_calls` block                                                           | `ask-user-question`, `ask-confirmation`, `web-search-example` |
 | `proxy`  | Applies a transform chain (no upstream call; same model also runs in real proxy paths)              | `compact-thinking`, `claude-code-compact`   |
 
+## Error models
+
+Error models are virtual models that always fail with a configurable error.
+They enable testing of failover, resilience, and error handling without
+requiring a real upstream provider or ad-hoc test servers.
+
+### Error model categories
+
+Error models are categorized by `ErrorCategory` (defined in `error_injection.go`):
+
+| Category      | Description | HTTP Status | Retryable |
+| ------------- | ----------- | ----------- | --------- |
+| `rate_limit`  | Rate limiting (429) | 429 | Yes |
+| `upstream`    | Upstream server errors (5xx) | 500, 502, 503, 504 | Yes |
+| `timeout`      | Request timeout | 504 | Yes (pre-content), No (mid-stream) |
+| `overloaded`   | Service overloaded | 503 | Yes |
+| `invalid`      | Invalid request | 400 | No |
+| `auth`         | Authentication/authorization | 401, 403 | No |
+| `network`      | Network connectivity | Various | Yes (pre-content), No (mid-stream) |
+| `malformed`    | Malformed response | Various | No |
+
+### Error stages
+
+Error models operate at two distinct stages:
+
+1. **Pre-content** (`ErrorStagePreContent`): Failure before any response bytes are written
+   - Handler returns HTTP error status immediately
+   - No streaming starts
+   - **Failover SHOULD retry** (firstChunkGate stays buffered)
+
+2. **Mid-stream** (`ErrorStageMidStream`): Failure after streaming has started
+   - Handler emits some content events, then fails
+   - Two modes: connection close or error event
+   - **Failover MUST NOT retry** (gate committed, bytes on the wire)
+
+### Basic error models (4)
+
+Registered in `SharedDefaultMocks()` (always available):
+
+| Model ID | Stage | Status | Retryable | Use case |
+| -------- | ----- | ------ | --------- | -------- |
+| `virtual-fail-429` | Pre-content | 429 | Yes | Rate limit testing |
+| `virtual-fail-500` | Pre-content | 500 | Yes | Upstream error testing |
+| `virtual-fail-midstream-close` | Mid-stream | — | No | TCP disconnect testing |
+| `virtual-fail-midstream-event` | Mid-stream | — | No | SSE error event testing |
+
+### Extended error models (5)
+
+Registered by `RegisterExtendedErrorMocks()`:
+
+| Model ID | Stage | Status | Category | Use case |
+| -------- | ----- | ------ | -------- | -------- |
+| `virtual-fail-auth-401` | Pre-content | 401 | auth | Authentication failure |
+| `virtual-fail-502` | Pre-content | 502 | upstream | Bad gateway |
+| `virtual-fail-503` | Pre-content | 503 | overloaded | Service unavailable |
+| `virtual-fail-400` | Pre-content | 400 | invalid | Invalid request |
+| `virtual-fail-timeout` | Mid-stream | — | timeout | Mid-stream timeout |
+
+### Using error models
+
+```go
+// In tests - basic error models are already available via SharedDefaultMocks
+reg := anthropic.NewRegistry()
+anthropic.RegisterDefaults(reg) // Includes virtual-fail-429, virtual-fail-500, etc.
+
+// For extended error models (opt-in)
+anthropic.RegisterExtendedErrorMocks(reg)
+
+// In production (for demo/onboarding)
+service := virtualserver.NewService(anthropicReg, openaiReg)
+// Basic error models ARE included by default
+// Extended error models require RegisterExtendedErrorMocks
+```
+
+### Error model naming convention
+
+Error model IDs follow the pattern:
+```
+virtual-fail-{status}-{variant}
+```
+
+- `status`: HTTP status code (429, 500, 401, 502, 503, 400) or type (midstream-close, midstream-event, timeout)
+- `variant`: Optional disambiguator (close, event, timeout, auth, etc.)
+
+The stage (pre-content vs mid-stream) is implicit from the ErrorStage field, not the ID.
+
+Examples:
+- `virtual-fail-429` - Rate limit (pre-content)
+- `virtual-fail-midstream-close` - Mid-stream connection close
+- `virtual-fail-auth-401` - Authentication failure
+- `virtual-fail-502` - Bad gateway error
+
 ## Default model allocation
 
 | Model ID                | Anthropic registry | OpenAI registry |
@@ -343,18 +437,14 @@ isolated to the handler) and leaves the common mock path uncluttered.
 
 ### Pre-registered fail mocks
 
-`vmodel.ErrorMockSpecs()` defines four well-known broken upstreams. Register
-them into either per-protocol registry with the opt-in helper:
-
-```go
-openai.RegisterErrorMocks(svc.GetOpenAIRegistry())
-anthropic.RegisterErrorMocks(svc.GetAnthropicRegistry())
-```
+Basic error models (429, 500, midstream-close, midstream-event) are included in
+`SharedDefaultMocks()` and registered by default via `RegisterDefaults()`.
+Extended error models require opt-in registration via `RegisterExtendedErrorMocks()`.
 
 | Model ID | Behavior |
 |----------|----------|
-| `virtual-fail-precontent-429`  | HTTP 429 + `rate_limit_error` envelope (retryable) |
-| `virtual-fail-precontent-500`  | HTTP 500 + `api_error` envelope (retryable) |
+| `virtual-fail-429`  | HTTP 429 + `rate_limit_error` envelope (retryable) |
+| `virtual-fail-500`  | HTTP 500 + `api_error` envelope (retryable) |
 | `virtual-fail-midstream-close` | One real chunk then TCP close (not retryable) |
 | `virtual-fail-midstream-event` | One real chunk then SSE error frame (not retryable) |
 

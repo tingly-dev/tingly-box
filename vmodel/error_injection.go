@@ -1,5 +1,18 @@
 package vmodel
 
+// ErrorCategory categorizes error models for filtering and catalog purposes.
+type ErrorCategory string
+
+const (
+	ErrorCategoryRateLimit  ErrorCategory = "rate_limit" // Rate limiting (429)
+	ErrorCategoryUpstream   ErrorCategory = "upstream"   // Upstream server errors (5xx)
+	ErrorCategoryTimeout    ErrorCategory = "timeout"    // Request timeout
+	ErrorCategoryOverloaded ErrorCategory = "overloaded" // Service overloaded
+	ErrorCategoryInvalid    ErrorCategory = "invalid"    // Invalid request
+	ErrorCategoryAuth       ErrorCategory = "auth"       // Authentication/authorization
+	ErrorCategoryNetwork    ErrorCategory = "network"    // Network connectivity
+	ErrorCategoryMalformed  ErrorCategory = "malformed"  // Malformed response
+)
 
 // ErrorStage selects when in the request lifecycle a mock model's error
 // injection fires.
@@ -118,4 +131,3 @@ func (g *EmitGate) Allow() bool {
 func (g *EmitGate) Tripped() bool {
 	return g.cutoff > 0 && g.n >= g.cutoff
 }
-

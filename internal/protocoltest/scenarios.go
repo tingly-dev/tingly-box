@@ -3,9 +3,18 @@ package protocoltest
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tingly-dev/tingly-box/vmodel"
+)
+
+// errorSpecCache caches error specs by ID to avoid repeated linear searches.
+// Initialized lazily on first use.
+var (
+	errorSpecCache     map[string]vmodel.SharedMockSpec
+	errorSpecCacheOnce sync.Once
+	errorSpecCacheMu   sync.RWMutex
 )
 
 // ResponseFormat represents the format of the mock response for different endpoints.
@@ -76,6 +85,20 @@ func AllScenarios() []Scenario {
 		StreamingToolUseScenario(),
 		IncompleteScenario(),
 		ErrorScenario(),
+		Error500Scenario(),
+		ErrorAuth401Scenario(),
+		ErrorMidStreamCloseScenario(),
+	}
+}
+
+// AllErrorScenarios returns all error scenarios for tests that need to
+// exercise error handling comprehensively.
+func AllErrorScenarios() []Scenario {
+	return []Scenario{
+		ErrorScenario(),
+		Error500Scenario(),
+		ErrorAuth401Scenario(),
+		ErrorMidStreamCloseScenario(),
 	}
 }
 
@@ -643,67 +666,83 @@ func openAIResponsesIncompleteSSE() []string {
 // ─── Error ───────────────────────────────────────────────────────────────────
 
 func ErrorScenario() Scenario {
+	spec429 := GetErrorSpec("virtual-fail-429")
 	return Scenario{
 		Name:           "error",
 		Description:    "Provider rate limit error (429) propagated to client",
 		Tags:           []string{"error"},
 		SkipTransitive: true,
 		MockResponses: map[ResponseFormat]MockResponseBuilder{
-			FormatOpenAIChat:      openAIErrorResponse(),
-			FormatOpenAIResponses: openAIErrorResponse(),
-			FormatAnthropic:       anthropicErrorResponse(),
-			FormatGoogle:          googleErrorResponse(),
+			FormatOpenAIChat:      BuildErrorFromSpec(FormatOpenAIChat, spec429),
+			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec429),
+			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec429),
+			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec429),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatusAtLeast(400),
-			AssertErrorMessageContains("Rate limit"),
+			AssertErrorMessageContains("rate limit"),
 		},
 	}
 }
 
-func openAIErrorResponse() MockResponseBuilder {
-	body := map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": "Rate limit exceeded",
-			"type":    "rate_limit_error",
-			"code":    "rate_limit_exceeded",
+// Error500Scenario tests upstream server error (500) propagated to client.
+func Error500Scenario() Scenario {
+	spec500 := GetErrorSpec("virtual-fail-500")
+	return Scenario{
+		Name:           "error-500",
+		Description:    "Provider upstream error (500) propagated to client",
+		Tags:           []string{"error"},
+		SkipTransitive: true,
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      BuildErrorFromSpec(FormatOpenAIChat, spec500),
+			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec500),
+			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec500),
+			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec500),
 		},
-	}
-	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return 429, mustMarshal(body) },
-		Stream: func() []string {
-			return []string{`data: {"error":{"message":"Rate limit exceeded","type":"rate_limit_error"}}`}
-		},
-	}
-}
-
-func anthropicErrorResponse() MockResponseBuilder {
-	body := map[string]interface{}{
-		"type": "error",
-		"error": map[string]interface{}{
-			"type":    "rate_limit_error",
-			"message": "Rate limit exceeded",
-		},
-	}
-	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return 429, mustMarshal(body) },
-		Stream: func() []string {
-			return []string{`event: error`, `data: {"type":"error","error":{"type":"rate_limit_error","message":"Rate limit exceeded"}}`}
+		Assertions: []Assertion{
+			AssertHTTPStatusAtLeast(400),
+			AssertErrorMessageContains("upstream"),
 		},
 	}
 }
 
-func googleErrorResponse() MockResponseBuilder {
-	body := map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    429,
-			"message": "Rate limit exceeded",
-			"status":  "RESOURCE_EXHAUSTED",
+// ErrorAuth401Scenario tests authentication failure (401) propagated to client.
+func ErrorAuth401Scenario() Scenario {
+	spec401 := GetErrorSpec("virtual-fail-auth-401")
+	return Scenario{
+		Name:           "error-auth-401",
+		Description:    "Authentication failure (401) propagated to client",
+		Tags:           []string{"error", "auth"},
+		SkipTransitive: true,
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat:      BuildErrorFromSpec(FormatOpenAIChat, spec401),
+			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, spec401),
+			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, spec401),
+			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, spec401),
+		},
+		Assertions: []Assertion{
+			AssertHTTPStatus(401),
+			AssertErrorMessageContains("authentication"),
 		},
 	}
-	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return 429, mustMarshal(body) },
-		Stream:    func() []string { return []string{`data: {"error":{"code":429,"message":"Rate limit exceeded"}}`} },
+}
+
+// ErrorMidStreamCloseScenario tests mid-stream connection close failure.
+func ErrorMidStreamCloseScenario() Scenario {
+	specClose := GetErrorSpec("virtual-fail-midstream-close")
+	return Scenario{
+		Name:           "error-midstream-close",
+		Description:    "Mid-stream connection close failure",
+		Tags:           []string{"error", "midstream"},
+		SkipTransitive: true,
+		MockResponses: map[ResponseFormat]MockResponseBuilder{
+			FormatOpenAIChat: BuildErrorFromSpec(FormatOpenAIChat, specClose),
+			FormatAnthropic:  BuildErrorFromSpec(FormatAnthropic, specClose),
+		},
+		Assertions: []Assertion{
+			AssertHTTPStatus(200),
+			AssertContentContains("truncated"),
+		},
 	}
 }
 
@@ -899,6 +938,141 @@ func anthropicThinkingSSE() []string {
 		`event: message_stop`,
 		`data: {"type":"message_stop"}`,
 	}
+}
+
+// ─── vmodel error integration helpers ─────────────────────────────────────────────
+
+// BuildErrorFromSpec creates a MockResponseBuilder from a vmodel.SharedMockSpec
+// for the specified protocol format. This enables protocoltest to use the same
+// error definitions as vmodel, ensuring consistency across testing and production.
+func BuildErrorFromSpec(format ResponseFormat, spec vmodel.SharedMockSpec) MockResponseBuilder {
+	if spec.Error == nil {
+		return MockResponseBuilder{} // No error configured
+	}
+
+	switch format {
+	case FormatOpenAIChat, FormatOpenAIResponses:
+		return buildOpenAIError(spec.Error)
+	case FormatAnthropic:
+		return buildAnthropicError(spec.Error)
+	case FormatGoogle:
+		return buildGoogleError(spec.Error)
+	default:
+		return MockResponseBuilder{}
+	}
+}
+
+// buildOpenAIError creates an OpenAI-shaped error response from vmodel.ErrorInjection.
+func buildOpenAIError(err *vmodel.ErrorInjection) MockResponseBuilder {
+	status, message, typ := normalizeErrorSpec(err)
+
+	body := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+			"type":    typ,
+		},
+	}
+
+	// Pre-compute stream payload to avoid repeated marshaling
+	streamPayload, _ := json.Marshal(body["error"])
+	streamLine := fmt.Sprintf("data: %s", string(streamPayload))
+
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return status, mustMarshal(body) },
+		Stream:    func() []string { return []string{streamLine} },
+	}
+}
+
+// normalizeErrorSpec centralizes default value logic for error injection fields.
+// Returns (status, message, type) with defaults applied for zero values.
+func normalizeErrorSpec(err *vmodel.ErrorInjection) (status int, message string, typ string) {
+	status = err.Status
+	if status == 0 {
+		status = 500
+	}
+	message = err.Message
+	if message == "" {
+		message = "simulated error"
+	}
+	typ = err.Type
+	if typ == "" {
+		typ = "api_error"
+	}
+	return status, message, typ
+}
+
+// buildAnthropicError creates an Anthropic-shaped error response from vmodel.ErrorInjection.
+func buildAnthropicError(err *vmodel.ErrorInjection) MockResponseBuilder {
+	status, message, typ := normalizeErrorSpec(err)
+
+	body := map[string]interface{}{
+		"type": "error",
+		"error": map[string]interface{}{
+			"type":    typ,
+			"message": message,
+		},
+	}
+
+	// Pre-compute stream payload to avoid repeated marshaling
+	streamPayload, _ := json.Marshal(body)
+	streamLines := []string{
+		"event: error",
+		fmt.Sprintf("data: %s", string(streamPayload)),
+	}
+
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return status, mustMarshal(body) },
+		Stream:    func() []string { return streamLines },
+	}
+}
+
+// buildGoogleError creates a Google-shaped error response from vmodel.ErrorInjection.
+func buildGoogleError(err *vmodel.ErrorInjection) MockResponseBuilder {
+	status, message, _ := normalizeErrorSpec(err)
+
+	body := map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    status,
+			"message": message,
+			"status":  "api_error",
+		},
+	}
+
+	// Pre-compute stream payload to avoid repeated marshaling
+	streamPayload, _ := json.Marshal(body["error"])
+	streamLine := fmt.Sprintf("data: %s", string(streamPayload))
+
+	return MockResponseBuilder{
+		NonStream: func() (int, []byte) { return status, mustMarshal(body) },
+		Stream:    func() []string { return []string{streamLine} },
+	}
+}
+
+// GetErrorSpec returns a vmodel error spec by ID from the built-in error models.
+// Searches SharedDefaultMocks() (basic errors) and ExtendedErrorSpecs().
+// Results are cached for O(1) subsequent access. Returns zero value if not found.
+func GetErrorSpec(id string) vmodel.SharedMockSpec {
+	// Initialize cache on first use
+	errorSpecCacheOnce.Do(func() {
+		errorSpecCache = make(map[string]vmodel.SharedMockSpec)
+
+		// Cache basic error models from SharedDefaultMocks
+		for _, spec := range vmodel.SharedDefaultMocks() {
+			if spec.Error != nil {
+				errorSpecCache[spec.ID] = spec
+			}
+		}
+
+		// Cache extended error models
+		for _, spec := range vmodel.ExtendedErrorSpecs() {
+			errorSpecCache[spec.ID] = spec
+		}
+	})
+
+	errorSpecCacheMu.RLock()
+	defer errorSpecCacheMu.RUnlock()
+
+	return errorSpecCache[id]
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
