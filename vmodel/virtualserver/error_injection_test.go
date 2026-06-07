@@ -246,13 +246,14 @@ func TestErrorInjection_MidStream_Anthropic_ErrorEvent(t *testing.T) {
 	require.NotContains(t, body, "event: message_stop")
 }
 
-// TestRegisterErrorMocks_OpenAI verifies that the opt-in registration helper
-// wires all four error-injection variants into the OpenAI registry, and that
+// TestRegisterErrorMocks_OpenAI verifies that error-injection models
+// are available in the OpenAI registry (via SharedDefaultMocks), and that
 // each one trips its configured behavior end-to-end.
 func TestRegisterErrorMocks_OpenAI(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := virtualserver.NewService()
-	openaivm.RegisterErrorMocks(svc.GetOpenAIRegistry())
+	// Error models are now in SharedDefaultMocks, registered by default
+	openaivm.RegisterDefaults(svc.GetOpenAIRegistry())
 	engine := gin.New()
 	svc.SetupRoutes(engine.Group("/v1"))
 	srv := httptest.NewServer(engine)
@@ -260,7 +261,7 @@ func TestRegisterErrorMocks_OpenAI(t *testing.T) {
 
 	t.Run("precontent-429", func(t *testing.T) {
 		resp := postJSON(t, srv.URL+"/v1/chat/completions", map[string]any{
-			"model":    "virtual-fail-precontent-429",
+			"model":    "virtual-fail-429",
 			"messages": []map[string]string{{"role": "user", "content": "hi"}},
 		})
 		defer resp.Body.Close()
@@ -269,7 +270,7 @@ func TestRegisterErrorMocks_OpenAI(t *testing.T) {
 
 	t.Run("precontent-500", func(t *testing.T) {
 		resp := postJSON(t, srv.URL+"/v1/chat/completions", map[string]any{
-			"model":    "virtual-fail-precontent-500",
+			"model":    "virtual-fail-500",
 			"messages": []map[string]string{{"role": "user", "content": "hi"}},
 		})
 		defer resp.Body.Close()
@@ -310,7 +311,8 @@ func TestRegisterErrorMocks_OpenAI(t *testing.T) {
 func TestRegisterErrorMocks_Anthropic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := virtualserver.NewService()
-	anthropicvm.RegisterErrorMocks(svc.GetAnthropicRegistry())
+	// Error models are now in SharedDefaultMocks, registered by default
+	anthropicvm.RegisterDefaults(svc.GetAnthropicRegistry())
 	engine := gin.New()
 	svc.SetupRoutes(engine.Group("/v1"))
 	srv := httptest.NewServer(engine)
@@ -326,13 +328,13 @@ func TestRegisterErrorMocks_Anthropic(t *testing.T) {
 	}
 
 	t.Run("precontent-429", func(t *testing.T) {
-		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-precontent-429", false))
+		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-429", false))
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
 
 	t.Run("precontent-500", func(t *testing.T) {
-		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-precontent-500", false))
+		resp := postJSON(t, srv.URL+"/v1/messages?beta=true", body("virtual-fail-500", false))
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})

@@ -27,6 +27,7 @@ func RegisterDefaults(r *Registry) {
 			Content:  spec.Content,
 			ToolCall: spec.ToolCall,
 			Delay:    spec.Delay,
+			Error:    spec.Error,
 		}))
 	}
 }
@@ -50,14 +51,12 @@ func RegisterStreamTestMocks(r *Registry) {
 	}
 }
 
-// RegisterErrorMocks registers the opt-in error-injection fixtures
-// (virtual-fail-precontent-{429,500}, virtual-fail-midstream-{close,event})
-// into r. These always fail and exist so consumers can simulate a broken
-// upstream by model name without standing up an ad-hoc httptest.Server.
-// Intentionally separate from RegisterDefaults so production registries
-// stay clean.
-func RegisterErrorMocks(r *Registry) {
-	for _, spec := range vmodel.ErrorMockSpecs() {
+// RegisterExtendedErrorMocks registers additional error scenarios beyond
+// the basic four: authentication failures, various upstream errors, network
+// issues, and timeout scenarios. Like RegisterErrorMocks, this is opt-in
+// and separate from RegisterDefaults.
+func RegisterExtendedErrorMocks(r *Registry) {
+	for _, spec := range vmodel.ExtendedErrorSpecs() {
 		_ = r.Register(NewMockModel(&MockModelConfig{
 			ID:      spec.ID,
 			Name:    spec.Name,
