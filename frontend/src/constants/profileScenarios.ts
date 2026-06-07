@@ -5,10 +5,6 @@
  */
 export const PROFILE_SCENARIOS = [
     'claude_code',
-    'codex',
-    'opencode',
-    'xcode',
-    'vscode',
 ] as const;
 
 export type ProfileScenario = typeof PROFILE_SCENARIOS[number];

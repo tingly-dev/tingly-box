@@ -94,7 +94,6 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			SupportedTransport: []ScenarioTransport{TransportOpenAI},
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
-			SupportsProfiles:   true,
 		}
 	case ScenarioClaudeCode:
 		return ScenarioDescriptor{
