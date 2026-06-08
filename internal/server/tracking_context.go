@@ -5,24 +5,27 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// Gin context keys for tracking metadata.
-// These keys are used to store tracking information in the gin context
-// to avoid explicit parameter passing throughout the handler chain.
+// Gin context key aliases — canonical values live in constant so that
+// routing/ and middleware/ sub-packages can reference them without an
+// import cycle.
 const (
-	ContextKeyRule           = "tracking_rule"             // *typ.Rule
-	ContextKeyProvider       = "tracking_provider"         // *typ.Provider
-	ContextKeyModel          = "tracking_model"            // string (actual model used)
-	ContextKeyRequestModel   = "tracking_request_model"    // string (model requested by user)
-	ContextKeyScenario       = "tracking_scenario"         // string (extracted from request path)
-	ContextKeyStreamed       = "tracking_streamed"         // bool
-	ContextKeyStartTime      = "tracking_start_time"       // time.Time
-	ContextKeyFirstTokenTime = "tracking_first_token_time" // time.Time (for TTFT calculation)
-	ContextKeyCacheHit       = "tracking_cache_hit"        // bool (cache hit status)
-	ContextKeySessionID      = "tracking_session_id"       // string (resolved session ID for affinity)
+	ContextKeyRule           = constant.CtxKeyRule
+	ContextKeyProvider       = constant.CtxKeyProvider
+	ContextKeyModel          = constant.CtxKeyModel
+	ContextKeyRequestModel   = constant.CtxKeyRequestModel
+	ContextKeyScenario       = constant.CtxKeyScenario
+	ContextKeyStreamed       = constant.CtxKeyStreamed
+	ContextKeyStartTime      = constant.CtxKeyStartTime
+	ContextKeyFirstTokenTime = constant.CtxKeyFirstTokenTime
+	ContextKeyCacheHit       = constant.CtxKeyCacheHit
+	ContextKeySessionID      = constant.CtxKeySessionID
+	ContextKeyLBServiceID    = constant.CtxKeyLBServiceID
+	ContextKeyLBTactic       = constant.CtxKeyLBTactic
 )
 
 // SetTrackingContext sets all tracking metadata in the gin context.
