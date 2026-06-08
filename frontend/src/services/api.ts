@@ -334,8 +334,7 @@ export const api = {
     },
 
     // List virtual models registered in the in-process registries.
-    // TODO: Regenerate swagger client to remove the raw fetch fallback once
-    // /api/v1/vmodel/available-models lands in the OpenAPI spec.
+    // NOTE: /api/v1/vmodel/available-models is not yet in the OpenAPI spec; raw fetch is intentional.
     getAvailableVirtualModels: async (): Promise<any> => {
         try {
             const headers = await getAuthHeaders();
@@ -1245,43 +1244,31 @@ export const api = {
 
     // Scan all IDE locations for skills (comprehensive scan)
     scanIdes: async (): Promise<any> => {
-        // TODO: Regenerate swagger client
         try {
+            const client = await getClient();
             const headers = await getAuthHeaders();
-            const response = await fetch(`${await getApiBaseUrl()}/api/v2/skill-locations/scan`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...headers,
-                },
-            });
-
-
-            return await response.json();
+            const response = await client.POST('/api/v2/skill-locations/scan', {headers});
+            return response.data;
         } catch (error: any) {
             return {success: false, error: error.message};
         }
     },
 
     // Get skill content with file content
+    // NOTE: query params (location_id, skill_id, skill_path) are not yet documented in the OpenAPI spec.
     getSkillContent: async (locationId: string, skillId: string, skillPath?: string): Promise<any> => {
         try {
+            const client = await getClient();
             const headers = await getAuthHeaders();
-            const params = new URLSearchParams({
-                location_id: locationId,
-                ...(skillId && {skill_id: skillId}),
-                ...(skillPath && {skill_path: skillPath}),
+            const response = await client.GET('/api/v2/skill-content', {
+                headers,
+                params: {query: {
+                    location_id: locationId,
+                    ...(skillId && {skill_id: skillId}),
+                    ...(skillPath && {skill_path: skillPath}),
+                } as any},
             });
-            const response = await fetch(`${await getApiBaseUrl()}/api/v2/skill-content?${params}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...headers,
-                },
-            });
-
-
-            return await response.json();
+            return response.data;
         } catch (error: any) {
             return {success: false, error: error.message};
         }
@@ -2113,7 +2100,6 @@ export const api = {
     // ========== MCP Tool Testing API ==========
 
     // Execute an MCP tool (for tool testing interface)
-    // NOTE: This requires backend implementation
     executeMCPTool: async (
         clientId: string,
         toolName: string,
@@ -2124,9 +2110,6 @@ export const api = {
         error?: string;
         executionTime?: number;
     }> => {
-        // TODO: Backend needs to implement this endpoint
-        // POST /api/v1/mcp/execute
-        // Body: { client_id, tool_name, arguments }
         try {
             return uiAPI('/mcp/execute', {
                 method: 'POST',
