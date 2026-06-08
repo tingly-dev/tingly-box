@@ -20,9 +20,9 @@ type MatrixCmd struct {
 	Scenarios  []string `kong:"name='scenario',sep=',',help='Filter by scenario name (can repeat or comma-separate)'"`
 	Sources    []string `kong:"name='source',sep=',',help='Filter by source protocol (can repeat or comma-separate)'"`
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
-	Streaming  bool   `kong:"name='streaming',help='Run only streaming tests'"`
-	NonStream  bool   `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Mode       string `kong:"name='mode',default='all',enum='all,single,transitive',help='Hop selection: all (default), single (A→B only), transitive (A→B→C only)'"`
+	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
+	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
+	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (single + transitive + idempotent), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only)'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
@@ -34,11 +34,18 @@ type MatrixCmd struct {
 // Help returns extended help text shown by `harness matrix --help`.
 func (*MatrixCmd) Help() string {
 	return `Examples:
-  # Run everything: single-hop + two-hop (default)
+  # Default: single-hop (A→B) + idempotent round-trips (g(f(A))==A).
+  # Two-hop (A→B→C) transitive chains are OFF by default.
   harness matrix
+
+  # Run absolutely everything: single + two-hop + idempotent
+  harness matrix --mode=all
 
   # Run only two-hop (A→B→C) transitive chain tests
   harness matrix --mode=transitive
+
+  # Run only idempotent round-trip tests
+  harness matrix --mode=idempotent
 
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
@@ -112,13 +119,20 @@ func (m *MatrixCmd) Run() error {
 		matrix = matrix.WithMCPEnabled()
 	}
 
-	// Collect results for selected hop sections (--mode controls which).
+	// Collect results for the selected sections (--mode controls which).
+	//
+	//   single-hop (A→B)        runs unless mode is transitive/idempotent
+	//   transitive (A→B→C)      runs only for all/transitive (OFF by default)
+	//   idempotent (g(f(A))==A) runs for default/all/idempotent
 	var combined []protocoltest.TestResult
-	if m.Mode != "transitive" {
+	if m.Mode != "transitive" && m.Mode != "idempotent" {
 		combined = append(combined, matrix.ExecuteAll()...)
 	}
-	if m.Mode != "single" {
+	if m.Mode == "all" || m.Mode == "transitive" {
 		combined = append(combined, matrix.ExecuteAllTransitive()...)
+	}
+	if m.Mode == "default" || m.Mode == "all" || m.Mode == "idempotent" {
+		combined = append(combined, matrix.ExecuteAllIdempotent()...)
 	}
 	results := filterResults(combined, m)
 
@@ -172,4 +186,3 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
-

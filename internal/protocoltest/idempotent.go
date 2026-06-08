@@ -3,6 +3,7 @@ package protocoltest
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -240,6 +241,136 @@ func (m *Matrix) RunIdempotent(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ExecuteAllIdempotent runs round-trip idempotency tests without requiring
+// testing.T. It is the CLI-compatible counterpart of RunIdempotent, returning
+// []TestResult. For each scenario × case × mode it wires the baseline and
+// round-trip routes in one gateway, drives both requests, and records whether
+// the client-visible results are semantically equivalent (g(f(A)) == A).
+//
+// Name format: "scenario/<case>/mode" (e.g. "text/openai_chat_via_anthropic/stream").
+func (m *Matrix) ExecuteAllIdempotent() []TestResult {
+	var results []TestResult
+	cases := DefaultIdempotentCases()
+
+	for _, scenario := range m.Scenarios {
+		// Error propagation through two hops is out of scope: the inner gateway
+		// wraps upstream errors, so the byte-for-byte error shape is not
+		// expected to survive a round-trip.
+		if scenario.Name == "error" {
+			continue
+		}
+
+		env, err := NewTestEnvForCLI(m.testEnvOpts()...)
+		if err != nil {
+			for _, ic := range cases {
+				for _, streaming := range m.Streaming {
+					results = append(results, TestResult{
+						Name:      idempotentTestName(scenario.Name, ic, streaming),
+						Scenario:  scenario.Name,
+						Source:    ic.Source,
+						Target:    ic.Mid,
+						Streaming: streaming,
+						Passed:    false,
+						Errors:    []AssertionError{{Assertion: "setup", Error: fmt.Sprintf("failed to create test env: %v", err)}},
+					})
+				}
+			}
+			continue
+		}
+
+		for _, ic := range cases {
+			for _, streaming := range m.Streaming {
+				results = append(results, m.executeIdempotentCase(env, scenario, ic, streaming))
+			}
+		}
+		env.Close()
+	}
+	return results
+}
+
+func idempotentTestName(scenarioName string, ic IdempotentCase, streaming bool) string {
+	return fmt.Sprintf("%s/%s/%s", scenarioName, ic.Name, streamMode(streaming))
+}
+
+// executeIdempotentCase runs a single baseline-vs-round-trip comparison and
+// returns its TestResult.
+func (m *Matrix) executeIdempotentCase(env *TestEnv, scenario Scenario, ic IdempotentCase, streaming bool) TestResult {
+	base := TestResult{
+		Name:      idempotentTestName(scenario.Name, ic, streaming),
+		Scenario:  scenario.Name,
+		Source:    ic.Source,
+		Target:    ic.Mid,
+		Streaming: streaming,
+	}
+
+	if reason, skip := skipIdempotentScenario(ic, scenario.Name); skip {
+		base.Skipped = true
+		base.SkipReason = reason
+		return base
+	}
+	if reason, skip := streamingSkipReason(scenario, streaming); skip {
+		base.Skipped = true
+		base.SkipReason = reason
+		return base
+	}
+
+	start := time.Now()
+
+	// Baseline: A → A' passthrough through the virtual server.
+	env.SetupRoute(ic.Source, ic.Baseline, scenario)
+	baseModel := env.findRouteModel(ic.Source, ic.Baseline, scenario.Name)
+
+	// Chain tail: B → A' through the virtual server.
+	env.SetupRoute(ic.Mid, ic.Baseline, scenario)
+	tailModel := env.findRouteModel(ic.Mid, ic.Baseline, scenario.Name)
+
+	// Chain head: A → B, forwarding back into the gateway carrying tailModel.
+	headModel := fmt.Sprintf("idem-%s-%s", ic.Name, scenario.Name)
+	env.setupChainHopRoute(ic.Source, ic.Mid, scenario, headModel, tailModel)
+
+	baseline, err := env.sendModel(ic.Source, ic.Baseline, scenario.Name, baseModel, streaming)
+	if err != nil {
+		base.Passed = false
+		base.Errors = []AssertionError{{Assertion: "baseline:send", Error: err.Error()}}
+		base.Duration = time.Since(start)
+		return base
+	}
+	roundtrip, err := env.sendModel(ic.Source, ic.Mid, scenario.Name, headModel, streaming)
+	if err != nil {
+		base.Passed = false
+		base.Errors = []AssertionError{{Assertion: "roundtrip:send", Error: err.Error()}}
+		base.Duration = time.Since(start)
+		return base
+	}
+
+	var errs []AssertionError
+	for _, a := range scenario.Assertions {
+		if checkErr := a.Check(baseline); checkErr != nil {
+			errs = append(errs, AssertionError{
+				Assertion: "baseline:" + a.Name,
+				Error:     checkErr.Error(),
+				Context:   truncate(string(baseline.RawBody), 300),
+			})
+		}
+		if checkErr := a.Check(roundtrip); checkErr != nil {
+			errs = append(errs, AssertionError{
+				Assertion: "roundtrip:" + a.Name,
+				Error:     checkErr.Error(),
+				Context:   truncate(string(roundtrip.RawBody), 300),
+			})
+		}
+	}
+	label := fmt.Sprintf("%s→%s→%s vs %s→%s", ic.Source, ic.Mid, ic.Baseline, ic.Source, ic.Baseline)
+	errs = append(errs, semanticEquivalenceErrors(label, baseline, roundtrip)...)
+
+	base.Passed = len(errs) == 0
+	base.Errors = errs
+	base.Duration = time.Since(start)
+	base.HTTPStatus = roundtrip.HTTPStatus
+	base.Response = roundtrip
+	return base
 }
 
 // skipIdempotentScenario reports whether a case+scenario should be skipped
