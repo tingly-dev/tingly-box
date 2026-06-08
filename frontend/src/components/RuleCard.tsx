@@ -16,6 +16,7 @@ import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
+import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
 // Module-level cache so we only fetch the flag catalog once per session.
 let _flagRegistryCache: FlagSpec[] | null = null;
@@ -254,23 +255,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const handleToggleFlagFromCard = useCallback((key: string) => {
         if (!configRecord) return;
         const current = configRecord.flags || {};
-        let next: RuleFlags = { ...current };
-        switch (key) {
-            case 'cursor_compat':
-                next = { ...next, cursorCompat: !current.cursorCompat };
-                break;
-            case 'cursor_compat_auto':
-                next = { ...next, cursorCompatAuto: !current.cursorCompatAuto };
-                break;
-            case 'skip_usage':
-                next = { ...next, skipUsage: !current.skipUsage };
-                break;
-            case 'use_max_completion_tokens':
-                next = { ...next, useMaxCompletionTokens: !current.useMaxCompletionTokens };
-                break;
-            default:
-                return;
-        }
+        const next = setFlagValue(current, key, !getFlagValue(current, key));
         void updateField(configRecord, setConfigRecord, 'flags', next);
     }, [configRecord, updateField, setConfigRecord]);
 
