@@ -103,6 +103,12 @@ func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 // 1. Rule-level flags (from the rule definition)
 // 2. Scenario flags (from the scenario configuration)
 // 3. Auto-applied flags (like CleanHeader for protocol transformation)
+//
+// Side effect: it also attaches the resolved CustomUserAgent to the request
+// context (applyCustomUserAgent) so callers don't have to repeat that at each
+// handler. The User-Agent is the one rule flag that has to reach a deep
+// component (the outbound transport) via ctx, so this central merge point is
+// where it gets applied.
 func resolveRuleFlagsWithScenario(
 	c *gin.Context,
 	rule *typ.Rule,
@@ -143,18 +149,26 @@ func resolveRuleFlagsWithScenario(
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios
 	flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
 
+	// Attach the resolved User-Agent override to the request context here, at the
+	// single merge point, so the chat / v1 / beta handlers don't each repeat it.
+	applyCustomUserAgent(c, flags)
+
 	return flags
 }
 
 // applyCustomUserAgent attaches the effective custom User-Agent (already merged
-// across rule + scenario by resolveRuleFlagsWithScenario) to the request
-// context, so the outbound transport (customUserAgentTransport) can read it at
-// RoundTrip time. This is the Type-2 (context-passed hint) injection point: the
-// dispatch path forwards c.Request.Context() down to the SDK call, where the
-// transport applies the override. No-op when no override is configured, so the
-// vendor/provider User-Agent is left untouched.
+// across rule + scenario) to the request context, so the outbound transport
+// (customUserAgentTransport) can read it at RoundTrip time. This is the Type-2
+// (context-passed hint) injection point: the dispatch path forwards
+// c.Request.Context() down to the SDK call, where the transport applies the
+// override. No-op when no override is configured, so the vendor/provider
+// User-Agent is left untouched.
+//
+// Called from resolveRuleFlagsWithScenario (covers the chat/v1/beta handlers);
+// the Responses handler calls it directly because it resolves flags via the
+// bare resolveRuleFlags path.
 func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
-	if flags.CustomUserAgent == "" {
+	if flags.CustomUserAgent == "" || c == nil || c.Request == nil {
 		return
 	}
 	c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), flags.CustomUserAgent))

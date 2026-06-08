@@ -223,10 +223,11 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	}
 
-	// Execute transform chain
+	// Execute transform chain. Unlike the chat/v1/beta handlers, the Responses
+	// path resolves flags via the bare resolveRuleFlags (it intentionally does
+	// not merge the other scenario flags), so it inherits the scenario-level
+	// User-Agent default and applies it to the context here itself.
 	ruleFlags := resolveRuleFlags(c, rule)
-	// Inherit the scenario-level User-Agent default when the rule doesn't set one,
-	// so custom_user_agent is exposed in the Responses path too (rule value wins).
 	if ruleFlags.CustomUserAgent == "" {
 		if sc := s.config.GetScenarioConfig(scenarioType); sc != nil {
 			ruleFlags.CustomUserAgent = sc.Flags.CustomUserAgent
