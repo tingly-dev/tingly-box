@@ -57,6 +57,9 @@ export interface TemplatePageExternalProps {
     emptyStateTitle?: string;
     emptyStateDescription?: string;
     onAddApiKeyClick?: () => void;
+    /** Re-apply the agent config (e.g. Claude Code settings.json) — surfaced by
+     *  a rule card's 1M re-config dialog. Only wired for Claude Code. */
+    onReapplyConfig?: () => void | Promise<void>;
 }
 
 /**

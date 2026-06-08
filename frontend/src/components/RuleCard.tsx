@@ -66,6 +66,8 @@ export interface RuleCardProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
+    // Re-apply the agent config from the 1M re-config dialog (Claude Code only).
+    onReapplyConfig?: () => void | Promise<void>;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -84,6 +86,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     onToggleExpanded,
+    onReapplyConfig,
 }) => {
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
@@ -388,6 +391,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 scenario={rule.scenario}
                 enabled={oneMDialog.enabled}
                 onClose={() => setOneMDialog((s) => ({ ...s, open: false }))}
+                onReapply={onReapplyConfig}
             />
 
             {/* Smart Rule Edit Dialog (catalog-style: conditions sidebar + detail pane) */}
