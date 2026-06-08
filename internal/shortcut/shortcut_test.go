@@ -1,4 +1,4 @@
-package command
+package shortcut
 
 import (
 	"path/filepath"
@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestShortcutLaunchArgs(t *testing.T) {
-	args := shortcutLaunchArgs()
+func TestLaunchArgs(t *testing.T) {
+	args := LaunchArgs()
 	if got := strings.Join(args, " "); got != "restart --daemon" {
 		t.Fatalf("unexpected launch args: %q", got)
 	}
@@ -41,58 +41,53 @@ func TestCommandScriptContent(t *testing.T) {
 }
 
 func TestResolveLaunchBinary(t *testing.T) {
-	s := &ShortcutCmdKong{Target: "binary"}
-	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "binary", "")
 
-	if want := []string{"/usr/local/bin/tingly-box", "restart", "--daemon"}; strings.Join(spec.argv, " ") != strings.Join(want, " ") {
-		t.Fatalf("unexpected argv: %v", spec.argv)
+	if want := []string{"/usr/local/bin/tingly-box", "restart", "--daemon"}; strings.Join(spec.Argv, " ") != strings.Join(want, " ") {
+		t.Fatalf("unexpected argv: %v", spec.Argv)
 	}
-	if spec.winTarget != "/usr/local/bin/tingly-box" {
-		t.Errorf("unexpected winTarget: %q", spec.winTarget)
+	if spec.WinTarget != "/usr/local/bin/tingly-box" {
+		t.Errorf("unexpected winTarget: %q", spec.WinTarget)
 	}
-	if spec.winArgs != "restart --daemon" {
-		t.Errorf("unexpected winArgs: %q", spec.winArgs)
+	if spec.WinArgs != "restart --daemon" {
+		t.Errorf("unexpected winArgs: %q", spec.WinArgs)
 	}
 }
 
 func TestResolveLaunchNpx(t *testing.T) {
-	s := &ShortcutCmdKong{Target: "npx"}
-	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx", "")
 
 	wantArgv := []string{"sh", "-lc", "npx -y tingly-box@latest restart --daemon"}
-	if strings.Join(spec.argv, "\x00") != strings.Join(wantArgv, "\x00") {
-		t.Fatalf("unexpected argv: %#v", spec.argv)
+	if strings.Join(spec.Argv, "\x00") != strings.Join(wantArgv, "\x00") {
+		t.Fatalf("unexpected argv: %#v", spec.Argv)
 	}
-	if spec.winArgs != "/c npx -y tingly-box@latest restart --daemon" {
-		t.Errorf("unexpected winArgs: %q", spec.winArgs)
+	if spec.WinArgs != "/c npx -y tingly-box@latest restart --daemon" {
+		t.Errorf("unexpected winArgs: %q", spec.WinArgs)
 	}
 }
 
 func TestResolveLaunchNpxBundle(t *testing.T) {
-	s := &ShortcutCmdKong{Target: "npx-bundle"}
-	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "npx-bundle", "")
 
-	if spec.winArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
-		t.Errorf("unexpected winArgs: %q", spec.winArgs)
+	if spec.WinArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
+		t.Errorf("unexpected winArgs: %q", spec.WinArgs)
 	}
 }
 
 func TestResolveLaunchAutoUsesPersistedSource(t *testing.T) {
-	s := &ShortcutCmdKong{Target: "auto"}
 	// A binary not in the npx cache, but the recorded launch source was npx-bundle.
-	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "npx-bundle")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "auto", "npx-bundle")
 
-	if spec.winArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
-		t.Errorf("auto did not honor persisted source: %q", spec.winArgs)
+	if spec.WinArgs != "/c npx -y tingly-box-bundle@latest restart --daemon" {
+		t.Errorf("auto did not honor persisted source: %q", spec.WinArgs)
 	}
 }
 
 func TestResolveLaunchAutoFallsBackToBinary(t *testing.T) {
-	s := &ShortcutCmdKong{Target: "auto"}
-	spec := s.resolveLaunch("/usr/local/bin/tingly-box", "")
+	spec := ResolveLaunch("/usr/local/bin/tingly-box", "auto", "")
 
-	if spec.winTarget != "/usr/local/bin/tingly-box" {
-		t.Errorf("expected binary fallback, got winTarget=%q", spec.winTarget)
+	if spec.WinTarget != "/usr/local/bin/tingly-box" {
+		t.Errorf("expected binary fallback, got winTarget=%q", spec.WinTarget)
 	}
 }
 
@@ -100,10 +95,10 @@ func TestIsNpxCachedBinary(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", "/home/u/.cache")
 
 	cached := filepath.Join("/home/u/.cache", "tingly-box", "latest", "bin", "tingly-box")
-	if !isNpxCachedBinary(cached) {
+	if !IsNpxCachedBinary(cached) {
 		t.Errorf("expected %q to be detected as npx-cached", cached)
 	}
-	if isNpxCachedBinary("/usr/local/bin/tingly-box") {
+	if IsNpxCachedBinary("/usr/local/bin/tingly-box") {
 		t.Errorf("did not expect /usr/local/bin/tingly-box to be npx-cached")
 	}
 }
