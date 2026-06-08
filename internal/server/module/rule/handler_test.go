@@ -384,6 +384,91 @@ func TestUpdateRule_Success(t *testing.T) {
 	}
 }
 
+// TestUpdateRule_ModelChangePreservesFlags locks the contract behind the
+// "switching a rule's model wiped its flags" bug. The endpoint uses full-replace
+// (PUT) semantics, so the frontend must send the complete rule — including flags —
+// on every update. This test mirrors the corrected model-switch payload: it changes
+// the service model while carrying the existing flags, and asserts they survive.
+func TestUpdateRule_ModelChangePreservesFlags(t *testing.T) {
+	registerTestRuleScenario(t, typ.RuleScenario("test-scenario"))
+
+	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler := NewHandler(cfg)
+
+	router.PUT("/rules/:uuid", handler.UpdateRule)
+
+	// A provider the rule's services can reference (validateRuleServices requires it).
+	provider := &typ.Provider{
+		UUID:     "prov-flags-1",
+		Name:     "FlagProvider",
+		APIBase:  "https://api.test.com",
+		APIStyle: protocol.APIStyleOpenAI,
+		AuthType: typ.AuthTypeAPIKey,
+		Token:    "sk-test",
+		Enabled:  true,
+	}
+	cfg.AddProvider(provider)
+
+	// Original rule with flags set and a service pointing at the old model.
+	testUUID := uuid.New().String()
+	originalRule := typ.Rule{
+		UUID:         testUUID,
+		RequestModel: "gpt-4",
+		Scenario:     "test-scenario",
+		Active:       true,
+		Flags: typ.RuleFlags{
+			CursorCompat: true,
+			SkipUsage:    true,
+		},
+		Services: []*loadbalance.Service{
+			{Provider: provider.UUID, Model: "old-model", Weight: 100},
+		},
+	}
+	if err := cfg.AddRule(originalRule); err != nil {
+		t.Fatalf("Failed to add test rule: %v", err)
+	}
+
+	// Update payload: model switched to "new-model", flags carried along (as the
+	// fixed frontend now does). Flags must still be present after the update.
+	updatedRule := typ.Rule{
+		RequestModel: "gpt-4",
+		Scenario:     "test-scenario",
+		Active:       true,
+		Flags: typ.RuleFlags{
+			CursorCompat: true,
+			SkipUsage:    true,
+		},
+		Services: []*loadbalance.Service{
+			{Provider: provider.UUID, Model: "new-model", Weight: 100},
+		},
+	}
+	body, _ := json.Marshal(updatedRule)
+	req, _ := http.NewRequest("PUT", "/rules/"+testUUID, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	retrieved := cfg.GetRuleByUUID(testUUID)
+	if retrieved == nil {
+		t.Fatal("Rule not found after update")
+	}
+	if len(retrieved.Services) != 1 || retrieved.Services[0].Model != "new-model" {
+		t.Fatalf("expected service model 'new-model', got %+v", retrieved.Services)
+	}
+	if !retrieved.Flags.CursorCompat {
+		t.Error("CursorCompat flag was cleared after a model-changing update")
+	}
+	if !retrieved.Flags.SkipUsage {
+		t.Error("SkipUsage flag was cleared after a model-changing update")
+	}
+}
+
 func TestDeleteRule_Success(t *testing.T) {
 	cfg, _ := config.NewConfig(config.WithConfigDir(t.TempDir()))
 	gin.SetMode(gin.TestMode)
