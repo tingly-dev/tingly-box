@@ -5,6 +5,7 @@ import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/Mo
 import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 import api from "@/services/api.ts";
+import { flagsToApi } from '@/components/rule-card/flagHelpers';
 
 export interface ModelSelectOptions {
     ruleUuid: string;
@@ -218,6 +219,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                 response_model: updated.responseModel,
                 active: updated.active,
                 description: updated.description,
+                flags: flagsToApi(updated.flags),
                 services: updated.providers
                     .filter(p => p.provider && p.model)
                     .map(provider => ({
@@ -243,6 +245,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
                             response_model: ruleData.response_model,
                             active: ruleData.active,
                             description: ruleData.description,
+                            flags: ruleData.flags,
                             services: ruleData.services,
                             smart_enabled: ruleData.smart_enabled,
                             smart_routing: ruleData.smart_routing,
