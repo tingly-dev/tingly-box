@@ -17,6 +17,7 @@ const (
 	FlagThinkingEffort  = "thinking_effort"
 	FlagRecordingV2     = "recording_v2"
 	FlagCustomUserAgent = "custom_user_agent"
+	FlagCompactKeyword  = "compact_keyword"
 )
 
 // ScenarioFlags int field keys. Same contract as above but for

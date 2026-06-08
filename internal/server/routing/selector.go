@@ -18,6 +18,11 @@ type ProviderResolver interface {
 	// GetEffectiveAffinity returns the effective affinity TTL for a rule,
 	// considering both scenario default and rule override. Returns 0 if disabled.
 	GetEffectiveAffinity(rule *typ.Rule) time.Duration
+	// GetEffectiveCompactKeyword returns the effective Claude Code rapid-compact
+	// wake keyword for a rule, resolving rule override > scenario default >
+	// built-in default. Read by the smart-routing stage to populate
+	// RequestContext.CompactWake for the agent.claude_code/wake_compact op.
+	GetEffectiveCompactKeyword(rule *typ.Rule) string
 }
 
 // LoadBalancer defines the interface for load balancing operations.
@@ -143,6 +148,7 @@ func NewServiceSelectorWithLogger(
 
 	newSmart := func() *SmartRoutingStage {
 		stage := NewSmartRoutingStage(lb, affinity)
+		stage.SetCompactKeywordResolver(cfg)
 		if multiLogger != nil {
 			stage.SetMultiLogger(multiLogger)
 		}

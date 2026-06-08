@@ -8833,6 +8833,10 @@
             "type": "boolean",
             "description": "Field clean_header"
           },
+          "compact_keyword": {
+            "type": "string",
+            "description": "Field compact_keyword"
+          },
           "cursor_compat": {
             "type": "boolean",
             "description": "Field cursor_compat"
@@ -9085,9 +9089,9 @@
             "type": "boolean",
             "description": "Field claude_code_compat"
           },
-          "clean_header": {
-            "type": "boolean",
-            "description": "Field clean_header"
+          "compact_keyword": {
+            "type": "string",
+            "description": "Field compact_keyword"
           },
           "custom_user_agent": {
             "type": "string",
@@ -10966,12 +10970,16 @@
   },
   "tags": [
     {
-      "name": "feishu",
-      "description": "Operations related to feishu"
+      "name": "actions",
+      "description": "Operations related to actions"
     },
     {
-      "name": "config",
-      "description": "Operations related to config"
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "feishu",
+      "description": "Operations related to feishu"
     },
     {
       "name": "auth",
@@ -10982,68 +10990,20 @@
       "description": "Operations related to server"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
-    },
-    {
-      "name": "requests",
-      "description": "Operations related to requests"
-    },
-    {
-      "name": "rules",
-      "description": "Operations related to rules"
-    },
-    {
       "name": "history",
       "description": "Operations related to history"
     },
     {
-      "name": "models",
-      "description": "Operations related to models"
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
       "name": "skills",
       "description": "Operations related to skills"
     },
     {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
-      "name": "scenarios",
-      "description": "Operations related to scenarios"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "imbot-admin",
-      "description": "Operations related to imbot-admin"
+      "name": "usage",
+      "description": "Operations related to usage"
     },
     {
       "name": "weixin",
@@ -11054,24 +11014,68 @@
       "description": "Operations related to info"
     },
     {
+      "name": "rules",
+      "description": "Operations related to rules"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
       "name": "system-logs",
       "description": "Operations related to system-logs"
     },
     {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
+      "name": "scenarios",
+      "description": "Operations related to scenarios"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
       "name": "onboarding",
       "description": "Operations related to onboarding"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "testing",
+      "description": "Operations related to testing"
     },
     {
-      "name": "oauth",
-      "description": "Operations related to oauth"
+      "name": "imbot-admin",
+      "description": "Operations related to imbot-admin"
+    },
+    {
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
+    },
+    {
+      "name": "requests",
+      "description": "Operations related to requests"
     }
   ]
 }

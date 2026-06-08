@@ -1,18 +1,25 @@
 package anthropic
 
 import (
-	"strings"
-
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/smart_compact"
 )
 
-// ClaudeCodeCompactTransform conditionally applies XML compression for Claude Code.
-// Only activates when:
-// 1. Last user message contains "compact" (case-insensitive)
-// 2. Request has tool definitions
+// ClaudeCodeCompactTransform applies XML compaction for Claude Code requests
+// routed to the rapid-compact virtual model.
+//
+// Gating note: the wake-keyword decision (whether a request is a rapid-compact
+// request at all) lives in the smart-routing layer — the
+// agent.claude_code/wake_compact op matches the configurable compact_keyword
+// flag and routes only matching requests here. By the time a request reaches
+// this transform it has already been selected for compaction, so this layer
+// only keeps a minimal structural guard: it compacts when the request carries
+// tool definitions (the shape of a real Claude Code agent turn) and otherwise
+// passes through untouched. The keyword is intentionally NOT re-checked here —
+// re-checking a literal word would break custom keywords and duplicate the
+// gating that already happened during routing.
 type ClaudeCodeCompactTransform struct {
 	inner *smart_compact.XMLCompactTransform
 }
@@ -29,80 +36,26 @@ func (t *ClaudeCodeCompactTransform) Name() string {
 	return "claude_code_compact"
 }
 
-// Apply applies XML compression only if conditions are met.
+// Apply applies XML compression when the request carries tool definitions.
 func (t *ClaudeCodeCompactTransform) Apply(ctx *transform.TransformContext) error {
 	switch req := ctx.Request.(type) {
 	case *sdk.MessageNewParams:
-		if !t.shouldApplyV1(req) {
-			logrus.Debugf("[claude_code_compact] v1: conditions not met, skipping")
+		if len(req.Tools) == 0 {
+			logrus.Debugf("[claude_code_compact] v1: no tools, skipping")
 			return nil
 		}
-		logrus.Debugf("[claude_code_compact] v1: conditions met, applying compression")
+		logrus.Debugf("[claude_code_compact] v1: applying compression")
 		return t.inner.Apply(ctx)
 
 	case *sdk.BetaMessageNewParams:
-		if !t.shouldApplyV1Beta(req) {
-			logrus.Debugf("[claude_code_compact] v1beta: conditions not met, skipping")
+		if len(req.Tools) == 0 {
+			logrus.Debugf("[claude_code_compact] v1beta: no tools, skipping")
 			return nil
 		}
-		logrus.Debugf("[claude_code_compact] v1beta: conditions met, applying compression")
+		logrus.Debugf("[claude_code_compact] v1beta: applying compression")
 		return t.inner.Apply(ctx)
 
 	default:
 		return nil
 	}
-}
-
-func (t *ClaudeCodeCompactTransform) shouldApplyV1(req *sdk.MessageNewParams) bool {
-	if len(req.Tools) == 0 {
-		return false
-	}
-	return lastUserMessageContainsCompact(req.Messages)
-}
-
-func (t *ClaudeCodeCompactTransform) shouldApplyV1Beta(req *sdk.BetaMessageNewParams) bool {
-	if len(req.Tools) == 0 {
-		return false
-	}
-	return lastUserMessageContainsCompactBeta(req.Messages)
-}
-
-func lastUserMessageContainsCompact(messages []sdk.MessageParam) bool {
-	for i := len(messages) - 1; i >= 0; i-- {
-		if string(messages[i].Role) == "user" {
-			return extractAndCheckText(messages[i].Content)
-		}
-	}
-	return false
-}
-
-func lastUserMessageContainsCompactBeta(messages []sdk.BetaMessageParam) bool {
-	for i := len(messages) - 1; i >= 0; i-- {
-		if string(messages[i].Role) == "user" {
-			return extractAndCheckTextBeta(messages[i].Content)
-		}
-	}
-	return false
-}
-
-func extractAndCheckText(content []sdk.ContentBlockParamUnion) bool {
-	for _, block := range content {
-		if block.OfText != nil {
-			if strings.Contains(strings.ToLower(block.OfText.Text), "compact") {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func extractAndCheckTextBeta(content []sdk.BetaContentBlockParamUnion) bool {
-	for _, block := range content {
-		if block.OfText != nil {
-			if strings.Contains(strings.ToLower(block.OfText.Text), "compact") {
-				return true
-			}
-		}
-	}
-	return false
 }

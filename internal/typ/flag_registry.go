@@ -228,5 +228,48 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryRequestAnthropic,
 		},
+		{
+			Key:             "compact_keyword",
+			Label:           "Rapid-compact wake keyword",
+			Description:     "Wake keyword for Claude Code rapid compaction. When the latest user message contains this keyword, the agent.claude_code / wake_compact smart-routing op matches, so a rule can route the request to the local XML-compaction virtual model — an instant conversation summary with no upstream token cost. Leave empty to use the built-in default (\"compact\"). Can also be set scenario-wide; the rule value wins when both are set.",
+			Type:            FlagTypeString,
+			Category:        FlagCategoryApp,
+			Placeholder:     "compact",
+			Suggestions:     DefaultCompactKeywords(),
+			Shared:          true,
+			InheritanceMode: "override",
+		},
 	}
+}
+
+// DefaultCompactKeyword is the built-in rapid-compact wake keyword used when
+// neither the rule nor the scenario configures CompactKeyword. It matches the
+// substring Claude Code's /compact command emits, so the feature works
+// out-of-the-box without any keyword configuration.
+const DefaultCompactKeyword = "compact"
+
+// DefaultCompactKeywords returns a curated, non-exhaustive list of recommended
+// wake keywords for the compact_keyword flag (both rule- and scenario-level).
+// The values are surfaced as quick-pick suggestions while still allowing
+// free-form input.
+func DefaultCompactKeywords() []FlagOption {
+	return []FlagOption{
+		{Label: "compact (default)", Value: DefaultCompactKeyword},
+		{Label: "compress", Value: "compress"},
+		{Label: "/compact", Value: "/compact"},
+	}
+}
+
+// ResolveCompactKeyword applies the rapid-compact wake-keyword inheritance
+// chain: rule explicit (non-empty) wins, else the scenario default, else the
+// built-in DefaultCompactKeyword. scenarioDefault may be empty when the
+// scenario does not configure one.
+func ResolveCompactKeyword(ruleValue, scenarioDefault string) string {
+	if ruleValue != "" {
+		return ruleValue
+	}
+	if scenarioDefault != "" {
+		return scenarioDefault
+	}
+	return DefaultCompactKeyword
 }
