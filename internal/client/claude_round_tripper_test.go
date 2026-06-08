@@ -65,9 +65,9 @@ func TestMergeBetaFlags(t *testing.T) {
 		{
 			name:     "multiple upstream header values handled",
 			required: "claude-code-20250219",
-			upstream: []string{"foo-1,bar-2", "baz-3"},
+			upstream: []string{"mcp-client-2025-04-04,pdfs-2024-09-25", "files-api-2025-04-14"},
 			oauth:    "oauth-2025-04-20",
-			want:     "claude-code-20250219,foo-1,bar-2,baz-3,oauth-2025-04-20",
+			want:     "claude-code-20250219,mcp-client-2025-04-04,pdfs-2024-09-25,files-api-2025-04-14,oauth-2025-04-20",
 		},
 		{
 			name:     "appends oauth when missing",
@@ -79,16 +79,16 @@ func TestMergeBetaFlags(t *testing.T) {
 		{
 			name:     "trims whitespace and empty entries",
 			required: "claude-code-20250219, ,oauth-2025-04-20",
-			upstream: []string{" extra-1 , "},
+			upstream: []string{" mcp-client-2025-04-04 , "},
 			oauth:    "oauth-2025-04-20",
-			want:     "claude-code-20250219,oauth-2025-04-20,extra-1",
+			want:     "claude-code-20250219,oauth-2025-04-20,mcp-client-2025-04-04",
 		},
 		{
-			name:     "drops malformed flags",
+			name:     "drops unknown flags",
 			required: "claude-code-20250219",
-			upstream: []string{"good-flag,bad flag with spaces,line\nbreak,oauth-2025-04-20"},
+			upstream: []string{"pdfs-2024-09-25,not-a-real-flag,bad flag,oauth-2025-04-20"},
 			oauth:    "oauth-2025-04-20",
-			want:     "claude-code-20250219,good-flag,oauth-2025-04-20",
+			want:     "claude-code-20250219,pdfs-2024-09-25,oauth-2025-04-20",
 		},
 	}
 	for _, tt := range tests {

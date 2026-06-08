@@ -8,11 +8,62 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 )
+
+// knownAnthropicBetas is the allowlist of valid anthropic-beta flag values.
+// Sourced from the SDK's AnthropicBeta* constants plus a few Claude Code
+// specific flags Anthropic ships ahead of the public SDK. Anything outside
+// this set is treated as junk and dropped — Anthropic rejects unknown flags
+// anyway, and forwarding them risks fingerprinting / 400s.
+var knownAnthropicBetas = func() map[string]struct{} {
+	flags := []string{
+		// SDK-defined (libs/anthropic-sdk-go/beta.go)
+		anthropic.AnthropicBetaMessageBatches2024_09_24,
+		anthropic.AnthropicBetaPromptCaching2024_07_31,
+		anthropic.AnthropicBetaComputerUse2024_10_22,
+		anthropic.AnthropicBetaComputerUse2025_01_24,
+		anthropic.AnthropicBetaPDFs2024_09_25,
+		anthropic.AnthropicBetaTokenCounting2024_11_01,
+		anthropic.AnthropicBetaTokenEfficientTools2025_02_19,
+		anthropic.AnthropicBetaOutput128k2025_02_19,
+		anthropic.AnthropicBetaFilesAPI2025_04_14,
+		anthropic.AnthropicBetaMCPClient2025_04_04,
+		anthropic.AnthropicBetaMCPClient2025_11_20,
+		anthropic.AnthropicBetaDevFullThinking2025_05_14,
+		anthropic.AnthropicBetaInterleavedThinking2025_05_14,
+		anthropic.AnthropicBetaCodeExecution2025_05_22,
+		anthropic.AnthropicBetaExtendedCacheTTL2025_04_11,
+		anthropic.AnthropicBetaContext1m2025_08_07,
+		anthropic.AnthropicBetaContextManagement2025_06_27,
+		anthropic.AnthropicBetaModelContextWindowExceeded2025_08_26,
+		anthropic.AnthropicBetaSkills2025_10_02,
+		anthropic.AnthropicBetaFastMode2026_02_01,
+		anthropic.AnthropicBetaOutput300k2026_03_24,
+		anthropic.AnthropicBetaUserProfiles2026_03_24,
+		anthropic.AnthropicBetaAdvisorTool2026_03_01,
+		anthropic.AnthropicBetaManagedAgents2026_04_01,
+		anthropic.AnthropicBetaCacheDiagnosis2026_04_07,
+		anthropic.AnthropicBetaThinkingTokenCount2026_05_13,
+		// Claude Code specific flags not (yet) exposed by the SDK
+		"claude-code-20250219",
+		"oauth-2025-04-20",
+		"prompt-caching-scope-2026-01-05",
+		"structured-outputs-2025-12-15",
+		"redact-thinking-2026-02-12",
+		"token-efficient-tools-2026-03-28",
+		"oidc-federation-2026-04-01",
+	}
+	m := make(map[string]struct{}, len(flags))
+	for _, f := range flags {
+		m[f] = struct{}{}
+	}
+	return m
+}()
 
 // claudeToolPrefix is empty to match real Claude Code behavior (no tool name prefix).
 const claudeToolPrefix = ""
@@ -241,25 +292,14 @@ func reverseRemapOAuthToolNames(body []byte, reverseMap map[string]string) []byt
 	return body
 }
 
-// isValidBetaFlag accepts tokens that look like Anthropic beta flags:
-// non-empty, ASCII letters/digits/dot/underscore/hyphen, no whitespace.
-// Rejects obvious junk (control chars, header separators) that could only
-// have come from a buggy or malicious upstream.
+// isValidBetaFlag returns true iff the token is a known, Anthropic-defined
+// beta flag value. The allowlist is sourced from the SDK constants plus
+// Claude Code specific extras — see knownAnthropicBetas. Unknown values
+// are dropped rather than forwarded, since Anthropic rejects unknown
+// beta flags anyway.
 func isValidBetaFlag(s string) bool {
-	if s == "" || len(s) > 128 {
-		return false
-	}
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z':
-		case r >= 'A' && r <= 'Z':
-		case r >= '0' && r <= '9':
-		case r == '-' || r == '_' || r == '.':
-		default:
-			return false
-		}
-	}
-	return true
+	_, ok := knownAnthropicBetas[s]
+	return ok
 }
 
 // mergeBetaFlags combines the required Claude Code beta flags with any
@@ -277,7 +317,7 @@ func mergeBetaFlags(required string, upstream []string, requiredOAuth string) st
 			p = strings.TrimSpace(p)
 			if !isValidBetaFlag(p) {
 				if p != "" {
-					logrus.WithField("flag", p).Warn("dropping malformed anthropic-beta flag")
+					logrus.WithField("flag", p).Warn("dropping unknown anthropic-beta flag")
 				}
 				continue
 			}
