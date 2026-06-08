@@ -150,10 +150,10 @@ func init() {
 
 // ccRule builds a built-in Claude Code rule with the shared defaults: an empty
 // service list, the default adaptive load-balancing tactic, Active, and the
-// claude_code_compat flag on. Claude Code emits mid-conversation system-role
-// messages that third-party Anthropic-compatible providers reject; normalizing
-// them is the right default for the built-in CC rules. Users can override the
-// flag per-rule from the Plugins card for native Anthropic fidelity.
+// claude_code_compat + clean_header flags on. Claude Code emits mid-conversation
+// system-role messages that third-party Anthropic-compatible providers reject
+// (ClaudeCodeCompat), and injects x-anthropic-billing-header blocks into system
+// messages that should never leak to external providers (CleanHeader).
 func ccRule(uuid, requestModel, description string) typ.Rule {
 	return typ.Rule{
 		UUID:         uuid,
@@ -165,7 +165,7 @@ func ccRule(uuid, requestModel, description string) typ.Rule {
 			Type:   loadbalance.TacticAdaptive,
 			Params: typ.DefaultAdaptiveParams(),
 		},
-		Flags:  typ.RuleFlags{ClaudeCodeCompat: true},
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true},
 		Active: true,
 	}
 }

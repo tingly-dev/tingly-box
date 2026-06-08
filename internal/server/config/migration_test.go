@@ -215,3 +215,51 @@ func TestMigrate20260608_OneTime_PreservesUserOff(t *testing.T) {
 		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
 	}
 }
+
+func TestMigrate20260609_DefaultsCleanHeader(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
+			{UUID: "cc-profile", Scenario: typ.RuleScenario("claude_code:p1")},
+			{UUID: "already-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{CleanHeader: true}},
+			{UUID: "desktop", Scenario: typ.ScenarioClaudeDesktop},
+			{UUID: "openai", Scenario: typ.ScenarioOpenAI},
+		},
+	}
+
+	migrate20260609(c)
+
+	if !c.hasMigrationCompleted("20260609") {
+		t.Fatal("migration should be marked completed")
+	}
+	want := map[string]bool{
+		"built-in-cc": true,  // claude_code base → defaulted on
+		"cc-profile":  true,  // claude_code:<profile> → defaulted on
+		"already-on":  true,  // unchanged
+		"desktop":     false, // claude_desktop — not in scope for this migration
+		"openai":      false, // non-claude_code → untouched
+	}
+	for _, r := range c.Rules {
+		if got := r.Flags.CleanHeader; got != want[r.UUID] {
+			t.Errorf("rule %q CleanHeader = %v, want %v", r.UUID, got, want[r.UUID])
+		}
+	}
+}
+
+func TestMigrate20260609_OneTime_PreservesUserOff(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
+	}
+
+	migrate20260609(c)
+	if !c.Rules[0].Flags.CleanHeader {
+		t.Fatal("first run should default the flag on")
+	}
+
+	// User turns it off; a later boot must not re-enable it.
+	c.Rules[0].Flags.CleanHeader = false
+	migrate20260609(c)
+	if c.Rules[0].Flags.CleanHeader {
+		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
+	}
+}
