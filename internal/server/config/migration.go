@@ -49,9 +49,9 @@ func Migrate(c *Config) error {
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
 	migrate20260606(c) // Add default scenario configs with session affinity
-	migrate20260608(c) // Default claude_code_compat on for existing Claude Code rules
-	migrate20260609(c) // Default clean_header on for existing Claude Code rules
-	migrate20260610(c) // Default clean_header on for existing Claude Desktop rules
+	migrate20260608(c)   // Default claude_code_compat on for existing Claude Code rules
+	migrate20260608_2(c) // Default clean_header on for existing Claude Code rules
+	migrate20260608_3(c) // Default clean_header on for existing Claude Desktop rules
 	return nil
 }
 
@@ -691,7 +691,7 @@ func migrate20260608(c *Config) {
 	}
 }
 
-// migrate20260609 defaults clean_header on for existing Claude Code rules —
+// migrate20260608_2 defaults clean_header on for existing Claude Code rules —
 // the built-in CC rules and any claude_code:<profile> profile rules. Claude Code
 // injects x-anthropic-billing-header blocks into system messages; these are a
 // CC-internal billing mechanism and should never reach external providers.
@@ -702,8 +702,8 @@ func migrate20260608(c *Config) {
 //
 // One-time only — gated by the migration marker — so a user who later turns the
 // flag off on a specific rule keeps it off across restarts.
-func migrate20260609(c *Config) {
-	if c.hasMigrationCompleted("20260609") {
+func migrate20260608_2(c *Config) {
+	if c.hasMigrationCompleted("20260608_2") {
 		return
 	}
 
@@ -719,22 +719,22 @@ func migrate20260609(c *Config) {
 		}
 	}
 
-	c.markMigrationCompleted("20260609")
+	c.markMigrationCompleted("20260608_2")
 	if needsSave {
 		_ = c.Save()
-		logrus.Info("Migration 2026-06-09 completed: defaulted clean_header on for Claude Code rules")
+		logrus.Info("Migration 20260608_2 completed: defaulted clean_header on for Claude Code rules")
 	}
 }
 
-// migrate20260610 defaults clean_header on for existing Claude Desktop rules.
+// migrate20260608_3 defaults clean_header on for existing Claude Desktop rules.
 // Claude Desktop injects x-anthropic-billing-header blocks into system messages
 // (same billing mechanism as Claude Code); these must not leak to external
-// providers. Mirrors migrate20260609 but targets ScenarioClaudeDesktop.
+// providers. Mirrors migrate20260608_2 but targets ScenarioClaudeDesktop.
 //
 // One-time only — gated by the migration marker — so a user who later turns the
 // flag off on a specific rule keeps it off across restarts.
-func migrate20260610(c *Config) {
-	if c.hasMigrationCompleted("20260610") {
+func migrate20260608_3(c *Config) {
+	if c.hasMigrationCompleted("20260608_3") {
 		return
 	}
 
@@ -750,9 +750,9 @@ func migrate20260610(c *Config) {
 		}
 	}
 
-	c.markMigrationCompleted("20260610")
+	c.markMigrationCompleted("20260608_3")
 	if needsSave {
 		_ = c.Save()
-		logrus.Info("Migration 2026-06-10 completed: defaulted clean_header on for Claude Desktop rules")
+		logrus.Info("Migration 20260608_3 completed: defaulted clean_header on for Claude Desktop rules")
 	}
 }
