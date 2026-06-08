@@ -98,6 +98,29 @@ func TestMergeBetaFlags(t *testing.T) {
 	}
 }
 
+func TestClassifyUpstreamBetaFlag(t *testing.T) {
+	cases := []struct {
+		flag       string
+		wantKeep   bool
+		wantReason string
+	}{
+		{"claude-code-20250219", true, ""},                  // required baseline
+		{"context-1m-2025-08-07", true, ""},                 // allowed upstream addition
+		{"message-batches-2024-09-24", false, "not-fingerprint-safe"},
+		{"managed-agents-2026-04-01", false, "not-fingerprint-safe"},
+		{"not-a-real-flag", false, "unknown"},
+		{"bad flag", false, "unknown"},
+		{"", false, "unknown"},
+	}
+	for _, c := range cases {
+		t.Run(c.flag, func(t *testing.T) {
+			keep, reason := classifyUpstreamBetaFlag(c.flag)
+			assert.Equal(t, c.wantKeep, keep)
+			assert.Equal(t, c.wantReason, reason)
+		})
+	}
+}
+
 func TestSupportsContext1M(t *testing.T) {
 	tests := []struct {
 		model string
