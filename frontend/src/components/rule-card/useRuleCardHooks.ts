@@ -13,7 +13,7 @@ import {
     pickLbTactic,
     type ExportFormat,
 } from './utils';
-import { flagsToApi } from './flagHelpers';
+import { buildRuleUpdatePayload } from './ruleUpdatePayload';
 
 // ============================================================================
 // Types
@@ -108,27 +108,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
 
             try {
                 const lbTactic = pickLbTactic(newConfigRecord);
-                const ruleData: Record<string, any> = {
-                    uuid: rule.uuid,
-                    scenario: rule.scenario,
-                    request_model: newConfigRecord.requestModel,
-                    response_model: newConfigRecord.responseModel,
-                    active: newConfigRecord.active,
-                    description: newConfigRecord.description,
-                    flags: flagsToApi(newConfigRecord.flags),
-                    services: newConfigRecord.providers
-                        .filter((p) => p.provider && p.model)
-                        .map((provider) => ({
-                            provider: provider.provider,
-                            model: provider.model,
-                            weight: provider.weight || 0,
-                            active: provider.active !== undefined ? provider.active : true,
-                            time_window: provider.time_window || 0,
-                            tier: provider.tier ?? 0,
-                        })),
-                    smart_enabled: newConfigRecord.smartEnabled || false,
-                    smart_routing: newConfigRecord.smartRouting || [],
-                };
+                const ruleData: Record<string, any> = buildRuleUpdatePayload(rule, newConfigRecord);
                 if (lbTactic) {
                     ruleData.lb_tactic = lbTactic;
                 }

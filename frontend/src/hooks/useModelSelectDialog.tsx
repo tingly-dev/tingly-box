@@ -5,7 +5,7 @@ import ModelSelectDialog, { type ProviderSelectTabOption } from '@/components/Mo
 import type { ConfigRecord, Rule } from '@/components/RoutingGraphTypes.ts';
 import { v4 as uuidv4 } from 'uuid';
 import api from "@/services/api.ts";
-import { flagsToApi } from '@/components/rule-card/flagHelpers';
+import { buildRuleUpdatePayload } from '@/components/rule-card/ruleUpdatePayload';
 
 export interface ModelSelectOptions {
     ruleUuid: string;
@@ -212,27 +212,7 @@ export const useModelSelectDialog = (options: UseModelSelectDialogOptions) => {
         // Save to backend
         const rule = rules.find(r => r.uuid === currentRuleUuid);
         if (rule && updated) {
-            const ruleData = {
-                uuid: rule.uuid,
-                scenario: rule.scenario,
-                request_model: updated.requestModel,
-                response_model: updated.responseModel,
-                active: updated.active,
-                description: updated.description,
-                flags: flagsToApi(updated.flags),
-                services: updated.providers
-                    .filter(p => p.provider && p.model)
-                    .map(provider => ({
-                        provider: provider.provider,
-                        model: provider.model,
-                        weight: provider.weight || 0,
-                        active: provider.active !== undefined ? provider.active : true,
-                        time_window: provider.time_window || 0,
-                        tier: provider.tier ?? 0,
-                    })),
-                smart_enabled: updated.smartEnabled || false,
-                smart_routing: updated.smartRouting || [],
-            };
+            const ruleData = buildRuleUpdatePayload(rule, updated);
 
             api.updateRule(rule.uuid, ruleData).then((result) => {
                 if (result.success) {
