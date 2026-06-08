@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -426,6 +427,7 @@ func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
 				scenarioConfig,
 				protocol.TypeAnthropicV1,
 				protocol.TypeOpenAIChat,
+				nil,
 			)
 
 			if result.ThinkingEffort != tt.wantThinkingEffort {
@@ -481,11 +483,45 @@ func TestResolveRuleFlagsWithScenario_CustomUserAgent(t *testing.T) {
 				scenarioConfig,
 				protocol.TypeAnthropicV1,
 				protocol.TypeOpenAIChat,
+				nil,
 			)
 
 			if result.CustomUserAgent != tt.wantUA {
 				t.Errorf("CustomUserAgent = %q, want %q", result.CustomUserAgent, tt.wantUA)
 			}
 		})
+	}
+}
+
+func TestResolveRuleFlagsWithScenario_CleanHeaderSuppressedForClaudeOAuth(t *testing.T) {
+	oauthProvider := &typ.Provider{
+		AuthType:    typ.AuthTypeOAuth,
+		OAuthDetail: &ai.OAuthDetail{Issuer: ai.IssuerClaudeCode},
+	}
+	otherProvider := &typ.Provider{AuthType: typ.AuthTypeAPIKey}
+
+	c, _ := gin.CreateTestContext(nil)
+	rule := &typ.Rule{Flags: typ.RuleFlags{CleanHeader: true}}
+	scenarioConfig := &typ.ScenarioConfig{}
+
+	// CleanHeader should be suppressed for Claude OAuth provider.
+	got := resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, oauthProvider)
+	if got.CleanHeader {
+		t.Error("CleanHeader should be suppressed for Claude OAuth provider")
+	}
+
+	// CleanHeader should be preserved for any other provider type.
+	got = resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, otherProvider)
+	if !got.CleanHeader {
+		t.Error("CleanHeader should be preserved for non-OAuth provider")
+	}
+
+	// nil provider: no suppression.
+	got = resolveRuleFlagsWithScenario(c, rule, typ.ScenarioClaudeCode, scenarioConfig,
+		protocol.TypeAnthropicV1, protocol.TypeAnthropicV1, nil)
+	if !got.CleanHeader {
+		t.Error("CleanHeader should be preserved when provider is nil")
 	}
 }
