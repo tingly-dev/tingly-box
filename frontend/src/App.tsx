@@ -18,7 +18,6 @@ import Layout from './layout/Layout';
 import createAppTheme from './theme';
 
 import Login from './pages/Login';
-import Guiding from './pages/Guiding';
 import Onboarding from './pages/Onboarding';
 import { api } from './services/api';
 import APITokensPage from './pages/APITokensPage';
