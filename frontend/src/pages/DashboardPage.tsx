@@ -19,7 +19,7 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, FilterOff } from '@/components/icons';
+import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, FilterOff, ChevronLeft, ChevronRight } from '@/components/icons';
 import { tablerMui } from '@/components/icons';
 import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
 
@@ -119,6 +119,8 @@ export default function DashboardPage() {
     const [providers, setProviders] = useState<Provider[]>([]);
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
     const [selectedModel, setSelectedModel] = useState<string>('all');
+    const [modelsPage, setModelsPage] = useState(0);
+    const [modelsPerPage] = useState(10);
 
     // By-request view state
     const [viewMode, setViewMode] = useState<'summary' | 'requests'>('summary');
@@ -235,6 +237,11 @@ export default function DashboardPage() {
             loadRecords(recordsTimeParams, selectedProvider, selectedModel);
         }
     }, [viewMode, recordsTimeParams, selectedProvider, selectedModel, loadRecords]);
+
+    // Reset model pagination when filters or data change
+    useEffect(() => {
+        setModelsPage(0);
+    }, [stats, selectedProvider, selectedModel]);
 
     useEffect(() => {
         if (autoRefresh) {
@@ -618,14 +625,29 @@ export default function DashboardPage() {
                             flexDirection: 'column',
                         }}
                     >
-                        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem', mb: 2 }}>
-                            Top Models by Token Usage
-                        </Typography>
-                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            {tokenChartData.slice(0, 6).map((item, index) => {
-                                const totalTokens = item.inputTokens + item.outputTokens + (item.cacheTokens || 0);
-                                const maxTokens = Math.max(...tokenChartData.slice(0, 6).map(d => d.inputTokens + d.outputTokens + (d.cacheTokens || 0)));
-                                const percentage = maxTokens > 0 ? (totalTokens / maxTokens) * 100 : 0;
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                                Models by Token Usage
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                {tokenChartData.length} total
+                            </Typography>
+                        </Box>
+
+                        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1, overflow: 'hidden' }}>
+                            {tokenChartData.length === 0 ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                                    <Typography variant="body2" color="text.secondary">No models found</Typography>
+                                </Box>
+                            ) : (
+                                <>
+                                    {tokenChartData
+                                        .slice(modelsPage * modelsPerPage, (modelsPage + 1) * modelsPerPage)
+                                        .map((item, index) => {
+                                            const globalIndex = modelsPage * modelsPerPage + index;
+                                            const totalTokens = item.inputTokens + item.outputTokens + (item.cacheTokens || 0);
+                                            const maxTokens = Math.max(...tokenChartData.map(d => d.inputTokens + d.outputTokens + (d.cacheTokens || 0)));
+                                            const percentage = maxTokens > 0 ? (totalTokens / maxTokens) * 100 : 0;
 
                                 return (
                                     <Tooltip
@@ -695,7 +717,7 @@ export default function DashboardPage() {
                                                     flexShrink: 0,
                                                 }}
                                             >
-                                                {index + 1}
+                                                {globalIndex + 1}
                                             </Box>
 
                                             {/* Content */}
@@ -755,6 +777,47 @@ export default function DashboardPage() {
                                     </Tooltip>
                                 );
                             })}
+
+                            {/* Pagination Controls */}
+                            {tokenChartData.length > modelsPerPage && (
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        gap: 0.5,
+                                        pt: 1.5,
+                                        borderTop: '1px solid',
+                                        borderColor: 'divider',
+                                        mt: 'auto',
+                                    }}
+                                >
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setModelsPage(p => Math.max(0, p - 1))}
+                                        disabled={modelsPage === 0}
+                                        sx={{ borderRadius: 1 }}
+                                    >
+                                        <ChevronLeft sx={{ fontSize: '1.1rem' }} />
+                                    </IconButton>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{ minWidth: 60, textAlign: 'center', color: 'text.secondary', fontSize: '0.75rem' }}
+                                    >
+                                        {modelsPage + 1} / {Math.ceil(tokenChartData.length / modelsPerPage)}
+                                    </Typography>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => setModelsPage(p => Math.min(Math.ceil(tokenChartData.length / modelsPerPage) - 1, p + 1))}
+                                        disabled={modelsPage >= Math.ceil(tokenChartData.length / modelsPerPage) - 1}
+                                        sx={{ borderRadius: 1 }}
+                                    >
+                                        <ChevronRight sx={{ fontSize: '1.1rem' }} />
+                                    </IconButton>
+                                </Box>
+                            )}
+                        </>
+                        )}
                         </Box>
                     </Paper>
                 </Box>
