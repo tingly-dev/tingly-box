@@ -69,6 +69,7 @@ export interface RuleFlags {
     sessionAffinity?: number;
     visionProxyService?: VisionProxyServiceRef;
     claudeCodeCompat?: boolean;
+    cleanHeader?: boolean;
 }
 
 export interface RuleFlagsApi {
@@ -84,6 +85,7 @@ export interface RuleFlagsApi {
     session_affinity?: number;
     vision_proxy_service?: VisionProxyServiceRef;
     claude_code_compat?: boolean;
+    clean_header?: boolean;
 }
 
 export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref';
@@ -105,6 +107,8 @@ export interface FlagSpec {
     // User-Agent presets). Rendered as quick-pick chips; free-form input is still
     // allowed. Populated from the backend registry (typ.DefaultUserAgents()).
     suggestions?: FlagOption[];
+    shared?: boolean;
+    inheritanceMode?: string;
 }
 
 export interface Rule {

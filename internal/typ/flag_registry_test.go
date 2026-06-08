@@ -26,6 +26,7 @@ func TestRuleFlagRegistry_KnownKeys(t *testing.T) {
 		"skip_usage",
 		"use_max_completion_tokens",
 		"custom_user_agent",
+		"clean_header",
 	}
 
 	present := map[string]bool{}
@@ -110,6 +111,19 @@ func TestRuleFlagRegistry_EnumOptions(t *testing.T) {
 				t.Errorf("enum flag %q has duplicate option Value %q", spec.Key, opt.Value)
 			}
 			seen[opt.Value] = true
+		}
+	}
+}
+
+// TestRuleFlagRegistry_SharedFlagsHaveInheritanceMode verifies that every flag
+// marked Shared declares an InheritanceMode and vice versa.
+func TestRuleFlagRegistry_SharedFlagsHaveInheritanceMode(t *testing.T) {
+	for _, spec := range RuleFlagRegistry() {
+		if spec.Shared && spec.InheritanceMode == "" {
+			t.Errorf("shared flag %q must declare InheritanceMode", spec.Key)
+		}
+		if !spec.Shared && spec.InheritanceMode != "" {
+			t.Errorf("non-shared flag %q should not declare InheritanceMode", spec.Key)
 		}
 	}
 }

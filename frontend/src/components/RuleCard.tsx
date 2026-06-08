@@ -13,7 +13,7 @@ import { RuleCardDeleteDialog, RuleFlagEditDialog } from '@/components/rule-card
 import UnifiedRoutingGraph from '@/components/UnifiedRoutingGraph';
 import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialog';
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
-import RuleExtensionsCard from '@/components/rule-card/RuleExtensionsCard';
+import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 
@@ -277,7 +277,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     if (!configRecord) return null;
 
     const extensionsCard = (
-        <RuleExtensionsCard
+        <RulePluginsCard
             flags={configRecord.flags}
             registry={flagRegistry}
             active={configRecord.active}

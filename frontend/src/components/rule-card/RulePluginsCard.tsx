@@ -21,7 +21,7 @@ const CARD_STYLES = {
 
 const CARD_HEADER_HEIGHT = 18;
 
-const StyledExtensionsCard = styled(Box, {
+const StyledPluginsCard = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active',
 })<{ active: boolean }>(({ active, theme }) => ({
     display: 'flex',
@@ -45,7 +45,7 @@ const StyledExtensionsCard = styled(Box, {
     },
 }));
 
-export interface RuleExtensionsCardProps {
+export interface RulePluginsCardProps {
     flags?: RuleFlags;
     registry?: FlagSpec[];
     active: boolean;
@@ -68,6 +68,8 @@ const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.useMaxTokens;
         case 'claude_code_compat':
             return !!flags.claudeCodeCompat;
+        case 'clean_header':
+            return !!flags.cleanHeader;
         default:
             return false;
     }
@@ -119,11 +121,11 @@ const flagServiceRefDisplay = (flags: RuleFlags | undefined, key: string): strin
 };
 
 /**
- * RuleExtensionsCard renders a compact card displaying the rule's enabled
- * extension flags. The "+ Add" action opens the catalog dialog where users
+ * RulePluginsCard renders a compact card displaying the rule's enabled
+ * plugin flags. The "+ Add" action opens the catalog dialog where users
  * pick which flags to enable and supply any parameters they require.
  */
-export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
+export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
     flags,
     registry,
     active,
@@ -143,7 +145,7 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
     });
 
     return (
-        <StyledExtensionsCard active={active} onClick={onOpenCatalog}>
+        <StyledPluginsCard active={active} onClick={onOpenCatalog}>
             {/* Fixed-height header so the body has a stable scroll region */}
             <Stack
                 direction="row"
@@ -157,10 +159,10 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
             >
                 <ExtensionIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                 <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.72rem', color: 'text.secondary', flexGrow: 1, lineHeight: 1 }}>
-                    Extensions{enabled.length > 0 ? ` (${enabled.length})` : ''}
+                    Plugins{enabled.length > 0 ? ` (${enabled.length})` : ''}
                 </Typography>
                 {/* Visual affordance only — the whole card is clickable. */}
-                <Tooltip title="Configure rule extensions">
+                <Tooltip title="Configure rule plugins">
                     <AddIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                 </Tooltip>
             </Stack>
@@ -283,8 +285,8 @@ export const RuleExtensionsCard: React.FC<RuleExtensionsCardProps> = ({
                     </Stack>
                 </Box>
             )}
-        </StyledExtensionsCard>
+        </StyledPluginsCard>
     );
 };
 
-export default RuleExtensionsCard;
+export default RulePluginsCard;

@@ -76,6 +76,8 @@ const flagToBool = (flags: RuleFlags | undefined, key: string): boolean => {
             return !!flags.useMaxTokens;
         case 'claude_code_compat':
             return !!flags.claudeCodeCompat;
+        case 'clean_header':
+            return !!flags.cleanHeader;
         default:
             return false;
     }
@@ -130,6 +132,8 @@ const setBool = (flags: RuleFlags, key: string, value: boolean): RuleFlags => {
             return { ...flags, useMaxTokens: value };
         case 'claude_code_compat':
             return { ...flags, claudeCodeCompat: value };
+        case 'clean_header':
+            return { ...flags, cleanHeader: value };
         default:
             return flags;
     }
@@ -282,9 +286,9 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle sx={{ pb: 1 }}>
-                Rule Extensions
+                Rule Plugins
                 <Typography variant="caption" component="div" color="text.secondary">
-                    Pre-installed flags applied at the rule level.
+                    Plugin flags applied at the rule level.
                 </Typography>
             </DialogTitle>
 

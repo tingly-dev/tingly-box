@@ -126,7 +126,8 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         thinking_effort: newConfigRecord.flags?.thinkingEffort || '',
                         session_affinity: newConfigRecord.flags?.sessionAffinity || 0,
                         vision_proxy_service: newConfigRecord.flags?.visionProxyService,
-                        claude_code_compat: newConfigRecord.flags?.anthropicCompat || false,
+                        claude_code_compat: newConfigRecord.flags?.claudeCodeCompat || false,
+                        clean_header: newConfigRecord.flags?.cleanHeader || false,
                     },
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)

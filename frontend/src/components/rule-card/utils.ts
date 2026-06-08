@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { api } from '@/services/api';
-import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags } from '@/components/RoutingGraphTypes';
+import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags, RuleFlagsApi } from '@/components/RoutingGraphTypes';
 
 // ============================================================================
 // Helper Functions
@@ -78,6 +78,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
             sessionAffinity: rule.flags?.session_affinity || 0,
             visionProxyService: rule.flags?.vision_proxy_service,
             claudeCodeCompat: rule.flags?.claude_code_compat || false,
+            cleanHeader: rule.flags?.clean_header || false,
         },
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
@@ -190,16 +191,7 @@ interface ExportRule {
     description?: string;
     services: any[];
     active?: boolean;
-    flags?: {
-        cursor_compat?: boolean;
-        cursor_compat_auto?: boolean;
-        skip_usage?: boolean;
-        custom_user_agent?: string;
-        use_max_completion_tokens?: boolean;
-        use_max_tokens?: boolean;
-        openai_endpoint_override?: string;
-        block_tools?: string;
-    };
+    flags?: RuleFlagsApi;
     smart_enabled?: boolean;
     smart_routing: any[];
 }
@@ -261,6 +253,7 @@ export function formatRuleFlags(flags?: RuleFlags): string {
     }
     if (flags.sessionAffinity) entries.push(`session_affinity=${flags.sessionAffinity}`);
     if (flags.claudeCodeCompat) entries.push('claude_code_compat=true');
+    if (flags.cleanHeader) entries.push('clean_header=true');
     return entries.join(',');
 }
 
@@ -281,6 +274,7 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
         thinkingEffort: '',
         sessionAffinity: 0,
         claudeCodeCompat: false,
+        cleanHeader: false,
     };
 
     const trimmed = input.trim();
@@ -367,6 +361,9 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             case 'claude_code_compat':
                 flags.claudeCodeCompat = parsedValue;
                 break;
+            case 'clean_header':
+                flags.cleanHeader = parsedValue;
+                break;
             default:
                 return { flags, error: `Unknown flag "${rawKey}".` };
         }
@@ -390,6 +387,7 @@ export function countActiveFlags(flags?: RuleFlags): number {
     if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) n++;
     if (flags.sessionAffinity && flags.sessionAffinity > 0) n++;
     if (flags.claudeCodeCompat) n++;
+    if (flags.cleanHeader) n++;
     return n;
 }
 

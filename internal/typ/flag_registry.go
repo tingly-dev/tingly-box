@@ -65,6 +65,15 @@ type FlagSpec struct {
 	// allowing free-form input. Used by custom_user_agent to expose the common
 	// CLI/agent User-Agent strings (see DefaultUserAgents).
 	Suggestions []FlagOption `json:"suggestions,omitempty"`
+	// Shared indicates this flag also exists at the scenario level
+	// (ScenarioFlags) and participates in scenario→rule inheritance.
+	Shared bool `json:"shared,omitempty"`
+	// InheritanceMode describes how the scenario-level and rule-level values
+	// combine when both are set:
+	//   - "or":       bool OR — either level enabling it activates the flag
+	//   - "override": rule non-zero/non-empty wins, else scenario default
+	// Empty means the flag is rule-only (not shared).
+	InheritanceMode string `json:"inheritance_mode,omitempty"`
 }
 
 // DefaultUserAgents returns a curated, non-exhaustive list of recommended
@@ -92,13 +101,15 @@ func RuleFlagRegistry() []FlagSpec {
 	return []FlagSpec{
 		// ── Request (OpenAI) ───────────────────────────────────────────────
 		{
-			Key:         "custom_user_agent",
-			Label:       "Custom User-Agent",
-			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, enter any value, or choose \"None\" to strip the User-Agent header entirely (send no User-Agent).",
-			Type:        FlagTypeString,
-			Category:    FlagCategoryRequestOpenAI,
-			Placeholder: "e.g. MyApp/1.0",
-			Suggestions: DefaultUserAgents(),
+			Key:             "custom_user_agent",
+			Label:           "Custom User-Agent",
+			Description:     "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, enter any value, or choose \"None\" to strip the User-Agent header entirely (send no User-Agent).",
+			Type:            FlagTypeString,
+			Category:        FlagCategoryRequestOpenAI,
+			Placeholder:     "e.g. MyApp/1.0",
+			Suggestions:     DefaultUserAgents(),
+			Shared:          true,
+			InheritanceMode: "override",
 		},
 		{
 			Key:         "openai_endpoint_override",
@@ -136,19 +147,23 @@ func RuleFlagRegistry() []FlagSpec {
 		},
 		// ── Response ───────────────────────────────────────────────────────
 		{
-			Key:         "skip_usage",
-			Label:       "Skip usage in response",
-			Description: "Strip the `usage` block from responses (both SSE deltas and the final body).",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryResponse,
+			Key:             "skip_usage",
+			Label:           "Skip usage in response",
+			Description:     "Strip the `usage` block from responses (both SSE deltas and the final body).",
+			Type:            FlagTypeBool,
+			Category:        FlagCategoryResponse,
+			Shared:          true,
+			InheritanceMode: "or",
 		},
 		// ── Reasoning ──────────────────────────────────────────────────────
 		{
-			Key:         "thinking_effort",
-			Label:       "Thinking",
-			Description: "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on with the matching budget — mapped to budget_tokens for Anthropic targets (low 1K / medium 5K / high 20K / max 32K) and to reasoning_effort for OpenAI targets (\"max\" collapses to \"high\").",
-			Type:        FlagTypeEnum,
-			Category:    FlagCategoryReasoning,
+			Key:             "thinking_effort",
+			Label:           "Thinking",
+			Description:     "Single control for extended thinking. \"By Client\" passes the client's thinking config through unchanged. \"Off\" forces thinking disabled. The level values force thinking on with the matching budget — mapped to budget_tokens for Anthropic targets (low 1K / medium 5K / high 20K / max 32K) and to reasoning_effort for OpenAI targets (\"max\" collapses to \"high\").",
+			Type:            FlagTypeEnum,
+			Category:        FlagCategoryReasoning,
+			Shared:          true,
+			InheritanceMode: "override",
 			Options: []FlagOption{
 				{Value: "", Label: "By Client"},
 				{Value: "off", Label: "Off"},
@@ -168,12 +183,14 @@ func RuleFlagRegistry() []FlagSpec {
 		},
 		// ── Routing ────────────────────────────────────────────────────────
 		{
-			Key:         "session_affinity",
-			Label:       "Session affinity",
-			Description: "TTL in seconds for session-to-service pinning. Pinning improves cache hit rate → faster responses + lower token costs. Once a session lands on a service, follow-up requests keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP.",
-			Type:        FlagTypeInt,
-			Category:    FlagCategoryRouting,
-			Placeholder: "e.g. 3600",
+			Key:             "session_affinity",
+			Label:           "Session affinity",
+			Description:     "TTL in seconds for session-to-service pinning. Pinning improves cache hit rate → faster responses + lower token costs. Once a session lands on a service, follow-up requests keep hitting that service until the entry expires. 0 disables affinity. Works with any load-balancing tactic; does not require smart routing. Session identity is resolved from Anthropic metadata.user_id, the X-Tingly-Session-ID header, or the client IP.",
+			Type:            FlagTypeInt,
+			Category:        FlagCategoryRouting,
+			Placeholder:     "e.g. 3600",
+			Shared:          true,
+			InheritanceMode: "override",
 		},
 		// ── App ────────────────────────────────────────────────────────────
 		{
@@ -191,11 +208,22 @@ func RuleFlagRegistry() []FlagSpec {
 			Category:    FlagCategoryApp,
 		},
 		{
-			Key:         "claude_code_compat",
-			Label:       "Claude Code compatibility",
-			Description: "Rewrite any \"system\" role in the messages array to \"user\" before forwarding. Claude Code sends system-role entries inside the messages list (a non-standard extension); enabling this normalizes them so third-party Anthropic-compatible providers that reject that role do not error out.",
-			Type:        FlagTypeBool,
-			Category:    FlagCategoryApp,
+			Key:             "claude_code_compat",
+			Label:           "Claude Code compatibility",
+			Description:     "Rewrite any \"system\" role in the messages array to \"user\" before forwarding. Claude Code sends system-role entries inside the messages list (a non-standard extension); enabling this normalizes them so third-party Anthropic-compatible providers that reject that role do not error out.",
+			Type:            FlagTypeBool,
+			Category:        FlagCategoryApp,
+			Shared:          true,
+			InheritanceMode: "or",
+		},
+		{
+			Key:             "clean_header",
+			Label:           "Clean Header",
+			Description:     "Strip x-anthropic-billing-header blocks from system messages before forwarding. Auto-enabled for billing scenarios (claude_code, claude_desktop) during protocol transformation; set manually to force enable on any rule.",
+			Type:            FlagTypeBool,
+			Category:        FlagCategoryApp,
+			Shared:          true,
+			InheritanceMode: "or",
 		},
 	}
 }
