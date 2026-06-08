@@ -52,6 +52,7 @@ func Migrate(c *Config) error {
 	migrate20260608(c)   // Default claude_code_compat on for existing Claude Code rules
 	migrate20260608_2(c) // Default clean_header on for existing Claude Code rules
 	migrate20260608_3(c) // Default clean_header on for existing Claude Desktop rules
+	migrate20260608_4(c) // Default claude_code_compat on for existing Claude Desktop rules
 	return nil
 }
 
@@ -563,7 +564,7 @@ func migrate20260521(c *Config) {
 			Type:   loadbalance.TacticAdaptive,
 			Params: typ.DefaultAdaptiveParams(),
 		},
-		Flags:  typ.RuleFlags{CleanHeader: true},
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true},
 		Active: true,
 	}
 	if referenceRule != nil && len(referenceRule.Services) > 0 {
@@ -754,5 +755,36 @@ func migrate20260608_3(c *Config) {
 	if needsSave {
 		_ = c.Save()
 		logrus.Info("Migration 20260608_3 completed: defaulted clean_header on for Claude Desktop rules")
+	}
+}
+
+// migrate20260608_4 defaults claude_code_compat on for existing Claude Desktop rules.
+// Claude Desktop sends mid-conversation system-role messages (same non-standard
+// extension as Claude Code) that third-party Anthropic-compatible providers reject.
+// Mirrors migrate20260608 but targets ScenarioClaudeDesktop.
+//
+// One-time only — gated by the migration marker — so a user who later turns the
+// flag off on a specific rule keeps it off across restarts.
+func migrate20260608_4(c *Config) {
+	if c.hasMigrationCompleted("20260608_4") {
+		return
+	}
+
+	needsSave := false
+	for i := range c.Rules {
+		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
+		if base != typ.ScenarioClaudeDesktop {
+			continue
+		}
+		if !c.Rules[i].Flags.ClaudeCodeCompat {
+			c.Rules[i].Flags.ClaudeCodeCompat = true
+			needsSave = true
+		}
+	}
+
+	c.markMigrationCompleted("20260608_4")
+	if needsSave {
+		_ = c.Save()
+		logrus.Info("Migration 20260608_4 completed: defaulted claude_code_compat on for Claude Desktop rules")
 	}
 }

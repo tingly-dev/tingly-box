@@ -102,8 +102,10 @@ func init() {
 
 // cdRule builds a built-in Claude Desktop rule with the shared defaults: an empty
 // service list, the default adaptive load-balancing tactic, Active, and the
-// clean_header flag on. Claude Desktop injects x-anthropic-billing-header blocks
-// into system messages that must not reach external providers (CleanHeader).
+// clean_header + claude_code_compat flags on. Claude Desktop injects
+// x-anthropic-billing-header blocks into system messages (CleanHeader) and sends
+// mid-conversation system-role messages that third-party Anthropic-compatible
+// providers reject (ClaudeCodeCompat).
 func cdRule(uuid, requestModel, description string) typ.Rule {
 	return typ.Rule{
 		UUID:         uuid,
@@ -115,7 +117,7 @@ func cdRule(uuid, requestModel, description string) typ.Rule {
 			Type:   loadbalance.TacticAdaptive,
 			Params: typ.DefaultAdaptiveParams(),
 		},
-		Flags:  typ.RuleFlags{CleanHeader: true},
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true},
 		Active: true,
 	}
 }
