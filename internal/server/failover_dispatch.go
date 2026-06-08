@@ -361,14 +361,30 @@ func (s *Server) dispatchWithPriorityFailover(
 
 		nextProvider, nextService, err := s.selectFallbackService(rule, tried, initialProvider.APIStyle)
 		if err != nil {
-			logrus.WithContext(c.Request.Context()).Warnf("[failover] load balancer failed selecting fallback after %d attempt(s) status=%d: %v", i+1, status, err)
+			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+				"stage":   "failover",
+				"attempt": i + 1,
+				"status":  status,
+				"error":   err.Error(),
+			}).Warnf("[failover] load balancer failed selecting fallback after %d attempt(s) status=%d: %v", i+1, status, err)
 			return
 		}
 		if nextProvider == nil || nextService == nil {
-			logrus.WithContext(c.Request.Context()).Debugf("[failover] giving up after %d attempt(s) status=%d (no more services)", i+1, status)
+			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+				"stage":   "failover",
+				"attempt": i + 1,
+				"status":  status,
+			}).Warnf("[failover] giving up after %d attempt(s) status=%d (no more services)", i+1, status)
 			return
 		}
-		logrus.WithContext(c.Request.Context()).Infof("[failover] %s status=%d → retrying with %s:%s", serviceID, status, nextProvider.UUID, nextService.Model)
+		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
+			"stage":        "failover",
+			"attempt":      i + 1,
+			"status":       status,
+			"from_service": serviceID,
+			"to_provider":  nextProvider.Name,
+			"to_model":     nextService.Model,
+		}).Infof("[failover] status=%d → retrying with %s/%s", status, nextProvider.Name, nextService.Model)
 
 		gate.Discard()
 		provider = nextProvider
