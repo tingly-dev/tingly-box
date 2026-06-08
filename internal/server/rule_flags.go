@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -158,7 +157,7 @@ func resolveRuleFlagsWithScenario(
 	// consumed by Anthropic's billing backend; stripping it would break billing
 	// for OAuth subscribers even though it must be stripped for every other
 	// provider type (third-party Anthropic-compatible, OpenAI, etc.).
-	if flags.CleanHeader && isClaudeOAuthProvider(provider) {
+	if flags.CleanHeader && provider.IsClaudeCodeProvider() {
 		flags.CleanHeader = false
 	}
 
@@ -167,18 +166,6 @@ func resolveRuleFlagsWithScenario(
 	applyCustomUserAgent(c, flags)
 
 	return flags
-}
-
-// isClaudeOAuthProvider reports whether a provider routes to Anthropic via a
-// Claude Code OAuth token. These providers carry an x-anthropic-billing-header
-// that Anthropic's backend uses for subscription billing; it must not be stripped.
-func isClaudeOAuthProvider(provider *typ.Provider) bool {
-	if provider == nil {
-		return false
-	}
-	return provider.AuthType == typ.AuthTypeOAuth &&
-		provider.OAuthDetail != nil &&
-		provider.OAuthDetail.GetIssuer() == ai.IssuerClaudeCode
 }
 
 // applyCustomUserAgent attaches the effective custom User-Agent (already merged
