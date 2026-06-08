@@ -2,7 +2,6 @@
  * Generic event system for cross-component communication.
  * Eliminates duplication across useCustomModels, useNewModels, useRecentModels, useProviderModels.
  */
-import { useEffect } from 'react';
 
 export interface EventSystem<T = any> {
   eventName: string;
@@ -59,26 +58,4 @@ export function createEventSystem<T = any>(eventName: string, crossTab = false):
       };
     },
   };
-}
-
-/**
- * React hook for listening to events.
- */
-export function useEvent<T = any>(
-  eventName: string,
-  callback: (data?: T) => void,
-  deps: any[] = []
-) {
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const customEvent = event as CustomEvent<T>;
-      callback(customEvent.detail);
-    };
-
-    window.addEventListener(eventName, handler);
-
-    return () => {
-      window.removeEventListener(eventName, handler);
-    };
-  }, [eventName, ...deps]);
 }
