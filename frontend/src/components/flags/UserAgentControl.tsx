@@ -21,14 +21,17 @@ export const USER_AGENT_NONE = 'none';
 
 // Presets mirror typ.DefaultUserAgents() on the backend. Kept local (like
 // RECORD_V2_MODES) so the control is self-contained; update both together.
+//
+// `name` is only a hint — the UI always surfaces the concrete `value` (the
+// literal User-Agent string actually sent) so the choice is never ambiguous.
 const UA_PRESETS = [
-    { value: '', label: 'Default', description: "Don't override — keep the vendor/provider User-Agent" },
-    { value: 'claude-cli/2.1.86 (external, cli)', label: 'Claude Code (CLI)', description: 'Impersonate the Claude Code CLI' },
-    { value: 'codex_cli_rs/0.20.0', label: 'Codex CLI', description: 'Impersonate the Codex CLI' },
-    { value: 'openclaw/1.0.0', label: 'OpenClaw', description: 'Impersonate OpenClaw' },
-    { value: 'hermes-agent/1.0.0', label: 'Hermes', description: 'Impersonate the Hermes agent' },
-    { value: 'OpenAI/Python 1.51.0', label: 'OpenAI Python SDK', description: 'Impersonate the OpenAI Python SDK' },
-    { value: USER_AGENT_NONE, label: 'None (no User-Agent)', description: 'Strip the User-Agent header — send no UA at all' },
+    { value: '', name: 'Default', description: "Don't override — keep the vendor/provider User-Agent" },
+    { value: 'claude-cli/2.1.86 (external, cli)', name: 'Claude Code (CLI)', description: 'Impersonate the Claude Code CLI' },
+    { value: 'codex_cli_rs/0.20.0', name: 'Codex CLI', description: 'Impersonate the Codex CLI' },
+    { value: 'openclaw/1.0.0', name: 'OpenClaw', description: 'Impersonate OpenClaw' },
+    { value: 'hermes-agent/1.0.0', name: 'Hermes', description: 'Impersonate the Hermes agent' },
+    { value: 'OpenAI/Python 1.51.0', name: 'OpenAI Python SDK', description: 'Impersonate the OpenAI Python SDK' },
+    { value: USER_AGENT_NONE, name: 'No User-Agent', description: 'Strip the User-Agent header — send no UA at all' },
 ] as const;
 
 interface UserAgentControlProps {
@@ -39,9 +42,16 @@ interface UserAgentControlProps {
 
 const presetFor = (value: string) => UA_PRESETS.find(p => p.value === value);
 
-const labelFor = (value: string): string => {
+// isLiteral marks values whose primary display IS the raw User-Agent string
+// (i.e. real UAs). The two non-UA modes — "" (Default) and the `none` sentinel
+// — have no real header to show, so they keep a descriptive label instead.
+const isLiteral = (value: string) => value !== '' && value !== USER_AGENT_NONE;
+
+// Primary text shown on the button / as the menu row's main line.
+const primaryText = (value: string): string => {
     if (value === '') return 'Default';
-    return presetFor(value)?.label ?? 'Custom';
+    if (value === USER_AGENT_NONE) return 'No User-Agent';
+    return value; // the concrete UA string
 };
 
 const UserAgentControl: React.FC<UserAgentControlProps> = ({ value, disabled, onChange }) => {
@@ -84,8 +94,8 @@ const UserAgentControl: React.FC<UserAgentControlProps> = ({ value, disabled, on
                     endIcon={<IconChevronDown size={18} />}
                     sx={{
                         minWidth: 110,
+                        maxWidth: 260,
                         textTransform: 'none',
-                        whiteSpace: 'nowrap',
                         bgcolor: isActive ? 'primary.main' : 'transparent',
                         color: isActive ? 'primary.contrastText' : 'text.primary',
                         fontWeight: isActive ? 600 : 400,
@@ -95,8 +105,19 @@ const UserAgentControl: React.FC<UserAgentControlProps> = ({ value, disabled, on
                         '&:hover': { bgcolor: isActive ? 'primary.dark' : 'action.selected' },
                     }}
                 >
-                    <IconCircleFilled size={14} style={{ marginRight: '4px' }} />
-                    UA: {labelFor(value)}
+                    <IconCircleFilled size={14} style={{ marginRight: '4px', flexShrink: 0 }} />
+                    <Box component="span" sx={{ flexShrink: 0 }}>UA:&nbsp;</Box>
+                    <Box
+                        component="span"
+                        sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontFamily: isLiteral(value) ? 'monospace' : undefined,
+                        }}
+                    >
+                        {primaryText(value)}
+                    </Box>
                 </Button>
             </Tooltip>
             <Menu
@@ -112,17 +133,38 @@ const UserAgentControl: React.FC<UserAgentControlProps> = ({ value, disabled, on
                         selected={preset.value === value}
                         onClick={() => pick(preset.value)}
                         title={preset.description}
+                        sx={{ maxWidth: 360 }}
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                            <ListItemText primary={preset.label} primaryTypographyProps={{ variant: 'body2' }} />
-                            {preset.value === value && <IconCheck size={16} />}
+                            <ListItemText
+                                primary={primaryText(preset.value)}
+                                // For real UAs the literal string is the primary line; the
+                                // friendly name drops to a caption so nothing is hidden.
+                                secondary={isLiteral(preset.value) ? preset.name : preset.description}
+                                primaryTypographyProps={{
+                                    variant: 'body2',
+                                    fontFamily: isLiteral(preset.value) ? 'monospace' : undefined,
+                                    sx: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                                }}
+                                secondaryTypographyProps={{ variant: 'caption' }}
+                            />
+                            {preset.value === value && <IconCheck size={16} style={{ flexShrink: 0 }} />}
                         </Box>
                     </MenuItem>
                 ))}
                 <MenuItem onClick={openCustom} title="Enter a custom User-Agent string">
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <ListItemText primary="Custom…" primaryTypographyProps={{ variant: 'body2' }} />
-                        {isCustom && <IconCheck size={16} />}
+                        <ListItemText
+                            primary={isCustom ? value : 'Custom…'}
+                            secondary={isCustom ? 'Custom value' : undefined}
+                            primaryTypographyProps={{
+                                variant: 'body2',
+                                fontFamily: isCustom ? 'monospace' : undefined,
+                                sx: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+                            }}
+                            secondaryTypographyProps={{ variant: 'caption' }}
+                        />
+                        {isCustom && <IconCheck size={16} style={{ flexShrink: 0 }} />}
                     </Box>
                 </MenuItem>
             </Menu>

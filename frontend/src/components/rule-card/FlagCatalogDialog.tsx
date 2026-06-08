@@ -477,8 +477,13 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                                 {spec.suggestions.map((s) => (
                                                                     <Chip
                                                                         key={s.value}
-                                                                        label={s.label}
+                                                                        // Show the concrete value (the literal UA
+                                                                        // string actually sent); the friendly name is
+                                                                        // a hover hint so nothing is hidden.
+                                                                        label={s.value}
+                                                                        title={s.label}
                                                                         size="small"
+                                                                        sx={{ fontFamily: 'monospace' }}
                                                                         variant={flagToString(draft, spec.key) === s.value ? 'filled' : 'outlined'}
                                                                         color={flagToString(draft, spec.key) === s.value ? 'primary' : 'default'}
                                                                         onClick={() => handleStringChange(spec.key, s.value)}
