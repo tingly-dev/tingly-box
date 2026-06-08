@@ -43,49 +43,49 @@ func TestAnthropicBetaFlags(t *testing.T) {
 func TestMergeBetaFlags(t *testing.T) {
 	tests := []struct {
 		name     string
-		required string
+		required []string
 		upstream []string
 		oauth    string
 		want     string
 	}{
 		{
 			name:     "no upstream — required preserved, oauth dedupes",
-			required: "claude-code-20250219,oauth-2025-04-20",
+			required: []string{"claude-code-20250219", "oauth-2025-04-20"},
 			upstream: nil,
 			oauth:    "oauth-2025-04-20",
 			want:     "claude-code-20250219,oauth-2025-04-20",
 		},
 		{
 			name:     "allowed upstream flag (context-1m) passes through",
-			required: "claude-code-20250219,oauth-2025-04-20",
+			required: []string{"claude-code-20250219", "oauth-2025-04-20"},
 			upstream: []string{"context-1m-2025-08-07,oauth-2025-04-20"},
 			oauth:    "oauth-2025-04-20",
 			want:     "claude-code-20250219,oauth-2025-04-20,context-1m-2025-08-07",
 		},
 		{
 			name:     "multiple upstream header values — only allowlisted kept",
-			required: "claude-code-20250219",
+			required: []string{"claude-code-20250219"},
 			upstream: []string{"context-1m-2025-08-07,pdfs-2024-09-25", "managed-agents-2026-04-01"},
 			oauth:    "oauth-2025-04-20",
 			want:     "claude-code-20250219,context-1m-2025-08-07,oauth-2025-04-20",
 		},
 		{
 			name:     "appends oauth when missing",
-			required: "claude-code-20250219",
+			required: []string{"claude-code-20250219"},
 			upstream: nil,
 			oauth:    "oauth-2025-04-20",
 			want:     "claude-code-20250219,oauth-2025-04-20",
 		},
 		{
 			name:     "upstream duplicate of required is a no-op",
-			required: "claude-code-20250219, ,oauth-2025-04-20",
+			required: []string{"claude-code-20250219", "oauth-2025-04-20"},
 			upstream: []string{" claude-code-20250219 , "},
 			oauth:    "oauth-2025-04-20",
 			want:     "claude-code-20250219,oauth-2025-04-20",
 		},
 		{
 			name:     "drops non-allowlisted SDK flags",
-			required: "claude-code-20250219",
+			required: []string{"claude-code-20250219"},
 			upstream: []string{"message-batches-2024-09-24,mcp-client-2025-04-04,bad flag,oauth-2025-04-20"},
 			oauth:    "oauth-2025-04-20",
 			want:     "claude-code-20250219,oauth-2025-04-20",

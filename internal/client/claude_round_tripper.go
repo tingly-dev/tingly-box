@@ -65,15 +65,26 @@ var knownAnthropicBetas = func() map[string]struct{} {
 	return m
 }()
 
-// claudeCodeRequiredBetas is the set of anthropic-beta flags that are
-// always part of a real Claude Code request — sourced from the
-// anthropicBeta constant. Treated as the trusted baseline.
-var claudeCodeRequiredBetas = func() map[string]struct{} {
-	m := make(map[string]struct{})
-	for _, p := range strings.Split(anthropicBeta, ",") {
+// claudeCodeRequiredBetasOrdered is the required baseline as an ordered
+// slice, derived once from anthropicBeta. mergeBetaFlags iterates this on
+// every request instead of re-splitting the constant per call.
+var claudeCodeRequiredBetasOrdered = func() []string {
+	parts := strings.Split(anthropicBeta, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
 		if p = strings.TrimSpace(p); p != "" {
-			m[p] = struct{}{}
+			out = append(out, p)
 		}
+	}
+	return out
+}()
+
+// claudeCodeRequiredBetas is the set form of the same baseline, for O(1)
+// membership checks in classifyUpstreamBetaFlag.
+var claudeCodeRequiredBetas = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(claudeCodeRequiredBetasOrdered))
+	for _, p := range claudeCodeRequiredBetasOrdered {
+		m[p] = struct{}{}
 	}
 	return m
 }()
@@ -351,7 +362,11 @@ func classifyUpstreamBetaFlag(s string) (keep bool, reason string) {
 // Everything else from upstream is dropped with a warn log — see
 // claudeCodeAllowedUpstreamBetas. Finally requiredOAuth is appended as a
 // fallback if no oauth flag is present in the merged set.
-func mergeBetaFlags(required string, upstream []string, requiredOAuth string) string {
+//
+// `required` is passed in pre-tokenized so the production caller can hand
+// us the package-level slice (claudeCodeRequiredBetasOrdered) and avoid
+// re-splitting the constant on every request; tests construct their own.
+func mergeBetaFlags(required []string, upstream []string, requiredOAuth string) string {
 	seen := make(map[string]struct{})
 	var out []string
 	hasOAuth := false
@@ -366,10 +381,8 @@ func mergeBetaFlags(required string, upstream []string, requiredOAuth string) st
 		}
 	}
 	// Required baseline — trusted, emitted as-is.
-	for _, p := range strings.Split(required, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			emit(p)
-		}
+	for _, p := range required {
+		emit(p)
 	}
 	// Upstream — gated by the fingerprint-safe allowlist.
 	for _, v := range upstream {
@@ -555,7 +568,7 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	// append any upstream-supplied flags we don't already cover (deduped,
 	// order preserved). Required flags stay at the front so the Claude
 	// Code fingerprint matches.
-	baseBetas := mergeBetaFlags(anthropicBeta, upstreamBetas, anthropicOAuthBeta)
+	baseBetas := mergeBetaFlags(claudeCodeRequiredBetasOrdered, upstreamBetas, anthropicOAuthBeta)
 
 	// Set all headers via map
 	headers := map[string]string{
