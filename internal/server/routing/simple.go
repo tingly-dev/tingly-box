@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -76,10 +77,20 @@ func (s *SimpleSelector) SelectService(
 	}
 
 	// Automatically store sessionID in gin context for downstream handlers
-	c.Set("tracking_session_id", ctx.SessionID.String())
+	c.Set(constant.CtxKeySessionID, ctx.SessionID.String())
 
 	// Store result metadata for observability
 	c.Set("routing_source", result.Source)
+
+	// Store LB trajectory: which upstream was selected and via which tactic.
+	// "smart_routing" and "affinity" sources bypass the normal LB tactic, so
+	// label them explicitly; otherwise use the rule's configured tactic name.
+	c.Set(constant.CtxKeyLBServiceID, result.Service.ServiceID())
+	tacticName := result.Source
+	if result.Source != "smart_routing" && result.Source != "affinity" {
+		tacticName = rule.GetTacticType().String()
+	}
+	c.Set(constant.CtxKeyLBTactic, tacticName)
 
 	setRoutingDebugHeaders(c, result.Provider.Name, result.Provider.UUID, result.Service.Model, result.Source, result.MatchedSmartRuleIndex)
 

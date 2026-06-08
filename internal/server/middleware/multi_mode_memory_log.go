@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 	"github.com/tingly-dev/tingly-box/pkg/obs"
 )
@@ -172,21 +173,27 @@ func (m *MultiModeMemoryLogMiddleware) Middleware() gin.HandlerFunc {
 		}
 
 		// Append routing metadata when set by AI handlers (absent for non-AI routes)
-		if rm := c.GetString("tracking_request_model"); rm != "" {
+		if rm := c.GetString(constant.CtxKeyRequestModel); rm != "" {
 			fields["request_model"] = rm
 		}
-		if am := c.GetString("tracking_model"); am != "" {
+		if am := c.GetString(constant.CtxKeyModel); am != "" {
 			fields["routed_model"] = am
 		}
-		if sc := c.GetString("tracking_scenario"); sc != "" {
+		if sc := c.GetString(constant.CtxKeyScenario); sc != "" {
 			fields["scenario"] = sc
 		}
-		if pv, exists := c.Get("tracking_provider"); exists {
+		if pv, exists := c.Get(constant.CtxKeyProvider); exists {
 			if p, ok := pv.(*typ.Provider); ok && p != nil {
 				fields["routed_provider"] = p.Name
 				fields["api_style"] = string(p.APIStyle)
 				fields["base_url"] = p.APIBase
 			}
+		}
+		if svcID := c.GetString(constant.CtxKeyLBServiceID); svcID != "" {
+			fields["lb_service_id"] = svcID
+		}
+		if tactic := c.GetString(constant.CtxKeyLBTactic); tactic != "" {
+			fields["lb_tactic"] = tactic
 		}
 
 		// Log with structured fields including error details
