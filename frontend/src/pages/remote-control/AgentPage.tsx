@@ -69,9 +69,8 @@ const AgentPage = () => {
         }
     }, [loadImbots]);
 
-    const handleAgentClick = useCallback((botUuid: string, currentAgent: string | null) => {
-        // For now, just log - agent selection needs to be implemented
-        console.log('Agent click for bot:', botUuid, 'current agent:', currentAgent);
+    const handleAgentClick = useCallback((_botUuid: string, _currentAgent: string | null) => {
+        // Agent selection from the bot list is not yet implemented.
     }, []);
 
     if (loading) {

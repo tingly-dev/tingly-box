@@ -52,10 +52,8 @@ const GlobalExperimentalFeatures: React.FC = () => {
 
     const toggleFeature = (featureKey: string) => {
         const newValue = !features[featureKey];
-        console.log('toggleGlobalFeature called:', featureKey, newValue);
         api.setScenarioFlag('_global', featureKey, newValue)
             .then((result) => {
-                console.log('setScenarioFlag result:', result);
                 if (result.success) {
                     setFeatures(prev => ({...prev, [featureKey]: newValue}));
                     refresh()

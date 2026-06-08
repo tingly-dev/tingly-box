@@ -95,10 +95,7 @@ export function getServiceProvidersSync(): Record<string, ServiceProvider> {
 
 // Initialize provider templates on module load
 // This ensures the provider list is available when components mount
-getServiceProviders().then(data => {
-    const providerCount = Object.keys(data || {}).length;
-    console.log(`[serviceProviders] Loaded ${providerCount} provider templates`);
-}).catch(err => console.error('Failed to initialize provider templates:', err));
+getServiceProviders().catch(err => console.error('Failed to initialize provider templates:', err));
 
 // Get dropdown options for service provider selection
 export function getServiceProviderOptions(): ServiceProviderOption[] {
