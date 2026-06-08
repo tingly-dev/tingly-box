@@ -30,7 +30,7 @@ import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/Ro
 import type { Provider } from '@/types/provider';
 import type { ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import ModelSelectDialog from '@/components/ModelSelectDialog';
-import { getFlagValue, setFlagValue, enumInactive, isFlagActive, normalizeEnumForStorage } from './flagHelpers';
+import { getFlagValue, setFlagValue, flagDefault, enumInactive, isFlagActive, normalizeEnumForStorage } from './flagHelpers';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -160,8 +160,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     };
 
     const handleRemoveActive = (spec: FlagSpec) => {
-        const def = spec.type === 'bool' ? false : spec.type === 'int' ? 0 : spec.type === 'service_ref' ? undefined : '';
-        setDraft((d) => setFlagValue(d, spec.key, def));
+        setDraft((d) => setFlagValue(d, spec.key, flagDefault(spec)));
     };
 
     return (
@@ -387,7 +386,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                         size="small"
                                                         type="number"
                                                         placeholder={spec.placeholder}
-                                                        value={flagToInt(draft, spec.key) || ''}
+                                                        value={flagToInt(draft, spec.key) ?? ''}
                                                         slotProps={{ htmlInput: { min: 0 } }}
                                                         onChange={(e) => handleIntChange(spec.key, e.target.value)}
                                                         sx={{ mt: 1 }}

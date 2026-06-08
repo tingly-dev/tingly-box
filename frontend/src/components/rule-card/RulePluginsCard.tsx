@@ -52,9 +52,6 @@ export interface RulePluginsCardProps {
     onToggleFlag?: (key: string) => void;
 }
 
-const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean =>
-    !!getFlagValue(flags, key);
-
 const flagIntValue = (flags: RuleFlags | undefined, key: string): number =>
     (getFlagValue(flags, key) as number) ?? 0;
 

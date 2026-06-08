@@ -217,9 +217,17 @@ export function formatRuleFlags(flags: RuleFlags | undefined, registry: FlagSpec
         .join(',');
 }
 
-export function parseRuleFlags(input: string, registry: FlagSpec[]): { flags: RuleFlags; error?: string } {
+export function parseRuleFlags(input: string, registry: FlagSpec[], currentFlags?: RuleFlags): { flags: RuleFlags; error?: string } {
     const flags: RuleFlags = {};
     for (const spec of registry) {
+        // Preserve non-text-editable flags (e.g. service_ref) from current state.
+        if (spec.type === 'service_ref' && currentFlags) {
+            const existing = getFlagValue(currentFlags, spec.key);
+            if (existing !== undefined) {
+                (flags as Record<string, unknown>)[snakeToCamel(spec.key)] = existing;
+                continue;
+            }
+        }
         (flags as Record<string, unknown>)[snakeToCamel(spec.key)] = flagDefault(spec);
     }
 
@@ -283,10 +291,7 @@ export function parseRuleFlags(input: string, registry: FlagSpec[]): { flags: Ru
     return { flags };
 }
 
-export function countActiveFlags(flags: RuleFlags | undefined, registry: FlagSpec[]): number {
-    if (!flags) return 0;
-    return registry.filter((spec) => isFlagActive(spec, flags)).length;
-}
+
 
 // Generic export handler
 async function exportData(
