@@ -457,14 +457,36 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                     )}
                                                 </Stack>
                                                 {spec.type === 'string' && (
-                                                    <TextField
-                                                        fullWidth
-                                                        size="small"
-                                                        placeholder={spec.placeholder}
-                                                        value={flagToString(draft, spec.key)}
-                                                        onChange={(e) => handleStringChange(spec.key, e.target.value)}
-                                                        sx={{ mt: 1 }}
-                                                    />
+                                                    <>
+                                                        <TextField
+                                                            fullWidth
+                                                            size="small"
+                                                            placeholder={spec.placeholder}
+                                                            value={flagToString(draft, spec.key)}
+                                                            onChange={(e) => handleStringChange(spec.key, e.target.value)}
+                                                            sx={{ mt: 1 }}
+                                                        />
+                                                        {spec.suggestions && spec.suggestions.length > 0 && (
+                                                            <Stack
+                                                                direction="row"
+                                                                spacing={0.5}
+                                                                useFlexGap
+                                                                flexWrap="wrap"
+                                                                sx={{ mt: 1 }}
+                                                            >
+                                                                {spec.suggestions.map((s) => (
+                                                                    <Chip
+                                                                        key={s.value}
+                                                                        label={s.label}
+                                                                        size="small"
+                                                                        variant={flagToString(draft, spec.key) === s.value ? 'filled' : 'outlined'}
+                                                                        color={flagToString(draft, spec.key) === s.value ? 'primary' : 'default'}
+                                                                        onClick={() => handleStringChange(spec.key, s.value)}
+                                                                    />
+                                                                ))}
+                                                            </Stack>
+                                                        )}
+                                                    </>
                                                 )}
                                                 {spec.type === 'int' && (
                                                     <TextField

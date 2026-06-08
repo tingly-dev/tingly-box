@@ -59,6 +59,29 @@ type FlagSpec struct {
 	// Options enumerates the selectable values for FlagTypeEnum flags.
 	// The first option is treated as the default when the stored value is empty.
 	Options []FlagOption `json:"options,omitempty"`
+	// Suggestions offers a non-exhaustive list of recommended values for a
+	// FlagTypeString flag. Unlike Options (enum) these are not the only legal
+	// values — the UI surfaces them as a quick-pick / autocomplete while still
+	// allowing free-form input. Used by custom_user_agent to expose the common
+	// CLI/agent User-Agent strings (see DefaultUserAgents).
+	Suggestions []FlagOption `json:"suggestions,omitempty"`
+}
+
+// DefaultUserAgents returns a curated, non-exhaustive list of recommended
+// User-Agent strings for the custom_user_agent flag (both rule- and
+// scenario-level). The values mirror the vendor-pinned User-Agents the built-in
+// clients send (see internal/client/*.go) plus a few widely used CLI/SDK agents,
+// so operators can impersonate a known client when an upstream gates on it.
+// Label is a human-friendly name; Value is the literal User-Agent header.
+func DefaultUserAgents() []FlagOption {
+	return []FlagOption{
+		{Label: "Claude Code (CLI)", Value: "claude-cli/2.1.86 (external, cli)"},
+		{Label: "Codex CLI", Value: "codex_cli_rs/0.20.0"},
+		{Label: "Gemini CLI", Value: "GeminiCLI/0.1.0 (linux; amd64)"},
+		{Label: "Kimi CLI", Value: "KimiCLI/1.10.6"},
+		{Label: "Antigravity", Value: "antigravity/1.11.5 windows/amd64"},
+		{Label: "OpenAI Python SDK", Value: "OpenAI/Python 1.51.0"},
+	}
 }
 
 // RuleFlagRegistry returns the catalog of supported rule flags. The order is
@@ -70,10 +93,11 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "custom_user_agent",
 			Label:       "Custom User-Agent",
-			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent.",
+			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, or enter any value.",
 			Type:        FlagTypeString,
 			Category:    FlagCategoryRequestOpenAI,
 			Placeholder: "e.g. MyApp/1.0",
+			Suggestions: DefaultUserAgents(),
 		},
 		{
 			Key:         "openai_endpoint_override",

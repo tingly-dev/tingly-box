@@ -125,7 +125,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `skip_usage` | bool | response | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
 | `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b）|
 | `use_max_tokens` | bool | request | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b）|
-| `custom_user_agent` | string | request | 覆盖出站 User-Agent header | `customUserAgentTransport` + `WithCustomUserAgent(ctx, ...)`（Type 2）|
+| `custom_user_agent` | string | request | 覆盖出站 User-Agent header。同时存在 rule 级与 scenario 级（rule 非空时优先，否则继承 scenario 默认）。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。| `customUserAgentTransport` + `applyCustomUserAgent(c, flags)` → `WithCustomUserAgent(ctx, ...)`（Type 2，在 handler 入口解析 flags 后注入 c.Request.Context()）|
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
 | `block_tools` | string (逗号分隔) | request | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre：pre-Base chain stage）|
 | `claude_code_compat` | bool | app | 把 `messages` 数组中 `role == "system"` 的条目重写为 `"user"`。Claude Code 会在 messages 中写入 system role（非标准扩展），严格遵守规范的第三方 Anthropic 兼容 Provider 会拒绝该字段；此 flag 在转发前归一化。同时作为 `ScenarioFlags.ClaudeCodeCompat` 存在，场景级启用后自动注入到该场景所有 rule（同 `CleanHeader` 模式）。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite` / `ops.ApplyClaudeCodeBetaCompatRoleRewrite`（Type 1b-pre：pre-Base chain stage，仅对 Anthropic 入站形态生效）|
@@ -459,6 +459,7 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 | `thinking_effort` | ✅ | ✅ | Rule 显式设置 > Scenario 默认 > By Client（空字符串）|
 | `clean_header` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `CleanHeader`；billing 场景协议转换时自动启用 |
 | `claude_code_compat` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `ClaudeCodeCompat` |
+| `custom_user_agent` | ✅ | ✅ | Rule 显式设置（非空）> Scenario 默认 > 不覆盖（空）。注入点 `applyCustomUserAgent`（Type 2，写入 c.Request.Context()）|
 | `session_affinity` | ✅ | ✅ | Rule 显式设置（>0）> Scenario 默认 > 禁用（0）|
 
 **Scenario-only flags**（无 rule 级对应，只存在于 ScenarioFlags）：
@@ -485,6 +486,10 @@ func resolveRuleFlagsWithScenario(...) typ.RuleFlags {
         flags.CleanHeader      = flags.CleanHeader || scenarioConfig.Flags.CleanHeader
         flags.ClaudeCodeCompat = flags.ClaudeCodeCompat || scenarioConfig.Flags.ClaudeCodeCompat
         flags.SkipUsage        = flags.SkipUsage || scenarioConfig.Flags.SkipUsage
+        // CustomUserAgent：rule 非空时优先，否则继承 scenario 默认
+        if flags.CustomUserAgent == "" && scenarioConfig.Flags.CustomUserAgent != "" {
+            flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
+        }
         // SessionAffinity：rule 显式设置（>0）优先
         if flags.SessionAffinity == 0 && scenarioConfig.Flags.SessionAffinity > 0 {
             flags.SessionAffinity = scenarioConfig.Flags.SessionAffinity

@@ -101,6 +101,10 @@ export interface FlagSpec {
     category: string;
     placeholder?: string;
     options?: FlagOption[];
+    // Non-exhaustive recommended values for string flags (e.g. custom_user_agent
+    // User-Agent presets). Rendered as quick-pick chips; free-form input is still
+    // allowed. Populated from the backend registry (typ.DefaultUserAgents()).
+    suggestions?: FlagOption[];
 }
 
 export interface Rule {

@@ -225,6 +225,14 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 
 	// Execute transform chain
 	ruleFlags := resolveRuleFlags(c, rule)
+	// Inherit the scenario-level User-Agent default when the rule doesn't set one,
+	// so custom_user_agent is exposed in the Responses path too (rule value wins).
+	if ruleFlags.CustomUserAgent == "" {
+		if sc := s.config.GetScenarioConfig(scenarioType); sc != nil {
+			ruleFlags.CustomUserAgent = sc.Flags.CustomUserAgent
+		}
+	}
+	applyCustomUserAgent(c, ruleFlags)
 	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{

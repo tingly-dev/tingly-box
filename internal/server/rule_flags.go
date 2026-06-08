@@ -127,6 +127,13 @@ func resolveRuleFlagsWithScenario(
 		// Inject scenario-level SkipUsage if not already set at rule level
 		flags.SkipUsage = flags.SkipUsage || scenarioConfig.Flags.SkipUsage
 
+		// Inject scenario-level CustomUserAgent if rule hasn't set one explicitly.
+		// Rule value wins so a single rule can retarget UA without disturbing the
+		// scenario-wide default.
+		if flags.CustomUserAgent == "" && scenarioConfig.Flags.CustomUserAgent != "" {
+			flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
+		}
+
 		// Inject scenario-level SessionAffinity if rule hasn't set one explicitly
 		if flags.SessionAffinity == 0 && scenarioConfig.Flags.SessionAffinity > 0 {
 			flags.SessionAffinity = scenarioConfig.Flags.SessionAffinity
@@ -137,6 +144,20 @@ func resolveRuleFlagsWithScenario(
 	flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
 
 	return flags
+}
+
+// applyCustomUserAgent attaches the effective custom User-Agent (already merged
+// across rule + scenario by resolveRuleFlagsWithScenario) to the request
+// context, so the outbound transport (customUserAgentTransport) can read it at
+// RoundTrip time. This is the Type-2 (context-passed hint) injection point: the
+// dispatch path forwards c.Request.Context() down to the SDK call, where the
+// transport applies the override. No-op when no override is configured, so the
+// vendor/provider User-Agent is left untouched.
+func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
+	if flags.CustomUserAgent == "" {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), flags.CustomUserAgent))
 }
 
 // shouldStripUsage merges the cursor_compat and skip_usage hints carried in

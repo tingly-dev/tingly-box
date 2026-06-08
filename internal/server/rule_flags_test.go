@@ -434,3 +434,58 @@ func TestResolveRuleFlagsWithScenario_ThinkingEffort(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveRuleFlagsWithScenario_CustomUserAgent(t *testing.T) {
+	tests := []struct {
+		name          string
+		ruleFlags     typ.RuleFlags
+		scenarioFlags typ.ScenarioFlags
+		wantUA        string
+	}{
+		{
+			name:          "Scenario default injected when rule is empty",
+			ruleFlags:     typ.RuleFlags{},
+			scenarioFlags: typ.ScenarioFlags{CustomUserAgent: "Scenario/1.0"},
+			wantUA:        "Scenario/1.0",
+		},
+		{
+			name:          "Rule explicit UA wins over scenario default",
+			ruleFlags:     typ.RuleFlags{CustomUserAgent: "Rule/2.0"},
+			scenarioFlags: typ.ScenarioFlags{CustomUserAgent: "Scenario/1.0"},
+			wantUA:        "Rule/2.0",
+		},
+		{
+			name:          "Rule UA preserved when scenario empty",
+			ruleFlags:     typ.RuleFlags{CustomUserAgent: "Rule/2.0"},
+			scenarioFlags: typ.ScenarioFlags{},
+			wantUA:        "Rule/2.0",
+		},
+		{
+			name:          "Both empty stays empty",
+			ruleFlags:     typ.RuleFlags{},
+			scenarioFlags: typ.ScenarioFlags{},
+			wantUA:        "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(nil)
+			rule := &typ.Rule{Flags: tt.ruleFlags}
+			scenarioConfig := &typ.ScenarioConfig{Flags: tt.scenarioFlags}
+
+			result := resolveRuleFlagsWithScenario(
+				c,
+				rule,
+				typ.ScenarioClaudeCode,
+				scenarioConfig,
+				protocol.TypeAnthropicV1,
+				protocol.TypeOpenAIChat,
+			)
+
+			if result.CustomUserAgent != tt.wantUA {
+				t.Errorf("CustomUserAgent = %q, want %q", result.CustomUserAgent, tt.wantUA)
+			}
+		})
+	}
+}

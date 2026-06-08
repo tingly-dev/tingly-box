@@ -150,8 +150,8 @@ type ScenarioFlags struct {
 	Smart    bool `json:"smart" yaml:"smart"`       // Smart mode with automatic optimization
 
 	// Experimental feature flags (scenario-based opt-in)
-	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"`   // Enable smart compact (remove thinking blocks)
-	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`     // Enable scenario recording V2 (request/request_response/staged_request_response)
+	SmartCompact bool          `json:"smart_compact,omitempty" yaml:"smart_compact,omitempty"` // Enable smart compact (remove thinking blocks)
+	RecordingV2  RecordingMode `json:"recording_v2,omitempty" yaml:"recording_v2,omitempty"`   // Enable scenario recording V2 (request/request_response/staged_request_response)
 	// SkipUsage strips usage fields from streaming chunks and responses.
 	// Use for clients that cannot handle usage data (e.g. Xcode). Equivalent
 	// to the rule-level skip_usage flag but applied as a scenario-wide default.
@@ -163,6 +163,13 @@ type ScenarioFlags struct {
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
 	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
+
+	// CustomUserAgent overrides the outbound User-Agent header for every rule
+	// under this scenario. Acts as a scenario-wide default; individual rules can
+	// override it via RuleFlags.CustomUserAgent (rule value wins when non-empty).
+	// Empty value means do not override. Same effect and injection path as the
+	// rule-level flag — see internal/client/custom_ua_transport.go.
+	CustomUserAgent string `json:"custom_user_agent,omitempty" yaml:"custom_user_agent,omitempty"`
 
 	// ClaudeCodeCompat rewrites any "system" role in the messages array to "user"
 	// before forwarding. Claude Code sends system-role entries inside the messages
