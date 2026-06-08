@@ -210,7 +210,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:             "claude_code_compat",
 			Label:           "Claude Code compatibility",
-			Description:     "Normalize Claude Code's mid-conversation \"system\" role messages before forwarding. Claude Code sends system-role entries inside the messages list (a non-standard extension); third-party Anthropic-compatible providers reject that role. This folds each system message into the adjacent user turn (or re-roles it to \"user\") so the request stays valid without producing the consecutive user messages that strict providers also reject. On by default for the built-in Claude Code rules; turn off for native Anthropic fidelity.",
+			Description:     "Normalize Claude Code's mid-conversation \"system\" role messages before forwarding. Claude Code sends system-role entries inside the messages list (a non-standard extension); third-party Anthropic-compatible providers reject that role. This folds each system message, in place, into a neighbouring user turn — backward into the preceding user, or forward into the following user when the previous turn is an assistant — so the request stays valid without producing the consecutive user messages that strict providers also reject. On by default for the built-in Claude Code rules; turn off for native Anthropic fidelity.",
 			Type:            FlagTypeBool,
 			Category:        FlagCategoryApp,
 			Shared:          true,

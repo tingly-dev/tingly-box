@@ -53,28 +53,110 @@ func TestApplyClaudeCodeCompatRoleRewrite(t *testing.T) {
 		in   []anthropic.MessageParam
 		want []rt
 	}{
+		// ── Exhaustive (prev, next) neighbour enumeration ──────────────────
 		{
-			name: "system after user merges into the user turn",
+			// prev=user, next=user → collapse all three into one user turn.
+			name: "case1: user, system, user collapses into one user",
 			in: []anthropic.MessageParam{
-				anthropic.NewUserMessage(anthropic.NewTextBlock("hello")),
-				systemMessage("be terse"),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("u1")),
+				systemMessage("s"),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("u2")),
 			},
-			// No consecutive user messages — the system content is folded in.
-			want: []rt{{Role: "user", Text: "hello|be terse"}},
+			want: []rt{{Role: "user", Text: "u1|s|u2"}},
 		},
 		{
-			name: "system after assistant is re-roled to user (alternation-safe)",
+			// prev=user, next=assistant → merge backward into the preceding user.
+			name: "case2: user, system, assistant merges backward",
 			in: []anthropic.MessageParam{
-				anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
-				anthropic.NewAssistantMessage(anthropic.NewTextBlock("hey")),
-				systemMessage("reminder"),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("u")),
+				systemMessage("s"),
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a")),
 			},
 			want: []rt{
-				{Role: "user", Text: "hi"},
-				{Role: "assistant", Text: "hey"},
-				{Role: "user", Text: "reminder"},
+				{Role: "user", Text: "u|s"},
+				{Role: "assistant", Text: "a"},
 			},
 		},
+		{
+			// prev=user, next=∅ (trailing) → merge backward into the preceding user.
+			name: "case3: user, system (trailing) merges backward",
+			in: []anthropic.MessageParam{
+				anthropic.NewUserMessage(anthropic.NewTextBlock("u")),
+				systemMessage("s"),
+			},
+			want: []rt{{Role: "user", Text: "u|s"}},
+		},
+		{
+			// prev=assistant, next=user → merge forward into the following user.
+			// This is the regression: the old eager re-role produced two
+			// consecutive user messages here.
+			name: "case4: assistant, system, user merges forward",
+			in: []anthropic.MessageParam{
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a")),
+				systemMessage("s"),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("u")),
+			},
+			want: []rt{
+				{Role: "assistant", Text: "a"},
+				{Role: "user", Text: "s|u"},
+			},
+		},
+		{
+			// prev=assistant, next=assistant → stand alone as its own user turn.
+			name: "case5: assistant, system, assistant stands alone",
+			in: []anthropic.MessageParam{
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a1")),
+				systemMessage("s"),
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a2")),
+			},
+			want: []rt{
+				{Role: "assistant", Text: "a1"},
+				{Role: "user", Text: "s"},
+				{Role: "assistant", Text: "a2"},
+			},
+		},
+		{
+			// prev=assistant, next=∅ → stand alone as its own user turn.
+			name: "case6: assistant, system (trailing) stands alone",
+			in: []anthropic.MessageParam{
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a")),
+				systemMessage("s"),
+			},
+			want: []rt{
+				{Role: "assistant", Text: "a"},
+				{Role: "user", Text: "s"},
+			},
+		},
+		{
+			// prev=∅, next=user → merge forward into the following user.
+			name: "case7: leading system, user merges forward",
+			in: []anthropic.MessageParam{
+				systemMessage("lead"),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("body")),
+			},
+			want: []rt{{Role: "user", Text: "lead|body"}},
+		},
+		{
+			// prev=∅, next=assistant → stand alone as its own user turn.
+			name: "case8: leading system, assistant stands alone",
+			in: []anthropic.MessageParam{
+				systemMessage("lead"),
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a")),
+			},
+			want: []rt{
+				{Role: "user", Text: "lead"},
+				{Role: "assistant", Text: "a"},
+			},
+		},
+		{
+			// prev=∅, next=∅ → the sole message stands alone as a user turn.
+			name: "case9: system is the only message",
+			in: []anthropic.MessageParam{
+				systemMessage("only"),
+			},
+			want: []rt{{Role: "user", Text: "only"}},
+		},
+		// ── Multi-system and longer-sequence stress cases ──────────────────
 		{
 			name: "consecutive systems after user all collapse into one user turn",
 			in: []anthropic.MessageParam{
@@ -85,35 +167,51 @@ func TestApplyClaudeCodeCompatRoleRewrite(t *testing.T) {
 			want: []rt{{Role: "user", Text: "q|note1|note2"}},
 		},
 		{
-			name: "system following assistant then another system stays alternating",
+			// Regression: two systems between assistant and user must all flow
+			// forward into the user — the old code emitted user(s1|s2),user(body).
+			name: "assistant, system, system, user all merge forward",
+			in: []anthropic.MessageParam{
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a")),
+				systemMessage("s1"),
+				systemMessage("s2"),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("body")),
+			},
+			want: []rt{
+				{Role: "assistant", Text: "a"},
+				{Role: "user", Text: "s1|s2|body"},
+			},
+		},
+		{
+			name: "trailing consecutive systems after assistant collapse into one user",
 			in: []anthropic.MessageParam{
 				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a")),
 				systemMessage("s1"),
 				systemMessage("s2"),
 			},
-			// s1 re-roled to user; s2 merges into that user — no consecutive users.
 			want: []rt{
 				{Role: "assistant", Text: "a"},
 				{Role: "user", Text: "s1|s2"},
 			},
 		},
 		{
-			name: "leading system (defensive — beta forbids it) merges forward into next user",
+			// A realistic agentic turn: tool_result user, a reminder, then the
+			// model's reply, then a fresh reminder before the next user input.
+			name: "long interleaved conversation stays alternating",
 			in: []anthropic.MessageParam{
-				systemMessage("lead"),
-				anthropic.NewUserMessage(anthropic.NewTextBlock("body")),
-			},
-			want: []rt{{Role: "user", Text: "lead|body"}},
-		},
-		{
-			name: "leading system before assistant is flushed as a lone user turn",
-			in: []anthropic.MessageParam{
-				systemMessage("lead"),
-				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a")),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("u1")),
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a1")),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("tool_result")),
+				systemMessage("reminder1"),
+				anthropic.NewAssistantMessage(anthropic.NewTextBlock("a2")),
+				systemMessage("reminder2"),
+				anthropic.NewUserMessage(anthropic.NewTextBlock("u2")),
 			},
 			want: []rt{
-				{Role: "user", Text: "lead"},
-				{Role: "assistant", Text: "a"},
+				{Role: "user", Text: "u1"},
+				{Role: "assistant", Text: "a1"},
+				{Role: "user", Text: "tool_result|reminder1"}, // backward into prev user
+				{Role: "assistant", Text: "a2"},
+				{Role: "user", Text: "reminder2|u2"}, // forward into next user
 			},
 		},
 		{
@@ -153,8 +251,8 @@ func TestApplyClaudeCodeCompatRoleRewrite(t *testing.T) {
 }
 
 func TestApplyClaudeCodeCompatRoleRewrite_Nil(t *testing.T) {
-	ApplyClaudeCodeCompatRoleRewrite(nil)             // must not panic
-	ApplyClaudeCodeBetaCompatRoleRewrite(nil)         // must not panic
+	ApplyClaudeCodeCompatRoleRewrite(nil)     // must not panic
+	ApplyClaudeCodeBetaCompatRoleRewrite(nil) // must not panic
 }
 
 func TestApplyClaudeCodeBetaCompatRoleRewrite(t *testing.T) {

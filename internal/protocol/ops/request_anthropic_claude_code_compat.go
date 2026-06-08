@@ -11,56 +11,82 @@ import "github.com/anthropics/anthropic-sdk-go"
 // messages is, by the Anthropic mid-conversation-system contract, always a
 // mid-conversation operator message (it cannot be messages[0]); the global
 // system prompt already lives in the top-level system field. So we never hoist
-// it — hoisting would reorder a "as of turn N" instruction to a global one and
-// invalidate the prompt cache. Instead the content is folded into an adjacent
-// user turn so it stays in place and never produces two consecutive user
-// messages (which strict third-party providers reject — "roles must
-// alternate", trading one 400 for another):
+// it — hoisting would reorder an "as of turn N" instruction to a global one and
+// invalidate the prompt cache. Instead each system block is folded, in place,
+// into a user turn under one hard constraint: the result must never contain two
+// consecutive user messages (strict providers reject that — "roles must
+// alternate" — which would just trade one 400 for another).
 //
-//   - system after a user turn  → merged into that preceding user turn.
-//   - system after an assistant → re-roled to "user" (assistant→user already
-//     alternates).
-//   - leading system(s) (defensive; the beta forbids messages[0]=="system") →
-//     merged forward into the following user turn, or flushed as a lone user
-//     turn if an assistant comes first.
+// The merge *direction* is not a free choice; it is forced by the system
+// block's neighbours. Enumerating (prev role, next role):
 //
-// Non-system messages pass through untouched; a request with no system role is
-// a pure pass-through (originally-consecutive user turns are left as-is).
+//	prev=user,      next=user      → collapse prev+system+next into one user turn
+//	prev=user,      next=assistant → merge backward into the preceding user
+//	prev=user,      next=∅ (end)   → merge backward into the preceding user
+//	prev=assistant, next=user      → merge forward into the following user
+//	prev=assistant, next=assistant → stand alone as its own user turn
+//	prev=assistant, next=∅         → stand alone as its own user turn
+//	prev=∅,         next=user      → merge forward into the following user
+//	prev=∅,         next=assistant → stand alone as its own user turn
+//	prev=∅,         next=∅         → stand alone as its own user turn (sole msg)
+//
+// In one rule: fold backward when the preceding turn is a user, otherwise fold
+// forward into the next user, and only stand alone when neither neighbour is a
+// user. The direction can only be decided once the *next* role is known, so
+// system content is held in a pending buffer and placed when the following
+// non-system message (or the end of the array) is reached.
+//
+// Non-system messages with no pending system pass through untouched; a request
+// with no system role is a pure pass-through (genuinely pre-existing
+// consecutive user turns are left as-is — we only avoid *creating* new ones).
 func ApplyClaudeCodeCompatRoleRewrite(req *anthropic.MessageNewParams) {
 	if req == nil {
 		return
 	}
 	out := make([]anthropic.MessageParam, 0, len(req.Messages))
-	var lead []anthropic.ContentBlockParamUnion // buffered leading system content
+	var pending []anthropic.ContentBlockParamUnion // system content not yet placed
+
+	// placePendingBackward folds buffered system content into the preceding user
+	// turn, or stands it up as its own user turn when there is none to merge into
+	// (preceding turn is an assistant, or out is empty). Used when the next turn
+	// is an assistant or we have reached the end — i.e. forward merge is unavailable.
+	placePendingBackward := func() {
+		if len(pending) == 0 {
+			return
+		}
+		if n := len(out); n > 0 && out[n-1].Role == anthropic.MessageParamRoleUser {
+			out[n-1].Content = concatBlocks(out[n-1].Content, pending)
+		} else {
+			out = append(out, anthropic.MessageParam{Role: anthropic.MessageParamRoleUser, Content: pending})
+		}
+		pending = nil
+	}
 
 	for _, msg := range req.Messages {
-		if msg.Role == "system" {
-			if n := len(out); n > 0 && out[n-1].Role == anthropic.MessageParamRoleUser {
-				out[n-1].Content = concatBlocks(out[n-1].Content, msg.Content)
-				continue
-			}
-			if len(out) == 0 {
-				lead = append(lead, msg.Content...)
-				continue
-			}
-			msg.Role = anthropic.MessageParamRoleUser
-			out = append(out, msg)
-			continue
-		}
+		switch {
+		case msg.Role == "system":
+			pending = append(pending, msg.Content...)
 
-		if len(lead) > 0 {
-			if msg.Role == anthropic.MessageParamRoleUser {
-				msg.Content = concatBlocks(lead, msg.Content)
-			} else {
-				out = append(out, anthropic.MessageParam{Role: anthropic.MessageParamRoleUser, Content: lead})
+		case msg.Role == anthropic.MessageParamRoleUser:
+			if len(pending) > 0 {
+				if n := len(out); n > 0 && out[n-1].Role == anthropic.MessageParamRoleUser {
+					// prev=user, next=user → collapse all three into the preceding turn.
+					out[n-1].Content = concatBlocks(concatBlocks(out[n-1].Content, pending), msg.Content)
+					pending = nil
+					continue
+				}
+				// prev=assistant/∅, next=user → merge forward into this user.
+				msg.Content = concatBlocks(pending, msg.Content)
+				pending = nil
 			}
-			lead = nil
+			out = append(out, msg)
+
+		default: // assistant (or any other non-user, non-system role)
+			placePendingBackward()
+			out = append(out, msg)
 		}
-		out = append(out, msg)
 	}
-	if len(lead) > 0 {
-		out = append(out, anthropic.MessageParam{Role: anthropic.MessageParamRoleUser, Content: lead})
-	}
+	placePendingBackward()
 	req.Messages = out
 }
 
@@ -79,36 +105,43 @@ func ApplyClaudeCodeBetaCompatRoleRewrite(req *anthropic.BetaMessageNewParams) {
 		return
 	}
 	out := make([]anthropic.BetaMessageParam, 0, len(req.Messages))
-	var lead []anthropic.BetaContentBlockParamUnion
+	var pending []anthropic.BetaContentBlockParamUnion
+
+	placePendingBackward := func() {
+		if len(pending) == 0 {
+			return
+		}
+		if n := len(out); n > 0 && out[n-1].Role == anthropic.BetaMessageParamRoleUser {
+			out[n-1].Content = concatBetaBlocks(out[n-1].Content, pending)
+		} else {
+			out = append(out, anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleUser, Content: pending})
+		}
+		pending = nil
+	}
 
 	for _, msg := range req.Messages {
-		if msg.Role == "system" {
-			if n := len(out); n > 0 && out[n-1].Role == anthropic.BetaMessageParamRoleUser {
-				out[n-1].Content = concatBetaBlocks(out[n-1].Content, msg.Content)
-				continue
-			}
-			if len(out) == 0 {
-				lead = append(lead, msg.Content...)
-				continue
-			}
-			msg.Role = anthropic.BetaMessageParamRoleUser
-			out = append(out, msg)
-			continue
-		}
+		switch {
+		case msg.Role == "system":
+			pending = append(pending, msg.Content...)
 
-		if len(lead) > 0 {
-			if msg.Role == anthropic.BetaMessageParamRoleUser {
-				msg.Content = concatBetaBlocks(lead, msg.Content)
-			} else {
-				out = append(out, anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleUser, Content: lead})
+		case msg.Role == anthropic.BetaMessageParamRoleUser:
+			if len(pending) > 0 {
+				if n := len(out); n > 0 && out[n-1].Role == anthropic.BetaMessageParamRoleUser {
+					out[n-1].Content = concatBetaBlocks(concatBetaBlocks(out[n-1].Content, pending), msg.Content)
+					pending = nil
+					continue
+				}
+				msg.Content = concatBetaBlocks(pending, msg.Content)
+				pending = nil
 			}
-			lead = nil
+			out = append(out, msg)
+
+		default:
+			placePendingBackward()
+			out = append(out, msg)
 		}
-		out = append(out, msg)
 	}
-	if len(lead) > 0 {
-		out = append(out, anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleUser, Content: lead})
-	}
+	placePendingBackward()
 	req.Messages = out
 }
 
