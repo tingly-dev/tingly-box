@@ -123,6 +123,9 @@ importers:
       oxlint:
         specifier: ^1.64.0
         version: 1.64.0
+      playwright:
+        specifier: ^1.60.0
+        version: 1.60.0
       rollup-plugin-visualizer:
         specifier: ^7.0.1
         version: 7.0.1(rolldown@1.0.0-rc.12(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2))(rollup@4.59.0)
@@ -1775,6 +1778,11 @@ packages:
     resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
     engines: {node: '>= 6'}
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -2233,6 +2241,16 @@ packages:
   picomatch@4.0.4:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
+
+  playwright-core@1.60.0:
+    resolution: {integrity: sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.60.0:
+    resolution: {integrity: sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
@@ -4136,6 +4154,9 @@ snapshots:
       hasown: 2.0.3
       mime-types: 2.1.35
 
+  fsevents@2.3.2:
+    optional: true
+
   fsevents@2.3.3:
     optional: true
 
@@ -4547,6 +4568,14 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@4.0.4: {}
+
+  playwright-core@1.60.0: {}
+
+  playwright@1.60.0:
+    dependencies:
+      playwright-core: 1.60.0
+    optionalDependencies:
+      fsevents: 2.3.2
 
   pluralize@8.0.0: {}
 

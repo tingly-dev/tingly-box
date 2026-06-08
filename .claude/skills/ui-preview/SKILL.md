@@ -17,29 +17,29 @@ Designed for the remote-execution container where:
 > transitive deps, which pulls **broken** versions (e.g. `es-toolkit@1.47.0` vs the
 > pinned `1.46.1`) that crash the whole SPA at load. See *Troubleshooting* below.
 
+`playwright` is already a committed `devDependency` in `frontend/package.json`, so
+a plain install provides it — no ad-hoc add/revert needed. `@emotion/react` /
+`@emotion/styled` are likewise already declared.
+
 ```bash
-# 1. Ensure deps match the lockfile (also fixes a node_modules previously
-#    polluted by npm — wipe it first if you suspect that).
+# 1. Install deps from the lockfile (also fixes a node_modules previously
+#    polluted by npm — wipe it first with `rm -rf node_modules` if you suspect that).
 cd frontend
-pnpm install --frozen-lockfile          # @emotion/react & styled are already deps
+pnpm install --frozen-lockfile
 
-# 2. Add Playwright as a dev tool (no browsers downloaded).
-pnpm add -D playwright
-
-# 3. Download Chrome for Testing
+# 2. Download Chrome for Testing (Playwright's own Chromium download is blocked)
 mkdir -p /tmp/chrome && cd /tmp/chrome
 curl -fsSL -o chrome.zip \
   "https://storage.googleapis.com/chrome-for-testing-public/148.0.7778.96/linux64/chrome-linux64.zip"
 unzip -q chrome.zip          # → /tmp/chrome/chrome-linux64/chrome
 ```
 
-`@emotion/react` / `@emotion/styled` are already declared in `package.json`, so a
-plain `pnpm install` provides them — no separate install needed.
-
-**Tooling-only** — never commit the playwright dev-dep. Revert with:
+**Do NOT** modify `frontend/package.json` / `frontend/pnpm-lock.yaml` for tooling
+anymore — everything needed is already committed. If a previous session left them
+dirty (or npm polluted the tree), reset with:
 ```bash
 cd <repo> && git checkout -- frontend/package.json frontend/pnpm-lock.yaml
-pnpm -C frontend install --frozen-lockfile   # restore the clean tree
+pnpm -C frontend install --frozen-lockfile
 ```
 
 ## Dev server
