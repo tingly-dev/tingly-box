@@ -117,7 +117,7 @@ func TestSelect_ValidatesActiveService(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{inactiveSvc, activeSvc})
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	sel := NewServiceSelector(cfg, store, lb)
 	result, err := sel.Select(testContext(rule, "session-1"))
@@ -142,7 +142,7 @@ func TestSelect_ValidatesProvider(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", []*loadbalance.Service{disabledSvc, activeSvc})
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	sel := NewServiceSelector(cfg, store, lb)
 	result, err := sel.Select(testContext(rule, "session-1"))
@@ -174,14 +174,6 @@ func TestSelect_PostProcess_LocksAffinity(t *testing.T) {
 	require.Len(t, store.sets, 1, "affinity should be locked after smart routing")
 	require.Equal(t, "rule-1", store.sets[0].ruleUUID)
 	require.Equal(t, testSessionKey("session-1"), store.sets[0].sessionID)
-}
-
-func TestSelect_PostProcess_NoLockOnAffinitySource(t *testing.T) {
-	// This case relies on Select() returning a result with Source="affinity",
-	// which requires the global-affinity pipeline. See the TODO on
-	// ServiceSelector.selectPipeline and TestSelect_GlobalAffinity_Hit for
-	// why that path is unreachable today.
-	t.Skip("global affinity pipeline not selected by current selectPipeline")
 }
 
 func TestSelect_PostProcess_LocksOnLoadBalancer(t *testing.T) {
@@ -221,7 +213,7 @@ func TestSelect_PostProcess_NoLockWithoutAffinity(t *testing.T) {
 
 	services := []*loadbalance.Service{svc}
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
-	// SmartAffinity=false (default from testSmartRule which doesn't set it)
+	// Flags.SessionAffinity=0 (default from testSmartRule which doesn't set it)
 
 	sel := NewServiceSelector(cfg, store, lb)
 	ctx := testContext(rule, "session-1")
@@ -229,7 +221,7 @@ func TestSelect_PostProcess_NoLockWithoutAffinity(t *testing.T) {
 
 	_, err := sel.Select(ctx)
 	require.NoError(t, err)
-	require.Len(t, store.sets, 0, "should NOT lock when SmartAffinity is false")
+	require.Len(t, store.sets, 0, "should NOT lock when SessionAffinity is 0")
 }
 
 func TestSelect_NoServiceAvailable(t *testing.T) {

@@ -239,7 +239,8 @@ func TestIntegration_Affinity_LockAndReuse(t *testing.T) {
 		RequestModel: "model-affinity", ResponseModel: delayModelResponseID,
 		Services: []*loadbalance.Service{svcA, svcB},
 		LBTactic: typ.Tactic{Type: loadbalance.TacticRandom},
-		Active:   true, SmartEnabled: true, SmartAffinity: true,
+		Active:   true, SmartEnabled: true,
+		Flags: typ.RuleFlags{SessionAffinity: 3600},
 	}
 	ts.addRule(t, rule)
 
@@ -270,7 +271,8 @@ func TestIntegration_Affinity_DifferentSessions(t *testing.T) {
 		UUID: "rule-diff", Scenario: typ.ScenarioOpenAI,
 		RequestModel: "model-diff", ResponseModel: delayModelResponseID,
 		Services: []*loadbalance.Service{svcA, svcB},
-		Active:   true, SmartEnabled: true, SmartAffinity: true,
+		Active:   true, SmartEnabled: true,
+		Flags: typ.RuleFlags{SessionAffinity: 3600},
 	}
 	ts.addRule(t, rule)
 
@@ -296,7 +298,8 @@ func TestIntegration_Affinity_WithSmartRouting(t *testing.T) {
 		UUID: "rule-smartaff", Scenario: typ.ScenarioOpenAI,
 		RequestModel: "model-smartaff", ResponseModel: delayModelResponseID,
 		Services: []*loadbalance.Service{svc}, Active: true,
-		SmartEnabled: true, SmartAffinity: true,
+		SmartEnabled: true,
+		Flags:        typ.RuleFlags{SessionAffinity: 3600},
 		SmartRouting: []smartrouting.SmartRouting{
 			{
 				Description: "route smartaff to delay",

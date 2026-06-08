@@ -14,65 +14,129 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// TestClientPool_BasicCreation tests basic client creation
-func TestClientPool_BasicCreation(t *testing.T) {
-	pool := NewClientPool()
-
-	provider := &typ.Provider{
-		UUID:    "test-uuid-1",
-		Name:    "test-provider",
-		Token:   "test-token-12345678",
+// TestClientPool_ClientConstruction exercises the GetXxxClient constructors
+// across providers, OAuth and non-OAuth, with and without a record sink. These
+// are pure smoke tests: each case just builds clients via the public API and
+// asserts they're non-nil. Behavior that's not just "constructor returns
+// non-nil" (no client-level caching, mode reporting, record sink wiring) is
+// verified once on the baseline OpenAI provider.
+func TestClientPool_ClientConstruction(t *testing.T) {
+	openaiProvider := &typ.Provider{
+		UUID:    "openai-uuid",
+		Name:    "OpenAI Provider",
+		Token:   "sk-test-12345678",
 		APIBase: "https://api.openai.com/v1",
 	}
-
-	// Create client
-	client := pool.GetOpenAIClient(context.Background(), provider, "gpt-4")
-	if client == nil {
-		t.Fatal("Expected non-nil client")
-	}
-
-	// Creating another client should return a new instance
-	client2 := pool.GetOpenAIClient(context.Background(), provider, "gpt-4")
-	if client2 == nil {
-		t.Fatal("Expected non-nil client")
-	}
-
-	// Clients should be different instances (no caching at client level)
-	if client == client2 {
-		t.Error("Expected different client instances (no client-level caching)")
-	}
-
-	// Verify stats shows "once" mode
-	stats := pool.Stats()
-	if stats["mode"] != "once" {
-		t.Errorf("Expected mode 'once', got %v", stats["mode"])
-	}
-}
-
-// TestClientPool_WithRecordSink tests record sink configuration
-func TestClientPool_WithRecordSink(t *testing.T) {
-	sink := &obs.Sink{} // Mock sink
-	pool := NewClientPoolBuilder().
-		WithRecordSink(sink).
-		Build()
-
-	provider := &typ.Provider{
-		UUID:    "test-uuid-sink",
-		Name:    "test-provider",
-		Token:   "test-token-12345678",
+	openaiProvider2 := &typ.Provider{
+		UUID:    "openai-uuid-2",
+		Name:    "OpenAI Provider 2",
+		Token:   "sk-test-87654321",
 		APIBase: "https://api.openai.com/v1",
 	}
-
-	client := pool.GetOpenAIClient(context.Background(), provider, "gpt-4")
-	if client == nil {
-		t.Fatal("Expected non-nil client")
+	anthropicProvider := &typ.Provider{
+		UUID:    "anthropic-uuid",
+		Name:    "Anthropic Provider",
+		Token:   "sk-ant-test",
+		APIBase: "https://api.anthropic.com/v1",
+	}
+	googleProvider := &typ.Provider{
+		UUID:    "google-uuid",
+		Name:    "Google Provider",
+		Token:   "google-test-key",
+		APIBase: "https://generativelanguage.googleapis.com/v1beta/openai",
+	}
+	claudeCodeOAuth := &typ.Provider{
+		UUID:     "claude-code-uuid",
+		Name:     "Claude Code",
+		Token:    "sk-ant-oa-test",
+		APIBase:  "https://api.anthropic.com/v1",
+		AuthType: typ.AuthTypeOAuth,
+	}
+	codexOAuth := &typ.Provider{
+		UUID:     "codex-uuid",
+		Name:     "Codex",
+		Token:    "sk-codex-test",
+		APIBase:  "https://api.openai.com/v1",
+		AuthType: typ.AuthTypeOAuth,
 	}
 
-	// Verify record sink is set
-	retrievedSink := pool.GetRecordSink()
-	if retrievedSink == nil {
-		t.Error("Record sink not set correctly")
+	sessionCtx := typ.WithSessionID(
+		context.Background(),
+		typ.SessionID{Source: typ.SessionSourceUser, Value: "oauth-test"},
+	)
+
+	cases := []struct {
+		name     string
+		ctx      context.Context
+		provider *typ.Provider
+		kind     string // "openai" | "anthropic" | "google"
+	}{
+		{"openai", context.Background(), openaiProvider, "openai"},
+		{"openai-second-provider", context.Background(), openaiProvider2, "openai"},
+		{"anthropic", context.Background(), anthropicProvider, "anthropic"},
+		{"google", context.Background(), googleProvider, "google"},
+		{"oauth-claude-code", sessionCtx, claudeCodeOAuth, "openai"},
+		{"oauth-codex", sessionCtx, codexOAuth, "openai"},
 	}
+
+	t.Run("constructors", func(t *testing.T) {
+		pool := NewClientPool()
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				var client interface{}
+				switch tc.kind {
+				case "openai":
+					client = pool.GetOpenAIClient(tc.ctx, tc.provider, "gpt-4")
+				case "anthropic":
+					client = pool.GetAnthropicClient(tc.ctx, tc.provider, "claude-3")
+				case "google":
+					client = pool.GetGoogleClient(tc.ctx, tc.provider, "gemini-pro")
+				}
+				if client == nil {
+					t.Fatalf("Expected non-nil %s client for %s", tc.kind, tc.provider.Name)
+				}
+			})
+		}
+	})
+
+	t.Run("no-client-level-caching-and-mode", func(t *testing.T) {
+		pool := NewClientPool()
+		c1 := pool.GetOpenAIClient(context.Background(), openaiProvider, "gpt-4")
+		c2 := pool.GetOpenAIClient(context.Background(), openaiProvider, "gpt-4")
+		if c1 == nil || c2 == nil {
+			t.Fatal("Expected non-nil clients")
+		}
+		if c1 == c2 {
+			t.Error("Expected different client instances (no client-level caching)")
+		}
+		if stats := pool.Stats(); stats["mode"] != "once" {
+			t.Errorf("Expected mode 'once', got %v", stats["mode"])
+		}
+	})
+
+	t.Run("different-providers-different-clients", func(t *testing.T) {
+		pool := NewClientPool()
+		c1 := pool.GetOpenAIClient(context.Background(), openaiProvider, "")
+		c2 := pool.GetOpenAIClient(context.Background(), openaiProvider2, "")
+		if c1 == nil || c2 == nil {
+			t.Fatal("Expected non-nil clients")
+		}
+		if c1 == c2 {
+			t.Error("Expected different clients for different providers")
+		}
+	})
+
+	t.Run("with-record-sink", func(t *testing.T) {
+		sink := &obs.Sink{}
+		pool := NewClientPoolBuilder().WithRecordSink(sink).Build()
+		if client := pool.GetOpenAIClient(context.Background(), openaiProvider, "gpt-4"); client == nil {
+			t.Fatal("Expected non-nil client")
+		}
+		if pool.GetRecordSink() == nil {
+			t.Error("Record sink not set correctly")
+		}
+	})
 }
 
 // TestClientPool_WithSessionID tests session ID propagation through context
@@ -187,110 +251,6 @@ func TestClientPool_InvalidateSession(t *testing.T) {
 	// Transport count should be less after invalidation
 	if transportCountAfter >= transportCountBefore {
 		t.Errorf("Expected transport count to decrease after invalidation, before: %d, after: %d", transportCountBefore, transportCountAfter)
-	}
-}
-
-// TestClientPool_DifferentProviders tests that different providers work correctly
-func TestClientPool_DifferentProviders(t *testing.T) {
-	pool := NewClientPool()
-
-	provider1 := &typ.Provider{
-		UUID:    "provider-uuid-1",
-		Name:    "provider1",
-		Token:   "token1-12345678",
-		APIBase: "https://api.openai.com/v1",
-	}
-
-	provider2 := &typ.Provider{
-		UUID:    "provider-uuid-2",
-		Name:    "provider2",
-		Token:   "token2-87654321",
-		APIBase: "https://api.openai.com/v1",
-	}
-
-	// Get clients for different providers
-	client1 := pool.GetOpenAIClient(context.Background(), provider1, "")
-	client2 := pool.GetOpenAIClient(context.Background(), provider2, "")
-
-	if client1 == nil || client2 == nil {
-		t.Fatal("Expected non-nil clients")
-	}
-
-	// Clients should be different instances
-	if client1 == client2 {
-		t.Error("Expected different clients for different providers")
-	}
-}
-
-// TestClientPool_AllProviderTypes tests all provider client types
-func TestClientPool_AllProviderTypes(t *testing.T) {
-	pool := NewClientPool()
-
-	openaiProvider := &typ.Provider{
-		UUID:    "openai-uuid",
-		Name:    "OpenAI Provider",
-		Token:   "sk-test",
-		APIBase: "https://api.openai.com/v1",
-	}
-
-	anthropicProvider := &typ.Provider{
-		UUID:    "anthropic-uuid",
-		Name:    "Anthropic Provider",
-		Token:   "sk-ant-test",
-		APIBase: "https://api.anthropic.com/v1",
-	}
-
-	googleProvider := &typ.Provider{
-		UUID:    "google-uuid",
-		Name:    "Google Provider",
-		Token:   "google-test-key",
-		APIBase: "https://generativelanguage.googleapis.com/v1beta/openai",
-	}
-
-	openaiClient := pool.GetOpenAIClient(context.Background(), openaiProvider, "gpt-4")
-	anthropicClient := pool.GetAnthropicClient(context.Background(), anthropicProvider, "claude-3")
-	googleClient := pool.GetGoogleClient(context.Background(), googleProvider, "gemini-pro")
-
-	if openaiClient == nil {
-		t.Error("Expected non-nil OpenAI client")
-	}
-	if anthropicClient == nil {
-		t.Error("Expected non-nil Anthropic client")
-	}
-	if googleClient == nil {
-		t.Error("Expected non-nil Google client")
-	}
-}
-
-// TestClientPool_OAuthProviderTypes tests various OAuth provider types
-func TestClientPool_OAuthProviderTypes(t *testing.T) {
-	pool := NewClientPool()
-
-	sessionID := typ.SessionID{Source: typ.SessionSourceUser, Value: "oauth-test"}
-
-	providers := []*typ.Provider{
-		{
-			UUID:     "claude-code-uuid",
-			Name:     "Claude Code",
-			Token:    "sk-ant-oa-test",
-			APIBase:  "https://api.anthropic.com/v1",
-			AuthType: typ.AuthTypeOAuth,
-		},
-		{
-			UUID:     "codex-uuid",
-			Name:     "Codex",
-			Token:    "sk-codex-test",
-			APIBase:  "https://api.openai.com/v1",
-			AuthType: typ.AuthTypeOAuth,
-		},
-	}
-
-	ctx := typ.WithSessionID(context.Background(), sessionID)
-	for _, provider := range providers {
-		client := pool.GetOpenAIClient(ctx, provider, "gpt-4")
-		if client == nil {
-			t.Errorf("Expected non-nil client for provider %s", provider.Name)
-		}
 	}
 }
 

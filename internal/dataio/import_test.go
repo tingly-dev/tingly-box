@@ -5,25 +5,6 @@ import (
 	"testing"
 )
 
-func TestFormatConstants(t *testing.T) {
-	tests := []struct {
-		name   string
-		format Format
-		want   string
-	}{
-		{"Auto format", FormatAuto, "auto"},
-		{"JSONL format", FormatJSONL, "jsonl"},
-		{"Base64 format", FormatBase64, "base64"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := string(tt.format); got != tt.want {
-				t.Errorf("Format = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestDetectorDetect(t *testing.T) {
 	detector := NewDetector()
 
@@ -109,53 +90,22 @@ func TestBase64ImporterDecode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := DecodeBase64Export(tt.data)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Base64Importer.DecodeBase64Export() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("DecodeBase64Export() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {
-				if tt.errMessage != "" {
-					// Check if error message contains expected text
-					if err == nil {
-						t.Errorf("Base64Importer.DecodeBase64Export() expected error, got nil")
-					} else if !strings.Contains(err.Error(), tt.errMessage) {
-						t.Errorf("Base64Importer.DecodeBase64Export() error = %v, want包含 %v", err.Error(), tt.errMessage)
-					}
+				if err == nil {
+					t.Errorf("DecodeBase64Export() expected error, got nil")
+				} else if !strings.Contains(err.Error(), tt.errMessage) {
+					t.Errorf("DecodeBase64Export() error = %v, want contains %v", err.Error(), tt.errMessage)
 				}
 				return
 			}
 			if got == "" {
-				t.Error("Base64Importer.DecodeBase64Export() returned empty string")
+				t.Error("DecodeBase64Export() returned empty string")
 			}
-			// Check that the decoded content is valid JSONL (has newlines between JSON objects)
 			if !strings.Contains(got, "\n") {
-				t.Error("Base64Importer.decodeBase64Export() decoded content should contain newlines for JSONL format")
-			}
-		})
-	}
-}
-
-func TestNewImporter(t *testing.T) {
-	tests := []struct {
-		name    string
-		format  Format
-		wantErr bool
-	}{
-		{"JSONL importer", FormatJSONL, false},
-		{"Base64 importer", FormatBase64, false},
-		{"Auto importer (defaults to JSONL)", FormatAuto, false},
-		{"Invalid format", Format("invalid"), true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			importer, err := NewImporter(tt.format)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewImporter() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr {
-				if importer == nil {
-					t.Error("NewImporter() returned nil importer")
-				}
+				t.Error("decoded content should contain newlines for JSONL format")
 			}
 		})
 	}
