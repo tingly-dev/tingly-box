@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go" alt="Go Version" />
+  <img src="https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go" alt="Go Version" />
   <img src="https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg" alt="License" />
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform" />
 </p>
@@ -246,7 +246,7 @@ We welcome contributions! Check the steps below to build from source code.
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Go | 1.25+ | https://go.dev/doc/install |
+| Go | 1.26+ | https://go.dev/doc/install |
 | Node.js | 20+ | https://nodejs.org/ |
 | pnpm | latest | `npm install -g pnpm` |
 | task | latest | `go install github.com/go-task/task/v3/cmd/task@latest` or https://taskfile.dev/installation/ |
