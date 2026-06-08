@@ -36,8 +36,8 @@
               │                    Frontend                        │
               │  FlagCatalogDialog  ◄── GET /rule/flags/registry  │
               │       │                                            │
-              │       ▼ Switch / TextField per FlagSpec            │
-              │  RuleExtensionsCard  ─── POST /rule/:uuid (flags)  │
+              │       ▼ Registry-driven (no per-flag switch/case) │
+              │  RulePluginsCard  ─── POST /rule/:uuid (flags)     │
               └─────────────────────┬─────────────────────────────┘
                                     │
               ┌─────────────────────▼─────────────────────────────┐
@@ -88,13 +88,16 @@
 ```go
 // internal/typ/flag_registry.go
 type FlagSpec struct {
-    Key         string        // 与 RuleFlags 上的 json tag 完全对应
-    Label       string        // UI 展示用人话
-    Description string        // hover 详细说明
-    Type        FlagValueType // bool | string | enum
-    Category    FlagCategory  // compatibility | request | response
-    Placeholder string        // string 类型的输入框 hint
-    Options     []FlagOption  // enum 类型的可选值，按显示顺序
+    Key             string        // 与 RuleFlags 上的 json tag 完全对应
+    Label           string        // UI 展示用人话
+    Description     string        // hover 详细说明
+    Type            FlagValueType // bool | string | enum | int | service_ref
+    Category        FlagCategory  // compatibility | request | response | routing | app
+    Placeholder     string        // string 类型的输入框 hint
+    Options         []FlagOption  // enum 类型的可选值，按显示顺序
+    Suggestions     []string      // string 类型的快选建议（如 DefaultUserAgents()）
+    Shared          bool          // 是否同时存在 scenario 和 rule 级
+    InheritanceMode string        // shared flag 的继承语义："or" | "override"
 }
 
 type FlagOption struct {
@@ -110,26 +113,31 @@ func RuleFlagRegistry() []FlagSpec { … }
 - 每个 `FlagSpec.Key` **必须**对应 `RuleFlags` struct 上的某个 json
   tag。这条测试挡住"加了 spec 忘了加字段"或反过来。
 - `Label` / `Description` 非空。
-- `Type` 必须在已知枚举内。
+- `Type` 必须在已知枚举内（`bool`、`string`、`enum`、`int`、`service_ref`）。
 - `enum` 类型必须声明 ≥ 2 个 `Options`，每个 Option 的 `Value` / `Label`
   非空且不重复。首个 Option 视为默认值（UI 显示为"未启用"状态）。
+- `Shared == true` 的 flag **必须**声明 `InheritanceMode`（`"or"` 或 `"override"`）。
+- `Shared == false` 的 flag **不得**声明 `InheritanceMode`。
 
 ---
 
-## 4. 当前已注册 flag
+## 4. 当前已注册 flag（14 个）
 
-| Key | Type | 类别 | 作用 | 注入点 |
-|-----|------|------|------|--------|
-| `cursor_compat` | bool | compatibility | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre：pre-Base chain stage）|
-| `cursor_compat_auto` | bool | compatibility | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
-| `skip_usage` | bool | response | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
-| `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b）|
-| `use_max_tokens` | bool | request | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b）|
-| `custom_user_agent` | string | request | 覆盖出站 User-Agent header。同时存在 rule 级与 scenario 级（rule 非空时优先，否则继承 scenario 默认）。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header（发送无 UA），区别于空值（"不覆盖"）。| `customUserAgentTransport` + `applyCustomUserAgent(c, flags)` → `WithCustomUserAgent(ctx, ...)`（Type 2）。注入点收敛在 `resolveRuleFlagsWithScenario` 内部（四个 handler 都经它解析 flags），不再在每个 handler 重复调用。`none` 时 transport 把 header 置空（net/http 见到 present-but-empty 即不发 UA）|
-| `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
-| `block_tools` | string (逗号分隔) | request | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre：pre-Base chain stage）|
-| `claude_code_compat` | bool | app | 把 `messages` 数组中 `role == "system"` 的条目重写为 `"user"`。Claude Code 会在 messages 中写入 system role（非标准扩展），严格遵守规范的第三方 Anthropic 兼容 Provider 会拒绝该字段；此 flag 在转发前归一化。同时作为 `ScenarioFlags.ClaudeCodeCompat` 存在，场景级启用后自动注入到该场景所有 rule（同 `CleanHeader` 模式）。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite` / `ops.ApplyClaudeCodeBetaCompatRoleRewrite`（Type 1b-pre：pre-Base chain stage，仅对 Anthropic 入站形态生效）|
-| `session_affinity` | int (seconds) | routing | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率 → 更快响应 + 更低 token 成本。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。支持 rule 级覆盖（显式设置 rule.Flags.SessionAffinity > 0 时优先）和 scenario 级继承（rule 未设置时继承 ScenarioFlags.SessionAffinity）。| `internal/server/routing/selector.go::ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5：路由层决策）|
+| Key | Type | 类别 | Shared | 继承 | 作用 | 注入点 |
+|-----|------|------|--------|------|------|--------|
+| `custom_user_agent` | string | request | **yes** | override | 覆盖出站 User-Agent header。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header。| `customUserAgentTransport` + `applyCustomUserAgent(c, flags)` → `WithCustomUserAgent(ctx, ...)`（Type 2）|
+| `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | — | — | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
+| `use_max_completion_tokens` | bool | request | — | — | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b-post）|
+| `use_max_tokens` | bool | request | — | — | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b-post）|
+| `block_tools` | string (逗号分隔) | request | — | — | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre）|
+| `skip_usage` | bool | response | **yes** | or | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
+| `thinking_effort` | enum (`""`/`off`/`low`/`medium`/`high`/`max`) | reasoning | **yes** | override | 统一控制 extended thinking。映射为 Anthropic budget_tokens（low 1K / medium 5K / high 20K / max 32K）或 OpenAI reasoning_effort。空 = "By Client"（透传客户端参数）。| `ThinkingModeTransform`（Type 1b，server-domain Transform）|
+| `vision_proxy_service` | service_ref | vision | — | — | 通过视觉代理模型描述图片，让纯文本下游模型能处理图片输入。rule 级优先于 scenario 级。| VisionProxy 中间件（Type 1b-pre）|
+| `session_affinity` | int (seconds) | routing | **yes** | override | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。| `ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5）|
+| `cursor_compat` | bool | app | — | — | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre）|
+| `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
+| `claude_code_compat` | bool | app | **yes** | or | 把 messages 中 `role == "system"` 重写为 `"user"`。Claude Code 在 messages 中写入 system role（非标准扩展）；此 flag 在转发前归一化。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite`（Type 1b-pre，仅 Anthropic 入站形态）|
+| `clean_header` | bool | app | **yes** | or | 剥离 system messages 中的 x-anthropic-billing-header 块。billing 场景（claude_code, claude_desktop）协议转换时自动启用；也可手动强制启用。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
 
 ---
 
@@ -319,45 +327,70 @@ flag 污染。**给 vendor 链新增 transport 时切勿引入 `customUserAgentT
 
 ## 9. 前端 UI
 
+### 统一命名：Plugins
+
+前端统一使用 **"Plugins"** 命名（之前混用 "Plugin" / "Rule Extensions"）。
+相关组件：`RulePluginsCard`（右侧卡片）、`FlagCatalogDialog`（弹窗标题
+"Rule Plugins"）、`PluginFeatures`（场景级 Plugin 控制）。
+
+### Registry-driven 架构
+
+前端不再硬编码任何 per-flag switch/case。核心工具集中在
+`frontend/src/components/rule-card/flagHelpers.ts`：
+
+| Helper | 作用 |
+|--------|------|
+| `snakeToCamel` / `camelToSnake` | `snake_case` ↔ `camelCase` key 转换 |
+| `getFlagValue(flags, key)` | 用 snake_case key 动态读取 camelCase flag |
+| `setFlagValue(flags, key, value)` | 用 snake_case key 动态写入，返回新 flags |
+| `apiToFlags(api)` / `flagsToApi(flags)` | 整体转换 `RuleFlagsApi` ↔ `RuleFlags` |
+| `isFlagActive(flags, spec)` | 根据 spec.Type 判断 flag 是否启用 |
+| `flagDefault(spec)` | 从 spec 取默认值（bool→false, enum→Options[0], etc.） |
+| `enumInactive(spec)` | 取 enum 的"未启用"值（首个 Option.Value） |
+
+这意味着**新增 flag 只需后端 `RuleFlagRegistry()` + `RuleFlags` struct 加字段 + 前端 `RuleFlags`/`RuleFlagsApi` 类型加字段**，无需改动任何 switch/case 或 UI 组件逻辑。
+
 ### 卡片位置
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ Rule Card                                            [⚙ settings]    │
-│                                                                      │
-│  ┌──────────────────────────────── horizontal scroll ──→  ┐ ┌─────┐  │
-│  │ ModelNode → ArrowNode → ProviderNode → ProviderNode … │ │ Ext │  │
-│  │                                                        │ │Card │  │
-│  └────────────────────────────────────────────────────────┘ └─────┘  │
-│           ↑                                                    ↑     │
-│   随 provider 增多可横向滚动                          常驻右侧不滚动 │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Rule Card                                            [⚙ settings]       │
+│                                                                         │
+│  ┌──────────────────────────────── horizontal scroll ──→  ┐ ┌────────┐  │
+│  │ ModelNode → ArrowNode → ProviderNode → ProviderNode … │ │Plugins │  │
+│  │                                                        │ │ Card   │  │
+│  └────────────────────────────────────────────────────────┘ └────────┘  │
+│           ↑                                                    ↑        │
+│   随 provider 增多可横向滚动                          常驻右侧不滚动    │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 关键 CSS 决策：
 
 - 外层 `display: flex`，graph 在 `flexGrow:1, minWidth:0` 的 box 里启用
   `overflowX:auto`；`minWidth:0` 是让 flex item 能收缩到内容宽以下的关
-  键，否则会把 Extensions 推出视口。
-- Extensions Card `flexShrink:0`——滚动条出现时它**不缩**。
+  键，否则会把 Plugins Card 推出视口。
+- Plugins Card `flexShrink:0`——滚动条出现时它**不缩**。
 - Card 高度 = `PROVIDER_NODE_STYLES.height`（72px），视觉与 provider 行对
   齐；内容溢出时 card 内 `overflowY:auto`。
 
 ### Catalog 弹窗
 
-按 `FlagSpec.Category` 分组（compatibility / request / response）。每个
-flag：
+按 `FlagSpec.Category` 分组。所有渲染逻辑 registry-driven——根据
+`spec.Type` 选择控件，无需为每个 flag 写 case：
 
-- `type: bool` → 一个 `Switch`。
-- `type: string` → `Switch`（占位，未来可改成独立 enable 控制）+
-  `TextField`。当前空字符串视为未启用。
+- `type: bool` → `Switch`。
+- `type: string` → `Switch` + `TextField`（空字符串 = 未启用）。
+- `type: enum` → `Switch` + `Select`（首个 Option = 未启用状态）。
+- `type: int` → `Switch` + `TextField` (number)（0 = 未启用）。
+- `type: service_ref` → `Switch` + provider/model picker。
 - 已启用的 flag 在边框 / 背景上有高亮。
 
 ### 路由图齿轮菜单
 
 齿轮菜单只保留通用项（Test Probe、Export、Activate/Deactivate、Edit
 flag、Delete）。**Cursor 专用菜单项已删除**——所有 flag 都通过右侧
-Extensions Card 操作。
+Plugins Card 操作。
 
 ---
 
@@ -373,6 +406,9 @@ Extensions Card 操作。
 2. internal/typ/flag_registry.go
    └─ 在 RuleFlagRegistry() 追加一个 FlagSpec，
       key 必须与上一步的 json tag 一字不差
+      ├─ 如果 flag 同时存在 scenario 和 rule 级：
+      │   设 Shared: true，并声明 InheritanceMode ("or" / "override")
+      └─ 如果 flag 是 enum 类型，首个 Option 是"未启用"默认值
 
 3. 选定 §5 的注入类型，落地行为：
 
@@ -421,21 +457,11 @@ Extensions Card 操作。
    ├─ RuleFlags 接口加 camelCase 字段
    └─ RuleFlagsApi 接口加 snake_case 字段（与后端 json tag 对齐）
 
-6. frontend/src/components/rule-card/utils.ts
-   ├─ ruleToConfigRecord：snake_case → camelCase 映射
-   ├─ formatRuleFlags / parseRuleFlags：扩展 string-key 兼容路径
-   └─ countActiveFlags：新字段计入
-
-7. frontend/src/components/rule-card/RuleExtensionsCard.tsx
-   └─ flagBoolValue / flagStringValue switch 增加 case
-
-8. frontend/src/components/rule-card/FlagCatalogDialog.tsx
-   └─ flagToBool / flagToString / setBool / setString switch 增加 case
-
-9. frontend/src/components/rule-card/useRuleCardHooks.ts
-   └─ autoSave 的 flags 序列化：camelCase → snake_case payload
-
-10. (可选) 重跑 frontend `npm run gen:api`（CLAUDE.md 约定）
+6. (完毕 — 无需改动前端 UI 组件)
+   flagHelpers.ts 的 registry-driven 工具（getFlagValue / setFlagValue /
+   isFlagActive / apiToFlags / flagsToApi）通过 snakeToCamel key 动态
+   访问 RuleFlags 字段。RulePluginsCard、FlagCatalogDialog、
+   useRuleCardHooks 均无需 per-flag switch/case 改动。
 ```
 
 `TestRuleFlagRegistry_KeysMatchStructFields` 会在第 1、2 步任一步漏改
@@ -456,7 +482,9 @@ Extensions Card 操作。
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |
 | Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/server/`。避免反向依赖 |
 | `BuildTransformChain` 是否感知 rule | 否 | 把 ruleFlags 传入 | chain builder 只懂 scenario/provider/recording；rule 级关心点放在 handler，通过 `extraTransforms ...transform.Transform` variadic 注入 |
-| 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Extensions 卡片 | 两套入口对同一字段会引发混淆 |
+| 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Plugins 卡片 | 两套入口对同一字段会引发混淆 |
+| 前端 registry-driven vs per-flag switch/case | registry-driven | 每个 flag 一个 case | registry-driven 消除 ~293 行重复代码；新增 flag 零前端 UI 改动。代价是需要 snakeToCamel 动态映射（类型不够严格），但 `TestRuleFlagRegistry_KeysMatchStructFields` 保证 key 与 struct 同步 |
+| `Shared` / `InheritanceMode` 嵌入 FlagSpec | ✅ | 前端单独维护共享清单 | 继承语义是 flag 固有属性，放在 registry 可信源里前端零维护 |
 
 ---
 
@@ -569,6 +597,10 @@ func (c *Config) scenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioCo
 
 ## 13. 未做 / 后续可做
 
+- **前端**：Scenario-level flag 的 `PluginFeatures.tsx` 仍硬编码
+  per-flag 状态管理。下一步应建立 `ScenarioFlagRegistry`（或复用 rule
+  registry 的 `Shared` 子集），让场景级 UI 也走 registry-driven 路径，
+  消除 `PluginFeatures.tsx` 中的 switch/case。
 - **UI**：string flag 加独立 enable Switch，让"空"与"未启用"可区分。
 - **UI**：Catalog 加搜索框 / category collapse（flag 数量超过 ~8 个时
   会拥挤）。
@@ -588,6 +620,12 @@ func (c *Config) scenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioCo
   `VisionProxyControl`、`PluginToggleButton`），均放在
   `frontend/src/components/flags/`。`PluginFeatures` 自身缩减为薄编排层，
   一次 `Promise.all` 加载后将数据+回调传给各子组件。
+- ~~**前端**：Rule flag UI 各组件（RuleExtensionsCard、FlagCatalogDialog、
+  useRuleCardHooks、utils）硬编码 per-flag switch/case~~。**已完成**：
+  统一为 registry-driven 架构。核心工具集中在 `flagHelpers.ts`
+  （`getFlagValue`/`setFlagValue`/`apiToFlags`/`flagsToApi`/`isFlagActive`
+  等）。新增 flag 零前端 UI 代码改动。组件重命名为 `RulePluginsCard`，
+  统一使用 "Plugins" 命名。
 - **后端**：`internal/client/openai.go` 通用 OpenAI client 用
   `http.DefaultTransport` 而非 `createSessionBoundTransport`，没有走
   transport pool / session 隔离——独立问题，不在 rule flag 范畴，但
