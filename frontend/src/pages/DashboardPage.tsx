@@ -243,6 +243,22 @@ export default function DashboardPage() {
         setModelsPage(0);
     }, [stats, selectedProvider, selectedModel]);
 
+    // Reset filters if selected provider/model no longer exists in current data
+    useEffect(() => {
+        if (selectedProvider !== 'all') {
+            const providerExists = stats.some(s => s.provider_uuid === selectedProvider);
+            if (!providerExists) {
+                setSelectedProvider('all');
+            }
+        }
+        if (selectedModel !== 'all') {
+            const modelExists = stats.some(s => (s.model || s.key) === selectedModel);
+            if (!modelExists) {
+                setSelectedModel('all');
+            }
+        }
+    }, [stats, selectedProvider, selectedModel]);
+
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(() => {
@@ -336,12 +352,21 @@ export default function DashboardPage() {
     const AUTH_TYPE_ORDER = ['oauth', 'api_key', 'bearer_token', 'basic_auth', 'vmodel'];
 
     const groupedProviderOptions = useMemo(() => {
+        // Extract provider UUIDs that exist in current stats data
+        const providerUuidsInData = new Set(
+            stats
+                .map(s => s.provider_uuid)
+                .filter((uuid): uuid is string => uuid != null && uuid !== '')
+        );
+
         const groups: Record<string, Provider[]> = {};
-        providers.forEach((p) => {
-            const authType = p.auth_type || 'api_key';
-            if (!groups[authType]) groups[authType] = [];
-            groups[authType].push(p);
-        });
+        providers
+            .filter(p => providerUuidsInData.has(p.uuid))  // Only include providers in current data
+            .forEach((p) => {
+                const authType = p.auth_type || 'api_key';
+                if (!groups[authType]) groups[authType] = [];
+                groups[authType].push(p);
+            });
         // Sort providers within each group by name
         Object.values(groups).forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)));
 
@@ -353,7 +378,7 @@ export default function DashboardPage() {
                 label: authTypeLabel(authType),
                 providers: groups[authType],
             }));
-    }, [providers]);
+    }, [providers, stats]);
 
     // Extract unique models from stats, sorted by usage
     const modelOptions = useMemo(() => {
