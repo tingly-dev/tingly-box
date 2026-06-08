@@ -1,4 +1,4 @@
-import { IconInfoCircle, IconPlus } from '@tabler/icons-react';
+import { Info as IconInfoCircle } from '@/components/icons';
 import {
     Box,
     Button,
@@ -188,10 +188,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                                 />
                                 {item.tooltip && (
                                     <IconInfoCircle
-                                        size={13}
-                                        style={{
+                                        sx={{
+                                            fontSize: 13,
                                             flexShrink: 0,
-                                            marginLeft: 4,
+                                            ml: '4px',
                                             opacity: active ? 0.6 : 0.35,
                                         }}
                                     />

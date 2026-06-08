@@ -1,4 +1,4 @@
-import { IconCheck, IconChevronDown } from '@tabler/icons-react';
+import { Check as IconCheck, KeyboardArrowDown as IconChevronDown } from '@/components/icons';
 import {
     Box,
     Button,
@@ -47,7 +47,7 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     variant="outlined"
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
-                    endIcon={<IconChevronDown size={18} />}
+                    endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
                     sx={{
                         minWidth: 100,
                         maxWidth: 260,
@@ -81,7 +81,7 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                     onClick={() => { setAnchor(null); if (isEnabled) onChange(null); }}
                 >
                     <ListItemText primary="Off" primaryTypographyProps={{ variant: 'body2' }} />
-                    {!isEnabled && <IconCheck size={16} />}
+                    {!isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
                 <MenuItem
                     selected={isEnabled}
@@ -93,7 +93,7 @@ const VisionProxyControl: React.FC<VisionProxyControlProps> = ({ value, provider
                         primaryTypographyProps={{ variant: 'body2' }}
                         secondaryTypographyProps={{ variant: 'caption' }}
                     />
-                    {isEnabled && <IconCheck size={16} />}
+                    {isEnabled && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
             </Menu>
 

@@ -1,5 +1,5 @@
 import { Box, Divider, Menu, MenuItem, Typography } from '@mui/material';
-import { IconDots, IconUser, IconSettings, IconBrush, IconSparkles } from '@tabler/icons-react';
+import { MoreHoriz as IconDots, Person as IconUser, Settings as IconSettings, Brush as IconBrush, AutoAwesome as IconSparkles } from '@/components/icons';
 import React, { ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useActivityItems } from './useActivityItems';
@@ -130,7 +130,7 @@ export const ZenNavigationBar: React.FC<ZenNavigationBarProps> = ({ agent, onExi
       {/* Profile button (if applicable) */}
       {config.showProfile && (
         <ZenButton
-          icon={<IconUser size={22} />}
+          icon={<IconUser sx={{ fontSize: 22 }} />}
           label="Profile"
           onClick={() => handleButtonClick({ action: 'profile', icon: null, label: '' })}
         />
@@ -267,10 +267,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: true,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     codex: {
@@ -283,10 +283,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: true,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     opencode: {
@@ -299,10 +299,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: true,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     xcode: {
@@ -315,10 +315,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: true,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     vscode: {
@@ -331,10 +331,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: true,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     openai: {
@@ -347,10 +347,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: false,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     anthropic: {
@@ -363,10 +363,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: false,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     claude_desktop: {
@@ -379,10 +379,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: false,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
     agent: {
@@ -395,10 +395,10 @@ function getZenLayoutConfig(agent: string): ZenLayoutConfig {
       },
       showProfile: false,
       additionalButtons: [
-        { icon: <IconDots size={22} />, label: 'More', action: 'more' },
-        { icon: <IconSettings size={22} />, label: 'System', action: 'system' },
-        { icon: <IconBrush size={22} />, label: 'Theme', action: 'theme' },
-        { icon: <IconZen size={22} />, label: 'Zen', action: 'zen' },
+        { icon: <IconDots sx={{ fontSize: 22 }} />, label: 'More', action: 'more' },
+        { icon: <IconSettings sx={{ fontSize: 22 }} />, label: 'System', action: 'system' },
+        { icon: <IconBrush sx={{ fontSize: 22 }} />, label: 'Theme', action: 'theme' },
+        { icon: <IconZen sx={{ fontSize: 22 }} />, label: 'Zen', action: 'zen' },
       ],
     },
   };

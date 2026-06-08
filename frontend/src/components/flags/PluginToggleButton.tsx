@@ -1,4 +1,4 @@
-import { IconCheck, IconChevronDown } from '@tabler/icons-react';
+import { Check as IconCheck, KeyboardArrowDown as IconChevronDown } from '@/components/icons';
 import { Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
 
@@ -21,7 +21,7 @@ const PluginToggleButton: React.FC<PluginToggleButtonProps> = ({ label, descript
                     variant="outlined"
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
-                    endIcon={<IconChevronDown size={18} />}
+                    endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
                     sx={{
                         minWidth: 100,
                         textTransform: 'none',
@@ -51,7 +51,7 @@ const PluginToggleButton: React.FC<PluginToggleButtonProps> = ({ label, descript
                     title={description}
                 >
                     <ListItemText primary="On" primaryTypographyProps={{ variant: 'body2' }} />
-                    {value && <IconCheck size={16} />}
+                    {value && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
                 <MenuItem
                     selected={!value}
@@ -59,7 +59,7 @@ const PluginToggleButton: React.FC<PluginToggleButtonProps> = ({ label, descript
                     title={description}
                 >
                     <ListItemText primary="Off" primaryTypographyProps={{ variant: 'body2' }} />
-                    {!value && <IconCheck size={16} />}
+                    {!value && <IconCheck sx={{ fontSize: 16 }} />}
                 </MenuItem>
             </Menu>
         </>

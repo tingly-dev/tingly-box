@@ -1,38 +1,38 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getHiddenScenarios } from '@/pages/scenario/AgentOverviewPage';
-import {
-    IconChartBar,
-    IconGridDots,
-    IconCalendarClock,
-    IconCalendar,
-    IconCalendarEvent,
-    IconPlus,
-    IconFileText,
-    IconBrain,
-    IconDeviceRemote,
-    IconBolt,
-    IconSettings,
-    IconSend,
-    IconLicense,
-    IconHistory,
-    IconKey,
-    IconShield,
-    IconLock,
-    IconVector,
-    IconPhoto,
-    IconFlask,
-    IconPlayerPlay,
-    IconTools,
-    IconServer,
-} from '@tabler/icons-react';
 import { OpenAI, Anthropic, Claude, OpenCode, Xcode, VSCode, Telegram, Feishu, Lark, DingTalk, Weixin, WeCom, Codex, OpenClaw, ClaudeDesktop } from '../components/BrandIcons';
-import { SettingsApplications } from '@/components/icons';
+import {
+    SettingsApplications,
+    BarChart as IconChartBar,
+    GridView as IconGridDots,
+    EventNote as IconCalendarClock,
+    CalendarToday as IconCalendar,
+    Event as IconCalendarEvent,
+    Add as IconPlus,
+    TextSnippet as IconFileText,
+    Psychology as IconBrain,
+    SettingsRemote as IconDeviceRemote,
+    Bolt as IconBolt,
+    Settings as IconSettings,
+    Send as IconSend,
+    License as IconLicense,
+    History as IconHistory,
+    Key as IconKey,
+    Shield as IconShield,
+    Lock as IconLock,
+    Vector as IconVector,
+    Photo as IconPhoto,
+    Science as IconFlask,
+    PlayArrow as IconPlayerPlay,
+    Handyman as IconTools,
+    Server as IconServer,
+    AiAgents as IconAiAgents,
+} from '@/components/icons';
 import { useFeatureFlags } from '../contexts/FeatureFlagsContext';
 import { useProfileContext } from '@/contexts/ProfileContext';
 import { isFullEdition } from '@/utils/edition';
 import type { ActivityItem, NavItem } from './types';
-import { IconAiAgents } from '@tabler/icons-react';
 import { useBotPlatformSummary } from './useBotPlatformSummary';
 
 export function useActivityItems(): ActivityItem[] {
@@ -62,14 +62,14 @@ export function useActivityItems(): ActivityItem[] {
             items.push({
                 path: '/prompt/user',
                 label: t('layout.userRequest'),
-                icon: <IconSend size={20} />,
+                icon: <IconSend sx={{ fontSize: 20 }} />,
             });
         }
         if (skillIde) {
             items.push({
                 path: '/prompt/skill',
                 label: t('layout.skills'),
-                icon: <IconBolt size={20} />,
+                icon: <IconBolt sx={{ fontSize: 20 }} />,
             });
         }
         return items;
@@ -89,7 +89,7 @@ export function useActivityItems(): ActivityItem[] {
             group.filter(s => !hiddenScenarios.has(s.id)).map(s => s.nav);
 
         const playgroundTool: NavItem[] = [
-            { path: '/agent/playground', label: t('layout.nav.playground', { defaultValue: 'Playground' }), icon: <IconPlayerPlay size={20} /> },
+            { path: '/agent/playground', label: t('layout.nav.playground', { defaultValue: 'Playground' }), icon: <IconPlayerPlay sx={{ fontSize: 20 }} /> },
         ];
         const codingTools = visible([
             { id: 'codex', nav: { path: '/agent/codex', label: t('layout.nav.useCodex', { defaultValue: 'Codex' }), icon: <Codex size={20} /> } },
@@ -101,8 +101,8 @@ export function useActivityItems(): ActivityItem[] {
         const sdkTools = visible([
             { id: 'openai', nav: { path: '/agent/openai', label: t('layout.nav.useOpenAI', { defaultValue: 'OpenAI' }), icon: <OpenAI size={20} /> } },
             { id: 'anthropic', nav: { path: '/agent/anthropic', label: t('layout.nav.useAnthropic', { defaultValue: 'Anthropic' }), icon: <Anthropic size={20} /> } },
-            { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector size={20} /> } },
-            { id: 'imagegen', nav: { path: '/agent/imagegen', label: t('layout.nav.useImageGen', { defaultValue: 'Image Gen' }), icon: <IconPhoto size={20} /> } },
+            { id: 'embed', nav: { path: '/agent/embed', label: t('layout.nav.useEmbed', { defaultValue: 'Embedding' }), icon: <IconVector sx={{ fontSize: 20 }} /> } },
+            { id: 'imagegen', nav: { path: '/agent/imagegen', label: t('layout.nav.useImageGen', { defaultValue: 'Image Gen' }), icon: <IconPhoto sx={{ fontSize: 20 }} /> } },
         ]);
         const agentTools = visible([
             { id: 'agent', nav: { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> } },
@@ -118,7 +118,7 @@ export function useActivityItems(): ActivityItem[] {
                     icon: <Claude size={20} />,
                 },
                 ...profileNavItems,
-                { path: '#add-profile', label: t('layout.addProfile'), icon: <IconPlus size={20} /> },
+                { path: '#add-profile', label: t('layout.addProfile'), icon: <IconPlus sx={{ fontSize: 20 }} /> },
             );
         }
         const pushGroup = (group: NavItem[]) => {
@@ -134,38 +134,38 @@ export function useActivityItems(): ActivityItem[] {
         const items: ActivityItem[] = [
             {
                 key: 'scenario',
-                icon: <IconAiAgents size={22} />,
+                icon: <IconAiAgents sx={{ fontSize: 22 }} />,
                 label: t('layout.nav.home'),
                 defaultPath: '/agent',
                 children: scenarioChildren,
             },
             {
                 key: 'dashboard',
-                icon: <IconChartBar size={22} />,
+                icon: <IconChartBar sx={{ fontSize: 22 }} />,
                 label: t('layout.usage', { defaultValue: 'Usage' }),
                 path: '/dashboard/today',
                 defaultPath: '/dashboard/today',
                 children: [
-                    { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock size={20} /> },
-                    { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar size={20} /> },
-                    { path: '/dashboard/3d', label: `3 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
-                    { path: '/dashboard/7d', label: `7 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
-                    { path: '/dashboard/30d', label: `30 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
-                    { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent size={20} /> },
+                    { path: '/dashboard/today', label: t('layout.today'), icon: <IconCalendarClock sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/yesterday', label: t('layout.yesterday'), icon: <IconCalendar sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/3d', label: `3 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/7d', label: `7 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/30d', label: `30 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
+                    { path: '/dashboard/90d', label: `90 ${t('layout.days')}`, icon: <IconCalendarEvent sx={{ fontSize: 20 }} /> },
                     { type: 'divider' },
-                    { path: '/overview/90d', label: t('layout.heatmap'), icon: <IconGridDots size={20} /> },
+                    { path: '/overview/90d', label: t('layout.heatmap'), icon: <IconGridDots sx={{ fontSize: 20 }} /> },
                 ],
             },
             ...(isFullEdition && promptMenuItems.length > 0 ? [{
                 key: 'prompt' as const,
-                icon: <IconBrain size={22} />,
+                icon: <IconBrain sx={{ fontSize: 22 }} />,
                 label: t('common.prompt', { defaultValue: 'Prompt' }),
                 defaultPath: promptMenuItems[0]?.path,
                 children: promptMenuItems,
             }] as ActivityItem[] : []),
             ...(isFullEdition ? [{
                 key: 'remote-control' as const,
-                icon: <IconDeviceRemote size={22} />,
+                icon: <IconDeviceRemote sx={{ fontSize: 22 }} />,
                 label: t('layout.remote'),
                 defaultPath: '/remote-control/weixin',
                 children: [
@@ -179,44 +179,44 @@ export function useActivityItems(): ActivityItem[] {
             }] as ActivityItem[] : []),
             ...(enableGuardrails ? [{
                 key: 'guardrails',
-                icon: <IconShield size={22} />,
+                icon: <IconShield sx={{ fontSize: 22 }} />,
                 label: t('layout.guardrails'),
                 defaultPath: '/guardrails',
                 children: [
-                    { path: '/guardrails', label: t('layout.overview'), icon: <IconShield size={20} /> },
-                    { path: '/guardrails/groups', label: t('layout.policyGroups'), icon: <IconLicense size={20} /> },
-                    { path: '/guardrails/rules', label: t('layout.policies'), icon: <IconLicense size={20} /> },
-                    { path: '/guardrails/credentials', label: t('layout.nav.credential', { defaultValue: 'Credential' }), icon: <IconKey size={20} /> },
-                    { path: '/guardrails/history', label: t('layout.guardrailsHistory'), icon: <IconHistory size={20} /> },
+                    { path: '/guardrails', label: t('layout.overview'), icon: <IconShield sx={{ fontSize: 20 }} /> },
+                    { path: '/guardrails/groups', label: t('layout.policyGroups'), icon: <IconLicense sx={{ fontSize: 20 }} /> },
+                    { path: '/guardrails/rules', label: t('layout.policies'), icon: <IconLicense sx={{ fontSize: 20 }} /> },
+                    { path: '/guardrails/credentials', label: t('layout.nav.credential', { defaultValue: 'Credential' }), icon: <IconKey sx={{ fontSize: 20 }} /> },
+                    { path: '/guardrails/history', label: t('layout.guardrailsHistory'), icon: <IconHistory sx={{ fontSize: 20 }} /> },
                 ] as NavItem[],
             }] as ActivityItem[] : []),
             ...(enableMCP ? [{
                 key: 'tools' as const,
-                icon: <IconTools size={22} />,
+                icon: <IconTools sx={{ fontSize: 22 }} />,
                 label: 'Tools',
                 defaultPath: '/mcp/sources',
                 children: [
                     { path: '/mcp/sources', label: 'MCP', icon: <SettingsApplications sx={{ fontSize: 20 }} /> },
-                    { path: '/tools/servertool', label: 'Servertool', icon: <IconServer size={20} /> },
+                    { path: '/tools/servertool', label: 'Servertool', icon: <IconServer sx={{ fontSize: 20 }} /> },
                 ],
             }] as ActivityItem[] : []),
             {
                 key: 'credential',
-                icon: <IconLock size={22} />,
+                icon: <IconLock sx={{ fontSize: 22 }} />,
                 label: t('layout.nav.credential', { defaultValue: 'Credentials' }),
                 defaultPath: '/credentials',
                 children: [
-                    { path: '/credentials', label: t('layout.modelKey'), icon: <IconLock size={20} /> },
+                    { path: '/credentials', label: t('layout.modelKey'), icon: <IconLock sx={{ fontSize: 20 }} /> },
                     {
                         path: '/tingly-box-token',
                         label: t('layout.tinglyBox'),
-                        icon: <IconKey size={20} />,
+                        icon: <IconKey sx={{ fontSize: 20 }} />,
                         tooltip: t('layout.tinglyBoxTooltip'),
                     },
                     {
                         path: '/credentials/virtual-models',
                         label: t('layout.virtualModels', { defaultValue: 'Virtual Models' }),
-                        icon: <IconFlask size={20} />,
+                        icon: <IconFlask sx={{ fontSize: 20 }} />,
                         tooltip: t('layout.virtualModelsTooltip', {
                             defaultValue: 'Built-in synthetic model providers for onboarding and dry-runs.',
                         }),
@@ -225,14 +225,14 @@ export function useActivityItems(): ActivityItem[] {
             },
             {
                 key: 'system',
-                icon: <IconSettings size={22} />,
+                icon: <IconSettings sx={{ fontSize: 22 }} />,
                 label: t('layout.system'),
                 defaultPath: '/system',
                 children: [
-                    { path: '/system', label: t('layout.general'), icon: <IconSettings size={20} /> },
-                    { path: '/access-control', label: t('layout.accessControl'), icon: <IconShield size={20} /> },
-                    { path: '/system/experimental', label: t('layout.experimental'), icon: <IconFlask size={20} /> },
-                    { path: '/system/logs', label: t('layout.logs'), icon: <IconFileText size={20} /> },
+                    { path: '/system', label: t('layout.general'), icon: <IconSettings sx={{ fontSize: 20 }} /> },
+                    { path: '/access-control', label: t('layout.accessControl'), icon: <IconShield sx={{ fontSize: 20 }} /> },
+                    { path: '/system/experimental', label: t('layout.experimental'), icon: <IconFlask sx={{ fontSize: 20 }} /> },
+                    { path: '/system/logs', label: t('layout.logs'), icon: <IconFileText sx={{ fontSize: 20 }} /> },
                 ],
             },
         ];

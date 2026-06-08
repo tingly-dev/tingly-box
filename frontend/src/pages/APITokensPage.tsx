@@ -1,18 +1,7 @@
 import { PageLayout } from '@/components/PageLayout';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
-import {
-    IconKey,
-    IconPlus,
-    IconTrash,
-    IconCopy,
-    IconCheck,
-    IconClock,
-    IconUser,
-    IconShield,
-    IconEye,
-    IconEyeOff,
-} from '@tabler/icons-react';
+import { Key as IconKey, Add as IconPlus, Delete as IconTrash, ContentCopy as IconCopy, Check as IconCheck, AccessTime as IconClock, Person as IconUser, Shield as IconShield, Visibility as IconEye, VisibilityOff as IconEyeOff } from '@/components/icons';
 import {
     Box,
     Button,
@@ -157,7 +146,7 @@ const APITokensPage = () => {
         if (!token.enabled) {
             return <Chip label="Disabled" color="default" size="small" />;
         }
-        return <Chip label="Active" color="success" size="small" icon={<IconCheck size={14} />} />;
+        return <Chip label="Active" color="success" size="small" icon={<IconCheck sx={{ fontSize: 14 }} />} />;
     };
 
     return (
@@ -172,7 +161,7 @@ const APITokensPage = () => {
                     rightAction={
                         <Button
                             variant="contained"
-                            startIcon={<IconPlus size={18} />}
+                            startIcon={<IconPlus sx={{ fontSize: 18 }} />}
                             onClick={() => setCreateDialogOpen(true)}
                         >
                             Create Token
@@ -223,7 +212,7 @@ const APITokensPage = () => {
                                                         color: 'text.disabled',
                                                     }}
                                                 >
-                                                    <IconKey size={24} />
+                                                    <IconKey sx={{ fontSize: 24 }} />
                                                 </Box>
                                                 <Typography variant="body2" color="text.secondary">
                                                     No API tokens found. Create your first token to get started.
@@ -254,7 +243,7 @@ const APITokensPage = () => {
                                                             flexShrink: 0,
                                                         }}
                                                     >
-                                                        <IconKey size={15} />
+                                                        <IconKey sx={{ fontSize: 15 }} />
                                                     </Box>
                                                     <Typography variant="body2" fontWeight={600}>
                                                         {token.display_name}
@@ -264,7 +253,7 @@ const APITokensPage = () => {
                                             <TableCell>
                                                 <Tooltip title={token.user_id} placement="top">
                                                     <Stack direction="row" spacing={0.5} alignItems="center" sx={{ width: 'fit-content', cursor: 'default' }}>
-                                                        <IconUser size={13} style={{ opacity: 0.4, flexShrink: 0 }} />
+                                                        <IconUser sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
                                                         <Typography
                                                             variant="caption"
                                                             sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
@@ -309,7 +298,7 @@ const APITokensPage = () => {
                                                                 sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
                                                                 onClick={() => toggleTokenVisibility(token.token_id)}
                                                             >
-                                                                {visibleTokens[token.token_id] ? <IconEyeOff size={13} /> : <IconEye size={13} />}
+                                                                {visibleTokens[token.token_id] ? <IconEyeOff sx={{ fontSize: 13 }} /> : <IconEye sx={{ fontSize: 13 }} />}
                                                             </IconButton>
                                                         </Tooltip>
                                                         <Tooltip title="Copy">
@@ -321,7 +310,7 @@ const APITokensPage = () => {
                                                                     notify.success('Token copied to clipboard');
                                                                 }}
                                                             >
-                                                                <IconCopy size={13} />
+                                                                <IconCopy sx={{ fontSize: 13 }} />
                                                             </IconButton>
                                                         </Tooltip>
                                                     </Box>
@@ -330,7 +319,7 @@ const APITokensPage = () => {
                                             <TableCell>{getStatusChip(token)}</TableCell>
                                             <TableCell>
                                                 <Stack direction="row" spacing={0.5} alignItems="center">
-                                                    <IconClock size={13} style={{ opacity: 0.4, flexShrink: 0 }} />
+                                                    <IconClock sx={{ fontSize: 13, opacity: 0.4, flexShrink: 0 }} />
                                                     <Typography variant="caption" color="text.secondary">
                                                         {formatDate(token.created_at)}
                                                     </Typography>
@@ -350,7 +339,7 @@ const APITokensPage = () => {
                                                             onClick={() => handleToggleTokenEnabled(token)}
                                                             sx={{ opacity: 0.75, '&:hover': { opacity: 1 } }}
                                                         >
-                                                            {token.enabled ? <IconShield size={15} /> : <IconCheck size={15} />}
+                                                            {token.enabled ? <IconShield sx={{ fontSize: 15 }} /> : <IconCheck sx={{ fontSize: 15 }} />}
                                                         </IconButton>
                                                     </Tooltip>
                                                     <Tooltip title="Delete token">
@@ -363,7 +352,7 @@ const APITokensPage = () => {
                                                             }}
                                                             sx={{ opacity: 0.75, '&:hover': { opacity: 1 } }}
                                                         >
-                                                            <IconTrash size={15} />
+                                                            <IconTrash sx={{ fontSize: 15 }} />
                                                         </IconButton>
                                                     </Tooltip>
                                                 </Stack>
@@ -399,7 +388,7 @@ const APITokensPage = () => {
                         variant="contained"
                         onClick={handleCreateToken}
                         disabled={creatingToken || !newTokenDisplayName}
-                        startIcon={creatingToken ? <CircularProgress size={16} /> : <IconPlus size={18} />}
+                        startIcon={creatingToken ? <CircularProgress size={16} /> : <IconPlus sx={{ fontSize: 18 }} />}
                     >
                         Create Token
                     </Button>
@@ -410,7 +399,7 @@ const APITokensPage = () => {
             <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>
                     <Stack direction="row" spacing={1} alignItems="center">
-                        <IconTrash color="#f44336" />
+                        <IconTrash color="error" />
                         <span>Delete Token</span>
                     </Stack>
                 </DialogTitle>
@@ -429,7 +418,7 @@ const APITokensPage = () => {
                         color="error"
                         onClick={handleDeleteToken}
                         disabled={deletingToken}
-                        startIcon={deletingToken ? <CircularProgress size={16} /> : <IconTrash size={18} />}
+                        startIcon={deletingToken ? <CircularProgress size={16} /> : <IconTrash sx={{ fontSize: 18 }} />}
                     >
                         Delete Token
                     </Button>

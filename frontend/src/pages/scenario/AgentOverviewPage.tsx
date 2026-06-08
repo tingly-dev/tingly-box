@@ -9,11 +9,7 @@ import {
     Typography,
     alpha,
 } from '@mui/material';
-import {
-    IconAiAgents,
-    IconPhoto,
-    IconVector,
-} from '@tabler/icons-react';
+import { AiAgents as IconAiAgents, Photo as IconPhoto, Vector as IconVector } from '@/components/icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -112,7 +108,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useEmbed',
         descKey: 'scenarioOverview.descriptions.embed',
         path: '/agent/embed',
-        icon: (size) => <IconVector size={size} />,
+        icon: (size) => <IconVector sx={{ fontSize: size }} />,
         hideable: true,
     },
     {
@@ -120,7 +116,7 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         labelKey: 'layout.nav.useImageGen',
         descKey: 'scenarioOverview.descriptions.imagegen',
         path: '/agent/imagegen',
-        icon: (size) => <IconPhoto size={size} />,
+        icon: (size) => <IconPhoto sx={{ fontSize: size }} />,
         hideable: true,
     },
     {
@@ -195,7 +191,7 @@ const AgentOverviewPage: React.FC = () => {
         <PageLayout loading={false}>
             <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
                 <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
-                    <IconAiAgents size={28} />
+                    <IconAiAgents sx={{ fontSize: 28 }} />
                     <Typography variant="h5" sx={{ fontWeight: 600 }}>
                         {t('scenarioOverview.title')}
                     </Typography>

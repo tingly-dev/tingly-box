@@ -1,8 +1,4 @@
-import {
-    IconCheck,
-    IconCircleFilled,
-    IconChevronDown,
-} from '@tabler/icons-react';
+import { Check as IconCheck, Circle as IconCircleFilled, KeyboardArrowDown as IconChevronDown } from '@/components/icons';
 import {
     Box,
     Button,
@@ -65,7 +61,7 @@ export const SessionAffinityControl: React.FC<SessionAffinityControlProps> = ({
                     variant="outlined"
                     onClick={handleMenuOpen}
                     disabled={disabled}
-                    endIcon={<IconChevronDown size={18} />}
+                    endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
                     sx={{
                         minWidth: 120,
                         textTransform: 'none',
@@ -79,7 +75,7 @@ export const SessionAffinityControl: React.FC<SessionAffinityControlProps> = ({
                         '&:hover': { bgcolor: isEnabled ? 'primary.dark' : 'action.selected' },
                     }}
                 >
-                    <IconCircleFilled size={14} style={{ marginRight: '4px' }} />
+                    <IconCircleFilled sx={{ fontSize: 14, mr: '4px' }} />
                     Affinity: {displayValue}
                 </Button>
             </Tooltip>
@@ -100,7 +96,7 @@ export const SessionAffinityControl: React.FC<SessionAffinityControlProps> = ({
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                             <ListItemText primary={option.label} primaryTypographyProps={{ variant: 'body2' }} />
-                            {value === option.value && <IconCheck size={16} />}
+                            {value === option.value && <IconCheck sx={{ fontSize: 16 }} />}
                         </Box>
                     </MenuItem>
                 ))}

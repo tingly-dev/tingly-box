@@ -19,15 +19,7 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, FilterOff, ChevronLeft, ChevronRight } from '@/components/icons';
-import { tablerMui } from '@/components/icons';
-import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
-
-// Predefined ones come from the central module; these three have no MUI-named
-// equivalent there, so build them ad-hoc via the generic factory.
-const PaidIcon = tablerMui(IconCoin);
-const StreamIcon = tablerMui(IconActivity);
-const CachedIcon = tablerMui(IconReload);
+import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, Token as PaidIcon, Stream as StreamIcon, Autorenew as CachedIcon, FilterOff, ChevronLeft, ChevronRight } from '@/components/icons';
 import { StatCard, DailyTokenHistoryChart, HourlyTokenHistoryChart, ServiceStatsTable, AgentQuickNav, RequestsView } from '@/components/dashboard';
 import type { TimeSeriesData, AggregatedStat, UsageRecord } from '@/components/dashboard';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';

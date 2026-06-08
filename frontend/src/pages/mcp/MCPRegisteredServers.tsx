@@ -26,11 +26,7 @@ import {
     Visibility as VisibilityIcon,
     VisibilityOff as VisibilityOffIcon,
 } from '@/components/icons';
-import {
-    IconSearch,
-    IconWorldDownload,
-    IconServer,
-} from '@tabler/icons-react';
+import { Search as IconSearch, CloudDownload as IconWorldDownload, Server as IconServer } from '@/components/icons';
 import { useEffect, useState } from 'react';
 import { useNotify } from '@/hooks/useNotify';
 import MCPSourceEditor from './MCPSourceEditor';
@@ -189,7 +185,7 @@ const WebtoolCard: React.FC<WebtoolCardProps> = ({ webtoolsSource, toolName, onS
 
     return (
         <ToolCard
-            icon={isSearch ? <IconSearch size={18} /> : <IconWorldDownload size={18} />}
+            icon={isSearch ? <IconSearch sx={{ fontSize: 18 }} /> : <IconWorldDownload sx={{ fontSize: 18 }} />}
             name={toolName}
             description={isSearch
                 ? 'Browser-side web search via Serper. Requires an API key.'
@@ -415,7 +411,7 @@ const MCPRegisteredServers = () => {
                                 return (
                                     <ToolCard
                                         key={source.id}
-                                        icon={<IconServer size={18} />}
+                                        icon={<IconServer sx={{ fontSize: 18 }} />}
                                         name={source.id || ''}
                                         description={conn}
                                         enabled={enabled}

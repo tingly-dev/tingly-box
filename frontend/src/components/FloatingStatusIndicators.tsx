@@ -1,5 +1,5 @@
 import { Box, IconButton, Tooltip } from '@mui/material';
-import { IconAlertCircle, IconStar } from '@tabler/icons-react';
+import { Error as IconAlertCircle, Star as IconStar } from '@/components/icons';
 import { useTranslation } from 'react-i18next';
 import { useHealth } from '../contexts/HealthContext';
 import { useVersion as useAppVersion } from '../contexts/VersionContext';
@@ -55,7 +55,7 @@ export const FloatingStatusIndicators = () => {
                             },
                         }}
                     >
-                        <IconAlertCircle size={20} />
+                        <IconAlertCircle sx={{ fontSize: 20 }} />
                     </IconButton>
                 </Tooltip>
             )}

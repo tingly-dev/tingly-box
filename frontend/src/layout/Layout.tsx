@@ -1,5 +1,5 @@
 import { Box, Drawer, IconButton, Popover, Tooltip, Typography, Menu, MenuItem, Stack } from '@mui/material';
-import { IconMenu, IconDots, IconYinYang, IconPencil } from '@tabler/icons-react';
+import { Menu as IconMenu, YinYang as IconYinYang, Create as IconPencil, Add as IconPlus } from '@/components/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -16,7 +16,6 @@ import type { ActivityItem, LayoutProps } from './types';
 import { getThemeOptions } from '@/theme/options';
 import { Claude, Codex, OpenCode, Xcode, VSCode, OpenAI, Anthropic, OpenClaw } from '../components/BrandIcons';
 import { FloatingStatusIndicators } from '../components/FloatingStatusIndicators';
-import { IconPlus } from '@tabler/icons-react';
 
 const mobileContentSx = {
     flex: 1,
@@ -61,7 +60,7 @@ const MobileNavigationBar = ({ onMenuClick }: { onMenuClick: () => void }) => (
                 '&:hover': { bgcolor: 'action.hover' },
             }}
         >
-            <IconMenu size={24} />
+            <IconMenu sx={{ fontSize: 24 }} />
         </IconButton>
     </Box>
 );
@@ -198,7 +197,7 @@ const Layout = ({ children }: LayoutProps) => {
                 zenSidebarItems.push({
                     path: '#add-profile',
                     label: 'Add Profile',
-                    icon: <IconPlus size={20} />,
+                    icon: <IconPlus sx={{ fontSize: 20 }} />,
                 });
             }
 
@@ -298,7 +297,7 @@ const Layout = ({ children }: LayoutProps) => {
                         '&:hover': { color: 'primary.main' },
                     }}
                 >
-                    <IconYinYang size={16} />
+                    <IconYinYang sx={{ fontSize: 16 }} />
                 </IconButton>
             </Tooltip>
             <Tooltip title={t('scenarioOverview.editTooltip', { defaultValue: 'Manage visible agents' })} arrow placement="right">
@@ -310,7 +309,7 @@ const Layout = ({ children }: LayoutProps) => {
                         '&:hover': { color: 'primary.main' },
                     }}
                 >
-                    <IconPencil size={16} />
+                    <IconPencil sx={{ fontSize: 16 }} />
                 </IconButton>
             </Tooltip>
         </Stack>

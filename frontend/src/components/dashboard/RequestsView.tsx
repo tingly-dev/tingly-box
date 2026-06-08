@@ -29,11 +29,8 @@ import {
     Tooltip as ReTooltip,
     ResponsiveContainer,
 } from 'recharts';
-import { tablerMui } from '@/components/icons';
-import { IconWaveSine } from '@tabler/icons-react';
+import { WaveSine as StreamIcon } from '@/components/icons';
 import { getThemeChartStyles, TOKEN_COLORS } from './chartStyles';
-
-const StreamIcon = tablerMui(IconWaveSine);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

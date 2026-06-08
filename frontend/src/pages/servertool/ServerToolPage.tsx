@@ -15,7 +15,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
-import { IconBrain } from '@tabler/icons-react';
+import { Psychology as IconBrain } from '@/components/icons';
 import { useEffect, useState } from 'react';
 import { useNotify } from '@/hooks/useNotify';
 import {
@@ -131,7 +131,7 @@ const AdvisorCard: React.FC<AdvisorCardProps> = ({ advisorSource, onSave, expand
 
     return (
         <ToolCard
-            icon={<IconBrain size={18} />}
+            icon={<IconBrain sx={{ fontSize: 18 }} />}
             name="Advisor"
             description="Sub-LLM consultation tool for hard decisions. An in-process tool agents can call to consult a second model."
             enabled={enabled}

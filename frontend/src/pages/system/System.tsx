@@ -4,7 +4,7 @@ import UnifiedCard from '@/components/UnifiedCard.tsx';
 import { Logout } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
 import { VersionDisplay } from '@/components/VersionDisplay';
-import { IconCircleCheck, IconCircleX, IconInfoCircle, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage, IconBrush, IconWorld, IconCheck, IconClock } from '@tabler/icons-react';
+import { CheckCircle as IconCircleCheck, Cancel as IconCircleX, Info as IconInfoCircle, Lock as IconLock, Star as IconStar, License as IconLicense, GitHub as IconBrandGithub, Translate as IconLanguage, Brush as IconBrush, Language as IconWorld, Check as IconCheck, AccessTime as IconClock } from '@/components/icons';
 import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
@@ -152,14 +152,12 @@ const System = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
                                 {serverStatus?.server_running ? (
-                                    <IconCircleCheck size={16} style={{ color: 'var(--mui-palette-success-main)' }} />
+                                    <IconCircleCheck sx={{ fontSize: 16, color: 'success.main' }} />
                                 ) : (
                                     <IconCircleX
-                                        size={16}
-                                        style={{
-                                            color: isServerStatusAvailable
-                                                ? 'var(--mui-palette-error-main)'
-                                                : 'var(--mui-palette-text-secondary)',
+                                        sx={{
+                                            fontSize: 16,
+                                            color: isServerStatusAvailable ? 'error.main' : 'text.secondary',
                                         }}
                                     />
                                 )}
@@ -183,7 +181,7 @@ const System = () => {
                         {serverStatus?.uptime && (
                             <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                    <IconClock size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                    <IconClock sx={{ fontSize: 14, color: 'text.secondary' }} />
                                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                         {t('system.status.uptime')}
                                     </Typography>
@@ -199,7 +197,7 @@ const System = () => {
                         {/* Proxy Settings */}
                         <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconLock size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                <IconLock sx={{ fontSize: 14, color: 'text.secondary' }} />
                                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                     {t('system.proxy.label')}
                                 </Typography>
@@ -230,7 +228,7 @@ const System = () => {
                         {/* Language — merged from the standalone Language Settings card */}
                         <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconLanguage size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                <IconLanguage sx={{ fontSize: 14, color: 'text.secondary' }} />
                                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                     {t('system.language.title')}
                                 </Typography>
@@ -274,7 +272,7 @@ const System = () => {
                         {/* Theme — moved from the activity bar */}
                         <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconBrush size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                <IconBrush sx={{ fontSize: 14, color: 'text.secondary' }} />
                                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                     {t('common.theme')}
                                 </Typography>
@@ -315,7 +313,7 @@ const System = () => {
                 <UnifiedCard
                     title={
                         <Stack direction="row" alignItems="center" spacing={1}>
-                            <IconWorld size={18} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                            <IconWorld sx={{ fontSize: 18, color: 'text.secondary' }} />
                             <Typography variant="subtitle1" fontWeight={600}>
                                 {t('system.proxy.globalProxyUrl.label')}
                             </Typography>
@@ -339,7 +337,7 @@ const System = () => {
                                     endAdornment: (
                                         <InputAdornment position="end">
                                             <Tooltip title={t('common.saved', { defaultValue: 'Saved' })} arrow>
-                                                <IconCheck size={16} style={{ color: 'var(--mui-palette-success-main)' }} />
+                                                <IconCheck sx={{ fontSize: 16, color: 'success.main' }} />
                                             </Tooltip>
                                         </InputAdornment>
                                     )
@@ -367,7 +365,7 @@ const System = () => {
                         {/* Version */}
                         <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconInfoCircle size={14} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                                <IconInfoCircle sx={{ fontSize: 14, color: 'text.secondary' }} />
                                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                     {t('system.about.version')}
                                 </Typography>
@@ -394,7 +392,7 @@ const System = () => {
                         {/* License */}
                         <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconLicense size={16} style={{ color: 'text.secondary' }} />
+                                <IconLicense sx={{ fontSize: 16, color: 'text.secondary' }} />
                                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                     {t('system.about.license')}
                                 </Typography>
@@ -409,7 +407,7 @@ const System = () => {
                         {/* GitHub */}
                         <Box sx={{ display: 'flex', alignItems: 'center', py: 0.5, gap: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 100 }}>
-                                <IconBrandGithub size={16} style={{ color: 'text.secondary' }} />
+                                <IconBrandGithub sx={{ fontSize: 16, color: 'text.secondary' }} />
                                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                     {t('system.about.github')}
                                 </Typography>

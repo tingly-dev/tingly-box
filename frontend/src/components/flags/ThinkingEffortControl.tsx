@@ -1,4 +1,4 @@
-import { IconCheck, IconChevronDown } from '@tabler/icons-react';
+import { Check as IconCheck, KeyboardArrowDown as IconChevronDown } from '@/components/icons';
 import { Box, Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
 
@@ -31,7 +31,7 @@ const ThinkingEffortControl: React.FC<ThinkingEffortControlProps> = ({ value, di
                     variant="outlined"
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
-                    endIcon={<IconChevronDown size={18} />}
+                    endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
                     sx={{
                         minWidth: 110,
                         textTransform: 'none',
@@ -63,7 +63,7 @@ const ThinkingEffortControl: React.FC<ThinkingEffortControlProps> = ({ value, di
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                             <ListItemText primary={level.label} primaryTypographyProps={{ variant: 'body2' }} />
-                            {level.value === value && <IconCheck size={16} />}
+                            {level.value === value && <IconCheck sx={{ fontSize: 16 }} />}
                         </Box>
                     </MenuItem>
                 ))}

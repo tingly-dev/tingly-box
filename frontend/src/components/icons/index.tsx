@@ -113,6 +113,30 @@ import {
     IconFoldUp,
     IconFilter,
     IconFilterOff,
+    IconUser,
+    IconShield,
+    IconReload,
+    IconStar,
+    IconLicense,
+    IconLanguage,
+    IconBrush,
+    IconMenu,
+    IconYinYang,
+    IconPencil,
+    IconAiAgents,
+    IconPhoto,
+    IconVector,
+    IconTools,
+    IconServer,
+    IconMessageReport,
+    IconWaveSine,
+    IconCircleFilled,
+    IconWorldDownload,
+    IconGridDots,
+    IconCalendarClock,
+    IconCalendarEvent,
+    IconFileText,
+    IconDeviceRemote,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -251,3 +275,56 @@ export const Remove = tablerMui(IconMinus);
 export const HorizontalRule = tablerMui(IconMinus);
 export const ViewList = tablerMui(IconList);
 export const NearMeOutlined = tablerMui(IconNavigation);
+
+// --- People / identity -------------------------------------------------------
+export const Person = tablerMui(IconUser);
+export const AccountCircle = tablerMui(IconUser);
+
+// --- Security / trust --------------------------------------------------------
+export const Shield = tablerMui(IconShield);
+export const VerifiedUser = tablerMui(IconShield);
+
+// --- Sync / reload -----------------------------------------------------------
+export const Autorenew = tablerMui(IconReload);
+
+// --- Rating ------------------------------------------------------------------
+export const Star = tablerMui(IconStar);
+export const StarBorder = tablerMui(IconStar);
+
+// --- Content -----------------------------------------------------------------
+export const License = tablerMui(IconLicense);
+export const Translate = tablerMui(IconLanguage);
+export const Brush = tablerMui(IconBrush);
+export const Menu = tablerMui(IconMenu);
+export const YinYang = tablerMui(IconYinYang);
+export const Create = tablerMui(IconPencil);
+
+// --- Custom / AI -------------------------------------------------------------
+export const AiAgents = tablerMui(IconAiAgents);
+
+// --- Media -------------------------------------------------------------------
+export const Photo = tablerMui(IconPhoto);
+export const Vector = tablerMui(IconVector);
+export const WaveSine = tablerMui(IconWaveSine);
+export const Circle = tablerMui(IconCircleFilled);
+
+// --- Infrastructure ----------------------------------------------------------
+export const Handyman = tablerMui(IconTools);
+export const Server = tablerMui(IconServer);
+export const CloudDownload = tablerMui(IconWorldDownload);
+
+// --- Communication -----------------------------------------------------------
+export const MessageReport = tablerMui(IconMessageReport);
+
+// --- Calendar / schedule -----------------------------------------------------
+export const EventNote = tablerMui(IconCalendarClock);
+export const Event = tablerMui(IconCalendarEvent);
+
+// --- Files / text ------------------------------------------------------------
+export const TextSnippet = tablerMui(IconFileText);
+
+// --- Devices -----------------------------------------------------------------
+export const SettingsRemote = tablerMui(IconDeviceRemote);
+
+// --- Layout ------------------------------------------------------------------
+export const GridView = tablerMui(IconGridDots);

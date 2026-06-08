@@ -1,11 +1,4 @@
-import {
-    IconUser,
-    IconYinYang,
-    IconDots,
-    IconLanguage,
-    IconWand,
-    IconMessageReport,
-} from '@tabler/icons-react';
+import { Person as IconUser, YinYang as IconYinYang, MoreHoriz as IconDots, Translate as IconLanguage, AutoFixHigh as IconWand, MessageReport as IconMessageReport } from '@/components/icons';
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
@@ -266,7 +259,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <IconWand size={22} />
+                                <IconWand sx={{ fontSize: 22 }} />
                             </ListItemIcon>
                             <Typography
                                 variant="caption"
@@ -293,7 +286,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <IconDots size={22} />
+                                <IconDots sx={{ fontSize: 22 }} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                                 {t('layout.activityBar.more')}
@@ -312,7 +305,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             })}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <IconYinYang size={22} />
+                                <IconYinYang sx={{ fontSize: 22 }} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                                 {t('layout.activityBar.exitZen')}
@@ -356,7 +349,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         }}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <IconMessageReport size={22} />
+                            <IconMessageReport sx={{ fontSize: 22 }} />
                         </ListItemIcon>
                         <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
                             {t('layout.activityBar.feedback')}
@@ -397,7 +390,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             }}
                         >
                             <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <IconLanguage size={22} />
+                                <IconLanguage sx={{ fontSize: 22 }} />
                             </ListItemIcon>
                             <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.1, fontSize: '0.65rem' }}>
                                 {i18n.language === 'zh' ? '中文' : 'EN'}
@@ -485,7 +478,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         }}
                     >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                            <IconUser size={20} />
+                            <IconUser sx={{ fontSize: 20 }} />
                         </ListItemIcon>
                     </ListItemButton>
                 </Tooltip>

@@ -1,4 +1,4 @@
-import { IconCheck, IconChevronDown, IconCircleFilled } from '@tabler/icons-react';
+import { Check as IconCheck, KeyboardArrowDown as IconChevronDown, Circle as IconCircleFilled } from '@/components/icons';
 import { Box, Button, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import React, { useState } from 'react';
 
@@ -33,7 +33,7 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
                     variant="outlined"
                     onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                     disabled={disabled}
-                    endIcon={<IconChevronDown size={18} />}
+                    endIcon={<IconChevronDown sx={{ fontSize: 18 }} />}
                     sx={{
                         minWidth: 110,
                         textTransform: 'none',
@@ -47,7 +47,7 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
                         '&:hover': { bgcolor: isActive ? 'primary.dark' : 'action.selected' },
                     }}
                 >
-                    <IconCircleFilled size={14} style={{ marginRight: '4px' }} />
+                    <IconCircleFilled sx={{ fontSize: 14, mr: '4px' }} />
                     Record: {currentMode?.label || 'Off'}
                 </Button>
             </Tooltip>
@@ -67,7 +67,7 @@ const RecordingV2Control: React.FC<RecordingV2ControlProps> = ({ value, disabled
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                             <ListItemText primary={mode.label} primaryTypographyProps={{ variant: 'body2' }} />
-                            {mode.value === value && <IconCheck size={16} />}
+                            {mode.value === value && <IconCheck sx={{ fontSize: 16 }} />}
                         </Box>
                     </MenuItem>
                 ))}

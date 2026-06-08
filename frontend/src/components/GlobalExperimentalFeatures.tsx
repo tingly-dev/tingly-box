@@ -1,6 +1,5 @@
 import {useFeatureFlags} from '@/contexts/FeatureFlagsContext';
-import { IconBrain, IconShield } from '@tabler/icons-react';
-import { SettingsApplications } from '@/components/icons';
+import { Psychology as IconBrain, Shield as IconShield, SettingsApplications } from '@/components/icons';
 import {Alert, Box, Chip, Tooltip, Typography,} from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -133,7 +132,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
                 <Box sx={{display: 'flex', alignItems: 'center', py: 2, gap: 3}}>
                     {/* Label */}
                     <Box sx={{display: 'flex', alignItems: 'center', gap: 1, minWidth: 180}}>
-                        <IconBrain size={16} style={{ color: 'var(--mui-palette-text-secondary)' }}/>
+                        <IconBrain sx={{ fontSize: 16, color: 'text.secondary' }} />
                         <Typography variant="subtitle2" sx={{color: 'text.secondary'}}>
                             {t('system.experimentalFeatures.skills')}
                         </Typography>
@@ -166,7 +165,7 @@ const GlobalExperimentalFeatures: React.FC = () => {
             {/* Guardrails Section */}
             <Box sx={{ display: 'flex', alignItems: 'center', py: 2, gap: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 180 }}>
-                    <IconShield size={16} style={{ color: 'var(--mui-palette-text-secondary)' }} />
+                    <IconShield sx={{ fontSize: 16, color: 'text.secondary' }} />
                     <Typography variant="subtitle2" sx={{ color: 'text.secondary' }}>
                         {t('system.experimentalFeatures.guardrails')}
                     </Typography>
