@@ -164,9 +164,8 @@ func resolveRuleFlagsWithScenario(
 // override. No-op when no override is configured, so the vendor/provider
 // User-Agent is left untouched.
 //
-// Called from resolveRuleFlagsWithScenario (covers the chat/v1/beta handlers);
-// the Responses handler calls it directly because it resolves flags via the
-// bare resolveRuleFlags path.
+// Called from resolveRuleFlagsWithScenario, which every handler now routes
+// through — so no handler needs to apply the User-Agent itself.
 func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
 	if flags.CustomUserAgent == "" || c == nil || c.Request == nil {
 		return

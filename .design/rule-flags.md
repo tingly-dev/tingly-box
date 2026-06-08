@@ -125,7 +125,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `skip_usage` | bool | response | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
 | `use_max_completion_tokens` | bool | request | 把 `max_tokens` 字段名重写为 `max_completion_tokens`（OpenAI o1/o3/gpt-5 系列必需） | `transform.OpenAIMaxTokensRewriteTransform` → `ops.ApplyMaxCompletionTokensRewrite`（Type 1b）|
 | `use_max_tokens` | bool | request | 反向：把 `max_completion_tokens` 写回旧字段 `max_tokens`（用于拒绝新字段的 provider/模型）| 同上 → `ops.ApplyMaxTokensRewrite`（Type 1b）|
-| `custom_user_agent` | string | request | 覆盖出站 User-Agent header。同时存在 rule 级与 scenario 级（rule 非空时优先，否则继承 scenario 默认）。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header（发送无 UA），区别于空值（"不覆盖"）。| `customUserAgentTransport` + `applyCustomUserAgent(c, flags)` → `WithCustomUserAgent(ctx, ...)`（Type 2，在 handler 入口解析 flags 后注入 c.Request.Context()）。`none` 时 transport 把 header 置空（net/http 见到 present-but-empty 即不发 UA）|
+| `custom_user_agent` | string | request | 覆盖出站 User-Agent header。同时存在 rule 级与 scenario 级（rule 非空时优先，否则继承 scenario 默认）。registry 通过 `Suggestions`（`typ.DefaultUserAgents()`）透出几个常见 CLI/agent 的 UA 预设供快选。特殊值 `none`（`typ.UserAgentNone`）= 完全去掉 User-Agent header（发送无 UA），区别于空值（"不覆盖"）。| `customUserAgentTransport` + `applyCustomUserAgent(c, flags)` → `WithCustomUserAgent(ctx, ...)`（Type 2）。注入点收敛在 `resolveRuleFlagsWithScenario` 内部（四个 handler 都经它解析 flags），不再在每个 handler 重复调用。`none` 时 transport 把 header 置空（net/http 见到 present-but-empty 即不发 UA）|
 | `openai_endpoint_override` | enum (`auto`/`chat`/`responses`) | request | 强制单条 rule 的 OpenAI 出口走 Chat 或 Responses；与 provider 声明的 `OpenAIEndpointMode` 冲突时 provider 赢（见 `.design/openai-endpoint-routing.md`）| `ParseEndpointOverride` → `ResolveOpenAIEndpoint`（Type 4：路由层决策）|
 | `block_tools` | string (逗号分隔) | request | 按名字从请求 tool list 中剔除指定工具（发出前），跨 OpenAI Chat / Responses / Anthropic / Google 入站形态生效 | `transform.ToolBlockTransform` → `ops.ApplyToolBlock*`（Type 1b-pre：pre-Base chain stage）|
 | `claude_code_compat` | bool | app | 把 `messages` 数组中 `role == "system"` 的条目重写为 `"user"`。Claude Code 会在 messages 中写入 system role（非标准扩展），严格遵守规范的第三方 Anthropic 兼容 Provider 会拒绝该字段；此 flag 在转发前归一化。同时作为 `ScenarioFlags.ClaudeCodeCompat` 存在，场景级启用后自动注入到该场景所有 rule（同 `CleanHeader` 模式）。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite` / `ops.ApplyClaudeCodeBetaCompatRoleRewrite`（Type 1b-pre：pre-Base chain stage，仅对 Anthropic 入站形态生效）|
@@ -302,8 +302,9 @@ vendor-specialized 路径不接 rule UA：它们 UA 跟整个 OAuth/握手协议
 定，rule 级覆盖反而会破坏 vendor 校验。这条边界写进了
 `flag_registry.go` 中 `custom_user_agent` 的 description 里。
 
-⚠️ **重要不变量**：`applyCustomUserAgent` 现在把 UA 写进 `c.Request.Context()`
-（对**所有**请求，无论 scenario/provider），但 UA 只在 transport 链里
+⚠️ **重要不变量**：`applyCustomUserAgent`（由 `resolveRuleFlagsWithScenario`
+统一调用）把 UA 写进 `c.Request.Context()`（对**所有**请求，无论
+scenario/provider），但 UA 只在 transport 链里
 **有** `customUserAgentTransport` 的 client 上生效——它读 `req.Context()`。
 `customUserAgentTransport` 只在两处接入：通用 `NewOpenAIClient`（openai.go）
 与通用非-OAuth Anthropic 分支（anthropic.go else）。vendor 路径

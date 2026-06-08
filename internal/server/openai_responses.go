@@ -223,17 +223,10 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	}
 
-	// Execute transform chain. Unlike the chat/v1/beta handlers, the Responses
-	// path resolves flags via the bare resolveRuleFlags (it intentionally does
-	// not merge the other scenario flags), so it inherits the scenario-level
-	// User-Agent default and applies it to the context here itself.
-	ruleFlags := resolveRuleFlags(c, rule)
-	if ruleFlags.CustomUserAgent == "" {
-		if sc := s.config.GetScenarioConfig(scenarioType); sc != nil {
-			ruleFlags.CustomUserAgent = sc.Flags.CustomUserAgent
-		}
-	}
-	applyCustomUserAgent(c, ruleFlags)
+	// Resolve flags with scenario injection, consistent with the chat/v1/beta
+	// handlers (this also applies the custom User-Agent to the request context).
+	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
+	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target)
 	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -244,6 +237,10 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	}
+	// Carry the response-shaping hints for downstream dispatch, matching the
+	// chat handler (consumed by shouldStripUsage on the conversion sub-paths).
+	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
+	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
 	// Use unified dispatch with mid-request failover (non-streaming only).
 	s.dispatchWithPriorityFailover(c, rule, provider, string(req.Model),
