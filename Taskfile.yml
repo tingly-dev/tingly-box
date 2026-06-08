@@ -43,7 +43,7 @@ tasks:
 
   e2e:
     cmds:
-      - go build ./... && go test -v ./internal/protocol/transform -run TestE2E
+      - go build ./... && go test -v -tags=e2e ./internal/protocol/transform -run TestE2E
   
   start:
     aliases:

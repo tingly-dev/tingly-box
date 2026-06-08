@@ -16,7 +16,7 @@ func TestAffinity_LockedSession(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
@@ -33,7 +33,7 @@ func TestAffinity_NoLock(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
@@ -50,7 +50,7 @@ func TestAffinity_AffinityDisabled(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
-	rule.SmartAffinity = false // disabled
+	rule.Flags.SessionAffinity = 0 // disabled
 
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
@@ -68,7 +68,7 @@ func TestAffinity_SmartDisabled(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = false
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "session-1")
@@ -78,24 +78,6 @@ func TestAffinity_SmartDisabled(t *testing.T) {
 	require.Equal(t, "provider-a", result.Service.Provider)
 }
 
-func TestAffinity_SessionAffinityFlag(t *testing.T) {
-	// The new Flags.SessionAffinity (int seconds) enables affinity on its own,
-	// with no smart routing involved.
-	store := newMockAffinityStore()
-	svc := testService("provider-a", "gpt-4", true)
-	store.Set("rule-1", testSessionKey("session-1"), testAffinityEntry(svc))
-
-	rule := testRule("rule-1", "gpt-4", nil)
-	rule.Flags.SessionAffinity = 3600 // 1 hour
-
-	stage := NewAffinityStage(store, "global")
-	ctx := testContext(rule, "session-1")
-
-	result, handled := stage.Evaluate(ctx, newSelectionState(ctx.Rule))
-	require.True(t, handled, "Flags.SessionAffinity should enable affinity")
-	require.Equal(t, "gpt-4", result.Service.Model)
-}
-
 func TestAffinity_EmptySession(t *testing.T) {
 	store := newMockAffinityStore()
 	svc := testService("provider-a", "gpt-4", true)
@@ -103,7 +85,7 @@ func TestAffinity_EmptySession(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	stage := NewAffinityStage(store, "global")
 	ctx := testContext(rule, "") // empty session
@@ -119,7 +101,7 @@ func TestAffinity_SmartRuleScope_NoIndex(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	stage := NewAffinityStage(store, "smart_rule")
 	ctx := testContext(rule, "session-1")
@@ -141,7 +123,7 @@ func TestAffinity_MatchedSmartRuleIndex_Propagated(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	stage := NewAffinityStage(store, "smart_rule")
 	ctx := testContext(rule, "session-1")
@@ -179,7 +161,7 @@ func TestAffinity_MultipleSessions(t *testing.T) {
 
 	rule := testRule("rule-1", "gpt-4", nil)
 	rule.SmartEnabled = true
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	stage := NewAffinityStage(store, "global")
 

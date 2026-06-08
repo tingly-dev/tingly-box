@@ -588,10 +588,6 @@ func TestPersistAndLoad(t *testing.T) {
 	}
 }
 
-func TestScanLocation_WithTildePath(t *testing.T) {
-	t.Skip("Tilde expansion has known issues - skipping until fixed")
-}
-
 func TestDiscoverIdes(t *testing.T) {
 	sm, tempDir := setupTestManager(t)
 	defer cleanupTestManager(t, sm, tempDir)

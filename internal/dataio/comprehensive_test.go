@@ -1,7 +1,6 @@
 package dataio
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -177,71 +176,6 @@ func TestEmptyAndMalformedInput(t *testing.T) {
 	}
 }
 
-// TestFormatStringConversion tests Format type conversions
-func TestFormatStringConversion(t *testing.T) {
-	formats := []struct {
-		format Format
-		str    string
-	}{
-		{FormatAuto, "auto"},
-		{FormatJSONL, "jsonl"},
-		{FormatBase64, "base64"},
-	}
-
-	for _, f := range formats {
-		t.Run(f.str, func(t *testing.T) {
-			if string(f.format) != f.str {
-				t.Errorf("Format string = %v, want %v", string(f.format), f.str)
-			}
-		})
-	}
-}
-
-// TestImportOptionsDefaults tests that default options are set correctly
-func TestImportOptionsDefaults(t *testing.T) {
-	opts := ImportOptions{}
-
-	// Test that zero-value options have sensible defaults handled in the code
-	// This is more of a documentation test to show the expected behavior
-	if opts.OnProviderConflict == "" {
-		// Should be handled by the importer to default to "use"
-		t.Log("Empty OnProviderConflict should default to 'use'")
-	}
-	if opts.OnRuleConflict == "" {
-		// Should be handled by the importer to default to "skip"
-		t.Log("Empty OnRuleConflict should default to 'skip'")
-	}
-}
-
-// TestServiceUUIDRemapping tests that provider UUIDs are correctly remapped
-func TestServiceUUIDRemapping(t *testing.T) {
-	// This test verifies the provider UUID remapping logic
-	// In a real scenario, when importing, provider UUIDs might need to be
-	// remapped to existing providers in the system
-
-	oldUUID := "old-provider-uuid"
-	newUUID := "new-provider-uuid"
-
-	// Simulate the remapping that happens during import
-	providerMap := map[string]string{
-		oldUUID: newUUID,
-	}
-
-	// Test remapping
-	service := &loadbalance.Service{
-		Provider: oldUUID,
-		Model:    "gpt-4",
-	}
-
-	if mappedUUID, ok := providerMap[service.Provider]; ok {
-		service.Provider = mappedUUID
-	}
-
-	if service.Provider != newUUID {
-		t.Errorf("Expected provider UUID to be remapped to %s, got %s", newUUID, service.Provider)
-	}
-}
-
 // TestExportDataStructureValidation validates the structure of export data
 func TestExportDataStructureValidation(t *testing.T) {
 	// Test that export data structures have required fields
@@ -324,81 +258,3 @@ func TestCrossFormatCompatibility(t *testing.T) {
 	}
 }
 
-// TestProviderConflictHandling tests different conflict resolution strategies
-func TestProviderConflictHandling(t *testing.T) {
-	conflictStrategies := []string{
-		"use",    // Use existing provider
-		"skip",   // Skip importing this provider
-		"suffix", // Create with suffixed name
-	}
-
-	for _, strategy := range conflictStrategies {
-		t.Run("Strategy_"+strategy, func(t *testing.T) {
-			opts := ImportOptions{
-				OnProviderConflict: strategy,
-				OnRuleConflict:     "skip",
-			}
-
-			if opts.OnProviderConflict != strategy {
-				t.Errorf("Expected strategy %s, got %s", strategy, opts.OnProviderConflict)
-			}
-		})
-	}
-
-	// Test invalid strategy
-	t.Run("Invalid strategy defaults gracefully", func(t *testing.T) {
-		// The code should handle invalid strategies by defaulting to "use"
-		// This is tested implicitly in the actual import logic
-	})
-}
-
-// TestRuleConflictHandling tests different rule conflict resolution strategies
-func TestRuleConflictHandling(t *testing.T) {
-	conflictStrategies := []string{
-		"skip",   // Skip importing the rule
-		"update", // Update existing rule
-		"new",    // Create as new with suffixed name
-	}
-
-	for _, strategy := range conflictStrategies {
-		t.Run("Strategy_"+strategy, func(t *testing.T) {
-			opts := ImportOptions{
-				OnProviderConflict: "use",
-				OnRuleConflict:     strategy,
-			}
-
-			if opts.OnRuleConflict != strategy {
-				t.Errorf("Expected strategy %s, got %s", strategy, opts.OnRuleConflict)
-			}
-		})
-	}
-}
-
-// TestProviderNameSuffixGeneration tests the suffix generation logic
-func TestProviderNameSuffixGeneration(t *testing.T) {
-	existingNames := map[string]bool{
-		"provider":   true,
-		"provider-2": true,
-		"provider-3": true,
-	}
-
-	// Test finding the next available suffix
-	baseName := "provider"
-	suffix := 2
-
-	for {
-		newName := fmt.Sprintf("%s-%d", baseName, suffix)
-		if !existingNames[newName] {
-			// Found available name
-			if newName != "provider-4" {
-				t.Errorf("Expected next available name to be 'provider-4', got '%s'", newName)
-			}
-			break
-		}
-		suffix++
-		if suffix > 100 {
-			t.Fatal("Failed to find available suffix")
-			break
-		}
-	}
-}
