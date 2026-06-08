@@ -15,55 +15,37 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
 )
 
-// knownAnthropicBetas is the allowlist of valid anthropic-beta flag values.
-// Sourced from the SDK's AnthropicBeta* constants plus a few Claude Code
-// specific flags Anthropic ships ahead of the public SDK. Anything outside
-// this set is treated as junk and dropped — Anthropic rejects unknown flags
-// anyway, and forwarding them risks fingerprinting / 400s.
-var knownAnthropicBetas = func() map[string]struct{} {
-	flags := []string{
-		// SDK-defined (libs/anthropic-sdk-go/beta.go)
-		anthropic.AnthropicBetaMessageBatches2024_09_24,
-		anthropic.AnthropicBetaPromptCaching2024_07_31,
-		anthropic.AnthropicBetaComputerUse2024_10_22,
-		anthropic.AnthropicBetaComputerUse2025_01_24,
-		anthropic.AnthropicBetaPDFs2024_09_25,
-		anthropic.AnthropicBetaTokenCounting2024_11_01,
-		anthropic.AnthropicBetaTokenEfficientTools2025_02_19,
-		anthropic.AnthropicBetaOutput128k2025_02_19,
-		anthropic.AnthropicBetaFilesAPI2025_04_14,
-		anthropic.AnthropicBetaMCPClient2025_04_04,
-		anthropic.AnthropicBetaMCPClient2025_11_20,
-		anthropic.AnthropicBetaDevFullThinking2025_05_14,
-		anthropic.AnthropicBetaInterleavedThinking2025_05_14,
-		anthropic.AnthropicBetaCodeExecution2025_05_22,
-		anthropic.AnthropicBetaExtendedCacheTTL2025_04_11,
-		anthropic.AnthropicBetaContext1m2025_08_07,
-		anthropic.AnthropicBetaContextManagement2025_06_27,
-		anthropic.AnthropicBetaModelContextWindowExceeded2025_08_26,
-		anthropic.AnthropicBetaSkills2025_10_02,
-		anthropic.AnthropicBetaFastMode2026_02_01,
-		anthropic.AnthropicBetaOutput300k2026_03_24,
-		anthropic.AnthropicBetaUserProfiles2026_03_24,
-		anthropic.AnthropicBetaAdvisorTool2026_03_01,
-		anthropic.AnthropicBetaManagedAgents2026_04_01,
-		anthropic.AnthropicBetaCacheDiagnosis2026_04_07,
-		anthropic.AnthropicBetaThinkingTokenCount2026_05_13,
-		// Claude Code specific flags not (yet) exposed by the SDK
-		"claude-code-20250219",
-		"oauth-2025-04-20",
-		"prompt-caching-scope-2026-01-05",
-		"structured-outputs-2025-12-15",
-		"redact-thinking-2026-02-12",
-		"token-efficient-tools-2026-03-28",
-		"oidc-federation-2026-04-01",
-	}
-	m := make(map[string]struct{}, len(flags))
-	for _, f := range flags {
-		m[f] = struct{}{}
+// claudeCodeRequiredBetas is the set of anthropic-beta flags that are
+// always part of a real Claude Code request — sourced from the
+// anthropicBeta constant. Treated as the trusted baseline.
+var claudeCodeRequiredBetas = func() map[string]struct{} {
+	m := make(map[string]struct{})
+	for _, p := range strings.Split(anthropicBeta, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			m[p] = struct{}{}
+		}
 	}
 	return m
 }()
+
+// claudeCodeAllowedUpstreamBetas is the very narrow set of anthropic-beta
+// flags we accept FROM upstream callers on top of the required baseline.
+//
+// Why this is restrictive: Anthropic fingerprints Claude Code OAuth
+// traffic, and `anthropic-beta` is one of the signals. Forwarding any
+// SDK-known flag (e.g. message-batches, managed-agents, pdfs, mcp-client)
+// would emit a header shape no real claude-cli ever sends, which both
+// breaks fingerprinting and may trigger anti-abuse responses.
+//
+// Only flags that real Claude Code is known to add conditionally — or
+// that have been explicitly cleared as fingerprint-safe — belong here.
+// When in doubt, leave it out; an unknown flag from upstream gets
+// dropped with a warn log.
+var claudeCodeAllowedUpstreamBetas = map[string]struct{}{
+	// Model-conditional 1M context window; real Claude Code adds this
+	// for sonnet/opus, so accepting it from upstream is safe.
+	anthropic.AnthropicBetaContext1m2025_08_07: {},
+}
 
 // claudeToolPrefix is empty to match real Claude Code behavior (no tool name prefix).
 const claudeToolPrefix = ""
@@ -292,51 +274,61 @@ func reverseRemapOAuthToolNames(body []byte, reverseMap map[string]string) []byt
 	return body
 }
 
-// isValidBetaFlag returns true iff the token is a known, Anthropic-defined
-// beta flag value. The allowlist is sourced from the SDK constants plus
-// Claude Code specific extras — see knownAnthropicBetas. Unknown values
-// are dropped rather than forwarded, since Anthropic rejects unknown
-// beta flags anyway.
-func isValidBetaFlag(s string) bool {
-	_, ok := knownAnthropicBetas[s]
+// isAllowedUpstreamBetaFlag reports whether an upstream-supplied flag may
+// be forwarded. It must either already be part of the required Claude
+// Code baseline (no-op pass-through) or appear in the explicit
+// fingerprint-safe allowlist.
+func isAllowedUpstreamBetaFlag(s string) bool {
+	if _, ok := claudeCodeRequiredBetas[s]; ok {
+		return true
+	}
+	_, ok := claudeCodeAllowedUpstreamBetas[s]
 	return ok
 }
 
-// mergeBetaFlags combines the required Claude Code beta flags with any
-// upstream-supplied flags in a single pass: tokenize → validate → dedupe.
-// The required list comes first (so Claude Code fingerprinting is
-// preserved), then any well-formed upstream flags not already present.
-// Finally requiredOAuth is appended as a fallback if no entry beginning
-// with "oauth" is in the merged set.
+// mergeBetaFlags builds the outgoing anthropic-beta value in a single pass:
+// tokenize → validate → dedupe. The required Claude Code baseline goes
+// first (preserving the claude-cli fingerprint), then any upstream-supplied
+// flags that are on the narrow allowlist of fingerprint-safe additions.
+// Everything else from upstream is dropped with a warn log — see
+// claudeCodeAllowedUpstreamBetas. Finally requiredOAuth is appended as a
+// fallback if no oauth flag is present in the merged set.
 func mergeBetaFlags(required string, upstream []string, requiredOAuth string) string {
 	seen := make(map[string]struct{})
 	var out []string
 	hasOAuth := false
-	add := func(raw string) {
-		for _, p := range strings.Split(raw, ",") {
-			p = strings.TrimSpace(p)
-			if !isValidBetaFlag(p) {
-				if p != "" {
-					logrus.WithField("flag", p).Warn("dropping unknown anthropic-beta flag")
-				}
-				continue
-			}
-			if _, ok := seen[p]; ok {
-				continue
-			}
-			seen[p] = struct{}{}
-			out = append(out, p)
-			if strings.HasPrefix(p, "oauth") {
-				hasOAuth = true
-			}
+	emit := func(p string) {
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+		if strings.HasPrefix(p, "oauth") {
+			hasOAuth = true
 		}
 	}
-	add(required)
+	// Required baseline — trusted, emitted as-is.
+	for _, p := range strings.Split(required, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			emit(p)
+		}
+	}
+	// Upstream — gated by the fingerprint-safe allowlist.
 	for _, v := range upstream {
-		add(v)
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if !isAllowedUpstreamBetaFlag(p) {
+				logrus.WithField("flag", p).Warn("dropping upstream anthropic-beta flag not on claude-code allowlist")
+				continue
+			}
+			emit(p)
+		}
 	}
 	if !hasOAuth && requiredOAuth != "" {
-		add(requiredOAuth)
+		emit(strings.TrimSpace(requiredOAuth))
 	}
 	return strings.Join(out, ",")
 }
