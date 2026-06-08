@@ -40,6 +40,64 @@ func TestAnthropicBetaFlags(t *testing.T) {
 	}
 }
 
+func TestMergeBetaFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		required string
+		upstream []string
+		oauth    string
+		want     string
+	}{
+		{
+			name:     "no upstream — required preserved, oauth dedupes",
+			required: "claude-code-20250219,oauth-2025-04-20",
+			upstream: nil,
+			oauth:    "oauth-2025-04-20",
+			want:     "claude-code-20250219,oauth-2025-04-20",
+		},
+		{
+			name:     "upstream extras preserved, dedup against required",
+			required: "claude-code-20250219,oauth-2025-04-20",
+			upstream: []string{"mcp-client-2025-04-04,prompt-caching-2024-07-31,oauth-2025-04-20"},
+			oauth:    "oauth-2025-04-20",
+			want:     "claude-code-20250219,oauth-2025-04-20,mcp-client-2025-04-04,prompt-caching-2024-07-31",
+		},
+		{
+			name:     "multiple upstream header values handled",
+			required: "claude-code-20250219",
+			upstream: []string{"foo-1,bar-2", "baz-3"},
+			oauth:    "oauth-2025-04-20",
+			want:     "claude-code-20250219,foo-1,bar-2,baz-3,oauth-2025-04-20",
+		},
+		{
+			name:     "appends oauth when missing",
+			required: "claude-code-20250219",
+			upstream: nil,
+			oauth:    "oauth-2025-04-20",
+			want:     "claude-code-20250219,oauth-2025-04-20",
+		},
+		{
+			name:     "trims whitespace and empty entries",
+			required: "claude-code-20250219, ,oauth-2025-04-20",
+			upstream: []string{" extra-1 , "},
+			oauth:    "oauth-2025-04-20",
+			want:     "claude-code-20250219,oauth-2025-04-20,extra-1",
+		},
+		{
+			name:     "drops malformed flags",
+			required: "claude-code-20250219",
+			upstream: []string{"good-flag,bad flag with spaces,line\nbreak,oauth-2025-04-20"},
+			oauth:    "oauth-2025-04-20",
+			want:     "claude-code-20250219,good-flag,oauth-2025-04-20",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, mergeBetaFlags(tt.required, tt.upstream, tt.oauth))
+		})
+	}
+}
+
 func TestSupportsContext1M(t *testing.T) {
 	tests := []struct {
 		model string

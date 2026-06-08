@@ -241,6 +241,66 @@ func reverseRemapOAuthToolNames(body []byte, reverseMap map[string]string) []byt
 	return body
 }
 
+// isValidBetaFlag accepts tokens that look like Anthropic beta flags:
+// non-empty, ASCII letters/digits/dot/underscore/hyphen, no whitespace.
+// Rejects obvious junk (control chars, header separators) that could only
+// have come from a buggy or malicious upstream.
+func isValidBetaFlag(s string) bool {
+	if s == "" || len(s) > 128 {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_' || r == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// mergeBetaFlags combines the required Claude Code beta flags with any
+// upstream-supplied flags in a single pass: tokenize → validate → dedupe.
+// The required list comes first (so Claude Code fingerprinting is
+// preserved), then any well-formed upstream flags not already present.
+// Finally requiredOAuth is appended as a fallback if no entry beginning
+// with "oauth" is in the merged set.
+func mergeBetaFlags(required string, upstream []string, requiredOAuth string) string {
+	seen := make(map[string]struct{})
+	var out []string
+	hasOAuth := false
+	add := func(raw string) {
+		for _, p := range strings.Split(raw, ",") {
+			p = strings.TrimSpace(p)
+			if !isValidBetaFlag(p) {
+				if p != "" {
+					logrus.WithField("flag", p).Warn("dropping malformed anthropic-beta flag")
+				}
+				continue
+			}
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+			if strings.HasPrefix(p, "oauth") {
+				hasOAuth = true
+			}
+		}
+	}
+	add(required)
+	for _, v := range upstream {
+		add(v)
+	}
+	if !hasOAuth && requiredOAuth != "" {
+		add(requiredOAuth)
+	}
+	return strings.Join(out, ",")
+}
+
 // claudeRoundTripper wraps an http.RoundTripper to handle Claude Code OAuth
 // - Applies tool prefix to request body for OAuth tokens
 // - Strips tool prefix from response (streaming and non-streaming)
@@ -383,6 +443,12 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 		req.Header.Set("X-Api-Key", key)
 	}
 
+	// Capture upstream anthropic-beta values BEFORE clearing headers so we can
+	// merge any extra flags the caller relies on (e.g. mcp-client-*, cache-*).
+	// Dropping them blindly is risky — only well-known Claude Code flags are
+	// guaranteed here, anything else the upstream SDK added should pass through.
+	upstreamBetas := req.Header.Values("Anthropic-Beta")
+
 	// Clear and set Claude Code specific headers
 	// First, clear headers that may have been set by the SDK
 	for k := range req.Header {
@@ -393,27 +459,11 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 		}
 	}
 
-	// Build beta header with all required flags
-	baseBetas := anthropicBeta
-
-	// Add context-1m for models that support it (Sonnet/Opus, not Haiku)
-	//if model != "" && supportsContext1M(model) {
-	//	baseBetas = strings.TrimRight(baseBetas, ",") + "," + anthropicContext1m
-	//}
-
-	// If user provides custom betas, use them
-	// we do never use users' beta headers
-	//if val := strings.TrimSpace(req.Header.Get("Anthropic-Beta")); val != "" {
-	//	baseBetas = val
-	//}
-
-	baseBetas = strings.TrimRight(baseBetas, ",")
-
-	// Ensure oauth is always present at the end
-	if !strings.Contains(baseBetas, "oauth") {
-		baseBetas = strings.TrimRight(baseBetas, ",")
-		baseBetas = fmt.Sprintf("%s,%s", baseBetas, anthropicOAuthBeta)
-	}
+	// Build beta header: start with the required Claude Code flags, then
+	// append any upstream-supplied flags we don't already cover (deduped,
+	// order preserved). Required flags stay at the front so the Claude
+	// Code fingerprint matches.
+	baseBetas := mergeBetaFlags(anthropicBeta, upstreamBetas, anthropicOAuthBeta)
 
 	// Set all headers via map
 	headers := map[string]string{
