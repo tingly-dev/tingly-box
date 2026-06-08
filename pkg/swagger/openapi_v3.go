@@ -247,7 +247,7 @@ func (rm *RouteManager) buildV3Operation(route RouteConfig, fullPath string, mod
 			Description: param.Description,
 			Required:    param.Required,
 			Schema: &Schema{
-				Type: param.Type,
+				Type: normalizeSchemaType(param.Type),
 			},
 		}
 		if param.Default != nil {
@@ -436,4 +436,21 @@ func (rm *RouteManager) RegisterOpenAPIEndpoint(path string, version Version) {
 		c.Header("Content-Type", "application/json")
 		c.String(http.StatusOK, openapiJSON)
 	})
+}
+
+// normalizeSchemaType normalizes Go type names to OpenAPI schema types
+func normalizeSchemaType(goType string) string {
+	switch goType {
+	case "bool":
+		return "boolean"
+	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
+		return "integer"
+	case "float", "float32", "float64":
+		return "number"
+	case "string":
+		return "string"
+	default:
+		// Return as-is for complex types or already-correct types
+		return goType
+	}
 }

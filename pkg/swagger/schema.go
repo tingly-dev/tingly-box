@@ -126,22 +126,24 @@ func (rm *RouteManager) generateSchemaWithReferences(model interface{}) Schema {
 			propSchema = rm.getSwaggerTypeWithDetails(field.Type, bindingTag, formatTag, enumTag)
 		}
 
-		// Set description with priority
-		if descriptionTag != "" {
-			propSchema.Description = descriptionTag
-		} else if docTag != "" {
-			propSchema.Description = docTag
-		} else {
-			propSchema.Description = fmt.Sprintf("Field %s", propName)
+		// Set description with priority (only if not a $ref)
+		if propSchema.Ref == "" {
+			if descriptionTag != "" {
+				propSchema.Description = descriptionTag
+			} else if docTag != "" {
+				propSchema.Description = docTag
+			} else {
+				propSchema.Description = fmt.Sprintf("Field %s", propName)
+			}
 		}
 
-		// Set example value
-		if exampleTag != "" {
+		// Set example value (only if not a $ref)
+		if propSchema.Ref == "" && exampleTag != "" {
 			propSchema.Example = rm.parseExampleValue(exampleTag, field.Type)
 		}
 
-		// Set default value
-		if defaultTag != "" {
+		// Set default value (only if not a $ref)
+		if propSchema.Ref == "" && defaultTag != "" {
 			propSchema.Default = rm.parseDefaultValue(defaultTag, field.Type)
 		}
 
@@ -279,22 +281,24 @@ func (rm *RouteManager) generateSchemaFromModelWithDefinitions(model interface{}
 			propSchema = rm.getSwaggerTypeWithDetails(field.Type, bindingTag, formatTag, enumTag)
 		}
 
-		// Set description with priority
-		if descriptionTag != "" {
-			propSchema.Description = descriptionTag
-		} else if docTag != "" {
-			propSchema.Description = docTag
-		} else {
-			propSchema.Description = fmt.Sprintf("Field %s", propName)
+		// Set description with priority (only if not a $ref)
+		if propSchema.Ref == "" {
+			if descriptionTag != "" {
+				propSchema.Description = descriptionTag
+			} else if docTag != "" {
+				propSchema.Description = docTag
+			} else {
+				propSchema.Description = fmt.Sprintf("Field %s", propName)
+			}
 		}
 
-		// Set example value
-		if exampleTag != "" {
+		// Set example value (only if not a $ref)
+		if propSchema.Ref == "" && exampleTag != "" {
 			propSchema.Example = rm.parseExampleValue(exampleTag, field.Type)
 		}
 
-		// Set default value
-		if defaultTag != "" {
+		// Set default value (only if not a $ref)
+		if propSchema.Ref == "" && defaultTag != "" {
 			propSchema.Default = rm.parseDefaultValue(defaultTag, field.Type)
 		}
 
@@ -367,15 +371,17 @@ func (rm *RouteManager) generateAnonymousStructSchema(structType reflect.Type, c
 			fieldSchema = rm.getSwaggerType(field.Type)
 		}
 
-		// Add description
+		// Add description (only if not a $ref)
 		descriptionTag := field.Tag.Get("description")
 		docTag := field.Tag.Get("doc")
-		if descriptionTag != "" {
-			fieldSchema.Description = descriptionTag
-		} else if docTag != "" {
-			fieldSchema.Description = docTag
-		} else {
-			fieldSchema.Description = fmt.Sprintf("Field %s", propName)
+		if fieldSchema.Ref == "" {
+			if descriptionTag != "" {
+				fieldSchema.Description = descriptionTag
+			} else if docTag != "" {
+				fieldSchema.Description = docTag
+			} else {
+				fieldSchema.Description = fmt.Sprintf("Field %s", propName)
+			}
 		}
 
 		schema.Properties[propName] = fieldSchema
@@ -506,22 +512,24 @@ func (rm *RouteManager) generateSchemaWithReferencesVersion(model interface{}, v
 			propSchema = rm.getSwaggerTypeWithDetailsVersion(field.Type, bindingTag, formatTag, enumTag, version)
 		}
 
-		// Set description
-		if descriptionTag != "" {
-			propSchema.Description = descriptionTag
-		} else if docTag != "" {
-			propSchema.Description = docTag
-		} else {
-			propSchema.Description = fmt.Sprintf("Field %s", propName)
+		// Set description (only if not a $ref - OpenAPI 3.0 doesn't allow siblings with $ref)
+		if propSchema.Ref == "" {
+			if descriptionTag != "" {
+				propSchema.Description = descriptionTag
+			} else if docTag != "" {
+				propSchema.Description = docTag
+			} else {
+				propSchema.Description = fmt.Sprintf("Field %s", propName)
+			}
 		}
 
-		// Set example
-		if exampleTag != "" {
+		// Set example (only if not a $ref)
+		if propSchema.Ref == "" && exampleTag != "" {
 			propSchema.Example = rm.parseExampleValue(exampleTag, field.Type)
 		}
 
-		// Set default
-		if defaultTag != "" {
+		// Set default (only if not a $ref)
+		if propSchema.Ref == "" && defaultTag != "" {
 			propSchema.Default = rm.parseDefaultValue(defaultTag, field.Type)
 		}
 
@@ -595,12 +603,14 @@ func (rm *RouteManager) generateAnonymousStructSchemaVersion(structType reflect.
 
 		descriptionTag := field.Tag.Get("description")
 		docTag := field.Tag.Get("doc")
-		if descriptionTag != "" {
-			fieldSchema.Description = descriptionTag
-		} else if docTag != "" {
-			fieldSchema.Description = docTag
-		} else {
-			fieldSchema.Description = fmt.Sprintf("Field %s", propName)
+		if fieldSchema.Ref == "" {
+			if descriptionTag != "" {
+				fieldSchema.Description = descriptionTag
+			} else if docTag != "" {
+				fieldSchema.Description = docTag
+			} else {
+				fieldSchema.Description = fmt.Sprintf("Field %s", propName)
+			}
 		}
 
 		schema.Properties[propName] = fieldSchema
@@ -715,7 +725,8 @@ func (rm *RouteManager) generateSchemaFromModelWithDefinitionsVersion(model inte
 			propSchema.Description = fmt.Sprintf("Field %s", propName)
 		}
 
-		if exampleTag != "" {
+		// Only set example if not a $ref
+		if propSchema.Ref == "" && exampleTag != "" {
 			propSchema.Example = rm.parseExampleValue(exampleTag, field.Type)
 		}
 
