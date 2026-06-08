@@ -235,6 +235,7 @@ const mockV1Rules: Record<string, any[]> = {
             response_model: '',
             active: true,
             description: 'Route gpt-4o to Anthropic claude-opus-4-7',
+            flags: { cursor_compat: true, thinking_effort: 'high' },
             services: [{ uuid: 'svc-o1', provider: 'mock-provider-anthropic', model: 'claude-opus-4-7', weight: 1, active: true }],
         },
         {
@@ -298,6 +299,7 @@ const mockV1Rules: Record<string, any[]> = {
             response_model: '',
             active: true,
             description: 'Smart routing + tiered fallback',
+            flags: { claude_code_compat: true, clean_header: true, skip_usage: true, session_affinity: 3600 },
             // Default providers in 3 tiers: T0 primary, T1 secondary, T2 budget
             services: [
                 { uuid: 'svc-cc-t0-a', provider: 'mock-provider-anthropic', model: 'claude-sonnet-4-6', weight: 1, active: true, tier: 0 },
@@ -1396,6 +1398,30 @@ export const handlers = [
             }
         }
         return HttpResponse.json({ success: false, error: 'Rule not found' }, { status: 404 })
+    }),
+
+    // ============================================
+    // Rule Flag Registry
+    // ============================================
+    http.get('/api/v1/rule/flags/registry', () => {
+        return HttpResponse.json({
+            success: true,
+            data: [
+                { key: 'custom_user_agent', label: 'Custom User-Agent', description: 'Override the outbound User-Agent header.', type: 'string', category: 'request_openai', placeholder: 'e.g. MyApp/1.0', suggestions: [{ value: 'claude-cli/2.1.86 (external, cli)', label: 'Claude Code (CLI)' }], shared: true, inheritance_mode: 'override' },
+                { key: 'openai_endpoint_override', label: 'OpenAI endpoint override', description: 'Force Chat or Responses endpoint.', type: 'enum', category: 'request_openai', options: [{ value: 'auto', label: 'Auto' }, { value: 'chat', label: 'Force Chat' }, { value: 'responses', label: 'Force Responses' }] },
+                { key: 'use_max_completion_tokens', label: 'OpenAI: Use max_completion_tokens', description: 'Rewrite max_tokens to max_completion_tokens.', type: 'bool', category: 'request_openai' },
+                { key: 'use_max_tokens', label: 'OpenAI: Use max_tokens (legacy)', description: 'Rewrite max_completion_tokens to max_tokens.', type: 'bool', category: 'request_openai' },
+                { key: 'block_tools', label: 'Block tools', description: 'Comma-separated tool names to strip.', type: 'string', category: 'request_openai', placeholder: 'e.g. web_search,run_terminal_cmd' },
+                { key: 'skip_usage', label: 'Skip usage in response', description: 'Strip usage from responses.', type: 'bool', category: 'response', shared: true, inheritance_mode: 'or' },
+                { key: 'thinking_effort', label: 'Thinking', description: 'Extended thinking control.', type: 'enum', category: 'reasoning', options: [{ value: '', label: 'By Client' }, { value: 'off', label: 'Off' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }, { value: 'max', label: 'Max' }], shared: true, inheritance_mode: 'override' },
+                { key: 'vision_proxy_service', label: 'Vision Proxy', description: 'Describe images via a vision-capable model.', type: 'service_ref', category: 'vision' },
+                { key: 'session_affinity', label: 'Session affinity', description: 'TTL in seconds for session pinning.', type: 'int', category: 'routing', placeholder: 'e.g. 3600', shared: true, inheritance_mode: 'override' },
+                { key: 'cursor_compat', label: 'Cursor compatibility', description: 'Normalize rich content for Cursor clients.', type: 'bool', category: 'app' },
+                { key: 'cursor_compat_auto', label: 'Auto-detect Cursor', description: 'Auto-apply cursor compat from request headers.', type: 'bool', category: 'app' },
+                { key: 'claude_code_compat', label: 'Claude Code compatibility', description: 'Rewrite system role to user.', type: 'bool', category: 'app', shared: true, inheritance_mode: 'or' },
+                { key: 'clean_header', label: 'Clean Header', description: 'Strip billing header from system messages.', type: 'bool', category: 'app', shared: true, inheritance_mode: 'or' },
+            ],
+        })
     }),
 
     // ============================================
