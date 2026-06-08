@@ -169,3 +169,49 @@ func TestMigrate20260606_PartialCustomization(t *testing.T) {
 			xcodeConfig.Flags.SessionAffinity)
 	}
 }
+
+func TestMigrate20260608_DefaultsClaudeCodeCompat(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
+			{UUID: "cc-profile", Scenario: typ.RuleScenario("claude_code:p1")},
+			{UUID: "already-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{ClaudeCodeCompat: true}},
+			{UUID: "openai", Scenario: typ.ScenarioOpenAI},
+		},
+	}
+
+	migrate20260608(c)
+
+	if !c.hasMigrationCompleted("20260608") {
+		t.Fatal("migration should be marked completed")
+	}
+	want := map[string]bool{
+		"built-in-cc": true,  // claude_code base → defaulted on
+		"cc-profile":  true,  // claude_code:<profile> → defaulted on
+		"already-on":  true,  // unchanged
+		"openai":      false, // non-claude_code → untouched
+	}
+	for _, r := range c.Rules {
+		if got := r.Flags.ClaudeCodeCompat; got != want[r.UUID] {
+			t.Errorf("rule %q ClaudeCodeCompat = %v, want %v", r.UUID, got, want[r.UUID])
+		}
+	}
+}
+
+func TestMigrate20260608_OneTime_PreservesUserOff(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
+	}
+
+	migrate20260608(c)
+	if !c.Rules[0].Flags.ClaudeCodeCompat {
+		t.Fatal("first run should default the flag on")
+	}
+
+	// User turns it off; a later boot must not re-enable it.
+	c.Rules[0].Flags.ClaudeCodeCompat = false
+	migrate20260608(c)
+	if c.Rules[0].Flags.ClaudeCodeCompat {
+		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
+	}
+}

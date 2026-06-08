@@ -1445,6 +1445,10 @@ func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Ru
 				Type:   loadbalance.TacticAdaptive,
 				Params: typ.DefaultAdaptiveParams(),
 			},
+			// Claude Code profiles inherit the built-in CC default: normalize the
+			// mid-conversation system role so third-party providers accept the
+			// request. Override per-rule for native Anthropic fidelity.
+			Flags:  typ.RuleFlags{ClaudeCodeCompat: true},
 			Active: true,
 		}
 	}

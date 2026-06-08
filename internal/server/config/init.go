@@ -74,84 +74,12 @@ func init() {
 			},
 			Active: true,
 		},
-		{
-			UUID:          "built-in-cc",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc",
-			ResponseModel: "",
-			Description:   "Default proxy rule for Claude Code",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-haiku",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-haiku",
-			ResponseModel: "",
-			Description:   "Claude Code - Haiku mode The model to use for haiku , or background functionality",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-sonnet",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-sonnet",
-			ResponseModel: "",
-			Description:   "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active.",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-opus",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-opus",
-			ResponseModel: "",
-			Description:   "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active.",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-default",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-default",
-			ResponseModel: "",
-			Description:   "Claude Code - Default model - for general task",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			},
-			Active: true,
-		},
-		{
-			UUID:          "built-in-cc-subagent",
-			Scenario:      typ.ScenarioClaudeCode,
-			RequestModel:  "tingly/cc-subagent",
-			ResponseModel: "",
-			Description:   "Claude Code - Subagent model - model to use for subagents",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			},
-			Active: true,
-		},
+		ccRule("built-in-cc", "tingly/cc", "Default proxy rule for Claude Code"),
+		ccRule("built-in-cc-haiku", "tingly/cc-haiku", "Claude Code - Haiku mode The model to use for haiku , or background functionality"),
+		ccRule("built-in-cc-sonnet", "tingly/cc-sonnet", "Claude Code - Sonnet model - model to use for sonnet , or for opusplan when Plan Mode is not active."),
+		ccRule("built-in-cc-opus", "tingly/cc-opus", "Claude Code - Opus model - to use for opus , or for opusplan when Plan Mode is active."),
+		ccRule("built-in-cc-default", "tingly/cc-default", "Claude Code - Default model - for general task"),
+		ccRule("built-in-cc-subagent", "tingly/cc-subagent", "Claude Code - Subagent model - model to use for subagents"),
 		{
 			UUID:          "built-in-opencode",
 			Scenario:      typ.ScenarioOpenCode,
@@ -217,5 +145,27 @@ func init() {
 			},
 			Active: true,
 		},
+	}
+}
+
+// ccRule builds a built-in Claude Code rule with the shared defaults: an empty
+// service list, the default adaptive load-balancing tactic, Active, and the
+// claude_code_compat flag on. Claude Code emits mid-conversation system-role
+// messages that third-party Anthropic-compatible providers reject; normalizing
+// them is the right default for the built-in CC rules. Users can override the
+// flag per-rule from the Plugins card for native Anthropic fidelity.
+func ccRule(uuid, requestModel, description string) typ.Rule {
+	return typ.Rule{
+		UUID:         uuid,
+		Scenario:     typ.ScenarioClaudeCode,
+		RequestModel: requestModel,
+		Description:  description,
+		Services:     []*loadbalance.Service{},
+		LBTactic: typ.Tactic{
+			Type:   loadbalance.TacticAdaptive,
+			Params: typ.DefaultAdaptiveParams(),
+		},
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true},
+		Active: true,
 	}
 }

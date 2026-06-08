@@ -49,6 +49,7 @@ func Migrate(c *Config) error {
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
 	migrate20260606(c) // Add default scenario configs with session affinity
+	migrate20260608(c) // Default claude_code_compat on for existing Claude Code rules
 	return nil
 }
 
@@ -650,5 +651,39 @@ func migrate20260606(c *Config) {
 	if needsSave {
 		_ = c.Save()
 		logrus.Info("Migration 2026-06-06 completed: added default scenario configs with session affinity")
+	}
+}
+
+// migrate20260608 defaults claude_code_compat on for existing Claude Code rules
+// — the built-in CC rules and any claude_code:<profile> profile rules. Claude
+// Code emits mid-conversation system-role messages that third-party
+// Anthropic-compatible providers reject; enabling the normalization by default
+// makes routing to those providers work without the user having to discover the
+// flag. New installs get this from init.go (ccRule) and newCCProfileRules; this
+// migration covers configs persisted before the default existed.
+//
+// One-time only — gated by the migration marker — so a user who later turns the
+// flag off on a specific rule keeps it off across restarts.
+func migrate20260608(c *Config) {
+	if c.hasMigrationCompleted("20260608") {
+		return
+	}
+
+	needsSave := false
+	for i := range c.Rules {
+		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
+		if base != typ.ScenarioClaudeCode {
+			continue
+		}
+		if !c.Rules[i].Flags.ClaudeCodeCompat {
+			c.Rules[i].Flags.ClaudeCodeCompat = true
+			needsSave = true
+		}
+	}
+
+	c.markMigrationCompleted("20260608")
+	if needsSave {
+		_ = c.Save()
+		logrus.Info("Migration 2026-06-08 completed: defaulted claude_code_compat on for Claude Code rules")
 	}
 }
