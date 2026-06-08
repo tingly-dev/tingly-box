@@ -8727,6 +8727,10 @@
             "type": "boolean",
             "description": "Field clean_header"
           },
+          "compact_keyword": {
+            "type": "string",
+            "description": "Field compact_keyword"
+          },
           "context_1m": {
             "type": "boolean",
             "description": "Field context_1m"
@@ -8982,6 +8986,10 @@
           "claude_code_compat": {
             "type": "boolean",
             "description": "Field claude_code_compat"
+          },
+          "compact_keyword": {
+            "type": "string",
+            "description": "Field compact_keyword"
           },
           "custom_user_agent": {
             "type": "string",

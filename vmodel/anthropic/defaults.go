@@ -54,7 +54,7 @@ func RegisterDefaults(r *Registry) {
 		{
 			ID:          "claude-code-compact",
 			Name:        "Claude Code Compact",
-			Description: "Conditional compression: only activates when last user message contains '<command>compact</command>' with tools defined.",
+			Description: "Rapid compaction endpoint: compacts the conversation into an XML summary when the request carries tool definitions. Wake-keyword gating lives in smart routing (agent.claude_code/wake_compact op + compact_keyword flag) — route matched requests here for an instant summary with no upstream token cost.",
 			Chain:       transform.NewTransformChain([]transform.Transform{NewClaudeCodeCompactTransform()}),
 		},
 		{

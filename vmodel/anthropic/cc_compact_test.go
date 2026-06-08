@@ -76,13 +76,20 @@ func TestClaudeCodeCompact_Compression(t *testing.T) {
 	}
 }
 
-// TestClaudeCodeCompact_NoCompressionWithoutCommand tests that compression doesn't happen without <command>compact</command>.
-func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
+// TestClaudeCodeCompact_CompressesOnArrivalWithTools verifies the gating
+// design: the wake-keyword decision lives in the smart-routing layer, so once a
+// tool-bearing request reaches the rapid-compact virtual model it is compacted
+// regardless of whether the literal word "compact" appears — the request was
+// already selected for compaction by the agent.claude_code/wake_compact op.
+// This lets custom compact_keyword values work end-to-end.
+func TestClaudeCodeCompact_CompressesOnArrivalWithTools(t *testing.T) {
 	vm := newCompactVM()
 
 	originalMessages := []sdk.BetaMessageParam{
-		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Regular user message")}},
-		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("Regular assistant response")}},
+		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First user message")}},
+		{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("First assistant response")}},
+		// No literal "compact" keyword here — routing already gated this request.
+		{Role: sdk.BetaMessageParamRoleUser, Content: []sdk.BetaContentBlockParamUnion{sdk.NewBetaTextBlock("please compress now")}},
 	}
 
 	req := &protocol.AnthropicBetaMessagesRequest{
@@ -94,25 +101,19 @@ func TestClaudeCodeCompact_NoCompressionWithoutCommand(t *testing.T) {
 		},
 	}
 
-	_, err := vm.HandleAnthropic(req)
+	result, err := vm.HandleAnthropic(req)
 	if err != nil {
 		t.Fatalf("HandleAnthropic failed: %v", err)
 	}
 
-	if len(req.Messages) != len(originalMessages) {
-		t.Errorf("Without compact command, expected message count to remain %d, got %d",
+	if len(req.Messages) >= len(originalMessages) {
+		t.Errorf("Expected compaction on arrival (fewer than %d messages), got %d",
 			len(originalMessages), len(req.Messages))
 	}
 
-	for _, msg := range req.Messages {
-		for _, block := range msg.Content {
-			if block.OfText != nil {
-				content := block.OfText.Text
-				if strings.Contains(content, "<conversation>") || strings.Contains(content, "<compressed>") {
-					t.Errorf("Unexpected compressed content without compact command: %s", truncate(content, 100))
-				}
-			}
-		}
+	contentText := extractTextFromVModelResponse(result)
+	if !strings.Contains(contentText, "<analysis>") && !strings.Contains(contentText, "<summary>") {
+		t.Errorf("Expected compacted summary markers, got: %s", truncate(contentText, 200))
 	}
 }
 

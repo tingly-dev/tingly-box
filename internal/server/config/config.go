@@ -590,6 +590,24 @@ func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
 	return 0
 }
 
+// GetEffectiveCompactKeyword resolves the Claude Code rapid-compact wake
+// keyword for a rule using override inheritance: rule explicit (non-empty)
+// wins, else the scenario default, else the built-in typ.DefaultCompactKeyword.
+// Mirrors GetEffectiveAffinity. Used by the smart-routing stage to decide
+// whether the agent.claude_code / wake_compact op matches.
+func (c *Config) GetEffectiveCompactKeyword(rule *typ.Rule) string {
+	scenarioDefault := ""
+
+	c.mu.RLock()
+	scenarioConfig := c.scenarioConfigLocked(rule.GetScenario())
+	c.mu.RUnlock()
+	if scenarioConfig != nil {
+		scenarioDefault = scenarioConfig.Flags.CompactKeyword
+	}
+
+	return typ.ResolveCompactKeyword(rule.Flags.CompactKeyword, scenarioDefault)
+}
+
 // AddRule updates the default Rule
 func (c *Config) AddRule(rule typ.Rule) error {
 	c.mu.Lock()
@@ -1838,6 +1856,8 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		return string(flags.RecordingV2)
 	case FlagCustomUserAgent:
 		return flags.CustomUserAgent
+	case FlagCompactKeyword:
+		return flags.CompactKeyword
 	default:
 		return ""
 	}
@@ -1879,6 +1899,8 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		config.Flags.RecordingV2 = typ.RecordingMode(value)
 	case FlagCustomUserAgent:
 		config.Flags.CustomUserAgent = value
+	case FlagCompactKeyword:
+		config.Flags.CompactKeyword = value
 	default:
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}

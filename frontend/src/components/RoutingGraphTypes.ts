@@ -71,6 +71,7 @@ export interface RuleFlags {
     claudeCodeCompat?: boolean;
     cleanHeader?: boolean;
     context1m?: boolean;
+    compactKeyword?: string;
 }
 
 export interface RuleFlagsApi {
@@ -88,6 +89,7 @@ export interface RuleFlagsApi {
     claude_code_compat?: boolean;
     clean_header?: boolean;
     context_1m?: boolean;
+    compact_keyword?: string;
 }
 
 export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref';

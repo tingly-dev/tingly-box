@@ -115,6 +115,29 @@ func TestRuleFlagRegistry_EnumOptions(t *testing.T) {
 	}
 }
 
+// TestResolveCompactKeyword verifies the rapid-compact wake-keyword override
+// inheritance: rule explicit > scenario default > built-in default.
+func TestResolveCompactKeyword(t *testing.T) {
+	cases := []struct {
+		name     string
+		rule     string
+		scenario string
+		want     string
+	}{
+		{"both empty -> built-in default", "", "", DefaultCompactKeyword},
+		{"scenario only", "", "compress", "compress"},
+		{"rule wins over scenario", "squash", "compress", "squash"},
+		{"rule only", "squash", "", "squash"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ResolveCompactKeyword(c.rule, c.scenario); got != c.want {
+				t.Errorf("ResolveCompactKeyword(%q, %q) = %q, want %q", c.rule, c.scenario, got, c.want)
+			}
+		})
+	}
+}
+
 // TestRuleFlagRegistry_SharedFlagsHaveInheritanceMode verifies that every flag
 // marked Shared declares an InheritanceMode and vice versa.
 func TestRuleFlagRegistry_SharedFlagsHaveInheritanceMode(t *testing.T) {

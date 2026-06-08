@@ -144,6 +144,14 @@ func resolveRuleFlagsWithScenario(
 		// SessionAffinity is rule-only — no scenario-level inheritance. The
 		// built-in Claude Code / Desktop / Codex rules seed it directly (init +
 		// migrate20260610), so there is nothing to inject here.
+
+		// Inject scenario-level CompactKeyword if rule hasn't set one explicitly.
+		// Override inheritance: rule value wins when non-empty. The empty result
+		// is later resolved to the built-in default by typ.ResolveCompactKeyword
+		// at the smart-routing match site (Config.GetEffectiveCompactKeyword).
+		if flags.CompactKeyword == "" && scenarioConfig.Flags.CompactKeyword != "" {
+			flags.CompactKeyword = scenarioConfig.Flags.CompactKeyword
+		}
 	}
 
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios

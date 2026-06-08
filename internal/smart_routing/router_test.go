@@ -650,8 +650,8 @@ func TestEvaluate_AgentClaudeCode_MatchesEachKind(t *testing.T) {
 	require.NoError(t, err)
 
 	cases := []struct {
-		kind     string
-		wantSvc  string
+		kind    string
+		wantSvc string
 	}{
 		{ClaudeCodeKindMain, "m-main"},
 		{ClaudeCodeKindSubagent, "m-sub"},
@@ -694,6 +694,41 @@ func TestValidateSmartOp_AgentClaudeCode(t *testing.T) {
 		Value:     ClaudeCodeKindSubagent,
 	}
 	require.NoError(t, ValidateSmartOp(&op))
+}
+
+func TestValidateSmartOp_AgentClaudeCodeWakeCompact(t *testing.T) {
+	op := SmartOp{
+		Position:  PositionAgentClaudeCode,
+		Operation: OpAgentClaudeCodeWakeCompact,
+	}
+	require.NoError(t, ValidateSmartOp(&op))
+}
+
+// TestEvaluate_AgentClaudeCode_WakeCompact verifies the wake_compact op matches
+// when the stage-populated CompactWake flag is set (latest user message contains
+// the configured rapid-compact wake keyword) and falls through otherwise.
+func TestEvaluate_AgentClaudeCode_WakeCompact(t *testing.T) {
+	svc := &loadbalance.Service{Provider: "p", Model: "compact-vm", Weight: 1, Active: true}
+	router, err := NewRouter([]SmartRouting{
+		{
+			Description: "rapid compact",
+			Ops: []SmartOp{
+				{Position: PositionAgentClaudeCode, Operation: OpAgentClaudeCodeWakeCompact},
+			},
+			Services: []*loadbalance.Service{svc},
+		},
+	})
+	require.NoError(t, err)
+
+	// CompactWake true → routes to the compaction vmodel.
+	services, matched := router.EvaluateRequest(&RequestContext{CompactWake: true})
+	require.True(t, matched)
+	require.Len(t, services, 1)
+	require.Equal(t, "compact-vm", services[0].Model)
+
+	// CompactWake false → no match (keyword absent, or non-claude_code scenario).
+	_, matched = router.EvaluateRequest(&RequestContext{CompactWake: false})
+	require.False(t, matched)
 }
 
 // TestLatestUser_ToolResultDoesNotFalseMatch verifies that when the most recent
@@ -840,4 +875,3 @@ func TestLatestContentType_NotBleededFromPreviousImage(t *testing.T) {
 	require.Equal(t, "", ctx.LatestContentType, "LatestContentType should be empty for the latest text-only user message")
 	require.True(t, ctx.LatestUserHasText)
 }
-
