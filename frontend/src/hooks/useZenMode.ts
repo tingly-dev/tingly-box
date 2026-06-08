@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { api } from '@/services/api';
 import { PROFILE_SCENARIOS, type ProfileScenario } from '@/constants/profileScenarios';
 
 /**
@@ -28,21 +29,6 @@ interface UseZenModeResult {
   setZenMode: (agent: string) => Promise<boolean>;
 }
 
-// Mock API functions - these should be replaced with actual API calls
-// TODO: Replace with actual API calls once swagger generation is updated
-const mockApi = {
-  getScenarioStringFlag: async (scenario: string, flag: string) => {
-    // Mock implementation - return from localStorage for now
-    const value = localStorage.getItem(`mock-flag-${scenario}-${flag}`) || '';
-    return { success: true, data: { scenario, flag, value } };
-  },
-  setScenarioStringFlag: async (scenario: string, flag: string, value: string) => {
-    // Mock implementation - save to localStorage for now
-    localStorage.setItem(`mock-flag-${scenario}-${flag}`, value);
-    return { success: true, data: { scenario, flag, value } };
-  },
-};
-
 /**
  * Hook for managing zen mode state
  *
@@ -70,8 +56,7 @@ export function useZenMode(): UseZenModeResult {
   useEffect(() => {
     const fetchZenMode = async () => {
       try {
-        // TODO: Replace with actual API call: api.getScenarioStringFlag('_global', 'zen')
-        const result = await mockApi.getScenarioStringFlag('_global', 'zen');
+        const result = await api.getScenarioStringFlag('_global', 'zen');
         if (result.success) {
           setAgent(result.data.value || '');
         }
@@ -92,8 +77,7 @@ export function useZenMode(): UseZenModeResult {
    */
   const setZenMode = async (newAgent: string): Promise<boolean> => {
     try {
-      // TODO: Replace with actual API call: api.setScenarioStringFlag('_global', 'zen', newAgent)
-      const result = await mockApi.setScenarioStringFlag('_global', 'zen', newAgent || '');
+      const result = await api.setScenarioStringFlag('_global', 'zen', newAgent || '');
       if (result.success) {
         setAgent(newAgent);
         return true;

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -11,54 +11,6 @@ import { RecordingCalendar, FilterBar, RecordingTimeline } from '@/components/pr
 import type { Recording, RecordingType } from '@/types/prompt';
 import { useTranslation } from 'react-i18next';
 
-// Mock data - TODO: Replace with actual API calls
-const mockRecordings: Recording[] = [
-  {
-    id: '1',
-    timestamp: new Date(),
-    user: { id: '1', name: 'John Doe' },
-    project: 'tingly-box',
-    type: 'code-review',
-    content: 'Code review session for authentication module',
-    duration: 120,
-    model: 'claude-3-5-sonnet-20241022',
-    summary: 'Reviewed auth implementation',
-  },
-  {
-    id: '2',
-    timestamp: new Date(Date.now() - 3600000),
-    user: { id: '2', name: 'Jane Smith' },
-    project: 'tingly-box',
-    type: 'debug',
-    content: 'Debug session for proxy routing',
-    duration: 300,
-    model: 'claude-3-5-sonnet-20241022',
-    summary: 'Fixed routing bug',
-  },
-  {
-    id: '3',
-    timestamp: new Date(Date.now() - 86400000),
-    user: { id: '1', name: 'John Doe' },
-    project: 'tingly-box',
-    type: 'refactor',
-    content: 'Refactored load balancer logic',
-    duration: 180,
-    model: 'claude-3-5-sonnet-20241022',
-    summary: 'Improved load balancer',
-  },
-  {
-    id: '4',
-    timestamp: new Date(Date.now() - 172800000),
-    user: { id: '2', name: 'Jane Smith' },
-    project: 'tingly-box',
-    type: 'test',
-    content: 'Added unit tests for smart routing',
-    duration: 240,
-    model: 'claude-3-5-sonnet-20241022',
-    summary: 'Unit tests for routing',
-  },
-];
-
 const UserPage = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -69,8 +21,14 @@ const UserPage = () => {
   const [userFilter, setUserFilter] = useState<string>();
   const [projectFilter, setProjectFilter] = useState<string>();
   const [typeFilter, setTypeFilter] = useState<RecordingType>();
-  const [recordings, setRecordings] = useState<Recording[]>(mockRecordings);
+  const [recordings, setRecordings] = useState<Recording[]>([]);
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
+
+  useEffect(() => {
+    // Placeholder: no backend endpoint yet for user recordings.
+    // Wire api.listUserRecordings() here once the endpoint is available.
+    setLoading(false);
+  }, []);
 
   // Get unique users and projects from recordings
   const { users, projects } = useMemo(() => {
@@ -131,19 +89,17 @@ const UserPage = () => {
     setRangeMode(days);
   };
 
-  const handlePlay = (recording: Recording) => {
-    console.log('Play recording:', recording);
-    // TODO: Implement playback functionality
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handlePlay = (_recording: Recording) => {
+    // Playback not yet implemented
   };
 
-  const handleViewDetails = (recording: Recording) => {
-    console.log('View details:', recording);
-    // TODO: Implement details view
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleViewDetails = (_recording: Recording) => {
+    // Detail view not yet implemented
   };
 
   const handleDelete = (recording: Recording) => {
-    console.log('Delete recording:', recording);
-    // TODO: Implement delete with confirmation
     setRecordings(recordings.filter((r) => r.id !== recording.id));
   };
 
