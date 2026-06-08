@@ -24,7 +24,6 @@ export default {
     "off": "Off",
     "direct": "Direct",
     "theme": "主题",
-    "zen": "禅",
     "openClaw": "OpenClaw",
     "prompt": "提示词"
   },
@@ -76,10 +75,6 @@ export default {
       "system": "跟随系统",
       "sunlit": "日光",
       "claude": "Claude",
-      "zenMode": "禅模式",
-      "enterZenMode": "进入禅模式：",
-      "more": "更多",
-      "exitZen": "退出",
       "click": "点击",
       "feedback": "反馈",
       "feedbackTooltip": "发送反馈（跳转到 GitHub Issues）"

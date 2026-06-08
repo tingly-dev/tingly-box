@@ -24,7 +24,6 @@ export default {
     "off": "Off",
     "direct": "Direct",
     "theme": "Theme",
-    "zen": "Zen",
     "openClaw": "OpenClaw",
     "prompt": "Prompt"
   },
@@ -75,10 +74,6 @@ export default {
       "system": "System",
       "sunlit": "Sunlit",
       "claude": "Claude",
-      "zenMode": "Zen Mode",
-      "enterZenMode": "Enter Zen Mode:",
-      "more": "More",
-      "exitZen": "Exit",
       "click": "Click",
       "feedback": "Feedback",
       "feedbackTooltip": "Send Feedback (opens GitHub Issues)"

@@ -1,4 +1,4 @@
-import { Person as IconUser, YinYang as IconYinYang, MoreHoriz as IconDots, Translate as IconLanguage, AutoFixHigh as IconWand, MessageReport as IconMessageReport } from '@/components/icons';
+import { Person as IconUser, Translate as IconLanguage, AutoFixHigh as IconWand, MessageReport as IconMessageReport } from '@/components/icons';
 import { Box, Divider, ListItemButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import React, { useMemo, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
@@ -23,20 +23,14 @@ interface ActivityBarProps {
     activeActivity: string;
     onActivityClick: (item: ActivityItem) => void;
     onUserClick: (event: React.MouseEvent<HTMLElement>) => void;
-    onZenToggle?: () => void;
-    zenEnabled?: boolean;
-    onMoreClick?: (event: React.MouseEvent<HTMLElement>) => void;
     onStandaloneNavigate?: () => void;
 }
 
-export const ZenActivityBar: React.FC<ActivityBarProps> = ({
+export const ActivityBar: React.FC<ActivityBarProps> = ({
     activityItems,
     activeActivity,
     onActivityClick,
     onUserClick,
-    onZenToggle,
-    zenEnabled = false,
-    onMoreClick,
     onStandaloneNavigate,
 }) => {
     const { t, i18n } = useTranslation();
@@ -176,8 +170,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
 
                 <Divider sx={{ mx: 2, my: 1 }} />
 
-                {/* Language menu - only show in normal mode */}
-                {!zenEnabled && (
+                {/* Language menu */}
                     <Menu
                         anchorEl={languageMenuAnchorEl}
                         open={Boolean(languageMenuAnchorEl)}
@@ -208,9 +201,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             <Typography>{t('system.language.zh')}</Typography>
                         </MenuItem>
                     </Menu>
-                )}
 
-                {!zenEnabled && (
                     <Menu
                         anchorEl={themeMenuAnchorEl}
                         open={Boolean(themeMenuAnchorEl)}
@@ -238,10 +229,8 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             </MenuItem>
                         ))}
                     </Menu>
-                )}
 
-                {/* Onboarding Quick Add Button - above Zen */}
-                {!zenEnabled && (
+                {/* Onboarding Quick Add Button */}
                     <Tooltip title={t('layout.onboarding', { defaultValue: 'Quick Add Provider' })} placement="right" arrow>
                         <ListItemButton
                             component={RouterLink}
@@ -274,45 +263,7 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                             </Typography>
                         </ListItemButton>
                     </Tooltip>
-                )}
 
-                {/* More button - only show in zen mode */}
-                {zenEnabled && onMoreClick && (
-                    <Tooltip title={t('layout.activityBar.more')} placement="right" arrow>
-                        <ListItemButton
-                            onClick={onMoreClick}
-                            sx={activityItemSx({
-                                '&:hover': { bgcolor: 'action.hover' },
-                            })}
-                        >
-                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <IconDots sx={{ fontSize: 22 }} />
-                            </ListItemIcon>
-                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                {t('layout.activityBar.more')}
-                            </Typography>
-                        </ListItemButton>
-                    </Tooltip>
-                )}
-
-                {/* Exit Zen button - only show in zen mode */}
-                {zenEnabled && onZenToggle && (
-                    <Tooltip title={t('layout.activityBar.exitZen')} placement="right" arrow>
-                        <ListItemButton
-                            onClick={onZenToggle}
-                            sx={activityItemSx({
-                                '&:hover': { bgcolor: 'action.hover' },
-                            })}
-                        >
-                            <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
-                                <IconYinYang sx={{ fontSize: 22 }} />
-                            </ListItemIcon>
-                            <Typography variant="caption" sx={{ color: 'inherit', textAlign: 'center', lineHeight: 1.2 }}>
-                                {t('layout.activityBar.exitZen')}
-                            </Typography>
-                        </ListItemButton>
-                    </Tooltip>
-                )}
             </Box>
 
             {/* Feedback button - bottom-left, above language icon */}
@@ -359,7 +310,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
             </Box>
 
             {/* Language button - bottom-left, above user icon */}
-            {!zenEnabled && (
                 <Box
                     sx={{
                         py: 0.5,
@@ -398,10 +348,8 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         </ListItemButton>
                     </Tooltip>
                 </Box>
-            )}
 
             {/* Theme button - bottom-left, above language icon */}
-            {!zenEnabled && (
                 <Box
                     sx={{
                         py: 0.5,
@@ -440,7 +388,6 @@ export const ZenActivityBar: React.FC<ActivityBarProps> = ({
                         </ListItemButton>
                     </Tooltip>
                 </Box>
-            )}
 
             {/* Bottom: User icon */}
             <Box

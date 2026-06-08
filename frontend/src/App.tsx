@@ -254,20 +254,7 @@ function AppContent() {
                     <Route path="/mcp" element={<Navigate to="/mcp/sources" replace />} />
                     {/* Tools */}
                     <Route path="/tools/servertool" element={<ServerToolPage />} />
-                    {/* Zen Mode Routes - reuse the scenario pages so the zen
-                        layout persists; agents without a dedicated zen page
-                        redirect back to their normal /agent/* route. */}
-                    <Route path="/zen/claude_code" element={<UseClaudeCodePage />} />
-                    <Route path="/zen/claude_code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
-                    <Route path="/zen/codex" element={<UseCodexPage />} />
-                    <Route path="/zen/opencode" element={<UseOpenCodePage />} />
-                    <Route path="/zen/xcode" element={<Navigate to="/agent/xcode" replace />} />
-                    <Route path="/zen/vscode" element={<Navigate to="/agent/vscode" replace />} />
-                    <Route path="/zen/openai" element={<Navigate to="/agent/openai" replace />} />
-                    <Route path="/zen/anthropic" element={<Navigate to="/agent/anthropic" replace />} />
-                    <Route path="/zen/agent" element={<Navigate to="/agent/agent" replace />} />
-                    <Route path="/zen" element={<Navigate to="/zen/claude_code" replace />} />
-                    {/* Catch-all redirect for unknown routes */}
+                    {/* Catch-all redirect for unknown routes (also covers legacy /zen/* links) */}
                     <Route path="*" element={<Navigate to="/agent" replace />} />
                 </Route>
             </Routes>
