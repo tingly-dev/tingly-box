@@ -116,6 +116,13 @@ const SessionIDKey contextKey = "session_id"
 // outbound HTTP transport.
 const CustomUserAgentKey contextKey = "custom_user_agent"
 
+// UserAgentNone is the sentinel custom_user_agent value that strips the
+// outbound User-Agent header entirely (the request is sent with no User-Agent),
+// as opposed to an empty value which means "do not override". Some upstreams
+// accept — or even prefer — requests without a User-Agent, so this gives
+// operators an explicit "send nothing" option distinct from "leave default".
+const UserAgentNone = "none"
+
 // WithSessionID adds a sessionID to the context.
 // This allows sessionID to be propagated through the call chain
 // without explicit parameter passing.

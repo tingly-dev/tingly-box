@@ -103,6 +103,12 @@ func resolveRuleFlags(c *gin.Context, rule *typ.Rule) typ.RuleFlags {
 // 1. Rule-level flags (from the rule definition)
 // 2. Scenario flags (from the scenario configuration)
 // 3. Auto-applied flags (like CleanHeader for protocol transformation)
+//
+// Side effect: it also attaches the resolved CustomUserAgent to the request
+// context (applyCustomUserAgent) so callers don't have to repeat that at each
+// handler. The User-Agent is the one rule flag that has to reach a deep
+// component (the outbound transport) via ctx, so this central merge point is
+// where it gets applied.
 func resolveRuleFlagsWithScenario(
 	c *gin.Context,
 	rule *typ.Rule,
@@ -127,6 +133,13 @@ func resolveRuleFlagsWithScenario(
 		// Inject scenario-level SkipUsage if not already set at rule level
 		flags.SkipUsage = flags.SkipUsage || scenarioConfig.Flags.SkipUsage
 
+		// Inject scenario-level CustomUserAgent if rule hasn't set one explicitly.
+		// Rule value wins so a single rule can retarget UA without disturbing the
+		// scenario-wide default.
+		if flags.CustomUserAgent == "" && scenarioConfig.Flags.CustomUserAgent != "" {
+			flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
+		}
+
 		// Inject scenario-level SessionAffinity if rule hasn't set one explicitly
 		if flags.SessionAffinity == 0 && scenarioConfig.Flags.SessionAffinity > 0 {
 			flags.SessionAffinity = scenarioConfig.Flags.SessionAffinity
@@ -136,7 +149,28 @@ func resolveRuleFlagsWithScenario(
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios
 	flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
 
+	// Attach the resolved User-Agent override to the request context here, at the
+	// single merge point, so the chat / v1 / beta handlers don't each repeat it.
+	applyCustomUserAgent(c, flags)
+
 	return flags
+}
+
+// applyCustomUserAgent attaches the effective custom User-Agent (already merged
+// across rule + scenario) to the request context, so the outbound transport
+// (customUserAgentTransport) can read it at RoundTrip time. This is the Type-2
+// (context-passed hint) injection point: the dispatch path forwards
+// c.Request.Context() down to the SDK call, where the transport applies the
+// override. No-op when no override is configured, so the vendor/provider
+// User-Agent is left untouched.
+//
+// Called from resolveRuleFlagsWithScenario, which every handler now routes
+// through — so no handler needs to apply the User-Agent itself.
+func applyCustomUserAgent(c *gin.Context, flags typ.RuleFlags) {
+	if flags.CustomUserAgent == "" || c == nil || c.Request == nil {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithCustomUserAgent(c.Request.Context(), flags.CustomUserAgent))
 }
 
 // shouldStripUsage merges the cursor_compat and skip_usage hints carried in

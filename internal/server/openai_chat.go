@@ -225,6 +225,8 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	}
 
 	// === Resolve flags with scenario injection ===
+	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
+	// request context, so no separate call is needed here.)
 	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target)
 
 	// === Transform via pipeline ===

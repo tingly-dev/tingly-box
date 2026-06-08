@@ -155,6 +155,51 @@ func TestRuleFlagRegistry_VisionProxyServiceRef(t *testing.T) {
 	}
 }
 
+// TestDefaultUserAgents_NonEmptyAndWellFormed checks that the curated preset
+// list is populated and that every entry carries both a friendly label and a
+// concrete User-Agent value (so the UI can render a labelled quick-pick).
+func TestDefaultUserAgents_NonEmptyAndWellFormed(t *testing.T) {
+	uas := DefaultUserAgents()
+	if len(uas) == 0 {
+		t.Fatal("DefaultUserAgents() returned no presets")
+	}
+	seen := map[string]bool{}
+	for i, ua := range uas {
+		if ua.Label == "" {
+			t.Errorf("preset %d has empty Label", i)
+		}
+		if ua.Value == "" {
+			t.Errorf("preset %d (%q) has empty Value", i, ua.Label)
+		}
+		if seen[ua.Value] {
+			t.Errorf("duplicate preset User-Agent value %q", ua.Value)
+		}
+		seen[ua.Value] = true
+	}
+}
+
+// TestRuleFlagRegistry_CustomUserAgentSuggestions pins the custom_user_agent
+// flag to surface the curated presets so the frontend can offer them as a
+// quick-pick while still allowing free-form input.
+func TestRuleFlagRegistry_CustomUserAgentSuggestions(t *testing.T) {
+	var found *FlagSpec
+	for i, s := range RuleFlagRegistry() {
+		if s.Key == "custom_user_agent" {
+			found = &RuleFlagRegistry()[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("custom_user_agent missing from registry")
+	}
+	if found.Type != FlagTypeString {
+		t.Fatalf("custom_user_agent type = %q, want %q", found.Type, FlagTypeString)
+	}
+	if len(found.Suggestions) == 0 {
+		t.Error("custom_user_agent should expose User-Agent suggestions")
+	}
+}
+
 // TestRuleFlags_VisionProxyService_JSONRoundTrip guards the wire shape of the
 // rule-level vision proxy service: a configured {provider, model} survives a
 // marshal/unmarshal cycle, and an unset pointer stays absent (omitempty).

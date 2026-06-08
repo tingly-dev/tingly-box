@@ -315,13 +315,13 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 				return nil, err
 			}
 
-				// Run migration on fresh install to set up scenario defaults
-				if !options.enableMigration {
-					logrus.Warnf("migration disabled")
-				} else {
-					Migrate(cfg)
-					cfg.Save()
-				}
+			// Run migration on fresh install to set up scenario defaults
+			if !options.enableMigration {
+				logrus.Warnf("migration disabled")
+			} else {
+				Migrate(cfg)
+				cfg.Save()
+			}
 		} else {
 			return nil, fmt.Errorf("failed to load global cfg: %w", err)
 		}
@@ -342,7 +342,6 @@ func NewConfig(opts ...ConfigOption) (*Config, error) {
 	} else {
 		cfg.InsertDefaultRule()
 	}
-
 
 	// Ensure tokens exist even for existing configs
 	updated := false
@@ -1734,6 +1733,8 @@ func (c *Config) GetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 		return flags.ThinkingEffort
 	case FlagRecordingV2:
 		return string(flags.RecordingV2)
+	case FlagCustomUserAgent:
+		return flags.CustomUserAgent
 	default:
 		return ""
 	}
@@ -1773,6 +1774,8 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 			return fmt.Errorf("invalid recording_v2 value: %s (must be one of: request, request_response, staged_request_response, or empty)", value)
 		}
 		config.Flags.RecordingV2 = typ.RecordingMode(value)
+	case FlagCustomUserAgent:
+		config.Flags.CustomUserAgent = value
 	default:
 		return fmt.Errorf("unknown string flag name: %s", flagName)
 	}
@@ -2133,7 +2136,6 @@ func (c *Config) InsertDefaultRule() error {
 	}
 	return nil
 }
-
 
 // logProxyEnvironment logs proxy-related environment variables and the
 // RespectEnvProxy config value so operators can diagnose unexpected proxy usage

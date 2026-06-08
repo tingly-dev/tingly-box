@@ -457,14 +457,44 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                                     )}
                                                 </Stack>
                                                 {spec.type === 'string' && (
-                                                    <TextField
-                                                        fullWidth
-                                                        size="small"
-                                                        placeholder={spec.placeholder}
-                                                        value={flagToString(draft, spec.key)}
-                                                        onChange={(e) => handleStringChange(spec.key, e.target.value)}
-                                                        sx={{ mt: 1 }}
-                                                    />
+                                                    <>
+                                                        <TextField
+                                                            fullWidth
+                                                            size="small"
+                                                            placeholder={spec.placeholder}
+                                                            value={flagToString(draft, spec.key)}
+                                                            onChange={(e) => handleStringChange(spec.key, e.target.value)}
+                                                            sx={{ mt: 1 }}
+                                                        />
+                                                        {spec.suggestions && spec.suggestions.length > 0 && (
+                                                            <Stack
+                                                                direction="row"
+                                                                spacing={0.5}
+                                                                useFlexGap
+                                                                flexWrap="wrap"
+                                                                sx={{ mt: 1 }}
+                                                            >
+                                                                {spec.suggestions.map((s) => {
+                                                                    const selected = flagToString(draft, spec.key) === s.value;
+                                                                    return (
+                                                                        <Chip
+                                                                            key={s.value}
+                                                                            // Show the concrete value (the literal UA
+                                                                            // string actually sent); the friendly name is
+                                                                            // a hover hint so nothing is hidden.
+                                                                            label={s.value}
+                                                                            title={s.label}
+                                                                            size="small"
+                                                                            sx={{ fontFamily: 'monospace' }}
+                                                                            variant={selected ? 'filled' : 'outlined'}
+                                                                            color={selected ? 'primary' : 'default'}
+                                                                            onClick={() => handleStringChange(spec.key, s.value)}
+                                                                        />
+                                                                    );
+                                                                })}
+                                                            </Stack>
+                                                        )}
+                                                    </>
                                                 )}
                                                 {spec.type === 'int' && (
                                                     <TextField

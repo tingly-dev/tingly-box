@@ -89,7 +89,8 @@ func (s *Server) AnthropicMessagesV1Beta(c *gin.Context, req protocol.AnthropicB
 		target = resolvedTarget
 	}
 
-	// Resolve flags with scenario injection and auto-apply for CleanHeader
+	// Resolve flags with scenario injection and auto-apply for CleanHeader.
+	// (This also applies the custom User-Agent to the request context.)
 	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeAnthropicBeta, target)
 
 	reqCtx, err := s.transformAnthropicBeta(c, req, target, provider, isStreaming, recorder, scenarioType, rulePreBaseTransforms(ruleFlags), ruleExtraTransforms(ruleFlags)...)

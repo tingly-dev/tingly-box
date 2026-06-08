@@ -7,6 +7,7 @@ import {
     RecordingV2Control,
     SessionAffinityControl,
     ThinkingEffortControl,
+    UserAgentControl,
     VisionProxyControl,
 } from './flags';
 import type { VisionService } from './flags';
@@ -36,6 +37,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [effort, setEffort] = useState<string>('');
     const [recordV2Mode, setRecordV2Mode] = useState<string>('');
+    const [userAgent, setUserAgent] = useState<string>('');
     const [sessionAffinity, setSessionAffinity] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<Record<string, boolean>>({});
@@ -49,10 +51,11 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         try {
             setLoading(true);
 
-            const [effortResult, recordV2Result, affinityResult, cfgResult, providersResult, ...featureResults] =
+            const [effortResult, recordV2Result, uaResult, affinityResult, cfgResult, providersResult, ...featureResults] =
                 await Promise.all([
                     api.getScenarioStringFlag(scenario, 'thinking_effort'),
                     api.getScenarioStringFlag(scenario, 'recording_v2'),
+                    api.getScenarioStringFlag(scenario, 'custom_user_agent'),
                     api.getScenarioIntFlag(scenario, 'session_affinity'),
                     api.getScenarioConfig(scenario),
                     api.getProviders(),
@@ -64,6 +67,9 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             }
             if (recordV2Result?.success && recordV2Result?.data?.value !== undefined) {
                 setRecordV2Mode(recordV2Result.data.value);
+            }
+            if (uaResult?.success && uaResult?.data?.value !== undefined) {
+                setUserAgent(uaResult.data.value);
             }
             if (affinityResult?.success && affinityResult?.data?.value !== undefined) {
                 setSessionAffinity(affinityResult.data.value);
@@ -100,23 +106,24 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             .finally(() => setUpdating(prev => ({ ...prev, [featureKey]: false })));
     };
 
-    const setEffortLevel = (level: string) => {
-        if (updating.effort || level === effort) return;
-        setUpdating(prev => ({ ...prev, effort: true }));
-        api.setScenarioStringFlag(scenario, 'thinking_effort', level)
-            .then(result => result.success ? setEffort(level) : loadData())
+    // Scenario string-flags share one optimistic save flow; build the setters
+    // from a single factory keyed by flag name (also the in-flight key).
+    const makeStringFlagSetter = (
+        flagKey: string,
+        current: string,
+        setLocal: (value: string) => void,
+    ) => (next: string) => {
+        if (updating[flagKey] || next === current) return;
+        setUpdating(prev => ({ ...prev, [flagKey]: true }));
+        api.setScenarioStringFlag(scenario, flagKey, next)
+            .then(result => (result.success ? setLocal(next) : loadData()))
             .catch(() => loadData())
-            .finally(() => setUpdating(prev => ({ ...prev, effort: false })));
+            .finally(() => setUpdating(prev => ({ ...prev, [flagKey]: false })));
     };
 
-    const setRecordV2 = (mode: string) => {
-        if (updating.recordV2 || mode === recordV2Mode) return;
-        setUpdating(prev => ({ ...prev, recordV2: true }));
-        api.setScenarioStringFlag(scenario, 'recording_v2', mode)
-            .then(result => result.success ? setRecordV2Mode(mode) : loadData())
-            .catch(() => loadData())
-            .finally(() => setUpdating(prev => ({ ...prev, recordV2: false })));
-    };
+    const setEffortLevel = makeStringFlagSetter('thinking_effort', effort, setEffort);
+    const setRecordV2 = makeStringFlagSetter('recording_v2', recordV2Mode, setRecordV2Mode);
+    const setUserAgentValue = makeStringFlagSetter('custom_user_agent', userAgent, setUserAgent);
 
     const handleSessionAffinityChange = (value: number) => {
         if (updating.session_affinity || value === sessionAffinity) return;
@@ -175,7 +182,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1, width: '100%' }}>
                                 <ThinkingEffortControl
                                     value={effort}
-                                    disabled={updating.effort}
+                                    disabled={updating.thinking_effort}
                                     onChange={setEffortLevel}
                                 />
                                 {visibleFeatures.map(feature => (
@@ -196,8 +203,13 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                 />
                                 <RecordingV2Control
                                     value={recordV2Mode}
-                                    disabled={updating.recordV2 || false}
+                                    disabled={updating.recording_v2 || false}
                                     onChange={setRecordV2}
+                                />
+                                <UserAgentControl
+                                    value={userAgent}
+                                    disabled={updating.custom_user_agent || false}
+                                    onChange={setUserAgentValue}
                                 />
                                 <SessionAffinityControl
                                     value={sessionAffinity}
