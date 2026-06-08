@@ -148,7 +148,32 @@ export default {
     "close": "关闭",
     "checking": "正在检查更新...",
     "message": "GitHub 上有新版本可用。您想现在下载吗？",
-    "later": "稍后"
+    "later": "稍后",
+    "check": "检查更新",
+    "checkUpdates": "手动检查更新",
+    "upToDate": "您使用的是最新版本",
+    "updateAvailable": "有新版本可用",
+    "currentVersion": "当前版本：{{version}}",
+    "versionComparison": "{{latest}} 可用（您当前使用 {{current}}）",
+    "releaseNotes": "查看更新说明",
+    "updateMethods": "更新方式",
+    "copy": "复制",
+    "copied": "已复制！",
+    "error": "检查更新失败",
+    "methods": {
+      "npx": {
+        "title": "快速更新（npx）",
+        "description": "使用最新版本运行一次"
+      },
+      "bundle": {
+        "title": "离线包（npx）",
+        "description": "下载包含内置二进制文件的离线包，解决网络问题"
+      },
+      "docker": {
+        "title": "Docker 镜像",
+        "description": "从 GitHub Container Registry 拉取镜像"
+      }
+    }
   },
   "login": {
     "title": "Tingly Box",

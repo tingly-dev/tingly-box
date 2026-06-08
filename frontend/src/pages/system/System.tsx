@@ -3,7 +3,9 @@ import { PageLayout } from '@/components/PageLayout.tsx';
 import UnifiedCard from '@/components/UnifiedCard.tsx';
 import { Logout } from '@/components/icons';
 import { Refresh as RefreshIcon } from '@/components/icons';
+import { VersionDisplay } from '@/components/VersionDisplay';
 import { IconCircleCheck, IconCircleX, IconInfoCircle, IconLock, IconStar, IconLicense, IconBrandGithub, IconLanguage, IconBrush, IconWorld, IconCheck, IconClock } from '@tabler/icons-react';
+import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip, Typography, Chip } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +19,7 @@ import { getThemeOptions } from '@/theme/options.ts';
 
 const System = () => {
     const { t, i18n } = useTranslation();
-    const { currentVersion, hasUpdate, latestVersion, showUpdateDialog } = useVersion();
+    const { currentVersion, showUpdateDialog, openUpdateDialog, closeUpdateDialog } = useVersion();
     const { isHealthy, checking, checkHealth } = useHealth();
     const { logout: authLogout } = useAuth();
     const { mode: themeMode, setTheme } = useThemeMode();
@@ -371,42 +373,21 @@ const System = () => {
                                 </Typography>
                             </Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                                <Typography variant="body2" sx={{ color: 'text.primary' }}>
-                                    {currentVersion || 'N/A'}
-                                </Typography>
-                                {(hasUpdate || import.meta.env.DEV) && (
-                                    <Tooltip title={`Click to view ${hasUpdate ? 'update details' : 'dev info'}`} arrow>
-                                        <Box
-                                            onClick={showUpdateDialog}
-                                            sx={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 0.5,
-                                                color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                                                cursor: 'pointer',
-                                                px: 1,
-                                                py: 0.5,
-                                                borderRadius: 1,
-                                                transition: 'all 150ms ease-in-out',
-                                                '&:hover': { bgcolor: 'action.hover' },
-                                            }}
-                                            role="button"
-                                            aria-label="View update details"
-                                            tabIndex={0}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    showUpdateDialog();
-                                                }
-                                            }}
-                                        >
-                                            <IconStar size={16} />
-                                            <Typography variant="caption" color={import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main'}>
-                                                {hasUpdate ? `${latestVersion} ${t('system.about.available')}` : t('system.about.devMode')}
-                                            </Typography>
-                                        </Box>
-                                    </Tooltip>
-                                )}
+                                <VersionDisplay onClick={showUpdateDialog}>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            color: 'text.primary',
+                                            fontStyle: 'normal',
+                                            cursor: 'pointer',
+                                            '&:hover': {
+                                                color: 'primary.main',
+                                            },
+                                        }}
+                                    >
+                                        version {(currentVersion || 'Unknown').split('+')[0]}
+                                    </Typography>
+                                </VersionDisplay>
                             </Box>
                         </Box>
 
@@ -448,6 +429,12 @@ const System = () => {
                 </UnifiedCard>
 
             </CardGrid>
+
+            {/* Update Panel Dialog */}
+            <UpdatePanelDialog
+                open={openUpdateDialog}
+                onClose={closeUpdateDialog}
+            />
         </PageLayout>
     );
 };

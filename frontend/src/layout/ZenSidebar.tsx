@@ -1,10 +1,12 @@
 import { Box, Divider, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
-import React from 'react';
+import React, { useState } from 'react';
 import {Trans, useTranslation} from 'react-i18next';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useVersion } from '@/contexts/VersionContext';
 import { sidebarWidth, headerHeight, footerHeight } from './constants';
 import type { NavItem } from './types';
+import { VersionDisplay } from '@/components/VersionDisplay';
+import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 
 interface ZenSidebarProps {
     sidebarItems: NavItem[];
@@ -23,7 +25,7 @@ export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActi
     const { t } = useTranslation();
     const location = useLocation();
     const { currentVersion } = useVersion();
-    const displayVersion = (currentVersion || 'Unknown').split('+')[0];
+    const [updatePanelOpen, setUpdatePanelOpen] = useState(false);
 
     const isActive = (path: string) => location.pathname === path;
 
@@ -161,22 +163,7 @@ export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActi
                     height: footerHeight,
                 }}
             >
-                <Typography
-                    variant="caption"
-                    sx={{
-                        color: 'text.secondary',
-                        textAlign: 'center',
-                        display: 'block',
-                        fontStyle: 'italic',
-                        cursor: 'default',
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    <Trans i18nKey="layout.version" values={{ version: displayVersion }} />
-                </Typography>
+                <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
             </Box>
 
             {/* Footer bottom row: slogan */}
@@ -200,6 +187,12 @@ export const ZenSidebar: React.FC<ZenSidebarProps> = ({ sidebarItems, activeActi
                     </Typography>
                 </Tooltip>
             </Box>
+
+            {/* Update Panel Dialog */}
+            <UpdatePanelDialog
+                open={updatePanelOpen}
+                onClose={() => setUpdatePanelOpen(false)}
+            />
         </Box>
     );
 };
