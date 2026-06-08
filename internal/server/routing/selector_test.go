@@ -162,7 +162,7 @@ func TestSelect_PostProcess_LocksAffinity(t *testing.T) {
 
 	services := []*loadbalance.Service{svc}
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("gpt"))
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	sel := NewServiceSelector(cfg, store, lb)
 	ctx := testContext(rule, "session-1")
@@ -194,10 +194,10 @@ func TestSelect_PostProcess_LocksOnLoadBalancer(t *testing.T) {
 		},
 	}
 
-	// SmartAffinity=true but smart routing won't match → falls to LB
+	// SessionAffinity set but smart routing won't match → falls to LB
 	services := []*loadbalance.Service{svc}
 	rule := testSmartRule("rule-1", "gpt-4", services, testModelContainsOp("claude"))
-	rule.SmartAffinity = true
+	rule.Flags.SessionAffinity = 3600
 
 	sel := NewServiceSelector(cfg, store, lb)
 	ctx := testContext(rule, "session-1")

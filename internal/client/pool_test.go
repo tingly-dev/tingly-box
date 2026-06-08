@@ -86,8 +86,8 @@ func TestClientPool_WithSessionID(t *testing.T) {
 		APIBase:  "https://api.anthropic.com/v1",
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
-			ProviderType: "claude_code",
-			AccessToken:  "sk-ant-oa-test123",
+			Issuer:      ai.IssuerCodex,
+			AccessToken: "sk-ant-oa-test123",
 		},
 	}
 
@@ -105,7 +105,7 @@ func TestClientPool_WithSessionID(t *testing.T) {
 		provider.UUID,
 		"",
 		"",
-		"claude_code",
+		"codex",
 		sessionAlice,
 	)
 
@@ -135,8 +135,8 @@ func TestClientPool_InvalidateSession(t *testing.T) {
 		APIBase:  "https://api.anthropic.com/v1",
 		AuthType: typ.AuthTypeOAuth,
 		OAuthDetail: &typ.OAuthDetail{
-			ProviderType: "claude_code",
-			AccessToken:  "sk-ant-oa-test123",
+			Issuer:      ai.IssuerCodex,
+			AccessToken: "sk-ant-oa-test123",
 		},
 	}
 
@@ -155,7 +155,7 @@ func TestClientPool_InvalidateSession(t *testing.T) {
 		oauthProvider.UUID,
 		"",
 		"",
-		"claude_code",
+		"codex",
 		sessionAlice,
 	)
 
