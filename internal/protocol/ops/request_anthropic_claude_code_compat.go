@@ -43,6 +43,9 @@ func ApplyClaudeCodeCompatRoleRewrite(req *anthropic.MessageNewParams) {
 	if req == nil {
 		return
 	}
+	if !hasSystemRole(req.Messages) {
+		return // already valid — leave the messages (and their backing array) untouched
+	}
 	out := make([]anthropic.MessageParam, 0, len(req.Messages))
 	var pending []anthropic.ContentBlockParamUnion // system content not yet placed
 
@@ -90,6 +93,18 @@ func ApplyClaudeCodeCompatRoleRewrite(req *anthropic.MessageNewParams) {
 	req.Messages = out
 }
 
+// hasSystemRole reports whether any message carries the non-standard "system"
+// role. When none do, the messages are already valid and the rewrite is a no-op,
+// so callers can skip the allocate-and-rebuild pass entirely.
+func hasSystemRole(msgs []anthropic.MessageParam) bool {
+	for i := range msgs {
+		if msgs[i].Role == "system" {
+			return true
+		}
+	}
+	return false
+}
+
 func concatBlocks(a, b []anthropic.ContentBlockParamUnion) []anthropic.ContentBlockParamUnion {
 	merged := make([]anthropic.ContentBlockParamUnion, 0, len(a)+len(b))
 	merged = append(merged, a...)
@@ -103,6 +118,9 @@ func concatBlocks(a, b []anthropic.ContentBlockParamUnion) []anthropic.ContentBl
 func ApplyClaudeCodeBetaCompatRoleRewrite(req *anthropic.BetaMessageNewParams) {
 	if req == nil {
 		return
+	}
+	if !hasBetaSystemRole(req.Messages) {
+		return // already valid — leave the messages (and their backing array) untouched
 	}
 	out := make([]anthropic.BetaMessageParam, 0, len(req.Messages))
 	var pending []anthropic.BetaContentBlockParamUnion
@@ -136,13 +154,22 @@ func ApplyClaudeCodeBetaCompatRoleRewrite(req *anthropic.BetaMessageNewParams) {
 			}
 			out = append(out, msg)
 
-		default:
+		default: // assistant (or any other non-user, non-system role)
 			placePendingBackward()
 			out = append(out, msg)
 		}
 	}
 	placePendingBackward()
 	req.Messages = out
+}
+
+func hasBetaSystemRole(msgs []anthropic.BetaMessageParam) bool {
+	for i := range msgs {
+		if msgs[i].Role == "system" {
+			return true
+		}
+	}
+	return false
 }
 
 func concatBetaBlocks(a, b []anthropic.BetaContentBlockParamUnion) []anthropic.BetaContentBlockParamUnion {
