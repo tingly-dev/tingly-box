@@ -8,6 +8,7 @@ import {
     Menu,
     MenuItem,
     ListItemText,
+    Switch,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -81,6 +82,14 @@ export interface ModelRequestHeaderProps {
     extraActions?: React.ReactNode;
     isExpanded?: boolean;
     onToggleExpanded?: () => void;
+    // 1M context-window toggle (Claude Code only). When `show` is true a "1M"
+    // switch renders in the actions row; toggling calls `onToggle(nextOn)`.
+    oneM?: {
+        show: boolean;
+        on: boolean;
+        onToggle: (on: boolean) => void;
+        tooltip?: string;
+    };
 }
 
 export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
@@ -95,6 +104,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     extraActions,
     isExpanded = true,
     onToggleExpanded,
+    oneM,
 }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(modelName);
@@ -253,6 +263,29 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     const renderActions = () => {
         return (
             <ActionsSection>
+                {/* 1M context-window toggle (Claude Code rules only) */}
+                {oneM?.show && (
+                    <Tooltip
+                        title={oneM.tooltip || 'Enable the 1M context window (appends [1m] to the model the client sends)'}
+                        arrow
+                        placement="top"
+                    >
+                        <Box
+                            onClick={(e) => e.stopPropagation()}
+                            sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, mr: 0.25 }}
+                        >
+                            <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 0.5 }}>
+                                1M
+                            </Typography>
+                            <Switch
+                                size="small"
+                                checked={oneM.on}
+                                onChange={(_, c) => oneM.onToggle(c)}
+                            />
+                        </Box>
+                    </Tooltip>
+                )}
+
                 {/* Extra Actions (from parent) */}
                 {extraActions && (
                     <Box onClick={(e) => e.stopPropagation()}>

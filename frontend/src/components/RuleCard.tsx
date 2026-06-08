@@ -15,7 +15,15 @@ import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialo
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
-import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
+import OneMReconfigDialog, { isOneMReconfigSuppressed } from '@/components/rule-card/OneMReconfigDialog';
+import {
+    formatRuleFlags,
+    parseRuleFlags,
+    hasOneM,
+    withOneM,
+    isWildcardModelName,
+    isClaudeCodeScenario,
+} from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
 // Module-level cache so we only fetch the flag catalog once per session.
@@ -112,6 +120,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const [flagDialogOpen, setFlagDialogOpen] = useState(false);
     const [flagInput, setFlagInput] = useState('');
     const [flagError, setFlagError] = useState<string | undefined>(undefined);
+
+    // 1M re-config reminder dialog state
+    const [oneMDialog, setOneMDialog] = useState<{ open: boolean; enabled: boolean }>({ open: false, enabled: false });
 
     // Catalog dialog state + registry
     const [catalogOpen, setCatalogOpen] = useState(false);
@@ -265,7 +276,22 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         void updateField(configRecord, setConfigRecord, 'flags', next);
     }, [configRecord, updateField, setConfigRecord]);
 
+    // 1M toggle: write the [1m] suffix onto request_model (the single source of
+    // truth — Quick Config and the CLI/profile env all derive from it), then
+    // remind the user to re-materialize the client config.
+    const handleToggleOneM = useCallback((on: boolean) => {
+        if (!configRecord) return;
+        void updateField(configRecord, setConfigRecord, 'requestModel', withOneM(configRecord.requestModel, on));
+        if (!isOneMReconfigSuppressed()) {
+            setOneMDialog({ open: true, enabled: on });
+        }
+    }, [configRecord, updateField, setConfigRecord]);
+
     if (!configRecord) return null;
+
+    // 1M switch only applies to Claude Code rules with a concrete (non-wildcard)
+    // model name — the [1m] convention is meaningless elsewhere.
+    const showOneM = isClaudeCodeScenario(rule.scenario) && !isWildcardModelName(configRecord.requestModel);
 
     const extensionsCard = (
         <RulePluginsCard
@@ -310,6 +336,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onToggleExpanded={handleToggleExpanded}
                 extraActions={extraActions}
                 extensionsCard={extensionsCard}
+                oneM={{
+                    show: showOneM,
+                    on: hasOneM(configRecord.requestModel),
+                    onToggle: handleToggleOneM,
+                }}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}
                 onTierChange={handleProviderTierChange}
@@ -349,6 +380,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 providers={providers}
                 onClose={() => setCatalogOpen(false)}
                 onSave={handleSaveCatalogFlags}
+            />
+
+            {/* 1M re-config reminder (Claude Code) */}
+            <OneMReconfigDialog
+                open={oneMDialog.open}
+                scenario={rule.scenario}
+                enabled={oneMDialog.enabled}
+                onClose={() => setOneMDialog((s) => ({ ...s, open: false }))}
             />
 
             {/* Smart Rule Edit Dialog (catalog-style: conditions sidebar + detail pane) */}

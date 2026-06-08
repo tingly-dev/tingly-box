@@ -105,6 +105,14 @@ export interface UnifiedRoutingGraphProps {
     extraActions?: React.ReactNode;
     extensionsCard?: React.ReactNode;
 
+    // 1M context-window toggle for the model header (Claude Code only).
+    oneM?: {
+        show: boolean;
+        on: boolean;
+        onToggle: (on: boolean) => void;
+        tooltip?: string;
+    };
+
     // Scroll control: when true, auto-scroll to 80% position (for guide mode)
     autoScroll?: boolean;
 }
@@ -184,6 +192,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                             onDeleteServiceFromSmartRule,
                                                                             onSwitchRoutingMode,
                                                                             extraActions,
+                                                                            oneM,
                                                                             extensionsCard,
                                                                             autoScroll,
                                                                         }) => {
@@ -459,6 +468,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 collapsible={collapsible}
                 onClick={collapsible ? onToggleExpanded : undefined}
                 extraActions={extraActions}
+                oneM={oneM}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
             />

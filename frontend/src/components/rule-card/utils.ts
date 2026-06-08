@@ -14,6 +14,40 @@ export function isWildcardModelName(modelName: string): boolean {
     return modelName === '*' || modelName === '[any]';
 }
 
+// ── 1M context-window suffix ────────────────────────────────────────────
+// 1M is a Claude Code client convention: the [1m] suffix on the model name
+// (carried on the rule's request_model) is what makes Claude Code request the
+// 1M context window. tingly-box keeps it as part of request_model so it flows
+// rule → generated env → wire → exact rule match. See .design/one-m-context.md.
+// Mirrors internal/typ/model_tag.go.
+
+export const ONE_M_SUFFIX = '[1m]';
+
+/** Whether a model name carries the [1m] suffix. */
+export function hasOneM(modelName: string | undefined): boolean {
+    return !!modelName && modelName.endsWith(ONE_M_SUFFIX);
+}
+
+/** The canonical model name with any trailing [1m] removed. */
+export function stripOneM(modelName: string | undefined): string {
+    return (modelName || '').replace(/\[1m\]$/, '');
+}
+
+/** Add or remove the [1m] suffix on a model name (idempotent). */
+export function withOneM(modelName: string | undefined, on: boolean): string {
+    const base = stripOneM(modelName);
+    return on ? base + ONE_M_SUFFIX : base;
+}
+
+/**
+ * Whether a scenario is the Claude Code family (base or any profile, e.g.
+ * "claude_code" / "claude_code:p1"). The 1M [1m] convention only applies here.
+ */
+export function isClaudeCodeScenario(scenario: string | undefined): boolean {
+    if (!scenario) return false;
+    return scenario === 'claude_code' || scenario.startsWith('claude_code:');
+}
+
 // ============================================================================
 // Converter Functions
 // ============================================================================

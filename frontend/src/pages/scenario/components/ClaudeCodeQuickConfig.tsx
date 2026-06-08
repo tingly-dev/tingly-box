@@ -13,6 +13,7 @@ import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { RestartAlt as RestartAltIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { hasOneM as has1M, withOneM as with1M, ONE_M_SUFFIX } from '@/components/rule-card/utils';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
 // Keys are the literal Claude Code env var names so the object can be
@@ -420,15 +421,10 @@ const useLang = (): Lang => {
 };
 
 // ── 1M-context suffix helpers ──────────────────────────────────────────
-// 1M is part of the model string itself; the suffix lives on the wire,
-// not as a separate prefs field. The UI just toggles the trailing [1m].
-
-const ONE_M_SUFFIX = '[1m]';
-const has1M = (v: string | undefined) => !!v && v.endsWith(ONE_M_SUFFIX);
-const with1M = (v: string | undefined, on: boolean): string => {
-    const base = (v || '').replace(/\[1m\]$/, '');
-    return on ? base + ONE_M_SUFFIX : base;
-};
+// 1M is part of the model string itself; the suffix lives on the wire, not as
+// a separate prefs field. The UI just toggles the trailing [1m]. Helpers are
+// shared with the rule card via @/components/rule-card/utils (see
+// .design/one-m-context.md) so both surfaces stay in sync.
 
 // ── Default prefs derivation ───────────────────────────────────────────
 // Build initial prefs from the active routing rules, mirroring how the

@@ -9,6 +9,8 @@ import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageConte
 import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 import type { AgentApplyResult } from './AgentSetupCard';
+import { api } from '@/services/api';
+import { hasOneM, withOneM } from '@/components/rule-card/utils';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -244,8 +246,49 @@ https.get("${downloadUrl}", (response) => {
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, []);
 
+    // Persist the 1M state of each model slot onto the corresponding built-in
+    // Claude Code rule's request_model. The [1m] suffix is the single source of
+    // truth (see .design/one-m-context.md): the env we write to settings.json
+    // carries it, so the rule must carry it too or the incoming model won't
+    // exact-match its rule. Only the [1m] bit is synced — the model name itself
+    // stays decoupled from the rule, as before.
+    const syncOneMToRules = React.useCallback(async () => {
+        const slots: { env: keyof ClaudeCodePrefs; uuid: string }[] = [
+            { env: 'ANTHROPIC_MODEL', uuid: 'built-in-cc-default' },
+            { env: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', uuid: 'built-in-cc-haiku' },
+            { env: 'ANTHROPIC_DEFAULT_SONNET_MODEL', uuid: 'built-in-cc-sonnet' },
+            { env: 'ANTHROPIC_DEFAULT_OPUS_MODEL', uuid: 'built-in-cc-opus' },
+            { env: 'CLAUDE_CODE_SUBAGENT_MODEL', uuid: 'built-in-cc-subagent' },
+        ];
+
+        const syncRule = async (rule: any, on: boolean) => {
+            if (!rule) return;
+            const next = withOneM(rule.request_model, on);
+            if (next !== rule.request_model) {
+                await api.updateRule(rule.uuid, { ...rule, request_model: next });
+            }
+        };
+
+        if (configMode !== 'separate') {
+            // Unified: a single built-in-cc rule drives every slot.
+            await syncRule(rules[0], hasOneM(prefs.ANTHROPIC_MODEL));
+            return;
+        }
+        for (const slot of slots) {
+            const rule = rules.find((r: any) => r?.uuid === slot.uuid);
+            await syncRule(rule, hasOneM(prefs[slot.env]));
+        }
+    }, [configMode, rules, prefs]);
+
     const handleApply = async (installStatusLine: boolean) => {
         if (!onApplyWithPrefs) return;
+        // Sync rules first so routing matches the [1m] model name we're about to
+        // write into settings.json.
+        try {
+            await syncOneMToRules();
+        } catch {
+            /* non-fatal: env apply still proceeds */
+        }
         const result = await onApplyWithPrefs(prefs, installStatusLine);
         setApplyResult(result);
     };
