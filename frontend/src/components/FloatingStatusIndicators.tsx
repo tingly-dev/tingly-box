@@ -59,37 +59,6 @@ export const FloatingStatusIndicators = () => {
                     </IconButton>
                 </Tooltip>
             )}
-
-            {showUpdate && (
-                <Tooltip
-                    title={
-                        import.meta.env.DEV && !hasUpdate
-                            ? t('layout.activityBar.devMode')
-                            : t('layout.activityBar.newVersionAvailable')
-                    }
-                    placement="left"
-                    arrow
-                >
-                    <IconButton
-                        onClick={showUpdateDialog}
-                        size="small"
-                        sx={{
-                            width: { xs: 44, md: 40 },
-                            height: { xs: 44, md: 40 },
-                            bgcolor: { xs: 'transparent', md: 'background.paper' },
-                            color: import.meta.env.DEV && !hasUpdate ? 'success.main' : 'info.main',
-                            border: { xs: 'none', md: '1px solid' },
-                            borderColor: 'divider',
-                            boxShadow: { xs: 0, md: 2 },
-                            '&:hover': {
-                                bgcolor: 'action.hover',
-                            },
-                        }}
-                    >
-                        <IconStar size={20} />
-                    </IconButton>
-                </Tooltip>
-            )}
         </Box>
     );
 };

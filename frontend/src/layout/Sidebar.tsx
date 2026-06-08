@@ -23,6 +23,8 @@ import { useProfileContext } from '@/contexts/ProfileContext';
 import { useVersion } from '@/contexts/VersionContext';
 import { footerHeight, headerHeight, sidebarWidth } from './constants';
 import type { NavItem } from './types';
+import { VersionDisplay } from '@/components/VersionDisplay';
+import { UpdatePanelDialog } from '@/components/UpdatePanelDialog';
 
 interface SidebarProps {
     sidebarItems: NavItem[];
@@ -36,12 +38,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
     const location = useLocation();
     const { refresh } = useProfileContext();
     const { currentVersion } = useVersion();
-    const displayVersion = (currentVersion || 'Unknown').split('+')[0];
 
     const [addProfileAnchorEl, setAddProfileAnchorEl] = useState<HTMLElement | null>(null);
     const [newProfileName, setNewProfileName] = useState('');
     const [newProfileUnified, setNewProfileUnified] = useState(true);  // Default to unified
     const [isCreating, setIsCreating] = useState(false);
+    const [updatePanelOpen, setUpdatePanelOpen] = useState(false);
     const addProfileInputRef = useRef<HTMLInputElement>(null);
 
     const isActive = (path: string) => location.pathname === path;
@@ -233,22 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     height: footerHeight,
                 }}
             >
-                <Typography
-                    variant="caption"
-                    sx={{
-                        color: 'text.secondary',
-                        textAlign: 'center',
-                        display: 'block',
-                        fontStyle: 'italic',
-                        cursor: 'default',
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    <Trans i18nKey="layout.version" values={{ version: displayVersion }} />
-                </Typography>
+                <VersionDisplay onClick={() => setUpdatePanelOpen(true)} />
             </Box>
 
             {/* Add Profile Popover */}
@@ -318,6 +305,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarItems, activeActivityLa
                     </Typography>
                 </Tooltip>
             </Box>
+
+            {/* Update Panel Dialog */}
+            <UpdatePanelDialog
+                open={updatePanelOpen}
+                onClose={() => setUpdatePanelOpen(false)}
+            />
         </Box>
     );
 };

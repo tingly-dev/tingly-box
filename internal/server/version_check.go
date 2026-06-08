@@ -13,6 +13,7 @@ const (
 	npmRegistryAPI = "https://registry.npmjs.org/%s"
 	npmmirrorAPI   = "https://registry.npmmirror.com/%s"
 	tinglyBoxNPM   = "tingly-box"
+	githubReleases = "https://github.com/tingly-dev/tingly-box/releases"
 )
 
 // NpmPackage represents an npm registry package response
@@ -44,7 +45,7 @@ func newVersionChecker() *VersionChecker {
 			Timeout: 10 * time.Second,
 		},
 		cache: &versionCache{
-			ttl: 24 * time.Hour, // Cache for 24 hours
+			ttl: 2 * time.Hour, // Cache for 2 hours
 		},
 	}
 }
@@ -109,8 +110,8 @@ func (vc *VersionChecker) checkFromNpm() (version, releaseURL string, err error)
 		return "", "", fmt.Errorf("npm package has no latest version")
 	}
 
-	// Use npm package page as release URL
-	releaseURL = fmt.Sprintf("https://www.npmjs.com/package/%s", tinglyBoxNPM)
+	// Always point to GitHub releases page for changelog
+	releaseURL = githubReleases
 
 	return version, releaseURL, nil
 }
@@ -142,8 +143,8 @@ func (vc *VersionChecker) checkFromNpmMirror() (version, releaseURL string, err 
 		return "", "", fmt.Errorf("npmmirror package has no latest version")
 	}
 
-	// Use npmmirror package page as release URL
-	releaseURL = fmt.Sprintf("https://npmmirror.com/package/%s", tinglyBoxNPM)
+	// Always point to GitHub releases page for changelog
+	releaseURL = githubReleases
 
 	return version, releaseURL, nil
 }

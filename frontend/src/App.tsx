@@ -1,7 +1,6 @@
 import { Events } from '@/bindings';
-import { fontMono } from '@/theme/fonts';
-import { ContentCopy, Error as ErrorIcon, GitHub, AppRegistration as NPM, Refresh, UpgradeOutlined } from '@/components/icons';
-import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, Paper, Stack, Typography } from '@mui/material';
+import { Error as ErrorIcon, Refresh } from '@/components/icons';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Stack, Typography } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 import { useEffect, useMemo, useState } from 'react';
@@ -84,11 +83,10 @@ import {
 
 // Loading fallback component - kept for potential future use with async data
 
-// Dialogs component that uses the health and version contexts
+// Dialogs component that uses the health context
 const AppDialogs = () => {
     const { t } = useTranslation();
     const { isHealthy, checking, checkHealth, disconnectDialogOpen, closeDisconnectDialog } = useHealth();
-    const { openUpdateDialog, currentVersion, latestVersion, releaseURL, closeUpdateDialog } = useVersion();
 
     return (
         <>
@@ -125,151 +123,6 @@ const AppDialogs = () => {
                         startIcon={checking ? <CircularProgress size={16} /> : <Refresh />}
                     >
                         {t('health.retry', { defaultValue: 'Retry' })}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Update Available Dialog */}
-            <Dialog
-                open={openUpdateDialog}
-                onClose={closeUpdateDialog}
-                maxWidth="sm"
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                    }
-                }}
-            >
-                {/* Header with gradient background - using info color for update notification */}
-                <Box
-                    sx={{
-                        background: 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)',
-                        px: 3,
-                        py: 2.5,
-                        textAlign: 'center',
-                    }}
-                >
-                    <Box
-                        sx={{
-                            width: 56,
-                            height: 56,
-                            borderRadius: '50%',
-                            bgcolor: 'rgba(255, 255, 255, 0.2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            mx: 'auto',
-                            mb: 1.5,
-                        }}
-                    >
-                        <UpgradeOutlined sx={{ fontSize: 32, color: 'white' }} />
-                    </Box>
-                    <Typography variant="h5" sx={{ color: 'white', fontWeight: 600, mb: 0.5 }}>
-                        {t('update.newVersionAvailable', { defaultValue: 'New Version Available' })}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.9)' }}>
-                        {t('update.versionAvailable', {
-                            latest: latestVersion,
-                            current: currentVersion,
-                            defaultValue: 'Version {{latest}} is available (you have {{current}})'
-                        })}
-                    </Typography>
-                </Box>
-
-                <DialogContent sx={{ p: 0 }}>
-                    <Stack spacing={0} divider={<Divider />}>
-                        {/* Command Section */}
-                        <Box sx={{ p: 2.5 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.primary' }}>
-                                Quick Update with npx
-                            </Typography>
-                            <Paper
-                                variant="outlined"
-                                sx={{
-                                    p: 2,
-                                    bgcolor: 'background.paper',
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    position: 'relative',
-                                }}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontFamily: fontMono,
-                                        color: 'text.primary',
-                                        fontSize: '0.875rem',
-                                        pr: 4,
-                                        wordBreak: 'break-all',
-                                    }}
-                                >
-                                    $ npx tingly-box@latest
-                                </Typography>
-                                <IconButton
-                                    size="small"
-                                    onClick={() => {
-                                        navigator.clipboard.writeText('npx tingly-box@latest');
-                                    }}
-                                    sx={{
-                                        position: 'absolute',
-                                        right: 8,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            color: 'primary.main',
-                                            bgcolor: 'action.hover',
-                                        },
-                                    }}
-                                    title="Copy to clipboard"
-                                >
-                                    <ContentCopy sx={{ fontSize: 18 }} />
-                                </IconButton>
-                            </Paper>
-                        </Box>
-
-                        {/* Links Section */}
-                        <Box sx={{ p: 2.5 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5, color: 'text.primary' }}>
-                                Or visit release page
-                            </Typography>
-                            <Stack direction="row" spacing={1.5}>
-                                <Button
-                                    variant="outlined"
-                                    onClick={() => window.open('https://www.npmjs.com/package/tingly-box', '_blank')}
-                                    startIcon={<NPM />}
-                                    sx={{ flex: 1 }}
-                                >
-                                    npm
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    onClick={() => window.open(releaseURL || 'https://github.com/tingly-dev/tingly-box/releases', '_blank')}
-                                    startIcon={<GitHub />}
-                                    sx={{ flex: 1 }}
-                                >
-                                    GitHub
-                                </Button>
-                            </Stack>
-                        </Box>
-                    </Stack>
-                </DialogContent>
-
-                <DialogActions sx={{ px: 3, py: 2, bgcolor: 'action.hover' }}>
-                    <Button
-                        onClick={closeUpdateDialog}
-                        sx={{
-                            color: 'text.secondary',
-                            '&:hover': {
-                                bgcolor: 'action.selected',
-                            },
-                        }}
-                    >
-                        {t('update.later', { defaultValue: 'Remind Me Later' })}
                     </Button>
                 </DialogActions>
             </Dialog>

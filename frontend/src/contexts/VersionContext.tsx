@@ -8,6 +8,7 @@ interface VersionContextType {
     shouldNotify: boolean;
     releaseURL: string | null;
     checking: boolean;
+    error: string | null;
     checkForUpdates: (manual?: boolean) => Promise<void>;
     showUpdateDialog: () => void;
     openUpdateDialog: boolean;
@@ -35,21 +36,30 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
     const [shouldNotify, setShouldNotify] = useState(false);
     const [releaseURL, setReleaseURL] = useState<string | null>(null);
     const [checking, setChecking] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [openUpdateDialog, setOpenUpdateDialog] = useState(false);
 
     const checkForUpdates = useCallback(async (manual = false) => {
         setChecking(true);
+        setError(null);
         try {
             const result = await api.getLatestVersion();
             if (result && result.success && result.data) {
-                setCurrentVersion(result.data.current_version);
+                // Don't override currentVersion - it should only come from getVersion()
+                // The backend current_version may be "dev" in development mode
                 setLatestVersion(result.data.latest_version);
                 setHasUpdate(result.data.has_update);
                 setShouldNotify(result.data.should_notify);
                 setReleaseURL(result.data.release_url);
             }
-        } catch (error) {
-            console.error('Failed to check for updates:', error);
+        } catch (err) {
+            console.error('Failed to check for updates:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+            setError(errorMessage);
+            // Only show error to user if it was a manual check
+            if (manual) {
+                // Error state is now available via context
+            }
         } finally {
             setChecking(false);
         }
@@ -96,6 +106,7 @@ export const VersionProvider: React.FC<VersionProviderProps> = ({ children }) =>
                 shouldNotify,
                 releaseURL,
                 checking,
+                error,
                 checkForUpdates,
                 showUpdateDialog,
                 openUpdateDialog,
