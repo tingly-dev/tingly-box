@@ -15,7 +15,7 @@
 
 ---
 
-## 1. 信息架构以"用户脑中的问题"组织，而不是后端分类
+## 1. 信息架构以"用户脑中的问题"组织，而不是后端分类 — Organize IA around user questions, not backend taxonomy
 
 **典型案例**：Probe 重做。旧版按 mode 分类（simple/streaming/tool、direct/loopback）展示数据；新版重新组织为用户真正在问的三个问题——**"成功了吗 / 请求是怎么走的 / 返回了什么"**——于是出现 "请求旅程"（Rule → Flags → Routing → Provider→Model → Endpoint → Upstream URL）这个布局基元。
 
@@ -23,7 +23,7 @@
 
 ---
 
-## 2. 消解模式选择，把工作面直接打开
+## 2. 消解模式选择，把工作面直接打开 — Eliminate mode pickers; open the work surface directly
 
 **典型案例**：
 - Probe 取消 mode-picker 菜单，trigger 直接开 dialog，形态/范围在里面切换、就地 re-run。
@@ -34,7 +34,7 @@
 
 ---
 
-## 3. 命名碰撞必须拆开，词汇必须全局统一
+## 3. 命名碰撞必须拆开，词汇必须全局统一 — Split name collisions; keep vocabulary globally consistent
 
 **典型案例**：
 - Probe 旧版 "Direct" 同时承担"流/非流"和"经过 TB/直连上游"两个含义 → 拆成 **形态（Nonstream/Stream）× 范围（经过 TB/直连上游）**。
@@ -44,7 +44,7 @@
 
 ---
 
-## 4. 正交维度必须分轴呈现
+## 4. 正交维度必须分轴呈现 — Separate orthogonal dimensions onto their own axes
 
 **典型案例**：
 - Probe 的形态 × 范围拆分。
@@ -54,7 +54,7 @@
 
 ---
 
-## 5. 展示"具体值"，而不是别名
+## 5. 展示"具体值"，而不是别名 — Show the concrete value, not the alias
 
 **典型案例**：
 - 自定义 UA 预设：主行展示**真实 UA 字符串（等宽字体）**，友好名作为 caption。
@@ -65,7 +65,7 @@
 
 ---
 
-## 6. 合理的默认值，优于多一个开关
+## 6. 合理的默认值，优于多一个开关 — Smart defaults beat another toggle
 
 **典型案例**：
 - Affinity 在 Claude Code 等 agent 场景**默认开启**。
@@ -77,7 +77,7 @@
 
 ---
 
-## 7. 诊断要走真实链路；"假路径"只为回答一个特定问题
+## 7. 诊断要走真实链路；"假路径"只为回答一个特定问题 — Diagnostics traverse the real path; fake paths exist only to answer a specific diff question
 
 **典型案例**：Probe 重做的关键决策——所有 probe 走 TB 自己的 loopback `/tingly/{scenario}`，让 flags / smart routing / load balancer 全部按生产路径执行。**Direct 模式**保留下来，但角色被重新定义——不是"省事的旁路"，而是**"用来区分故障在 TB 内还是上游"的对照实验**。
 
@@ -85,7 +85,7 @@
 
 ---
 
-## 8. 教育要内嵌产品，用可视化和交互式步骤
+## 8. 教育要内嵌产品，用可视化和交互式步骤 — Embed education in the product with visuals and interactive steps
 
 **典型案例**：
 - EntryGuideDialog：Direct vs Smart 模式的 6 步交互引导 + 路由图示。
@@ -96,7 +96,7 @@
 
 ---
 
-## 9. 降低视觉噪声，让主体成为视觉锚点
+## 9. 降低视觉噪声，让主体成为视觉锚点 — Reduce visual noise; let the subject be the visual anchor
 
 **典型案例**：Provider 协议 tag / 角标（OpenAI / Anthropic / Key / OAuth / CN / Global）原本太抢眼 → 改为淡化的文本标签，让 **provider name 成为视觉锚点**。
 
@@ -104,7 +104,7 @@
 
 ---
 
-## 10. 完成 ≠ 锁死：保留再进入与可逆性
+## 10. 完成 ≠ 锁死：保留再进入与可逆性 — Done ≠ locked: preserve re-entry and reversibility
 
 **典型案例**：
 - Quick Start 步骤完成后**仍然可展开**，可以重新复制安装命令。
@@ -115,7 +115,7 @@
 
 ---
 
-## 11. 显式提供"下一步动作所需的物件"
+## 11. 显式提供"下一步动作所需的物件" — Hand over the artifact needed for the next action
 
 **典型案例**：
 - 版本更新对话框：直接给 `npx` / bundle / docker 命令 + copy 按钮；release URL 改到 GitHub releases（用户能 act 的地方），而非 npm 包页面。
@@ -126,7 +126,7 @@
 
 ---
 
-## 12. 副作用要限定在用户当前所处的表面
+## 12. 副作用要限定在用户当前所处的表面 — Scope side effects to the surface the user is currently on
 
 **典型案例**：`ui: should only scroll in guiding graph.`——滚动只发生在引导图本身，不冒泡到外层页面。同理，probe 控件作用域在 dialog 内、scenario flag 的 setter 收敛到一个 factory。
 
