@@ -77,10 +77,11 @@ func DefaultUserAgents() []FlagOption {
 	return []FlagOption{
 		{Label: "Claude Code (CLI)", Value: "claude-cli/2.1.86 (external, cli)"},
 		{Label: "Codex CLI", Value: "codex_cli_rs/0.20.0"},
-		{Label: "Gemini CLI", Value: "GeminiCLI/0.1.0 (linux; amd64)"},
-		{Label: "Kimi CLI", Value: "KimiCLI/1.10.6"},
-		{Label: "Antigravity", Value: "antigravity/1.11.5 windows/amd64"},
+		{Label: "OpenClaw", Value: "openclaw/1.0.0"},
+		{Label: "Hermes", Value: "hermes-agent/1.0.0"},
 		{Label: "OpenAI Python SDK", Value: "OpenAI/Python 1.51.0"},
+		// Sentinel preset: send no User-Agent at all (see typ.UserAgentNone).
+		{Label: "None (no User-Agent)", Value: UserAgentNone},
 	}
 }
 
@@ -93,7 +94,7 @@ func RuleFlagRegistry() []FlagSpec {
 		{
 			Key:         "custom_user_agent",
 			Label:       "Custom User-Agent",
-			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, or enter any value.",
+			Description: "Override the outbound User-Agent header sent to the upstream provider. Takes precedence over the provider-level User-Agent for generic OpenAI / Anthropic clients; vendor-specific clients (Claude Code OAuth, Codex, Gemini, Google) keep their dedicated User-Agent. Can also be set scenario-wide (the rule value wins when both are set). Pick a preset to impersonate a known CLI/agent, enter any value, or choose \"None\" to strip the User-Agent header entirely (send no User-Agent).",
 			Type:        FlagTypeString,
 			Category:    FlagCategoryRequestOpenAI,
 			Placeholder: "e.g. MyApp/1.0",
