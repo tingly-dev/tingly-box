@@ -51,6 +51,7 @@ func Migrate(c *Config) error {
 	migrate20260606(c) // Add default scenario configs with session affinity
 	migrate20260608(c) // Default claude_code_compat on for existing Claude Code rules
 	migrate20260609(c) // Default clean_header on for existing Claude Code rules
+	migrate20260610(c) // Default clean_header on for existing Claude Desktop rules
 	return nil
 }
 
@@ -562,6 +563,7 @@ func migrate20260521(c *Config) {
 			Type:   loadbalance.TacticAdaptive,
 			Params: typ.DefaultAdaptiveParams(),
 		},
+		Flags:  typ.RuleFlags{CleanHeader: true},
 		Active: true,
 	}
 	if referenceRule != nil && len(referenceRule.Services) > 0 {
@@ -721,5 +723,36 @@ func migrate20260609(c *Config) {
 	if needsSave {
 		_ = c.Save()
 		logrus.Info("Migration 2026-06-09 completed: defaulted clean_header on for Claude Code rules")
+	}
+}
+
+// migrate20260610 defaults clean_header on for existing Claude Desktop rules.
+// Claude Desktop injects x-anthropic-billing-header blocks into system messages
+// (same billing mechanism as Claude Code); these must not leak to external
+// providers. Mirrors migrate20260609 but targets ScenarioClaudeDesktop.
+//
+// One-time only — gated by the migration marker — so a user who later turns the
+// flag off on a specific rule keeps it off across restarts.
+func migrate20260610(c *Config) {
+	if c.hasMigrationCompleted("20260610") {
+		return
+	}
+
+	needsSave := false
+	for i := range c.Rules {
+		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
+		if base != typ.ScenarioClaudeDesktop {
+			continue
+		}
+		if !c.Rules[i].Flags.CleanHeader {
+			c.Rules[i].Flags.CleanHeader = true
+			needsSave = true
+		}
+	}
+
+	c.markMigrationCompleted("20260610")
+	if needsSave {
+		_ = c.Save()
+		logrus.Info("Migration 2026-06-10 completed: defaulted clean_header on for Claude Desktop rules")
 	}
 }
