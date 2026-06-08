@@ -19,7 +19,7 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon } from '@/components/icons';
+import { Refresh as RefreshIcon, Outbound as CallMadeIcon, ErrorOutline as ErrorOutlineIcon, FilterOff } from '@/components/icons';
 import { tablerMui } from '@/components/icons';
 import { IconCoin, IconActivity, IconReload } from '@tabler/icons-react';
 
@@ -118,6 +118,7 @@ export default function DashboardPage() {
     const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
     const [providers, setProviders] = useState<Provider[]>([]);
     const [selectedProvider, setSelectedProvider] = useState<string>('all');
+    const [selectedModel, setSelectedModel] = useState<string>('all');
 
     // By-request view state
     const [viewMode, setViewMode] = useState<'summary' | 'requests'>('summary');
@@ -125,7 +126,7 @@ export default function DashboardPage() {
     const [recordsLoading, setRecordsLoading] = useState(false);
     const [recordsTimeParams, setRecordsTimeParams] = useState<{ start_time: string; end_time: string } | null>(null);
 
-    const buildTimeParams = useCallback((provider: string, range: TimeRange) => {
+    const buildTimeParams = useCallback((provider: string, model: string, range: TimeRange) => {
         const now = new Date();
         const config = TIME_RANGE_CONFIG[range];
         const todayStart = getLocalMidnight(now);
@@ -150,13 +151,16 @@ export default function DashboardPage() {
         if (provider && provider !== 'all') {
             params.provider = provider;
         }
+        if (model && model !== 'all') {
+            params.model = model;
+        }
         return params;
     }, []);
 
-    const loadData = useCallback(async (provider: string, range: TimeRange) => {
+    const loadData = useCallback(async (provider: string, model: string, range: TimeRange) => {
         try {
             const config = TIME_RANGE_CONFIG[range];
-            const params = buildTimeParams(provider, range);
+            const params = buildTimeParams(provider, model, range);
 
             const [statsResult, timeSeriesResult, providersResult] = await Promise.all([
                 api.getUsageStats({ ...params, group_by: 'model', limit: 100 }),
@@ -187,16 +191,23 @@ export default function DashboardPage() {
     const loadRecords = useCallback(async (
         timeParams: { start_time: string; end_time: string } | null,
         provider: string,
+        model: string,
     ) => {
         if (!timeParams) return;
         setRecordsLoading(true);
         try {
-            const result = await api.getUsageRecords({
+            const filters: Record<string, any> = {
                 ...timeParams,
-                ...(provider !== 'all' ? { provider } : {}),
                 limit: 500,
                 offset: 0,
-            });
+            };
+            if (provider !== 'all') {
+                filters.provider = provider;
+            }
+            if (model !== 'all') {
+                filters.model = model;
+            }
+            const result = await api.getUsageRecords(filters);
             if (result?.data) {
                 setRecords(result.data);
             }
@@ -208,8 +219,8 @@ export default function DashboardPage() {
     }, []);
 
     useEffect(() => {
-        loadData(selectedProvider, timeRange);
-    }, [loadData, selectedProvider, timeRange]);
+        loadData(selectedProvider, selectedModel, timeRange);
+    }, [loadData, selectedProvider, selectedModel, timeRange]);
 
     // Reset view mode when switching away from hourly ranges
     useEffect(() => {
@@ -218,28 +229,28 @@ export default function DashboardPage() {
         }
     }, [isHourlyRange]);
 
-    // Load records when entering requests view or time/provider changes
+    // Load records when entering requests view or time/provider/model changes
     useEffect(() => {
         if (viewMode === 'requests') {
-            loadRecords(recordsTimeParams, selectedProvider);
+            loadRecords(recordsTimeParams, selectedProvider, selectedModel);
         }
-    }, [viewMode, recordsTimeParams, selectedProvider, loadRecords]);
+    }, [viewMode, recordsTimeParams, selectedProvider, selectedModel, loadRecords]);
 
     useEffect(() => {
         if (autoRefresh) {
             const interval = setInterval(() => {
-                loadData(selectedProvider, timeRange);
+                loadData(selectedProvider, selectedModel, timeRange);
                 if (viewMode === 'requests') {
-                    loadRecords(recordsTimeParams, selectedProvider);
+                    loadRecords(recordsTimeParams, selectedProvider, selectedModel);
                 }
             }, 60000);
             return () => clearInterval(interval);
         }
-    }, [autoRefresh, loadData, selectedProvider, timeRange, viewMode, loadRecords, recordsTimeParams]);
+    }, [autoRefresh, loadData, selectedProvider, selectedModel, timeRange, viewMode, loadRecords, recordsTimeParams]);
 
     const handleRefresh = () => {
         setRefreshing(true);
-        loadData(selectedProvider, timeRange);
+        loadData(selectedProvider, selectedModel, timeRange);
     };
 
     // Calculate totals from stats
@@ -337,13 +348,40 @@ export default function DashboardPage() {
             }));
     }, [providers]);
 
+    // Extract unique models from stats, sorted by usage
+    const modelOptions = useMemo(() => {
+        const modelMap = new Map<string, { model: string; providerName: string; totalTokens: number }>();
+        stats.forEach((stat) => {
+            const model = stat.model || stat.key || 'Unknown';
+            const totalTokens = (stat.total_input_tokens || 0) + (stat.total_output_tokens || 0) + (stat.cache_input_tokens || 0);
+            const existing = modelMap.get(model);
+            if (!existing || totalTokens > existing.totalTokens) {
+                modelMap.set(model, {
+                    model,
+                    providerName: stat.provider_name || 'Unknown',
+                    totalTokens,
+                });
+            }
+        });
+        return Array.from(modelMap.values())
+            .sort((a, b) => b.totalTokens - a.totalTokens)
+            .map((m) => m.model);
+    }, [stats]);
+
+    const hasActiveFilters = selectedProvider !== 'all' || selectedModel !== 'all';
+
+    const handleClearFilters = () => {
+        setSelectedProvider('all');
+        setSelectedModel('all');
+    };
+
     if (loading) {
         return <DashboardSkeleton />;
     }
 
     const headerActions = (
         <>
-            <FormControl size="small" sx={{ minWidth: { xs: 180, sm: 150 } }}>
+            <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 160 } }}>
                 <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>Provider</InputLabel>
                 <Select
                     value={selectedProvider}
@@ -366,7 +404,6 @@ export default function DashboardPage() {
                                 lineHeight: '28px',
                                 pt: 1,
                                 pl: 1.5,
-                                // colored left accent bar
                                 borderLeft: '3px solid',
                                 borderLeftColor: 'primary.main',
                                 backgroundColor: 'action.hover',
@@ -382,6 +419,45 @@ export default function DashboardPage() {
                     ])}
                 </Select>
             </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 160 } }}>
+                <InputLabel sx={{ fontWeight: 500, fontSize: '0.875rem' }}>Model</InputLabel>
+                <Select
+                    value={selectedModel}
+                    label="Model"
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    disabled={!stats.length}
+                    sx={{
+                        borderRadius: 2,
+                        '& .MuiOutlinedInput-input': { py: 1 },
+                    }}
+                >
+                    <MenuItem value="all">All Models</MenuItem>
+                    {modelOptions.map((model) => (
+                        <MenuItem key={model} value={model}>
+                            {model}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+
+            {hasActiveFilters && (
+                <>
+                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5, display: { xs: 'none', sm: 'block' } }} />
+                    <Tooltip title="Clear all filters">
+                        <IconButton
+                            size="small"
+                            onClick={handleClearFilters}
+                            sx={{
+                                backgroundColor: 'action.hover',
+                                '&:hover': { backgroundColor: 'action.selected' },
+                            }}
+                        >
+                            <FilterOff />
+                        </IconButton>
+                    </Tooltip>
+                </>
+            )}
 
             <Divider orientation="vertical" flexItem sx={{ mx: 0.5, display: { xs: 'none', sm: 'block' } }} />
 
@@ -584,8 +660,9 @@ export default function DashboardPage() {
                                     >
                                         <Box
                                             onClick={() => {
-                                                if (item.providerUuid) {
-                                                    setSelectedProvider(item.providerUuid);
+                                                // When clicking a model, filter by that model
+                                                if (item.model) {
+                                                    setSelectedModel(item.model);
                                                 }
                                             }}
                                             sx={{
@@ -596,7 +673,7 @@ export default function DashboardPage() {
                                                 px: 1,
                                                 borderRadius: 1,
                                                 transition: 'background-color 0.15s ease',
-                                                cursor: item.providerUuid ? 'pointer' : 'default',
+                                                cursor: item.model ? 'pointer' : 'default',
                                                 '&:hover': {
                                                     backgroundColor: 'action.hover',
                                                 },

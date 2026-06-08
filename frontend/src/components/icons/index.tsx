@@ -111,6 +111,8 @@ import {
     IconBrain,
     IconFoldDown,
     IconFoldUp,
+    IconFilter,
+    IconFilterOff,
 } from '@tabler/icons-react';
 import { tablerMui } from './tablerMui';
 
@@ -154,6 +156,8 @@ export const OpenInNew = tablerMui(IconExternalLink);
 export const Launch = tablerMui(IconExternalLink);
 export const Link = tablerMui(IconLink);
 export const PlayArrow = tablerMui(IconPlayerPlay);
+export const Filter = tablerMui(IconFilter);
+export const FilterOff = tablerMui(IconFilterOff);
 
 // --- Status / feedback -------------------------------------------------------
 export const Info = tablerMui(IconInfoCircle);
