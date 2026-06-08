@@ -137,7 +137,7 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `cursor_compat` | bool | app | — | — | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre）|
 | `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
 | `claude_code_compat` | bool | app | **yes** | or | 归一化 Claude Code 的会话中段 `role == "system"` 消息。Claude Code 在 messages 中写入 system role（非标准扩展，对应 Anthropic `mid-conversation-system` beta）；三方 Anthropic-compatible provider 拒绝该 role。**位置感知**：把每条 system 消息**就地并入相邻 user turn**，方向由左右邻居唯一决定（不是自由选择）——前邻是 user 则**向后并**入它；前邻是 assistant/开头则**向前并**入下一条 user；两侧都不是 user 才独立成一个 user turn。决策需先知道 next 的角色，故实现用 pending 缓冲，到下一条非 system 消息（或数组末尾）才落位。这样既保住位置、又避免产生连续 user 消息（严格 provider 同样会以 "roles must alternate" 拒绝）。**不做 hoist**：messages 里的 system 按 beta 契约必是中段消息（不能是 `messages[0]`），全局 system prompt 已在顶层 `system` 字段；hoist 会把"截至第 N 轮"的指令重排为全局、并击穿 prompt cache。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260608` 存量），可在 Plugins 卡片按 rule 关闭以保真原生 Anthropic。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite`（Type 1b-pre，仅 Anthropic 入站形态）|
-| `clean_header` | bool | app | **yes** | or | 剥离 system messages 中的 x-anthropic-billing-header 块。billing 场景（claude_code, claude_desktop）协议转换时自动启用；也可手动强制启用。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
+| `clean_header` | bool | app | — | — | 剥离 system messages 中的 x-anthropic-billing-header 块。Claude Code 注入该 header 仅供自家计费，绝不能泄漏给三方 provider。**rule-only**（已从 scenario plugin 移除 —— 不再有 `ScenarioFlags.CleanHeader` / OR 注入）。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260609` 存量），可按 rule 关闭以保真原生 Anthropic。**Claude OAuth provider 自动抑制**：OAuth 订阅走原生 Anthropic，其计费后端要消费这个 header，故 `resolveRuleFlagsWithScenario` 在解析末尾对 `provider.IsClaudeCodeProvider()` 命中的请求清掉该 flag。claude_desktop 仍靠 `autoSetCleanHeaderFlag` 在协议转换时自动启用（claude_desktop 未做 rule 级默认）。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
 
 ---
 
@@ -498,7 +498,6 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 |------|--------|------------|----------|
 | `skip_usage` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `SkipUsage`（rule 未禁用即生效）|
 | `thinking_effort` | ✅ | ✅ | Rule 显式设置 > Scenario 默认 > By Client（空字符串）|
-| `clean_header` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `CleanHeader`；billing 场景协议转换时自动启用 |
 | `claude_code_compat` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `ClaudeCodeCompat` |
 | `custom_user_agent` | ✅ | ✅ | Rule 显式设置（非空）> Scenario 默认 > 不覆盖（空）。注入点 `applyCustomUserAgent`（Type 2，写入 c.Request.Context()）|
 | `session_affinity` | ✅ | ✅ | Rule 显式设置（>0）> Scenario 默认 > 禁用（0）|
@@ -510,6 +509,8 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 | `smart_compact` | 从会话历史中移除 thinking blocks 以减少 context |
 | `recording_v2` | 控制请求/响应录制模式（off / request / request_response / staged） |
 | `unified` / `separate` / `smart` | 路由模式开关 |
+
+**Rule-only flags（曾是 scenario 级、已下放为纯 rule 级）**：`clean_header` 原本是 scenario-shared（OR 继承），现已从 scenario plugin 移除——`ScenarioFlags.CleanHeader` 字段、`GetScenarioFlag`/`SetScenarioFlag` 的 `clean_header` 分支、`FlagCleanHeader` 常量、以及 `resolveRuleFlagsWithScenario` 里的 OR 注入全部删除。改为 built-in CC rule 默认开（见上方主表与 §built-in 默认），UI 上只在 Plugins 卡片按 rule 呈现真实值，不再有 scenario 级开关。
 
 **继承逻辑实现**：
 
@@ -523,8 +524,8 @@ func resolveRuleFlagsWithScenario(...) typ.RuleFlags {
         if flags.ThinkingEffort == "" && scenarioConfig.Flags.ThinkingEffort != "" {
             flags.ThinkingEffort = scenarioConfig.Flags.ThinkingEffort
         }
-        // CleanHeader / ClaudeCodeCompat / SkipUsage：OR 语义（任一启用即生效）
-        flags.CleanHeader      = flags.CleanHeader || scenarioConfig.Flags.CleanHeader
+        // ClaudeCodeCompat / SkipUsage：OR 语义（任一启用即生效）
+        // 注意：clean_header 已不在此 —— 它是 rule-only，无 scenario 级 OR 注入。
         flags.ClaudeCodeCompat = flags.ClaudeCodeCompat || scenarioConfig.Flags.ClaudeCodeCompat
         flags.SkipUsage        = flags.SkipUsage || scenarioConfig.Flags.SkipUsage
         // CustomUserAgent：rule 非空时优先，否则继承 scenario 默认
@@ -536,8 +537,12 @@ func resolveRuleFlagsWithScenario(...) typ.RuleFlags {
             flags.SessionAffinity = scenarioConfig.Flags.SessionAffinity
         }
     }
-    // billing 场景协议转换时自动启用 CleanHeader
+    // claude_desktop 等 billing 场景：协议转换时自动启用 CleanHeader（claude_code 已 rule 级默认开）
     flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
+    // Claude OAuth provider：原生 Anthropic 计费后端要消费 billing header，抑制 CleanHeader
+    if flags.CleanHeader && provider.IsClaudeCodeProvider() {
+        flags.CleanHeader = false
+    }
     return flags
 }
 

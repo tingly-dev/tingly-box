@@ -162,8 +162,6 @@ type ScenarioFlags struct {
 	// "low"/"medium"/"high"/"max" (force enabled with the matching budget).
 	ThinkingEffort ThinkingEffortLevel `json:"thinking_effort,omitempty" yaml:"thinking_effort,omitempty"`
 
-	CleanHeader bool `json:"clean_header,omitempty" yaml:"clean_header,omitempty"` // Remove billing header from system messages (Claude Code only)
-
 	// CustomUserAgent overrides the outbound User-Agent header for every rule
 	// under this scenario. Acts as a scenario-wide default; individual rules can
 	// override it via RuleFlags.CustomUserAgent (rule value wins when non-empty).

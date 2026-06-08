@@ -9,7 +9,6 @@ const (
 	FlagSmart        = "smart"
 	FlagSmartCompact = "smart_compact"
 	FlagSkipUsage    = "skip_usage"
-	FlagCleanHeader  = "clean_header"
 )
 
 // ScenarioFlags string field keys. Same contract as above but for

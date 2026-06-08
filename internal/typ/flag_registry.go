@@ -217,13 +217,11 @@ func RuleFlagRegistry() []FlagSpec {
 			InheritanceMode: "or",
 		},
 		{
-			Key:             "clean_header",
-			Label:           "Clean Header",
-			Description:     "Strip x-anthropic-billing-header blocks from system messages before forwarding. Auto-enabled for billing scenarios (claude_code, claude_desktop) during protocol transformation; set manually to force enable on any rule.",
-			Type:            FlagTypeBool,
-			Category:        FlagCategoryApp,
-			Shared:          true,
-			InheritanceMode: "or",
+			Key:         "clean_header",
+			Label:       "Clean Header",
+			Description: "Strip x-anthropic-billing-header blocks from system messages before forwarding. Claude Code injects this header for its own billing; it must not leak to third-party providers. On by default for the built-in Claude Code rules, and automatically suppressed when the rule routes to a Claude OAuth provider (whose billing backend consumes the header). Still auto-enabled for claude_desktop during protocol transformation. Turn off only for native Anthropic fidelity.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryApp,
 		},
 	}
 }
