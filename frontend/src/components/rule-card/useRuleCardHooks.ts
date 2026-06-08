@@ -13,6 +13,7 @@ import {
     pickLbTactic,
     type ExportFormat,
 } from './utils';
+import { flagsToApi } from './flagHelpers';
 
 // ============================================================================
 // Types
@@ -114,21 +115,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                     response_model: newConfigRecord.responseModel,
                     active: newConfigRecord.active,
                     description: newConfigRecord.description,
-                    flags: {
-                        cursor_compat: newConfigRecord.flags?.cursorCompat || false,
-                        cursor_compat_auto: newConfigRecord.flags?.cursorCompatAuto || false,
-                        skip_usage: newConfigRecord.flags?.skipUsage || false,
-                        custom_user_agent: newConfigRecord.flags?.customUserAgent || '',
-                        use_max_completion_tokens: newConfigRecord.flags?.useMaxCompletionTokens || false,
-                        use_max_tokens: newConfigRecord.flags?.useMaxTokens || false,
-                        openai_endpoint_override: newConfigRecord.flags?.openaiEndpointOverride || '',
-                        block_tools: newConfigRecord.flags?.blockTools || '',
-                        thinking_effort: newConfigRecord.flags?.thinkingEffort || '',
-                        session_affinity: newConfigRecord.flags?.sessionAffinity || 0,
-                        vision_proxy_service: newConfigRecord.flags?.visionProxyService,
-                        claude_code_compat: newConfigRecord.flags?.claudeCodeCompat || false,
-                        clean_header: newConfigRecord.flags?.cleanHeader || false,
-                    },
+                    flags: flagsToApi(newConfigRecord.flags),
                     services: newConfigRecord.providers
                         .filter((p) => p.provider && p.model)
                         .map((provider) => ({

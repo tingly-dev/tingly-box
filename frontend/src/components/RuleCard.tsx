@@ -224,7 +224,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     const handleOpenFlagEditor = useCallback(() => {
         if (!configRecord) return;
-        const currentFlags = formatRuleFlags(configRecord.flags);
+        const currentFlags = formatRuleFlags(configRecord.flags, flagRegistry);
         if (!currentFlags && configRecord.requestModel === 'cursor') {
             setFlagInput('cursor_compat=true');
         } else {
@@ -232,18 +232,18 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         }
         setFlagError(undefined);
         setFlagDialogOpen(true);
-    }, [configRecord]);
+    }, [configRecord, flagRegistry]);
 
     const handleSaveFlags = useCallback(async () => {
         if (!configRecord) return;
-        const result = parseRuleFlags(flagInput);
+        const result = parseRuleFlags(flagInput, flagRegistry);
         if (result.error) {
             setFlagError(result.error);
             return;
         }
         await updateField(configRecord, setConfigRecord, 'flags', result.flags);
         setFlagDialogOpen(false);
-    }, [configRecord, flagInput, updateField, setConfigRecord]);
+    }, [configRecord, flagInput, flagRegistry, updateField, setConfigRecord]);
 
     const handleSaveCatalogFlags = useCallback(async (next: RuleFlags) => {
         if (!configRecord) return;

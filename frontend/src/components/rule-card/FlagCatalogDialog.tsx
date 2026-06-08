@@ -30,6 +30,7 @@ import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/Ro
 import type { Provider } from '@/types/provider';
 import type { ProviderSelectTabOption } from '@/components/ModelSelectDialog';
 import ModelSelectDialog from '@/components/ModelSelectDialog';
+import { getFlagValue, setFlagValue, enumInactive, isFlagActive, normalizeEnumForStorage } from './flagHelpers';
 
 export interface FlagCatalogDialogProps {
     open: boolean;
@@ -42,142 +43,17 @@ export interface FlagCatalogDialogProps {
     onSave: (next: RuleFlags) => void;
 }
 
-const flagToServiceRef = (flags: RuleFlags | undefined, key: string): VisionProxyServiceRef | undefined => {
-    if (!flags) return undefined;
-    switch (key) {
-        case 'vision_proxy_service':
-            return flags.visionProxyService;
-        default:
-            return undefined;
-    }
-};
+const flagToBool = (flags: RuleFlags | undefined, key: string): boolean =>
+    !!getFlagValue(flags, key);
 
-const setServiceRef = (flags: RuleFlags, key: string, value: VisionProxyServiceRef | undefined): RuleFlags => {
-    switch (key) {
-        case 'vision_proxy_service':
-            return { ...flags, visionProxyService: value };
-        default:
-            return flags;
-    }
-};
+const flagToInt = (flags: RuleFlags | undefined, key: string): number =>
+    (getFlagValue(flags, key) as number) ?? 0;
 
-const flagToBool = (flags: RuleFlags | undefined, key: string): boolean => {
-    if (!flags) return false;
-    switch (key) {
-        case 'cursor_compat':
-            return !!flags.cursorCompat;
-        case 'cursor_compat_auto':
-            return !!flags.cursorCompatAuto;
-        case 'skip_usage':
-            return !!flags.skipUsage;
-        case 'use_max_completion_tokens':
-            return !!flags.useMaxCompletionTokens;
-        case 'use_max_tokens':
-            return !!flags.useMaxTokens;
-        case 'claude_code_compat':
-            return !!flags.claudeCodeCompat;
-        case 'clean_header':
-            return !!flags.cleanHeader;
-        default:
-            return false;
-    }
-};
+const flagToString = (flags: RuleFlags | undefined, key: string): string =>
+    (getFlagValue(flags, key) as string) ?? '';
 
-const flagToInt = (flags: RuleFlags | undefined, key: string): number => {
-    if (!flags) return 0;
-    switch (key) {
-        case 'session_affinity':
-            return flags.sessionAffinity ?? 0;
-        default:
-            return 0;
-    }
-};
-
-const setInt = (flags: RuleFlags, key: string, value: number): RuleFlags => {
-    switch (key) {
-        case 'session_affinity':
-            return { ...flags, sessionAffinity: value };
-        default:
-            return flags;
-    }
-};
-
-const flagToString = (flags: RuleFlags | undefined, key: string): string => {
-    if (!flags) return '';
-    switch (key) {
-        case 'custom_user_agent':
-            return flags.customUserAgent || '';
-        case 'openai_endpoint_override':
-            return flags.openaiEndpointOverride || '';
-        case 'block_tools':
-            return flags.blockTools || '';
-        case 'thinking_effort':
-            return flags.thinkingEffort || '';
-        default:
-            return '';
-    }
-};
-
-const setBool = (flags: RuleFlags, key: string, value: boolean): RuleFlags => {
-    switch (key) {
-        case 'cursor_compat':
-            return { ...flags, cursorCompat: value };
-        case 'cursor_compat_auto':
-            return { ...flags, cursorCompatAuto: value };
-        case 'skip_usage':
-            return { ...flags, skipUsage: value };
-        case 'use_max_completion_tokens':
-            return { ...flags, useMaxCompletionTokens: value };
-        case 'use_max_tokens':
-            return { ...flags, useMaxTokens: value };
-        case 'claude_code_compat':
-            return { ...flags, claudeCodeCompat: value };
-        case 'clean_header':
-            return { ...flags, cleanHeader: value };
-        default:
-            return flags;
-    }
-};
-
-const setString = (flags: RuleFlags, key: string, value: string): RuleFlags => {
-    switch (key) {
-        case 'custom_user_agent':
-            return { ...flags, customUserAgent: value };
-        case 'openai_endpoint_override':
-            // Persist "auto" as empty string so omitempty hides it on the wire.
-            return { ...flags, openaiEndpointOverride: value === 'auto' ? '' : value };
-        case 'block_tools':
-            return { ...flags, blockTools: value };
-        case 'thinking_effort':
-            // First option already uses "" for the inactive ("By Client") value.
-            return { ...flags, thinkingEffort: value };
-        default:
-            return flags;
-    }
-};
-
-// The inactive/default value for an enum flag is its first registry option
-// (e.g. "auto" for endpoint override, "" for thinking effort, "default" for thinking mode).
-const enumDefault = (spec: FlagSpec): string => spec.options?.[0]?.value ?? '';
-
-const isFlagActive = (spec: FlagSpec, flags: RuleFlags): boolean => {
-    if (spec.type === 'bool') return flagToBool(flags, spec.key);
-    if (spec.type === 'int') return flagToInt(flags, spec.key) > 0;
-    if (spec.type === 'service_ref') {
-        const ref = flagToServiceRef(flags, spec.key);
-        return !!(ref && ref.provider && ref.model);
-    }
-    const v = flagToString(flags, spec.key);
-    if (spec.type === 'enum') return v !== '' && v !== enumDefault(spec);
-    return v !== '';
-};
-
-const resetFlag = (flags: RuleFlags, spec: FlagSpec): RuleFlags => {
-    if (spec.type === 'bool') return setBool(flags, spec.key, false);
-    if (spec.type === 'int') return setInt(flags, spec.key, 0);
-    if (spec.type === 'service_ref') return setServiceRef(flags, spec.key, undefined);
-    return setString(flags, spec.key, '');
-};
+const flagToServiceRef = (flags: RuleFlags | undefined, key: string): VisionProxyServiceRef | undefined =>
+    getFlagValue(flags, key) as VisionProxyServiceRef | undefined;
 
 interface CategoryMeta {
     label: string;
@@ -253,17 +129,21 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
 
     const currentGroup = grouped.find((g) => g.category === activeCategory);
 
+    const specLookup = useMemo(() => new Map((registry || []).map((s) => [s.key, s])), [registry]);
+
     const handleToggle = (key: string, value: boolean) => {
-        setDraft((d) => setBool(d, key, value));
+        setDraft((d) => setFlagValue(d, key, value));
     };
 
     const handleStringChange = (key: string, value: string) => {
-        setDraft((d) => setString(d, key, value));
+        const spec = specLookup.get(key);
+        const normalized = spec?.type === 'enum' ? normalizeEnumForStorage(spec, value) : value;
+        setDraft((d) => setFlagValue(d, key, normalized));
     };
 
     const handleIntChange = (key: string, value: string) => {
         const n = parseInt(value, 10);
-        setDraft((d) => setInt(d, key, isNaN(n) || n < 0 ? 0 : n));
+        setDraft((d) => setFlagValue(d, key, isNaN(n) || n < 0 ? 0 : n));
     };
 
     const jumpToFlag = (spec: FlagSpec) => {
@@ -280,7 +160,8 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     };
 
     const handleRemoveActive = (spec: FlagSpec) => {
-        setDraft((d) => resetFlag(d, spec));
+        const def = spec.type === 'bool' ? false : spec.type === 'int' ? 0 : spec.type === 'service_ref' ? undefined : '';
+        setDraft((d) => setFlagValue(d, spec.key, def));
     };
 
     return (
@@ -412,7 +293,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                                     {currentGroup.specs.map((spec) => {
                                         const enabled = isFlagActive(spec, draft);
                                         const enumValue = spec.type === 'enum'
-                                            ? (flagToString(draft, spec.key) || enumDefault(spec))
+                                            ? (flagToString(draft, spec.key) || enumInactive(spec))
                                             : '';
                                         const pulsing = pulseKey === spec.key;
                                         return (
@@ -584,12 +465,12 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
                             selectedModel={flagToServiceRef(draft, pickerKey)?.model}
                             onSelected={(option: ProviderSelectTabOption) => {
                                 const key = pickerKey;
-                                setDraft((d) => setServiceRef(d, key, { provider: option.provider.uuid, model: option.model }));
+                                setDraft((d) => setFlagValue(d, key, { provider: option.provider.uuid, model: option.model }));
                                 setPickerKey(null);
                             }}
                             onSelectionClear={() => {
                                 const key = pickerKey;
-                                setDraft((d) => setServiceRef(d, key, undefined));
+                                setDraft((d) => setFlagValue(d, key, undefined));
                                 setPickerKey(null);
                             }}
                         />

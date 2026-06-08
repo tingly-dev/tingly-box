@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { api } from '@/services/api';
-import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags, RuleFlagsApi } from '@/components/RoutingGraphTypes';
+import type { SmartRouting, ConfigProvider, Rule, ConfigRecord, RuleFlags, RuleFlagsApi, FlagSpec } from '@/components/RoutingGraphTypes';
+import { getFlagValue, setFlagValue, flagDefault, isFlagActive, snakeToCamel, apiToFlags } from './flagHelpers';
 
 // ============================================================================
 // Helper Functions
@@ -65,21 +66,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
         active: rule.active !== undefined ? rule.active : true,
         providers: providersList,
         description: rule.description,
-        flags: {
-            cursorCompat: rule.flags?.cursor_compat || false,
-            cursorCompatAuto: rule.flags?.cursor_compat_auto || false,
-            skipUsage: rule.flags?.skip_usage || false,
-            customUserAgent: rule.flags?.custom_user_agent || '',
-            useMaxCompletionTokens: rule.flags?.use_max_completion_tokens || false,
-            useMaxTokens: rule.flags?.use_max_tokens || false,
-            openaiEndpointOverride: rule.flags?.openai_endpoint_override || '',
-            blockTools: rule.flags?.block_tools || '',
-            thinkingEffort: rule.flags?.thinking_effort || '',
-            sessionAffinity: rule.flags?.session_affinity || 0,
-            visionProxyService: rule.flags?.vision_proxy_service,
-            claudeCodeCompat: rule.flags?.claude_code_compat || false,
-            cleanHeader: rule.flags?.clean_header || false,
-        },
+        flags: apiToFlags(rule.flags),
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
         lbTactic: rule.lb_tactic?.type,
@@ -213,76 +200,35 @@ interface ExportProvider {
 }
 
 // ============================================================================
-// Rule flag helpers
+// Rule flag helpers (registry-driven — no per-flag switch/case needed)
 // ============================================================================
 
 const TRUE_VALUES = new Set(['true', '1', 'yes', 'on']);
 const FALSE_VALUES = new Set(['false', '0', 'no', 'off']);
 
-const ENUM_FLAG_VALUES: Record<string, Set<string>> = {
-    openai_endpoint_override: new Set(['auto', 'chat', 'responses']),
-    thinking_effort: new Set(['off', 'low', 'medium', 'high', 'max']),
-};
-
-// The sentinel value that means "inactive/By Client" for each enum flag.
-// Empty string (omitted on the wire) is always inactive too.
-const ENUM_INACTIVE_VALUE: Record<string, string> = {
-    openai_endpoint_override: 'auto',
-    thinking_effort: '',
-};
-
-function isEnumActive(key: string, value: string): boolean {
-    return value !== '' && value !== (ENUM_INACTIVE_VALUE[key] ?? '');
-}
-
-export function formatRuleFlags(flags?: RuleFlags): string {
+export function formatRuleFlags(flags: RuleFlags | undefined, registry: FlagSpec[]): string {
     if (!flags) return '';
-    const entries: string[] = [];
-    if (flags.cursorCompat) entries.push('cursor_compat=true');
-    if (flags.cursorCompatAuto) entries.push('cursor_compat_auto=true');
-    if (flags.skipUsage) entries.push('skip_usage=true');
-    if (flags.useMaxCompletionTokens) entries.push('use_max_completion_tokens=true');
-    if (flags.useMaxTokens) entries.push('use_max_tokens=true');
-    if (flags.customUserAgent) entries.push(`custom_user_agent=${flags.customUserAgent}`);
-    if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) {
-        entries.push(`openai_endpoint_override=${flags.openaiEndpointOverride}`);
-    }
-    if (flags.blockTools) entries.push(`block_tools=${flags.blockTools}`);
-    if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) {
-        entries.push(`thinking_effort=${flags.thinkingEffort}`);
-    }
-    if (flags.sessionAffinity) entries.push(`session_affinity=${flags.sessionAffinity}`);
-    if (flags.claudeCodeCompat) entries.push('claude_code_compat=true');
-    if (flags.cleanHeader) entries.push('clean_header=true');
-    return entries.join(',');
+    return registry
+        .filter((spec) => spec.type !== 'service_ref' && isFlagActive(spec, flags))
+        .map((spec) => {
+            const val = getFlagValue(flags, spec.key);
+            return spec.type === 'bool' ? `${spec.key}=true` : `${spec.key}=${val}`;
+        })
+        .join(',');
 }
 
-const STRING_FLAG_KEYS = new Set(['custom_user_agent', 'block_tools']);
-const ENUM_FLAG_KEYS = new Set(Object.keys(ENUM_FLAG_VALUES));
-const INT_FLAG_KEYS = new Set(['session_affinity']);
-
-export function parseRuleFlags(input: string): { flags: RuleFlags; error?: string } {
-    const flags: RuleFlags = {
-        cursorCompat: false,
-        cursorCompatAuto: false,
-        skipUsage: false,
-        customUserAgent: '',
-        useMaxCompletionTokens: false,
-        useMaxTokens: false,
-        openaiEndpointOverride: '',
-        blockTools: '',
-        thinkingEffort: '',
-        sessionAffinity: 0,
-        claudeCodeCompat: false,
-        cleanHeader: false,
-    };
+export function parseRuleFlags(input: string, registry: FlagSpec[]): { flags: RuleFlags; error?: string } {
+    const flags: RuleFlags = {};
+    for (const spec of registry) {
+        (flags as Record<string, unknown>)[snakeToCamel(spec.key)] = flagDefault(spec);
+    }
 
     const trimmed = input.trim();
-    if (!trimmed) {
-        return { flags };
-    }
+    if (!trimmed) return { flags };
 
+    const lookup = new Map(registry.map((s) => [s.key, s]));
     const parts = trimmed.split(',').map((part) => part.trim()).filter(Boolean);
+
     for (const part of parts) {
         const eqIdx = part.indexOf('=');
         if (eqIdx === -1) {
@@ -294,101 +240,52 @@ export function parseRuleFlags(input: string): { flags: RuleFlags; error?: strin
             return { flags, error: `Invalid flag format: "${part}". Use key=value.` };
         }
 
-        if (STRING_FLAG_KEYS.has(rawKey)) {
-            switch (rawKey) {
-                case 'custom_user_agent':
-                    flags.customUserAgent = rawValue;
-                    break;
-                case 'block_tools':
-                    flags.blockTools = rawValue;
-                    break;
-            }
-            continue;
+        const spec = lookup.get(rawKey);
+        if (!spec) {
+            return { flags, error: `Unknown flag "${rawKey}".` };
         }
 
-        if (INT_FLAG_KEYS.has(rawKey)) {
-            const n = parseInt(rawValue, 10);
-            if (isNaN(n) || n < 0) {
-                return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use a non-negative integer (seconds).` };
+        switch (spec.type) {
+            case 'string':
+                (flags as Record<string, unknown>)[snakeToCamel(rawKey)] = rawValue;
+                break;
+            case 'int': {
+                const n = parseInt(rawValue, 10);
+                if (isNaN(n) || n < 0) {
+                    return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use a non-negative integer.` };
+                }
+                (flags as Record<string, unknown>)[snakeToCamel(rawKey)] = n;
+                break;
             }
-            if (rawKey === 'session_affinity') flags.sessionAffinity = n;
-            continue;
-        }
-
-        if (ENUM_FLAG_KEYS.has(rawKey)) {
-            const allowed = ENUM_FLAG_VALUES[rawKey];
-            if (!allowed.has(rawValue)) {
-                const options = Array.from(allowed).join('/');
-                return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use ${options}.` };
+            case 'enum': {
+                const allowed = new Set((spec.options || []).map((o) => o.value).filter(Boolean));
+                if (!allowed.has(rawValue)) {
+                    return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use ${Array.from(allowed).join('/')}.` };
+                }
+                (flags as Record<string, unknown>)[snakeToCamel(rawKey)] = rawValue;
+                break;
             }
-            switch (rawKey) {
-                case 'openai_endpoint_override':
-                    flags.openaiEndpointOverride = rawValue;
-                    break;
-                case 'thinking_effort':
-                    flags.thinkingEffort = rawValue;
-                    break;
+            case 'bool': {
+                const lower = rawValue.toLowerCase();
+                if (TRUE_VALUES.has(lower)) {
+                    (flags as Record<string, unknown>)[snakeToCamel(rawKey)] = true;
+                } else if (FALSE_VALUES.has(lower)) {
+                    (flags as Record<string, unknown>)[snakeToCamel(rawKey)] = false;
+                } else {
+                    return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use true/false.` };
+                }
+                break;
             }
-            continue;
-        }
-
-        const valueLower = rawValue.toLowerCase();
-        let parsedValue: boolean;
-        if (TRUE_VALUES.has(valueLower)) {
-            parsedValue = true;
-        } else if (FALSE_VALUES.has(valueLower)) {
-            parsedValue = false;
-        } else {
-            return { flags, error: `Invalid value for "${rawKey}": "${rawValue}". Use true/false.` };
-        }
-
-        switch (rawKey) {
-            case 'cursor_compat':
-                flags.cursorCompat = parsedValue;
-                break;
-            case 'cursor_compat_auto':
-                flags.cursorCompatAuto = parsedValue;
-                break;
-            case 'skip_usage':
-                flags.skipUsage = parsedValue;
-                break;
-            case 'use_max_completion_tokens':
-                flags.useMaxCompletionTokens = parsedValue;
-                break;
-            case 'use_max_tokens':
-                flags.useMaxTokens = parsedValue;
-                break;
-            case 'claude_code_compat':
-                flags.claudeCodeCompat = parsedValue;
-                break;
-            case 'clean_header':
-                flags.cleanHeader = parsedValue;
-                break;
             default:
-                return { flags, error: `Unknown flag "${rawKey}".` };
+                return { flags, error: `Flag "${rawKey}" cannot be set via text input.` };
         }
     }
-
     return { flags };
 }
 
-// Counts how many flags have a meaningful (non-default) value set.
-export function countActiveFlags(flags?: RuleFlags): number {
+export function countActiveFlags(flags: RuleFlags | undefined, registry: FlagSpec[]): number {
     if (!flags) return 0;
-    let n = 0;
-    if (flags.cursorCompat) n++;
-    if (flags.cursorCompatAuto) n++;
-    if (flags.skipUsage) n++;
-    if (flags.useMaxCompletionTokens) n++;
-    if (flags.useMaxTokens) n++;
-    if (flags.customUserAgent && flags.customUserAgent.trim() !== '') n++;
-    if (flags.openaiEndpointOverride && isEnumActive('openai_endpoint_override', flags.openaiEndpointOverride)) n++;
-    if (flags.blockTools && flags.blockTools.trim() !== '') n++;
-    if (flags.thinkingEffort && isEnumActive('thinking_effort', flags.thinkingEffort)) n++;
-    if (flags.sessionAffinity && flags.sessionAffinity > 0) n++;
-    if (flags.claudeCodeCompat) n++;
-    if (flags.cleanHeader) n++;
-    return n;
+    return registry.filter((spec) => isFlagActive(spec, flags)).length;
 }
 
 // Generic export handler

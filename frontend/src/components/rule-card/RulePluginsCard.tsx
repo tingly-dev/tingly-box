@@ -9,10 +9,9 @@ import {
     graphNodeHoverStyles,
     MODEL_NODE_STYLES,
 } from '@/components/nodes/styles';
-import type { FlagSpec, RuleFlags } from '@/components/RoutingGraphTypes';
+import type { FlagSpec, RuleFlags, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
+import { getFlagValue, isFlagActive } from './flagHelpers';
 
-// Matches the route graph node footprint so this feels like a pinned tool node,
-// not a smaller floating card. Content overflow scrolls inside the body.
 const CARD_STYLES = {
     width: MODEL_NODE_STYLES.width,
     minHeight: MODEL_NODE_STYLES.height,
@@ -53,37 +52,11 @@ export interface RulePluginsCardProps {
     onToggleFlag?: (key: string) => void;
 }
 
-const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean => {
-    if (!flags) return false;
-    switch (key) {
-        case 'cursor_compat':
-            return !!flags.cursorCompat;
-        case 'cursor_compat_auto':
-            return !!flags.cursorCompatAuto;
-        case 'skip_usage':
-            return !!flags.skipUsage;
-        case 'use_max_completion_tokens':
-            return !!flags.useMaxCompletionTokens;
-        case 'use_max_tokens':
-            return !!flags.useMaxTokens;
-        case 'claude_code_compat':
-            return !!flags.claudeCodeCompat;
-        case 'clean_header':
-            return !!flags.cleanHeader;
-        default:
-            return false;
-    }
-};
+const flagBoolValue = (flags: RuleFlags | undefined, key: string): boolean =>
+    !!getFlagValue(flags, key);
 
-const flagIntValue = (flags: RuleFlags | undefined, key: string): number => {
-    if (!flags) return 0;
-    switch (key) {
-        case 'session_affinity':
-            return flags.sessionAffinity ?? 0;
-        default:
-            return 0;
-    }
-};
+const flagIntValue = (flags: RuleFlags | undefined, key: string): number =>
+    (getFlagValue(flags, key) as number) ?? 0;
 
 const formatSeconds = (s: number): string => {
     if (s <= 0) return '0s';
@@ -92,33 +65,11 @@ const formatSeconds = (s: number): string => {
     return `${s}s`;
 };
 
-const flagStringValue = (flags: RuleFlags | undefined, key: string): string => {
-    if (!flags) return '';
-    switch (key) {
-        case 'custom_user_agent':
-            return flags.customUserAgent || '';
-        case 'openai_endpoint_override':
-            return flags.openaiEndpointOverride || '';
-        case 'block_tools':
-            return flags.blockTools || '';
-        case 'thinking_effort':
-            return flags.thinkingEffort || '';
-        default:
-            return '';
-    }
-};
+const flagStringValue = (flags: RuleFlags | undefined, key: string): string =>
+    (getFlagValue(flags, key) as string) ?? '';
 
-// flagServiceRefDisplay returns the model name of a service_ref flag (the
-// concise label for the extension chip), or '' when unset.
-const flagServiceRefDisplay = (flags: RuleFlags | undefined, key: string): string => {
-    if (!flags) return '';
-    switch (key) {
-        case 'vision_proxy_service':
-            return flags.visionProxyService?.model || '';
-        default:
-            return '';
-    }
-};
+const flagServiceRefDisplay = (flags: RuleFlags | undefined, key: string): string =>
+    (getFlagValue(flags, key) as VisionProxyServiceRef | undefined)?.model ?? '';
 
 /**
  * RulePluginsCard renders a compact card displaying the rule's enabled
@@ -132,17 +83,7 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
     onOpenCatalog,
     onToggleFlag,
 }) => {
-    const enabled = (registry || []).filter((spec) => {
-        if (spec.type === 'bool') return flagBoolValue(flags, spec.key);
-        if (spec.type === 'int') return flagIntValue(flags, spec.key) > 0;
-        if (spec.type === 'enum') {
-            const v = flagStringValue(flags, spec.key);
-            const inactive = spec.options?.[0]?.value ?? '';
-            return v !== '' && v !== inactive;
-        }
-        if (spec.type === 'service_ref') return flagServiceRefDisplay(flags, spec.key) !== '';
-        return flagStringValue(flags, spec.key) !== '';
-    });
+    const enabled = (registry || []).filter((spec) => isFlagActive(spec, flags));
 
     return (
         <StyledPluginsCard active={active} onClick={onOpenCatalog}>

@@ -9,6 +9,7 @@ export * from './dialogs';
 
 // Utils
 export * from './utils';
+export * from './flagHelpers';
 
 // Plugin card + catalog dialog
 export { default as RulePluginsCard } from './RulePluginsCard';
