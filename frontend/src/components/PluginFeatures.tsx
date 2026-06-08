@@ -106,32 +106,24 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             .finally(() => setUpdating(prev => ({ ...prev, [featureKey]: false })));
     };
 
-    const setEffortLevel = (level: string) => {
-        if (updating.effort || level === effort) return;
-        setUpdating(prev => ({ ...prev, effort: true }));
-        api.setScenarioStringFlag(scenario, 'thinking_effort', level)
-            .then(result => result.success ? setEffort(level) : loadData())
+    // Scenario string-flags share one optimistic save flow; build the setters
+    // from a single factory keyed by flag name (also the in-flight key).
+    const makeStringFlagSetter = (
+        flagKey: string,
+        current: string,
+        setLocal: (value: string) => void,
+    ) => (next: string) => {
+        if (updating[flagKey] || next === current) return;
+        setUpdating(prev => ({ ...prev, [flagKey]: true }));
+        api.setScenarioStringFlag(scenario, flagKey, next)
+            .then(result => (result.success ? setLocal(next) : loadData()))
             .catch(() => loadData())
-            .finally(() => setUpdating(prev => ({ ...prev, effort: false })));
+            .finally(() => setUpdating(prev => ({ ...prev, [flagKey]: false })));
     };
 
-    const setRecordV2 = (mode: string) => {
-        if (updating.recordV2 || mode === recordV2Mode) return;
-        setUpdating(prev => ({ ...prev, recordV2: true }));
-        api.setScenarioStringFlag(scenario, 'recording_v2', mode)
-            .then(result => result.success ? setRecordV2Mode(mode) : loadData())
-            .catch(() => loadData())
-            .finally(() => setUpdating(prev => ({ ...prev, recordV2: false })));
-    };
-
-    const setUserAgentValue = (ua: string) => {
-        if (updating.custom_user_agent || ua === userAgent) return;
-        setUpdating(prev => ({ ...prev, custom_user_agent: true }));
-        api.setScenarioStringFlag(scenario, 'custom_user_agent', ua)
-            .then(result => result.success ? setUserAgent(ua) : loadData())
-            .catch(() => loadData())
-            .finally(() => setUpdating(prev => ({ ...prev, custom_user_agent: false })));
-    };
+    const setEffortLevel = makeStringFlagSetter('thinking_effort', effort, setEffort);
+    const setRecordV2 = makeStringFlagSetter('recording_v2', recordV2Mode, setRecordV2Mode);
+    const setUserAgentValue = makeStringFlagSetter('custom_user_agent', userAgent, setUserAgent);
 
     const handleSessionAffinityChange = (value: number) => {
         if (updating.session_affinity || value === sessionAffinity) return;
@@ -190,7 +182,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1, width: '100%' }}>
                                 <ThinkingEffortControl
                                     value={effort}
-                                    disabled={updating.effort}
+                                    disabled={updating.thinking_effort}
                                     onChange={setEffortLevel}
                                 />
                                 {visibleFeatures.map(feature => (
@@ -211,7 +203,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                 />
                                 <RecordingV2Control
                                     value={recordV2Mode}
-                                    disabled={updating.recordV2 || false}
+                                    disabled={updating.recording_v2 || false}
                                     onChange={setRecordV2}
                                 />
                                 <UserAgentControl
