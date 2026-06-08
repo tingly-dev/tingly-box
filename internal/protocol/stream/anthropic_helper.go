@@ -69,10 +69,14 @@ func SendInvalidRequestBodyError(c *gin.Context, err error) {
 	})
 }
 
-// SendStreamingError sends an error response for streaming request failures
+// SendStreamingError sends an error response for streaming request failures.
+// When the failure occurs before any SSE frame has been written (the caller
+// guards this with conv.MessageStarted()), the HTTP status is still settable, so
+// we propagate the upstream provider's status (401/429/4xx) instead of
+// flattening every pre-stream failure into a 500.
 func SendStreamingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
 			Message: "Failed to create streaming request: " + err.Error(),
 			Type:    "api_error",
@@ -80,10 +84,11 @@ func SendStreamingError(c *gin.Context, err error) {
 	})
 }
 
-// SendForwardingError sends an error response for request forwarding failures
+// SendForwardingError sends an error response for request forwarding failures,
+// propagating the upstream provider's HTTP status when the error carries one.
 func SendForwardingError(c *gin.Context, err error) {
 	c.Error(err).SetType(gin.ErrorTypePublic) //nolint:errcheck
-	c.JSON(http.StatusInternalServerError, protocol.ErrorResponse{
+	c.JSON(protocol.UpstreamStatus(err, http.StatusInternalServerError), protocol.ErrorResponse{
 		Error: protocol.ErrorDetail{
 			Message: "Failed to forward request: " + err.Error(),
 			Type:    "api_error",

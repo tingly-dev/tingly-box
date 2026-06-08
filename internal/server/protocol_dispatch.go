@@ -286,7 +286,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 		}
 		if err != nil {
 			s.trackUsageFromContext(c, 0, 0, err)
-			SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+			SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -303,7 +303,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 				// Track error even when no tokens were received (e.g., early 1302 rate limit)
 				s.trackUsageFromContext(c, 0, 0, err)
 			}
-			SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+			SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 			if recorder != nil {
 				recorder.RecordError(err)
 			}
@@ -341,7 +341,7 @@ func (s *Server) dispatchAnthropicBetaToOpenAIChat(
 			}
 			if forwardErr != nil {
 				s.trackUsageFromContext(c, 0, 0, forwardErr)
-				SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward Anthropic request: : %w", forwardErr), "api_error")
+				SendErrorResponse(c, upstreamForwardStatus(forwardErr), fmt.Errorf("Failed to forward Anthropic request: : %w", forwardErr), "api_error")
 				if recorder != nil {
 					recorder.RecordError(forwardErr)
 				}
@@ -876,7 +876,7 @@ func (s *Server) nonstreamResponsesToChat(c *gin.Context, reqCtx *transform.Tran
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -904,7 +904,7 @@ func (s *Server) nonstreamOpenAIResponses(c *gin.Context, reqCtx *transform.Tran
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -969,7 +969,7 @@ func (s *Server) nonstreamOpenAIChatToResponses(c *gin.Context, reqCtx *transfor
 	chatResp, _, err := forwarding.ForwardOpenAIChat(fc, wrapper, chatReq)
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -995,7 +995,7 @@ func (s *Server) streamOpenAIChatToResponses(c *gin.Context, reqCtx *transform.T
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -1021,7 +1021,7 @@ func (s *Server) nonstreamAnthropicBetaFromResponses(c *gin.Context, reqCtx *tra
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to forward request: : %w", err), "api_error")
+		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to forward request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}
@@ -1050,7 +1050,7 @@ func (s *Server) streamAnthropicBetaFromResponses(c *gin.Context, reqCtx *transf
 	}
 	if err != nil {
 		s.trackUsageWithTokenUsage(c, protocol.NewTokenUsageWithCache(0, 0, 0), err)
-		SendErrorResponse(c, http.StatusInternalServerError, fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
+		SendErrorResponse(c, upstreamForwardStatus(err), fmt.Errorf("Failed to create streaming request: : %w", err), "api_error")
 		if recorder != nil {
 			recorder.RecordError(err)
 		}

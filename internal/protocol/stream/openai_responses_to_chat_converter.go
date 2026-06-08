@@ -249,6 +249,12 @@ func (c *responsesToChatConverter) emitCompletedOutput(output []responses.Respon
 }
 
 func (c *responsesToChatConverter) emitFallbackCompletion() {
+	// Mark completed first: this runs when the upstream stream ended without a
+	// response.completed event (e.g. a truncated / mid-stream-cut stream). The
+	// terminal chunk is emitted exactly once — without this flag the Next() loop
+	// would re-enter on the next exhausted stream.Next() and re-emit the
+	// fallback forever, flushing chunks unboundedly until the process OOMs.
+	c.completed = true
 	if !c.hasSentCreated {
 		c.pending = append(c.pending, c.roleChunk())
 	}

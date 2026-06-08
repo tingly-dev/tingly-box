@@ -137,7 +137,7 @@ func (s *Server) HandleOpenAIImageGeneration(c *gin.Context) {
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		s.trackUsageWithTokenUsage(c, usage, err)
 		logrus.Errorf("Failed to forward image generation request: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		c.JSON(upstreamForwardStatus(err), ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
 				Type:    "api_error",

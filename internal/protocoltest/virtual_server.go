@@ -134,6 +134,22 @@ func (vs *VirtualServer) recordHit(kind EndpointKind) {
 
 // ─── HTTP handlers ─────────────────────────────────────────────────────────────
 
+// writeBuilderResponse serves a MockResponseBuilder over HTTP. For streaming
+// requests it writes a 200 SSE stream, except when the builder declares a
+// pre-content HTTP error (StreamHTTPError >= 400) — those fail at the HTTP
+// status line, the same way a real provider rejects an auth/rate-limit/5xx error
+// before any SSE frame is emitted.
+func writeBuilderResponse(w http.ResponseWriter, builder MockResponseBuilder, streaming bool) {
+	if streaming && builder.StreamHTTPError < 400 {
+		sse.WriteSSEResponse(w, builder.Stream())
+		return
+	}
+	status, body := builder.NonStream()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(body)
+}
+
 func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request) {
 	vs.recordHit(EndpointChat)
 
@@ -154,14 +170,7 @@ func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if streaming {
-		sse.WriteSSEResponse(w, builder.Stream())
-	} else {
-		status, body := builder.NonStream()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		w.Write(body)
-	}
+	writeBuilderResponse(w, builder, streaming)
 }
 
 func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Request) {
@@ -188,14 +197,7 @@ func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if streaming {
-		sse.WriteSSEResponse(w, builder.Stream())
-	} else {
-		status, body := builder.NonStream()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		w.Write(body)
-	}
+	writeBuilderResponse(w, builder, streaming)
 }
 
 func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.Request) {
@@ -218,14 +220,7 @@ func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if streaming {
-		sse.WriteSSEResponse(w, builder.Stream())
-	} else {
-		status, body := builder.NonStream()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		w.Write(body)
-	}
+	writeBuilderResponse(w, builder, streaming)
 }
 
 func (vs *VirtualServer) handleGoogle(w http.ResponseWriter, r *http.Request) {
@@ -248,14 +243,7 @@ func (vs *VirtualServer) handleGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if streaming {
-		sse.WriteSSEResponse(w, builder.Stream())
-	} else {
-		status, body := builder.NonStream()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		w.Write(body)
-	}
+	writeBuilderResponse(w, builder, streaming)
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

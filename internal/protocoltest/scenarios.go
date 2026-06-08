@@ -31,6 +31,14 @@ const (
 type MockResponseBuilder struct {
 	NonStream func() (statusCode int, body []byte)
 	Stream    func() []string
+
+	// StreamHTTPError, when >= 400, makes the streaming endpoint reply with this
+	// HTTP status and the NonStream JSON body instead of a 200 SSE stream. It
+	// models pre-content failures (auth / rate-limit / 5xx) that real providers
+	// surface as an HTTP error even for streaming requests — the failure happens
+	// before any SSE frame is written, so the status line itself carries it.
+	// Mid-stream failures leave this zero and use the 200 + SSE path.
+	StreamHTTPError int
 }
 
 // Scenario is a named test scenario describing what the mock provider returns
@@ -736,8 +744,10 @@ func ErrorMidStreamCloseScenario() Scenario {
 		Tags:           []string{"error", "midstream"},
 		SkipTransitive: true,
 		MockResponses: map[ResponseFormat]MockResponseBuilder{
-			FormatOpenAIChat: BuildErrorFromSpec(FormatOpenAIChat, specClose),
-			FormatAnthropic:  BuildErrorFromSpec(FormatAnthropic, specClose),
+			FormatOpenAIChat:      BuildErrorFromSpec(FormatOpenAIChat, specClose),
+			FormatOpenAIResponses: BuildErrorFromSpec(FormatOpenAIResponses, specClose),
+			FormatAnthropic:       BuildErrorFromSpec(FormatAnthropic, specClose),
+			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, specClose),
 		},
 		Assertions: []Assertion{
 			AssertHTTPStatus(200),
@@ -950,6 +960,14 @@ func BuildErrorFromSpec(format ResponseFormat, spec vmodel.SharedMockSpec) MockR
 		return MockResponseBuilder{} // No error configured
 	}
 
+	// Mid-stream failures are not HTTP-level errors: the upstream starts a
+	// normal 200 response, emits partial content, then the connection drops. We
+	// model that as a truncated content stream so the gateway forwards a 200
+	// with the partial body (rather than an error envelope).
+	if spec.Error.Stage == vmodel.ErrorStageMidStream {
+		return buildMidStreamTruncated(format, spec.Content)
+	}
+
 	switch format {
 	case FormatOpenAIChat, FormatOpenAIResponses:
 		return buildOpenAIError(spec.Error)
@@ -957,6 +975,104 @@ func BuildErrorFromSpec(format ResponseFormat, spec vmodel.SharedMockSpec) MockR
 		return buildAnthropicError(spec.Error)
 	case FormatGoogle:
 		return buildGoogleError(spec.Error)
+	default:
+		return MockResponseBuilder{}
+	}
+}
+
+// buildMidStreamTruncated produces a 200 response whose streaming variant emits
+// partial content and then stops without the terminal frames ([DONE] /
+// message_stop), simulating a provider connection that drops mid-stream. The
+// non-streaming variant returns the same text as a complete 200 body, since a
+// non-streaming request cannot observe a mid-stream cut. content is the partial
+// text the client should still receive (e.g. "...this stream will be truncated").
+func buildMidStreamTruncated(format ResponseFormat, content string) MockResponseBuilder {
+	if content == "" {
+		content = "partial content before the stream was truncated"
+	}
+	switch format {
+	case FormatOpenAIChat:
+		body := map[string]interface{}{
+			"id":      "chatcmpl-validate-midstream",
+			"object":  "chat.completion",
+			"created": time.Now().Unix(),
+			"model":   "gpt-4o",
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"message":       map[string]interface{}{"role": "assistant", "content": content},
+					"finish_reason": "stop",
+				},
+			},
+			"usage": map[string]interface{}{"prompt_tokens": 10, "completion_tokens": 8, "total_tokens": 18},
+		}
+		return MockResponseBuilder{
+			NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+			Stream: func() []string {
+				delta := mustMarshal(map[string]interface{}{
+					"id": "chatcmpl-validate-midstream", "object": "chat.completion.chunk",
+					"created": 1700000000, "model": "gpt-4o",
+					"choices": []map[string]interface{}{{"index": 0, "delta": map[string]interface{}{"role": "assistant", "content": content}, "finish_reason": nil}},
+				})
+				// No finish_reason chunk and no `[DONE]`: the stream is cut short.
+				return []string{"data: " + string(delta)}
+			},
+		}
+	case FormatOpenAIResponses:
+		body := map[string]interface{}{
+			"id": "resp-validate-midstream", "object": "realtime.response", "model": "gpt-4o", "status": "completed",
+			"output": []map[string]interface{}{{
+				"id": "item-validate-midstream", "type": "message", "role": "assistant", "status": "completed",
+				"content": []map[string]interface{}{{"type": "output_text", "text": content}},
+			}},
+			"usage": map[string]interface{}{"input_tokens": 10, "output_tokens": 8, "total_tokens": 18},
+		}
+		return MockResponseBuilder{
+			NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+			Stream: func() []string {
+				created := `data: {"type":"response.created","response":{"id":"resp-validate-midstream","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`
+				added := `data: {"type":"response.output_item.added","response_id":"resp-validate-midstream","item":{"id":"item-validate-midstream","type":"message","role":"assistant","status":"in_progress","content":[]}}`
+				delta := mustMarshal(map[string]interface{}{"type": "response.output_text.delta", "response_id": "resp-validate-midstream", "item_id": "item-validate-midstream", "output_index": 0, "content_index": 0, "delta": content})
+				// No response.output_text.done / response.completed / [DONE]: cut short.
+				return []string{created, added, "data: " + string(delta)}
+			},
+		}
+	case FormatAnthropic:
+		body := map[string]interface{}{
+			"id": "msg-validate-midstream", "type": "message", "role": "assistant",
+			"content":     []map[string]interface{}{{"type": "text", "text": content}},
+			"model":       "claude-3-5-sonnet-20241022",
+			"stop_reason": "end_turn", "stop_sequence": nil,
+			"usage": map[string]interface{}{"input_tokens": 10, "output_tokens": 8},
+		}
+		return MockResponseBuilder{
+			NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+			Stream: func() []string {
+				start := mustMarshal(map[string]interface{}{"type": "message_start", "message": map[string]interface{}{"id": "msg-validate-midstream", "type": "message", "role": "assistant", "content": []interface{}{}, "model": "claude-3-5-sonnet-20241022", "stop_reason": nil, "usage": map[string]interface{}{"input_tokens": 10, "output_tokens": 0}}})
+				delta := mustMarshal(map[string]interface{}{"type": "content_block_delta", "index": 0, "delta": map[string]interface{}{"type": "text_delta", "text": content}})
+				// No content_block_stop / message_delta / message_stop: cut short.
+				return []string{
+					"event: message_start", "data: " + string(start),
+					"event: content_block_start", `data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+					"event: content_block_delta", "data: " + string(delta),
+				}
+			},
+		}
+	case FormatGoogle:
+		body := map[string]interface{}{
+			"candidates": []map[string]interface{}{{
+				"content": map[string]interface{}{"role": "model", "parts": []map[string]interface{}{{"text": content}}},
+				"index":   0,
+			}},
+			"usageMetadata": map[string]interface{}{"promptTokenCount": 10, "candidatesTokenCount": 8, "totalTokenCount": 18},
+		}
+		return MockResponseBuilder{
+			NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
+			Stream: func() []string {
+				chunk := mustMarshal(map[string]interface{}{"candidates": []map[string]interface{}{{"content": map[string]interface{}{"role": "model", "parts": []map[string]interface{}{{"text": content}}}, "index": 0}}})
+				return []string{"data: " + string(chunk)}
+			},
+		}
 	default:
 		return MockResponseBuilder{}
 	}
@@ -978,9 +1094,20 @@ func buildOpenAIError(err *vmodel.ErrorInjection) MockResponseBuilder {
 	streamLine := fmt.Sprintf("data: %s", string(streamPayload))
 
 	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return status, mustMarshal(body) },
-		Stream:    func() []string { return []string{streamLine} },
+		NonStream:       func() (int, []byte) { return status, mustMarshal(body) },
+		Stream:          func() []string { return []string{streamLine} },
+		StreamHTTPError: preContentStreamStatus(err, status),
 	}
+}
+
+// preContentStreamStatus returns the HTTP status a streaming request should fail
+// with for a pre-content error injection, or 0 for mid-stream injections (which
+// must reply 200 and surface the failure inside the SSE stream).
+func preContentStreamStatus(err *vmodel.ErrorInjection, status int) int {
+	if err != nil && err.Stage == vmodel.ErrorStagePreContent {
+		return status
+	}
+	return 0
 }
 
 // normalizeErrorSpec centralizes default value logic for error injection fields.
@@ -1021,8 +1148,9 @@ func buildAnthropicError(err *vmodel.ErrorInjection) MockResponseBuilder {
 	}
 
 	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return status, mustMarshal(body) },
-		Stream:    func() []string { return streamLines },
+		NonStream:       func() (int, []byte) { return status, mustMarshal(body) },
+		Stream:          func() []string { return streamLines },
+		StreamHTTPError: preContentStreamStatus(err, status),
 	}
 }
 
@@ -1043,8 +1171,9 @@ func buildGoogleError(err *vmodel.ErrorInjection) MockResponseBuilder {
 	streamLine := fmt.Sprintf("data: %s", string(streamPayload))
 
 	return MockResponseBuilder{
-		NonStream: func() (int, []byte) { return status, mustMarshal(body) },
-		Stream:    func() []string { return []string{streamLine} },
+		NonStream:       func() (int, []byte) { return status, mustMarshal(body) },
+		Stream:          func() []string { return []string{streamLine} },
+		StreamHTTPError: preContentStreamStatus(err, status),
 	}
 }
 

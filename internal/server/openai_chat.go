@@ -264,7 +264,7 @@ func (s *Server) nonstreamOpenAIChat(c *gin.Context, provider *typ.Provider, ori
 		// Track error with no usage
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		s.trackUsageWithTokenUsage(c, usage, err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		c.JSON(upstreamForwardStatus(err), ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to forward request: " + err.Error(),
 				Type:    "api_error",
@@ -347,7 +347,7 @@ func (s *Server) streamOpenAIChat(c *gin.Context, provider *typ.Provider, origin
 		// Track error with no usage
 		usage := protocol.NewTokenUsageWithCache(0, 0, 0)
 		s.trackUsageWithTokenUsage(c, usage, err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		c.JSON(upstreamForwardStatus(err), ErrorResponse{
 			Error: ErrorDetail{
 				Message: "Failed to create streaming request: " + err.Error(),
 				Type:    "api_error",

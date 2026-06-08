@@ -75,33 +75,37 @@ func newSelectionState(rule *typ.Rule) *selectionState {
 		return &selectionState{candidateServices: nil}
 	}
 
-	// Use a map to deduplicate services by service ID
-	serviceMap := make(map[string]*loadbalance.Service)
+	// Deduplicate services by service ID while preserving first-seen order.
+	// Map iteration order in Go is randomized, so building the candidate slice
+	// from a map would make routing (and tests) non-deterministic. We keep an
+	// ordered slice and use the index map only to dedupe / override in place.
+	services := make([]*loadbalance.Service, 0, len(rule.Services))
+	indexByID := make(map[string]int)
 
-	// Add default services
-	if rule.Services != nil {
-		for _, svc := range rule.Services {
-			if svc != nil {
-				serviceMap[svc.GetServiceID().String()] = svc
-			}
+	add := func(svc *loadbalance.Service) {
+		if svc == nil {
+			return
 		}
-	}
-
-	// Add smart_routing services (override defaults if same ID)
-	for _, sr := range rule.SmartRouting {
-		if sr.Services != nil {
-			for _, svc := range sr.Services {
-				if svc != nil {
-					serviceMap[svc.GetServiceID().String()] = svc
-				}
-			}
+		id := svc.GetServiceID().String()
+		if i, ok := indexByID[id]; ok {
+			// Override the existing entry in place, keeping its position.
+			services[i] = svc
+			return
 		}
-	}
-
-	// Convert map back to slice
-	services := make([]*loadbalance.Service, 0, len(serviceMap))
-	for _, svc := range serviceMap {
+		indexByID[id] = len(services)
 		services = append(services, svc)
+	}
+
+	// Add default services.
+	for _, svc := range rule.Services {
+		add(svc)
+	}
+
+	// Add smart_routing services (override defaults if same ID).
+	for _, sr := range rule.SmartRouting {
+		for _, svc := range sr.Services {
+			add(svc)
+		}
 	}
 
 	return &selectionState{candidateServices: services}
