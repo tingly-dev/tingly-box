@@ -3,104 +3,124 @@ package config
 import (
 	"testing"
 
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-func TestMigrate20260606(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfg, err := NewConfig(WithConfigDir(tmpDir))
-	if err != nil {
-		t.Fatalf("NewConfig error: %v", err)
+func TestMigrate20260110_CopiesCCServices(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("cc")}},
+			{UUID: RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode}, // empty → should inherit
+			{UUID: RuleUUIDBuiltinCCSonnet, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("own")}}, // own → kept
+		},
 	}
 
-	// Trigger migration manually since it already ran during NewConfig
-	migrate20260606(cfg)
+	migrate20260110(c)
 
-	// Verify migration completed flag
-	if !cfg.hasMigrationCompleted("20260606") {
-		t.Error("Migration 20260606 should be marked as completed")
+	if !c.hasMigrationCompleted("20260110") {
+		t.Error("migration should be marked completed")
 	}
-
-	// migrate20260606 now only defaults SkipUsage on for the Xcode scenario;
-	// session_affinity has moved to a rule-only flag (migrate20260610).
-	xcodeConfig := cfg.GetScenarioConfig(typ.ScenarioXcode)
-	if xcodeConfig == nil {
-		t.Error("Xcode scenario config not found")
-		return
+	haiku := c.findRuleByUUID(RuleUUIDBuiltinCCHaiku)
+	if haiku == nil || len(haiku.Services) != 1 || haiku.Services[0].Provider != "cc" {
+		t.Errorf("haiku should inherit built-in-cc services, got %+v", haiku)
 	}
-	if !xcodeConfig.Flags.SkipUsage {
-		t.Error("Xcode should have SkipUsage = true")
+	sonnet := c.findRuleByUUID(RuleUUIDBuiltinCCSonnet)
+	if sonnet == nil || len(sonnet.Services) != 1 || sonnet.Services[0].Provider != "own" {
+		t.Errorf("sonnet's own services must be preserved, got %+v", sonnet)
 	}
 }
 
-func TestMigrate20260606_Idempotent(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// First run - migration should add defaults
-	cfg1, err := NewConfig(WithConfigDir(tmpDir))
-	if err != nil {
-		t.Fatalf("NewConfig error: %v", err)
+func TestMigrate20260513_SeedsDesktopRules(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("p1")}},
+			// One desktop rule already present — must be left untouched / not duplicated.
+			{UUID: RuleUUIDBuiltinClaudeDesktopSonnet46, Scenario: typ.ScenarioClaudeDesktop},
+		},
 	}
 
-	// Debug: print migrations completed
-	t.Logf("After first NewConfig, MigrationsCompleted: %v", cfg1.MigrationsCompleted)
+	migrate20260513(c)
 
-	// Verify migration ran
-	if !cfg1.hasMigrationCompleted("20260606") {
-		t.Error("Migration should have completed after first NewConfig")
-	}
-
-	// Verify the Xcode SkipUsage default was set
-	xcodeConfig1 := cfg1.GetScenarioConfig(typ.ScenarioXcode)
-	if xcodeConfig1 == nil {
-		t.Fatal("Xcode scenario config should exist after migration")
-	}
-	if !xcodeConfig1.Flags.SkipUsage {
-		t.Error("Expected default SkipUsage = true after migration")
-	}
-
-	// Now user explicitly disables it
-	for i := range cfg1.Scenarios {
-		if cfg1.Scenarios[i].Scenario == typ.ScenarioXcode {
-			cfg1.Scenarios[i].Flags.SkipUsage = false
-			cfg1.Save()
-			break
+	for _, uuid := range []string{
+		RuleUUIDBuiltinClaudeDesktopSonnet46,
+		RuleUUIDBuiltinClaudeDesktopOpus46,
+		RuleUUIDBuiltinClaudeDesktopOpus47,
+	} {
+		if c.findRuleByUUID(uuid) == nil {
+			t.Errorf("expected desktop rule %q to exist", uuid)
 		}
 	}
-
-	// Second run - migration should NOT run again (already completed)
-	// and should NOT overwrite user's explicit setting
-	cfg2, err := NewConfig(WithConfigDir(tmpDir))
-	if err != nil {
-		t.Fatalf("NewConfig error (second run): %v", err)
+	if n := countRules(c, RuleUUIDBuiltinClaudeDesktopSonnet46); n != 1 {
+		t.Errorf("sonnet rule duplicated: count = %d", n)
 	}
-
-	// Verify migration is still marked as completed
-	if !cfg2.hasMigrationCompleted("20260606") {
-		t.Error("Migration should still be marked as completed")
-	}
-
-	xcodeConfig2 := cfg2.GetScenarioConfig(typ.ScenarioXcode)
-	if xcodeConfig2 == nil {
-		t.Fatal("Xcode scenario config should still exist")
-	}
-
-	// Should preserve user's explicit choice to disable
-	if xcodeConfig2.Flags.SkipUsage {
-		t.Error("Expected to preserve user's explicit SkipUsage = false")
+	opus := c.findRuleByUUID(RuleUUIDBuiltinClaudeDesktopOpus46)
+	if opus == nil || len(opus.Services) != 1 || opus.Services[0].Provider != "p1" {
+		t.Errorf("opus46 should inherit reference services, got %+v", opus)
 	}
 }
 
-func TestMigrate20260606_PartialCustomization(t *testing.T) {
-	tmpDir := t.TempDir()
+func TestMigrate20260521_AddsHaikuFromTemplate(t *testing.T) {
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: RuleUUIDBuiltinClaudeDesktopSonnet46, Scenario: typ.ScenarioClaudeDesktop, Services: []*loadbalance.Service{svc("pd")}},
+		},
+	}
 
-	// Create config with xcode scenario that has SkipUsage=false (user override)
-	cfg, err := NewConfig(WithConfigDir(tmpDir))
+	migrate20260521(c)
+
+	haiku := c.findRuleByUUID(RuleUUIDBuiltinClaudeDesktopHaiku45)
+	if haiku == nil {
+		t.Fatal("expected haiku-4-5 desktop rule to be added")
+	}
+	// Pulled from the init.go template, so it carries the built-in desktop flags.
+	if !haiku.Flags.ClaudeCodeCompat || !haiku.Flags.CleanHeader {
+		t.Errorf("haiku rule missing built-in flags: %+v", haiku.Flags)
+	}
+	// Services mirrored from the existing desktop rule.
+	if len(haiku.Services) != 1 || haiku.Services[0].Provider != "pd" {
+		t.Errorf("haiku rule should inherit desktop reference services, got %+v", haiku.Services)
+	}
+
+	// Idempotent: running again does not duplicate it.
+	migrate20260521(c)
+	if n := countRules(c, RuleUUIDBuiltinClaudeDesktopHaiku45); n != 1 {
+		t.Errorf("haiku rule duplicated: count = %d", n)
+	}
+}
+
+func TestMigrate20260606_DefaultsXcodeSkipUsage(t *testing.T) {
+	// NewConfig runs Migrate, which applies migrate20260606.
+	cfg, err := NewConfig(WithConfigDir(t.TempDir()))
 	if err != nil {
 		t.Fatalf("NewConfig error: %v", err)
 	}
 
-	// Manually set xcode SkipUsage to false (user explicitly disabled it)
+	if !cfg.hasMigrationCompleted("20260606") {
+		t.Error("migration 20260606 should be marked completed")
+	}
+	xcode := cfg.GetScenarioConfig(typ.ScenarioXcode)
+	if xcode == nil {
+		t.Fatal("Xcode scenario config not found")
+	}
+	if !xcode.Flags.SkipUsage {
+		t.Error("Xcode should default SkipUsage = true")
+	}
+}
+
+func TestMigrate20260606_PreservesUserOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// First boot applies the default.
+	cfg, err := NewConfig(WithConfigDir(tmpDir))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+	if x := cfg.GetScenarioConfig(typ.ScenarioXcode); x == nil || !x.Flags.SkipUsage {
+		t.Fatalf("expected SkipUsage defaulted on after first boot, got %+v", x)
+	}
+
+	// User explicitly disables it.
 	for i := range cfg.Scenarios {
 		if cfg.Scenarios[i].Scenario == typ.ScenarioXcode {
 			cfg.Scenarios[i].Flags.SkipUsage = false
@@ -109,26 +129,16 @@ func TestMigrate20260606_PartialCustomization(t *testing.T) {
 		}
 	}
 
-	// Reload config
+	// Second boot: migration is marker-gated, so the user's choice survives.
 	cfg2, err := NewConfig(WithConfigDir(tmpDir))
 	if err != nil {
 		t.Fatalf("NewConfig error (reload): %v", err)
 	}
-
-	// Verify that migration completed but didn't re-run
 	if !cfg2.hasMigrationCompleted("20260606") {
-		t.Error("Migration should still be marked as completed")
+		t.Error("migration should still be marked completed after reload")
 	}
-
-	// Verify that user's SkipUsage=false is preserved
-	xcodeConfig := cfg2.GetScenarioConfig(typ.ScenarioXcode)
-	if xcodeConfig == nil {
-		t.Fatal("Xcode scenario config should exist")
-	}
-
-	if xcodeConfig.Flags.SkipUsage != false {
-		t.Errorf("Expected user's SkipUsage=false to be preserved, got %v",
-			xcodeConfig.Flags.SkipUsage)
+	if x := cfg2.GetScenarioConfig(typ.ScenarioXcode); x == nil || x.Flags.SkipUsage {
+		t.Errorf("user's SkipUsage=false should be preserved across reload, got %+v", x)
 	}
 }
 
