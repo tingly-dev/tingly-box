@@ -55,7 +55,7 @@ export const OneMContextSwitch: React.FC<OneMContextSwitchProps> = ({ checked, o
                     checked={checked}
                     disabled={disabled}
                     onChange={(e) => onToggle(e.target.checked)}
-                    inputProps={{ 'aria-label': 'Toggle 1M context window for this rule' }}
+                    slotProps={{ input: { 'aria-label': 'Toggle 1M context window for this rule' } }}
                 />
             </Box>
         </Tooltip>
