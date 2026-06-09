@@ -40,6 +40,19 @@ type VirtualServer struct {
 	mu           sync.RWMutex
 	callCount    int
 	endpointHits map[EndpointKind]int
+	captured     map[EndpointKind]*CapturedRequest
+}
+
+// JSON decodes a captured request body into a generic map. It returns an empty
+// map if the body is absent or not JSON. Used by flag-behavior tests to assert
+// on what the gateway actually forwarded to the upstream provider.
+func (cr *CapturedRequest) JSON() map[string]interface{} {
+	out := map[string]interface{}{}
+	if cr == nil || len(cr.Body) == 0 {
+		return out
+	}
+	_ = json.Unmarshal(cr.Body, &out)
+	return out
 }
 
 // NewVirtualServer creates a new VirtualServer and registers cleanup with t.
@@ -48,6 +61,7 @@ func NewVirtualServer(t *testing.T) *VirtualServer {
 	vs := &VirtualServer{
 		scenarios:    vmodel.NewGenericRegistry[Scenario](),
 		endpointHits: make(map[EndpointKind]int),
+		captured:     make(map[EndpointKind]*CapturedRequest),
 	}
 
 	mux := http.NewServeMux()
@@ -71,6 +85,7 @@ func NewVirtualServerForCLI() *VirtualServer {
 	vs := &VirtualServer{
 		scenarios:    vmodel.NewGenericRegistry[Scenario](),
 		endpointHits: make(map[EndpointKind]int),
+		captured:     make(map[EndpointKind]*CapturedRequest),
 	}
 
 	mux := http.NewServeMux()
@@ -124,6 +139,28 @@ func (vs *VirtualServer) EndpointHits(kind EndpointKind) int {
 	return vs.endpointHits[kind]
 }
 
+// LastRequest returns the most recent request the gateway forwarded to the
+// given provider endpoint, or nil if that endpoint was never hit.
+func (vs *VirtualServer) LastRequest(kind EndpointKind) *CapturedRequest {
+	vs.mu.RLock()
+	defer vs.mu.RUnlock()
+	return vs.captured[kind]
+}
+
+// capture records the outbound request for a provider endpoint so flag tests can
+// assert on what the gateway actually forwarded. body must be the already-read
+// request body (handlers restore r.Body separately for their own parsing).
+func (vs *VirtualServer) capture(kind EndpointKind, r *http.Request, body []byte) {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	vs.captured[kind] = &CapturedRequest{
+		Method:  r.Method,
+		Path:    r.URL.Path,
+		Headers: r.Header.Clone(),
+		Body:    append([]byte(nil), body...),
+	}
+}
+
 // recordHit increments the total call count and the per-endpoint counter.
 func (vs *VirtualServer) recordHit(kind EndpointKind) {
 	vs.mu.Lock()
@@ -155,6 +192,7 @@ func (vs *VirtualServer) handleOpenAIChat(w http.ResponseWriter, r *http.Request
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	vs.capture(EndpointChat, r, bodyBytes)
 
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
 	scenario := vs.detectScenario(bodyBytes)
@@ -178,6 +216,7 @@ func (vs *VirtualServer) handleOpenAIResponses(w http.ResponseWriter, r *http.Re
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	vs.capture(EndpointResponses, r, bodyBytes)
 
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
 	scenario := vs.detectScenario(bodyBytes)
@@ -205,6 +244,7 @@ func (vs *VirtualServer) handleAnthropicMessages(w http.ResponseWriter, r *http.
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	vs.capture(EndpointAnthropic, r, bodyBytes)
 
 	streaming := vs.parseStreamFlagFromBytes(bodyBytes)
 	scenario := vs.detectScenario(bodyBytes)
@@ -228,6 +268,7 @@ func (vs *VirtualServer) handleGoogle(w http.ResponseWriter, r *http.Request) {
 
 	bodyBytes, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	vs.capture(EndpointGoogle, r, bodyBytes)
 
 	streaming := strings.Contains(r.URL.Path, "streamGenerateContent")
 	scenario := vs.detectScenarioFromURLOrBody(r.URL.Path, bodyBytes)

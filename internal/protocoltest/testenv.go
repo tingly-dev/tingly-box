@@ -190,6 +190,14 @@ func (env *TestEnv) VirtualCallCount() int { return env.virtual.CallCount() }
 // The provider's APIBase includes the /v1 suffix for OpenAI-style providers
 // to match actual provider API structure.
 func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
+	env.setupRouteCore(source, target, s, nil)
+}
+
+// setupRouteCore wires the provider + rule for a (source, target, scenario)
+// route. When flags is non-nil it is stamped onto the rule, so requests routed
+// through it traverse the real flag-resolution + transform path. flags==nil
+// preserves the original flag-free behavior used by the protocol matrix.
+func (env *TestEnv) setupRouteCore(source, target protocol.APIType, s Scenario, flags *typ.RuleFlags) {
 	key := routeKey(source, target, s.Name)
 
 	env.mu.Lock()
@@ -252,11 +260,22 @@ func (env *TestEnv) SetupRoute(source, target protocol.APIType, s Scenario) {
 		},
 		Active: true,
 	}
+	if flags != nil {
+		rule.Flags = *flags
+	}
 	_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
 
 	env.mu.Lock()
 	env.routeModels[key] = requestModel
 	env.mu.Unlock()
+}
+
+// SetupRouteWithFlags wires a route exactly like SetupRoute but stamps rule.Flags
+// onto the gateway rule, so a request routed through it exercises the real
+// flag-resolution and transform pipeline. Returns the request model to send to.
+func (env *TestEnv) SetupRouteWithFlags(source, target protocol.APIType, s Scenario, flags typ.RuleFlags) string {
+	env.setupRouteCore(source, target, s, &flags)
+	return env.findRouteModel(source, target, s.Name)
 }
 
 // SendAs sends a request to the gateway as the given source protocol,
@@ -303,12 +322,27 @@ func (env *TestEnv) SendAsCLI(source, target protocol.APIType, s Scenario, strea
 // Non-streaming requests use the recorder for simplicity.
 func (env *TestEnv) sendModel(source, target protocol.APIType, scenarioName, requestModel string, streaming bool) (*RoundTripResult, error) {
 	path, body := buildRequest(source, requestModel, streaming)
+	return env.dispatch(source, target, scenarioName, path, body, nil, streaming)
+}
 
+// dispatch drives a single request through the gateway and parses the result.
+// It is the shared core behind sendModel and the flag-behavior sender, so both
+// exercise the identical gateway path; extraHeaders are applied on top of the
+// default Content-Type / Authorization headers (nil for none).
+func (env *TestEnv) dispatch(source, target protocol.APIType, scenarioName, path string, body []byte, extraHeaders map[string]string, streaming bool) (*RoundTripResult, error) {
 	result := &RoundTripResult{
 		SourceProtocol: source,
 		TargetProtocol: target,
 		ScenarioName:   scenarioName,
 		IsStreaming:    streaming,
+	}
+
+	setHeaders := func(h http.Header) {
+		h.Set("Content-Type", "application/json")
+		h.Set("Authorization", "Bearer "+env.modelToken)
+		for k, v := range extraHeaders {
+			h.Set(k, v)
+		}
 	}
 
 	if streaming {
@@ -317,8 +351,7 @@ func (env *TestEnv) sendModel(source, target protocol.APIType, scenarioName, req
 		if err != nil {
 			return nil, fmt.Errorf("new request: %w", err)
 		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+env.modelToken)
+		setHeaders(req.Header)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -336,8 +369,7 @@ func (env *TestEnv) sendModel(source, target protocol.APIType, scenarioName, req
 		if err != nil {
 			return nil, fmt.Errorf("new request: %w", err)
 		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+env.modelToken)
+		setHeaders(req.Header)
 
 		w := httptest.NewRecorder()
 		env.ginEngine.ServeHTTP(w, req)
