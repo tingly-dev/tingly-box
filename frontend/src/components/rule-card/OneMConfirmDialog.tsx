@@ -37,6 +37,9 @@ export interface OneMConfirmDialogProps {
     /** Phase: 'confirm' asks; 'applied' shows the restart reminder after apply. */
     phase: 'confirm' | 'applied';
     busy: boolean;
+    /** Set when the last confirm attempt failed; shows the error alert. */
+    failed?: boolean;
+    /** Backend error message, if any. Falls back to a localized generic string. */
     error?: string;
     onConfirm: () => void;
     onCancel: () => void;
@@ -60,6 +63,7 @@ interface DialogCopy {
     what: string;
     appliedTitle: string;
     restartLabel: string;
+    genericError: string;
     cancel: string;
     done: string;
     agents: Record<'codex' | 'claude', AgentCopy>;
@@ -72,6 +76,7 @@ const TEXT: Record<Lang, DialogCopy> = {
         what: '1M 指 1,000,000-token 的上下文窗口。它是该 rule 的开关，目标模型需支持，否则上游会拒绝。',
         appliedTitle: '生效就差最后一步',
         restartLabel: '下一步',
+        genericError: '操作失败，请重试。',
         cancel: '取消',
         done: '知道了',
         agents: {
@@ -96,6 +101,7 @@ const TEXT: Record<Lang, DialogCopy> = {
         what: '1M is the 1,000,000-token context window. It is a per-rule switch — the routed model must support it or the upstream rejects the request.',
         appliedTitle: 'One last step to take effect',
         restartLabel: 'Next',
+        genericError: 'Something went wrong. Please try again.',
         cancel: 'Cancel',
         done: 'Got it',
         agents: {
@@ -122,6 +128,7 @@ export const OneMConfirmDialog: React.FC<OneMConfirmDialogProps> = ({
     effect,
     phase,
     busy,
+    failed,
     error,
     onConfirm,
     onCancel,
@@ -149,7 +156,7 @@ export const OneMConfirmDialog: React.FC<OneMConfirmDialogProps> = ({
                             {t.what}
                         </Typography>
                         <Typography variant="body2">{agent.body}</Typography>
-                        {error && <Alert severity="error">{error}</Alert>}
+                        {(failed || error) && <Alert severity="error">{error || t.genericError}</Alert>}
                     </Stack>
                 ) : (
                     <Stack spacing={1.5}>

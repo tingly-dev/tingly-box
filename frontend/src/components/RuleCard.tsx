@@ -309,6 +309,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         enabling: boolean;
         phase: 'confirm' | 'applied';
         busy: boolean;
+        failed?: boolean;
         error?: string;
     }>({ open: false, enabling: false, phase: 'confirm', busy: false });
 
@@ -319,18 +320,19 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             handleToggleFlagFromCard('context_1m');
             return;
         }
-        setOneMDialog({ open: true, enabling: next, phase: 'confirm', busy: false, error: undefined });
+        setOneMDialog({ open: true, enabling: next, phase: 'confirm', busy: false, failed: false, error: undefined });
     }, [configRecord, oneMNeedsDialog, handleToggleFlagFromCard]);
 
     const handleOneMConfirm = useCallback(async () => {
         if (!configRecord) return;
-        setOneMDialog((d) => ({ ...d, busy: true, error: undefined }));
+        setOneMDialog((d) => ({ ...d, busy: true, failed: false, error: undefined }));
 
         // 1. Persist the rule flag (gateway honors it from the next request).
         const nextFlags = setFlagValue(configRecord.flags || {}, 'context_1m', oneMDialog.enabling);
         const saved = await updateField(configRecord, setConfigRecord, 'flags', nextFlags);
         if (!saved) {
-            setOneMDialog((d) => ({ ...d, busy: false, error: 'Failed to save the rule flag.' }));
+            // Localized generic error rendered by the dialog (no backend message).
+            setOneMDialog((d) => ({ ...d, busy: false, failed: true }));
             return;
         }
 
@@ -346,11 +348,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 res = await applyClaudeCodeFromRules();
             }
             if (res && !res.success) {
-                setOneMDialog((d) => ({ ...d, busy: false, error: res!.message || 'Failed to apply agent config.' }));
+                setOneMDialog((d) => ({ ...d, busy: false, failed: true, error: res!.message }));
                 return;
             }
         } catch (e) {
-            setOneMDialog((d) => ({ ...d, busy: false, error: e instanceof Error ? e.message : 'Failed to apply agent config.' }));
+            setOneMDialog((d) => ({ ...d, busy: false, failed: true, error: e instanceof Error ? e.message : undefined }));
             return;
         }
 
@@ -455,6 +457,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 effect={oneMEffect}
                 phase={oneMDialog.phase}
                 busy={oneMDialog.busy}
+                failed={oneMDialog.failed}
                 error={oneMDialog.error}
                 onConfirm={handleOneMConfirm}
                 onCancel={handleOneMClose}
