@@ -41,12 +41,11 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 
 		hooks := s.buildAnthropicToOpenAIMCPHooks(c.Request.Context(), req)
 		hc := protocol.NewHandleContext(c, responseModel)
-		inputTokens, outputTokens, err := stream.AnthropicToOpenAIStreamWithMCPHooks(hc, req, streamResp, responseModel, disableStreamUsage, hooks)
+		usage, err := stream.AnthropicToOpenAIStreamWithMCPHooks(hc, req, streamResp, responseModel, disableStreamUsage, hooks)
 		if errors.Is(err, stream.ErrMCPStreamContinue) {
 			continue
 		}
 		if err != nil {
-			usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
 			s.trackUsageWithTokenUsage(c, usage, err)
 			stream.SendInternalError(c, err.Error())
 			if recorder != nil {
@@ -55,7 +54,6 @@ func (s *Server) streamAnthropicBetaToOpenAIChatWithMCP(
 			return
 		}
 
-		usage := protocol.NewTokenUsageWithCache(inputTokens, outputTokens, 0)
 		s.trackUsageWithTokenUsage(c, usage, nil)
 		return
 	}
