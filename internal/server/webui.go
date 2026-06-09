@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ import (
 	notifymodule "github.com/tingly-dev/tingly-box/internal/server/module/notify"
 	oauthmodule "github.com/tingly-dev/tingly-box/internal/server/module/oauth"
 	providerQuotaModule "github.com/tingly-dev/tingly-box/internal/server/module/provider_quota"
+	smartmemmodule "github.com/tingly-dev/tingly-box/internal/server/module/smart_mem"
 	"github.com/tingly-dev/tingly-box/internal/server/module/statusline"
 	usagemodule "github.com/tingly-dev/tingly-box/internal/server/module/usage"
 	virtualmodelmodule "github.com/tingly-dev/tingly-box/internal/server/module/virtualmodel"
@@ -155,6 +157,15 @@ func (s *Server) UseUIEndpoints(ctx context.Context) {
 	mcpHandler := mcpmodule.NewHandler(s.config, s.mcpRuntime)
 	mcpmodule.RegisterRoutes(apiV1, mcpHandler, mcpHandler.GetLocalHandler(), mcpHandler.GetTransportHandler())
 
+	// smart_mem API routes — file-backed persistent memory keyed by UUID.
+	// Persists raw JSON payloads under a cache dir and returns a UUID + preview
+	// the caller can later use to retrieve the document verbatim.
+	if smStore, err := smartmemmodule.NewFileStore(smartMemBaseDir()); err != nil {
+		logrus.WithError(err).Warn("Failed to initialise smart_mem store, smart_mem APIs will not be available")
+	} else {
+		smartmemmodule.RegisterRoutes(apiV1, smartmemmodule.NewHandler(smStore, nil))
+	}
+
 	// Provider quota API routes
 	if s.quotaManager != nil {
 		quotaHandler := providerQuotaModule.NewHandler(s.quotaManager, logrus.StandardLogger())
@@ -250,4 +261,13 @@ func GetShutdownChannel() <-chan struct{} {
 func init() {
 	mime.AddExtensionType(".svg", "image/svg+xml")
 	mime.AddExtensionType(".png", "image/png")
+}
+
+// smartMemBaseDir returns the directory smart_mem persists documents to.
+// Prefers the user cache dir; falls back to the OS temp dir.
+func smartMemBaseDir() string {
+	if cache, err := os.UserCacheDir(); err == nil && cache != "" {
+		return cache + "/tingly-box/smart_mem"
+	}
+	return os.TempDir() + "/tingly-box/smart_mem"
 }
