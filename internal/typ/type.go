@@ -176,12 +176,6 @@ type ScenarioFlags struct {
 	// list (a non-standard extension); this flag normalizes them so third-party
 	// providers that reject that role do not error out.
 	ClaudeCodeCompat bool `json:"claude_code_compat,omitempty" yaml:"claude_code_compat,omitempty"`
-
-	// SessionAffinity sets default session affinity TTL for all rules under this
-	// scenario. Value in seconds (0 = disabled, >0 = enabled). Individual rules
-	// can override via RuleFlags.SessionAffinity. Rules under this scenario will
-	// inherit this value unless they set their own explicit SessionAffinity.
-	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
 }
 
 // RuleFlags represents per-rule feature flags.
@@ -243,6 +237,10 @@ type RuleFlags struct {
 	// the same session keep hitting that service until the affinity entry
 	// expires. This is a load-balancing concern and works independently of
 	// smart routing. Supersedes the legacy top-level Rule.SmartAffinity field.
+	//
+	// Rule-only: there is no scenario-level inheritance. The built-in Claude
+	// Code / Claude Desktop / Codex rules default this to 1800s (30 min) via
+	// init seeds + migration; any other rule is off unless explicitly set.
 	SessionAffinity int `json:"session_affinity,omitempty" yaml:"session_affinity,omitempty"`
 
 	// VisionProxyService enables the rule-scoped vision proxy when set. When a

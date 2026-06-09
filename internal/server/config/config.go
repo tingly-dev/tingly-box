@@ -584,28 +584,15 @@ func (c *Config) SaveCurrentServiceID(ruleUUID string, serviceID string) error {
 	return c.ruleStateStore.SetServiceID(ruleUUID, serviceID)
 }
 
-// GetEffectiveAffinity returns the effective affinity TTL for a rule,
-// considering both scenario default and rule override. Returns 0 if disabled.
-// Resolution order:
-// 1. Rule explicit SessionAffinity (> 0)
-// 2. Scenario SessionAffinity (> 0)
-// 3. Disabled (0)
+// GetEffectiveAffinity returns the effective affinity TTL for a rule.
+// session_affinity is rule-only — there is no scenario-level inheritance.
+// The built-in Claude Code / Claude Desktop / Codex rules seed 1800s by
+// default (init + migration); every other rule is disabled unless it sets
+// an explicit value. Returns 0 (disabled) when the rule's value is 0.
 func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
-	// 1. Rule explicit value
 	if rule.Flags.SessionAffinity > 0 {
 		return time.Duration(rule.Flags.SessionAffinity) * time.Second
 	}
-
-	// 2. Scenario default
-	c.mu.RLock()
-	scenarioConfig := c.scenarioConfigLocked(rule.GetScenario())
-	c.mu.RUnlock()
-
-	if scenarioConfig != nil && scenarioConfig.Flags.SessionAffinity > 0 {
-		return time.Duration(scenarioConfig.Flags.SessionAffinity) * time.Second
-	}
-
-	// 3. Disabled
 	return 0
 }
 
@@ -1784,7 +1771,12 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 	return c.Save()
 }
 
-// GetScenarioIntFlag returns an integer flag value for a scenario
+// GetScenarioIntFlag returns an integer flag value for a scenario.
+//
+// Generic infra for scenario-level integer flags: the HTTP int-flag endpoint
+// routes through here. No keys are currently registered (session_affinity moved
+// to a rule-only flag), so it returns 0; adding a future scenario int flag is
+// just a new case in the switch.
 func (c *Config) GetScenarioIntFlag(scenario typ.RuleScenario, flagName string) int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -1793,14 +1785,16 @@ func (c *Config) GetScenarioIntFlag(scenario typ.RuleScenario, flagName string) 
 		return 0
 	}
 	switch flagName {
-	case FlagSessionAffinity:
-		return config.Flags.SessionAffinity
+	// No scenario-level int flags currently registered; add cases here.
 	default:
 		return 0
 	}
 }
 
-// SetScenarioIntFlag sets an integer flag value for a scenario
+// SetScenarioIntFlag sets an integer flag value for a scenario.
+//
+// Generic infra (see GetScenarioIntFlag). With no keys registered every flag is
+// rejected; adding a future scenario int flag is just a new case in the switch.
 func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, value int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -1815,7 +1809,6 @@ func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, 
 	}
 
 	if config == nil {
-		// Create new scenario config
 		newConfig := typ.ScenarioConfig{
 			Scenario:   scenario,
 			Flags:      typ.ScenarioFlags{},
@@ -1825,18 +1818,14 @@ func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, 
 		config = &c.Scenarios[len(c.Scenarios)-1]
 	}
 
-	// Set the specific flag
 	switch flagName {
-	case FlagSessionAffinity:
-		if value < 0 {
-			return fmt.Errorf("session_affinity must be >= 0, got %d", value)
-		}
-		config.Flags.SessionAffinity = value
+	// No scenario-level int flags currently registered; add cases here, e.g.
+	//   case FlagFoo:
+	//       config.Flags.Foo = value
+	//       return c.Save()
 	default:
 		return fmt.Errorf("unknown int flag name: %s", flagName)
 	}
-
-	return c.Save()
 }
 
 // GetScenarioExtensionBool returns a boolean value from scenario extensions.

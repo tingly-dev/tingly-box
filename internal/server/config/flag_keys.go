@@ -20,7 +20,9 @@ const (
 )
 
 // ScenarioFlags int field keys. Same contract as above but for
-// GetScenarioIntFlag / SetScenarioIntFlag.
-const (
-	FlagSessionAffinity = "session_affinity"
-)
+// GetScenarioIntFlag / SetScenarioIntFlag. None are registered right now:
+// session_affinity was downgraded to a rule-only flag (see
+// internal/typ/flag_registry.go and the built-in rule seeds in init.go /
+// migrate20260610). The generic int-flag get/set infra (and its HTTP endpoint)
+// is retained for future scenario int flags — add the key const here plus a
+// switch case in config.go's Get/SetScenarioIntFlag.

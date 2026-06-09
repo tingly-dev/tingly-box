@@ -21,31 +21,8 @@ func TestMigrate20260606(t *testing.T) {
 		t.Error("Migration 20260606 should be marked as completed")
 	}
 
-	// Check that IDE/Agent scenarios have affinity
-	expectedAffinityScenarios := []typ.RuleScenario{
-		typ.ScenarioClaudeCode,
-		typ.ScenarioClaudeDesktop,
-		typ.ScenarioVSCode,
-		typ.ScenarioAgent,
-		typ.ScenarioCodex,
-		typ.ScenarioOpenCode,
-	}
-
-	for _, scenario := range expectedAffinityScenarios {
-		t.Run(string(scenario), func(t *testing.T) {
-			scenarioConfig := cfg.GetScenarioConfig(scenario)
-			if scenarioConfig == nil {
-				t.Errorf("Scenario config not found for %s", scenario)
-				return
-			}
-			if scenarioConfig.Flags.SessionAffinity != 1800 {
-				t.Errorf("Scenario %s: expected SessionAffinity = 1800, got %d",
-					scenario, scenarioConfig.Flags.SessionAffinity)
-			}
-		})
-	}
-
-	// Check xcode scenario
+	// migrate20260606 now only defaults SkipUsage on for the Xcode scenario;
+	// session_affinity has moved to a rule-only flag (migrate20260610).
 	xcodeConfig := cfg.GetScenarioConfig(typ.ScenarioXcode)
 	if xcodeConfig == nil {
 		t.Error("Xcode scenario config not found")
@@ -53,10 +30,6 @@ func TestMigrate20260606(t *testing.T) {
 	}
 	if !xcodeConfig.Flags.SkipUsage {
 		t.Error("Xcode should have SkipUsage = true")
-	}
-	if xcodeConfig.Flags.SessionAffinity != 1800 {
-		t.Errorf("Xcode: expected SessionAffinity = 1800, got %d",
-			xcodeConfig.Flags.SessionAffinity)
 	}
 }
 
@@ -77,20 +50,19 @@ func TestMigrate20260606_Idempotent(t *testing.T) {
 		t.Error("Migration should have completed after first NewConfig")
 	}
 
-	// Verify defaults were set
-	claudeCodeConfig1 := cfg1.GetScenarioConfig(typ.ScenarioClaudeCode)
-	if claudeCodeConfig1 == nil {
-		t.Fatal("Claude Code scenario config should exist after migration")
+	// Verify the Xcode SkipUsage default was set
+	xcodeConfig1 := cfg1.GetScenarioConfig(typ.ScenarioXcode)
+	if xcodeConfig1 == nil {
+		t.Fatal("Xcode scenario config should exist after migration")
 	}
-	if claudeCodeConfig1.Flags.SessionAffinity != 1800 {
-		t.Errorf("Expected default SessionAffinity = 1800 after migration, got %d",
-			claudeCodeConfig1.Flags.SessionAffinity)
+	if !xcodeConfig1.Flags.SkipUsage {
+		t.Error("Expected default SkipUsage = true after migration")
 	}
 
-	// Now user explicitly changes the value
+	// Now user explicitly disables it
 	for i := range cfg1.Scenarios {
-		if cfg1.Scenarios[i].Scenario == typ.ScenarioClaudeCode {
-			cfg1.Scenarios[i].Flags.SessionAffinity = 3600
+		if cfg1.Scenarios[i].Scenario == typ.ScenarioXcode {
+			cfg1.Scenarios[i].Flags.SkipUsage = false
 			cfg1.Save()
 			break
 		}
@@ -103,23 +75,19 @@ func TestMigrate20260606_Idempotent(t *testing.T) {
 		t.Fatalf("NewConfig error (second run): %v", err)
 	}
 
-	// Debug: print migrations completed
-	t.Logf("After second NewConfig, MigrationsCompleted: %v", cfg2.MigrationsCompleted)
-
 	// Verify migration is still marked as completed
 	if !cfg2.hasMigrationCompleted("20260606") {
 		t.Error("Migration should still be marked as completed")
 	}
 
-	claudeCodeConfig2 := cfg2.GetScenarioConfig(typ.ScenarioClaudeCode)
-	if claudeCodeConfig2 == nil {
-		t.Fatal("Claude Code scenario config should still exist")
+	xcodeConfig2 := cfg2.GetScenarioConfig(typ.ScenarioXcode)
+	if xcodeConfig2 == nil {
+		t.Fatal("Xcode scenario config should still exist")
 	}
 
-	// Should preserve user's explicit 3600 value
-	if claudeCodeConfig2.Flags.SessionAffinity != 3600 {
-		t.Errorf("Expected to preserve user's explicit SessionAffinity = 3600, got %d",
-			claudeCodeConfig2.Flags.SessionAffinity)
+	// Should preserve user's explicit choice to disable
+	if xcodeConfig2.Flags.SkipUsage {
+		t.Error("Expected to preserve user's explicit SkipUsage = false")
 	}
 }
 
@@ -162,104 +130,81 @@ func TestMigrate20260606_PartialCustomization(t *testing.T) {
 		t.Errorf("Expected user's SkipUsage=false to be preserved, got %v",
 			xcodeConfig.Flags.SkipUsage)
 	}
-
-	// Verify that SessionAffinity still got the default value
-	if xcodeConfig.Flags.SessionAffinity != 1800 {
-		t.Errorf("Expected SessionAffinity=1800 to be set even with customized SkipUsage, got %d",
-			xcodeConfig.Flags.SessionAffinity)
-	}
 }
 
-func TestMigrate20260608_DefaultsClaudeCodeCompat(t *testing.T) {
+func TestMigrate20260610_SeedsRuleFlags(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
 			{UUID: "cc-profile", Scenario: typ.RuleScenario("claude_code:p1")},
-			{UUID: "already-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{ClaudeCodeCompat: true}},
-			{UUID: "openai", Scenario: typ.ScenarioOpenAI},
-		},
-	}
-
-	migrate20260608(c)
-
-	if !c.hasMigrationCompleted("20260608") {
-		t.Fatal("migration should be marked completed")
-	}
-	want := map[string]bool{
-		"built-in-cc": true,  // claude_code base → defaulted on
-		"cc-profile":  true,  // claude_code:<profile> → defaulted on
-		"already-on":  true,  // unchanged
-		"openai":      false, // non-claude_code → untouched
-	}
-	for _, r := range c.Rules {
-		if got := r.Flags.ClaudeCodeCompat; got != want[r.UUID] {
-			t.Errorf("rule %q ClaudeCodeCompat = %v, want %v", r.UUID, got, want[r.UUID])
-		}
-	}
-}
-
-func TestMigrate20260608_OneTime_PreservesUserOff(t *testing.T) {
-	c := &Config{
-		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
-	}
-
-	migrate20260608(c)
-	if !c.Rules[0].Flags.ClaudeCodeCompat {
-		t.Fatal("first run should default the flag on")
-	}
-
-	// User turns it off; a later boot must not re-enable it.
-	c.Rules[0].Flags.ClaudeCodeCompat = false
-	migrate20260608(c)
-	if c.Rules[0].Flags.ClaudeCodeCompat {
-		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
-	}
-}
-
-func TestMigrate20260609_DefaultsCleanHeader(t *testing.T) {
-	c := &Config{
-		Rules: []typ.Rule{
-			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
-			{UUID: "cc-profile", Scenario: typ.RuleScenario("claude_code:p1")},
-			{UUID: "already-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{CleanHeader: true}},
+			{UUID: "cc-compat-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{ClaudeCodeCompat: true}},
+			{UUID: "cc-affinity-set", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{SessionAffinity: 900}},
 			{UUID: "desktop", Scenario: typ.ScenarioClaudeDesktop},
+			{UUID: "codex", Scenario: typ.ScenarioCodex},
 			{UUID: "openai", Scenario: typ.ScenarioOpenAI},
 		},
 	}
 
-	migrate20260609(c)
+	migrate20260610(c)
 
-	if !c.hasMigrationCompleted("20260609") {
+	if !c.hasMigrationCompleted("20260610") {
 		t.Fatal("migration should be marked completed")
 	}
-	want := map[string]bool{
-		"built-in-cc": true,  // claude_code base → defaulted on
-		"cc-profile":  true,  // claude_code:<profile> → defaulted on
-		"already-on":  true,  // unchanged
-		"desktop":     false, // claude_desktop — not in scope for this migration
-		"openai":      false, // non-claude_code → untouched
+
+	type want struct {
+		compat   bool
+		clean    bool
+		affinity int
+	}
+	const aff = defaultSessionAffinitySeconds
+	wants := map[string]want{
+		"built-in-cc":     {compat: true, clean: true, affinity: aff},  // claude_code base → all defaulted on
+		"cc-profile":      {compat: true, clean: true, affinity: aff},  // claude_code:<profile> → covered
+		"cc-compat-on":    {compat: true, clean: true, affinity: aff},  // already-on compat unchanged, others seeded
+		"cc-affinity-set": {compat: true, clean: true, affinity: 900},  // user affinity preserved
+		"desktop":         {compat: true, clean: true, affinity: aff},  // claude_desktop → all defaulted on
+		"codex":           {compat: false, clean: false, affinity: aff}, // codex → affinity only
+		"openai":          {compat: false, clean: false, affinity: 0},   // out of scope → untouched
 	}
 	for _, r := range c.Rules {
-		if got := r.Flags.CleanHeader; got != want[r.UUID] {
-			t.Errorf("rule %q CleanHeader = %v, want %v", r.UUID, got, want[r.UUID])
+		w := wants[r.UUID]
+		if r.Flags.ClaudeCodeCompat != w.compat {
+			t.Errorf("rule %q ClaudeCodeCompat = %v, want %v", r.UUID, r.Flags.ClaudeCodeCompat, w.compat)
+		}
+		if r.Flags.CleanHeader != w.clean {
+			t.Errorf("rule %q CleanHeader = %v, want %v", r.UUID, r.Flags.CleanHeader, w.clean)
+		}
+		if r.Flags.SessionAffinity != w.affinity {
+			t.Errorf("rule %q SessionAffinity = %d, want %d", r.UUID, r.Flags.SessionAffinity, w.affinity)
 		}
 	}
 }
 
-func TestMigrate20260609_OneTime_PreservesUserOff(t *testing.T) {
+func TestMigrate20260610_OneTime_PreservesUserOff(t *testing.T) {
 	c := &Config{
-		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
+		Rules: []typ.Rule{
+			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
+			{UUID: "codex", Scenario: typ.ScenarioCodex},
+		},
 	}
 
-	migrate20260609(c)
-	if !c.Rules[0].Flags.CleanHeader {
-		t.Fatal("first run should default the flag on")
+	migrate20260610(c)
+	if !c.Rules[0].Flags.ClaudeCodeCompat || !c.Rules[0].Flags.CleanHeader ||
+		c.Rules[0].Flags.SessionAffinity != defaultSessionAffinitySeconds {
+		t.Fatal("first run should seed the default flags on the CC rule")
+	}
+	if c.Rules[1].Flags.SessionAffinity != defaultSessionAffinitySeconds {
+		t.Fatal("first run should seed affinity on the Codex rule")
 	}
 
-	// User turns it off; a later boot must not re-enable it.
+	// User turns everything off; a later boot must not re-enable any of it.
+	c.Rules[0].Flags.ClaudeCodeCompat = false
 	c.Rules[0].Flags.CleanHeader = false
-	migrate20260609(c)
-	if c.Rules[0].Flags.CleanHeader {
-		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
+	c.Rules[0].Flags.SessionAffinity = 0
+	c.Rules[1].Flags.SessionAffinity = 0
+	migrate20260610(c)
+	if c.Rules[0].Flags.ClaudeCodeCompat || c.Rules[0].Flags.CleanHeader ||
+		c.Rules[0].Flags.SessionAffinity != 0 || c.Rules[1].Flags.SessionAffinity != 0 {
+		t.Error("migration re-enabled user-disabled flags; one-time gate is broken")
 	}
 }

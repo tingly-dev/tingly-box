@@ -133,11 +133,11 @@ func RuleFlagRegistry() []FlagSpec { … }
 | `skip_usage` | bool | response | **yes** | or | 剥离响应中的 `usage`（流式 + 非流式 + Anthropic 转 OpenAI 路径） | `shouldStripUsage(reqCtx.Extra)`（Type 3）|
 | `thinking_effort` | enum (`""`/`off`/`low`/`medium`/`high`/`max`) | reasoning | **yes** | override | 统一控制 extended thinking。映射为 Anthropic budget_tokens（low 1K / medium 5K / high 20K / max 32K）或 OpenAI reasoning_effort。空 = "By Client"（透传客户端参数）。| `ThinkingModeTransform`（Type 1b，server-domain Transform）|
 | `vision_proxy_service` | service_ref | vision | — | — | 通过视觉代理模型描述图片，让纯文本下游模型能处理图片输入。rule 级优先于 scenario 级。| VisionProxy 中间件（Type 1b-pre）|
-| `session_affinity` | int (seconds) | routing | **yes** | override | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。| `ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5）|
+| `session_affinity` | int (seconds) | routing | — | — | 会话亲和 TTL（秒），0=禁用，>0=启用。Pin 会话到服务以提升缓存命中率。Session ID 解析优先级：Anthropic metadata.user_id > X-Tingly-Session-ID header > 客户端 IP。**rule-only**（已从 scenario plugin 移除——无 scenario 级继承）。**built-in CC / Desktop / Codex rule 默认 1800s**（`init.go` 种子 + `migrate20260610` 存量），其余 rule 不设即禁用，可在 Plugins 卡片按 rule 调整。| `ProviderResolver.PostProcess()` → `Config.GetEffectiveAffinity(rule)`（Type 5，仅读 `rule.Flags.SessionAffinity`）|
 | `cursor_compat` | bool | app | — | — | Cursor IDE 内容归一化 + stream usage 抑制 | `transform.OpenAICursorCompatTransform` → `ops.ApplyCursorCompatContentNormalization`（Type 1b-pre）|
 | `cursor_compat_auto` | bool | app | — | — | 通过请求头识别 Cursor，自动折叠进 `cursor_compat` | `resolveRuleFlags(c, rule)` 在 handler 入口合并 |
-| `claude_code_compat` | bool | app | **yes** | or | 归一化 Claude Code 的会话中段 `role == "system"` 消息。Claude Code 在 messages 中写入 system role（非标准扩展，对应 Anthropic `mid-conversation-system` beta）；三方 Anthropic-compatible provider 拒绝该 role。**位置感知**：把每条 system 消息**就地并入相邻 user turn**，方向由左右邻居唯一决定（不是自由选择）——前邻是 user 则**向后并**入它；前邻是 assistant/开头则**向前并**入下一条 user；两侧都不是 user 才独立成一个 user turn。决策需先知道 next 的角色，故实现用 pending 缓冲，到下一条非 system 消息（或数组末尾）才落位。这样既保住位置、又避免产生连续 user 消息（严格 provider 同样会以 "roles must alternate" 拒绝）。**不做 hoist**：messages 里的 system 按 beta 契约必是中段消息（不能是 `messages[0]`），全局 system prompt 已在顶层 `system` 字段；hoist 会把"截至第 N 轮"的指令重排为全局、并击穿 prompt cache。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260608` 存量），可在 Plugins 卡片按 rule 关闭以保真原生 Anthropic。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite`（Type 1b-pre，仅 Anthropic 入站形态）|
-| `clean_header` | bool | app | — | — | 剥离 system messages 中的 x-anthropic-billing-header 块。Claude Code 注入该 header 仅供自家计费，绝不能泄漏给三方 provider。**rule-only**（已从 scenario plugin 移除 —— 不再有 `ScenarioFlags.CleanHeader` / OR 注入）。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260609` 存量），可按 rule 关闭以保真原生 Anthropic。**Claude OAuth provider 自动抑制**：OAuth 订阅走原生 Anthropic，其计费后端要消费这个 header，故 `resolveRuleFlagsWithScenario` 在解析末尾对 `provider.IsClaudeCodeProvider()` 命中的请求清掉该 flag。claude_desktop 仍靠 `autoSetCleanHeaderFlag` 在协议转换时自动启用（claude_desktop 未做 rule 级默认）。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
+| `claude_code_compat` | bool | app | **yes** | or | 归一化 Claude Code 的会话中段 `role == "system"` 消息。Claude Code 在 messages 中写入 system role（非标准扩展，对应 Anthropic `mid-conversation-system` beta）；三方 Anthropic-compatible provider 拒绝该 role。**位置感知**：把每条 system 消息**就地并入相邻 user turn**，方向由左右邻居唯一决定（不是自由选择）——前邻是 user 则**向后并**入它；前邻是 assistant/开头则**向前并**入下一条 user；两侧都不是 user 才独立成一个 user turn。决策需先知道 next 的角色，故实现用 pending 缓冲，到下一条非 system 消息（或数组末尾）才落位。这样既保住位置、又避免产生连续 user 消息（严格 provider 同样会以 "roles must alternate" 拒绝）。**不做 hoist**：messages 里的 system 按 beta 契约必是中段消息（不能是 `messages[0]`），全局 system prompt 已在顶层 `system` 字段；hoist 会把"截至第 N 轮"的指令重排为全局、并击穿 prompt cache。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可在 Plugins 卡片按 rule 关闭以保真原生 Anthropic。| `transform.ClaudeCodeCompatTransform` → `ops.ApplyClaudeCodeCompatRoleRewrite`（Type 1b-pre，仅 Anthropic 入站形态）|
+| `clean_header` | bool | app | — | — | 剥离 system messages 中的 x-anthropic-billing-header 块。Claude Code 注入该 header 仅供自家计费，绝不能泄漏给三方 provider。**rule-only**（已从 scenario plugin 移除 —— 不再有 `ScenarioFlags.CleanHeader` / OR 注入）。**built-in CC rule 默认开**（`init.go::ccRule` + `newCCProfileRules` 种子 / `migrate20260610` 存量），可按 rule 关闭以保真原生 Anthropic。**Claude OAuth provider 自动抑制**：OAuth 订阅走原生 Anthropic，其计费后端要消费这个 header，故 `resolveRuleFlagsWithScenario` 在解析末尾对 `provider.IsClaudeCodeProvider()` 命中的请求清掉该 flag。claude_desktop 仍靠 `autoSetCleanHeaderFlag` 在协议转换时自动启用（claude_desktop 未做 rule 级默认）。| `CleanHeaderTransform`（Type 1b-pre，server-domain Transform）|
 
 ---
 
@@ -500,7 +500,6 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 | `thinking_effort` | ✅ | ✅ | Rule 显式设置 > Scenario 默认 > By Client（空字符串）|
 | `claude_code_compat` | ✅ | ✅ | Scenario 启用时自动 OR 进 rule 的 `ClaudeCodeCompat` |
 | `custom_user_agent` | ✅ | ✅ | Rule 显式设置（非空）> Scenario 默认 > 不覆盖（空）。注入点 `applyCustomUserAgent`（Type 2，写入 c.Request.Context()）|
-| `session_affinity` | ✅ | ✅ | Rule 显式设置（>0）> Scenario 默认 > 禁用（0）|
 
 **Scenario-only flags**（无 rule 级对应，只存在于 ScenarioFlags）：
 
@@ -510,7 +509,12 @@ rule flag 在请求级覆盖或继承它。`resolveRuleFlagsWithScenario`（`int
 | `recording_v2` | 控制请求/响应录制模式（off / request / request_response / staged） |
 | `unified` / `separate` / `smart` | 路由模式开关 |
 
-**Rule-only flags（曾是 scenario 级、已下放为纯 rule 级）**：`clean_header` 原本是 scenario-shared（OR 继承），现已从 scenario plugin 移除——`ScenarioFlags.CleanHeader` 字段、`GetScenarioFlag`/`SetScenarioFlag` 的 `clean_header` 分支、`FlagCleanHeader` 常量、以及 `resolveRuleFlagsWithScenario` 里的 OR 注入全部删除。改为 built-in CC rule 默认开（见上方主表与 §built-in 默认），UI 上只在 Plugins 卡片按 rule 呈现真实值，不再有 scenario 级开关。
+**Rule-only flags（曾是 scenario 级、已下放为纯 rule 级）**：
+
+- `clean_header` 原本是 scenario-shared（OR 继承），现已从 scenario plugin 移除——`ScenarioFlags.CleanHeader` 字段、`GetScenarioFlag`/`SetScenarioFlag` 的 `clean_header` 分支、`FlagCleanHeader` 常量、以及 `resolveRuleFlagsWithScenario` 里的 OR 注入全部删除。改为 built-in CC rule 默认开（见上方主表与 §built-in 默认），UI 上只在 Plugins 卡片按 rule 呈现真实值，不再有 scenario 级开关。
+- `session_affinity` 原本是 scenario-shared（`>0` override 继承），现已下放为纯 rule 级（参考 `clean_header`）——`ScenarioFlags.SessionAffinity` 字段、`GetScenarioIntFlag`/`SetScenarioIntFlag` 的 `session_affinity` 分支、`FlagSessionAffinity` 常量、`GetEffectiveAffinity` 的 scenario fallback、以及 `resolveRuleFlagsWithScenario` 里的注入全部删除。改为 built-in **Claude Code / Claude Desktop / Codex** rule 默认 1800s（`init.go` 种子 + `migrate20260610` 存量回填），其余 rule 不设即禁用，UI 上只在 Plugins 卡片按 rule 调整。`GetScenarioIntFlag`/`SetScenarioIntFlag` 与其 HTTP int-flag endpoint 当前无任何注册 key，但作为**通用 infra 保留**（scenario 级 int flag 的读写骨架）——未来新增 scenario int flag 只需在 `flag_keys.go` 加 key 常量 + 在 `config.go` 的 switch 里加一个 case。`migrate20260606` 不再种 scenario 级 affinity，仅保留 Xcode `SkipUsage` 默认。
+
+> **Migration 整合**：上述 `claude_code_compat` / `clean_header` / `session_affinity` 三个 rule 级默认值，曾分散在 `migrate20260608`/`_2`/`_3`/`_4` 与 `migrate20260609`/`_2`/`_3` 共 7 个 migration 中，现已统一重组为单个 **`migrate20260610`**（一次性 marker 门控，按 rule scenario 分支：CC / Desktop → 三个 flag 全开，Codex → 仅 affinity），与 `init.go` 的内建 rule 种子一一对应。
 
 **继承逻辑实现**：
 
@@ -532,10 +536,7 @@ func resolveRuleFlagsWithScenario(...) typ.RuleFlags {
         if flags.CustomUserAgent == "" && scenarioConfig.Flags.CustomUserAgent != "" {
             flags.CustomUserAgent = scenarioConfig.Flags.CustomUserAgent
         }
-        // SessionAffinity：rule 显式设置（>0）优先
-        if flags.SessionAffinity == 0 && scenarioConfig.Flags.SessionAffinity > 0 {
-            flags.SessionAffinity = scenarioConfig.Flags.SessionAffinity
-        }
+        // 注意：session_affinity 已不在此 —— 它是 rule-only，无 scenario 级注入。
     }
     // claude_desktop 等 billing 场景：协议转换时自动启用 CleanHeader（claude_code 已 rule 级默认开）
     flags = autoSetCleanHeaderFlag(flags, sourceAPI, targetAPI, scenarioType)
@@ -546,56 +547,27 @@ func resolveRuleFlagsWithScenario(...) typ.RuleFlags {
     return flags
 }
 
-// session_affinity 路由层解析顺序（Config.GetEffectiveAffinity）
+// session_affinity 路由层解析顺序（Config.GetEffectiveAffinity）—— rule-only，
+// 无 scenario fallback。built-in CC/Desktop/Codex rule 已种 1800s；其余 rule
+// 不设即禁用。
 func (c *Config) GetEffectiveAffinity(rule *typ.Rule) time.Duration {
-    // 1. Rule 显式设置
     if rule.Flags.SessionAffinity > 0 {
         return time.Duration(rule.Flags.SessionAffinity) * time.Second
     }
-
-    // 2. Scenario 默认（profiled scenario 先找自己，没有则 fallback 到 base）
-    scenarioConfig := c.scenarioConfigLocked(rule.GetScenario())
-    if scenarioConfig != nil && scenarioConfig.Flags.SessionAffinity > 0 {
-        return time.Duration(scenarioConfig.Flags.SessionAffinity) * time.Second
-    }
-
-    // 3. 禁用
-    return 0
-}
-
-// scenarioConfigLocked 的查找顺序
-func (c *Config) scenarioConfigLocked(scenario typ.RuleScenario) *typ.ScenarioConfig {
-    // 1. 精确匹配 profiled scenario（如 claude_code:p1）
-    for i := range c.Scenarios {
-        if c.Scenarios[i].Scenario == scenario {
-            return &c.Scenarios[i]
-        }
-    }
-
-    // 2. Profile fallback 到 base scenario
-    baseScenario, profileID := typ.ParseScenarioProfile(scenario)
-    if profileID != "" {
-        for i := range c.Scenarios {
-            if c.Scenarios[i].Scenario == baseScenario {
-                return &c.Scenarios[i]
-            }
-        }
-    }
-
-    return nil
+    return 0 // 禁用
 }
 ```
 
-**默认值策略**：
+**默认值策略（session_affinity，rule 级）**：
 
-- IDE/Agent 场景（claude_code, claude_desktop, vscode, xcode, agent, codex, opencode）：默认 1800 秒（30 分钟）
-- API 场景（openai, anthropic, embed, imagegen）：默认禁用（0）
-- Profile（如 claude_code:p1）：继承 base scenario 默认，可独立配置覆盖
+- built-in **Claude Code / Claude Desktop / Codex** rule：默认 1800 秒（30 分钟），由 `init.go` 种子（新装）+ `migrate20260610` 回填（存量）。
+- 其余场景 / 用户自建 rule：不设即禁用（0）。需要时在 Plugins 卡片按 rule 开启。
+- Profile（如 claude_code:p1）：migration 通过 `ParseScenarioProfile` 按 base scenario 匹配，profile rule 同样回填。
 
 **持久化语义**：
 
-- Scenario 配置**只在不存在时创建默认**，用户配置后不会被覆盖
-- Rule 的 `0` 值表示"未设置"而非"禁用"，通过继承链决定实际值
+- Migration 一次性回填（marker 门控）：用户事后把某 rule 的 affinity 设为 0（禁用）后，重启不会被重新打开。
+- Rule 的 `0` 值现在直接表示"禁用"（无 scenario 继承可回退）。
 - Profile 删除时清理独立的 scenario config（防止遗留）
 
 ---
