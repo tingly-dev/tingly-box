@@ -29,25 +29,83 @@ type flagCase struct {
 	run func(t *testing.T, env *TestEnv)
 }
 
-// endpointForTarget maps a target protocol to the mock provider endpoint the
-// gateway forwards to, so tests can fetch the captured upstream request.
-func endpointForTarget(target protocol.APIType) EndpointKind {
-	switch target {
-	case protocol.TypeOpenAIResponses:
-		return EndpointResponses
-	case protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta:
-		return EndpointAnthropic
+// flagScenario is the single shared scenario every flag case routes through.
+// One representative fixture is enough: rather than a trivial single-turn text
+// exchange, it serves the multi-turn mocks (which advertise a usage block, so
+// skip_usage has something to strip) paired with flagBaseRequest below. It
+// carries no assertions of its own — the flag suite asserts directly on the
+// captured upstream request / client response.
+func flagScenario() Scenario {
+	s := MultiTurnScenario()
+	s.Name = "flags"
+	s.Description = "Unified multi-turn fixture for rule-flag behavior tests"
+	s.Assertions = nil
+	return s
+}
+
+// flagBaseRequest is the unified inbound request the flag suite sends: one
+// representative, multi-turn conversation that bakes in the material the various
+// flags act on, so individual cases set only their flag and assert their slice
+// rather than each crafting a bespoke request.
+//
+//   - OpenAI: a system turn + user/assistant history, array-shaped user content
+//     (cursor flattening), a tool list (block_tools), and max_tokens
+//     (max_tokens→max_completion_tokens rewrite).
+//   - Anthropic: a system block carrying an injected billing header
+//     (clean_header) plus a normal block, and a multi-turn message history
+//     (thinking budget, etc).
+//
+// Flags whose test is inherently about a field/shape swap (use_max_tokens,
+// claude_code_compat) still pass a small mutate to sendFlag.
+func flagBaseRequest(source protocol.APIType, model string, streaming bool) (string, []byte) {
+	switch source {
+	case protocol.TypeOpenAIChat:
+		return "/tingly/openai/v1/chat/completions", mustMarshal(map[string]any{
+			"model":      model,
+			"max_tokens": 64,
+			"stream":     streaming,
+			"messages": []map[string]any{
+				{"role": "system", "content": "You are a helpful assistant."},
+				{"role": "user", "content": []map[string]any{
+					{"type": "text", "text": "Hello"},
+					{"type": "text", "text": " world"},
+				}},
+				{"role": "assistant", "content": "Hi — how can I help?"},
+				{"role": "user", "content": []map[string]any{
+					{"type": "text", "text": "What is the capital of France?"},
+				}},
+			},
+			"tools": []map[string]any{
+				{"type": "function", "function": map[string]any{"name": "web_search", "parameters": map[string]any{"type": "object"}}},
+				{"type": "function", "function": map[string]any{"name": "keep_me", "parameters": map[string]any{"type": "object"}}},
+			},
+		})
+	case protocol.TypeAnthropicV1:
+		return "/tingly/anthropic/v1/messages", mustMarshal(map[string]any{
+			"model":      model,
+			"max_tokens": 64,
+			"stream":     streaming,
+			"system": []map[string]any{
+				{"type": "text", "text": "x-anthropic-billing-header: secret-token"},
+				{"type": "text", "text": "You are a helpful assistant."},
+			},
+			"messages": []map[string]any{
+				{"role": "user", "content": "What is the capital of France?"},
+				{"role": "assistant", "content": "It is Paris."},
+				{"role": "user", "content": "And the capital of Germany?"},
+			},
+		})
 	default:
-		return EndpointChat
+		return buildRequest(source, model, streaming)
 	}
 }
 
-// sendFlag builds the default request for source, applies an optional body
+// sendFlag builds the unified flag request for source, applies an optional body
 // mutation and extra headers, drives it through the gateway, and returns the
 // parsed result. It fails the test on transport errors.
 func sendFlag(t *testing.T, env *TestEnv, source, target protocol.APIType, reqModel string, streaming bool, mutate func(map[string]any), headers map[string]string) *RoundTripResult {
 	t.Helper()
-	path, body := buildRequest(source, reqModel, streaming)
+	path, body := flagBaseRequest(source, reqModel, streaming)
 	if mutate != nil {
 		var m map[string]any
 		if err := json.Unmarshal(body, &m); err != nil {
@@ -134,7 +192,7 @@ func ruleFlagCases() []flagCase {
 		// ── custom_user_agent ────────────────────────────────────────────────
 		{key: "custom_user_agent", run: func(t *testing.T, env *TestEnv) {
 			const ua = "HarnessFlagUA/9.9"
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{CustomUserAgent: ua})
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{CustomUserAgent: ua})
 			// Streaming path: the custom UA rides c.Request.Context() into the
 			// forward context, which the OpenAI client's customUserAgentTransport
 			// reads. (The non-streaming openai_chat path builds its forward
@@ -152,9 +210,9 @@ func ruleFlagCases() []flagCase {
 
 		// ── use_max_completion_tokens ────────────────────────────────────────
 		{key: "use_max_completion_tokens", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{UseMaxCompletionTokens: true})
-			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false,
-				func(m map[string]any) { m["max_tokens"] = 777 }, nil)
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{UseMaxCompletionTokens: true})
+			// The unified request already carries max_tokens.
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
 			body := env.virtual.LastRequest(EndpointChat).JSON()
 			if _, ok := body["max_completion_tokens"]; !ok {
 				t.Errorf("upstream missing max_completion_tokens; body keys=%v", keysOf(body))
@@ -166,9 +224,13 @@ func ruleFlagCases() []flagCase {
 
 		// ── use_max_tokens ───────────────────────────────────────────────────
 		{key: "use_max_tokens", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{UseMaxTokens: true})
-			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false,
-				func(m map[string]any) { m["max_completion_tokens"] = 555 }, nil)
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{UseMaxTokens: true})
+			// This rewrite is the inverse direction, so swap the unified request's
+			// max_tokens for the newer field that the flag rewrites back.
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, func(m map[string]any) {
+				delete(m, "max_tokens")
+				m["max_completion_tokens"] = 555
+			}, nil)
 			body := env.virtual.LastRequest(EndpointChat).JSON()
 			if _, ok := body["max_tokens"]; !ok {
 				t.Errorf("upstream missing max_tokens; body keys=%v", keysOf(body))
@@ -180,13 +242,9 @@ func ruleFlagCases() []flagCase {
 
 		// ── block_tools ──────────────────────────────────────────────────────
 		{key: "block_tools", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{BlockTools: "web_search"})
-			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, func(m map[string]any) {
-				m["tools"] = []map[string]any{
-					{"type": "function", "function": map[string]any{"name": "web_search", "parameters": map[string]any{"type": "object"}}},
-					{"type": "function", "function": map[string]any{"name": "keep_me", "parameters": map[string]any{"type": "object"}}},
-				}
-			}, nil)
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{BlockTools: "web_search"})
+			// The unified request already carries the web_search + keep_me tools.
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
 			names := upstreamToolNames(env.virtual.LastRequest(EndpointChat).JSON())
 			if contains(names, "web_search") {
 				t.Errorf("blocked tool web_search still forwarded; tools=%v", names)
@@ -198,7 +256,7 @@ func ruleFlagCases() []flagCase {
 
 		// ── skip_usage ───────────────────────────────────────────────────────
 		{key: "skip_usage", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{SkipUsage: true})
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{SkipUsage: true})
 			res := sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
 			if strings.Contains(string(res.RawBody), "\"usage\"") {
 				t.Errorf("client response still contains usage block: %s", truncate(string(res.RawBody), 300))
@@ -207,7 +265,7 @@ func ruleFlagCases() []flagCase {
 
 		// ── thinking_effort ──────────────────────────────────────────────────
 		{key: "thinking_effort", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, TextScenario(), typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
+			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, flagScenario(), typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
 			sendFlag(t, env, protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, model, false, nil, nil)
 			body := env.virtual.LastRequest(EndpointAnthropic).JSON()
 			thinking, ok := body["thinking"].(map[string]any)
@@ -221,11 +279,14 @@ func ruleFlagCases() []flagCase {
 
 		// ── claude_code_compat ───────────────────────────────────────────────
 		{key: "claude_code_compat", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, TextScenario(), typ.RuleFlags{ClaudeCodeCompat: true})
+			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, flagScenario(), typ.RuleFlags{ClaudeCodeCompat: true})
+			// Claude Code's non-standard quirk is a mid-conversation system-role
+			// message inside the messages array; inject one for the fold to act on.
 			sendFlag(t, env, protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, model, false, func(m map[string]any) {
 				m["messages"] = []map[string]any{
-					{"role": "system", "content": "be terse"},
-					{"role": "user", "content": "hi"},
+					{"role": "user", "content": "What is the capital of France?"},
+					{"role": "system", "content": "Answer tersely."},
+					{"role": "user", "content": "And of Germany?"},
 				}
 			}, nil)
 			roles := messageRoles(env.virtual.LastRequest(EndpointAnthropic).JSON())
@@ -236,13 +297,10 @@ func ruleFlagCases() []flagCase {
 
 		// ── clean_header ─────────────────────────────────────────────────────
 		{key: "clean_header", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, TextScenario(), typ.RuleFlags{CleanHeader: true})
-			sendFlag(t, env, protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, model, false, func(m map[string]any) {
-				m["system"] = []map[string]any{
-					{"type": "text", "text": "x-anthropic-billing-header: secret-token"},
-					{"type": "text", "text": "You are a helpful assistant."},
-				}
-			}, nil)
+			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, flagScenario(), typ.RuleFlags{CleanHeader: true})
+			// The unified request's system block already carries the injected
+			// x-anthropic-billing-header that clean_header must strip.
+			sendFlag(t, env, protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, model, false, nil, nil)
 			up := string(env.virtual.LastRequest(EndpointAnthropic).Body)
 			if strings.Contains(up, "x-anthropic-billing-header") {
 				t.Errorf("billing header not stripped from upstream system: %s", truncate(up, 300))
@@ -251,23 +309,24 @@ func ruleFlagCases() []flagCase {
 
 		// ── cursor_compat ────────────────────────────────────────────────────
 		{key: "cursor_compat", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{CursorCompat: true})
-			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, richContentMutator, nil)
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{CursorCompat: true})
+			// The unified request already carries array-shaped user content.
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
 			assertFlattenedContent(t, env.virtual.LastRequest(EndpointChat).JSON())
 		}},
 
 		// ── cursor_compat_auto ───────────────────────────────────────────────
 		{key: "cursor_compat_auto", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{CursorCompatAuto: true})
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{CursorCompatAuto: true})
 			// cursor_compat_auto only fires when a Cursor client is detected.
-			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, richContentMutator,
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil,
 				map[string]string{"User-Agent": "Cursor/1.2.3"})
 			assertFlattenedContent(t, env.virtual.LastRequest(EndpointChat).JSON())
 		}},
 
 		// ── openai_endpoint_override ─────────────────────────────────────────
 		{key: "openai_endpoint_override", run: func(t *testing.T, env *TestEnv) {
-			model := setupBothModeRoute(env, TextScenario(), typ.RuleFlags{OpenAIEndpointOverride: "responses"})
+			model := setupBothModeRoute(env, flagScenario(), typ.RuleFlags{OpenAIEndpointOverride: "responses"})
 			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIResponses, model, false, nil, nil)
 			if hits := env.virtual.EndpointHits(EndpointResponses); hits == 0 {
 				t.Errorf("override=responses did not force the Responses endpoint (responses hits=0, chat hits=%d)", env.virtual.EndpointHits(EndpointChat))
@@ -279,7 +338,7 @@ func ruleFlagCases() []flagCase {
 		// we only verify the flag is accepted and the request still completes
 		// through the gateway (guards against wiring/parse regressions).
 		{key: "session_affinity", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), typ.RuleFlags{SessionAffinity: 3600})
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{SessionAffinity: 3600})
 			res := sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil,
 				map[string]string{"X-Tingly-Session-ID": "flag-affinity-session"})
 			if res.HTTPStatus != 200 {
@@ -293,7 +352,7 @@ func ruleFlagCases() []flagCase {
 		// cleanly and a normal request still succeeds end-to-end.
 		{key: "vision_proxy_service", run: func(t *testing.T, env *TestEnv) {
 			flags := typ.RuleFlags{VisionProxyService: &typ.VisionProxyService{Provider: "describer", Model: "vision-model"}}
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, TextScenario(), flags)
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), flags)
 			res := sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
 			if res.HTTPStatus != 200 {
 				t.Errorf("vision_proxy_service request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 200))
@@ -302,26 +361,19 @@ func ruleFlagCases() []flagCase {
 	}
 }
 
-// richContentMutator rewrites the single user message to carry array-shaped
-// rich content, which cursor compatibility flattens to a plain string.
-func richContentMutator(m map[string]any) {
-	m["messages"] = []map[string]any{
-		{"role": "user", "content": []map[string]any{
-			{"type": "text", "text": "Hello"},
-			{"type": "text", "text": " world"},
-		}},
-	}
-}
-
+// assertFlattenedContent verifies cursor compatibility flattened every message's
+// rich (array) content down to a plain string in the upstream request.
 func assertFlattenedContent(t *testing.T, body map[string]any) {
 	t.Helper()
 	msgs, _ := body["messages"].([]any)
 	if len(msgs) == 0 {
 		t.Fatalf("no upstream messages; body keys=%v", keysOf(body))
 	}
-	first, _ := msgs[0].(map[string]any)
-	if _, isString := first["content"].(string); !isString {
-		t.Errorf("cursor compat did not flatten content to a string; got %T", first["content"])
+	for i, raw := range msgs {
+		m, _ := raw.(map[string]any)
+		if _, isString := m["content"].(string); !isString {
+			t.Errorf("cursor compat left message[%d] content un-flattened; got %T", i, m["content"])
+		}
 	}
 }
 
