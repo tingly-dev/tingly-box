@@ -128,6 +128,11 @@ interface OAuthDialogProps {
     // this provider id, skipping the in-dialog grid. Used by the unified
     // "Connect Provider" picker to route OAuth cards straight into the flow.
     autoStartProviderId?: string | null;
+    // When set, the flow re-authenticates this existing provider in place: on
+    // success the backend overwrites its credentials on the same UUID instead of
+    // creating a new provider, so every rule/service reference stays intact.
+    // Pair with autoStartProviderId set to the provider's issuer.
+    reauthProviderUuid?: string | null;
 }
 
 // OAuth Authorization Dialog - unified UI for both standard and device code flow
@@ -539,7 +544,8 @@ const OAuthAuthorizationDialog = ({
     );
 };
 
-const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialogProps) => {
+const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId, reauthProviderUuid}: OAuthDialogProps) => {
+    const isReauth = Boolean(reauthProviderUuid);
     const [authorizing, setAuthorizing] = useState<string | null>(null);
     const [authDialogOpen, setAuthDialogOpen] = useState(false);
     const [authData, setAuthData] = useState<OAuthAuthorizationData | null>(null);
@@ -679,6 +685,8 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
                     provider: provider.id,
                     proxy_url: proxyUrl || undefined,
                     redirect: redirectUri,
+                    // Re-auth: overwrite this existing provider in place (same UUID).
+                    provider_uuid: reauthProviderUuid || undefined,
                 } as any,
             );
 
@@ -763,7 +771,9 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
                 <Dialog open={open && !authDialogOpen} onClose={handleClose} maxWidth="xs" fullWidth>
                     <DialogTitle>
                         <Stack direction="row" alignItems="center" justifyContent="space-between">
-                            <Typography variant="h6">Connect {provider?.name || 'Provider'}</Typography>
+                            <Typography variant="h6">
+                                {isReauth ? `Reauthorize ${provider?.name || 'Provider'}` : `Connect ${provider?.name || 'Provider'}`}
+                            </Typography>
                             <IconButton onClick={handleClose} size="small"><Close/></IconButton>
                         </Stack>
                     </DialogTitle>
@@ -772,11 +782,17 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
                             <Stack alignItems="center" spacing={2} sx={{py: 3}}>
                                 <CircularProgress size={28}/>
                                 <Typography variant="body2" color="text.secondary">
-                                    Connecting to {name}…
+                                    {isReauth ? `Reauthorizing ${name}…` : `Connecting to ${name}…`}
                                 </Typography>
                             </Stack>
                         ) : (
                             <Stack spacing={2.5} sx={{py: 1}}>
+                                {isReauth && (
+                                    <Alert severity="info">
+                                        Sign in again to refresh this credential. The provider keeps its
+                                        existing name and UUID, so all routing rules and model keys stay intact.
+                                    </Alert>
+                                )}
                                 {/* Provider info */}
                                 {provider && (
                                     <Stack direction="row" alignItems="center" spacing={2}>
@@ -854,7 +870,7 @@ const OAuthDialog = ({open, onClose, onSuccess, autoStartProviderId}: OAuthDialo
                                     disabled={provider?.enabled === false}
                                     onClick={() => setConfigConfirmed(true)}
                                 >
-                                    Connect &amp; Authorize
+                                    {isReauth ? 'Reauthorize' : 'Connect & Authorize'}
                                 </Button>
                             </Stack>
                         )}

@@ -41,6 +41,10 @@ type SessionState struct {
 	ProviderUUID string        `json:"provider_uuid,omitempty"` // Set when success
 	Error        string        `json:"error,omitempty"`         // Set when failed
 	ProxyURL     string        `json:"proxy_url,omitempty"`     // Proxy URL used for this session
+	// TargetProviderUUID, when set, marks this flow as a re-authentication of an
+	// existing provider: on success the credentials are overwritten in place on
+	// this UUID instead of creating a new provider.
+	TargetProviderUUID string `json:"target_provider_uuid,omitempty"`
 }
 
 // Manager handles OAuth flows

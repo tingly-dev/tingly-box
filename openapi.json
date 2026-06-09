@@ -7328,6 +7328,11 @@
             "description": "OAuth provider type",
             "example": "anthropic"
           },
+          "provider_uuid": {
+            "type": "string",
+            "description": "Existing provider UUID to re-authenticate in place (preserves UUID and all references)",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
           "proxy_url": {
             "type": "string",
             "description": "HTTP/SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)",

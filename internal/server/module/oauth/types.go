@@ -37,6 +37,10 @@ type OAuthAuthorizeRequest struct {
 	ResponseType string `json:"response_type" description:"Response type: 'redirect' or 'json'" example:"json"`
 	Name         string `json:"name" description:"Custom name for the provider (optional, auto-generated if empty)" example:"my-claude-account"`
 	ProxyURL     string `json:"proxy_url,omitempty" description:"HTTP/SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://proxy.example.com:8080"`
+	// ProviderUUID, when set, re-authenticates an existing OAuth provider and
+	// overwrites its credentials in place (same UUID) instead of creating a new
+	// provider. The provider's issuer must match the requested provider type.
+	ProviderUUID string `json:"provider_uuid,omitempty" description:"Existing provider UUID to re-authenticate in place (preserves UUID and all references)" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
 // OAuthAuthorizeResponse represents the response for OAuth authorization initiation

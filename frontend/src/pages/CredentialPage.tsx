@@ -12,8 +12,13 @@ import Surface from '@/components/Surface';
 import { useProviderQuota } from '@/hooks/useProviderQuota';
 import { Add, ListAlt, Upload, VpnKey } from '@/components/icons';
 import {
+    Alert,
     Button,
     Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
     Stack,
     Typography,
 } from '@mui/material';
@@ -60,6 +65,17 @@ const CredentialPage = () => {
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
+    // When set, the OAuth dialog re-authenticates this existing provider in place
+    // (preserves UUID + all references) instead of creating a new one.
+    const [oauthReauthUuid, setOAuthReauthUuid] = useState<string | null>(null);
+    // After a token refresh fails, prompt the user to reauthorize (refresh can't
+    // recover a revoked/expired credential — a fresh sign-in can).
+    const [refreshFailPrompt, setRefreshFailPrompt] = useState<{
+        open: boolean;
+        providerUuid: string;
+        providerName: string;
+        reason: string;
+    }>({ open: false, providerUuid: '', providerName: '', reason: '' });
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
 
@@ -428,23 +444,58 @@ const CredentialPage = () => {
 
     // OAuth handlers
     const handleOAuthSuccess = () => {
-        showNotification('OAuth provider added successfully!', 'success');
+        showNotification(
+            oauthReauthUuid ? 'Provider reauthorized successfully!' : 'OAuth provider added successfully!',
+            'success',
+        );
+        setOAuthReauthUuid(null);
         loadProviders();
+    };
+
+    // Re-authenticate an existing OAuth provider in place. Runs the normal OAuth
+    // flow for the provider's issuer, but the backend overwrites credentials on
+    // the same UUID — recovering a dead credential without orphaning the rules,
+    // smart routing, and model keys that reference it (which delete+recreate would).
+    const handleReauthorize = (providerUuid: string) => {
+        const provider = oauthProviders.find((p: any) => p.uuid === providerUuid);
+        const issuer = provider?.oauth_detail?.provider_type || provider?.oauth_detail?.issuer;
+        if (!issuer) {
+            showNotification('Cannot reauthorize: provider issuer is unknown', 'error');
+            return;
+        }
+        setOAuthReauthUuid(providerUuid);
+        setOAuthAutoStartId(issuer);
+        setOAuthDialogOpen(true);
+    };
+
+    // Surface a refresh failure as a guided prompt: refreshing a token can't
+    // recover a credential whose refresh token was revoked or fully expired, so
+    // we steer the user to reauthorize (sign in again, in place) rather than
+    // leaving them with a dead toast and a delete+recreate as the only escape.
+    const promptReauthAfterRefreshFailure = (providerUuid: string, reason: string) => {
+        const provider = oauthProviders.find((p: any) => p.uuid === providerUuid);
+        setRefreshFailPrompt({
+            open: true,
+            providerUuid,
+            providerName: provider?.name || 'this provider',
+            reason: reason || 'Unknown error',
+        });
     };
 
     const handleRefreshToken = async (providerUuid: string) => {
         try {
             const response = await api.oauthRefresh({ provider_uuid: providerUuid });
 
-            if (response.success) {
+            if (response?.success) {
                 showNotification('Token refreshed successfully!', 'success');
                 await loadProviders();
             } else {
-                showNotification(`Failed to refresh token: ${response.message || 'Unknown error'}`, 'error');
+                const reason = response?.data?.error || response?.error || response?.message || 'Unknown error';
+                promptReauthAfterRefreshFailure(providerUuid, reason);
             }
         } catch (error: any) {
-            const errorMessage = error?.response?.data?.error || error?.message || 'Unknown error';
-            showNotification(`Failed to refresh token: ${errorMessage}`, 'error');
+            const reason = error?.response?.data?.error || error?.message || 'Unknown error';
+            promptReauthAfterRefreshFailure(providerUuid, reason);
         }
     };
 
@@ -571,6 +622,7 @@ const CredentialPage = () => {
                             onToggle={handleToggleProvider}
                             onDelete={handleDeleteProvider}
                             onRefreshToken={handleRefreshToken}
+                            onReauthorize={handleReauthorize}
                             onNotification={showNotification}
                             providerQuotas={quotaData}
                             refreshingQuotas={refreshing}
@@ -652,12 +704,54 @@ const CredentialPage = () => {
             <OAuthDialog
                 open={oauthDialogOpen}
                 autoStartProviderId={oauthAutoStartId}
+                reauthProviderUuid={oauthReauthUuid}
                 onClose={() => {
                     setOAuthDialogOpen(false);
                     setOAuthAutoStartId(null);
+                    setOAuthReauthUuid(null);
                 }}
                 onSuccess={handleOAuthSuccess}
             />
+
+            {/* Refresh-failed → reauthorize guidance */}
+            <Dialog
+                open={refreshFailPrompt.open}
+                onClose={() => setRefreshFailPrompt((s) => ({ ...s, open: false }))}
+                maxWidth="xs"
+                fullWidth
+            >
+                <DialogTitle>Token refresh failed</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 0.5 }}>
+                        <Alert severity="warning">{refreshFailPrompt.reason}</Alert>
+                        <Typography variant="body2" color="text.secondary">
+                            Refreshing the token for <strong>{refreshFailPrompt.providerName}</strong> didn't
+                            work. If the credential was revoked or has fully expired, a refresh can't recover
+                            it — reauthorize to sign in again. This overwrites the credential in place, keeping
+                            the same provider so your routing rules and model keys stay intact.
+                        </Typography>
+                    </Stack>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        color="inherit"
+                        onClick={() => setRefreshFailPrompt((s) => ({ ...s, open: false }))}
+                    >
+                        Dismiss
+                    </Button>
+                    <Button
+                        variant="contained"
+                        startIcon={<VpnKey />}
+                        onClick={() => {
+                            const uuid = refreshFailPrompt.providerUuid;
+                            setRefreshFailPrompt((s) => ({ ...s, open: false }));
+                            handleReauthorize(uuid);
+                        }}
+                    >
+                        Reauthorize
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* OAuth Detail/Edit Dialog */}
             <OAuthDetailDialog
