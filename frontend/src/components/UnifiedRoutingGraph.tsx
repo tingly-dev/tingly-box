@@ -63,7 +63,7 @@ const RULE_GRAPH_STYLES = {
     },
 } as const;
 
-const {header, graphContainer, graph} = RULE_GRAPH_STYLES;
+const {graphContainer, graph} = RULE_GRAPH_STYLES;
 
 export interface UnifiedRoutingGraphProps {
     // Mode control
@@ -461,6 +461,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 extraActions={extraActions}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
+                context1M={record.flags?.context1m || false}
+                onContext1MToggle={() => {
+                    const newState = !(record.flags?.context1m || false);
+                    // Update the flags
+                    const updatedFlags = { ...record.flags, context1m: newState };
+                    onUpdateRecord?.('flags', updatedFlags);
+                }}
             />
 
             {/* Tier Guide Dialog */}
