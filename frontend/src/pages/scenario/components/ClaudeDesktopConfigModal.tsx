@@ -32,11 +32,12 @@ interface ClaudeDesktopConfigModalProps {
 const MODEL_PREFIX = 'claude-';
 const buildInferenceModelsJson = (modelRules: any[]): string => {
     const entries = modelRules.map(r => {
+        const name = r.context_1m ? `${r.request_model}[1m]` : r.request_model;
         const label = r.description?.startsWith('label:') ? r.description.slice(6) : '';
         if (label) {
-            return `    {\n      "name": "${r.request_model}",\n      "labelOverride": "${label}"\n    }`;
+            return `    {\n      "name": "${name}",\n      "labelOverride": "${label}"\n    }`;
         }
-        return `    {\n      "name": "${r.request_model}"\n    }`;
+        return `    {\n      "name": "${name}"\n    }`;
     });
     return `"inferenceModels": [\n${entries.join(',\n')}\n  ]`;
 };

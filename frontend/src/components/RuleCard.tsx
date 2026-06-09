@@ -19,6 +19,7 @@ import {
     formatRuleFlags,
     parseRuleFlags,
     isClaudeCodeScenario,
+    isClaudeDesktopScenario,
     isCodexScenario,
 } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
@@ -284,7 +285,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // 1M switch applies to Claude Code (env [1m] suffix) and Codex (catalog
     // context window). It's a separate flag, not the model string, so wildcard
     // rules are fine too.
-    const showOneM = isClaudeCodeScenario(rule.scenario) || isCodexScenario(rule.scenario);
+    const showOneM = isClaudeCodeScenario(rule.scenario) || isClaudeDesktopScenario(rule.scenario) || isCodexScenario(rule.scenario);
 
     const extensionsCard = (
         <RulePluginsCard

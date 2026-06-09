@@ -53,7 +53,6 @@ func Migrate(c *Config) error {
 	migrate20260608_2(c) // Default clean_header on for existing Claude Code rules
 	migrate20260608_3(c) // Default clean_header on for existing Claude Desktop rules
 	migrate20260608_4(c) // Default claude_code_compat on for existing Claude Desktop rules
-	migrate20260612(c)   // Strip legacy [1m] suffix from rule.request_model -> rule.context_1m flag
 	return nil
 }
 
@@ -790,26 +789,3 @@ func migrate20260608_4(c *Config) {
 	}
 }
 
-// migrate20260612 strips any legacy [1m] suffix from rule.request_model and
-// lifts the intent onto the rule.Context1M flag. Earlier feature-branch builds
-// represented the 1M context window as a request_model suffix; the canonical
-// form now is a clean request_model plus a separate boolean. This migration
-// reconciles configs from those builds. It is idempotent and runs once.
-func migrate20260612(c *Config) {
-	if c.hasMigrationCompleted("20260612") {
-		return
-	}
-	needsSave := false
-	for i := range c.Rules {
-		if typ.HasContextWindow1M(c.Rules[i].RequestModel) {
-			c.Rules[i].RequestModel = typ.StripContextWindow1M(c.Rules[i].RequestModel)
-			c.Rules[i].Context1M = true
-			needsSave = true
-		}
-	}
-	c.markMigrationCompleted("20260612")
-	if needsSave {
-		_ = c.Save()
-		logrus.Info("Migration 20260612 completed: lifted [1m] suffix from request_model to Context1M flag")
-	}
-}

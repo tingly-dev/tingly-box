@@ -48,6 +48,12 @@ export function isClaudeCodeScenario(scenario: string | undefined): boolean {
     return scenario === 'claude_code' || scenario.startsWith('claude_code:');
 }
 
+/** Whether a scenario is the Claude Desktop family (base or any profile). */
+export function isClaudeDesktopScenario(scenario: string | undefined): boolean {
+    if (!scenario) return false;
+    return scenario === 'claude_desktop' || scenario.startsWith('claude_desktop:');
+}
+
 /** Whether a scenario is the Codex family (base or any profile). */
 export function isCodexScenario(scenario: string | undefined): boolean {
     if (!scenario) return false;
