@@ -6,38 +6,52 @@
 
 ---
 
-## 0. 一张图看懂
+## 0. 全局数据流（先看这个）
 
-```
-        provider wire (OpenAI / Anthropic / Google)
-                          │
-        ┌─────────────────┴──────────────────┐
-        │  非流式 nonstream          流式 stream │
-        │  usage.From*(resp.Usage)            │
-        │                    ┌────────────────┤
-        │                    │ Anthropic 上游 │ OpenAI 上游
-        │                    │ usage.Anthropic│ token.StreamTokenCounter
-        │                    │   Accumulator  │   (增量 tiktoken + 上游 usage chunk)
-        └────────┬───────────┴───────┬────────┘
-                 ▼                    ▼
-        ┌────────────────────────────────────┐
-        │  canonical  *ai.TokenUsage          │  ← 全链路流通货币
-        │  {Input, Output, CacheInput,        │
-        │   Reasoning, System}                │
-        └───────┬───────────────────┬─────────┘
-                │ (录制路径)         │ (计费/observability 路径)
-                ▼                    ▼
-   assembler.AnthropicStreamAssembler   server.trackUsageWithTokenUsage(c, usage, err)
-   .SetUsageFromTokenUsage(u)            ├─ updateServiceStats        (内存 stats)
-   → streamRecorder.Finish(model, u)     ├─ tokenTracker.RecordUsage  (OTel)
-   → assembled anthropic.Message         ├─ recordDetailedUsage...    (DB UsageRecord)
-                                         └─ reportHealthStatus / 429 hook
-                                                    │
-                                                    ▼
-                              internal/data/db  →  GET /api/v1/usage/{stats,timeseries,records}
+一句话：**上游各家 usage 先归一化成一个统一结构 `*ai.TokenUsage`，再一分为二——一条去"录制回放"，一条去"计费落库"。**
+
+分四步：
+
+1. **拿到上游 usage**（OpenAI / Anthropic / Google 的 wire 格式，字段语义各不相同）
+2. **归一化**成 canonical `*ai.TokenUsage`——按「非流式 vs 流式」「哪家 provider」选不同提取器（详见 §2）
+3. **分发**：同一个 `*ai.TokenUsage` 同时喂给两条下游路径
+   - 录制路径 → 拼回一个完整的 `anthropic.Message`（用于回放 / 调试）
+   - 计费路径 → `trackUsageWithTokenUsage` → 内存 stats / OTel / DB / 健康监控
+4. **落库 + 对外**：DB `usage_records` → `GET /api/v1/usage/*`
+
+```mermaid
+flowchart TD
+    A["① 上游 wire usage<br/>OpenAI · Anthropic · Google<br/>(字段语义各不相同)"]
+
+    subgraph N ["② 归一化 (internal/protocol/usage + token)"]
+        direction LR
+        B1["非流式<br/>usage.From*()"]
+        B2["流式·Anthropic<br/>AnthropicAccumulator"]
+        B3["流式·OpenAI<br/>StreamTokenCounter"]
+    end
+
+    A --> B1
+    A --> B2
+    A --> B3
+    B1 --> C
+    B2 --> C
+    B3 --> C
+
+    C["③ canonical &nbsp;*ai.TokenUsage&nbsp;<br/>Input · Output · CacheInput · Reasoning · System"]
+
+    C -->|录制路径| D["assembler.SetUsageFromTokenUsage<br/>→ streamRecorder.Finish<br/>→ assembled anthropic.Message"]
+    C -->|计费路径| E["server.trackUsageWithTokenUsage(c, usage, err)"]
+
+    E --> E1["updateServiceStats (内存)"]
+    E --> E2["tokenTracker.RecordUsage (OTel)"]
+    E --> E3["recordDetailedUsage… (写 DB)"]
+    E --> E4["reportHealthStatus / 429 hook"]
+
+    E3 --> F[("④ DB: usage_records")]
+    F --> G["GET /api/v1/usage/<br/>stats · timeseries · records"]
 ```
 
-核心原则：**所有 provider 的 usage 先归一化成 `*ai.TokenUsage`，再往下游分发。** 任何一段没拿全，下游记录就缺字段。
+> 核心原则：**所有 provider 的 usage 先归一化成 `*ai.TokenUsage`，再往下游分发。** 归一化这一步只要哪个字段没拿全，后面录制和计费就一起缺字段——所以 §2 的字段语义是整条链路的地基。
 
 ---
 
