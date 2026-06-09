@@ -180,6 +180,9 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 }
 
 func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, provider *typ.Provider, rule *typ.Rule, req protocol.ResponseCreateRequest, responseModel string, maxAllowed int) {
+	// Auto-detect context-1m from incoming beta header for Claude Code/Desktop/Codex
+	detectAndApplyContext1MFromIncomingRequest(c, rule)
+
 	// Resolve fusion endpoint: when the provider has an OpenAI-compatible
 	// fusion URL configured, route there natively to avoid a transform.
 	provider = s.resolveProviderForClient(provider, protocol.APIStyleOpenAI)
