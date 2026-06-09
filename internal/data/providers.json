@@ -14,8 +14,8 @@
     },
     "models_schema": "每条模型 { id, context?, max_output? }，仅填写已验证的数值，不确定的省略字段或整个数组留空"
   },
-  "version": "2.0.0",
-  "last_updated": "2026-05-20T00:00:00Z",
+  "version": "2.0.1",
+  "last_updated": "2026-06-09T00:00:00Z",
   "providers": {
     "openai-com": {
       "id": "openai-com",
@@ -202,11 +202,6 @@
       "base_url_anthropic": "https://api.anthropic.com",
       "models": [
         {
-          "id": "claude-3-haiku-20240307",
-          "context": 200000,
-          "max_output": 4096
-        },
-        {
           "id": "claude-sonnet-4-20250514",
           "context": 200000,
           "max_output": 64000
@@ -250,6 +245,11 @@
           "id": "claude-opus-4-7",
           "context": 1000000,
           "max_output": 128000
+        },
+        {
+          "id": "claude-opus-4-8",
+          "context": 1000000,
+          "max_output": 128000
         }
       ],
       "supports_models_endpoint": true,
@@ -276,34 +276,16 @@
       "base_url_anthropic": null,
       "models": [
         {
-          "id": "gpt-5-codex"
+          "id": "gpt-5.5",
+          "context": 272000
         },
         {
-          "id": "gpt-5.1-codex"
+          "id": "gpt-5.4",
+          "context": 272000
         },
         {
-          "id": "gpt-5.1-codex-max"
-        },
-        {
-          "id": "gpt-5.1-codex-mini"
-        },
-        {
-          "id": "gpt-5.2-codex"
-        },
-        {
-          "id": "gpt-5.3-codex"
-        },
-        {
-          "id": "gpt-5.4"
-        },
-        {
-          "id": "gpt-5.4-mini"
-        },
-        {
-          "id": "gpt-5.5"
-        },
-        {
-          "id": "gpt-5.5-mini"
+          "id": "gpt-5.4-mini",
+          "context": 272000
         }
       ],
       "supports_models_endpoint": false,
@@ -367,19 +349,29 @@
       "base_url_anthropic": null,
       "models": [
         {
-          "id": "gemini-1.5-flash",
-          "context": 1000000,
-          "max_output": 8192
+          "id": "gemini-2.5-pro",
+          "context": 1048576,
+          "max_output": 65536
         },
         {
-          "id": "gemini-1.5-pro",
-          "context": 2000000,
-          "max_output": 8192
+          "id": "gemini-2.5-flash",
+          "context": 1048576,
+          "max_output": 65536
         },
         {
-          "id": "gemini-2.0-flash",
+          "id": "gemini-2.5-flash-lite",
+          "context": 1048576,
+          "max_output": 65536
+        },
+        {
+          "id": "gemini-3.1-pro-preview",
           "context": 1000000,
-          "max_output": 8192
+          "max_output": 65536
+        },
+        {
+          "id": "gemini-3.5-flash",
+          "context": 1000000,
+          "max_output": 65536
         }
       ],
       "supports_models_endpoint": true,
@@ -391,19 +383,38 @@
       "name": "Antigravity (Google OAuth)",
       "status": "active",
       "valid": true,
-      "canonical_domain": "generativelanguage.googleapis.com",
+      "canonical_domain": "cloudcode-pa.googleapis.com",
       "vendor_family": "google",
       "region": "global",
       "plan": "oauth",
-      "website": "https://cloud.google.com",
-      "description": "Antigravity services via Google OAuth",
+      "website": "https://antigravity.google",
+      "description": "Google Antigravity agentic IDE via Google OAuth (Code Assist endpoint). Exposes Gemini 3, Anthropic Claude, and an OpenAI open model.",
       "auth_type": "oauth",
-      "api_doc": "https://cloud.google.com/docs",
-      "model_doc": "",
+      "api_doc": "https://antigravity.google/docs",
+      "model_doc": "https://antigravity.google/docs/models",
       "pricing_doc": "",
-      "base_url_openai": "https://generativelanguage.googleapis.com",
+      "base_url_openai": "https://cloudcode-pa.googleapis.com",
       "base_url_anthropic": null,
-      "models": [],
+      "models": [
+        {
+          "id": "gemini-3-pro-high"
+        },
+        {
+          "id": "gemini-3-pro-low"
+        },
+        {
+          "id": "gemini-3-flash"
+        },
+        {
+          "id": "claude-sonnet-4-6"
+        },
+        {
+          "id": "claude-opus-4-6-thinking"
+        },
+        {
+          "id": "gpt-oss-120b-medium"
+        }
+      ],
       "supports_models_endpoint": false,
       "oauth_provider": "antigravity",
       "icon": "google"
@@ -649,38 +660,44 @@
       "base_url_anthropic": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
       "models": [
         {
-          "id": "qwen3-max-2026-01-23",
-          "context": 262144
-        },
-        {
           "id": "qwen3-coder-plus",
-          "context": 1000000,
+          "context": 1048576,
           "max_output": 65536
         },
         {
           "id": "qwen3.5-plus",
-          "context": 1000000
+          "context": 1000000,
+          "max_output": 65536
         },
         {
-          "id": "qwen3-coder-next"
+          "id": "qwen3-max",
+          "context": 262144,
+          "max_output": 65536
+        },
+        {
+          "id": "qwen3-coder-next",
+          "context": 262144,
+          "max_output": 65536
+        },
+        {
+          "id": "glm-5",
+          "context": 202752,
+          "max_output": 16384
         },
         {
           "id": "glm-4.7",
-          "context": 200000,
-          "max_output": 128000
+          "context": 202752,
+          "max_output": 16384
         },
         {
-          "id": "glm-5"
-        },
-        {
-          "id": "MiniMax-M2.5",
-          "context": 204800,
-          "max_output": 65536
+          "id": "minimax-m2.5",
+          "context": 1048576,
+          "max_output": 32768
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_output": 32768
         }
       ],
       "supports_models_endpoint": false,
@@ -705,38 +722,44 @@
       "base_url_anthropic": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
       "models": [
         {
-          "id": "qwen3-max-2026-01-23",
-          "context": 262144
-        },
-        {
           "id": "qwen3-coder-plus",
-          "context": 1000000,
+          "context": 1048576,
           "max_output": 65536
         },
         {
           "id": "qwen3.5-plus",
-          "context": 1000000
+          "context": 1000000,
+          "max_output": 65536
         },
         {
-          "id": "qwen3-coder-next"
+          "id": "qwen3-max",
+          "context": 262144,
+          "max_output": 65536
+        },
+        {
+          "id": "qwen3-coder-next",
+          "context": 262144,
+          "max_output": 65536
+        },
+        {
+          "id": "glm-5",
+          "context": 202752,
+          "max_output": 16384
         },
         {
           "id": "glm-4.7",
-          "context": 200000,
-          "max_output": 128000
+          "context": 202752,
+          "max_output": 16384
         },
         {
-          "id": "glm-5"
-        },
-        {
-          "id": "MiniMax-M2.5",
-          "context": 204800,
-          "max_output": 65536
+          "id": "minimax-m2.5",
+          "context": 1048576,
+          "max_output": 32768
         },
         {
           "id": "kimi-k2.5",
           "context": 262144,
-          "max_output": 65535
+          "max_output": 32768
         }
       ],
       "supports_models_endpoint": false,
@@ -767,9 +790,6 @@
         },
         {
           "id": "qwen3-coder-flash"
-        },
-        {
-          "id": "vision-model"
         }
       ],
       "supports_models_endpoint": false,
@@ -945,14 +965,24 @@
       "base_url_anthropic": "https://api.z.ai/api/anthropic",
       "models": [
         {
-          "id": "glm-4.5",
-          "context": 128000,
-          "max_output": 96000
+          "id": "glm-5.1",
+          "context": 204800,
+          "max_output": 131072
         },
         {
-          "id": "glm-4.5-air",
-          "context": 128000,
-          "max_output": 96000
+          "id": "glm-5-turbo",
+          "context": 202752,
+          "max_output": 131072
+        },
+        {
+          "id": "glm-5",
+          "context": 202752,
+          "max_output": 131072
+        },
+        {
+          "id": "glm-4.7",
+          "context": 200000,
+          "max_output": 128000
         },
         {
           "id": "glm-4.6",
@@ -960,9 +990,9 @@
           "max_output": 128000
         },
         {
-          "id": "glm-4.7",
-          "context": 200000,
-          "max_output": 128000
+          "id": "glm-4.5-air",
+          "context": 128000,
+          "max_output": 96000
         }
       ],
       "supports_models_endpoint": true,
@@ -1033,14 +1063,24 @@
       "base_url_anthropic": "https://open.bigmodel.cn/api/anthropic",
       "models": [
         {
-          "id": "glm-4.5",
-          "context": 128000,
-          "max_output": 96000
+          "id": "glm-5.1",
+          "context": 204800,
+          "max_output": 131072
         },
         {
-          "id": "glm-4.5-air",
-          "context": 128000,
-          "max_output": 96000
+          "id": "glm-5-turbo",
+          "context": 202752,
+          "max_output": 131072
+        },
+        {
+          "id": "glm-5",
+          "context": 202752,
+          "max_output": 131072
+        },
+        {
+          "id": "glm-4.7",
+          "context": 200000,
+          "max_output": 128000
         },
         {
           "id": "glm-4.6",
@@ -1048,9 +1088,9 @@
           "max_output": 128000
         },
         {
-          "id": "glm-4.7",
-          "context": 200000,
-          "max_output": 128000
+          "id": "glm-4.5-air",
+          "context": 128000,
+          "max_output": 96000
         }
       ],
       "supports_models_endpoint": true,
@@ -1154,7 +1194,9 @@
       "base_url_anthropic": "https://api.kimi.com/coding/",
       "models": [
         {
-          "id": "kimi-for-coding"
+          "id": "kimi-for-coding",
+          "context": 262144,
+          "max_output": 65536
         }
       ],
       "supports_models_endpoint": false,
@@ -1211,7 +1253,8 @@
           "id": "doubao-seed-2.0-code"
         },
         {
-          "id": "doubao-seed-2.0-pro"
+          "id": "doubao-seed-2.0-pro",
+          "context": 262144
         },
         {
           "id": "doubao-seed-2.0-lite"
@@ -1223,6 +1266,12 @@
         },
         {
           "id": "deepseek-v3.2"
+        },
+        {
+          "id": "deepseek-v4-pro"
+        },
+        {
+          "id": "deepseek-v4-flash"
         },
         {
           "id": "kimi-k2.5",
@@ -1281,6 +1330,28 @@
       "models": [
         {
           "id": "qianfan-code-latest"
+        },
+        {
+          "id": "ernie-4.5-turbo-20260402"
+        },
+        {
+          "id": "deepseek-v3.2"
+        },
+        {
+          "id": "deepseek-v4-flash"
+        },
+        {
+          "id": "glm-5"
+        },
+        {
+          "id": "glm-5.1"
+        },
+        {
+          "id": "kimi-k2.5",
+          "context": 262144
+        },
+        {
+          "id": "minimax-m2.5"
         }
       ],
       "supports_models_endpoint": false,
