@@ -7,6 +7,12 @@ import (
 
 var DefaultRules []typ.Rule
 
+// defaultSessionAffinitySeconds is the 30-minute session-affinity TTL seeded on
+// the built-in Claude Code / Claude Desktop / Codex rules. session_affinity is
+// rule-only (no scenario-level inheritance); these seeds + migrate20260609* are
+// the sole source of the default. Other scenarios are off unless set per-rule.
+const defaultSessionAffinitySeconds = 1800
+
 func init() {
 	DefaultRules = []typ.Rule{
 		{
@@ -85,6 +91,8 @@ func init() {
 				Type:   loadbalance.TacticAdaptive,
 				Params: typ.DefaultAdaptiveParams(),
 			},
+			// 30-min session affinity improves cache hit rate for Codex sessions.
+			Flags:  typ.RuleFlags{SessionAffinity: defaultSessionAffinitySeconds},
 			Active: true,
 		},
 		ccRule("built-in-cc", "tingly/cc", "Default proxy rule for Claude Code"),
@@ -115,10 +123,11 @@ func init() {
 
 // cdRule builds a built-in Claude Desktop rule with the shared defaults: an empty
 // service list, the default adaptive load-balancing tactic, Active, and the
-// clean_header + claude_code_compat flags on. Claude Desktop injects
-// x-anthropic-billing-header blocks into system messages (CleanHeader) and sends
-// mid-conversation system-role messages that third-party Anthropic-compatible
-// providers reject (ClaudeCodeCompat).
+// clean_header + claude_code_compat + session_affinity flags on. Claude Desktop
+// injects x-anthropic-billing-header blocks into system messages (CleanHeader)
+// and sends mid-conversation system-role messages that third-party
+// Anthropic-compatible providers reject (ClaudeCodeCompat); the 30-min
+// SessionAffinity improves cache hit rate across a desktop session.
 func cdRule(uuid, requestModel, description string) typ.Rule {
 	return typ.Rule{
 		UUID:         uuid,
@@ -130,17 +139,19 @@ func cdRule(uuid, requestModel, description string) typ.Rule {
 			Type:   loadbalance.TacticAdaptive,
 			Params: typ.DefaultAdaptiveParams(),
 		},
-		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true},
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
 		Active: true,
 	}
 }
 
 // ccRule builds a built-in Claude Code rule with the shared defaults: an empty
 // service list, the default adaptive load-balancing tactic, Active, and the
-// claude_code_compat + clean_header flags on. Claude Code emits mid-conversation
-// system-role messages that third-party Anthropic-compatible providers reject
-// (ClaudeCodeCompat), and injects x-anthropic-billing-header blocks into system
-// messages that should never leak to external providers (CleanHeader).
+// claude_code_compat + clean_header + session_affinity flags on. Claude Code
+// emits mid-conversation system-role messages that third-party
+// Anthropic-compatible providers reject (ClaudeCodeCompat), and injects
+// x-anthropic-billing-header blocks into system messages that should never leak
+// to external providers (CleanHeader); the 30-min SessionAffinity improves
+// cache hit rate across a coding session.
 func ccRule(uuid, requestModel, description string) typ.Rule {
 	return typ.Rule{
 		UUID:         uuid,
@@ -152,7 +163,7 @@ func ccRule(uuid, requestModel, description string) typ.Rule {
 			Type:   loadbalance.TacticAdaptive,
 			Params: typ.DefaultAdaptiveParams(),
 		},
-		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true},
+		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true, SessionAffinity: defaultSessionAffinitySeconds},
 		Active: true,
 	}
 }

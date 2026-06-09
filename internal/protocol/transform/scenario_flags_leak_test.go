@@ -22,7 +22,6 @@ func TestScenarioFlags_NotLeakedToJSON(t *testing.T) {
 	// Create scenario flags
 	flags := &typ.ScenarioFlags{
 		SkipUsage: true,
-		SessionAffinity:    1800,
 	}
 
 	// Create transform context
