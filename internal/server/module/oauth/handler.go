@@ -1003,59 +1003,6 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		}
 	}
 
-	// Generate provider name using smart naming strategy
-	// Priority: customName > email username > display name > timestamp
-	providerName := generateProviderName(issuer, token, customName)
-
-	// Generate UUID for the provider
-	providerUUID, err := uuid.NewUUID()
-	if err != nil {
-		return "", fmt.Errorf("failed to generate provider UUID: %w", err)
-	}
-
-	// Determine API base and style based on provider type
-	var apiBase string
-	var apiStyle protocol.APIStyle
-
-	// If token contains ResourceURL from OAuth response, use it
-	if token.ResourceURL != "" && issuer == ai.IssuerQwenCode {
-		apiBase = normalizeAPIBase(token.ResourceURL, "/v1")
-		apiStyle = protocol.APIStyleOpenAI
-	} else {
-		switch issuer {
-		case ai.IssuerClaudeCode:
-			apiBase = "https://api.anthropic.com"
-			apiStyle = protocol.APIStyleAnthropic
-		case ai.IssuerQwenCode:
-			apiBase = "https://portal.qwen.ai/v1"
-			apiStyle = protocol.APIStyleOpenAI
-		case ai.IssuerGoogle:
-			apiBase = "https://generativelanguage.googleapis.com"
-			apiStyle = protocol.APIStyleOpenAI
-		case ai.IssuerAntigravity:
-			apiBase = "https://cloudcode-pa.googleapis.com"
-			apiStyle = protocol.APIStyleGoogle
-		case ai.IssuerGemini:
-			// Gemini CLI authenticates via Google Code Assist endpoint (same host as Antigravity)
-			apiBase = "https://cloudcode-pa.googleapis.com"
-			apiStyle = protocol.APIStyleGoogle
-		case ai.IssuerOpenAI:
-			apiBase = "https://api.openai.com/v1"
-			apiStyle = protocol.APIStyleOpenAI
-		case ai.IssuerCodex:
-			apiBase = protocol.CodexAPIBase
-			apiStyle = protocol.APIStyleOpenAI
-		case ai.IssuerKimiCode:
-			// Kimi OAuth tokens target kimi.com's coding API, not Moonshot.
-			// Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
-			apiBase = "https://api.kimi.com/coding/v1"
-			apiStyle = protocol.APIStyleOpenAI
-		default:
-			apiBase = "mock"
-			apiStyle = protocol.APIStyleOpenAI
-		}
-	}
-
 	// Build expires_at string
 	var expiresAt string
 	if !token.Expiry.IsZero() {
@@ -1126,6 +1073,59 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		}).Info("OAuth provider re-authenticated in place")
 
 		return existing.UUID, nil
+	}
+
+	// New-provider path (the re-auth path above returns first): derive a name,
+	// a fresh UUID, and the issuer's endpoint. None of this is needed when
+	// re-authenticating, which reuses the existing provider's identity.
+	providerName := generateProviderName(issuer, token, customName)
+
+	providerUUID, err := uuid.NewUUID()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate provider UUID: %w", err)
+	}
+
+	// Determine API base and style based on provider type
+	var apiBase string
+	var apiStyle protocol.APIStyle
+
+	// If token contains ResourceURL from OAuth response, use it
+	if token.ResourceURL != "" && issuer == ai.IssuerQwenCode {
+		apiBase = normalizeAPIBase(token.ResourceURL, "/v1")
+		apiStyle = protocol.APIStyleOpenAI
+	} else {
+		switch issuer {
+		case ai.IssuerClaudeCode:
+			apiBase = "https://api.anthropic.com"
+			apiStyle = protocol.APIStyleAnthropic
+		case ai.IssuerQwenCode:
+			apiBase = "https://portal.qwen.ai/v1"
+			apiStyle = protocol.APIStyleOpenAI
+		case ai.IssuerGoogle:
+			apiBase = "https://generativelanguage.googleapis.com"
+			apiStyle = protocol.APIStyleOpenAI
+		case ai.IssuerAntigravity:
+			apiBase = "https://cloudcode-pa.googleapis.com"
+			apiStyle = protocol.APIStyleGoogle
+		case ai.IssuerGemini:
+			// Gemini CLI authenticates via Google Code Assist endpoint (same host as Antigravity)
+			apiBase = "https://cloudcode-pa.googleapis.com"
+			apiStyle = protocol.APIStyleGoogle
+		case ai.IssuerOpenAI:
+			apiBase = "https://api.openai.com/v1"
+			apiStyle = protocol.APIStyleOpenAI
+		case ai.IssuerCodex:
+			apiBase = protocol.CodexAPIBase
+			apiStyle = protocol.APIStyleOpenAI
+		case ai.IssuerKimiCode:
+			// Kimi OAuth tokens target kimi.com's coding API, not Moonshot.
+			// Reference: CLIProxyAPI internal/runtime/executor/kimi_executor.go.
+			apiBase = "https://api.kimi.com/coding/v1"
+			apiStyle = protocol.APIStyleOpenAI
+		default:
+			apiBase = "mock"
+			apiStyle = protocol.APIStyleOpenAI
+		}
 	}
 
 	provider := &typ.Provider{
