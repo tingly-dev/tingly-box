@@ -16,7 +16,7 @@ import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import OneMContextSwitch from '@/components/rule-card/OneMContextSwitch';
-import OneMConfirmDialog, { oneMEffectForScenario, type OneMEffect } from '@/components/rule-card/OneMConfirmDialog';
+import OneMConfirmDialog, { oneMAgentForScenario } from '@/components/rule-card/OneMConfirmDialog';
 import { derivePrefsFromRules } from '@/pages/scenario/components/ClaudeCodeQuickConfig';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
@@ -294,73 +294,69 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     }, [configRecord, updateField, setConfigRecord]);
 
     // ── 1M context switch (context_1m flag) ────────────────────────────────
-    // Toggling 1M opens a confirm dialog instead of silently saving: it spells
-    // out what takes effect where, and — for Codex / Claude Code — offers a
-    // one-click config apply plus the restart reminder. Cancel reverts (the
-    // switch is controlled by the flag, written only on confirm).
+    // Toggling 1M on an agent scenario opens a small confirm dialog whose only
+    // job is to remind the user to restart that agent for the change to take
+    // effect. On confirm we save the flag and — for agents that have a config
+    // file (codex / claude_code) — re-apply it; the result is surfaced via the
+    // same notification used elsewhere. claude_desktop is gateway-only (no config
+    // file) so it just saves. Non-agent scenarios save directly with no dialog.
     // See .design/one-m-context.md.
-    const oneMEffect: OneMEffect = oneMEffectForScenario(rule.scenario);
-    // codex/claude both write an agent config file read at startup → confirm +
-    // apply + restart dialog. Other scenarios are gateway-only → toggle directly.
-    const oneMNeedsDialog = oneMEffect !== 'gateway';
+    const oneMAgent = oneMAgentForScenario(rule.scenario);
     const oneMOn = !!getFlagValue(configRecord?.flags, 'context_1m');
 
-    const [oneMDialog, setOneMDialog] = useState<{
-        open: boolean;
-        enabling: boolean;
-        phase: 'confirm' | 'applied';
-        busy: boolean;
-        failed?: boolean;
-        error?: string;
-    }>({ open: false, enabling: false, phase: 'confirm', busy: false });
+    const [oneMDialog, setOneMDialog] = useState<{ open: boolean; enabling: boolean; busy: boolean }>(
+        { open: false, enabling: false, busy: false },
+    );
 
     const handleOneMSwitch = useCallback((next: boolean) => {
         if (!configRecord) return;
-        if (!oneMNeedsDialog) {
-            // Plain gateway scenarios: nothing to apply / restart — just save.
+        if (!oneMAgent) {
+            // Non-agent scenario: nothing to restart — just save.
             handleToggleFlagFromCard('context_1m');
             return;
         }
-        setOneMDialog({ open: true, enabling: next, phase: 'confirm', busy: false, failed: false, error: undefined });
-    }, [configRecord, oneMNeedsDialog, handleToggleFlagFromCard]);
+        setOneMDialog({ open: true, enabling: next, busy: false });
+    }, [configRecord, oneMAgent, handleToggleFlagFromCard]);
 
     const handleOneMConfirm = useCallback(async () => {
-        if (!configRecord) return;
-        setOneMDialog((d) => ({ ...d, busy: true, failed: false, error: undefined }));
+        if (!configRecord || !oneMAgent) return;
+        const enabling = oneMDialog.enabling;
+        setOneMDialog((d) => ({ ...d, busy: true }));
 
-        // 1. Persist the rule flag (gateway honors it from the next request).
-        const nextFlags = setFlagValue(configRecord.flags || {}, 'context_1m', oneMDialog.enabling);
+        const nextFlags = setFlagValue(configRecord.flags || {}, 'context_1m', enabling);
         const saved = await updateField(configRecord, setConfigRecord, 'flags', nextFlags);
         if (!saved) {
-            // Localized generic error rendered by the dialog (no backend message).
-            setOneMDialog((d) => ({ ...d, busy: false, failed: true }));
+            showNotification('Failed to save the 1M setting.', 'error');
+            setOneMDialog((d) => ({ ...d, busy: false }));
             return;
         }
 
-        // 2. Re-apply the agent's config so the CLI picks up the new context
-        //    window on its next start (the flag alone is gateway-only; the agent
-        //    reads its own config file at startup).
+        // Re-apply the agent's config so it reflects the new context window.
+        const scenarioBase = (rule.scenario || '').split(':')[0];
         try {
             let res: { success: boolean; message?: string } | undefined;
-            if (oneMEffect === 'codex') {
+            if (scenarioBase === 'codex') {
                 const r = await api.applyCodexConfig();
                 res = { success: !!r?.success, message: r?.message || r?.error };
-            } else if (oneMEffect === 'claude') {
+            } else if (scenarioBase === 'claude_code') {
                 res = await applyClaudeCodeFromRules();
             }
             if (res && !res.success) {
-                setOneMDialog((d) => ({ ...d, busy: false, failed: true, error: res!.message }));
+                showNotification(res.message || `Failed to apply ${oneMAgent} config.`, 'error');
+                setOneMDialog((d) => ({ ...d, busy: false }));
                 return;
             }
         } catch (e) {
-            setOneMDialog((d) => ({ ...d, busy: false, failed: true, error: e instanceof Error ? e.message : undefined }));
+            showNotification(e instanceof Error ? e.message : `Failed to apply ${oneMAgent} config.`, 'error');
+            setOneMDialog((d) => ({ ...d, busy: false }));
             return;
         }
 
-        setOneMDialog((d) => ({ ...d, busy: false, phase: 'applied' }));
-    }, [configRecord, oneMDialog.enabling, oneMEffect, updateField, setConfigRecord]);
+        showNotification(`1M ${enabling ? 'enabled' : 'disabled'} — restart ${oneMAgent} for it to take effect.`, 'success');
+        setOneMDialog({ open: false, enabling: false, busy: false });
+    }, [configRecord, oneMAgent, oneMDialog.enabling, rule.scenario, updateField, setConfigRecord, showNotification]);
 
-    const handleOneMClose = useCallback(() => {
+    const handleOneMCancel = useCallback(() => {
         setOneMDialog((d) => ({ ...d, open: false }));
     }, []);
 
@@ -451,18 +447,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onSave={handleSaveFlags}
             />
 
-            {/* 1M context confirm + apply dialog */}
+            {/* 1M context confirm dialog (restart reminder) */}
             <OneMConfirmDialog
                 open={oneMDialog.open}
                 enabling={oneMDialog.enabling}
-                effect={oneMEffect}
-                phase={oneMDialog.phase}
+                agent={oneMAgent || ''}
                 busy={oneMDialog.busy}
-                failed={oneMDialog.failed}
-                error={oneMDialog.error}
                 onConfirm={handleOneMConfirm}
-                onCancel={handleOneMClose}
-                onClose={handleOneMClose}
+                onCancel={handleOneMCancel}
             />
 
             {/* Flag Catalog Dialog - rich UI for picking + configuring rule flags */}

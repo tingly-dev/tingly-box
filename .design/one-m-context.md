@@ -137,35 +137,35 @@ not in the map keep the conservative 200000 default.
 - `context_1m` is filtered out of `RulePluginsCard` and `FlagCatalogDialog`
   so it has exactly one visible home (the promoted switch), not two.
 
-## 6. Toggle lifecycle: confirm dialog, not silent save
+## 6. Toggle lifecycle: a small restart reminder
 
-Flipping the 1M switch does not silently persist — it opens
-`OneMConfirmDialog`, which spells out what takes effect where and lets the user
-**Apply** or **Cancel** (cancel reverts: the switch is controlled by the flag,
-which is only written on confirm). The flag is written first (gateway-effective
-immediately), then the agent's config file is re-applied so the CLI picks up 1M
-on its next start. Both CLI agents read their config at startup, so both need a
-re-apply + restart — the dialog is symmetric:
+Flipping the 1M switch on an **agent scenario** opens `OneMConfirmDialog`, whose
+only job is to remind the user to **restart that agent** for the change to take
+effect — one generic line, the agent name being the only thing that varies. No
+per-agent paragraphs, no in-dialog "applied" panel; **Cancel** reverts (the
+switch is controlled by the flag, written only on confirm).
 
-| Scenario | What 1M needs | Dialog behavior |
-|---|---|---|
-| **Codex** | catalog rewrite + **codex restart** (the flag alone does nothing; only the catalog's context_window reaches codex) | Primary **Apply Codex config** → one-click `api.applyCodexConfig()` (merged, preserves user keys) → dialog flips to a **restart `codex`** reminder |
-| **Claude Code** | `settings.json` rewrite + **Claude Code restart** (the CLI reads model config at startup) | Primary **Apply Claude Code config** → `applyClaudeCodeFromRules()` regenerates `settings.json` from the current rules (model slots carry `[1m]` per flag) via `api.applyClaudeConfig` → **restart Claude Code** reminder |
-| other (anthropic/openai) | gateway-immediate, no agent artifact | no dialog — the switch saves directly |
+`oneMAgentForScenario(scenario)` maps the scenario to the restartable agent
+(`codex` → Codex, `claude_code` → Claude Code, `claude_desktop` → Claude
+Desktop) or `null` for non-agent scenarios (plain anthropic/openai), which just
+toggle the flag directly with no dialog.
 
-Why apply-from-rules is safe for Claude Code: `api.applyClaudeConfig` already
-**replaces** the `settings.json` env block on every apply, and the Quick Config
-derives that env from the rules + tb defaults — there is no server-side merge of
-prior custom env. So a rule-card apply produces exactly what a default Quick
-Config apply would; it is not a new clobber. Users who customized non-model
-prefs still tune them in Quick Config. The rule card fetches the CC rules +
-scenario mode and reuses the same `derivePrefsFromRules` the Quick Config uses,
-so the `[1m]` derivation stays single-sourced.
+On confirm, `RuleCard`:
+1. writes the `context_1m` flag, then
+2. re-applies the agent's config **only for agents that have a config file** —
+   `codex` → `api.applyCodexConfig()`, `claude_code` →
+   `applyClaudeCodeFromRules()` (regenerates `settings.json` from the current
+   rules via the same `derivePrefsFromRules` the Quick Config uses).
+   `claude_desktop` is gateway-only (no config file) so it just saves.
+3. surfaces the outcome through the **same `showNotification` snackbar** the rest
+   of the card uses (success → "restart {agent}…", failure → the backend
+   message) — consistent with every other rule-card action, not a bespoke
+   result panel.
 
-The honest core: the "must restart the agent" message attaches to **writing the
-agent's config file**, which both Codex and Claude Code do here. (The gateway
-also honors the flag immediately, but the CLI only reflects 1M after it reloads
-its config — hence the restart.)
+Re-applying Claude Code config from the rule card is safe because
+`api.applyClaudeConfig` already **replaces** the `settings.json` env block on
+every apply and the Quick Config derives that env from rules + tb defaults — so
+the rule-card apply produces exactly what a default Quick Config apply would.
 
 ## 8. Touch list
 
