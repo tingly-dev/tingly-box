@@ -138,18 +138,37 @@ export const SCENARIOS: ScenarioDescriptor[] = [
 ];
 
 const STORAGE_KEY = 'scenario.hiddenScenarios';
+const DEFAULTS_VERSION_KEY = 'scenario.hiddenDefaultsVersion';
 const VISIBILITY_EVENT = 'scenario-visibility-change';
 const DEFAULT_HIDDEN = ['agent', 'team'];
+// Bump this whenever DEFAULT_HIDDEN gains new entries, so existing users pick
+// up the new defaults without losing their own customisations.
+const DEFAULTS_VERSION = 2;
 
 const readHidden = (): string[] => {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw === null) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_HIDDEN));
+            localStorage.setItem(DEFAULTS_VERSION_KEY, String(DEFAULTS_VERSION));
             return DEFAULT_HIDDEN;
         }
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+        const stored: string[] = Array.isArray(parsed)
+            ? parsed.filter((x): x is string => typeof x === 'string')
+            : [];
+
+        // Merge any new default-hidden entries that existing users haven't
+        // seen yet (i.e. the stored defaults-version is behind the current one).
+        const storedVersion = Number(localStorage.getItem(DEFAULTS_VERSION_KEY) ?? 0);
+        if (storedVersion < DEFAULTS_VERSION) {
+            const merged = Array.from(new Set([...stored, ...DEFAULT_HIDDEN]));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            localStorage.setItem(DEFAULTS_VERSION_KEY, String(DEFAULTS_VERSION));
+            return merged;
+        }
+
+        return stored;
     } catch {
         return [];
     }
