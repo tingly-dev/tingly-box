@@ -81,6 +81,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         rightAction: customRightAction,
         onAddApiKeyClick,
         newlyCreatedRuleUuids = internalData.newlyCreatedRuleUuids,
+        onContext1MToggle,
     } = props;
 
     const isLoading = isInternalMode ? internalData.isLoading : false;
@@ -437,6 +438,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                                             onRuleDelete={onRuleDelete}
                                             allowToggleRule={allowToggleRule}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
+                                            onContext1MToggle={onContext1MToggle}
                                         />
                                     )}
                                 </div>

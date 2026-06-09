@@ -59,6 +59,7 @@ export interface RuleCardProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
+    onContext1MToggle?: (newState: boolean) => void;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -77,6 +78,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     onToggleExpanded,
+    onContext1MToggle,
 }) => {
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
@@ -323,6 +325,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onAddServiceToSmartRule={handleAddServiceToSmartRuleByUuid}
                 onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
                 onSwitchRoutingMode={handleRoutingModeSwitch}
+                onContext1MToggle={onContext1MToggle}
             />
 
             {/* Delete Confirmation Dialog */}

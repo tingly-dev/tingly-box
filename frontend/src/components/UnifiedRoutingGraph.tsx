@@ -101,6 +101,9 @@ export interface UnifiedRoutingGraphProps {
     // Routing mode switch
     onSwitchRoutingMode?: () => void;
 
+    // 1M context window toggle - receives the new state for scenario-specific handling
+    onContext1MToggle?: (newState: boolean) => void;
+
     // Slots
     extraActions?: React.ReactNode;
     extensionsCard?: React.ReactNode;
@@ -183,6 +186,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                             onAddServiceToSmartRule,
                                                                             onDeleteServiceFromSmartRule,
                                                                             onSwitchRoutingMode,
+                                                                            onContext1MToggle,
                                                                             extraActions,
                                                                             extensionsCard,
                                                                             autoScroll,
@@ -467,6 +471,8 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     // Update the flags
                     const updatedFlags = { ...record.flags, context1m: newState };
                     onUpdateRecord?.('flags', updatedFlags);
+                    // Notify parent for scenario-specific handling
+                    onContext1MToggle?.(newState);
                 }}
             />
 
