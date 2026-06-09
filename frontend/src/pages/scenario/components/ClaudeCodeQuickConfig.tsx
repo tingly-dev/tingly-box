@@ -13,7 +13,7 @@ import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { RestartAlt as RestartAltIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { hasOneM as has1M, withOneM as with1M, ONE_M_SUFFIX } from '@/components/rule-card/utils';
+import { hasOneM as has1M, withOneM as with1M, stripOneM } from '@/components/rule-card/utils';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
 // Keys are the literal Claude Code env var names so the object can be
@@ -574,10 +574,13 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                 {(field.kind === 'int' || field.kind === 'text' || field.kind === 'model') && (
                     <TextField
                         size="small"
-                        value={field.kind === 'model' ? value.replace(/\[1m\]$/, '') : value}
+                        // Model rows show the clean name; a [1m] suffix (1M context,
+                        // driven by the rule's flag and toggled on the rule card) is
+                        // hidden here and preserved in state so Apply still writes it.
+                        value={field.kind === 'model' ? stripOneM(value) : value}
                         onChange={(e) => {
                             const next = e.target.value;
-                            setValue(field.kind === 'model' && has1M(value) ? next + ONE_M_SUFFIX : next);
+                            setValue(field.kind === 'model' ? with1M(next, has1M(value)) : next);
                         }}
                         placeholder={text.placeholder}
                         sx={{ width: field.kind === 'model' ? 280 : field.kind === 'text' ? 320 : 180 }}
@@ -589,15 +592,17 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                         }}
                     />
                 )}
-                {field.kind === 'model' && (
+                {field.kind === 'model' && has1M(value) && (
                     <Tooltip title={oneMTooltip} arrow placement="top">
-                        <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                            <Typography variant="caption" sx={{ mr: 0.25, color: 'text.secondary', letterSpacing: 0.5 }}>1M</Typography>
-                            <Switch
-                                size="small"
-                                checked={has1M(value)}
-                                onChange={(_, c) => setValue(with1M(value, c))}
-                            />
+                        <Box
+                            component="span"
+                            sx={{
+                                flexShrink: 0, px: 0.75, py: 0.25, borderRadius: 0.75,
+                                bgcolor: 'primary.main', color: 'primary.contrastText',
+                                fontSize: '0.68rem', fontWeight: 600, letterSpacing: 0.5,
+                            }}
+                        >
+                            1M
                         </Box>
                     </Tooltip>
                 )}

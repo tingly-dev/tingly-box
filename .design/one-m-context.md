@@ -143,63 +143,58 @@ if HasContextWindow1M(rule.RequestModel) {
 复用 `POST /api/v1/rule/{uuid}`(`config.UpdateRule`)。`Rule` 加字段后,
 `ShouldBindJSON(&rule)` 自动接受 `context_1m`,**无需新 swagger**。
 
+### 4f. Codex catalog context window(`apply_config.go`)
+
+Codex 没有 `[1m]` 这类 wire 信号——1M 纯粹是 catalog 里声明的预算。所以
+Codex 的 1M = 生成 `~/.codex/tingly-model-catalog.json` 时,对开了
+`Context1M` 的模型把 `context_window` / `max_context_window` 写成
+`codex1MContextWindow = 1_000_000`(否则维持 200k)。
+
+- `CollectCodexContext1M(cfg) map[string]bool`:codex 场景规则的
+  `request_model` → `Context1M`(同名 OR 合并)。
+- `RenderCodexModelCatalog(models, context1M)` 按 map 决定每个 entry 的窗口。
+- `ApplyCodexConfig(..., context1M)` 透传;两个 caller(HTTP handler
+  `ApplyCodexConfigFromState`、agent path `CodexParams.Context1M` ←
+  `rule_bridge`)都喂 `CollectCodexContext1M`。
+- Codex slug **保持干净**(catalog 用干净 slug),server 入口的 `[1m]` strip
+  对 codex 无副作用(codex 不发后缀)。
+
 ---
 
-## 5. 前端改动(UX 优先)
+## 5. 前端改动(精简后 — 一个开关 + 派生)
+
+核心:**唯一的 1M 控件是规则卡模型头(`ModelRequestHeader`)上的开关**,直接读写
+`rule.context_1m`。没有跨面同步、没有重配弹窗、没有一键 Re-apply——那些都是
+之前过度设计的产物,已删。
 
 ### 5a. 模型节点上的 1M 开关 —— `ModelRequestHeader`
 
-规则卡的模型节点是 **`ModelRequestHeader`**(`RuleCard.tsx` →
-`ModelRequestHeader.tsx`),它已有 **`extraActions` 插槽**(L81)。
+- `ModelRequestHeader` 加 `oneM` prop(`UnifiedRoutingGraph` 透传),
+  `RuleCard` 计算 `show / on / onToggle`。
+- `on = configRecord.context1M`;`onToggle` → `updateField('context1M', on)`
+  (规则卡既有 autosave 路径,失败自动回滚 + toast)。
+- **门控**:`isClaudeCodeScenario(scenario) || isCodexScenario(scenario)`。
+  通配规则也能配(1M 是独立 flag,不是模型串,不影响匹配)。
+- **白送 profile + codex 入口**:profile 规则、codex 规则都用同一规则卡渲染,
+  开关自动覆盖,无需各自做控件。
 
-- 在 `extraActions` 放一个紧凑 `1M` Switch。写入走现成
-  `onModelChange` → `onUpdateRecord('requestModel', with1M(modelName, on))`,
-  规则卡本就 autosave `request_model`。
-- **门控**:
-  - 仅 `claude_code` 系场景显示(`rule.scenario` 在 RuleCard 可得)。`[1m]`
-    是 Claude Code 客户端约定;通用 openai/anthropic 规则加后缀只会让精确
-    匹配失配。
-  - 通配规则(`*` / `[any]`)不显示。
-- **白送 profile 入口**:profile 规则用同一规则卡 UI 渲染 → 这个开关同时覆盖
-  默认 built-in-cc 规则和 profile 规则,profile 的 1M 入口无需单独控件。
+### 5b. 与 Quick Config 的关系(单向派生,无同步)
 
-### 5b. 与 Quick Config 自动联动
+- `ConfigRecord.context1M` ← `rule.context_1m`(`ruleToConfigRecord`);
+  `buildRuleUpdatePayload` 写 `context_1m`;`autoSave` echo 回父态。
+- `ClaudeCodeQuickConfig.derivePrefsFromRules` 从 `request_model +
+  (context_1m ? '[1m]' : '')` 组合 env 串 → Apply 写 settings.json。
+- Quick Config modal **不再有内联 1M 开关**(避免双写 + 双源)。模型行显示
+  **干净模型名**(剥掉 `[1m]`,符合"1M 是展示效果不是模型名"),旁边一个
+  只读 `1M` 角标表示该槽位已开;开关动作在规则卡完成。
 
-两者都读写同一个 `rule.request_model`(SoT),是**同一真源的两个视图**:
+### 5c. 为什么删掉重配弹窗 / 一键 Re-apply
 
-- ModelHeader 开 1M → 写 rule;Quick Config 下次打开 `derivePrefsFromRules`
-  读到 `[1m]` → 1M 开关自动点亮。反之亦然。
-- `ClaudeCodeQuickConfig.tsx` 的 `derivePrefsFromRules`(L443)无需改;
-  `has1M`/`with1M`(L427-431)已认后缀。
-- Quick Config 内联 1M 开关(L594)若也要写回 rule(而非仅 env),按同一
-  `with1M` + `api.updateRule` 路径,与 ModelHeader 共用逻辑。
-
-### 5c. 点击 1M 弹"重新配置"提示
-
-**为什么需要**:rule 是 SoT(routing 立刻匹配),但 client 只通过**已落盘的
-env** 才看得到 `[1m]`,而 tingly-box 的 materialize 不是自动的。
-
-| 场景 | rule 改后 | client 何时看到 `[1m]` |
-|---|---|---|
-| 默认场景 | routing 立即匹配 | settings.json 是 Quick Config **Apply 一次性写的** → 现在是旧的 → **必须重新 Apply** |
-| Profile | routing 立即匹配 | env 在 `tingly-box cc --profile` **启动时**生成 → **重启 profile 会话**生效,运行中不会热生效 |
-
-弹窗设计(**先翻转、再提示** —— 乐观更新写 rule,再弹 CTA):
-
-- **默认场景**:"1M 已写入路由规则。Claude Code 还在用旧的 settings.json,
-  需要重新应用配置才会带 `[1m]`。" → 主按钮 **【立即重新应用】**:用**更新后
-  的 rules** 重新 `derivePrefsFromRules` 再 `api.applyClaudeConfig`(顺序不能
-  反:先写 rule → 再 derive 才拿得到 `[1m]`)。
-- **Profile**:"该 profile 的 env 在启动时生成。重启
-  `tingly-box cc --profile <id>` 生效。"(给命令,无一键)
-- 两者补一句:**env 是进程启动时读的,运行中的 Claude Code 会话即使重新
-  Apply 也需重启会话**才认新 `[1m]`。
-- 加 **【本次不再提示】**,避免连开多槽位被反复打断。
-
-轻量备选:改成规则卡上常驻 banner("自上次应用后配置已变更 · 重新应用")。
-更激进备选:默认场景下开关直接静默重写 settings.json(更接近 cc-switch 的
-"切了就 live"),但会在每次点击动用户的 `~/.claude/settings.json`,侵入性高,
-不采纳为默认。
+1M 现在是**配置生成时单向投影**的效果(§4c CC env / §4f codex catalog)。
+改 `rule.context_1m` 后,用户本来就要走既有的 Apply(modal / 一键)或重启
+`tingly-box cc` 才生效——这是 agent 配置的固有节奏,不需要 1M 专属弹窗。
+保留 autosave 的成功 toast 作为反馈即可。要更强提醒可后续加一条规则卡
+banner,但默认不做。
 
 ---
 
@@ -253,45 +248,52 @@ rule.Context1M=true → env 含 [1m] → CC 客户端按名感知 → 发 contex
 - `MatchRuleByModelAndScenario_StripsContext1M`:`tingly/cc-sonnet[1m]` 入站 →
   命中 `built-in-cc-sonnet`(clean rule);clean 入站也命中。
 
+- Codex catalog(`apply_config_test.go::TestRenderCodexModelCatalog_Context1M`):
+  1M-flagged 模型 `context_window=1_000_000`,其余 `200000`。
+
 前端(`ruleUpdatePayload.test.ts`):
 - `context_1m` 在 payload 里(snake_case),默认 false,显式 true 时为 true。
 
-待补:Race 1/2 的并发测试(toggle → re-apply 紧邻;syncOneMToRules 部分失败)。
-
 ---
 
-## 9b. 实现落地状态(v2 — Context1M 字段)
+## 9b. 实现落地状态(v3 — 精简 + Codex)
+
+相对 v2 的变化:**删掉所有跨面同步与重配 UI**(它们是过度设计 + race 源),
+**加上 Codex catalog**。
 
 后端:
-- `Rule.Context1M bool`(`internal/typ/type.go`)+ `ToJSON` 输出。
-- `MatchRuleByModelAndScenario` 新增 strip-1m exact 层(`config.go`)。
-- `resolveCCModelSlots` 用 `WithContextWindow1M(model, flag)` 组合
-  (`cc_command.go`)。
-- `migrate20260612` 平移旧形态(`migration.go`)。
-- 单测覆盖匹配+四态 env 派生(`cc_command_test.go`)。
+- `Rule.Context1M bool` + `ToJSON`;`MatchRuleByModelAndScenario` strip-1m 层;
+  `resolveCCModelSlots` 用 `WithContextWindow1M`;`migrate20260612` 平移旧形态。
+- **Codex**:`CollectCodexContext1M` + `RenderCodexModelCatalog(models, ctx1m)`
+  + `ApplyCodexConfig(..., ctx1m)`,两个 caller(handler / agent path)透传。
+- 测试:`TestResolveCCModelSlots_*`、`TestMatchRuleByModelAndScenario_StripsContext1M`、
+  `TestRenderCodexModelCatalog_Context1M`。
 
 前端:
-- `ConfigRecord.context1M` / `Rule.context_1m` 类型字段
-  (`RoutingGraphTypes.ts`)。
-- `ruleToConfigRecord` 读 `rule.context_1m`(`utils.ts`)。
-- `buildRuleUpdatePayload` 写 `context_1m`(`ruleUpdatePayload.ts`),
-  `useRuleCardHooks.autoSave` 回写父态时一并 echo。
-- `RuleCard.handleToggleOneM` 改 `context1M` 字段;**await** `updateField`
-  → 修复 Race 1;失败时不弹 dialog。
-- `RuleCard.showOneM` 只看 scenario,不再因通配模型隐藏(开关与名字解耦,
-  通配规则也能配 1M)。
-- `ClaudeCodeQuickConfig.derivePrefsFromRules` 改为 `rule.request_model +
-  (rule.context_1m ? '[1m]' : '')` 组合。
-- `ClaudeCodeConfigModal.syncOneMToRules` 写 `context_1m` 字段;**并行
-  Promise.allSettled + 失败抛出 + Apply 主动 abort** → 修复 Race 2;不再
-  默默"non-fatal continue"。
-- `OneMReconfigDialog` + 一键 Re-apply 链路保留,行为不变(`onReapply` 走
-  `getRules → derive → apply`;Race 1 修复后此处不再读到 stale rule)。
+- 类型 + 映射:`ConfigRecord.context1M` / `Rule.context_1m` /
+  `ruleToConfigRecord` / `buildRuleUpdatePayload` / `autoSave` echo。
+- **唯一开关**:`ModelRequestHeader.oneM`(`UnifiedRoutingGraph` 透传,
+  `RuleCard` 计算),写 `context1M`;门控 cc ∪ codex 场景。
+- `derivePrefsFromRules` 单向派生 env 串(读 `context_1m`)。
+- Quick Config modal:**移除内联 1M 开关**,模型行显示干净名 + 只读 `1M` 角标。
+- **删除**:`OneMReconfigDialog`(整文件)、`ClaudeCodeConfigModal.syncOneMToRules`
+  + Apply abort、`onReapplyConfig` 透传链(TemplatePage / RuleCard /
+  UseClaudeCodePage)、`UseClaudeCodePage.handleReapplyConfig`。
 
-测试:
-- 后端 `TestMatchRuleByModelAndScenario_StripsContext1M`、`TestResolveCCModelSlots_*` 全绿。
-- 前端 `ruleUpdatePayload.test.ts` 加 `context_1m` 往返断言。
-- TODO:Race 1/2 的端到端并发回归(需 Playwright + 模拟网络失败注入)。
+被删代码消解的问题:
+- **Race 1**(toggle→re-apply 读 stale):没有 re-apply 按钮了,消失。
+- **Race 2**(syncOneMToRules 半失败):没有 Apply 时反向批量同步了,消失。
+- 单向投影(rule flag → config 生成)结构上不可能 env/rule 失配。
+
+仍未做(诚实):
+- `internal/server/config` 整个包测试**当前在 main 上就编译失败**
+  (`migration_test.go` 引用未定义的 `migrate20260609`),所以
+  `TestRenderCodexModelCatalog_Context1M` 现在跑不起来;其逻辑已用仓库内
+  throwaway `main` 运行验证(1M→1000000 / 其余→200000)。等 main 修了那个
+  migration,此测试自动生效。
+- `isClaudeCodeScenario` / `isCodexScenario` 仍是 Go + TS 双份常量。
+- Codex profile 场景(`codex:pN`)未纳入 `CollectCodexContext1M`(沿用既有
+  collector 的 base-codex-only 口径)。
 
 ## 10. cc-switch 借鉴
 
@@ -299,9 +301,10 @@ rule.Context1M=true → env 含 [1m] → CC 客户端按名感知 → 发 contex
 ([用户手册](https://github.com/farion1231/cc-switch/blob/main/docs/user-manual/en/README.md)):
 
 - 它用 SQLite 作 **单一真源(SSOT)**,切换时 **materialize 到 live
-  settings.json**(原子写:临时文件 + rename)。→ 印证我们 rule=SoT、多视图
-  投影的选择。
+  settings.json**(原子写:临时文件 + rename)。→ 印证我们 `rule.Context1M`
+  作真源、config 生成时单向 materialize 的选择。
 - 它明确:多数工具切换后要**重启终端 / CLI** 才生效;Claude Code 例外、支持
-  provider 数据热切换。→ 印证我们的 re-config 弹窗,并提醒 env 变量仍需重启
-  会话。
-- 差异:cc-switch 自动写 live 文件;我们用显式的一键 Apply 保留可控性。
+  provider 数据热切换。→ 印证我们不做 1M 专属弹窗:改 flag 后走既有 Apply /
+  重启即可。
+- 差异:cc-switch 自动写 live 文件;我们用显式的 Apply / `tingly-box cc`
+  启动来 materialize,保留可控性。

@@ -122,6 +122,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			CodexBaseURL: codexBaseURL,
 			APIKey:       apiKey,
 			Models:       models,
+			Context1M:    serverconfig.CollectCodexContext1M(aa.config),
 			Prefs:        serverconfig.DefaultCodexPrefs(),
 			WriteCatalog: true,
 		})

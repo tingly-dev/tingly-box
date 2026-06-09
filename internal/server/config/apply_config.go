@@ -14,6 +14,7 @@ import (
 
 	tomlpkg "github.com/pelletier/go-toml/v2"
 	"github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // defaultBackupRetention is the default number of backup files to keep per
@@ -993,7 +994,7 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 //
 // The previous config.toml and catalog (if any) are backed up before being
 // rewritten.
-func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool) (*ApplyResult, error) {
+func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool, context1M map[string]bool) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1056,7 +1057,7 @@ func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeC
 				return result, nil
 			}
 		}
-		catalogBytes, err := RenderCodexModelCatalog(models)
+		catalogBytes, err := RenderCodexModelCatalog(models, context1M)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to render model catalog: %v", err)
 			return result, nil
@@ -1161,6 +1162,11 @@ const (
 	codexDefaultMaxContextWindow         = 200000
 	codexEffectiveContextWindowPercent   = 92
 	codexDefaultAutoCompactTokenLimitPct = 85
+	// codex1MContextWindow is used for models whose routing rule has
+	// Context1M=true. Codex has no wire-level 1M signal like Claude Code's
+	// [1m] suffix; the context window is purely the catalog's declared budget,
+	// so enabling 1M means rendering a larger context_window in the catalog.
+	codex1MContextWindow = 1000000
 )
 
 // renderCodexModelCatalog produces the JSON payload for
@@ -1170,7 +1176,7 @@ const (
 // no verbosity knob). Codex 0.124+ deserializes this into
 // `protocol::openai_models::ModelsResponse`; field names and value types must
 // stay in sync with that struct.
-func RenderCodexModelCatalog(models []string) ([]byte, error) {
+func RenderCodexModelCatalog(models []string, context1M map[string]bool) ([]byte, error) {
 	// supported_reasoning_levels is Vec<ReasoningEffortPreset>, not a bare
 	// string list — each element is an {effort, description} object. Values
 	// mirror Codex's bundled catalog for GPT-5 so /model shows the familiar
@@ -1183,6 +1189,12 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 	}
 	entries := make([]map[string]interface{}, 0, len(models))
 	for _, model := range models {
+		ctxWindow := codexDefaultContextWindow
+		maxCtxWindow := codexDefaultMaxContextWindow
+		if context1M[model] {
+			ctxWindow = codex1MContextWindow
+			maxCtxWindow = codex1MContextWindow
+		}
 		entries = append(entries, map[string]interface{}{
 			"slug":                             model,
 			"display_name":                     model,
@@ -1199,9 +1211,9 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 			"support_verbosity":                false,
 			"truncation_policy":                map[string]interface{}{"mode": "tokens", "limit": 10000},
 			"supports_parallel_tool_calls":     true,
-			"context_window":                   codexDefaultContextWindow,
-			"max_context_window":               codexDefaultMaxContextWindow,
-			"auto_compact_token_limit":         codexAutoCompactTokenLimit(codexDefaultContextWindow),
+			"context_window":                   ctxWindow,
+			"max_context_window":               maxCtxWindow,
+			"auto_compact_token_limit":         codexAutoCompactTokenLimit(ctxWindow),
 			"effective_context_window_percent": codexEffectiveContextWindowPercent,
 			"experimental_supported_tools":     []string{},
 			"input_modalities":                 []string{"text", "image"},
@@ -1213,6 +1225,29 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 		"models":  entries,
 	}
 	return json.MarshalIndent(payload, "", "  ")
+}
+
+// CollectCodexContext1M maps each active Codex-scenario rule's request_model to
+// whether its Context1M flag is set (OR-merged across duplicate model names).
+// Feeds RenderCodexModelCatalog so 1M-enabled models get a larger context
+// window. Base codex scenario only (mirrors the model collectors).
+func CollectCodexContext1M(c *Config) map[string]bool {
+	out := map[string]bool{}
+	for _, rule := range c.GetRequestConfigs() {
+		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
+			continue
+		}
+		model := strings.TrimSpace(rule.RequestModel)
+		if model == "" {
+			continue
+		}
+		if rule.Context1M {
+			out[model] = true
+		} else if _, ok := out[model]; !ok {
+			out[model] = false
+		}
+	}
+	return out
 }
 
 func codexAutoCompactTokenLimit(contextWindow int) int {

@@ -15,11 +15,11 @@ import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialo
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
-import OneMReconfigDialog, { isOneMReconfigSuppressed } from '@/components/rule-card/OneMReconfigDialog';
 import {
     formatRuleFlags,
     parseRuleFlags,
     isClaudeCodeScenario,
+    isCodexScenario,
 } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
@@ -63,8 +63,6 @@ export interface RuleCardProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
-    // Re-apply the agent config from the 1M re-config dialog (Claude Code only).
-    onReapplyConfig?: () => void | Promise<void>;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -83,7 +81,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     onToggleExpanded,
-    onReapplyConfig,
 }) => {
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
@@ -120,9 +117,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     const [flagDialogOpen, setFlagDialogOpen] = useState(false);
     const [flagInput, setFlagInput] = useState('');
     const [flagError, setFlagError] = useState<string | undefined>(undefined);
-
-    // 1M re-config reminder dialog state
-    const [oneMDialog, setOneMDialog] = useState<{ open: boolean; enabled: boolean }>({ open: false, enabled: false });
 
     // Catalog dialog state + registry
     const [catalogOpen, setCatalogOpen] = useState(false);
@@ -276,25 +270,21 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         void updateField(configRecord, setConfigRecord, 'flags', next);
     }, [configRecord, updateField, setConfigRecord]);
 
-    // 1M toggle: flip the rule's Context1M flag (request_model stays clean).
-    // The reminder dialog only opens after the save completes — otherwise the
-    // user could click "Re-apply" before the new state is persisted and the
-    // server would generate env from a stale rule (Race 1).
-    const handleToggleOneM = useCallback(async (on: boolean) => {
+    // 1M toggle: flip the rule's Context1M flag. The flag is the single source
+    // of truth; config materialization (Claude Code env [1m] suffix / Codex
+    // catalog context_window) reads it at apply/launch time. autoSave persists
+    // it and toasts on failure (with rollback), so no extra reminder here.
+    const handleToggleOneM = useCallback((on: boolean) => {
         if (!configRecord) return;
-        const ok = await updateField(configRecord, setConfigRecord, 'context1M', on);
-        if (!ok) return; // save failed → autoSave already toasted; don't nag
-        if (!isOneMReconfigSuppressed()) {
-            setOneMDialog({ open: true, enabled: on });
-        }
+        void updateField(configRecord, setConfigRecord, 'context1M', on);
     }, [configRecord, updateField, setConfigRecord]);
 
     if (!configRecord) return null;
 
-    // 1M switch only applies to Claude Code rules — the [1m] convention is a
-    // Claude Code client behavior. Wildcard rules are fine: the switch is a
-    // separate flag (not the model string), so it doesn't affect matching.
-    const showOneM = isClaudeCodeScenario(rule.scenario);
+    // 1M switch applies to Claude Code (env [1m] suffix) and Codex (catalog
+    // context window). It's a separate flag, not the model string, so wildcard
+    // rules are fine too.
+    const showOneM = isClaudeCodeScenario(rule.scenario) || isCodexScenario(rule.scenario);
 
     const extensionsCard = (
         <RulePluginsCard
@@ -383,15 +373,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 providers={providers}
                 onClose={() => setCatalogOpen(false)}
                 onSave={handleSaveCatalogFlags}
-            />
-
-            {/* 1M re-config reminder (Claude Code) */}
-            <OneMReconfigDialog
-                open={oneMDialog.open}
-                scenario={rule.scenario}
-                enabled={oneMDialog.enabled}
-                onClose={() => setOneMDialog((s) => ({ ...s, open: false }))}
-                onReapply={onReapplyConfig}
             />
 
             {/* Smart Rule Edit Dialog (catalog-style: conditions sidebar + detail pane) */}

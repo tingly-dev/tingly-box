@@ -80,7 +80,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         showEmptyState = true,
         rightAction: customRightAction,
         onAddApiKeyClick,
-        onReapplyConfig,
         newlyCreatedRuleUuids = internalData.newlyCreatedRuleUuids,
     } = props;
 
@@ -438,7 +437,6 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                                             onRuleDelete={onRuleDelete}
                                             allowToggleRule={allowToggleRule}
                                             onToggleExpanded={() => handleRuleExpandToggle(rule.uuid)}
-                                            onReapplyConfig={onReapplyConfig}
                                         />
                                     )}
                                 </div>

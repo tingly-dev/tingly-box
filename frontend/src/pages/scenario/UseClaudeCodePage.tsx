@@ -190,23 +190,6 @@ const UseClaudeCodePageContent: React.FC = () => {
         }
     };
 
-    // Re-apply triggered from a rule card's 1M re-config dialog. Re-fetches the
-    // rules first so the freshly-toggled [1m] suffix is reflected in the derived
-    // prefs (the page's `rules` state may not have round-tripped yet), then
-    // writes settings.json.
-    const handleReapplyConfig = async () => {
-        const res = await api.getRules(SCENARIO);
-        const fresh = Array.isArray(res?.data) ? res.data : rules;
-        const result = await applyPrefs(
-            derivePrefsFromRules({ rules: fresh, mode: configMode }) as Record<string, string>,
-            false,
-        );
-        showNotification(
-            result.success ? 'Claude Code config re-applied' : `Re-apply failed: ${result.error || 'unknown error'}`,
-            result.success ? 'success' : 'error',
-        );
-    };
-
     // AgentSetupCard's one-click apply uses prefs derived from the current
     // rules + configMode — same defaults the modal would seed with.
     const handleApply = () =>
@@ -294,7 +277,6 @@ const UseClaudeCodePageContent: React.FC = () => {
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}
-                    onReapplyConfig={handleReapplyConfig}
                 />
 
                 <Dialog

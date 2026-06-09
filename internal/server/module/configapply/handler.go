@@ -720,7 +720,7 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	if authMode == config.CodexAuthChatGPT {
 		configResult, err = config.ClearCodexGatewayConfig()
 	} else {
-		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
+		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog, config.CollectCodexContext1M(cfg))
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
@@ -827,7 +827,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 		Models:     models,
 	}
 	if writeCatalog && len(models) > 0 {
-		catalogBytes, err := config.RenderCodexModelCatalog(models)
+		catalogBytes, err := config.RenderCodexModelCatalog(models, config.CollectCodexContext1M(cfg))
 		if err == nil {
 			resp.CatalogJson = string(catalogBytes)
 		}

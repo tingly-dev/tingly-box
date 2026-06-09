@@ -9,8 +9,6 @@ import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageConte
 import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 import type { AgentApplyResult } from './AgentSetupCard';
-import { api } from '@/services/api';
-import { hasOneM } from '@/components/rule-card/utils';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -246,65 +244,8 @@ https.get("${downloadUrl}", (response) => {
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, []);
 
-    // Persist each slot's 1M intent onto the corresponding built-in rule's
-    // Context1M flag. The flag is the source of truth (see .design/one-m-context.md):
-    // when Apply writes [1m] into settings.json, the rule must agree or the UI
-    // (which shows the switch from the rule) will lie. The model name itself
-    // stays decoupled from the rule, per §5.5.
-    //
-    // Failures are aggregated and surfaced — partial syncs are NOT silently
-    // accepted (Race 2). Calls run in parallel for latency.
-    const syncOneMToRules = React.useCallback(async () => {
-        const slots: { env: keyof ClaudeCodePrefs; uuid: string }[] = [
-            { env: 'ANTHROPIC_MODEL', uuid: 'built-in-cc-default' },
-            { env: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', uuid: 'built-in-cc-haiku' },
-            { env: 'ANTHROPIC_DEFAULT_SONNET_MODEL', uuid: 'built-in-cc-sonnet' },
-            { env: 'ANTHROPIC_DEFAULT_OPUS_MODEL', uuid: 'built-in-cc-opus' },
-            { env: 'CLAUDE_CODE_SUBAGENT_MODEL', uuid: 'built-in-cc-subagent' },
-        ];
-
-        // Returns an updateRule promise only if the rule's current Context1M
-        // disagrees with the form's intent — otherwise no-op.
-        const syncRule = (rule: any, on: boolean): Promise<any> | null => {
-            if (!rule) return null;
-            if (Boolean(rule.context_1m) === on) return null;
-            return api.updateRule(rule.uuid, { ...rule, context_1m: on });
-        };
-
-        const ops: Promise<any>[] = [];
-        if (configMode !== 'separate') {
-            const p = syncRule(rules[0], hasOneM(prefs.ANTHROPIC_MODEL));
-            if (p) ops.push(p);
-        } else {
-            for (const slot of slots) {
-                const rule = rules.find((r: any) => r?.uuid === slot.uuid);
-                const p = syncRule(rule, hasOneM(prefs[slot.env]));
-                if (p) ops.push(p);
-            }
-        }
-        if (ops.length === 0) return;
-        const results = await Promise.allSettled(ops);
-        const failed = results.filter((r) => r.status === 'rejected').length;
-        if (failed > 0) {
-            throw new Error(`failed to sync 1M state on ${failed} of ${ops.length} rule(s)`);
-        }
-    }, [configMode, rules, prefs]);
-
     const handleApply = async (installStatusLine: boolean) => {
         if (!onApplyWithPrefs) return;
-        // Sync rules first. If sync fails (network, validation, etc.) we abort
-        // the env write — otherwise the env would say "[1m]" while the rule's
-        // Context1M flag stays false and the UI keeps lying. The user can
-        // retry: the previous round's successful syncs are no-ops next time.
-        try {
-            await syncOneMToRules();
-        } catch (e: any) {
-            setApplyResult({
-                success: false,
-                error: `Could not sync 1M state to rules (${e?.message || 'unknown error'}). Apply aborted to avoid an env/rule mismatch — please retry.`,
-            });
-            return;
-        }
         const result = await onApplyWithPrefs(prefs, installStatusLine);
         setApplyResult(result);
     };
