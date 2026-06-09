@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 
 	"github.com/tingly-dev/tingly-box/internal/server/config"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // newOAuthTestContext returns a gin.Context whose engine has the HTML
@@ -288,5 +290,61 @@ func TestGenerateProviderName(t *testing.T) {
 		result := generateProviderName(ai.IssuerQwenCode, token, "")
 		assert.Contains(t, result, "qwen_code-", "Should have provider prefix")
 		assert.Regexp(t, `qwen_code-\d{8}-\d{4}`, result, "Should match timestamp format")
+	})
+}
+
+// TestHandler_AuthorizeOAuth_Reauth_Validation covers the up-front guards added
+// for the re-authentication flow: a missing target provider and an issuer
+// mismatch must be rejected before any OAuth flow is initiated, so the user gets
+// an immediate, clear error instead of a failed callback.
+func TestHandler_AuthorizeOAuth_Reauth_Validation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	newReauthHandler := func(t *testing.T) (*Handler, *config.Config) {
+		registry := oauth.NewRegistry()
+		registry.Register(&oauth.ProviderConfig{
+			Type:         ai.IssuerClaudeCode,
+			DisplayName:  "Anthropic",
+			ClientID:     "cid",
+			ClientSecret: "sec",
+			AuthURL:      "https://anthropic.com/auth",
+			TokenURL:     "https://anthropic.com/token",
+			Scopes:       []string{"api"},
+		})
+		cfg, err := config.NewConfigWithDir(t.TempDir(), config.WithDisableMigration(), config.WithDisableBuiltIn())
+		require.NoError(t, err, "config should build")
+		oauthManager := oauth.NewManager(oauth.DefaultConfig(), registry)
+		return NewHandler(oauthManager, cfg), cfg
+	}
+
+	doAuthorize := func(h *Handler, body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		c := newOAuthTestContext(w)
+		c.Request = httptest.NewRequest("POST", "/api/v1/oauth/authorize", strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.AuthorizeOAuth(c)
+		return w
+	}
+
+	t.Run("ReauthTargetNotFound", func(t *testing.T) {
+		h, _ := newReauthHandler(t)
+		w := doAuthorize(h, `{"provider":"claude_code","provider_uuid":"does-not-exist"}`)
+		assert.Equal(t, http.StatusNotFound, w.Code, "missing re-auth target should 404")
+		assert.Contains(t, w.Body.String(), "not found")
+	})
+
+	t.Run("ReauthIssuerMismatch", func(t *testing.T) {
+		h, cfg := newReauthHandler(t)
+		require.NoError(t, cfg.AddProvider(&typ.Provider{
+			UUID:        "uuid-claude-1",
+			Name:        "claude-acct",
+			APIBase:     "https://api.anthropic.com",
+			AuthType:    typ.AuthTypeOAuth,
+			OAuthDetail: &typ.OAuthDetail{Issuer: ai.IssuerClaudeCode, ProviderType: string(ai.IssuerClaudeCode)},
+		}))
+		// Request a codex login against a claude provider — must be rejected.
+		w := doAuthorize(h, `{"provider":"codex","provider_uuid":"uuid-claude-1"}`)
+		assert.Equal(t, http.StatusBadRequest, w.Code, "issuer mismatch should 400")
+		assert.Contains(t, w.Body.String(), "mismatch")
 	})
 }

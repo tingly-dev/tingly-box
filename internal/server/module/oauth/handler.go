@@ -246,6 +246,36 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 		return
 	}
 
+	// Re-authentication: when a target provider UUID is supplied, validate up front
+	// that it exists, is an OAuth provider, and matches the requested issuer. On
+	// success the credentials will be overwritten on this same UUID (preserving all
+	// rule/service references) instead of creating a new provider.
+	if req.ProviderUUID != "" {
+		existing, err := h.config.GetProviderByUUID(req.ProviderUUID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, OAuthErrorResponse{
+				Success: false,
+				Error:   "Provider to re-authenticate not found",
+			})
+			return
+		}
+		if existing.OAuthDetail == nil {
+			c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+				Success: false,
+				Error:   "Provider is not an OAuth provider",
+			})
+			return
+		}
+		if existing.OAuthDetail.Issuer != issuer {
+			c.JSON(http.StatusBadRequest, OAuthErrorResponse{
+				Success: false,
+				Error: fmt.Sprintf("Re-authentication issuer mismatch: provider is '%s', requested '%s'",
+					existing.OAuthDetail.Issuer, issuer),
+			})
+			return
+		}
+	}
+
 	// Check if provider uses device code flow
 	config, ok := h.oauthManager.GetRegistry().Get(issuer)
 	if !ok {
@@ -327,6 +357,11 @@ func (h *Handler) AuthorizeOAuth(c *gin.Context) {
 	// Store proxy URL if provided
 	if proxyURL != "" {
 		oauthSession.ProxyURL = proxyURL
+	}
+	// Carry the re-authentication target through the flow so the terminal provider
+	// step overwrites in place instead of creating a new provider.
+	if req.ProviderUUID != "" {
+		oauthSession.TargetProviderUUID = req.ProviderUUID
 	}
 	h.oauthManager.StoreSession(oauthSession)
 
@@ -954,8 +989,9 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		customName = token.Name
 	}
 
-	// Retrieve proxy URL from session if available
+	// Retrieve proxy URL and re-auth target from session if available
 	var proxyURL string
+	var targetProviderUUID string
 	if sessionID != "" {
 		session, err := h.oauthManager.GetSession(sessionID)
 		if err == nil && session != nil {
@@ -963,6 +999,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 			if proxyURL != "" {
 				log.Printf("[OAuth] Using proxy URL from session: %s", proxyURL)
 			}
+			targetProviderUUID = session.TargetProviderUUID
 		}
 	}
 
@@ -1025,6 +1062,72 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		expiresAt = token.Expiry.Format(time.RFC3339)
 	}
 
+	oauthDetail := &typ.OAuthDetail{
+		AccessToken:  token.AccessToken,
+		ProviderType: string(issuer),
+		Issuer:       issuer,
+		UserID:       uuid.New().String(),
+		RefreshToken: token.RefreshToken,
+		ExpiresAt:    expiresAt,
+		DeviceID:     deviceID,
+		ExtraFields:  make(map[string]interface{}),
+	}
+
+	// Store account_id from token metadata for ChatGPT API
+	if token.Metadata != nil {
+		for k, v := range token.Metadata {
+			oauthDetail.ExtraFields[k] = v
+		}
+	}
+	// Preserve id_token: required for native Codex `~/.codex/auth.json` export
+	// (chatgpt auth mode). Mirrors the CLI flow in internal/command/oauth.go.
+	if token.IDToken != "" {
+		oauthDetail.ExtraFields["id_token"] = token.IDToken
+	}
+
+	// Re-authentication path: overwrite the existing provider's credentials in
+	// place, preserving its UUID, name, endpoints, and every rule/service that
+	// references it. This is the recovery flow for a permanently invalid OAuth
+	// credential that delete+recreate would otherwise orphan.
+	if targetProviderUUID != "" {
+		existing, err := h.config.GetProviderByUUID(targetProviderUUID)
+		if err != nil {
+			return "", fmt.Errorf("re-auth target provider %s not found: %w", targetProviderUUID, err)
+		}
+		if existing.OAuthDetail == nil {
+			return "", fmt.Errorf("re-auth target provider %s is not an OAuth provider", targetProviderUUID)
+		}
+		if existing.OAuthDetail.Issuer != issuer {
+			return "", fmt.Errorf("re-auth issuer mismatch for provider %s: have '%s', got '%s'",
+				targetProviderUUID, existing.OAuthDetail.Issuer, issuer)
+		}
+		existing.OAuthDetail = oauthDetail
+		existing.AuthType = typ.AuthTypeOAuth
+		existing.Enabled = true
+		// Honor a proxy chosen during re-auth; otherwise keep the existing one.
+		if proxyURL != "" {
+			existing.ProxyURL = proxyURL
+		}
+		if err := h.config.UpdateProvider(existing.UUID, existing); err != nil {
+			return "", fmt.Errorf("failed to update provider during re-auth: %w", err)
+		}
+		log.Printf("[OAuth] Re-authenticated provider %s (%s) in place", existing.Name, existing.UUID)
+
+		// Refresh the model list: the new credential may expose a different set.
+		if err := h.config.FetchAndSaveProviderModels(existing.UUID); err != nil {
+			log.Printf("[OAuth] Warning: Failed to fetch models after re-auth for %s: %v", existing.Name, err)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"action":        "oauth_provider_reauthorized",
+			"provider_name": existing.Name,
+			"provider_type": string(token.Provider),
+			"uuid":          existing.UUID,
+		}).Info("OAuth provider re-authenticated in place")
+
+		return existing.UUID, nil
+	}
+
 	provider := &typ.Provider{
 		UUID:     providerUUID.String(),
 		Name:     providerName,
@@ -1035,28 +1138,7 @@ func (h *Handler) createProviderFromToken(token *oauth.Token, issuer ai.Issuer, 
 		AuthType: typ.AuthTypeOAuth,
 		// Issuer-specific endpoint mode (e.g. Codex → responses).
 		OpenAIEndpointMode: ai.OpenAIEndpointModeForIssuer(issuer),
-		OAuthDetail: &typ.OAuthDetail{
-			AccessToken:  token.AccessToken,
-			ProviderType: string(issuer),
-			Issuer:       issuer,
-			UserID:       uuid.New().String(),
-			RefreshToken: token.RefreshToken,
-			ExpiresAt:    expiresAt,
-			DeviceID:     deviceID,
-			ExtraFields:  make(map[string]interface{}),
-		},
-	}
-
-	// Store account_id from token metadata for ChatGPT API
-	if token.Metadata != nil {
-		for k, v := range token.Metadata {
-			provider.OAuthDetail.ExtraFields[k] = v
-		}
-	}
-	// Preserve id_token: required for native Codex `~/.codex/auth.json` export
-	// (chatgpt auth mode). Mirrors the CLI flow in internal/command/oauth.go.
-	if token.IDToken != "" {
-		provider.OAuthDetail.ExtraFields["id_token"] = token.IDToken
+		OAuthDetail:        oauthDetail,
 	}
 
 	// Save provider to config

@@ -972,6 +972,9 @@ export const api = {
         proxy_url?: string;
         redirect?: string;
         state?: string;
+        // When set, re-authenticate this existing provider in place (preserves
+        // its UUID and all rule/service references) instead of creating a new one.
+        provider_uuid?: string;
     }): Promise<any> => {
         try {
             const client = await getClient();

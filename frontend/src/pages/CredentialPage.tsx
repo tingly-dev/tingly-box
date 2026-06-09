@@ -60,6 +60,9 @@ const CredentialPage = () => {
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
+    // When set, the OAuth dialog re-authenticates this existing provider in place
+    // (preserves UUID + all references) instead of creating a new one.
+    const [oauthReauthUuid, setOAuthReauthUuid] = useState<string | null>(null);
     const [oauthDetailProvider, setOAuthDetailProvider] = useState<any | null>(null);
     const [oauthDetailDialogOpen, setOAuthDetailDialogOpen] = useState(false);
 
@@ -428,8 +431,28 @@ const CredentialPage = () => {
 
     // OAuth handlers
     const handleOAuthSuccess = () => {
-        showNotification('OAuth provider added successfully!', 'success');
+        showNotification(
+            oauthReauthUuid ? 'Provider reauthorized successfully!' : 'OAuth provider added successfully!',
+            'success',
+        );
+        setOAuthReauthUuid(null);
         loadProviders();
+    };
+
+    // Re-authenticate an existing OAuth provider in place. Runs the normal OAuth
+    // flow for the provider's issuer, but the backend overwrites credentials on
+    // the same UUID — recovering a dead credential without orphaning the rules,
+    // smart routing, and model keys that reference it (which delete+recreate would).
+    const handleReauthorize = (providerUuid: string) => {
+        const provider = oauthProviders.find((p: any) => p.uuid === providerUuid);
+        const issuer = provider?.oauth_detail?.provider_type || provider?.oauth_detail?.issuer;
+        if (!issuer) {
+            showNotification('Cannot reauthorize: provider issuer is unknown', 'error');
+            return;
+        }
+        setOAuthReauthUuid(providerUuid);
+        setOAuthAutoStartId(issuer);
+        setOAuthDialogOpen(true);
     };
 
     const handleRefreshToken = async (providerUuid: string) => {
@@ -571,6 +594,7 @@ const CredentialPage = () => {
                             onToggle={handleToggleProvider}
                             onDelete={handleDeleteProvider}
                             onRefreshToken={handleRefreshToken}
+                            onReauthorize={handleReauthorize}
                             onNotification={showNotification}
                             providerQuotas={quotaData}
                             refreshingQuotas={refreshing}
@@ -652,9 +676,11 @@ const CredentialPage = () => {
             <OAuthDialog
                 open={oauthDialogOpen}
                 autoStartProviderId={oauthAutoStartId}
+                reauthProviderUuid={oauthReauthUuid}
                 onClose={() => {
                     setOAuthDialogOpen(false);
                     setOAuthAutoStartId(null);
+                    setOAuthReauthUuid(null);
                 }}
                 onSuccess={handleOAuthSuccess}
             />
