@@ -351,6 +351,8 @@ func (c *TBClientImpl) GetScenarioEndpointPath(scenario typ.RuleScenario) string
 		return "/tingly/xcode"
 	case typ.ScenarioVSCode:
 		return "/tingly/vscode"
+	case typ.ScenarioTeam:
+		return "/tingly/team"
 	default:
 		// Default to OpenAI scenario path
 		return "/tingly/openai"

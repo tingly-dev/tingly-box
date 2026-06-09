@@ -54,6 +54,7 @@ const (
 	ScenarioOpenAI        RuleScenario = "openai"
 	ScenarioAnthropic     RuleScenario = "anthropic"
 	ScenarioAgent         RuleScenario = "agent"
+	ScenarioTeam          RuleScenario = "team" // Centrally deployed model shared across a team; hidden by default in the UI
 	ScenarioCodex         RuleScenario = "codex"
 	ScenarioClaudeCode    RuleScenario = "claude_code"
 	ScenarioOpenCode      RuleScenario = "opencode"
@@ -71,6 +72,7 @@ func BuiltinScenarios() []RuleScenario {
 		ScenarioOpenAI,
 		ScenarioAnthropic,
 		ScenarioAgent,
+		ScenarioTeam,
 		ScenarioCodex,
 		ScenarioClaudeCode,
 		ScenarioOpenCode,

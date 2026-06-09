@@ -123,13 +123,31 @@ func TestClaudeCodeSupportsProfiles(t *testing.T) {
 }
 
 func TestNonProfileScenariosDoNotSupportProfiles(t *testing.T) {
-	for _, s := range []RuleScenario{ScenarioOpenAI, ScenarioAnthropic, ScenarioAgent} {
+	for _, s := range []RuleScenario{ScenarioOpenAI, ScenarioAnthropic, ScenarioAgent, ScenarioTeam} {
 		d, ok := GetScenarioDescriptor(s)
 		if !ok {
 			continue
 		}
 		if d.SupportsProfiles {
 			t.Errorf("scenario %q should not have SupportsProfiles=true", s)
+		}
+	}
+}
+
+func TestTeamScenarioDescriptor(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioTeam)
+	if !ok {
+		t.Fatal("team descriptor not found")
+	}
+	if !d.AllowRuleBinding {
+		t.Error("team should allow rule binding")
+	}
+	if !d.AllowDirectPathUse {
+		t.Error("team should allow direct path use")
+	}
+	for _, transport := range []ScenarioTransport{TransportOpenAI, TransportAnthropic} {
+		if !ScenarioSupportsTransport(ScenarioTeam, transport) {
+			t.Errorf("team should support transport %q", transport)
 		}
 	}
 }

@@ -294,6 +294,8 @@ func TestGetScenarioEndpointPath(t *testing.T) {
 		{"opencode:p1", "/tingly/opencode"},
 		{typ.ScenarioXcode, "/tingly/xcode"},
 		{typ.ScenarioVSCode, "/tingly/vscode"},
+		{typ.ScenarioTeam, "/tingly/team"},
+		{"team:p1", "/tingly/team"},
 		{typ.ScenarioSmartGuide, "/tingly/_smart_guide"},
 		{typ.ScenarioOpenAI, "/tingly/openai"},
 	}

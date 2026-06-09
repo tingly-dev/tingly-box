@@ -29,6 +29,7 @@ import UseClaudeCodePage from './pages/scenario/UseClaudeCodePage';
 import ClaudeCodeProfilePage from './pages/scenario/ClaudeCodeProfilePage';
 import UseClaudeDesktopPage from './pages/scenario/UseClaudeDesktopPage';
 import UseAgentPage from './pages/scenario/UseAgentPage';
+import UseTeamPage from './pages/scenario/UseTeamPage';
 import AgentOverviewPage from './pages/scenario/AgentOverviewPage';
 import UseOpenCodePage from './pages/scenario/UseOpenCodePage';
 import UseXcodePage from './pages/scenario/UseXcodePage';
@@ -196,6 +197,7 @@ function AppContent() {
                     <Route path="/agent/claude_code/profile/:profileId" element={<ClaudeCodeProfilePage />} />
                     <Route path="/agent/claude_desktop" element={<UseClaudeDesktopPage />} />
                     <Route path="/agent/agent" element={<UseAgentPage />} />
+                    <Route path="/agent/team" element={<UseTeamPage />} />
                     <Route path="/agent/opencode" element={<UseOpenCodePage />} />
                     <Route path="/agent/xcode" element={<UseXcodePage />} />
                     <Route path="/agent/vscode" element={<UseVSCodePage />} />

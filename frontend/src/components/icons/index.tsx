@@ -114,6 +114,7 @@ import {
     IconFilter,
     IconFilterOff,
     IconUser,
+    IconUsers,
     IconShield,
     IconReload,
     IconStar,
@@ -279,6 +280,7 @@ export const NearMeOutlined = tablerMui(IconNavigation);
 // --- People / identity -------------------------------------------------------
 export const Person = tablerMui(IconUser);
 export const AccountCircle = tablerMui(IconUser);
+export const Users = tablerMui(IconUsers);
 
 // --- Security / trust --------------------------------------------------------
 export const Shield = tablerMui(IconShield);
