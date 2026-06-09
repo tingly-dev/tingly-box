@@ -1,11 +1,15 @@
 import type { FlagSpec, RuleFlags, RuleFlagsApi, VisionProxyServiceRef } from '@/components/RoutingGraphTypes';
 
 export function snakeToCamel(s: string): string {
-    return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    return s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 }
 
 export function camelToSnake(s: string): string {
-    return s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    // First handle the special case of digits at the end (e.g., context1m -> context_1m)
+    let result = s.replace(/([a-z])([0-9])([a-z])/g, '$1_$2$3');
+    // Then handle regular camelCase to snake_case (only uppercase letters)
+    result = result.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    return result;
 }
 
 export function getFlagValue(flags: RuleFlags | undefined, key: string): unknown {

@@ -16,6 +16,7 @@ import {
     AutoAwesome as AutoAwesomeIcon,
     NearMeOutlined as DirectIcon,
     Settings as SettingsIcon,
+    Psychology as MemoryIcon,
 } from '@/components/icons';
 import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -51,6 +52,9 @@ export interface ModelNodeProps {
     showSmartSwitch?: boolean;
     switchDisabled?: boolean;
     onSwitch?: () => void;
+    // 1M context window props
+    context1M?: boolean;
+    onContext1MToggle?: () => void;
 }
 
 export const ModelNode: React.FC<ModelNodeProps> = ({
@@ -66,6 +70,9 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
     showSmartSwitch = false,
     switchDisabled = false,
     onSwitch,
+    // 1M context window props
+    context1M = false,
+    onContext1MToggle,
 }) => {
     const { t } = useTranslation();
     const [editMode, setEditMode] = useState(false);
@@ -283,6 +290,50 @@ export const ModelNode: React.FC<ModelNodeProps> = ({
                             >
                                 <AutoAwesomeIcon sx={{ fontSize: 13 }} />
                                 Smart
+                            </ToggleButton>
+                        </NodeTooltip>
+                    </Box>
+                )}
+
+                {/* Divider - only show when 1M context switch is visible */}
+                {(context1M || onContext1MToggle) && !editMode && (
+                    <Divider sx={NODE_LAYER_STYLES.divider} />
+                )}
+
+                {/* Bottom Layer - 1M Context Switch */}
+                {(context1M || onContext1MToggle) && !editMode && (
+                    <Box sx={NODE_LAYER_STYLES.bottomLayer}>
+                        <NodeTooltip title={context1M ? "1M context enabled" : "Enable 1M context window"} placement="bottom-start">
+                            <ToggleButton
+                                value="context1m"
+                                selected={context1M}
+                                disabled={!active}
+                                onClick={onContext1MToggle}
+                                sx={(theme) => ({
+                                    ...NODE_LAYER_STYLES.toggleButton,
+                                    flex: 1,
+                                    borderColor: context1M ? alpha(getRouteGraphActiveColor(theme), 0.7) : alpha(theme.palette.text.disabled, 0.5),
+                                    color: context1M ? theme.palette.common.white : theme.palette.text.secondary,
+                                    '&.Mui-selected': {
+                                        backgroundColor: context1M ? getRouteGraphControlFill(theme) : 'transparent',
+                                        color: context1M ? theme.palette.common.white : theme.palette.text.primary,
+                                        borderColor: context1M ? getRouteGraphControlFill(theme) : getRouteGraphActiveColor(theme),
+                                        '& .MuiSvgIcon-root': {
+                                            color: theme.palette.common.white,
+                                        },
+                                        '&:hover': {
+                                            backgroundColor: getRouteGraphControlFillHover(theme),
+                                        },
+                                    },
+                                    '&:hover': {
+                                        backgroundColor: context1M
+                                            ? getRouteGraphControlFillHover(theme)
+                                            : alpha(theme.palette.text.disabled, theme.palette.mode === 'dark' ? 0.16 : 0.08),
+                                    },
+                                })}
+                            >
+                                <PsychologyIcon sx={{ fontSize: 13 }} />
+                                1M
                             </ToggleButton>
                         </NodeTooltip>
                     </Box>
