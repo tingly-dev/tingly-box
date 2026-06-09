@@ -19,7 +19,10 @@ const (
 	FlagCustomUserAgent = "custom_user_agent"
 )
 
-// No scenario-level integer flags remain. session_affinity was downgraded to a
-// rule-only flag (see internal/typ/flag_registry.go and the built-in rule seeds
-// in init.go / migrate20260610), so GetScenarioIntFlag / SetScenarioIntFlag no
-// longer recognise any key.
+// ScenarioFlags int field keys. Same contract as above but for
+// GetScenarioIntFlag / SetScenarioIntFlag. None are registered right now:
+// session_affinity was downgraded to a rule-only flag (see
+// internal/typ/flag_registry.go and the built-in rule seeds in init.go /
+// migrate20260610). The generic int-flag get/set infra (and its HTTP endpoint)
+// is retained for future scenario int flags — add the key const here plus a
+// switch case in config.go's Get/SetScenarioIntFlag.

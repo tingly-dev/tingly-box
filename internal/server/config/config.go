@@ -1773,21 +1773,59 @@ func (c *Config) SetScenarioStringFlag(scenario typ.RuleScenario, flagName strin
 
 // GetScenarioIntFlag returns an integer flag value for a scenario.
 //
-// No scenario-level integer flags remain: session_affinity was downgraded to
-// a rule-only flag (defaulted on the built-in Claude Code / Desktop / Codex
-// rules via init + migration), mirroring how clean_header was handled. The
-// endpoint is kept so the generated client/openapi stay stable; it now always
-// reports 0. The whole int-flag endpoint group is vestigial and can be removed
-// in a follow-up codegen pass.
-func (c *Config) GetScenarioIntFlag(_ typ.RuleScenario, _ string) int {
-	return 0
+// Generic infra for scenario-level integer flags: the HTTP int-flag endpoint
+// routes through here. No keys are currently registered (session_affinity moved
+// to a rule-only flag), so it returns 0; adding a future scenario int flag is
+// just a new case in the switch.
+func (c *Config) GetScenarioIntFlag(scenario typ.RuleScenario, flagName string) int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	config := c.scenarioConfigLocked(scenario)
+	if config == nil {
+		return 0
+	}
+	switch flagName {
+	// No scenario-level int flags currently registered; add cases here.
+	default:
+		return 0
+	}
 }
 
-// SetScenarioIntFlag sets an integer flag value for a scenario. See
-// GetScenarioIntFlag: no scenario-level integer flags remain, so every flag is
-// rejected.
-func (c *Config) SetScenarioIntFlag(_ typ.RuleScenario, flagName string, _ int) error {
-	return fmt.Errorf("unknown int flag name: %s", flagName)
+// SetScenarioIntFlag sets an integer flag value for a scenario.
+//
+// Generic infra (see GetScenarioIntFlag). With no keys registered every flag is
+// rejected; adding a future scenario int flag is just a new case in the switch.
+func (c *Config) SetScenarioIntFlag(scenario typ.RuleScenario, flagName string, value int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Find or create scenario config
+	var config *typ.ScenarioConfig
+	for i := range c.Scenarios {
+		if c.Scenarios[i].Scenario == scenario {
+			config = &c.Scenarios[i]
+			break
+		}
+	}
+
+	if config == nil {
+		newConfig := typ.ScenarioConfig{
+			Scenario:   scenario,
+			Flags:      typ.ScenarioFlags{},
+			Extensions: make(map[string]interface{}),
+		}
+		c.Scenarios = append(c.Scenarios, newConfig)
+		config = &c.Scenarios[len(c.Scenarios)-1]
+	}
+
+	switch flagName {
+	// No scenario-level int flags currently registered; add cases here, e.g.
+	//   case FlagFoo:
+	//       config.Flags.Foo = value
+	//       return c.Save()
+	default:
+		return fmt.Errorf("unknown int flag name: %s", flagName)
+	}
 }
 
 // GetScenarioExtensionBool returns a boolean value from scenario extensions.
