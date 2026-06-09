@@ -73,8 +73,17 @@ interface PresetProviderFormDialogProps {
     /** Pass true for local providers: token field stays editable but is not required. */
     optionalEditableToken?: boolean;
     /** When true, the user entered via "Custom endpoint" — hide the provider
-     *  dropdown and show a plain URL text field instead. */
+     *  dropdown and show a plain URL text field instead. Custom endpoints are
+     *  strictly single-protocol. */
     customMode?: boolean;
+    /** When true, the user entered via "Fusion endpoint" — show two URL fields
+     *  (OpenAI + Anthropic) under one key and always save a single fused record.
+     *  No protocol selector, no topology toggle. */
+    fusionMode?: boolean;
+    /** Edit-mode upgrade: convert a single custom provider into a fusion one. */
+    onConvertToFusion?: () => void;
+    /** Edit-mode downgrade: convert a fusion provider back to a single endpoint. */
+    onConvertToSingle?: () => void;
 }
 
 const ProviderFormDialog = ({
@@ -90,9 +99,16 @@ const ProviderFormDialog = ({
                                 isFirstProvider = false,
                                 optionalEditableToken = false,
                                 customMode = false,
+                                fusionMode = false,
+                                onConvertToFusion,
+                                onConvertToSingle,
                             }: PresetProviderFormDialogProps) => {
     const {t} = useTranslation();
-    const defaultTitle = mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle');
+    const defaultTitle = fusionMode
+        ? (mode === 'add'
+            ? t('providerDialog.fusionForm.title', {defaultValue: 'Add Fusion endpoint'})
+            : t('providerDialog.fusionForm.editTitle', {defaultValue: 'Edit Fusion endpoint'}))
+        : (mode === 'add' ? t('providerDialog.addTitle') : t('providerDialog.editTitle'));
     const defaultSubmitText = mode === 'add' ? t('providerDialog.addButton') : t('common.saveChanges');
 
     const [verifying, setVerifying] = useState(false);
@@ -113,12 +129,10 @@ const ProviderFormDialog = ({
     const [createFusionProvider, setCreateFusionProvider] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [baseUrlError, setBaseUrlError] = useState(false);
-    // Custom-endpoint fusion: when the user has a second, distinct Anthropic URL.
-    // Default collapsed (single URL serves both). `anthropicUrlValue` mirrors the
-    // second field locally so typing stays snappy; it is committed to
-    // `data.apiBaseAnthropic` on blur / submit.
-    const [showSecondUrl, setShowSecondUrl] = useState(false);
-    const [anthropicUrlValue, setAnthropicUrlValue] = useState('');
+    // Fusion-form local mirrors for the two URL fields (snappy typing; committed
+    // to data.apiBaseOpenAI / data.apiBaseAnthropic on blur / submit).
+    const [fusOpenAIUrl, setFusOpenAIUrl] = useState('');
+    const [fusAnthropicUrl, setFusAnthropicUrl] = useState('');
     // Whether the provider being edited already has both fusion URLs stored.
     const [isExistingFusion, setIsExistingFusion] = useState(false);
     // Snapshot of fusion URLs captured on dialog open, used for downgrade/revert.
@@ -180,14 +194,10 @@ const ProviderFormDialog = ({
 
         setVerificationResult(null);
         setBaseUrlError(false);
-        // Seed the custom second-URL state. An existing custom fusion provider
-        // (both URLs stored, Anthropic differing) opens with the second field
-        // revealed; a fresh add starts collapsed.
-        setAnthropicUrlValue(data.apiBaseAnthropic || '');
-        setShowSecondUrl(
-            !!data.apiBaseAnthropic &&
-            data.apiBaseAnthropic !== (data.apiBaseOpenAI || data.apiBase)
-        );
+        // Seed the fusion-form URL mirrors. By convention apiBase carries the
+        // OpenAI URL, so fall back to it when apiBaseOpenAI is empty.
+        setFusOpenAIUrl(data.apiBaseOpenAI || data.apiBase || '');
+        setFusAnthropicUrl(data.apiBaseAnthropic || '');
         // Edit mode opens the advanced panel so users can see/change existing settings.
         setAdvancedOpen(mode === 'edit');
         // Hide the optional name field on each add-mode open; edit-mode keeps
@@ -264,7 +274,7 @@ const ProviderFormDialog = ({
             setUseGlobalProxy(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open]);
+    }, [open, fusionMode]);
 
     // Helper: push protocol-related fields to parent in one batch.
     // Called only from user-driven handlers (not from a render-triggered effect).
@@ -321,22 +331,14 @@ const ProviderFormDialog = ({
                     cb('apiBaseOpenAI', '');
                     cb('apiBaseAnthropic', '');
                 }
-            } else if (customMode) {
-                // Custom endpoint: the URL text fields own apiBase (OpenAI/primary)
-                // and apiBaseAnthropic (second field), so don't clobber them here.
-                // When the user drops back to a single protocol, clear the unused
-                // fusion field so the single-protocol payload stays clean.
-                cb('apiBaseOpenAI', '');
-                if (!(nextOpenAI && nextAnthropic)) {
-                    if (!nextAnthropic) cb('apiBaseAnthropic', '');
-                }
             } else {
-                // Free-form non-custom (rare) — fusion requires a known template.
+                // Free-form / custom single endpoint — no fusion fields here.
+                // (Two-endpoint fusion is configured via the dedicated Fusion form.)
                 cb('apiBaseOpenAI', '');
                 cb('apiBaseAnthropic', '');
             }
         },
-        [createFusionProvider, customMode]
+        [createFusionProvider]
     );
 
     const handleUseGlobalProxyChange = (checked: boolean) => {
@@ -378,6 +380,16 @@ const ProviderFormDialog = ({
     const toggleOpenAIProtocol = () => {
         if (effectiveLocked) return;
         if (selectedProvider && !selectedProvider.supportsOpenAI) return;
+        // Custom endpoints are strictly single-protocol: selecting one clears the
+        // other; the active option can't be unselected (radio semantics).
+        if (customMode) {
+            if (protocolOpenAI) return;
+            setProtocolOpenAI(true);
+            setProtocolAnthropic(false);
+            setVerificationResult(null);
+            syncProtocolsToParent(true, false, selectedProvider);
+            return;
+        }
         const next = !protocolOpenAI;
         // Prevent deselecting the last protocol on a fusion provider.
         if (isExistingFusion && !next && !protocolAnthropic) return;
@@ -393,6 +405,14 @@ const ProviderFormDialog = ({
     const toggleAnthropicProtocol = () => {
         if (effectiveLocked) return;
         if (selectedProvider && !selectedProvider.supportsAnthropic) return;
+        if (customMode) {
+            if (protocolAnthropic) return;
+            setProtocolAnthropic(true);
+            setProtocolOpenAI(false);
+            setVerificationResult(null);
+            syncProtocolsToParent(false, true, selectedProvider);
+            return;
+        }
         const next = !protocolAnthropic;
         // Prevent deselecting the last protocol on a fusion provider.
         if (isExistingFusion && !next && !protocolOpenAI) return;
@@ -498,13 +518,13 @@ const ProviderFormDialog = ({
         if (selectedProvider) {
             return selectedProvider.alias || selectedProvider.name;
         }
-        const raw = data.apiBase || providerInputValue || '';
+        const raw = (fusionMode ? fusOpenAIUrl : data.apiBase) || providerInputValue || '';
         try {
             const host = new URL(raw).hostname;
             if (host) return host;
         } catch { /* not a URL */ }
         return t('providerDialog.keyName.fallback', {defaultValue: 'Custom Provider'});
-    }, [selectedProvider, data.apiBase, providerInputValue, t]);
+    }, [selectedProvider, fusionMode, fusOpenAIUrl, data.apiBase, providerInputValue, t]);
 
     // Ensure a name exists before submit/verify. Writes back to parent so the
     // submit payload carries the generated value.
@@ -557,6 +577,39 @@ const ProviderFormDialog = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        const resolved: Partial<EnhancedProviderFormData> = {};
+
+        if (fusionMode) {
+            // Fusion form: two URLs, one key, always a single fused record.
+            const openai = fusOpenAIUrl.trim();
+            const anthropic = fusAnthropicUrl.trim();
+            if (!openai || !anthropic) {
+                setBaseUrlError(true);
+                return;
+            }
+            const cb = onChangeRef.current;
+            cb('apiBaseOpenAI', openai);
+            cb('apiBaseAnthropic', anthropic);
+            cb('apiBase', openai);
+            cb('apiStyle', 'openai');
+            cb('protocols', ['openai', 'anthropic']);
+            cb('createFusionProvider', true);
+            resolved.apiBaseOpenAI = openai;
+            resolved.apiBaseAnthropic = anthropic;
+            resolved.apiBase = openai;
+            resolved.apiStyle = 'openai';
+            (resolved as any).protocols = ['openai', 'anthropic'];
+            resolved.createFusionProvider = true;
+            resolved.name = ensureName();
+            setSubmitting(true);
+            try {
+                await onSubmit(e, resolved);
+            } finally {
+                setSubmitting(false);
+            }
+            return;
+        }
+
         const effectiveBase = data.apiBase || providerInputValue;
         if (!effectiveBase.trim()) {
             setBaseUrlError(true);
@@ -568,7 +621,6 @@ const ProviderFormDialog = ({
         // parent's submit closure would otherwise read stale values — that's
         // why a free-typed provider could not be added without first clicking
         // "Test Connection" (which triggered extra renders that flushed state).
-        const resolved: Partial<EnhancedProviderFormData> = {};
 
         // Make sure any free-form text in the provider input is committed before submit.
         if (!selectedProvider && data.apiBase !== providerInputValue) {
@@ -576,15 +628,6 @@ const ProviderFormDialog = ({
             onChangeRef.current('providerBaseUrls', undefined);
             resolved.apiBase = providerInputValue;
             (resolved as any).providerBaseUrls = undefined;
-        }
-
-        // Commit a custom second (Anthropic) URL that may not have blurred yet.
-        if (
-            customMode && protocolOpenAI && protocolAnthropic && showSecondUrl &&
-            data.apiBaseAnthropic !== anthropicUrlValue
-        ) {
-            onChangeRef.current('apiBaseAnthropic', anthropicUrlValue);
-            resolved.apiBaseAnthropic = anthropicUrlValue;
         }
 
         resolved.name = ensureName();
@@ -608,7 +651,8 @@ const ProviderFormDialog = ({
         }
     };
 
-    const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
+    // Fusion form implies both protocols; its own URL validation gates submit.
+    const hasAnyProtocol = fusionMode || protocolOpenAI || protocolAnthropic;
 
     // Persistent /v1 suffix hint: shown in custom mode when an OpenAI
     // protocol is selected and the user has typed a URL that doesn't already
@@ -631,10 +675,12 @@ const ProviderFormDialog = ({
     const hasBothBaseUrls = !!selectedProvider?.baseUrlOpenAI && !!selectedProvider?.baseUrlAnthropic;
     // add mode: shown when both protocols are selected
     // edit mode: shown for non-fusion providers when the template supports both sides (upgrade path)
-    const showFusionToggle = mode === 'add'
+    // Fusion toggle / topology hint are template-only concerns (presets keep the
+    // split-vs-merge choice). Custom and fusion paths never show them.
+    const showFusionToggle = !customMode && !fusionMode && (mode === 'add'
         ? (protocolOpenAI && protocolAnthropic)
-        : (!isExistingFusion && hasBothBaseUrls);
-    const showTopologyHint = protocolOpenAI && protocolAnthropic && (hasBothBaseUrls || customMode);
+        : (!isExistingFusion && hasBothBaseUrls));
+    const showTopologyHint = !customMode && !fusionMode && protocolOpenAI && protocolAnthropic && hasBothBaseUrls;
     const willMergeBaseUrls = createFusionProvider;
 
     return (
@@ -661,8 +707,53 @@ const ProviderFormDialog = ({
                             </Alert>
                         )}
 
-                        {customMode ? (
-                          <Stack spacing={1}>
+                        {fusionMode ? (
+                          <Stack spacing={2}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label={t('providerDialog.customFusion.openAILabel')}
+                                placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
+                                value={fusOpenAIUrl}
+                                onChange={(e) => {
+                                    setFusOpenAIUrl(e.target.value);
+                                    if (e.target.value.trim()) setBaseUrlError(false);
+                                    setVerificationResult(null);
+                                }}
+                                onBlur={() => onChangeRef.current('apiBaseOpenAI', fusOpenAIUrl)}
+                                required
+                                error={baseUrlError && !fusOpenAIUrl.trim()}
+                            />
+                            <TextField
+                                size="small"
+                                fullWidth
+                                label={t('providerDialog.customFusion.anthropicLabel')}
+                                placeholder={t('providerDialog.fusionForm.anthropicPlaceholder', {defaultValue: 'https://api.example.com/anthropic'})}
+                                value={fusAnthropicUrl}
+                                onChange={(e) => {
+                                    setFusAnthropicUrl(e.target.value);
+                                    if (e.target.value.trim()) setBaseUrlError(false);
+                                    setVerificationResult(null);
+                                }}
+                                onBlur={() => onChangeRef.current('apiBaseAnthropic', fusAnthropicUrl)}
+                                required
+                                error={baseUrlError && !fusAnthropicUrl.trim()}
+                                helperText={t('providerDialog.fusionForm.help', {defaultValue: 'Both protocols share the API key below. Inbound requests are routed to the matching endpoint.'})}
+                            />
+                            {mode === 'edit' && onConvertToSingle && (
+                                <Link
+                                    component="button"
+                                    type="button"
+                                    variant="caption"
+                                    underline="hover"
+                                    sx={{alignSelf: 'flex-start'}}
+                                    onClick={onConvertToSingle}
+                                >
+                                    {t('providerDialog.fusionForm.convertToSingle', {defaultValue: 'Convert to a single endpoint'})}
+                                </Link>
+                            )}
+                          </Stack>
+                        ) : customMode ? (
                             <Tooltip
                                 open={showV1Hint}
                                 title={
@@ -719,13 +810,7 @@ const ProviderFormDialog = ({
                                 <TextField
                                     size="small"
                                     fullWidth
-                                    label={
-                                        protocolOpenAI && protocolAnthropic
-                                            ? (showSecondUrl
-                                                ? t('providerDialog.customFusion.openAILabel')
-                                                : t('providerDialog.customFusion.bothLabel'))
-                                            : t('providerDialog.provider.label')
-                                    }
+                                    label={t('providerDialog.provider.label')}
                                     placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
                                     value={providerInputValue}
                                     onChange={(e) => {
@@ -744,64 +829,6 @@ const ProviderFormDialog = ({
                                     helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
                                 />
                             </Tooltip>
-
-                            {/* Custom fusion: a second, distinct Anthropic endpoint.
-                                Only relevant once both protocols are selected. */}
-                            {protocolOpenAI && protocolAnthropic && (
-                                showSecondUrl ? (
-                                    <>
-                                        <TextField
-                                            size="small"
-                                            fullWidth
-                                            label={t('providerDialog.customFusion.anthropicLabel')}
-                                            placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
-                                            value={anthropicUrlValue}
-                                            onChange={(e) => {
-                                                setAnthropicUrlValue(e.target.value);
-                                                setVerificationResult(null);
-                                            }}
-                                            onBlur={() => {
-                                                if (data.apiBaseAnthropic !== anthropicUrlValue) {
-                                                    onChangeRef.current('apiBaseAnthropic', anthropicUrlValue);
-                                                }
-                                            }}
-                                        />
-                                        <Link
-                                            component="button"
-                                            type="button"
-                                            variant="caption"
-                                            underline="hover"
-                                            sx={{alignSelf: 'flex-start'}}
-                                            onClick={() => {
-                                                setShowSecondUrl(false);
-                                                setAnthropicUrlValue('');
-                                                onChangeRef.current('apiBaseAnthropic', '');
-                                                setVerificationResult(null);
-                                            }}
-                                        >
-                                            {t('providerDialog.customFusion.sameLink')}
-                                        </Link>
-                                    </>
-                                ) : (
-                                    <Link
-                                        component="button"
-                                        type="button"
-                                        variant="caption"
-                                        underline="hover"
-                                        sx={{alignSelf: 'flex-start'}}
-                                        onClick={() => {
-                                            const seed = data.apiBase || providerInputValue;
-                                            setShowSecondUrl(true);
-                                            setAnthropicUrlValue(seed);
-                                            onChangeRef.current('apiBaseAnthropic', seed);
-                                            setVerificationResult(null);
-                                        }}
-                                    >
-                                        {t('providerDialog.customFusion.differsLink')}
-                                    </Link>
-                                )
-                            )}
-                          </Stack>
                         ) : (
                             <ProviderAutocomplete
                                 options={allProviders}
@@ -835,16 +862,33 @@ const ProviderFormDialog = ({
                             }}
                         />
 
-                        <ProtocolSelector
-                            selectedProvider={selectedProvider}
-                            protocolOpenAI={protocolOpenAI}
-                            protocolAnthropic={protocolAnthropic}
-                            fusionLocked={effectiveLocked}
-                            openAICapabilities={openAICapabilities}
-                            onToggleOpenAI={toggleOpenAIProtocol}
-                            onToggleAnthropic={toggleAnthropicProtocol}
-                            recommendOpenAI={customMode}
-                        />
+                        {!fusionMode && (
+                            <ProtocolSelector
+                                selectedProvider={selectedProvider}
+                                protocolOpenAI={protocolOpenAI}
+                                protocolAnthropic={protocolAnthropic}
+                                fusionLocked={effectiveLocked}
+                                singleSelect={customMode}
+                                openAICapabilities={openAICapabilities}
+                                onToggleOpenAI={toggleOpenAIProtocol}
+                                onToggleAnthropic={toggleAnthropicProtocol}
+                                recommendOpenAI={customMode}
+                            />
+                        )}
+
+                        {/* Edit-mode upgrade: turn a single endpoint into a fusion one. */}
+                        {mode === 'edit' && !fusionMode && data.authType !== 'oauth' && onConvertToFusion && (
+                            <Link
+                                component="button"
+                                type="button"
+                                variant="caption"
+                                underline="hover"
+                                sx={{alignSelf: 'flex-start'}}
+                                onClick={onConvertToFusion}
+                            >
+                                {t('providerDialog.providerSingle.convertToFusion', {defaultValue: 'Add an Anthropic endpoint (make it a Fusion provider)'})}
+                            </Link>
+                        )}
 
                         {showFusionToggle && (
                             <FusionToggle

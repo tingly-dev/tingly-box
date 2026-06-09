@@ -272,11 +272,18 @@ export default {
       "outcomeMerged": "Will keep 1 base URL serving both OpenAI and Anthropic."
     },
     "customFusion": {
-      "bothLabel": "Base URL (OpenAI & Anthropic)",
       "openAILabel": "OpenAI Base URL",
-      "anthropicLabel": "Anthropic Base URL",
-      "differsLink": "Anthropic endpoint differs?",
-      "sameLink": "Use the same URL"
+      "anthropicLabel": "Anthropic Base URL"
+    },
+    "fusionForm": {
+      "title": "Add Fusion endpoint",
+      "editTitle": "Edit Fusion endpoint",
+      "anthropicPlaceholder": "https://api.example.com/anthropic",
+      "help": "Both protocols share the API key below. Inbound requests are routed to the matching endpoint.",
+      "convertToSingle": "Convert to a single endpoint"
+    },
+    "providerSingle": {
+      "convertToFusion": "Add an Anthropic endpoint (make it a Fusion provider)"
     },
     "keyName": {
       "label": "Name",
