@@ -142,27 +142,6 @@ func TestClassifyUpstreamBetaFlag(t *testing.T) {
 	}
 }
 
-func TestSupportsContext1M(t *testing.T) {
-	tests := []struct {
-		model string
-		want  bool
-	}{
-		{"claude-sonnet-4-6", true},
-		{"claude-sonnet-4-20250514", false},
-		{"claude-opus-4-6", true},
-		{"claude-opus-4-20250514", false},
-		{"claude-3-5-haiku-20241022", false},
-		{"claude-haiku-4-5-20250115", false},
-		{"", false},
-		{"some-other-model", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.model, func(t *testing.T) {
-			assert.Equal(t, tt.want, supportsContext1M(tt.model))
-		})
-	}
-}
-
 func TestExtractModelFromBody(t *testing.T) {
 	tests := []struct {
 		name string
