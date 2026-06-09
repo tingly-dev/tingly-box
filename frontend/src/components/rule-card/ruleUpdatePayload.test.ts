@@ -59,6 +59,16 @@ describe('buildRuleUpdatePayload', () => {
         });
     });
 
+    it('round-trips the context_1m flag (snake_case, defaults to false)', () => {
+        // Default: no field on ConfigRecord → false on the wire.
+        const off = buildRuleUpdatePayload(baseRule, makeConfig());
+        expect(off.context_1m).toBe(false);
+
+        // Explicitly enabled.
+        const on = buildRuleUpdatePayload(baseRule, makeConfig({ context1M: true }));
+        expect(on.context_1m).toBe(true);
+    });
+
     it('drops services missing a provider or model', () => {
         const payload = buildRuleUpdatePayload(
             baseRule,

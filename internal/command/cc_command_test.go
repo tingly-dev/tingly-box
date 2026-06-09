@@ -15,7 +15,6 @@ func newTestConfig(t *testing.T) *config.Config {
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
 
 	ac, err := appconfig.NewAppConfig(appconfig.WithConfigDir(tempDir))
 	if err != nil {
@@ -24,12 +23,12 @@ func newTestConfig(t *testing.T) *config.Config {
 	return ac.GetGlobalConfig()
 }
 
-// setRequestModel updates the request_model of the rule with the given UUID.
-func setRequestModel(t *testing.T, cfg *config.Config, uuid, model string) {
+// setContext1M flips the Context1M flag on the rule with the given UUID.
+func setContext1M(t *testing.T, cfg *config.Config, uuid string, on bool) {
 	t.Helper()
 	for _, r := range cfg.GetRequestConfigs() {
 		if r.UUID == uuid {
-			r.RequestModel = model
+			r.Context1M = on
 			if err := cfg.UpdateRule(uuid, r); err != nil {
 				t.Fatalf("UpdateRule(%s): %v", uuid, err)
 			}
@@ -43,13 +42,20 @@ func TestResolveCCModelSlots_DefaultSeparate(t *testing.T) {
 	cfg := newTestConfig(t)
 
 	slots := resolveCCModelSlots(cfg, "", false)
-	// Built-in defaults flow through unchanged.
 	if got := slots["ANTHROPIC_DEFAULT_SONNET_MODEL"]; got != "tingly/cc-sonnet" {
 		t.Fatalf("sonnet slot = %q, want tingly/cc-sonnet", got)
 	}
 
-	// Toggling 1M on the sonnet rule flows the [1m] suffix into that slot only.
-	setRequestModel(t, cfg, config.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet"+typ.ContextWindow1MTag)
+	// Toggling Context1M on the sonnet rule appends [1m] to that slot only —
+	// the rule's request_model itself stays clean.
+	setContext1M(t, cfg, config.RuleUUIDBuiltinCCSonnet, true)
+	for _, r := range cfg.GetRequestConfigs() {
+		if r.UUID == config.RuleUUIDBuiltinCCSonnet {
+			if r.RequestModel != "tingly/cc-sonnet" {
+				t.Fatalf("rule.request_model dirtied after 1M toggle: %q", r.RequestModel)
+			}
+		}
+	}
 	slots = resolveCCModelSlots(cfg, "", false)
 	if got := slots["ANTHROPIC_DEFAULT_SONNET_MODEL"]; got != "tingly/cc-sonnet[1m]" {
 		t.Fatalf("sonnet slot after 1M = %q, want tingly/cc-sonnet[1m]", got)
@@ -62,7 +68,7 @@ func TestResolveCCModelSlots_DefaultSeparate(t *testing.T) {
 func TestResolveCCModelSlots_DefaultUnified(t *testing.T) {
 	cfg := newTestConfig(t)
 
-	setRequestModel(t, cfg, config.RuleUUIDBuiltinCC, "tingly/cc"+typ.ContextWindow1MTag)
+	setContext1M(t, cfg, config.RuleUUIDBuiltinCC, true)
 	slots := resolveCCModelSlots(cfg, "", true)
 	for _, k := range []string{
 		"ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -82,17 +88,16 @@ func TestResolveCCModelSlots_Profile(t *testing.T) {
 		t.Fatalf("CreateProfile: %v", err)
 	}
 
-	// Baseline: profile separate mode uses short names.
 	slots := resolveCCModelSlots(cfg, meta.ID, false)
 	if got := slots["ANTHROPIC_DEFAULT_SONNET_MODEL"]; got != "sonnet" {
 		t.Fatalf("profile sonnet slot = %q, want sonnet", got)
 	}
 
-	// Toggle 1M on the profile's sonnet rule (matched by short base name).
+	// Flip Context1M on the profile's sonnet rule (matched by short base name).
 	profiledScenario := typ.ProfiledScenarioName(typ.ScenarioClaudeCode, meta.ID)
 	for _, r := range cfg.GetRequestConfigs() {
 		if r.GetScenario() == profiledScenario && r.RequestModel == "sonnet" {
-			setRequestModel(t, cfg, r.UUID, "sonnet"+typ.ContextWindow1MTag)
+			setContext1M(t, cfg, r.UUID, true)
 			break
 		}
 	}
@@ -102,5 +107,29 @@ func TestResolveCCModelSlots_Profile(t *testing.T) {
 	}
 	if got := slots["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "haiku" {
 		t.Fatalf("profile haiku slot leaked 1M = %q", got)
+	}
+}
+
+func TestMatchRuleByModelAndScenario_StripsContext1M(t *testing.T) {
+	cfg := newTestConfig(t)
+
+	// Default built-in sonnet rule has request_model = "tingly/cc-sonnet".
+	// Client with 1M enabled will send "tingly/cc-sonnet[1m]" on the wire.
+	rule := cfg.MatchRuleByModelAndScenario("tingly/cc-sonnet[1m]", typ.ScenarioClaudeCode)
+	if rule == nil {
+		t.Fatal("expected to find rule by stripping [1m]")
+	}
+	if rule.UUID != config.RuleUUIDBuiltinCCSonnet {
+		t.Fatalf("matched wrong rule: %s", rule.UUID)
+	}
+	if rule.RequestModel != "tingly/cc-sonnet" {
+		t.Fatalf("rule.request_model = %q, want clean tingly/cc-sonnet", rule.RequestModel)
+	}
+
+	// Exact-match still works for legacy rules that hand-carry [1m]
+	// (defense in depth; canonical form is the flag).
+	rule = cfg.MatchRuleByModelAndScenario("tingly/cc-sonnet", typ.ScenarioClaudeCode)
+	if rule == nil || rule.UUID != config.RuleUUIDBuiltinCCSonnet {
+		t.Fatal("clean exact match broken")
 	}
 }

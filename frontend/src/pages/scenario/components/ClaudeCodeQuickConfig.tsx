@@ -437,10 +437,16 @@ interface DerivePrefsInput {
 }
 
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
+    // Compose env model strings from the rule's clean request_model plus a
+    // [1m] suffix when its Context1M flag is on. The flag is the source of
+    // truth; the suffix is just its env projection so Claude Code's client
+    // perceives 1M (see .design/one-m-context.md §2-§3).
     const modelForVariant = (variant: string, fallback: string): string => {
-        if (mode === 'unified') return rules[0]?.request_model || fallback;
-        const rule = rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
-        return rule?.request_model || fallback;
+        const rule = mode === 'unified'
+            ? rules[0]
+            : rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
+        const base = rule?.request_model || fallback;
+        return rule?.context_1m ? with1M(base, true) : base;
     };
 
     const isUnified = mode !== 'separate';

@@ -348,17 +348,15 @@ func buildTempSettings(env map[string]string, scenarioPath string) (string, erro
 }
 
 // resolveCCModelSlots returns the 5 Claude Code model env vars, deriving each
-// model string from the corresponding routing rule's request_model so that a
-// [1m] (1M context) suffix toggled on the rule flows into the launched env.
-// Falls back to tb's canonical model names when a rule is absent.
+// model name from the corresponding routing rule and appending the [1m]
+// context-window suffix when the rule has Context1M=true. Falls back to tb's
+// canonical model names when a rule is absent.
 //
 // Rule selection mirrors the other materializers:
 //   - default scenario (no profile): the stable built-in-cc[-variant] UUIDs,
 //     matching tbclient.resolveClaudeCodeModels (robust to request_model edits).
 //   - profile scenario: the profile's rules, matched by their short
 //     request_model base name (profile rules use uuid.New(), not stable UUIDs).
-//
-// The full request_model (including any [1m] suffix) is returned verbatim.
 func resolveCCModelSlots(cfg *config.Config, profileID string, unified bool) map[string]string {
 	isProfile := profileID != ""
 	scenario := typ.ScenarioClaudeCode
@@ -368,20 +366,24 @@ func resolveCCModelSlots(cfg *config.Config, profileID string, unified bool) map
 
 	rules := cfg.GetRequestConfigs()
 	// pick resolves a slot: for profiles match by short base name, otherwise by
-	// the stable built-in UUID. Returns the rule's full request_model (with any
-	// [1m] suffix) or the fallback when no rule matches.
+	// the stable built-in UUID. Returns request_model + optional [1m] suffix
+	// (driven by the rule's Context1M flag), or the fallback when no rule matches.
 	pick := func(uuid, shortName, fallback string) string {
 		for i := range rules {
 			r := rules[i]
 			if r.GetScenario() != scenario {
 				continue
 			}
+			match := false
 			if isProfile {
-				if typ.StripContextWindow1M(r.RequestModel) == shortName {
-					return r.RequestModel
+				if r.RequestModel == shortName {
+					match = true
 				}
 			} else if r.UUID == uuid {
-				return r.RequestModel
+				match = true
+			}
+			if match {
+				return typ.WithContextWindow1M(r.RequestModel, r.Context1M)
 			}
 		}
 		return fallback
@@ -389,10 +391,11 @@ func resolveCCModelSlots(cfg *config.Config, profileID string, unified bool) map
 
 	env := make(map[string]string, 5)
 	if unified {
-		v := pick(config.RuleUUIDBuiltinCC, "cc", "tingly/cc")
+		fallback := "tingly/cc"
 		if isProfile {
-			v = pick(config.RuleUUIDBuiltinCC, "cc", "cc")
+			fallback = "cc"
 		}
+		v := pick(config.RuleUUIDBuiltinCC, "cc", fallback)
 		env["ANTHROPIC_MODEL"] = v
 		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = v
 		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = v

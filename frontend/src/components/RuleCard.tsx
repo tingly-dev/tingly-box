@@ -19,9 +19,6 @@ import OneMReconfigDialog, { isOneMReconfigSuppressed } from '@/components/rule-
 import {
     formatRuleFlags,
     parseRuleFlags,
-    hasOneM,
-    withOneM,
-    isWildcardModelName,
     isClaudeCodeScenario,
 } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
@@ -279,12 +276,14 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         void updateField(configRecord, setConfigRecord, 'flags', next);
     }, [configRecord, updateField, setConfigRecord]);
 
-    // 1M toggle: write the [1m] suffix onto request_model (the single source of
-    // truth — Quick Config and the CLI/profile env all derive from it), then
-    // remind the user to re-materialize the client config.
-    const handleToggleOneM = useCallback((on: boolean) => {
+    // 1M toggle: flip the rule's Context1M flag (request_model stays clean).
+    // The reminder dialog only opens after the save completes — otherwise the
+    // user could click "Re-apply" before the new state is persisted and the
+    // server would generate env from a stale rule (Race 1).
+    const handleToggleOneM = useCallback(async (on: boolean) => {
         if (!configRecord) return;
-        void updateField(configRecord, setConfigRecord, 'requestModel', withOneM(configRecord.requestModel, on));
+        const ok = await updateField(configRecord, setConfigRecord, 'context1M', on);
+        if (!ok) return; // save failed → autoSave already toasted; don't nag
         if (!isOneMReconfigSuppressed()) {
             setOneMDialog({ open: true, enabled: on });
         }
@@ -292,9 +291,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     if (!configRecord) return null;
 
-    // 1M switch only applies to Claude Code rules with a concrete (non-wildcard)
-    // model name — the [1m] convention is meaningless elsewhere.
-    const showOneM = isClaudeCodeScenario(rule.scenario) && !isWildcardModelName(configRecord.requestModel);
+    // 1M switch only applies to Claude Code rules — the [1m] convention is a
+    // Claude Code client behavior. Wildcard rules are fine: the switch is a
+    // separate flag (not the model string), so it doesn't affect matching.
+    const showOneM = isClaudeCodeScenario(rule.scenario);
 
     const extensionsCard = (
         <RulePluginsCard
@@ -341,7 +341,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 extensionsCard={extensionsCard}
                 oneM={{
                     show: showOneM,
-                    on: hasOneM(configRecord.requestModel),
+                    on: configRecord.context1M === true,
                     onToggle: handleToggleOneM,
                 }}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}

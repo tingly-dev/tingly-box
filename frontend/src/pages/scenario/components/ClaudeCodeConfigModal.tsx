@@ -10,7 +10,7 @@ import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from '
 import type { ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 import type { AgentApplyResult } from './AgentSetupCard';
 import { api } from '@/services/api';
-import { hasOneM, withOneM } from '@/components/rule-card/utils';
+import { hasOneM } from '@/components/rule-card/utils';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -246,12 +246,14 @@ https.get("${downloadUrl}", (response) => {
 node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
     }, []);
 
-    // Persist the 1M state of each model slot onto the corresponding built-in
-    // Claude Code rule's request_model. The [1m] suffix is the single source of
-    // truth (see .design/one-m-context.md): the env we write to settings.json
-    // carries it, so the rule must carry it too or the incoming model won't
-    // exact-match its rule. Only the [1m] bit is synced — the model name itself
-    // stays decoupled from the rule, as before.
+    // Persist each slot's 1M intent onto the corresponding built-in rule's
+    // Context1M flag. The flag is the source of truth (see .design/one-m-context.md):
+    // when Apply writes [1m] into settings.json, the rule must agree or the UI
+    // (which shows the switch from the rule) will lie. The model name itself
+    // stays decoupled from the rule, per §5.5.
+    //
+    // Failures are aggregated and surfaced — partial syncs are NOT silently
+    // accepted (Race 2). Calls run in parallel for latency.
     const syncOneMToRules = React.useCallback(async () => {
         const slots: { env: keyof ClaudeCodePrefs; uuid: string }[] = [
             { env: 'ANTHROPIC_MODEL', uuid: 'built-in-cc-default' },
@@ -261,33 +263,47 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
             { env: 'CLAUDE_CODE_SUBAGENT_MODEL', uuid: 'built-in-cc-subagent' },
         ];
 
-        const syncRule = async (rule: any, on: boolean) => {
-            if (!rule) return;
-            const next = withOneM(rule.request_model, on);
-            if (next !== rule.request_model) {
-                await api.updateRule(rule.uuid, { ...rule, request_model: next });
-            }
+        // Returns an updateRule promise only if the rule's current Context1M
+        // disagrees with the form's intent — otherwise no-op.
+        const syncRule = (rule: any, on: boolean): Promise<any> | null => {
+            if (!rule) return null;
+            if (Boolean(rule.context_1m) === on) return null;
+            return api.updateRule(rule.uuid, { ...rule, context_1m: on });
         };
 
+        const ops: Promise<any>[] = [];
         if (configMode !== 'separate') {
-            // Unified: a single built-in-cc rule drives every slot.
-            await syncRule(rules[0], hasOneM(prefs.ANTHROPIC_MODEL));
-            return;
+            const p = syncRule(rules[0], hasOneM(prefs.ANTHROPIC_MODEL));
+            if (p) ops.push(p);
+        } else {
+            for (const slot of slots) {
+                const rule = rules.find((r: any) => r?.uuid === slot.uuid);
+                const p = syncRule(rule, hasOneM(prefs[slot.env]));
+                if (p) ops.push(p);
+            }
         }
-        for (const slot of slots) {
-            const rule = rules.find((r: any) => r?.uuid === slot.uuid);
-            await syncRule(rule, hasOneM(prefs[slot.env]));
+        if (ops.length === 0) return;
+        const results = await Promise.allSettled(ops);
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+            throw new Error(`failed to sync 1M state on ${failed} of ${ops.length} rule(s)`);
         }
     }, [configMode, rules, prefs]);
 
     const handleApply = async (installStatusLine: boolean) => {
         if (!onApplyWithPrefs) return;
-        // Sync rules first so routing matches the [1m] model name we're about to
-        // write into settings.json.
+        // Sync rules first. If sync fails (network, validation, etc.) we abort
+        // the env write — otherwise the env would say "[1m]" while the rule's
+        // Context1M flag stays false and the UI keeps lying. The user can
+        // retry: the previous round's successful syncs are no-ops next time.
         try {
             await syncOneMToRules();
-        } catch {
-            /* non-fatal: env apply still proceeds */
+        } catch (e: any) {
+            setApplyResult({
+                success: false,
+                error: `Could not sync 1M state to rules (${e?.message || 'unknown error'}). Apply aborted to avoid an env/rule mismatch — please retry.`,
+            });
+            return;
         }
         const result = await onApplyWithPrefs(prefs, installStatusLine);
         setApplyResult(result);

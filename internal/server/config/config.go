@@ -808,9 +808,16 @@ func IsWildcardRuleName(name string) bool {
 	return name == WildcardRuleName || name == WildcardRuleNameAlt
 }
 
-// MatchRuleByModelAndScenario finds a rule by model name with wildcard support
-// Priority: exact match > wildcard match
-// Returns nil if no rule matches
+// MatchRuleByModelAndScenario finds a rule by model name with wildcard support.
+// Priority: exact match > [1m]-stripped match > wildcard match.
+//
+// The [1m]-stripped layer exists because Claude Code, when 1M context is
+// enabled, appends a "[1m]" suffix to the model name it sends on the wire
+// (e.g. "tingly/cc-sonnet[1m]"). Rules persist a clean request_model plus a
+// separate Context1M flag, so a rule "tingly/cc-sonnet" with Context1M=true
+// is the canonical match for an incoming "tingly/cc-sonnet[1m]". The exact
+// branch still wins so any rule that literally carries the suffix (legacy or
+// hand-edited) keeps matching.
 func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.RuleScenario) *typ.Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -819,6 +826,16 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 	for _, rule := range c.Rules {
 		if rule.RequestModel == requestModel && rule.GetScenario() == scenario {
 			return &rule
+		}
+	}
+
+	// Then, try with the [1m] context-window suffix stripped — the canonical
+	// "rule = clean name, flag = context window" form.
+	if stripped := typ.StripContextWindow1M(requestModel); stripped != requestModel {
+		for _, rule := range c.Rules {
+			if rule.RequestModel == stripped && rule.GetScenario() == scenario {
+				return &rule
+			}
 		}
 	}
 

@@ -123,6 +123,7 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
                         active: ruleData.active,
                         description: ruleData.description,
                         flags: ruleData.flags,
+                        context_1m: ruleData.context_1m,
                         services: ruleData.services,
                         smart_enabled: ruleData.smart_enabled,
                         smart_routing: ruleData.smart_routing,

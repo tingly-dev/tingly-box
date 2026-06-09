@@ -18,6 +18,7 @@ export interface RuleUpdatePayload {
     active: boolean;
     description?: string;
     flags: RuleFlagsApi;
+    context_1m: boolean;
     services: RuleUpdateService[];
     smart_enabled: boolean;
     smart_routing: SmartRouting[];
@@ -45,6 +46,7 @@ export function buildRuleUpdatePayload(
         active: config.active,
         description: config.description,
         flags: flagsToApi(config.flags),
+        context_1m: config.context1M === true,
         services: config.providers
             .filter((p) => p.provider && p.model)
             .map((provider) => ({

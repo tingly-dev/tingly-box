@@ -43,6 +43,10 @@ export interface ConfigRecord {
     providers: ConfigProvider[];
     description?: string;
     flags?: RuleFlags;
+    // 1M context window — config-time intent (see .design/one-m-context.md).
+    // Mirrored as rule.context_1m on the API; the generated Claude Code env
+    // appends [1m] to the model name based on this flag.
+    context1M?: boolean;
     // Smart routing fields
     smartEnabled?: boolean;
     smartRouting?: SmartRouting[];
@@ -119,6 +123,9 @@ export interface Rule {
     active?: boolean;
     description?: string;
     flags?: RuleFlagsApi;
+    // 1M context-window flag. The server appends [1m] to the model name in
+    // the generated client env when this is true. Keeps request_model clean.
+    context_1m?: boolean;
     services?: Array<{
         id?: string;
         uuid?: string;

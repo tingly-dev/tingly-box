@@ -46,67 +46,102 @@
 
 ---
 
-## 3. 决策:`[1m]` 进 `rule.RequestModel`,作为单一真源
+## 3. 决策:`Rule.Context1M` 布尔为真源,`[1m]` 只是 env 与 wire 上的投影
 
-把 `[1m]` 持久化进 `rule.RequestModel`,让它成为**唯一真源**;所有 cc 配置面
-都从它派生:
+`rule.request_model` 保持**干净的模型名**(`"tingly/cc-sonnet"`),1M 状态用
+**独立布尔字段 `Rule.Context1M`** 持久化。所有 cc 配置面都从这两块组合派生;
+server 入口在匹配时反向解析 `[1m]` 后缀,把它映射回干净 rule。
 
 ```
-            ┌───────────────── rule.RequestModel (SoT) ─────────────┐
-            │   built-in-cc-sonnet  /  profile pN 的 sonnet rule      │
-            │   request_model = "tingly/cc-sonnet[1m]"                │
-            └───────┬───────────────────────────────────┬───────────┘
-       派生 env      │                                    │  派生 env
-   (默认场景)        ▼                                    ▼   (profile)
-   prefs.ToEnv ─► ...[1m]                       generateCCEnv ─► ...[1m]
-                    │ 写 settings.json                    │ 写 <profile>.json
-                    ▼                                    ▼
-              Claude Code 读 env、按名字感知 [1m] → 发 context-1m beta
-                    │
-                    ▼ 回到 tingly:入站 model == rule.RequestModel(都带 [1m])
-              精确匹配命中(不动匹配路径)
-                    │
-                    ▼ ModelHeader 开关 / Quick Config 开关 / profile 启动
-              全部从同一个 rule.RequestModel 投影 → 自动联动
+            ┌──────────── Rule (SoT) ────────────┐
+            │  RequestModel: "tingly/cc-sonnet"   │ ← 始终干净
+            │  Context1M:    true                 │ ← 唯一真源
+            └────────┬──────────────────┬─────────┘
+   派生 env (默认)     │                  │  派生 env (profile)
+        ▼              │                  │       ▼
+   prefs.ToEnv         │                  │   generateCCEnv
+   "...sonnet[1m]"     │                  │   "...sonnet[1m]"
+        │ 写 settings.json                │  写 <profile>.json
+        ▼                                  ▼
+   Claude Code 读 env、按名字感知 [1m] → 发 context-1m beta
+        │
+        ▼  回到 tingly:入站 model = "tingly/cc-sonnet[1m]"
+   MatchRuleByModelAndScenario:
+     exact("tingly/cc-sonnet[1m]") ✗
+     → strip [1m] → exact("tingly/cc-sonnet") ✓ 命中干净 rule
+        │
+        ▼  Round tripper(上游 #1157 merge_beta_flags + 白名单):
+   client 发的 context-1m beta 被允许转发给 Anthropic
+        │
+        ▼  ModelHeader 开关 / Quick Config 开关 / profile 启动
+   全部读 rule.Context1M(干净 model + 干净开关)→ 自动联动
 ```
 
-**为什么选后缀进 request_model,而不是加独立布尔字段**(取舍):
+**为什么选独立布尔(改了!)**:
 
 | 选项 | 采纳 | 理由 |
 |---|---|---|
-| `[1m]` 进 `request_model` | ✅ | 单一字符串真源:它本就是 §5.4 "rule = env = wire = 匹配键"的同一个串。`[1m]` 顺着它流到 env、流回 wire、精确匹配自动命中——**不需要在入口 strip**。前端 `has1M`/`with1M` 已认后缀,几乎零改动反映。 |
-| Rule 加独立布尔 `Context1M` | ❌ | 模型身份与上下文窗口分两个真源,每个生成器要"组合"二者;且 env 带 `[1m]`、rule 干净 → 入口必须 strip `[1m]` 才能匹配。联动天然更弱。 |
-| RuleFlags 里加 flag | ❌ | rule flag 是"请求期链路行为"(见 `rule-flags.md`),这里是"env 生成输入",语义不符;且 `generateCCEnv` / `ToEnv` 不走请求期 flag 解析。 |
+| `Rule.Context1M bool` 独立字段 | ✅ | **`[1m]` 是配置展示效果,不是模型身份。**模型名保持干净 → 按 request_model 分组的统计/日志/dashboards 不被切成 `sonnet` vs `sonnet[1m]` 两份;`tb_client.resolveClaudeCodeModels` 等下游消费者拿到的也是干净串。两个字段的组合在 env 生成处一次完成(`WithContextWindow1M(model, flag)`),不会"半同步"。 |
+| `[1m]` 进 `request_model`(前版) | ❌ 已弃 | 看似单串真源,但污染 model identity;且把"路由匹配"与"上下文窗口语义"硬绑在同一个字符串里,任何按 request_model 分组的下游全要打补丁。 |
+| `RuleFlags` 里加 flag | ❌ | `RuleFlags` 是请求期 transform/ctx 注入(见 `rule-flags.md`),Context1M 是 env 生成+入口解析的 **config-time 数据**,不走那条流水线。 |
 
-代价:`request_model` 不再是纯净模型名。但它本是入站别名(真实上游模型在
-service 上,计费按 service 走),`[1m]` 漏到日志 / 用量里基本是装饰性、甚至
-能区分 1M 用量。影响面审计见 §6。
+代价:server 入口要做一次 `[1m]` strip 才能匹配 — 1 处代码(`MatchRuleByModelAndScenario`),覆盖整个站。换来 model identity 干净 + 双向投影解耦。
 
 ---
 
 ## 4. 后端改动
 
-### 4a. `generateCCEnv` 从 rule 派生(`internal/command/cc_command.go`)
+### 4a. 新增 `Rule.Context1M` 字段(`internal/typ/type.go`)
 
-- 新增可测 helper `resolveCCModelSlots(cfg, scenario, profileID, unified, isProfile) map[string]string`:
-  - 读取该 scenario 的 rules(默认场景 = `claude_code` 的 `built-in-cc*`;
-    profile = `ProfiledScenarioName(claude_code, profileID)` 的短名 rule)。
-  - 按槽位匹配 rule(默认场景按 `built-in-cc-<variant>` UUID;profile 按
-    `request_model` 的 **base 名**——比较时 strip `[1m]`),输出该 rule 的
-    **完整 `request_model`(含 `[1m]`)**。
-  - rule 缺失时回退到现有硬编码默认串(保持当前行为)。
-- `generateCCEnv` 签名改为接收 `slots map[string]string`,只负责拼装 env;
-  rule 读取逻辑下沉到 helper。call site(`cc_command.go:135`)已有
-  `globalConfig`。
-- unified:单条 `cc` / `tingly/cc` rule 的 `[1m]` 复制到全部 5 槽。
+```go
+type Rule struct {
+    ...
+    SmartEnabled bool `json:"smart_enabled"`
+    // Context1M is config-time data: env materialization adds [1m]; server
+    // entry strips [1m] for matching. RequestModel stays clean.
+    Context1M    bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
+    ...
+}
+```
+同步 `Rule.ToJSON()` 输出 `"context_1m"`。
 
-### 4b. rule 更新 API(已存在,无需新增)
+### 4b. 入口反向解析 `[1m]`(`internal/server/config/config.go`)
 
-复用 `POST /api/v1/rule/{uuid}`(`config.UpdateRule`,`config.go:644`;前端
-`api.updateRule`,`api.ts:469`)。1M 写回**不需要**新端点 / 新 swagger。
+`MatchRuleByModelAndScenario` 增加一层"strip 后再 exact"匹配:
 
-> 后端不新增字段、不动 routing、不动 transform。`[1m]` 只是 `request_model`
-> 的一部分,沿用既有精确匹配。
+```
+priority: exact(literal) > exact(strip [1m]) > wildcard
+```
+
+`exact(literal)` 在前是**防御层**——任何手工编辑或老配置里仍带 `[1m]` 的
+rule 也能匹配。canonical 路径(干净 rule + Context1M)走第二层。
+
+### 4c. `generateCCEnv` 派生(`internal/command/cc_command.go`)
+
+`resolveCCModelSlots` 用规则的干净 `request_model` + `Context1M` 组合:
+
+```go
+return typ.WithContextWindow1M(r.RequestModel, r.Context1M)
+```
+
+profile 匹配也回到直接 `r.RequestModel == shortName`(不再需要 strip)。
+
+### 4d. 迁移(`migration.go::migrate20260612`)
+
+幂等地把任何**仍在 `request_model` 里带 `[1m]`** 的旧 rule(来自本特性
+早期分支的中间形态)平移到新形态:
+
+```go
+if HasContextWindow1M(rule.RequestModel) {
+    rule.RequestModel = StripContextWindow1M(rule.RequestModel)
+    rule.Context1M = true
+}
+```
+
+### 4e. rule 更新 API(已存在)
+
+复用 `POST /api/v1/rule/{uuid}`(`config.UpdateRule`)。`Rule` 加字段后,
+`ShouldBindJSON(&rule)` 自动接受 `context_1m`,**无需新 swagger**。
 
 ---
 
@@ -168,81 +203,95 @@ env** 才看得到 `[1m]`,而 tingly-box 的 materialize 不是自动的。
 
 ---
 
-## 6. `[1m]` 流经 request_model 的影响面审计
+## 6. 影响面审计(新方案:`request_model` 永远干净)
 
 | 位置 | 行为 | 结论 |
 |---|---|---|
-| `config.go` 各 `RequestModel ==` 查找(733/746/772/785/798/821/865/895) | 两侧都带 `[1m]`,一致 | ✅ 命中 |
-| `handlers.go:292/350` 路由入口匹配 | 同上 | ✅ |
-| `migration.go:427/448` `== "*"` 通配 | `[1m]` ≠ `*` | ✅ 不误伤 |
-| `configapply/handler.go:654`、`tb_client.go:191`(用 RequestModel 构建 catalog/env) | 会带出 `[1m]` | ⚠️ 审计:Codex catalog / 状态行是否容忍;必要时这两处 strip |
-| 计费 / 用量(`model_request_handler.go`、`claude.models.json` 查价) | 计费按 **service 上游模型**,非 request_model | ⚠️ 确认查价不读 request_model;日志带 `[1m]` 视为可接受 |
+| `config.go` 各 `RequestModel ==` 查找(733/746/772/785/798/821/865/895) | rule 干净,入口的 `[1m]` 在 `MatchRuleByModelAndScenario` 里被 strip;其他 callsite 由 handlers 上游已通过 Match 解析过的 rule 对象传入,不会拿到带 `[1m]` 的串 | ✅ 一处 strip,全站受益 |
+| `handlers.go:292/350` 路由入口匹配 | 走 `MatchRuleByModelAndScenario` | ✅ |
+| `migration.go:427/448` `== "*"` 通配 | rule 永远不会是 `[1m]`,通配不受影响 | ✅ |
+| `configapply/handler.go:654`、`tb_client.go:191`(catalog / 状态行) | 拿到的是干净 `request_model` | ✅ 干净 → catalog/状态行不再泄露 `[1m]` |
+| 计费 / 用量、按 request_model 分组的统计 | 干净 → `sonnet` 不会被切成 `sonnet` vs `sonnet[1m]` | ✅ |
+| `migration.go::migrate20260612` | 一次性把旧形态 (`request_model` 带 `[1m]`) 平移到 `Context1M` 字段 | ✅ 幂等 |
 
 ---
 
 ## 7. 兼容 / 迁移
 
-- 老用户此前靠 settings.json 里临时 `[1m]` 的,rule 无后缀 → 升级后需**重新
-  开一次** 1M 开关(无法从 rule 反推,不做破坏性迁移)。release note 注明。
-- `init.go` / profile 种子规则继续不带 `[1m]`;后缀由用户开关添加,零迁移。
+- 来自本特性早期分支(`[1m]` 在 `request_model` 里)的旧配置:
+  `migrate20260612` 一次性平移到 `Context1M` + 干净 `request_model`,**用户
+  无感**。迁移幂等;后续 1M 开关只读写 `Context1M`。
+- 来自 main 的全新配置:`Context1M` 默认 false,行为不变。
+- 入口匹配:**双层** exact (literal → strip-1m) 保证手工编辑/老导出文件即使
+  仍带 `[1m]` 也能匹配。
 
 ---
 
-## 8. ⚠️ 明确不在本次范围:上游真正激活(beta 转发)
+## 8. 上游激活(✅ 由 upstream #1157 闭合)
 
-让**上游真正切到 1M** 还需 round tripper 转发 client 的
-`context-1m-2025-08-07` beta:`claude_round_tripper.go:386-421` 现在用硬编码
-常量 `anthropicBeta` 重建 header、把 client 发来的 beta 清掉
-(`406-408` 的合并逻辑被注释)。
+让上游真正切到 1M 需要 round tripper 把 client 发来的
+`context-1m-2025-08-07` beta 转发给 Anthropic。这部分由 **upstream `43a113c`
+(#1157)** 完成:`internal/client/claude_round_tripper.go` 现在用
+`mergeBetaFlags(...)` 合并 client 发来的 beta,并通过
+`claudeCodeAllowedUpstreamBetas` 白名单**显式包含** `context-1m-2025-08-07`
+作为指纹安全的 flag。
 
-本设计只解决 **表示 + 联动 + 路由命中**。在补上 beta 转发(把"覆盖"改成
-"合并")之前,OAuth → `api.anthropic.com` 这条链路上游不会真正生效;三方
-Anthropic 兼容 provider(非 OAuth 分支)可能本就透传。此项作为后续独立改动。
+端到端链路因此完整:
+```
+rule.Context1M=true → env 含 [1m] → CC 客户端按名感知 → 发 context-1m beta
+  → tingly round tripper mergeBetaFlags 放行 → Anthropic 收到 → 1M 上下文激活
+```
 
 ---
 
 ## 9. 测试点
 
-- `resolveCCModelSlots`:默认 / unified / separate / profile 四态;rule 带 /
-  不带 `[1m]`;rule 缺失回退默认。
-- `generateCCEnv`:给定 slots 正确产出 env(含 `[1m]`)。
-- 前端:`has1M` / `with1M` 幂等(已测);ModelHeader 1M 开关调 `updateRule`
-  的 payload 正确(加 / 去后缀、不动其余字段);"重新应用"按更新后 rules
-  重新 derive。
-- 回归:`tingly/cc-sonnet[1m]` 入站 → 精确命中该 rule(路由层单测)。
+后端(`internal/command/cc_command_test.go`):
+- `resolveCCModelSlots`:默认 / unified / separate / profile 四态;开关 `Context1M` 后
+  - 对应 slot 输出 `xxx[1m]`,其他 slot 干净
+  - rule.RequestModel **没有**被弄脏(始终干净)
+- `MatchRuleByModelAndScenario_StripsContext1M`:`tingly/cc-sonnet[1m]` 入站 →
+  命中 `built-in-cc-sonnet`(clean rule);clean 入站也命中。
+
+前端(`ruleUpdatePayload.test.ts`):
+- `context_1m` 在 payload 里(snake_case),默认 false,显式 true 时为 true。
+
+待补:Race 1/2 的并发测试(toggle → re-apply 紧邻;syncOneMToRules 部分失败)。
 
 ---
 
-## 9b. 实现落地状态(首版)
+## 9b. 实现落地状态(v2 — Context1M 字段)
 
-已实现:
+后端:
+- `Rule.Context1M bool`(`internal/typ/type.go`)+ `ToJSON` 输出。
+- `MatchRuleByModelAndScenario` 新增 strip-1m exact 层(`config.go`)。
+- `resolveCCModelSlots` 用 `WithContextWindow1M(model, flag)` 组合
+  (`cc_command.go`)。
+- `migrate20260612` 平移旧形态(`migration.go`)。
+- 单测覆盖匹配+四态 env 派生(`cc_command_test.go`)。
 
-- **真源助手**:`internal/typ/model_tag.go`(`ContextWindow1MTag` /
-  `HasContextWindow1M` / `StripContextWindow1M` / `WithContextWindow1M`)+
-  前端 `frontend/src/components/rule-card/utils.ts`(`ONE_M_SUFFIX` /
-  `hasOneM` / `stripOneM` / `withOneM` / `isClaudeCodeScenario`)。
-  `ClaudeCodeQuickConfig.tsx` 改为复用前端助手(别名 `has1M`/`with1M`),
-  消除重复实现。
-- **CLI / Profile env**:`cc_command.go` 新增 `resolveCCModelSlots`,
-  `generateCCEnv` 改为消费它。默认场景按 `built-in-cc[-variant]` UUID 取,
-  profile 按短名 base(strip `[1m]`)取,输出完整 `request_model`。覆盖
-  四态单测 `cc_command_test.go`。
-- **模型节点开关**:`ModelRequestHeader` 增 `oneM` prop(`UnifiedRoutingGraph`
-  透传),`RuleCard` 计算 `show/on/onToggle`,门控 `claude_code` 系 + 非
-  通配。toggle 走既有 `updateField('requestModel', withOneM(...))` 自动落库。
-- **Quick Config 联动**:`ClaudeCodeConfigModal.handleApply` 新增
-  `syncOneMToRules` —— Apply 时把每个槽位的 1M 状态(仅 `[1m]` 这一位)同步
-  到对应 built-in 规则的 `request_model`(先同步规则,再写 settings.json),
-  避免"env 带 `[1m]`、rule 不带 → 精确匹配失配"。模型名本身仍与 rule 解耦。
-- **re-config 弹窗**:`rule-card/OneMReconfigDialog.tsx`,默认/profile 双话术
-  + sessionStorage "本次不再提示"。先翻转后提示。
+前端:
+- `ConfigRecord.context1M` / `Rule.context_1m` 类型字段
+  (`RoutingGraphTypes.ts`)。
+- `ruleToConfigRecord` 读 `rule.context_1m`(`utils.ts`)。
+- `buildRuleUpdatePayload` 写 `context_1m`(`ruleUpdatePayload.ts`),
+  `useRuleCardHooks.autoSave` 回写父态时一并 echo。
+- `RuleCard.handleToggleOneM` 改 `context1M` 字段;**await** `updateField`
+  → 修复 Race 1;失败时不弹 dialog。
+- `RuleCard.showOneM` 只看 scenario,不再因通配模型隐藏(开关与名字解耦,
+  通配规则也能配 1M)。
+- `ClaudeCodeQuickConfig.derivePrefsFromRules` 改为 `rule.request_model +
+  (rule.context_1m ? '[1m]' : '')` 组合。
+- `ClaudeCodeConfigModal.syncOneMToRules` 写 `context_1m` 字段;**并行
+  Promise.allSettled + 失败抛出 + Apply 主动 abort** → 修复 Race 2;不再
+  默默"non-fatal continue"。
+- `OneMReconfigDialog` + 一键 Re-apply 链路保留,行为不变(`onReapply` 走
+  `getRules → derive → apply`;Race 1 修复后此处不再读到 stale rule)。
 
-暂缺(后续):
-
-- 弹窗的"一键重新应用"(`onReapply`)未接线——当前弹窗为信息提示型。接线
-  需 `UseClaudeCodePage` 提供"按更新后 rules 重新 derive + applyClaudeConfig"
-  回调,prop 传到 `RuleCard` → `OneMReconfigDialog`。
-- §8 的 beta 转发(上游真正激活)仍未做。
+测试:
+- 后端 `TestMatchRuleByModelAndScenario_StripsContext1M`、`TestResolveCCModelSlots_*` 全绿。
+- 前端 `ruleUpdatePayload.test.ts` 加 `context_1m` 往返断言。
+- TODO:Race 1/2 的端到端并发回归(需 Playwright + 模拟网络失败注入)。
 
 ## 10. cc-switch 借鉴
 

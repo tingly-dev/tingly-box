@@ -101,6 +101,7 @@ export function ruleToConfigRecord(rule: Rule): ConfigRecord {
         providers: providersList,
         description: rule.description,
         flags: apiToFlags(rule.flags),
+        context1M: (rule as any).context_1m === true,
         smartEnabled: rule.smart_enabled || false,
         smartRouting: smartRouting,
         lbTactic: rule.lb_tactic?.type,

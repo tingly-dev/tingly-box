@@ -542,6 +542,12 @@ type Rule struct {
 	Active   bool   `json:"active" yaml:"active"`
 	// Smart Routing Configuration
 	SmartEnabled bool `json:"smart_enabled" yaml:"smart_enabled"`
+	// Context1M requests the 1M context window. It is config-time data, not
+	// request-time behavior: the generated Claude Code env carries a [1m]
+	// suffix on the model name, the client then sends the context-1m beta,
+	// and the server strips [1m] when matching incoming requests to rules.
+	// Rule.RequestModel stays clean. See .design/one-m-context.md.
+	Context1M bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
 	// Deprecated: use Flags.SessionAffinity. Kept for backward compatibility
 	// with configs persisted before affinity moved into rule flags. Reads go
 	// through Rule.AffinityEnabled() which honors both.
@@ -584,6 +590,7 @@ func (r *Rule) ToJSON() interface{} {
 		"lb_tactic":      r.LBTactic,
 		"active":         r.Active,
 		"smart_enabled":  r.SmartEnabled,
+		"context_1m":     r.Context1M,
 		"smart_affinity": r.SmartAffinity,
 		"smart_routing":  r.SmartRouting,
 	}
