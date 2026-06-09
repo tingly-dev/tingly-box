@@ -215,6 +215,13 @@ func RuleFlagRegistry() []FlagSpec {
 			InheritanceMode: "or",
 		},
 		{
+			Key:         "context_1m",
+			Label:       "1M context",
+			Description: "Request the 1M (1,000,000-token) context window for this rule. Claude Code / Anthropic targets get the context-1m-2025-08-07 anthropic-beta flag (and the Quick Config appends the [1m] model-id suffix); Codex targets get a widened model-catalog context_window. The routed model is not validated — the request is sent and the upstream accepts or rejects it. Surfaced as a dedicated 1M switch on each rule card.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryApp,
+		},
+		{
 			Key:         "clean_header",
 			Label:       "Clean Header",
 			Description: "Strip x-anthropic-billing-header blocks from system messages before forwarding. Claude Code injects this header for its own billing; it must not leak to third-party providers. On by default for the built-in Claude Code rules, and automatically suppressed when the rule routes to a Claude OAuth provider (whose billing backend consumes the header). Still auto-enabled for claude_desktop during protocol transformation. Turn off only for native Anthropic fidelity.",

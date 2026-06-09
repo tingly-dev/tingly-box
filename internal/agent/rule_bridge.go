@@ -119,11 +119,12 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 		rawModels := aa.collectCodexRuleModels()
 		models := CollectCodexModels(rawModels)
 		fileResult, err = config.Apply(&aiagent.CodexParams{
-			CodexBaseURL: codexBaseURL,
-			APIKey:       apiKey,
-			Models:       models,
-			Prefs:        serverconfig.DefaultCodexPrefs(),
-			WriteCatalog: true,
+			CodexBaseURL:    codexBaseURL,
+			APIKey:          apiKey,
+			Models:          models,
+			Prefs:           serverconfig.DefaultCodexPrefs(),
+			WriteCatalog:    true,
+			Context1MModels: aa.collectCodexContext1MModels(),
 		})
 	}
 
@@ -191,6 +192,24 @@ func (aa *AgentApply) collectCodexRuleModels() []string {
 		models = append(models, rule.RequestModel)
 	}
 	return CollectCodexModels(models)
+}
+
+// collectCodexContext1MModels returns the set of active Codex-rule request
+// models whose context_1m flag is set. Keyed by request_model so it lines up
+// with the catalog slugs produced by collectCodexRuleModels / CollectCodexModels.
+func (aa *AgentApply) collectCodexContext1MModels() map[string]bool {
+	out := map[string]bool{}
+	for _, rule := range aa.config.GetRequestConfigs() {
+		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
+			continue
+		}
+		if rule.Flags.Context1M {
+			if m := strings.TrimSpace(rule.RequestModel); m != "" {
+				out[m] = true
+			}
+		}
+	}
+	return out
 }
 
 // getBaseURLAndToken returns the base URL and API token for configuration

@@ -23,6 +23,11 @@ type CodexParams struct {
 	// Caller is responsible for collecting and deduplicating these
 	Models []string
 
+	// Context1MModels marks which entries of Models requested the 1M context
+	// window (rule context_1m flag). Their catalog entries get a widened
+	// context_window. nil/empty leaves every model on the default.
+	Context1MModels map[string]bool
+
 	// Prefs holds the typed, whitelisted, user-tunable Codex config.toml keys
 	// (see serverconfig.CodexPrefs). nil means "use built-in defaults".
 	Prefs *serverconfig.CodexPrefs
@@ -59,7 +64,7 @@ func (c *CodexConfig) Apply(paramsInterface interface{}) (*ApplyAgentResult, err
 	// In ChatGPT mode the user is going direct-to-OpenAI; we don't touch
 	// config.toml — their existing model_provider / base_url stay intact.
 	if params.AuthMode != serverconfig.CodexAuthChatGPT {
-		configResult, err := serverconfig.ApplyCodexConfig(params.CodexBaseURL, params.Models, params.Prefs, params.WriteCatalog)
+		configResult, err := serverconfig.ApplyCodexConfig(params.CodexBaseURL, params.Models, params.Prefs, params.WriteCatalog, params.Context1MModels)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply Codex config: %w", err)
 		}

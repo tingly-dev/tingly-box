@@ -993,7 +993,10 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 //
 // The previous config.toml and catalog (if any) are backed up before being
 // rewritten.
-func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool) (*ApplyResult, error) {
+// oneM maps the model slugs (keys of models) that requested the 1M context
+// window to true; their catalog entries get a widened context_window. A nil or
+// empty map means every model keeps the conservative default.
+func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool, oneM map[string]bool) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1056,7 +1059,7 @@ func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeC
 				return result, nil
 			}
 		}
-		catalogBytes, err := RenderCodexModelCatalog(models)
+		catalogBytes, err := RenderCodexModelCatalog(models, oneM)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to render model catalog: %v", err)
 			return result, nil
@@ -1161,6 +1164,9 @@ const (
 	codexDefaultMaxContextWindow         = 200000
 	codexEffectiveContextWindowPercent   = 92
 	codexDefaultAutoCompactTokenLimitPct = 85
+	// codex1MContextWindow is the widened window used for catalog entries whose
+	// rule enabled the 1M context flag.
+	codex1MContextWindow = 1000000
 )
 
 // renderCodexModelCatalog produces the JSON payload for
@@ -1170,7 +1176,10 @@ const (
 // no verbosity knob). Codex 0.124+ deserializes this into
 // `protocol::openai_models::ModelsResponse`; field names and value types must
 // stay in sync with that struct.
-func RenderCodexModelCatalog(models []string) ([]byte, error) {
+// oneM marks which slugs requested the 1M context window; their entries get
+// codex1MContextWindow instead of the conservative default. A nil/empty map
+// leaves every model on the default.
+func RenderCodexModelCatalog(models []string, oneM map[string]bool) ([]byte, error) {
 	// supported_reasoning_levels is Vec<ReasoningEffortPreset>, not a bare
 	// string list — each element is an {effort, description} object. Values
 	// mirror Codex's bundled catalog for GPT-5 so /model shows the familiar
@@ -1183,6 +1192,10 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 	}
 	entries := make([]map[string]interface{}, 0, len(models))
 	for _, model := range models {
+		contextWindow := codexDefaultContextWindow
+		if oneM[model] {
+			contextWindow = codex1MContextWindow
+		}
 		entries = append(entries, map[string]interface{}{
 			"slug":                             model,
 			"display_name":                     model,
@@ -1199,9 +1212,9 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 			"support_verbosity":                false,
 			"truncation_policy":                map[string]interface{}{"mode": "tokens", "limit": 10000},
 			"supports_parallel_tool_calls":     true,
-			"context_window":                   codexDefaultContextWindow,
-			"max_context_window":               codexDefaultMaxContextWindow,
-			"auto_compact_token_limit":         codexAutoCompactTokenLimit(codexDefaultContextWindow),
+			"context_window":                   contextWindow,
+			"max_context_window":               contextWindow,
+			"auto_compact_token_limit":         codexAutoCompactTokenLimit(contextWindow),
 			"effective_context_window_percent": codexEffectiveContextWindowPercent,
 			"experimental_supported_tools":     []string{},
 			"input_modalities":                 []string{"text", "image"},
