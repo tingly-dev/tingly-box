@@ -139,21 +139,30 @@ not in the map keep the conservative 200000 default.
 Flipping the 1M switch does not silently persist — it opens
 `OneMConfirmDialog`, which spells out what takes effect where and lets the user
 **Apply** or **Cancel** (cancel reverts: the switch is controlled by the flag,
-which is only written on confirm). The dialog is scenario-aware because 1M's
-effectiveness genuinely differs:
+which is only written on confirm). The flag is written first (gateway-effective
+immediately), then the agent's config file is re-applied so the CLI picks up 1M
+on its next start. Both CLI agents read their config at startup, so both need a
+re-apply + restart — the dialog is symmetric:
 
 | Scenario | What 1M needs | Dialog behavior |
 |---|---|---|
 | **Codex** | catalog rewrite + **codex restart** (the flag alone does nothing; only the catalog's context_window reaches codex) | Primary **Apply Codex config** → one-click `api.applyCodexConfig()` (merged, preserves user keys) → dialog flips to a **restart `codex`** reminder |
-| **Claude Code** | nothing — the gateway honors the rule flag on the **next request**, no apply / restart (the `[1m]` settings.json suffix is redundant) | Primary **Enable** commits the flag; copy states it's live immediately and points to Quick Config only if the user wants the settings.json sync |
+| **Claude Code** | `settings.json` rewrite + **Claude Code restart** (the CLI reads model config at startup) | Primary **Apply Claude Code config** → `applyClaudeCodeFromRules()` regenerates `settings.json` from the current rules (model slots carry `[1m]` per flag) via `api.applyClaudeConfig` → **restart Claude Code** reminder |
 | other (anthropic/openai) | gateway-immediate, no agent artifact | no dialog — the switch saves directly |
 
+Why apply-from-rules is safe for Claude Code: `api.applyClaudeConfig` already
+**replaces** the `settings.json` env block on every apply, and the Quick Config
+derives that env from the rules + tb defaults — there is no server-side merge of
+prior custom env. So a rule-card apply produces exactly what a default Quick
+Config apply would; it is not a new clobber. Users who customized non-model
+prefs still tune them in Quick Config. The rule card fetches the CC rules +
+scenario mode and reuses the same `derivePrefsFromRules` the Quick Config uses,
+so the `[1m]` derivation stays single-sourced.
+
 The honest core: the "must restart the agent" message attaches to **writing the
-agent's config files**, which only happens for Codex here. We do not claim a
-restart is needed for Claude Code (it isn't), and we do not auto-apply Claude
-Code's `settings.json` from the rule card (it requires the full Quick Config
-prefs, which the card does not have — applying with derived defaults would
-clobber the user's tunables).
+agent's config file**, which both Codex and Claude Code do here. (The gateway
+also honors the flag immediately, but the CLI only reflects 1M after it reloads
+its config — hence the restart.)
 
 ## 8. Touch list
 
