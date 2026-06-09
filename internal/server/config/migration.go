@@ -32,6 +32,64 @@ const (
 	RuleUUIDBuiltinClaudeDesktopHaiku45  = "builtin:claude_desktop:claude-haiku-4-5"
 )
 
+// --- Shared migration helpers -------------------------------------------------
+//
+// Several migrations seed or repair built-in rules with the same moves: look a
+// rule up by UUID, pull a template from DefaultRules, and copy a reference
+// rule's upstream services onto a freshly added rule. These helpers centralize
+// those moves so each migration reads as intent, not bookkeeping.
+
+// findRuleByUUID returns a pointer to the rule with the given UUID, or nil.
+func (c *Config) findRuleByUUID(uuid string) *typ.Rule {
+	for i := range c.Rules {
+		if c.Rules[i].UUID == uuid {
+			return &c.Rules[i]
+		}
+	}
+	return nil
+}
+
+// defaultRuleByUUID looks up a built-in rule template (from DefaultRules) by UUID.
+func defaultRuleByUUID(uuid string) (typ.Rule, bool) {
+	for _, r := range DefaultRules {
+		if r.UUID == uuid {
+			return r, true
+		}
+	}
+	return typ.Rule{}, false
+}
+
+// cloneServices returns a shallow copy of a load-balancing services slice
+// (nil for an empty input) so a seeded rule gets its own slice header rather
+// than aliasing the source rule's.
+func cloneServices(src []*loadbalance.Service) []*loadbalance.Service {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make([]*loadbalance.Service, len(src))
+	copy(dst, src)
+	return dst
+}
+
+// referenceServicesFor returns a copy of the services of the first rule whose
+// scenario matches one of the given scenarios and that has a non-empty service
+// list, or nil when none exists. Used to seed a new built-in rule with the same
+// upstream services the user already configured for a sibling scenario.
+func (c *Config) referenceServicesFor(scenarios ...typ.RuleScenario) []*loadbalance.Service {
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		if len(rule.Services) == 0 {
+			continue
+		}
+		for _, s := range scenarios {
+			if rule.Scenario.Is(s) {
+				return cloneServices(rule.Services)
+			}
+		}
+	}
+	return nil
+}
+
 func Migrate(c *Config) error {
 	migrate20251220(c)
 	migrate20251221(c)
@@ -45,9 +103,9 @@ func Migrate(c *Config) error {
 	migrate20260421(c) // Migrate profile unified model from "*" to "cc"
 	migrate20260502(c) // Remove wildcard (*) rules for smart_guide scenario
 	migrate20260513(c) // Add Claude Desktop built-in rules
-	migrate20260521(c) // Add Claude Desktop haiku-4-5 built-in rule
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
+	migrate20260521(c) // Add Claude Desktop haiku-4-5 built-in rule
 	migrate20260606(c) // Default SkipUsage on for the Xcode scenario
 	migrate20260610(c) // Seed default rule flags (claude_code_compat / clean_header / session_affinity) for CC / Desktop / Codex rules
 	return nil
@@ -159,12 +217,20 @@ func migrate20251221(c *Config) {
 	}
 }
 
+// migrate20251225 clamps any legacy JSON-config provider timeout above the max
+// to the cap. Runs before migrateProvidersToDB, so it only affects the one-time
+// JSON→DB import; once providers live in SQLite the JSON list is empty and this
+// is a no-op.
 func migrate20251225(c *Config) {
+	needsSave := false
 	for _, p := range c.Providers {
-		// second
-		if p.Timeout >= 30*60 {
+		if p.Timeout > int64(constant.DefaultMaxTimeout) {
 			p.Timeout = int64(constant.DefaultMaxTimeout)
+			needsSave = true
 		}
+	}
+	if needsSave {
+		_ = c.Save()
 	}
 }
 
@@ -214,17 +280,9 @@ func migrate20260110(c *Config) {
 		return
 	}
 
-	// Find the source rule (built-in-cc)
-	var fallbackRule *typ.Rule
-	for i := range c.Rules {
-		if c.Rules[i].UUID == RuleUUIDBuiltinCC {
-			fallbackRule = &c.Rules[i]
-			break
-		}
-	}
-
-	// If source rule doesn't exist or has no services, nothing to copy.
-	// Still mark as completed so we don't keep retrying on every restart.
+	// Source rule (built-in-cc). If it's missing or has no services there's
+	// nothing to copy — still mark completed so we don't retry every restart.
+	fallbackRule := c.findRuleByUUID(RuleUUIDBuiltinCC)
 	if fallbackRule == nil || len(fallbackRule.Services) == 0 {
 		c.markMigrationCompleted("20260110")
 		return
@@ -239,37 +297,23 @@ func migrate20260110(c *Config) {
 		RuleUUIDBuiltinCCSubagent,
 	}
 
-	defaultMap := map[string]typ.Rule{}
-
-	for _, targetUUID := range targetUUIDs {
-		for _, defaultRule := range DefaultRules {
-			if targetUUID == defaultRule.UUID {
-				defaultMap[targetUUID] = defaultRule
-			}
-		}
-	}
-
 	needsSave := false
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-
-		// Check if this is a target rule
-		var defaultRule typ.Rule
-		var ok bool
-		if defaultRule, ok = defaultMap[rule.UUID]; !ok {
+	for _, targetUUID := range targetUUIDs {
+		defaultRule, ok := defaultRuleByUUID(targetUUID)
+		if !ok {
 			continue
 		}
-
-		rule.Description = defaultRule.Description
-
-		// If services is not empty, skip
-		if len(rule.Services) > 0 {
+		target := c.findRuleByUUID(targetUUID)
+		if target == nil {
 			continue
 		}
+		target.Description = defaultRule.Description
 
-		// Copy services from fallback rule
-		rule.Services = make([]*loadbalance.Service, len(fallbackRule.Services))
-		copy(rule.Services, fallbackRule.Services)
+		// Only fill services when the target has none of its own.
+		if len(target.Services) > 0 {
+			continue
+		}
+		target.Services = cloneServices(fallbackRule.Services)
 		needsSave = true
 	}
 
@@ -303,22 +347,9 @@ func migrate20260210(c *Config) {
 		return
 	}
 
-	// Find required rules.
-	var haikuRule *typ.Rule
-	var subagentRule *typ.Rule
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		if rule.UUID == RuleUUIDBuiltinCCHaiku {
-			haikuRule = rule
-			continue
-		}
-		if rule.UUID == RuleUUIDBuiltinCCSubagent {
-			subagentRule = rule
-		}
-	}
-
 	// Without a haiku model, there's nothing to mirror.
 	// Mark as completed so we don't retry every restart.
+	haikuRule := c.findRuleByUUID(RuleUUIDBuiltinCCHaiku)
 	if haikuRule == nil {
 		c.markMigrationCompleted("20260210")
 		return
@@ -326,30 +357,22 @@ func migrate20260210(c *Config) {
 
 	needsSave := false
 
-	// Ensure subagent rule exists (add default if missing).
+	// Ensure subagent rule exists (add the default template if missing).
+	subagentRule := c.findRuleByUUID(RuleUUIDBuiltinCCSubagent)
 	if subagentRule == nil {
-		for _, defaultRule := range DefaultRules {
-			if defaultRule.UUID == RuleUUIDBuiltinCCSubagent {
-				c.Rules = append(c.Rules, defaultRule)
-				subagentRule = &c.Rules[len(c.Rules)-1]
-				needsSave = true
-				break
-			}
-		}
-		if subagentRule == nil {
+		defaultRule, ok := defaultRuleByUUID(RuleUUIDBuiltinCCSubagent)
+		if !ok {
 			c.markMigrationCompleted("20260210")
-			if needsSave {
-				_ = c.Save()
-			}
 			return
 		}
+		c.Rules = append(c.Rules, defaultRule)
+		subagentRule = &c.Rules[len(c.Rules)-1]
+		needsSave = true
 	}
 
-	// Keep subagent request model as-is; only mirror services.
-	// Mirror haiku's services if subagent has none.
+	// Keep subagent request model as-is; mirror haiku's services if it has none.
 	if len(subagentRule.Services) == 0 && len(haikuRule.Services) > 0 {
-		subagentRule.Services = make([]*loadbalance.Service, len(haikuRule.Services))
-		copy(subagentRule.Services, haikuRule.Services)
+		subagentRule.Services = cloneServices(haikuRule.Services)
 		needsSave = true
 	}
 
@@ -359,19 +382,14 @@ func migrate20260210(c *Config) {
 	}
 }
 
+// migrate20260306 adds the built-in Codex rule if it's missing.
 func migrate20260306(c *Config) {
-	for _, rule := range c.Rules {
-		if rule.UUID == RuleUUIDBuiltinCodex {
-			return
-		}
+	if c.findRuleByUUID(RuleUUIDBuiltinCodex) != nil {
+		return
 	}
-
-	for _, defaultRule := range DefaultRules {
-		if defaultRule.UUID == RuleUUIDBuiltinCodex {
-			c.Rules = append(c.Rules, defaultRule)
-			_ = c.Save()
-			return
-		}
+	if defaultRule, ok := defaultRuleByUUID(RuleUUIDBuiltinCodex); ok {
+		c.Rules = append(c.Rules, defaultRule)
+		_ = c.Save()
 	}
 }
 
@@ -385,20 +403,12 @@ func migrate20260416(c *Config) {
 		return
 	}
 
-	// Enable multi-tenant with default settings
-	// Only set values that are not already configured
-	if c.MultiTenantConfig.APITokenSecret == "" {
-		c.MultiTenantConfig.APITokenSecret = generateSecret()
-	}
-	if c.MultiTenantConfig.APITokenAlgorithm == "" {
-		c.MultiTenantConfig.APITokenAlgorithm = "HS256"
-	}
-	if c.MultiTenantConfig.APITokenIssuer == "" {
-		c.MultiTenantConfig.APITokenIssuer = "tingly-box"
-	}
-	// Always enable multi-tenant (this is the main purpose of the migration)
+	// All three token fields are empty (guaranteed by the guard above), so seed
+	// the defaults and enable multi-tenant — the main purpose of the migration.
+	c.MultiTenantConfig.APITokenSecret = generateSecret()
+	c.MultiTenantConfig.APITokenAlgorithm = "HS256"
+	c.MultiTenantConfig.APITokenIssuer = "tingly-box"
 	c.MultiTenantConfig.Enabled = true
-	// Keep global token enabled for backward compatibility
 
 	_ = c.Save()
 }
@@ -471,51 +481,27 @@ func migrate20260502(c *Config) {
 // - builtin:claude_desktop:claude-opus-4-6
 // - builtin:claude_desktop:claude-opus-4-7
 func migrate20260513(c *Config) {
+	desktopUUIDs := []string{
+		RuleUUIDBuiltinClaudeDesktopSonnet46,
+		RuleUUIDBuiltinClaudeDesktopOpus46,
+		RuleUUIDBuiltinClaudeDesktopOpus47,
+	}
+
+	// Seed new desktop rules with the services the user already uses for a
+	// sibling agent scenario (prefer claude_code, then codex).
+	refServices := c.referenceServicesFor(typ.ScenarioClaudeCode, typ.ScenarioCodex)
+
 	needsSave := false
-
-	// Check if Claude Desktop rules already exist
-	existingRules := map[string]bool{
-		RuleUUIDBuiltinClaudeDesktopSonnet46: false,
-		RuleUUIDBuiltinClaudeDesktopOpus46:   false,
-		RuleUUIDBuiltinClaudeDesktopOpus47:   false,
-	}
-
-	for _, rule := range c.Rules {
-		if _, exists := existingRules[rule.UUID]; exists {
-			existingRules[rule.UUID] = true
-		}
-	}
-
-	// Find a reference rule to copy services from (prefer claude_code or codex)
-	var referenceRule *typ.Rule
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		if rule.Scenario.Is(typ.ScenarioClaudeCode) || rule.Scenario.Is(typ.ScenarioCodex) {
-			if len(rule.Services) > 0 {
-				referenceRule = rule
-				break
-			}
-		}
-	}
-
-	// Add missing Claude Desktop rules
-	for _, defaultRule := range DefaultRules {
-		uuid := defaultRule.UUID
-		alreadyExists, exists := existingRules[uuid]
-		if !exists {
-			continue // Not a Claude Desktop rule
-		}
-
-		if alreadyExists {
+	for _, uuid := range desktopUUIDs {
+		if c.findRuleByUUID(uuid) != nil {
 			continue // Rule already exists, skip
 		}
-
-		// Add the rule
-		newRule := defaultRule
-		// Copy services from reference rule if available
-		if referenceRule != nil && len(referenceRule.Services) > 0 {
-			newRule.Services = make([]*loadbalance.Service, len(referenceRule.Services))
-			copy(newRule.Services, referenceRule.Services)
+		newRule, ok := defaultRuleByUUID(uuid)
+		if !ok {
+			continue
+		}
+		if services := cloneServices(refServices); services != nil {
+			newRule.Services = services
 		}
 
 		c.Rules = append(c.Rules, newRule)
@@ -534,39 +520,20 @@ func migrate20260513(c *Config) {
 	}
 }
 
-// migrate20260521 adds the claude-haiku-4-5 built-in rule for Claude Desktop
+// migrate20260521 adds the claude-haiku-4-5 built-in rule for Claude Desktop.
 func migrate20260521(c *Config) {
-	for _, rule := range c.Rules {
-		if rule.UUID == RuleUUIDBuiltinClaudeDesktopHaiku45 {
-			return
-		}
+	if c.findRuleByUUID(RuleUUIDBuiltinClaudeDesktopHaiku45) != nil {
+		return
 	}
 
-	var referenceRule *typ.Rule
-	for i := range c.Rules {
-		rule := &c.Rules[i]
-		if rule.Scenario.Is(typ.ScenarioClaudeDesktop) && len(rule.Services) > 0 {
-			referenceRule = rule
-			break
-		}
+	// Use the init.go template so this rule's flags/tactic stay in sync with the
+	// other built-in Claude Desktop rules instead of drifting from a local copy.
+	newRule, ok := defaultRuleByUUID(RuleUUIDBuiltinClaudeDesktopHaiku45)
+	if !ok {
+		return
 	}
-
-	newRule := typ.Rule{
-		UUID:         RuleUUIDBuiltinClaudeDesktopHaiku45,
-		Scenario:     typ.ScenarioClaudeDesktop,
-		RequestModel: "claude-haiku-4-5",
-		Description:  "Claude Desktop - Haiku 4.5 model for fast responses",
-		Services:     []*loadbalance.Service{},
-		LBTactic: typ.Tactic{
-			Type:   loadbalance.TacticAdaptive,
-			Params: typ.DefaultAdaptiveParams(),
-		},
-		Flags:  typ.RuleFlags{ClaudeCodeCompat: true, CleanHeader: true},
-		Active: true,
-	}
-	if referenceRule != nil && len(referenceRule.Services) > 0 {
-		newRule.Services = make([]*loadbalance.Service, len(referenceRule.Services))
-		copy(newRule.Services, referenceRule.Services)
+	if services := c.referenceServicesFor(typ.ScenarioClaudeDesktop); services != nil {
+		newRule.Services = services
 	}
 
 	c.Rules = append(c.Rules, newRule)
