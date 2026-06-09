@@ -687,6 +687,9 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 
 	models := collectCodexRuleModels(cfg)
 
+	// Build context windows map from rules for models with context_1m flag
+	contextWindows := config.BuildContextWindowsFromRules(cfg)
+
 	port := h.config.ServerPort
 	if port == 0 {
 		port = 12580
@@ -720,7 +723,7 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	if authMode == config.CodexAuthChatGPT {
 		configResult, err = config.ClearCodexGatewayConfig()
 	} else {
-		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
+		configResult, err = config.ApplyCodexConfigWithContextWindows(codexBaseURL, models, prefs, writeCatalog, contextWindows)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
@@ -794,6 +797,9 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 
 	models := collectCodexRuleModels(cfg)
 
+	// Build context windows map from rules for models with context_1m flag
+	contextWindows := config.BuildContextWindowsFromRules(cfg)
+
 	port := h.config.ServerPort
 	if port == 0 {
 		port = 12580
@@ -827,7 +833,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 		Models:     models,
 	}
 	if writeCatalog && len(models) > 0 {
-		catalogBytes, err := config.RenderCodexModelCatalog(models)
+		catalogBytes, err := config.RenderCodexModelCatalog(models, contextWindows)
 		if err == nil {
 			resp.CatalogJson = string(catalogBytes)
 		}

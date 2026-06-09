@@ -14,6 +14,7 @@ import (
 
 	tomlpkg "github.com/pelletier/go-toml/v2"
 	"github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // defaultBackupRetention is the default number of backup files to keep per
@@ -965,35 +966,19 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 // and writes ~/.codex/tingly-model-catalog.json with one entry per supplied
 // model so Codex's `/model` picker can see them.
 //
-// MERGE semantics: only fields tingly-box manages are overwritten. Everything
-// else the user put in config.toml — other top-level keys, other entries under
-// `[model_providers.*]`, and unrelated `[profiles.*]` blocks — is left alone.
-//
-// Managed fields:
-//   - top-level `model` (set to models[0] when models is non-empty)
-//   - top-level `model_provider = "tingly-box"`
-//   - top-level `model_catalog_json` (set to the absolute path of the
-//     catalog file when models is non-empty; cleared otherwise so we don't
-//     point at a missing file)
-//   - `[model_providers.tingly-box]` (always re-pinned to the supplied base URL)
-//   - `[profiles.<sanitized(model)>]` for each model — overwritten unconditionally
-//     under that key; `agent restore codex` recovers the previous file if needed
-//   - the whitelisted user prefs (see codexPrefSpec, e.g.
-//     `model_reasoning_effort`, `model_reasoning_summary`,
-//     `model_supports_reasoning_summaries`, `model_verbosity`) at the top level
-//     and inside each managed profile
-//
-// Note: Codex's `model_catalog_json` REPLACES the bundled catalog (it does not
-// merge), and is read on startup only — switching via `/model` doesn't reload
-// it. Users wanting native OpenAI entries in `/model` should keep the bundled
-// catalog (i.e. not run apply) or merge by hand.
-//
-// Orphan tingly profiles from earlier applies are NOT garbage-collected; if
-// the user has trimmed their rules they can remove stale profiles by hand.
-//
-// The previous config.toml and catalog (if any) are backed up before being
-// rewritten.
+// This is the backward-compatible version that uses default context windows.
+// For context window support, use ApplyCodexConfigWithContextWindows.
 func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool) (*ApplyResult, error) {
+	return ApplyCodexConfigWithContextWindows(baseURL, models, prefs, writeCatalog, nil)
+}
+
+// ApplyCodexConfigWithContextWindows merges tingly-box Codex settings into ~/.codex/config.toml
+// and writes ~/.codex/tingly-model-catalog.json with one entry per supplied
+// model so Codex's `/model` picker can see them.
+//
+// The contextWindows parameter allows specifying custom context windows for specific models
+// (e.g., 1M context window for models with context_1m flag). If nil, uses defaults.
+func ApplyCodexConfigWithContextWindows(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool, contextWindows map[string]int) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1056,7 +1041,7 @@ func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeC
 				return result, nil
 			}
 		}
-		catalogBytes, err := RenderCodexModelCatalog(models)
+		catalogBytes, err := RenderCodexModelCatalog(models, contextWindows)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to render model catalog: %v", err)
 			return result, nil
@@ -1161,6 +1146,9 @@ const (
 	codexDefaultMaxContextWindow         = 200000
 	codexEffectiveContextWindowPercent   = 92
 	codexDefaultAutoCompactTokenLimitPct = 85
+
+	// 1M context window for models that support it (Sonnet 4.6+, Opus 4.6+)
+	codex1MContextWindow = 1000000
 )
 
 // renderCodexModelCatalog produces the JSON payload for
@@ -1170,7 +1158,10 @@ const (
 // no verbosity knob). Codex 0.124+ deserializes this into
 // `protocol::openai_models::ModelsResponse`; field names and value types must
 // stay in sync with that struct.
-func RenderCodexModelCatalog(models []string) ([]byte, error) {
+//
+// The contextWindows parameter allows overriding the default context window
+// for specific models (e.g., 1M context window models). If nil, uses default.
+func RenderCodexModelCatalog(models []string, contextWindows map[string]int) ([]byte, error) {
 	// supported_reasoning_levels is Vec<ReasoningEffortPreset>, not a bare
 	// string list — each element is an {effort, description} object. Values
 	// mirror Codex's bundled catalog for GPT-5 so /model shows the familiar
@@ -1183,6 +1174,18 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 	}
 	entries := make([]map[string]interface{}, 0, len(models))
 	for _, model := range models {
+		// Determine context window for this model
+		contextWindow := codexDefaultContextWindow
+		maxContextWindow := codexDefaultMaxContextWindow
+
+		// Check if this model has a custom context window (e.g., 1M context)
+		if contextWindows != nil {
+			if cw, ok := contextWindows[model]; ok {
+				contextWindow = cw
+				maxContextWindow = cw
+			}
+		}
+
 		entries = append(entries, map[string]interface{}{
 			"slug":                             model,
 			"display_name":                     model,
@@ -1199,9 +1202,9 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 			"support_verbosity":                false,
 			"truncation_policy":                map[string]interface{}{"mode": "tokens", "limit": 10000},
 			"supports_parallel_tool_calls":     true,
-			"context_window":                   codexDefaultContextWindow,
-			"max_context_window":               codexDefaultMaxContextWindow,
-			"auto_compact_token_limit":         codexAutoCompactTokenLimit(codexDefaultContextWindow),
+			"context_window":                   contextWindow,
+			"max_context_window":               maxContextWindow,
+			"auto_compact_token_limit":         codexAutoCompactTokenLimit(contextWindow),
 			"effective_context_window_percent": codexEffectiveContextWindowPercent,
 			"experimental_supported_tools":     []string{},
 			"input_modalities":                 []string{"text", "image"},
@@ -1217,6 +1220,39 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 
 func codexAutoCompactTokenLimit(contextWindow int) int {
 	return contextWindow * codexDefaultAutoCompactTokenLimitPct / 100
+}
+
+// BuildContextWindowsFromRules extracts model context windows from rules
+// for Codex catalog generation. Returns a map of model name -> context window size.
+// Models with context_1m flag enabled get 1M context window, others use default.
+func BuildContextWindowsFromRules(cfg *Config) map[string]int {
+	contextWindows := make(map[string]int)
+
+	for _, rule := range cfg.GetRequestConfigs() {
+		// Only process Codex scenario rules
+		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
+			continue
+		}
+
+		// Check if context_1m flag is enabled
+		if rule.Flags.Context1M {
+			// Use 1M context window for models with the flag
+			modelName := rule.RequestModel
+			if modelName != "" {
+				// Strip [1m] suffix if present to get base model name
+				modelName = strings.TrimSuffix(modelName, "[1m]")
+				contextWindows[modelName] = codex1MContextWindow
+			}
+
+			// Also handle response model if different
+			if rule.ResponseModel != "" && rule.ResponseModel != rule.RequestModel {
+				responseModel := strings.TrimSuffix(rule.ResponseModel, "[1m]")
+				contextWindows[responseModel] = codex1MContextWindow
+			}
+		}
+	}
+
+	return contextWindows
 }
 
 var codexProfileKeyInvalid = regexp.MustCompile(`[^A-Za-z0-9_-]`)
