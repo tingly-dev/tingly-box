@@ -56,11 +56,14 @@ func TestAnthropicToOpenAIStream_VModelFullUsage(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			c.Request, _ = http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/chat/completions", nil)
 
-			input, output, err := AnthropicToOpenAIStream(protocol.NewHandleContext(c, modelID), nil, stream, modelID, false)
+			usage, err := AnthropicToOpenAIStream(protocol.NewHandleContext(c, modelID), nil, stream, modelID, false)
 			require.NoError(t, err)
 			// Anthropic input_tokens=42, cache_creation=5 → stored as 42+5=47 (non-cache-read total)
-			assert.Equal(t, 47, input, "InputTokens should be input_tokens + cache_creation_input_tokens")
-			assert.Equal(t, 17, output, "OutputTokens should reflect upstream output_tokens")
+			assert.Equal(t, 47, usage.InputTokens, "InputTokens should be input_tokens + cache_creation_input_tokens")
+			assert.Equal(t, 17, usage.OutputTokens, "OutputTokens should reflect upstream output_tokens")
+			// The returned usage (what gets persisted) must retain cache_read_input_tokens
+			// instead of dropping it to 0 on the conversion path.
+			assert.Equal(t, 11, usage.CacheInputTokens, "CacheInputTokens should retain cache_read_input_tokens for recorded usage")
 
 			body := w.Body.String()
 

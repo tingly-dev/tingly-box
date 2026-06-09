@@ -40,17 +40,27 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 		})
 	}
 
+	usageMap := map[string]any{
+		"input_tokens":  resp.Usage.PromptTokens,
+		"output_tokens": resp.Usage.CompletionTokens,
+		"total_tokens":  resp.Usage.PromptTokens + resp.Usage.CompletionTokens,
+	}
+	// Carry cache-read and reasoning detail so a client reading usage off the
+	// Responses-API body sees them instead of zeros.
+	if cached := resp.Usage.PromptTokensDetails.CachedTokens; cached > 0 {
+		usageMap["input_tokens_details"] = map[string]any{"cached_tokens": cached}
+	}
+	if reasoning := resp.Usage.CompletionTokensDetails.ReasoningTokens; reasoning > 0 {
+		usageMap["output_tokens_details"] = map[string]any{"reasoning_tokens": reasoning}
+	}
+
 	result := map[string]any{
 		"id":     resp.ID,
 		"object": "response",
 		"model":  model,
 		"status": status,
 		"output": output,
-		"usage": map[string]any{
-			"input_tokens":  resp.Usage.PromptTokens,
-			"output_tokens": resp.Usage.CompletionTokens,
-			"total_tokens":  resp.Usage.PromptTokens + resp.Usage.CompletionTokens,
-		},
+		"usage":  usageMap,
 	}
 	if incompleteDetails != nil {
 		result["incomplete_details"] = incompleteDetails
@@ -120,17 +130,26 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 		output = append([]map[string]any{msgItem}, output...)
 	}
 
+	// Responses-API input_tokens is the TOTAL prompt cost. Anthropic reports
+	// uncached input separately from cache-read/creation, so fold them in here
+	// (matching the Chat conversion) instead of reporting only the uncached slice.
+	totalInput := resp.Usage.InputTokens + resp.Usage.CacheReadInputTokens + resp.Usage.CacheCreationInputTokens
+	usageMap := map[string]any{
+		"input_tokens":  totalInput,
+		"output_tokens": resp.Usage.OutputTokens,
+		"total_tokens":  totalInput + resp.Usage.OutputTokens,
+	}
+	if cached := resp.Usage.CacheReadInputTokens; cached > 0 {
+		usageMap["input_tokens_details"] = map[string]any{"cached_tokens": cached}
+	}
+
 	result := map[string]any{
 		"id":     resp.ID,
 		"object": "response",
 		"model":  model,
 		"status": status,
 		"output": output,
-		"usage": map[string]any{
-			"input_tokens":  resp.Usage.InputTokens,
-			"output_tokens": resp.Usage.OutputTokens,
-			"total_tokens":  resp.Usage.InputTokens + resp.Usage.OutputTokens,
-		},
+		"usage":  usageMap,
 	}
 	if incompleteDetails != nil {
 		result["incomplete_details"] = incompleteDetails

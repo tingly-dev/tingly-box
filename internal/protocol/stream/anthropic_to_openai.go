@@ -28,13 +28,16 @@ type AnthropicToOpenAIMCPHooks struct {
 	OnToolCallsFinal   func(calls []AnthropicToOpenAIToolCall) error
 }
 
-// AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format
-// Returns inputTokens, outputTokens, and error for usage tracking
-func AnthropicToOpenAIStream(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (int, int, error) {
+// AnthropicToOpenAIStream processes Anthropic streaming events and converts them to OpenAI format.
+// Returns the normalized TokenUsage (input/output plus cache-read and reasoning
+// tokens) and an error for usage tracking. Returning the full usage — rather
+// than just input/output — keeps cache tokens out of the dropped column when
+// the recorded usage is persisted on the conversion path.
+func AnthropicToOpenAIStream(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool) (*protocol.TokenUsage, error) {
 	return AnthropicToOpenAIStreamWithMCPHooks(hc, req, stream, responseModel, disableStreamUsage, nil)
 }
 
-func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (int, int, error) {
+func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthropic.BetaMessageNewParams, stream *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion], responseModel string, disableStreamUsage bool, hooks *AnthropicToOpenAIMCPHooks) (*protocol.TokenUsage, error) {
 	c := hc.GinContext
 	logrus.WithContext(c.Request.Context()).Info("Starting Anthropic to OpenAI streaming response handler")
 	defer func() {
@@ -55,54 +58,53 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 
 	conv := newAnthropicToOpenAIConverter(stream, responseModel, disableStreamUsage, hooks)
 	usage, err := RunConverter(hc, conv, openaiChatSSEWriter(c))
-	in, out := usage.InputTokens, usage.OutputTokens
 
 	// MCP continuation: hook requested the stream to be retried
 	if hookErr := conv.HookErr(); errors.Is(hookErr, ErrMCPStreamContinue) {
-		return in, out, hookErr
+		return usage, hookErr
 	}
 
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			logrus.WithContext(c.Request.Context()).Debug("Anthropic to OpenAI stream canceled by client")
-			return in, out, nil
+			return usage, nil
 		}
 		if errors.Is(err, io.EOF) {
 			logrus.WithContext(c.Request.Context()).Info("Anthropic stream ended normally (EOF)")
-			return in, out, nil
+			return usage, nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
 		streamErr := fmt.Errorf("anthropic stream error: %w", err)
 		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
-			return in, out, streamErr
+			return usage, streamErr
 		}
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
-		return in, out, streamErr
+		return usage, streamErr
 	}
 
 	if err := stream.Err(); err != nil {
 		if errors.Is(err, context.Canceled) {
 			logrus.WithContext(c.Request.Context()).Debug("Anthropic to OpenAI stream canceled by client")
-			return in, out, nil
+			return usage, nil
 		}
 		if errors.Is(err, io.EOF) {
-			return in, out, nil
+			return usage, nil
 		}
 		logrus.WithContext(c.Request.Context()).Errorf("Anthropic stream error: %v", err)
 		streamErr := fmt.Errorf("anthropic stream error: %w", err)
 		hc.DispatchStreamError(streamErr)
 		if !c.Writer.Written() {
 			SendStreamingError(c, err)
-			return in, out, streamErr
+			return usage, streamErr
 		}
 		sendOpenAIStreamError(c, err.Error(), "stream_error")
-		return in, out, streamErr
+		return usage, streamErr
 	}
 
 	OpenAISSEDone(c)
-	return in, out, nil
+	return usage, nil
 }
 
 // sendOpenAIStreamChunk sends a ChatCompletionChunk as SSE

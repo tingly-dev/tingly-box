@@ -172,10 +172,16 @@ func ConvertGoogleToAnthropicResponse(googleResp *genai.GenerateContentResponse,
 
 	// Add usage info if available
 	if googleResp.UsageMetadata != nil {
-		responseJSON["usage"] = map[string]interface{}{
+		usage := map[string]interface{}{
 			"input_tokens":  googleResp.UsageMetadata.PromptTokenCount,
 			"output_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
 		}
+		// Gemini's cached-content tokens map to Anthropic cache-read so the
+		// client-facing response reports the cache hit instead of dropping it.
+		if googleResp.UsageMetadata.CachedContentTokenCount > 0 {
+			usage["cache_read_input_tokens"] = googleResp.UsageMetadata.CachedContentTokenCount
+		}
+		responseJSON["usage"] = usage
 	}
 
 	// Marshal and unmarshal to create proper Message struct
@@ -260,10 +266,16 @@ func ConvertGoogleToAnthropicBetaResponse(googleResp *genai.GenerateContentRespo
 
 	// Add usage info if available
 	if googleResp.UsageMetadata != nil {
-		responseJSON["usage"] = map[string]interface{}{
+		usage := map[string]interface{}{
 			"input_tokens":  googleResp.UsageMetadata.PromptTokenCount,
 			"output_tokens": googleResp.UsageMetadata.CandidatesTokenCount,
 		}
+		// Gemini's cached-content tokens map to Anthropic cache-read so the
+		// client-facing response reports the cache hit instead of dropping it.
+		if googleResp.UsageMetadata.CachedContentTokenCount > 0 {
+			usage["cache_read_input_tokens"] = googleResp.UsageMetadata.CachedContentTokenCount
+		}
+		responseJSON["usage"] = usage
 	}
 
 	// Marshal and unmarshal to create proper BetaMessage struct
