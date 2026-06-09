@@ -531,54 +531,66 @@ export default {
         "close": "Close",
         "hoverHint": "Action buttons shown - try hovering over nodes!",
         "steps": {
-          "1": {
-            "title": "What is Direct Routing?",
-            "content": "Direct routing is the simplest way to forward requests. Traffic flows through your tiers in order — T0 first, then T1, T2, and so on. Within each tier, services are load-balanced evenly. This works great when all your services are equivalent and you just need primary/fallback layers.",
+          "connectAI": {
+            "title": "1. Connect an AI provider",
+            "content": "Routing needs at least one AI service to forward to. Use Connect AI in the page toolbar to add a provider — paste an API key, sign in with OAuth, or point at a self-hosted server. Until you do, a rule has nothing to route to.",
             "annotation": {
-              "entryNode": "Entry node - routing mode selector",
-              "directButton": "Direct mode selected"
+              "toolbar": "Connect AI lives in the page toolbar",
+              "empty": "An empty rule has no model yet"
             }
           },
-          "2": {
-            "title": "Load Balancing Within Tiers",
-            "content": "When multiple services are in the same tier, they share the incoming traffic evenly. This load balancing distributes requests across all services in the tier, preventing any single service from becoming overwhelmed.",
+          "addModel": {
+            "title": "2. Add your first model",
+            "content": "Each rule maps a request model to one or more services. In an empty rule, click ＋ Add model to pick a connected provider and a model. Need a separate rule for a different request model? Use New Rule in the toolbar.",
             "annotation": {
-              "loadBalance": "Same tier = load balanced",
+              "addModel": "＋ Add model — pick provider + model",
+              "newRule": "New Rule adds another request-model mapping"
+            }
+          },
+          "editModel": {
+            "title": "3. Change or remove a model",
+            "content": "Click any service card to edit it — swap to a different model, switch the provider, or move it to another tier. Hover the card to reveal its actions; the trash icon removes it from the rule.",
+            "annotation": {
+              "click": "Click a card to edit / swap the model",
+              "remove": "Hover → trash icon to remove"
+            }
+          },
+          "loadBalance": {
+            "title": "4. Load balancing within a tier",
+            "content": "When several services share the same tier (T0), incoming traffic is spread evenly across them. This balances load and prevents any single service from being overwhelmed.",
+            "annotation": {
+              "sameTier": "Same tier = load balanced",
               "services": "Multiple services share traffic"
             }
           },
-          "3": {
-            "title": "Tier-Based Fallback Chain",
-            "content": "Services in T0 are your primary choice. If all T0 services fail, traffic automatically falls back to T1, then T2, and so on. This creates a cascading failover chain that ensures high availability for your applications.",
+          "tierFallback": {
+            "title": "5. Tier-based fallback chain",
+            "content": "Lower tiers are tried first: T0 is primary, and if every T0 service fails, traffic cascades to T1, then T2, and so on. Use the up/down actions on a card to move it between tiers and build a failover chain.",
             "annotation": {
-              "primary": "T0 — Primary services (tried first)",
-              "fallback": "T1 — Fallback services (used when T0 fails)",
-              "tierBased": "Tier-based automatic failover"
+              "primary": "T0 — primary (tried first)",
+              "fallback": "T1 — fallback (used when T0 fails)"
             }
           },
-          "4": {
+          "smartIntro": {
             "title": "What is Smart Routing?",
-            "content": "Smart routing lets you define custom conditions to control which service handles each request. Route based on model name, token count, user groups, or any request parameter. This gives you fine-grained control without managing complex tier configurations.",
+            "content": "Smart routing lets you define custom conditions to control which service handles each request. Route by model name, token count, user group, or any request parameter — fine-grained control without juggling tier configurations.",
             "annotation": {
-              "smartMode": "Smart mode selected",
-              "smartButton": "Smart routing button",
+              "smartButton": "Switch to Smart with the entry toggle",
               "conditional": "Conditional routing based on rules"
             }
           },
-          "5": {
-            "title": "Smart Routing Conditions",
-            "content": "Each smart rule has a condition that determines when it applies. Common conditions include: model name matching (e.g., 'contains claude'), token count (e.g., 'gt 4000' for large contexts), or custom fields. Rules are evaluated in order — the first matching rule wins.",
+          "smartConditions": {
+            "title": "Smart routing conditions",
+            "content": "Each smart rule has a condition that decides when it applies — e.g. model name 'contains claude', or token count 'gt 4000' for large contexts. Rules are evaluated top to bottom; the first match wins.",
             "annotation": {
-              "conditions": "Multiple smart rules with conditions",
               "modelBased": "Route by model name",
               "tokenBased": "Route by token count"
             }
           },
-          "6": {
-            "title": "Advanced Smart Routing",
-            "content": "Combine multiple smart rules to create sophisticated routing strategies. For example: route Claude requests to one service, large contexts to another, and premium users to a third. The default service handles everything that doesn't match any rule.",
+          "smartAdvanced": {
+            "title": "Advanced smart routing",
+            "content": "Stack multiple smart rules into a richer strategy: send Claude requests one way, large contexts another, premium users to a third. Anything that matches no rule falls through to the default services.",
             "annotation": {
-              "complex": "Complex routing with multiple conditions",
               "defaultRoute": "Default route for unmatched requests",
               "claudeRoute": "Route for Claude models",
               "largeContext": "Route for large context windows"

@@ -36,25 +36,18 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
     const { t } = useTranslation();
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-    const [activeStep, setActiveStep] = React.useState(initialStep);
-    const maxSteps = ROUTING_GUIDE_STEPS.length;
-    const currentStep = ROUTING_GUIDE_STEPS[activeStep];
     const triggerRef = useRef<HTMLElement | null>(null);
 
-    // Filter steps based on mode
-    const filteredSteps = ROUTING_GUIDE_STEPS.filter((step, index) => {
-        if (mode === 'direct') {
-            // Show steps 1-3 (Direct routing)
-            return index < 3;
-        } else {
-            // Show steps 4-6 (Smart routing)
-            return index >= 3;
-        }
-    });
-
-    const adjustedMaxSteps = filteredSteps.length;
-    const adjustedActiveStep = mode === 'direct' ? activeStep : activeStep - 3;
-    const currentFilteredStep = filteredSteps[adjustedActiveStep] || filteredSteps[0];
+    // Steps for the current mode are the source of truth; activeStep is a plain
+    // local index into this list (no array-offset arithmetic).
+    const filteredSteps = React.useMemo(
+        () => ROUTING_GUIDE_STEPS.filter((step) => step.mode === mode),
+        [mode],
+    );
+    const [activeStep, setActiveStep] = React.useState(initialStep);
+    const totalSteps = filteredSteps.length;
+    const safeActiveStep = Math.min(activeStep, totalSteps - 1);
+    const currentStep = filteredSteps[safeActiveStep] || filteredSteps[0];
 
     // Store trigger element for focus restoration
     React.useEffect(() => {
@@ -77,36 +70,25 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
         return () => document.removeEventListener('keydown', handleEscape);
     }, [open]);
 
-    // Adjust active step when mode changes
+    // Restart from the first step whenever the mode changes or the dialog opens.
     React.useEffect(() => {
-        if (mode === 'smart' && activeStep < 3) {
-            setActiveStep(3);
-        } else if (mode === 'direct' && activeStep >= 3) {
-            setActiveStep(0);
-        }
-    }, [mode]);
+        if (open) setActiveStep(0);
+    }, [mode, open]);
 
     const handleNext = () => {
-        const nextStep = mode === 'direct' ? activeStep + 1 : activeStep + 1;
-        if (mode === 'direct' && nextStep < 3) {
-            setActiveStep(nextStep);
-        } else if (mode === 'smart' && nextStep < ROUTING_GUIDE_STEPS.length) {
-            setActiveStep(nextStep);
+        if (activeStep < totalSteps - 1) {
+            setActiveStep(activeStep + 1);
         } else {
             handleClose();
         }
     };
 
     const handleBack = () => {
-        if (mode === 'direct') {
-            setActiveStep(Math.max(0, activeStep - 1));
-        } else {
-            setActiveStep(Math.max(3, activeStep - 1));
-        }
+        setActiveStep(Math.max(0, activeStep - 1));
     };
 
     const handleClose = () => {
-        setActiveStep(mode === 'direct' ? 0 : 3);
+        setActiveStep(0);
         onClose();
         // Restore focus to trigger element
         if (triggerRef.current) {
@@ -115,7 +97,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
     };
 
     const handleStepChange = (step: number) => {
-        setActiveStep(mode === 'direct' ? step : step + 3);
+        setActiveStep(step);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -152,7 +134,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                     {guideTitle}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                    {t('rule.routing.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: adjustedActiveStep + 1, total: adjustedMaxSteps })}
+                    {t('rule.routing.guide.subtitle', { defaultValue: 'Step {{current}} of {{total}}', current: safeActiveStep + 1, total: totalSteps })}
                 </Typography>
             </DialogTitle>
             <IconButton
@@ -181,7 +163,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                         flexShrink: 0,
                     }}>
                         <Stepper
-                            activeStep={adjustedActiveStep}
+                            activeStep={safeActiveStep}
                             orientation={fullScreen ? 'horizontal' : 'vertical'}
                             sx={{
                                 '& .MuiStepLabel-root': {
@@ -230,7 +212,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                         }}>
                             <Box sx={{ width: '100%', maxWidth: 700 }}>
                                 <StaticGraphViewer
-                                    scenario={currentFilteredStep.diagram}
+                                    scenario={currentStep.diagram}
                                     interactive={true}
                                 />
                             </Box>
@@ -254,13 +236,13 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                         {/* Explanation Text */}
                         <Box sx={{ mt: 2, p: { xs: 2, sm: 3 }, bgcolor: 'background.default', borderRadius: 1 }}>
                             <Typography variant="body1" sx={{ lineHeight: 1.8 }}>
-                                {t(currentFilteredStep.content, { defaultValue: currentFilteredStep.content })}
+                                {t(currentStep.content, { defaultValue: currentStep.content })}
                             </Typography>
 
                             {/* Annotations */}
-                            {currentFilteredStep.annotations && currentFilteredStep.annotations.length > 0 && (
+                            {currentStep.annotations && currentStep.annotations.length > 0 && (
                                 <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                    {currentFilteredStep.annotations.map((annotation, idx) => (
+                                    {currentStep.annotations.map((annotation, idx) => (
                                         <Paper
                                             key={idx}
                                             variant="outlined"
@@ -284,7 +266,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between', px: { xs: 2, sm: 3 }, py: 2 }}>
                 <Button
-                    disabled={adjustedActiveStep === 0}
+                    disabled={safeActiveStep === 0}
                     onClick={handleBack}
                     variant="outlined"
                     size="small"
@@ -298,7 +280,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                     size="small"
                     sx={{ minWidth: 100 }}
                 >
-                    {adjustedActiveStep === adjustedMaxSteps - 1
+                    {safeActiveStep === totalSteps - 1
                         ? t('rule.routing.guide.gotIt', { defaultValue: 'Got it!' })
                         : t('rule.routing.guide.next', { defaultValue: 'Next' })
                     }

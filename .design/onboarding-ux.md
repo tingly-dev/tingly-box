@@ -11,9 +11,9 @@ The graph already ships interactive education (`EntryGuideDialog` Direct/Smart
 walkthrough, `TierGuideDialog`), but it was only reachable by *hovering* a node —
 undiscoverable for a first-time user who doesn't know to hover.
 
-**Fix:** a persistent `?` affordance ("How routing works") in the rule header
-(`ModelRequestHeader`), wired through `UnifiedRoutingGraph` to open
-`EntryGuideDialog` **in the mode the user is currently looking at**
+**Fix (discoverability):** a persistent `?` affordance ("How routing works") in
+the rule header (`ModelRequestHeader`), wired through `UnifiedRoutingGraph` to
+open `EntryGuideDialog` **in the mode the user is currently looking at**
 (`effectiveMode`), so the walkthrough matches the graph in front of them.
 
 - `ModelRequestHeader` gains an optional `onShowGuide` prop; the button only
@@ -21,7 +21,25 @@ undiscoverable for a first-time user who doesn't know to hover.
 - No intrusive auto-popup — discoverable, not forced (principle #10: education
   stays available, never blocks).
 
-Files: `ModelRequestHeader.tsx`, `UnifiedRoutingGraph.tsx`.
+**Fix (content gap):** the Direct walkthrough used to start mid-stream at
+"single provider" and never explained how you *get* there. It now starts from
+zero and covers the actions, not just the routing theory:
+
+1. **Connect an AI provider** — you need a credential first (Connect AI toolbar).
+2. **Add your first model** — `＋ Add model` in an empty rule; `New Rule` for more.
+3. **Change or remove a model** — click a service card to edit/swap, hover→trash.
+4. **Load balancing within a tier** — same-tier services share traffic.
+5. **Tier-based fallback chain** — T0 primary, cascade to T1/T2 on failure.
+
+Smart mode keeps its 3 conceptual steps. The dialog's step model was refactored
+from index-magic (`< 3` / `>= 3`) to a `mode` field on each `GuideStep` plus
+plain filtered-local indexing — adding/reordering steps no longer needs offset
+arithmetic. Step i18n keys moved from numeric (`steps.1`…`6`) to semantic
+(`steps.connectAI`, `addModel`, `editModel`, `loadBalance`, `tierFallback`,
+`smartIntro`, `smartConditions`, `smartAdvanced`) in en + zh.
+
+Files: `ModelRequestHeader.tsx`, `UnifiedRoutingGraph.tsx`,
+`tier/EntryGuideDialog.tsx`, `tier/diagrams.ts`, i18n en/zh.
 
 ## 2. Connect AI picker — "custom or find one?"
 

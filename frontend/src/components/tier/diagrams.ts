@@ -37,6 +37,9 @@ export interface GuideStep {
     title: string; // i18n key (will be looked up as `rule.tier.guide.steps.{stepNumber}.title`)
     content: string; // i18n key
     annotations?: Annotation[];
+    // Which routing mode this step belongs to (routing guide only). Lets the
+    // dialog filter steps without relying on array-index magic numbers.
+    mode?: 'direct' | 'smart';
 }
 
 /**
@@ -608,63 +611,90 @@ export const TIER_GUIDE_STEPS: GuideStep[] = [
  * - annotations: Optional callout annotations for key elements
  */
 export const ROUTING_GUIDE_STEPS: GuideStep[] = [
+    // --- Direct routing: start from zero, then routing behaviour ---
     {
-        diagram: TierDiagramType.DIRECT_SINGLE,
-        title: 'rule.routing.guide.steps.1.title',
-        content: 'rule.routing.guide.steps.1.content',
+        // Step 1: you need a credential before anything routes.
+        diagram: TierDiagramType.EMPTY,
+        mode: 'direct',
+        title: 'rule.routing.guide.steps.connectAI.title',
+        content: 'rule.routing.guide.steps.connectAI.content',
         annotations: [
-            { target: '.entry-node', text: 'rule.routing.guide.steps.1.annotation.entryNode' },
-            { target: '.direct-button', text: 'rule.routing.guide.steps.1.annotation.directButton' },
+            { target: '.entry-node', text: 'rule.routing.guide.steps.connectAI.annotation.toolbar' },
+            { target: '.service-node-0', text: 'rule.routing.guide.steps.connectAI.annotation.empty' },
+        ],
+    },
+    {
+        // Step 2: from an empty rule, add your first model; New Rule adds more rules.
+        diagram: TierDiagramType.EMPTY,
+        mode: 'direct',
+        title: 'rule.routing.guide.steps.addModel.title',
+        content: 'rule.routing.guide.steps.addModel.content',
+        annotations: [
+            { target: '.action-add-node', text: 'rule.routing.guide.steps.addModel.annotation.addModel' },
+            { target: '.entry-node', text: 'rule.routing.guide.steps.addModel.annotation.newRule' },
+        ],
+    },
+    {
+        // Step 3: swap / edit / remove a model that's already there.
+        diagram: TierDiagramType.SINGLE_PROVIDER,
+        mode: 'direct',
+        title: 'rule.routing.guide.steps.editModel.title',
+        content: 'rule.routing.guide.steps.editModel.content',
+        annotations: [
+            { target: '.service-node-0', text: 'rule.routing.guide.steps.editModel.annotation.click' },
+            { target: '.service-node-0', text: 'rule.routing.guide.steps.editModel.annotation.remove' },
         ],
     },
     {
         diagram: TierDiagramType.TWO_PROVIDERS_SAME_TIER,
-        title: 'rule.routing.guide.steps.2.title',
-        content: 'rule.routing.guide.steps.2.content',
+        mode: 'direct',
+        title: 'rule.routing.guide.steps.loadBalance.title',
+        content: 'rule.routing.guide.steps.loadBalance.content',
         annotations: [
-            { target: '.entry-node', text: 'rule.routing.guide.steps.2.annotation.loadBalance' },
-            { target: '.service-node-0', text: 'rule.routing.guide.steps.2.annotation.services' },
+            { target: '.tier-node-0', text: 'rule.routing.guide.steps.loadBalance.annotation.sameTier' },
+            { target: '.service-node-0', text: 'rule.routing.guide.steps.loadBalance.annotation.services' },
         ],
     },
     {
         diagram: TierDiagramType.DIRECT_MULTIPLE_TIERS,
-        title: 'rule.routing.guide.steps.3.title',
-        content: 'rule.routing.guide.steps.3.content',
+        mode: 'direct',
+        title: 'rule.routing.guide.steps.tierFallback.title',
+        content: 'rule.routing.guide.steps.tierFallback.content',
         annotations: [
-            { target: '.tier-node-0', text: 'rule.routing.guide.steps.3.annotation.primary' },
-            { target: '.tier-node-1', text: 'rule.routing.guide.steps.3.annotation.fallback' },
-            { target: '.entry-node', text: 'rule.routing.guide.steps.3.annotation.tierBased' },
+            { target: '.tier-node-0', text: 'rule.routing.guide.steps.tierFallback.annotation.primary' },
+            { target: '.tier-node-1', text: 'rule.routing.guide.steps.tierFallback.annotation.fallback' },
         ],
     },
+    // --- Smart routing ---
     {
         diagram: TierDiagramType.SMART_BASIC,
-        title: 'rule.routing.guide.steps.4.title',
-        content: 'rule.routing.guide.steps.4.content',
+        mode: 'smart',
+        title: 'rule.routing.guide.steps.smartIntro.title',
+        content: 'rule.routing.guide.steps.smartIntro.content',
         annotations: [
-            { target: '.entry-node', text: 'rule.routing.guide.steps.4.annotation.smartMode' },
-            { target: '.smart-button', text: 'rule.routing.guide.steps.4.annotation.smartButton' },
-            { target: '.service-node-1', text: 'rule.routing.guide.steps.4.annotation.conditional' },
+            { target: '.smart-button', text: 'rule.routing.guide.steps.smartIntro.annotation.smartButton' },
+            { target: '.service-node-1', text: 'rule.routing.guide.steps.smartIntro.annotation.conditional' },
         ],
     },
     {
         diagram: TierDiagramType.SMART_CONDITIONS,
-        title: 'rule.routing.guide.steps.5.title',
-        content: 'rule.routing.guide.steps.5.content',
+        mode: 'smart',
+        title: 'rule.routing.guide.steps.smartConditions.title',
+        content: 'rule.routing.guide.steps.smartConditions.content',
         annotations: [
-            { target: '.entry-node', text: 'rule.routing.guide.steps.5.annotation.conditions' },
-            { target: '.service-node-1', text: 'rule.routing.guide.steps.5.annotation.modelBased' },
-            { target: '.service-node-2', text: 'rule.routing.guide.steps.5.annotation.tokenBased' },
+            { target: '.service-node-1', text: 'rule.routing.guide.steps.smartConditions.annotation.modelBased' },
+            { target: '.service-node-2', text: 'rule.routing.guide.steps.smartConditions.annotation.tokenBased' },
         ],
     },
     {
         diagram: TierDiagramType.SMART_COMPLEX,
-        title: 'rule.routing.guide.steps.6.title',
-        content: 'rule.routing.guide.steps.6.content',
+        mode: 'smart',
+        title: 'rule.routing.guide.steps.smartAdvanced.title',
+        content: 'rule.routing.guide.steps.smartAdvanced.content',
         annotations: [
-            { target: '.entry-node', text: 'rule.routing.guide.steps.6.annotation.complex' },
-            { target: '.service-node-0', text: 'rule.routing.guide.steps.6.annotation.defaultRoute' },
-            { target: '.service-node-1', text: 'rule.routing.guide.steps.6.annotation.claudeRoute' },
-            { target: '.service-node-2', text: 'rule.routing.guide.steps.6.annotation.largeContext' },
+            { target: '.service-node-0', text: 'rule.routing.guide.steps.smartAdvanced.annotation.defaultRoute' },
+            { target: '.service-node-1', text: 'rule.routing.guide.steps.smartAdvanced.annotation.claudeRoute' },
+            { target: '.service-node-2', text: 'rule.routing.guide.steps.smartAdvanced.annotation.largeContext' },
         ],
     },
 ];
