@@ -70,6 +70,7 @@ export interface RuleFlags {
     visionProxyService?: VisionProxyServiceRef;
     claudeCodeCompat?: boolean;
     cleanHeader?: boolean;
+    context1m?: boolean;
 }
 
 export interface RuleFlagsApi {
@@ -86,6 +87,7 @@ export interface RuleFlagsApi {
     vision_proxy_service?: VisionProxyServiceRef;
     claude_code_compat?: boolean;
     clean_header?: boolean;
+    context_1m?: boolean;
 }
 
 export type FlagValueType = 'bool' | 'string' | 'enum' | 'int' | 'service_ref';
