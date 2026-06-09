@@ -16,6 +16,7 @@ import (
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/ai/oauth"
 
+	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -347,4 +348,99 @@ func TestHandler_AuthorizeOAuth_Reauth_Validation(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code, "issuer mismatch should 400")
 		assert.Contains(t, w.Body.String(), "mismatch")
 	})
+}
+
+// TestHandler_Reauth_OverwritesInPlace drives the real terminal OAuth step
+// (createProviderFromToken) with a re-auth target set on the session and proves
+// the feature's core guarantee: the credential is overwritten ON THE SAME
+// PROVIDER (same UUID, no duplicate), so a routing rule that references the
+// provider by UUID survives untouched — exactly what delete+recreate destroyed.
+func TestHandler_Reauth_OverwritesInPlace(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	registry := oauth.NewRegistry()
+	registry.Register(&oauth.ProviderConfig{
+		Type:         ai.IssuerCodex,
+		DisplayName:  "Codex",
+		ClientID:     "cid",
+		ClientSecret: "sec",
+		AuthURL:      "https://example.com/auth",
+		TokenURL:     "https://example.com/token",
+		Scopes:       []string{"api"},
+	})
+	cfg, err := config.NewConfigWithDir(t.TempDir(), config.WithDisableMigration(), config.WithDisableBuiltIn())
+	require.NoError(t, err)
+
+	const targetUUID = "u-reauth-1"
+	require.NoError(t, cfg.AddProvider(&typ.Provider{
+		UUID: targetUUID,
+		Name: "my-codex",
+		// Unreachable on purpose: the post-reauth model fetch fails fast
+		// (connection refused) and is non-fatal, keeping the test offline.
+		APIBase:  "http://127.0.0.1:1",
+		AuthType: typ.AuthTypeOAuth,
+		Enabled:  true,
+		OAuthDetail: &typ.OAuthDetail{
+			Issuer:       ai.IssuerCodex,
+			ProviderType: string(ai.IssuerCodex),
+			AccessToken:  "OLD-ACCESS",
+			RefreshToken: "OLD-REFRESH",
+			ExpiresAt:    time.Now().Add(-time.Hour).Format(time.RFC3339),
+			UserID:       "old-user",
+		},
+	}))
+
+	// A routing rule references the provider by UUID — the thing delete+recreate orphans.
+	require.NoError(t, cfg.AddRule(typ.Rule{
+		UUID:         "rule-1",
+		Scenario:     typ.ScenarioOpenAI,
+		RequestModel: "gpt-x",
+		Services:     []*loadbalance.Service{{Provider: targetUUID, Model: "gpt-x", Active: true, Weight: 1}},
+	}))
+
+	beforeCount := len(cfg.ListProviders())
+
+	oauthManager := oauth.NewManager(oauth.DefaultConfig(), registry)
+	handler := NewHandler(oauthManager, cfg)
+
+	sessionID := uuid.New().String()
+	now := time.Now()
+	oauthManager.StoreSession(&oauth.SessionState{
+		SessionID:          sessionID,
+		Status:             oauth.SessionStatusPending,
+		Provider:           ai.IssuerCodex,
+		CreatedAt:          now,
+		ExpiresAt:          now.Add(oauth.DefaultSessionExpiry),
+		TargetProviderUUID: targetUUID,
+	})
+
+	newExpiry := time.Now().Add(2 * time.Hour)
+	token := &oauth.Token{
+		AccessToken:  "NEW-ACCESS",
+		RefreshToken: "NEW-REFRESH",
+		Expiry:       newExpiry,
+		Provider:     ai.IssuerCodex,
+	}
+
+	gotUUID, err := handler.createProviderFromToken(token, ai.IssuerCodex, "", sessionID, "")
+	require.NoError(t, err)
+
+	// 1. Same UUID — no new identity minted.
+	assert.Equal(t, targetUUID, gotUUID, "re-auth must return the same provider UUID")
+	// 2. No duplicate provider — overwrite, not create.
+	assert.Equal(t, beforeCount, len(cfg.ListProviders()), "re-auth must not create a new provider")
+	// 3. Credentials overwritten in place; identity preserved.
+	p, err := cfg.GetProviderByUUID(targetUUID)
+	require.NoError(t, err)
+	require.NotNil(t, p.OAuthDetail)
+	assert.Equal(t, "NEW-ACCESS", p.OAuthDetail.AccessToken)
+	assert.Equal(t, "NEW-REFRESH", p.OAuthDetail.RefreshToken)
+	assert.Equal(t, newExpiry.Format(time.RFC3339), p.OAuthDetail.ExpiresAt)
+	assert.True(t, p.Enabled, "re-auth re-enables the provider")
+	assert.Equal(t, "my-codex", p.Name, "name is preserved across re-auth")
+	// 4. The rule still references the same provider UUID — nothing orphaned.
+	rule := cfg.GetRuleByUUID("rule-1")
+	require.NotNil(t, rule)
+	require.Len(t, rule.Services, 1)
+	assert.Equal(t, targetUUID, rule.Services[0].Provider, "rule reference survives re-auth")
 }
