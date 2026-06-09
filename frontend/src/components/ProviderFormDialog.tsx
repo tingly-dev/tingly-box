@@ -226,12 +226,15 @@ const ProviderFormDialog = ({
             setIsExistingFusion(false);
             setCreateFusionProvider(false);
             // If the parent prefilled apiBase to a known provider (onboarding
-            // browse / paste-detect), seed the Autocomplete with it so users
-            // see the picked provider rather than a blank field.
-            setSelectedProvider(matchingProvider);
+            // browse / paste-detect), seed the Autocomplete with it so users see
+            // the picked provider rather than a blank field. In custom mode
+            // (including self-hosted) the field is a free-text URL input, so seed
+            // the URL itself — never the provider's display name/alias.
+            const seedProvider = customMode ? null : matchingProvider;
+            setSelectedProvider(seedProvider);
             setProviderInputValue(
-                matchingProvider
-                    ? matchingProvider.alias || matchingProvider.name
+                seedProvider
+                    ? seedProvider.alias || seedProvider.name
                     : data.apiBase || ''
             );
         }
