@@ -213,6 +213,12 @@ const ProviderFormDialog = ({
                 // auto-select the provider's supported protocols
                 setProtocolOpenAI(!!matchingProvider.baseUrlOpenAI);
                 setProtocolAnthropic(!!matchingProvider.baseUrlAnthropic);
+            } else if (customMode) {
+                // Custom endpoints are OpenAI-compatible in the vast majority of
+                // cases — pre-select OpenAI so users aren't stuck with nothing
+                // chosen, and let the recommendation hint steer the rare exception.
+                setProtocolOpenAI(true);
+                setProtocolAnthropic(false);
             } else {
                 setProtocolOpenAI(false);
                 setProtocolAnthropic(false);
@@ -220,12 +226,15 @@ const ProviderFormDialog = ({
             setIsExistingFusion(false);
             setCreateFusionProvider(false);
             // If the parent prefilled apiBase to a known provider (onboarding
-            // browse / paste-detect), seed the Autocomplete with it so users
-            // see the picked provider rather than a blank field.
-            setSelectedProvider(matchingProvider);
+            // browse / paste-detect), seed the Autocomplete with it so users see
+            // the picked provider rather than a blank field. In custom mode
+            // (including self-hosted) the field is a free-text URL input, so seed
+            // the URL itself — never the provider's display name/alias.
+            const seedProvider = customMode ? null : matchingProvider;
+            setSelectedProvider(seedProvider);
             setProviderInputValue(
-                matchingProvider
-                    ? matchingProvider.alias || matchingProvider.name
+                seedProvider
+                    ? seedProvider.alias || seedProvider.name
                     : data.apiBase || ''
             );
         }
@@ -570,10 +579,12 @@ const ProviderFormDialog = ({
     const hasAnyProtocol = protocolOpenAI || protocolAnthropic;
 
     // Persistent /v1 suffix hint: shown in custom mode when an OpenAI
-    // protocol is selected and the current URL doesn't already end with /v1.
+    // protocol is selected and the user has typed a URL that doesn't already
+    // end with /v1. Stays hidden while the field is empty — nothing to append to,
+    // and popping a hint over a blank input is just noise.
     const currentUrl = data.apiBase || providerInputValue;
     const urlAlreadyHasV1 = /\/v1\/?$/.test(currentUrl);
-    const showV1Hint = customMode && protocolOpenAI && !urlAlreadyHasV1;
+    const showV1Hint = customMode && protocolOpenAI && currentUrl.trim().length > 0 && !urlAlreadyHasV1;
     const applyV1Suffix = () => {
         const base = currentUrl.replace(/\/+$/, '');
         const newUrl = `${base}/v1`;
@@ -735,6 +746,7 @@ const ProviderFormDialog = ({
                             openAICapabilities={openAICapabilities}
                             onToggleOpenAI={toggleOpenAIProtocol}
                             onToggleAnthropic={toggleAnthropicProtocol}
+                            recommendOpenAI={customMode}
                         />
 
                         {showFusionToggle && (

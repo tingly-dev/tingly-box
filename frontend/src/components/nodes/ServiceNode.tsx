@@ -15,16 +15,17 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { alpha, styled } from '@mui/material/styles';
+import { styled, useTheme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
-import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox } from './styles.tsx';
+import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
+import { useAddModelSpotlight } from './ActionAddNode.tsx';
 
 const ServiceNodeWrapper = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'forceShowActions',
@@ -195,10 +196,16 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     forceShowActions = false,
 }) => {
     const { t } = useTranslation();
+    const theme = useTheme();
     const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
     const [probeAnchorEl, setProbeAnchorEl] = useState<null | HTMLElement>(null);
     const menuOpen = Boolean(menuAnchorEl);
     const probeMenuOpen = Boolean(probeAnchorEl);
+
+    // Guidance (Quick Start → "Select a Model") also lights up existing service
+    // cards — they can be clicked to edit, not just added to. Pulse the card and
+    // reveal its action buttons so "modify" is obvious.
+    const spotlight = useAddModelSpotlight(active);
 
     const providerInfo = getProviderInfo(provider.provider, providersData);
     const isProviderMissing = provider.provider && !providerInfo.exists;
@@ -224,7 +231,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
     const hasTier = showTier && !!onTierChange;
 
     return (
-        <ServiceNodeWrapper forceShowActions={forceShowActions}>
+        <ServiceNodeWrapper forceShowActions={forceShowActions || spotlight}>
             <ServiceNodeContent
                 menuAnchorEl={menuAnchorEl}
                 menuOpen={menuOpen}
@@ -247,7 +254,10 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
 
             <ServiceNodeContainer
                 onClick={onNodeClick}
-                sx={{ cursor: active ? 'pointer' : 'default' }}
+                sx={{
+                    cursor: active ? 'pointer' : 'default',
+                    ...(spotlight && active ? nodeSpotlightSx(theme) : {}),
+                }}
             >
                 {!provider.provider ? (
                     <Box sx={{ ...NODE_LAYER_STYLES.topLayer }}>

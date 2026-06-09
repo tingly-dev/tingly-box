@@ -13,6 +13,10 @@ interface ProtocolSelectorProps {
     openAICapabilities: string[];
     onToggleOpenAI: () => void;
     onToggleAnthropic: () => void;
+    // Custom endpoint mode: there is no provider template to tell us which
+    // protocol the URL speaks, so we steer users toward OpenAI (the common case)
+    // and warn that Anthropic should only be picked when explicitly supported.
+    recommendOpenAI?: boolean;
 }
 
 const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
@@ -23,6 +27,7 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
     openAICapabilities,
     onToggleOpenAI,
     onToggleAnthropic,
+    recommendOpenAI = false,
 }) => {
     const {t} = useTranslation();
 
@@ -59,17 +64,30 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                     <Stack direction="row" alignItems="flex-start" spacing={1}>
                         <OpenAI size={18} sx={{mt: 0.2}}/>
                         <Box sx={{flex: 1}}>
-                            <Typography variant="body2" fontWeight={500}>
-                                {t('providerDialog.apiStyle.openAI')}
-                            </Typography>
+                            <Stack direction="row" alignItems="center" spacing={0.75}>
+                                <Typography variant="body2" fontWeight={500}>
+                                    {t('providerDialog.apiStyle.openAI')}
+                                </Typography>
+                                {recommendOpenAI && (
+                                    <Chip
+                                        label={t('providerDialog.apiStyle.recommendedBadge', {defaultValue: 'Recommended'})}
+                                        size="small"
+                                        color="primary"
+                                        variant="outlined"
+                                        sx={{height: 18, fontSize: '0.62rem', '& .MuiChip-label': {px: 0.75}}}
+                                    />
+                                )}
+                            </Stack>
                             <Typography
                                 variant="caption"
                                 color="text.secondary"
                                 sx={{display: 'block', lineHeight: 1.2}}
                             >
-                                {openAICapabilities.length > 0
-                                    ? `Supports ${openAICapabilities.join(' + ')}`
-                                    : t('providerDialog.apiStyle.helperOpenAI')}
+                                {recommendOpenAI
+                                    ? t('providerDialog.apiStyle.customOpenAIHint', {defaultValue: 'Most endpoints speak the OpenAI API — start here unless you know otherwise.'})
+                                    : openAICapabilities.length > 0
+                                        ? `Supports ${openAICapabilities.join(' + ')}`
+                                        : t('providerDialog.apiStyle.helperOpenAI')}
                             </Typography>
                             <Stack
                                 direction="row"
@@ -134,7 +152,9 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                                 color="text.secondary"
                                 sx={{display: 'block', lineHeight: 1.2}}
                             >
-                                {t('providerDialog.apiStyle.helperAnthropic')}
+                                {recommendOpenAI
+                                    ? t('providerDialog.apiStyle.customAnthropicHint', {defaultValue: 'Only if your endpoint explicitly supports the Anthropic (Claude) API.'})
+                                    : t('providerDialog.apiStyle.helperAnthropic')}
                             </Typography>
                             {selectedProvider?.baseUrlAnthropic && (
                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlAnthropic}/>

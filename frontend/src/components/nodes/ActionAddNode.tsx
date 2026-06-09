@@ -9,14 +9,43 @@ import {
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import NodeTooltip from './NodeTooltip';
-import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, SMALL_NODE_STYLES } from './styles';
+import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES } from './styles';
 
 const { node } = { node: SMALL_NODE_STYLES };
 
+// Quick Start "Select a Model" fires this so we can point users at the exact
+// click targets instead of just scrolling near them — both the "+ Add model"
+// node and existing service cards (which can be edited) light up.
+export const SPOTLIGHT_ADD_MODEL_EVENT = 'tb:spotlight-add-model';
+
+/**
+ * Returns true for a few seconds after a spotlight is requested, so a node can
+ * pulse to draw attention. Only arms while `active` (no point spotlighting a
+ * disabled target). Auto-clears, and re-triggers cleanly if fired again.
+ */
+export const useAddModelSpotlight = (active: boolean): boolean => {
+    const [spotlight, setSpotlight] = React.useState(false);
+    React.useEffect(() => {
+        if (!active) return;
+        const onSpotlight = () => {
+            setSpotlight(false);
+            requestAnimationFrame(() => setSpotlight(true));
+        };
+        window.addEventListener(SPOTLIGHT_ADD_MODEL_EVENT, onSpotlight);
+        return () => window.removeEventListener(SPOTLIGHT_ADD_MODEL_EVENT, onSpotlight);
+    }, [active]);
+    React.useEffect(() => {
+        if (!spotlight) return;
+        const timer = window.setTimeout(() => setSpotlight(false), 4400);
+        return () => window.clearTimeout(timer);
+    }, [spotlight]);
+    return spotlight;
+};
+
 // ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
-    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning',
-})<{ active: boolean; warning?: boolean }>(({ active, warning, theme }) => ({
+    shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight',
+})<{ active: boolean; warning?: boolean; spotlight?: boolean }>(({ active, warning, spotlight, theme }) => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -36,6 +65,9 @@ const StyledAddProviderNode = styled(Box, {
         ...graphNodeHoverStyles(theme),
         borderStyle: 'solid',
     } : {},
+    // Spotlight: mirror the hover look and pulse a ring so the node is
+    // unmistakable when guidance sends the user here.
+    ...(spotlight && active ? { borderStyle: 'solid', ...nodeSpotlightSx(theme) } : {}),
 }));
 
 export interface AddProviderNodeProps {
@@ -51,11 +83,15 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     onAdd,
     tooltip = 'Add model',
 }) => {
+    // Pulse when guidance (Quick Start → "Select a Model") points the user here.
+    const spotlight = useAddModelSpotlight(active);
+
     return (
         <NodeTooltip title={tooltip} placement="top">
             <StyledAddProviderNode
                 active={active}
                 warning={warning}
+                spotlight={spotlight}
                 onClick={active ? onAdd : undefined}
             >
                 <AddIcon sx={{ fontSize: 24, color: 'text.secondary' }} />

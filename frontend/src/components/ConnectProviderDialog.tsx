@@ -273,7 +273,8 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
         <Box>
             {!hideOfficialInfo && (
                 <Typography variant="body2" color="text.secondary" sx={{mb: 1.5}}>
-                    Pick a provider. We&apos;ll ask only for what that provider needs.
+                    Search for your provider below — most are pre-configured, so we&apos;ll ask only
+                    for what they need. Not listed? Pick <Box component="span" sx={{fontWeight: 600, color: 'text.primary'}}>Custom endpoint</Box> to enter any base URL yourself.
                 </Typography>
             )}
             <TextField
@@ -313,7 +314,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                             <ProviderCard
                                 icon={<Add/>}
                                 name="Custom endpoint"
-                                meta="Any compatible API"
+                                meta="Not listed? Bring your own URL"
                                 badge={keyBadge}
                                 onClick={() => onSelect({kind: 'custom'})}
                             />

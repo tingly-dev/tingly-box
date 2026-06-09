@@ -1,5 +1,5 @@
 import { Box } from '@mui/material';
-import { alpha, styled, type Theme } from '@mui/material/styles';
+import { alpha, keyframes, styled, type Theme } from '@mui/material/styles';
 
 export const routeGraphActive = '#4F6F9F';
 export const routeGraphActiveBg = '#F7F9FC';
@@ -108,6 +108,21 @@ export const graphNodeBaseHoverStyles = {
     boxShadow: 'none',
     transform: 'translateY(0)',
 } as const;
+
+// Spotlight: a primary-colored ring that briefly pulses to draw attention to a
+// node when guidance (Quick Start → "Select a Model") points the user at it.
+// Shared by ActionAddNode (add a model) and ServiceNode (edit an existing one).
+export const spotlightPulse = keyframes`
+    0%   { box-shadow: 0 0 0 0 var(--node-spotlight-ring); }
+    70%  { box-shadow: 0 0 0 9px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+`;
+
+export const nodeSpotlightSx = (theme: Theme) => ({
+    borderColor: theme.palette.primary.main,
+    '--node-spotlight-ring': alpha(theme.palette.primary.main, 0.5),
+    animation: `${spotlightPulse} 1.4s ease-out 3`,
+});
 
 // Service node container (formerly ProviderNodeContainer)
 export const ServiceNodeContainer = styled(Box)(({ theme }: { theme: Theme }) => ({

@@ -7,6 +7,7 @@ import {
     FoldDown as FoldDownIcon,
     Key as KeyIcon,
     Speed as SpeedIcon,
+    HelpOutline as HelpOutlineIcon,
 } from '@/components/icons';
 import { Button, IconButton, Stack, Tooltip } from '@mui/material';
 import { ProbeMenu } from '@/components/probe';
@@ -21,6 +22,10 @@ export interface TemplatePageActionsProps {
     onCreateRule: () => void;
     showExpandCollapseButton?: boolean;
     onViewLogs?: () => void;
+    // Opens the routing walkthrough. Rendered as a "?" at the end of the toolbar
+    // so it's a single, page-level entry point (and a persistent hint that the
+    // guide can be reopened here later).
+    onShowGuide?: () => void;
     // Probe V2 props
     scenario?: string;
 }
@@ -35,6 +40,7 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
     onCreateRule,
     showExpandCollapseButton = true,
     onViewLogs,
+    onShowGuide,
     scenario,
 }) => {
     const { t } = useTranslation();
@@ -90,6 +96,18 @@ export const TemplatePageActions: React.FC<TemplatePageActionsProps> = ({
                 <Tooltip title={allExpanded ? t('templateActions.collapseAllRules') : t('templateActions.expandAllRules')}>
                     <IconButton size="small" onClick={onToggleExpandAll}>
                         {allExpanded ? <FoldUpIcon fontSize="small" /> : <FoldDownIcon fontSize="small" />}
+                    </IconButton>
+                </Tooltip>
+            )}
+            {onShowGuide && (
+                <Tooltip title={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}>
+                    <IconButton
+                        size="small"
+                        aria-label={t('templateActions.howRoutingWorks', { defaultValue: 'How routing works' })}
+                        onClick={onShowGuide}
+                        sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                    >
+                        <HelpOutlineIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
             )}
