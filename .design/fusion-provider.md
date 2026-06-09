@@ -70,6 +70,11 @@ transformers.  The stored provider record is never mutated.
 See also: [connect-provider-flow.md](connect-provider-flow.md) for the full
 picker → form sequence.
 
+Fusion is reached two ways, kept on separate surfaces so each form answers one
+question:
+
+### Preset template (both protocols)
+
 When the user selects a provider template that has both `baseUrlOpenAI` and
 `baseUrlAnthropic`, the form lets them pick both protocol checkboxes.  Once both
 are checked, a **Fusion mode** toggle appears below the protocol selector.
@@ -80,38 +85,49 @@ are checked, a **Fusion mode** toggle appears below the protocol selector.
 | On | One fusion `Provider` record is created with both URLs and `APIStyle: openai` as primary. |
 
 A topology hint below the toggle tells the user which outcome is selected
-("merged into one" vs "saved as two separate providers").
+("merged into one" vs "saved as two separate providers").  Presets keep this
+split-vs-merge choice.
 
-### Custom endpoint (no template)
+### "Fusion endpoint" picker card (custom)
 
-A free-form **Custom endpoint** can also be a fusion provider — the second URL is
-entered manually instead of inferred from a template.
+The Connect AI picker has a dedicated **Fusion endpoint** card (next to "Custom
+endpoint").  It opens a purpose-built form (`ProviderFormDialog` with
+`fusionMode`) that is *born dual*:
 
-- The single Base URL field is the OpenAI / primary URL. When **both** protocols
-  are ticked, the Fusion toggle and topology hint appear just as for templates.
-- By default both protocols share that one URL (same address ⇒
-  `api_base_openai == api_base_anthropic`). An **"Anthropic endpoint differs?"**
-  link reveals a second labelled field (*OpenAI Base URL* / *Anthropic Base URL*)
-  for providers that serve each protocol at a distinct address; **"Use the same
-  URL"** collapses it back.
-- Fusion toggle **on** ⇒ one fusion record (URLs may be equal or distinct);
-  **off** ⇒ two split single-protocol records, each carrying its own URL.
+- two free-text URL fields — *OpenAI Base URL* + *Anthropic Base URL*;
+- one shared API key;
+- no protocol selector, no topology toggle, no progressive disclosure.
 
-The URL source in `buildAddProviderPayload` is therefore template-driven
-(`providerBaseUrls`) **or** form-driven (`apiBaseOpenAI`/`apiBaseAnthropic`,
-falling back to `apiBase`) — the backend payload is identical either way.
+It **always** produces a single fused record (`api_base_openai` +
+`api_base_anthropic` both set, `api_base = openai URL`, `api_style = openai`,
+`auth_type = api_key`).  The two URLs may be identical (degenerate but allowed).
 
-> **Known gap:** upgrading an *existing* single-protocol custom provider to fusion
-> via the edit dialog is not yet wired (the edit-mode upgrade toggle still keys off
-> a matched template). Downgrade of an existing custom fusion provider works, since
-> `isExistingFusion` derives from the stored URLs. Add-mode custom fusion is fully
-> supported.
+Plain **Custom endpoint** is therefore strictly single-protocol (a single URL +
+an OpenAI/Anthropic radio).  To get two independent records instead of a fused
+one, add two Custom entries — "split" is no longer a modeled mode on the custom
+side.
+
+`buildAddProviderPayload` sources the two URLs template-driven (`providerBaseUrls`)
+**or** form-driven (`apiBaseOpenAI`/`apiBaseAnthropic`, falling back to `apiBase`),
+so the backend payload is identical for both surfaces.
 
 ---
 
 ## Edit flow
 
-Edit mode enforces three rules that differ from add mode.
+How an existing provider opens depends on its stored shape:
+
+- **Both fusion URLs set** → opens the dedicated **Fusion endpoint** form
+  (`fusionMode`).  A *"Convert to a single endpoint"* link downgrades it (keeps
+  the OpenAI URL, clears both fusion fields, `APIStyle = openai`).
+- **Single protocol** (or matched preset) → opens the standard form.  A
+  *"Add an Anthropic endpoint (make it a Fusion provider)"* link upgrades it: the
+  current URL becomes the OpenAI side and the dialog switches to `fusionMode`
+  (`CredentialPage.handleConvertToFusion` / `handleConvertToSingle` flip the
+  parent's mode flags and patch `providerFormData`; the open-effect, keyed on
+  `[open, fusionMode]`, re-initialises the form for the new shape).
+
+The template-driven preset edit additionally enforces the three rules below.
 
 ### Rule 1 — Protocol lock for non-fusion providers
 
@@ -169,12 +185,12 @@ Deselecting the **last** protocol is blocked — at least one must remain.
 | `initialFusionRef` | Snapshot of `{ openAI, anthropic, apiBase, apiStyle }` taken on open |
 | `createFusionProvider` | Tracks the fusion toggle state (also written to parent as `createFusionProvider` field) |
 | `effectiveLocked` | `fusionLocked \|\| protocolLocked`; passed to `ProtocolSelector` as `fusionLocked` |
-| `showFusionToggle` | add: `protocolOpenAI && protocolAnthropic`; edit: `!isExistingFusion && hasBothBaseUrls` |
-| `showSecondUrl` / `anthropicUrlValue` | custom mode only: progressive-disclosure of a second (Anthropic) URL field and its local value. Committed to `data.apiBaseAnthropic` on blur/submit. |
+| `showFusionToggle` | preset-only (`!customMode && !fusionMode`): add `protocolOpenAI && protocolAnthropic`; edit `!isExistingFusion && hasBothBaseUrls` |
+| `fusOpenAIUrl` / `fusAnthropicUrl` | `fusionMode` local mirrors for the two URL fields. Seeded from `data.apiBaseOpenAI`/`apiBaseAnthropic` on `[open, fusionMode]`; committed to parent on blur and in `handleSubmit`. |
 
-In custom mode `syncProtocolsToParent` does **not** clear the fusion URL fields
-(the URL text inputs own them); it only clears the unused side when the user drops
-back to a single protocol. `showTopologyHint` also fires in custom mode.
+`customMode` is strictly single-protocol: `ProtocolSelector` renders radios
+(`singleSelect`) and the toggle handlers are mutually exclusive. The fusion toggle
+and topology hint are preset-only.
 
 `handleFusionDowngrade(nextOpenAI, nextAnthropic)` — called from protocol toggle
 handlers when `isExistingFusion` is true.  Reads from `initialFusionRef` and

@@ -25,13 +25,19 @@ Scrollbar is always visible on the card area.
 
 | Section | Grid | Badge | Notes |
 |---|---|---|---|
-| Custom | 1-column | Key | Single "Custom endpoint" card |
+| Custom | 2-column | Key | "Custom endpoint" (single URL), "Fusion endpoint" (two URLs, one key), "Import" |
 | OAuth sign-in | 2-column | OAuth (green) | Short names fit side-by-side |
 | Self-hosted | 2-column | Self-hosted (amber) | Ollama, LM Studio, LocalAI, Jan, vLLM, SGLang |
 | API key providers | 1-column | Key | Long localized names need full width |
 
+**Custom vs Fusion** — two shapes, two cards (`kind: 'custom'` / `'fusion'`):
+- **Custom endpoint** → single-protocol form (one base URL + OpenAI/Anthropic radio).
+- **Fusion endpoint** → `fusionMode` form: *OpenAI Base URL* + *Anthropic Base URL*
+  + one key, always a single fused record. See
+  [fusion-provider.md](fusion-provider.md).
+
 **Routing on card click:**
-- **Custom / Key provider / Self-hosted** → opens the form dialog (pre-filled)
+- **Custom / Fusion / Key provider / Self-hosted** → opens the form dialog (pre-filled)
 - **OAuth** → opens OAuthDialog in direct mode (skips the provider grid, straight to auth)
 
 ---

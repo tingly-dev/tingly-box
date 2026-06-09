@@ -61,6 +61,7 @@ const CredentialPage = () => {
     const [isLocalProvider, setIsLocalProvider] = useState(false);
     const [fromConnectPicker, setFromConnectPicker] = useState(false);
     const [isCustomMode, setIsCustomMode] = useState(false);
+    const [isFusionMode, setIsFusionMode] = useState(false);
 
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
@@ -175,6 +176,29 @@ const CredentialPage = () => {
             handleAddApiKey();
             return;
         }
+        if (selection.kind === 'fusion') {
+            setFromConnectPicker(true);
+            setIsFusionMode(true);
+            setApiKeyDialogMode('add');
+            setProviderFormData({
+                uuid: undefined,
+                name: '',
+                apiBase: '',
+                apiStyle: 'openai',
+                apiBaseOpenAI: '',
+                apiBaseAnthropic: '',
+                token: '',
+                enabled: true,
+                noKeyRequired: false,
+                proxyUrl: '',
+                userAgent: '',
+                authType: 'api_key',
+                createFusionProvider: true,
+                protocols: ['openai', 'anthropic'],
+            } as any);
+            setApiKeyDialogOpen(true);
+            return;
+        }
         if (selection.kind === 'local') {
             const lp = selection.provider;
             setIsLocalProvider(true);
@@ -209,6 +233,36 @@ const CredentialPage = () => {
             providerBaseUrls: {openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic},
         } as any);
         setApiKeyDialogOpen(true);
+    };
+
+    // Edit-mode upgrade: a single-endpoint provider becomes a fusion one. Keep the
+    // current URL as the OpenAI side and let the user fill the Anthropic URL.
+    const handleConvertToFusion = () => {
+        setProviderFormData((fd: any) => ({
+            ...fd,
+            apiBaseOpenAI: fd.apiBase || fd.apiBaseOpenAI || '',
+            apiBaseAnthropic: '',
+            apiStyle: 'openai',
+            createFusionProvider: true,
+            protocols: ['openai', 'anthropic'],
+        }));
+        setIsCustomMode(false);
+        setIsFusionMode(true);
+    };
+
+    // Edit-mode downgrade: a fusion provider becomes a single OpenAI endpoint.
+    const handleConvertToSingle = () => {
+        setProviderFormData((fd: any) => ({
+            ...fd,
+            apiBase: fd.apiBaseOpenAI || fd.apiBase || '',
+            apiStyle: 'openai',
+            apiBaseOpenAI: '',
+            apiBaseAnthropic: '',
+            createFusionProvider: false,
+            protocols: ['openai'],
+        }));
+        setIsFusionMode(false);
+        setIsCustomMode(true);
     };
 
     const loadProviders = async () => {
@@ -427,7 +481,12 @@ const CredentialPage = () => {
                 setOAuthDetailProvider(result.data);
                 setOAuthDetailDialogOpen(true);
             } else {
-                // Handle API Key edit
+                // Handle API Key edit. A provider with both fusion URLs opens the
+                // dedicated Fusion form; everything else opens the standard form
+                // (which offers an upgrade-to-fusion action for single endpoints).
+                const isFusion = !!provider.api_base_openai && !!provider.api_base_anthropic;
+                setIsFusionMode(isFusion);
+                setIsCustomMode(false);
                 setApiKeyDialogMode('edit');
                 setProviderFormData({
                     uuid: provider.uuid,
@@ -690,7 +749,7 @@ const CredentialPage = () => {
             {/* API Key Provider Dialog */}
             <ProviderFormDialog
                 open={apiKeyDialogOpen}
-                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); setIsCustomMode(false); }}
+                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); setIsCustomMode(false); setIsFusionMode(false); }}
                 onBack={fromConnectPicker ? () => setConnectOpen(true) : undefined}
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
@@ -699,6 +758,9 @@ const CredentialPage = () => {
                 mode={apiKeyDialogMode}
                 optionalEditableToken={isLocalProvider}
                 customMode={isCustomMode}
+                fusionMode={isFusionMode}
+                onConvertToFusion={handleConvertToFusion}
+                onConvertToSingle={handleConvertToSingle}
             />
 
             {/* Unified provider picker */}

@@ -1,4 +1,4 @@
-import {Add, Close, Computer, Key, Login, Search, Language, Description, Upload} from '@/components/icons';
+import {Add, Close, Computer, Key, Login, Search, Language, Description, Upload, Fusion} from '@/components/icons';
 import RegionBadge from './RegionBadge';
 import {
     Box,
@@ -27,6 +27,7 @@ export type ConnectSelection =
     | {kind: 'oauth'; providerId: string}
     | {kind: 'local'; provider: UniqueProvider}
     | {kind: 'custom'}
+    | {kind: 'fusion'}
     | {kind: 'import'};
 
 interface ConnectProviderDialogProps {
@@ -317,6 +318,13 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                                 meta="Not listed? Bring your own URL"
                                 badge={keyBadge}
                                 onClick={() => onSelect({kind: 'custom'})}
+                            />
+                            <ProviderCard
+                                icon={<Fusion/>}
+                                name="Fusion endpoint"
+                                meta="Separate OpenAI & Anthropic URLs, one key"
+                                badge={keyBadge}
+                                onClick={() => onSelect({kind: 'fusion'})}
                             />
                             <ProviderCard
                                 icon={<Upload/>}

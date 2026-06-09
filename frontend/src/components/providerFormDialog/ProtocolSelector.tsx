@@ -1,4 +1,4 @@
-import {Box, Checkbox, Chip, FormControl, FormLabel, Stack, Typography} from '@mui/material';
+import {Box, Checkbox, Chip, FormControl, FormLabel, Radio, Stack, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {UniqueProvider} from '../../services/serviceProviders';
@@ -10,6 +10,8 @@ interface ProtocolSelectorProps {
     protocolOpenAI: boolean;
     protocolAnthropic: boolean;
     fusionLocked: boolean;
+    /** Custom endpoints are single-protocol: render mutually-exclusive radios. */
+    singleSelect?: boolean;
     openAICapabilities: string[];
     onToggleOpenAI: () => void;
     onToggleAnthropic: () => void;
@@ -24,12 +26,14 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
     protocolOpenAI,
     protocolAnthropic,
     fusionLocked,
+    singleSelect = false,
     openAICapabilities,
     onToggleOpenAI,
     onToggleAnthropic,
     recommendOpenAI = false,
 }) => {
     const {t} = useTranslation();
+    const Toggle = singleSelect ? Radio : Checkbox;
 
     const openAIDisabled = fusionLocked || (selectedProvider ? !selectedProvider.supportsOpenAI : false);
     const anthropicDisabled = fusionLocked || (selectedProvider ? !selectedProvider.supportsAnthropic : false);
@@ -109,7 +113,7 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI}/>
                             )}
                         </Box>
-                        <Checkbox
+                        <Toggle
                             size="small"
                             checked={protocolOpenAI}
                             disabled={openAIDisabled}
@@ -160,7 +164,7 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlAnthropic}/>
                             )}
                         </Box>
-                        <Checkbox
+                        <Toggle
                             size="small"
                             checked={protocolAnthropic}
                             disabled={anthropicDisabled}
