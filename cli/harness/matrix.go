@@ -22,7 +22,7 @@ type MatrixCmd struct {
 	Targets    []string `kong:"name='target',sep=',',help='Filter by target protocol (can repeat or comma-separate)'"`
 	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
 	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
-	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (single + transitive + idempotent), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only)'"`
+	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (single + transitive + idempotent + flags), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only)'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
@@ -46,6 +46,9 @@ func (*MatrixCmd) Help() string {
 
   # Run only idempotent round-trip tests
   harness matrix --mode=idempotent
+
+  # Run only per-rule flag behavior tests
+  harness matrix --mode=flags
 
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
@@ -121,11 +124,12 @@ func (m *MatrixCmd) Run() error {
 
 	// Collect results for the selected sections (--mode controls which).
 	//
-	//   single-hop (A→B)        runs unless mode is transitive/idempotent
+	//   single-hop (A→B)        runs unless mode is transitive/idempotent/flags
 	//   transitive (A→B→C)      runs only for all/transitive (OFF by default)
 	//   idempotent (g(f(A))==A) runs for default/all/idempotent
+	//   flags (per-rule flags)  runs for all/flags
 	var combined []protocoltest.TestResult
-	if m.Mode != "transitive" && m.Mode != "idempotent" {
+	if m.Mode != "transitive" && m.Mode != "idempotent" && m.Mode != "flags" {
 		combined = append(combined, matrix.ExecuteAll()...)
 	}
 	if m.Mode == "all" || m.Mode == "transitive" {
@@ -133,6 +137,9 @@ func (m *MatrixCmd) Run() error {
 	}
 	if m.Mode == "default" || m.Mode == "all" || m.Mode == "idempotent" {
 		combined = append(combined, matrix.ExecuteAllIdempotent()...)
+	}
+	if m.Mode == "all" || m.Mode == "flags" {
+		combined = append(combined, matrix.ExecuteAllFlags()...)
 	}
 	results := filterResults(combined, m)
 

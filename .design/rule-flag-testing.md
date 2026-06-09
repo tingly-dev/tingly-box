@@ -8,6 +8,11 @@
 > tests **rule flags** (per-rule request/response behavior). Keeping them
 > separate avoids an `pairs × scenarios × flags` blow-up and keeps each
 > concern's intent legible.
+>
+> It is wired into the harness as the **`flags`** section: run it via
+> `harness matrix --mode=flags` (also included in `--mode=all`), or as
+> `go test -run TestRuleFlags`. See the mode table in
+> [`harness-matrix.md`](./harness-matrix.md#3-how-to-run).
 
 ---
 
@@ -53,11 +58,20 @@ Key pieces (all in `internal/protocoltest/`):
 | Piece | Role |
 |-------|------|
 | `flagCase{key, run}` | one flag's full setup→send→assert, keyed by its registry key |
+| `flagTB` | the `testing.TB` subset the cases use, so the same bodies run under `go test` (`*testing.T`) and the CLI (a recording shim) |
 | `flagScenario()` | the single shared scenario (built from `MultiTurnScenario`'s mocks) |
 | `flagBaseRequest(src, model, streaming)` | the unified multi-turn request material |
 | `sendFlag(...)` | sends `flagBaseRequest` (+ optional body mutate / headers) through `dispatch` |
 | `VirtualServer.LastRequest(kind)` | the forwarded upstream request, for assertions |
 | `TestEnv.SetupRouteWithFlags(...)` | wires a route with `rule.Flags` set |
+| `Matrix.ExecuteAllFlags()` | CLI executor — runs every case with the recording shim, returns `[]TestResult` |
+
+The cases live in `flags.go` (a non-test file) so the CLI build can see them;
+`flag_test.go` is just the two go-test entry points (`TestRuleFlags`,
+`TestRuleFlagRegistry_FullyCovered`). Cases assert via the `flagTB` interface,
+not `*testing.T` directly, which is what lets `ExecuteAllFlags` reuse the exact
+same case bodies from the CLI (its shim records `Errorf`/`Fatalf` into
+`AssertionError`s and runs `Cleanup`s).
 
 One unified fixture is intentional: rather than each case crafting a bespoke
 request, the multi-turn `flagBaseRequest` already carries the material, so a
@@ -145,16 +159,22 @@ silently dropped on a code path).
 ## 6. How to run
 
 ```bash
-# Whole suite + the completeness guard (runs in normal go test, no e2e tag)
+# CLI — the flags section of the matrix
+go run ./cli/harness matrix --mode=flags
+go run ./cli/harness matrix --mode=flags --json     # one row per flag
+
+# go test — whole suite + the completeness guard (no e2e tag)
 go test ./internal/protocoltest/ -run TestRuleFlag
 
 # A single flag
 go test ./internal/protocoltest/ -run 'TestRuleFlags/block_tools' -v
 ```
 
-The suite spins up the full gateway per case (`NewTestEnv`), so it runs in the
-ordinary `go test` path — unlike the e2e-tagged protocol matrix — which keeps
-the registry guard cheap to run on every change.
+The suite spins up the full gateway per case (`NewTestEnv` under `go test`,
+`NewTestEnvForCLI` under the CLI), so it runs in the ordinary `go test` path —
+unlike the e2e-tagged protocol matrix — which keeps the registry guard cheap to
+run on every change. In the CLI table each row's `Scenario` column is the flag
+key.
 
 ---
 

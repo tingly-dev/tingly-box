@@ -101,21 +101,23 @@ go test -tags e2e ./internal/protocoltest/... -run TestIdempotent
 
 ### CLI (`cli/harness`)
 
-`--mode` selects which sections run. Unlike the `go test` path, the CLI can run
-idempotence directly (`ExecuteAllIdempotent`, the `testing.T`-free counterpart
-of `RunIdempotent`).
+`--mode` selects which sections run. Each section has a `testing.T`-free
+executor (`ExecuteAll*`) so the CLI can run it directly — including idempotence
+and the rule-flag suite, which would otherwise be go-test-only.
 
-| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) |
-|----------|:---:|:---:|:---:|
-| `default` *(no flag)* | ✅ | — | ✅ |
-| `all` | ✅ | ✅ | ✅ |
-| `single` | ✅ | — | — |
-| `transitive` | — | ✅ | — |
-| `idempotent` | — | — | ✅ |
+| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) | flags (per-rule) |
+|----------|:---:|:---:|:---:|:---:|
+| `default` *(no flag)* | ✅ | — | ✅ | — |
+| `all` | ✅ | ✅ | ✅ | ✅ |
+| `single` | ✅ | — | — | — |
+| `transitive` | — | ✅ | — | — |
+| `idempotent` | — | — | ✅ | — |
+| `flags` | — | — | — | ✅ |
 
 ```bash
-# Default: single-hop + idempotent round-trips. Two-hop is OFF by default
-# (it is the slowest section and overlaps single-hop coverage).
+# Default: single-hop + idempotent round-trips. Two-hop and flags are OFF by
+# default (two-hop is the slowest and overlaps single-hop; flags are an
+# orthogonal axis).
 go run ./cli/harness matrix
 
 # Everything
@@ -125,6 +127,7 @@ go run ./cli/harness matrix --mode=all
 go run ./cli/harness matrix --mode=single
 go run ./cli/harness matrix --mode=transitive
 go run ./cli/harness matrix --mode=idempotent
+go run ./cli/harness matrix --mode=flags     # per-rule flag behavior
 
 # Filter by scenario / source / target
 go run ./cli/harness matrix --scenario text --source anthropic_v1
@@ -132,6 +135,10 @@ go run ./cli/harness matrix --scenario text --source anthropic_v1
 # JSON for CI
 go run ./cli/harness matrix --json
 ```
+
+The `flags` section is documented in detail in
+[`rule-flag-testing.md`](./rule-flag-testing.md); `ExecuteAllFlags` reports one
+`TestResult` per flag (`Name: "flags/<key>"`, `Scenario: <key>`).
 
 ---
 
