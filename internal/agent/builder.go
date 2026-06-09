@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"strings"
-
 	aiagent "github.com/tingly-dev/tingly-box/ai/agent"
 )
 
@@ -55,23 +53,3 @@ func BuildOpenCodeConfig(configBaseURL, apiKey string, models map[string]interfa
 	}
 }
 
-// CollectCodexModels deduplicates and preserves order of model names.
-// This helper processes routing rules to extract unique model names.
-func CollectCodexModels(rules []string) []string {
-	seen := map[string]struct{}{}
-	var out []string
-
-	for _, ruleModel := range rules {
-		model := strings.TrimSpace(ruleModel)
-		if model == "" {
-			continue
-		}
-		if _, exists := seen[model]; exists {
-			continue
-		}
-		seen[model] = struct{}{}
-		out = append(out, model)
-	}
-
-	return out
-}
