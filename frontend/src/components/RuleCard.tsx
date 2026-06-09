@@ -295,9 +295,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     // ── 1M context switch (context_1m flag) ────────────────────────────────
     // Toggling 1M opens a confirm dialog instead of silently saving: it spells
-    // out what takes effect where, and — for Codex — offers a one-click config
-    // apply plus the restart reminder. Cancel reverts (the switch is controlled
-    // by the flag, which we only write on confirm). See .design/one-m-context.md.
+    // out what takes effect where, and — for Codex / Claude Code — offers a
+    // one-click config apply plus the restart reminder. Cancel reverts (the
+    // switch is controlled by the flag, written only on confirm).
+    // See .design/one-m-context.md.
     const oneMEffect: OneMEffect = oneMEffectForScenario(rule.scenario);
     // codex/claude both write an agent config file read at startup → confirm +
     // apply + restart dialog. Other scenarios are gateway-only → toggle directly.
