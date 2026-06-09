@@ -285,10 +285,6 @@ func (s *Server) DetermineProviderAndModel(rule *typ.Rule) (*typ.Provider, *load
 }
 
 func (s *Server) determineRule(modelName string) (*typ.Rule, error) {
-	// Strip a trailing `[1m]` suffix so count-tokens / passthrough requests that
-	// carry the 1M intent on the model name still resolve their rule. Matching
-	// the scenario path keeps the gateway tolerant of the suffix everywhere.
-	modelName, _ = typ.StripContext1MSuffix(modelName)
 
 	c := s.config
 	if c != nil && c.IsRequestModel(modelName) {
@@ -317,12 +313,6 @@ func isEnterpriseContextPresent(c *gin.Context) bool {
 const probeSyntheticRuleUUID = "probe-synthetic"
 
 func (s *Server) determineRuleWithScenario(ctx *gin.Context, scenario typ.RuleScenario, modelName string) (*typ.Rule, error) {
-	// Tolerate a trailing `[1m]` suffix in the request model: it carries the 1M
-	// context intent, not a distinct route. Strip it before matching so a client
-	// sending "tingly/cc-sonnet[1m]" still lands on the "tingly/cc-sonnet" rule.
-	// The Anthropic handler reads the suffix separately to drive the beta flag.
-	modelName, _ = typ.StripContext1MSuffix(modelName)
-
 	// X-Tingly-Probe-Rule: load a specific rule by UUID (for applying its flags
 	// while service selection is overridden by X-Tingly-Probe-Service).
 	if ruleUUID := ctx.GetHeader("X-Tingly-Probe-Rule"); ruleUUID != "" {

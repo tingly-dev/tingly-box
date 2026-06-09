@@ -77,13 +77,14 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 			ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
 		}
 
+		_, has1M := typ.StripContext1MSuffix(rule.RequestModel)
 		models = append(models, OpenAIModel{
 			ID:        rule.RequestModel,
 			Object:    "model",
 			Created:   created,
 			OwnedBy:   ownedBy,
 			AuthType:  string(primaryAuthTypeForRule(cfg, rule)),
-			Context1M: rule.Flags.Context1M,
+			Context1M: has1M,
 		})
 	}
 

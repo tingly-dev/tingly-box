@@ -1171,8 +1171,8 @@ const (
 )
 
 // CollectCodexRuleModels returns the deduplicated request_models of every
-// active Codex-scenario rule, plus the set of those slugs whose context_1m
-// flag is set so the catalog can widen their context_window.
+// active Codex-scenario rule, plus the set of those slugs whose model name
+// carries the [1m] suffix so the catalog can widen their context_window.
 func CollectCodexRuleModels(cfg *Config) ([]string, map[string]bool) {
 	seen := map[string]struct{}{}
 	var out []string
@@ -1185,7 +1185,7 @@ func CollectCodexRuleModels(cfg *Config) ([]string, map[string]bool) {
 		if model == "" {
 			continue
 		}
-		if rule.Flags.Context1M {
+		if _, has := typ.StripContext1MSuffix(model); has {
 			oneM[model] = true
 		}
 		if _, dup := seen[model]; dup {

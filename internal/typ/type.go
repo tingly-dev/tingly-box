@@ -251,16 +251,6 @@ type RuleFlags struct {
 	// narrower in scope; when both are set the rule-level service wins.
 	VisionProxyService *VisionProxyService `json:"vision_proxy_service,omitempty" yaml:"vision_proxy_service,omitempty"`
 
-	// Context1M requests the 1M (1,000,000-token) context window for this rule.
-	// It is the single per-rule source of truth that fans out per scenario:
-	//   - Claude Code / Anthropic: the gateway injects the
-	//     context-1m-2025-08-07 anthropic-beta flag upstream (and the Quick
-	//     Config appends the `[1m]` model-id suffix to this rule's slot).
-	//   - Codex: the model catalog's context_window is widened to 1M.
-	// Whether the routed model actually supports 1M is not validated here —
-	// the flag is sent and the upstream accepts or rejects it.
-	// See .design/one-m-context.md.
-	Context1M bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
 }
 
 // VisionProxyService identifies the upstream used to describe images for the

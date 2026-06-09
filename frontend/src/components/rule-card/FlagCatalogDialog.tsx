@@ -102,12 +102,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         }
     }, [open, flags]);
 
-    // context_1m has a promoted switch in the rule header (OneMContextSwitch),
-    // so it is hidden from the generic catalog to keep one visual home.
-    const visibleRegistry = useMemo(
-        () => (registry || []).filter((s) => s.key !== 'context_1m'),
-        [registry],
-    );
+    const visibleRegistry = useMemo(() => registry || [], [registry]);
 
     // Group registry entries by category, preserving backend order within each
     // group, then sort groups by CATEGORY_ORDER (unknown categories appended).

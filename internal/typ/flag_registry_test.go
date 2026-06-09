@@ -27,7 +27,6 @@ func TestRuleFlagRegistry_KnownKeys(t *testing.T) {
 		"use_max_completion_tokens",
 		"custom_user_agent",
 		"clean_header",
-		"context_1m",
 	}
 
 	present := map[string]bool{}

@@ -61,13 +61,14 @@ func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.R
 			}
 		}
 
+		_, has1M := typ.StripContext1MSuffix(rule.RequestModel)
 		models = append(models, AnthropicModel{
 			ID:          rule.RequestModel,
 			CreatedAt:   "2024-01-01T00:00:00Z",
 			DisplayName: displayName,
 			Type:        "model",
 			AuthType:    string(primaryAuthTypeForRule(cfg, rule)),
-			Context1M:   rule.Flags.Context1M,
+			Context1M:   has1M,
 		})
 	}
 

@@ -441,15 +441,10 @@ interface DerivePrefsInput {
 }
 
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
-    // The rule's context_1m flag is the source of truth for 1M: derive the
-    // slot's [1m] suffix from it so toggling the rule-level switch flows
-    // straight into the generated env. See .design/one-m-context.md.
     const ruleFor = (variant: string): any =>
         mode === 'unified' ? rules[0] : rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
     const modelForVariant = (variant: string, fallback: string): string => {
-        const rule = ruleFor(variant);
-        const base = rule?.request_model || fallback;
-        return with1M(base, !!rule?.flags?.context_1m);
+        return ruleFor(variant)?.request_model || fallback;
     };
 
     const isUnified = mode !== 'separate';

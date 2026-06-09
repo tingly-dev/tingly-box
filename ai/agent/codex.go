@@ -24,8 +24,8 @@ type CodexParams struct {
 	Models []string
 
 	// Context1MModels marks which entries of Models requested the 1M context
-	// window (rule context_1m flag). Their catalog entries get a widened
-	// context_window. nil/empty leaves every model on the default.
+	// window (model name carries [1m] suffix). Their catalog entries get a
+	// widened context_window. nil/empty leaves every model on the default.
 	Context1MModels map[string]bool
 
 	// Prefs holds the typed, whitelisted, user-tunable Codex config.toml keys
