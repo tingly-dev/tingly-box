@@ -14,8 +14,33 @@ import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyle
 const { node } = { node: SMALL_NODE_STYLES };
 
 // Quick Start "Select a Model" fires this so we can point users at the exact
-// click target instead of just scrolling near it.
+// click targets instead of just scrolling near them — both the "+ Add model"
+// node and existing service cards (which can be edited) light up.
 export const SPOTLIGHT_ADD_MODEL_EVENT = 'tb:spotlight-add-model';
+
+/**
+ * Returns true for a few seconds after a spotlight is requested, so a node can
+ * pulse to draw attention. Only arms while `active` (no point spotlighting a
+ * disabled target). Auto-clears, and re-triggers cleanly if fired again.
+ */
+export const useAddModelSpotlight = (active: boolean): boolean => {
+    const [spotlight, setSpotlight] = React.useState(false);
+    React.useEffect(() => {
+        if (!active) return;
+        const onSpotlight = () => {
+            setSpotlight(false);
+            requestAnimationFrame(() => setSpotlight(true));
+        };
+        window.addEventListener(SPOTLIGHT_ADD_MODEL_EVENT, onSpotlight);
+        return () => window.removeEventListener(SPOTLIGHT_ADD_MODEL_EVENT, onSpotlight);
+    }, [active]);
+    React.useEffect(() => {
+        if (!spotlight) return;
+        const timer = window.setTimeout(() => setSpotlight(false), 4400);
+        return () => window.clearTimeout(timer);
+    }, [spotlight]);
+    return spotlight;
+};
 
 const spotlightPulse = keyframes`
     0%   { box-shadow: 0 0 0 0 var(--add-ring); }
@@ -69,25 +94,8 @@ export const ActionAddNode: React.FC<AddProviderNodeProps> = ({
     onAdd,
     tooltip = 'Add model',
 }) => {
-    // Temporary pulse when guidance (Quick Start → "Select a Model") asks us to
-    // point the user at the add-model target. Auto-clears so it never lingers.
-    const [spotlight, setSpotlight] = React.useState(false);
-    React.useEffect(() => {
-        if (!active) return;
-        const onSpotlight = () => {
-            setSpotlight(false);
-            // restart the animation on a fresh frame even if already pulsing
-            requestAnimationFrame(() => setSpotlight(true));
-        };
-        window.addEventListener(SPOTLIGHT_ADD_MODEL_EVENT, onSpotlight);
-        return () => window.removeEventListener(SPOTLIGHT_ADD_MODEL_EVENT, onSpotlight);
-    }, [active]);
-
-    React.useEffect(() => {
-        if (!spotlight) return;
-        const timer = window.setTimeout(() => setSpotlight(false), 4400);
-        return () => window.clearTimeout(timer);
-    }, [spotlight]);
+    // Pulse when guidance (Quick Start → "Select a Model") points the user here.
+    const spotlight = useAddModelSpotlight(active);
 
     return (
         <NodeTooltip title={tooltip} placement="top">
