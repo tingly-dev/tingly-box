@@ -40,6 +40,10 @@ export interface GuideStep {
     // Which routing mode this step belongs to (routing guide only). Lets the
     // dialog filter steps without relying on array-index magic numbers.
     mode?: 'direct' | 'smart';
+    // When set, the step renders a mock page-toolbar above the diagram with this
+    // button highlighted, so users can recognise what to click (the real button
+    // lives in the toolbar, off-graph).
+    toolbarHighlight?: 'connectAI' | 'newRule';
 }
 
 /**
@@ -616,6 +620,7 @@ export const ROUTING_GUIDE_STEPS: GuideStep[] = [
         // Step 1: you need a credential before anything routes.
         diagram: TierDiagramType.EMPTY,
         mode: 'direct',
+        toolbarHighlight: 'connectAI',
         title: 'rule.routing.guide.steps.connectAI.title',
         content: 'rule.routing.guide.steps.connectAI.content',
         annotations: [
@@ -627,6 +632,7 @@ export const ROUTING_GUIDE_STEPS: GuideStep[] = [
         // Step 2: from an empty rule, add your first model; New Rule adds more rules.
         diagram: TierDiagramType.EMPTY,
         mode: 'direct',
+        toolbarHighlight: 'newRule',
         title: 'rule.routing.guide.steps.addModel.title',
         content: 'rule.routing.guide.steps.addModel.content',
         annotations: [

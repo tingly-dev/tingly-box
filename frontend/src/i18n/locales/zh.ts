@@ -531,6 +531,8 @@ export default {
         "gotIt": "明白了！",
         "close": "关闭",
         "hoverHint": "操作按钮已显示 - 尝试悬停节点查看！",
+        "toolbarLabel": "页面工具栏",
+        "clickHere": "点这里",
         "steps": {
           "connectAI": {
             "title": "1. 连接一个 AI 提供商",

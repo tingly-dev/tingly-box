@@ -19,6 +19,7 @@ import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ROUTING_GUIDE_STEPS, type GuideStep } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
+import { GuideToolbarPreview } from './GuideToolbarPreview';
 
 export interface EntryGuideDialogProps {
     open: boolean;
@@ -210,6 +211,9 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
                             borderColor: 'divider',
                             position: 'relative',
                         }}>
+                            {currentStep.toolbarHighlight && (
+                                <GuideToolbarPreview highlight={currentStep.toolbarHighlight} />
+                            )}
                             <Box sx={{ width: '100%', maxWidth: 700 }}>
                                 <StaticGraphViewer
                                     scenario={currentStep.diagram}

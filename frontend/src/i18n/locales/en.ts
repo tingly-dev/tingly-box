@@ -530,6 +530,8 @@ export default {
         "gotIt": "Got it!",
         "close": "Close",
         "hoverHint": "Action buttons shown - try hovering over nodes!",
+        "toolbarLabel": "Page toolbar",
+        "clickHere": "Click here",
         "steps": {
           "connectAI": {
             "title": "1. Connect an AI provider",
