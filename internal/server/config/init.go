@@ -9,7 +9,7 @@ var DefaultRules []typ.Rule
 
 // defaultSessionAffinitySeconds is the 30-minute session-affinity TTL seeded on
 // the built-in Claude Code / Claude Desktop / Codex rules. session_affinity is
-// rule-only (no scenario-level inheritance); these seeds + migrate20260609* are
+// rule-only (no scenario-level inheritance); these seeds + migrate20260610 are
 // the sole source of the default. Other scenarios are off unless set per-rule.
 const defaultSessionAffinitySeconds = 1800
 

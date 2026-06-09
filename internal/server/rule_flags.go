@@ -141,7 +141,7 @@ func resolveRuleFlagsWithScenario(
 
 		// SessionAffinity is rule-only — no scenario-level inheritance. The
 		// built-in Claude Code / Desktop / Codex rules seed it directly (init +
-		// migrate20260609*), so there is nothing to inject here.
+		// migrate20260610), so there is nothing to inject here.
 	}
 
 	// Auto-apply CleanHeader for protocol transformation in billing scenarios

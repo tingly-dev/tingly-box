@@ -48,14 +48,8 @@ func Migrate(c *Config) error {
 	migrate20260521(c) // Add Claude Desktop haiku-4-5 built-in rule
 	migrate20260517(c) // Rewrite 127.0.0.1 to localhost in tingly-owned agent configs
 	migrate20260518(c) // Set OpenAIEndpointMode=responses on existing Codex OAuth providers
-	migrate20260606(c) // Add default scenario configs with session affinity
-	migrate20260608(c)   // Default claude_code_compat on for existing Claude Code rules
-	migrate20260608_2(c) // Default clean_header on for existing Claude Code rules
-	migrate20260608_3(c) // Default clean_header on for existing Claude Desktop rules
-	migrate20260608_4(c) // Default claude_code_compat on for existing Claude Desktop rules
-	migrate20260609(c)   // Default session_affinity on for existing Claude Code rules
-	migrate20260609_2(c) // Default session_affinity on for existing Claude Desktop rules
-	migrate20260609_3(c) // Default session_affinity on for existing Codex rules
+	migrate20260606(c) // Default SkipUsage on for the Xcode scenario
+	migrate20260610(c) // Seed default rule flags (claude_code_compat / clean_header / session_affinity) for CC / Desktop / Codex rules
 	return nil
 }
 
@@ -586,7 +580,7 @@ func migrate20260521(c *Config) {
 // This migration originally also seeded scenario-level session_affinity for the
 // IDE/Agent scenarios. session_affinity has since been downgraded to a rule-only
 // flag (seeded on the built-in Claude Code / Desktop / Codex rules via init +
-// migrate20260609*), so the affinity seeding has been removed; only the Xcode
+// migrate20260610), so the affinity seeding has been removed; only the Xcode
 // SkipUsage default remains.
 func migrate20260606(c *Config) {
 	if c.hasMigrationCompleted("20260606") {
@@ -624,181 +618,61 @@ func migrate20260606(c *Config) {
 	}
 }
 
-// migrate20260608 defaults claude_code_compat on for existing Claude Code rules
-// — the built-in CC rules and any claude_code:<profile> profile rules. Claude
-// Code emits mid-conversation system-role messages that third-party
-// Anthropic-compatible providers reject; enabling the normalization by default
-// makes routing to those providers work without the user having to discover the
-// flag. New installs get this from init.go (ccRule) and newCCProfileRules; this
-// migration covers configs persisted before the default existed.
+// migrate20260610 seeds the default rule-level flags for the built-in agent
+// scenarios in a single pass, consolidating the earlier per-flag/per-scenario
+// migrations (claude_code_compat, clean_header, session_affinity) that were
+// fragmented across 20260608*/20260609*. For each existing rule it mirrors what
+// init.go seeds on the built-in rules:
 //
-// One-time only — gated by the migration marker — so a user who later turns the
-// flag off on a specific rule keeps it off across restarts.
-func migrate20260608(c *Config) {
-	if c.hasMigrationCompleted("20260608") {
+//   - Claude Code / Claude Desktop rules (base scenario, profile-aware):
+//       claude_code_compat on, clean_header on, session_affinity = 1800s
+//   - Codex rules: session_affinity = 1800s
+//
+// Rationale per flag:
+//   - claude_code_compat: CC / Desktop emit mid-conversation system-role
+//     messages that third-party Anthropic-compatible providers reject.
+//   - clean_header: CC / Desktop inject x-anthropic-billing-header blocks that
+//     must never leak to external providers.
+//   - session_affinity: 30-min session pinning improves cache hit rate.
+//
+// Each default is applied only when the rule hasn't set it yet (false / 0 = not
+// set), and the whole pass is gated by one marker so a user who later turns any
+// flag off (or affinity to 0) keeps it off across restarts. New installs get
+// these straight from init.go (ccRule / cdRule / built-in-codex); this migration
+// covers configs persisted before the defaults existed.
+func migrate20260610(c *Config) {
+	if c.hasMigrationCompleted("20260610") {
 		return
 	}
 
 	needsSave := false
 	for i := range c.Rules {
 		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
-		if base != typ.ScenarioClaudeCode {
-			continue
-		}
-		if !c.Rules[i].Flags.ClaudeCodeCompat {
-			c.Rules[i].Flags.ClaudeCodeCompat = true
-			needsSave = true
+		switch base {
+		case typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
+			if !c.Rules[i].Flags.ClaudeCodeCompat {
+				c.Rules[i].Flags.ClaudeCodeCompat = true
+				needsSave = true
+			}
+			if !c.Rules[i].Flags.CleanHeader {
+				c.Rules[i].Flags.CleanHeader = true
+				needsSave = true
+			}
+			if c.Rules[i].Flags.SessionAffinity == 0 {
+				c.Rules[i].Flags.SessionAffinity = defaultSessionAffinitySeconds
+				needsSave = true
+			}
+		case typ.ScenarioCodex:
+			if c.Rules[i].Flags.SessionAffinity == 0 {
+				c.Rules[i].Flags.SessionAffinity = defaultSessionAffinitySeconds
+				needsSave = true
+			}
 		}
 	}
 
-	c.markMigrationCompleted("20260608")
+	c.markMigrationCompleted("20260610")
 	if needsSave {
 		_ = c.Save()
-		logrus.Info("Migration 2026-06-08 completed: defaulted claude_code_compat on for Claude Code rules")
+		logrus.Info("Migration 20260610 completed: seeded default rule flags (claude_code_compat / clean_header / session_affinity) for Claude Code, Claude Desktop, and Codex rules")
 	}
-}
-
-// migrate20260608_2 defaults clean_header on for existing Claude Code rules —
-// the built-in CC rules and any claude_code:<profile> profile rules. Claude Code
-// injects x-anthropic-billing-header blocks into system messages; these are a
-// CC-internal billing mechanism and should never reach external providers.
-// Previously the header was only stripped on protocol transformation (Anthropic →
-// OpenAI/other); defaulting the flag at rule level strips it unconditionally,
-// regardless of the target protocol, and makes the Plugins card show the true
-// active state.
-//
-// One-time only — gated by the migration marker — so a user who later turns the
-// flag off on a specific rule keeps it off across restarts.
-func migrate20260608_2(c *Config) {
-	if c.hasMigrationCompleted("20260608_2") {
-		return
-	}
-
-	needsSave := false
-	for i := range c.Rules {
-		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
-		if base != typ.ScenarioClaudeCode {
-			continue
-		}
-		if !c.Rules[i].Flags.CleanHeader {
-			c.Rules[i].Flags.CleanHeader = true
-			needsSave = true
-		}
-	}
-
-	c.markMigrationCompleted("20260608_2")
-	if needsSave {
-		_ = c.Save()
-		logrus.Info("Migration 20260608_2 completed: defaulted clean_header on for Claude Code rules")
-	}
-}
-
-// migrate20260608_3 defaults clean_header on for existing Claude Desktop rules.
-// Claude Desktop injects x-anthropic-billing-header blocks into system messages
-// (same billing mechanism as Claude Code); these must not leak to external
-// providers. Mirrors migrate20260608_2 but targets ScenarioClaudeDesktop.
-//
-// One-time only — gated by the migration marker — so a user who later turns the
-// flag off on a specific rule keeps it off across restarts.
-func migrate20260608_3(c *Config) {
-	if c.hasMigrationCompleted("20260608_3") {
-		return
-	}
-
-	needsSave := false
-	for i := range c.Rules {
-		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
-		if base != typ.ScenarioClaudeDesktop {
-			continue
-		}
-		if !c.Rules[i].Flags.CleanHeader {
-			c.Rules[i].Flags.CleanHeader = true
-			needsSave = true
-		}
-	}
-
-	c.markMigrationCompleted("20260608_3")
-	if needsSave {
-		_ = c.Save()
-		logrus.Info("Migration 20260608_3 completed: defaulted clean_header on for Claude Desktop rules")
-	}
-}
-
-// migrate20260608_4 defaults claude_code_compat on for existing Claude Desktop rules.
-// Claude Desktop sends mid-conversation system-role messages (same non-standard
-// extension as Claude Code) that third-party Anthropic-compatible providers reject.
-// Mirrors migrate20260608 but targets ScenarioClaudeDesktop.
-//
-// One-time only — gated by the migration marker — so a user who later turns the
-// flag off on a specific rule keeps it off across restarts.
-func migrate20260608_4(c *Config) {
-	if c.hasMigrationCompleted("20260608_4") {
-		return
-	}
-
-	needsSave := false
-	for i := range c.Rules {
-		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
-		if base != typ.ScenarioClaudeDesktop {
-			continue
-		}
-		if !c.Rules[i].Flags.ClaudeCodeCompat {
-			c.Rules[i].Flags.ClaudeCodeCompat = true
-			needsSave = true
-		}
-	}
-
-	c.markMigrationCompleted("20260608_4")
-	if needsSave {
-		_ = c.Save()
-		logrus.Info("Migration 20260608_4 completed: defaulted claude_code_compat on for Claude Desktop rules")
-	}
-}
-
-// defaultSessionAffinityForScenario defaults session_affinity to 1800s (30 min)
-// on every existing rule whose base scenario matches, when the rule hasn't set
-// one yet (0 = not set). session_affinity moved from a scenario-level default to
-// a rule-only flag; this back-fills existing rules the same way the built-in
-// rules are seeded in init.go. Profile-aware via ParseScenarioProfile so
-// claude_code:<profile> rules are covered too.
-//
-// One-time only — gated by the migration marker — so a user who later disables
-// affinity on a specific rule (sets it to 0) keeps it off across restarts.
-func defaultSessionAffinityForScenario(c *Config, marker string, scenario typ.RuleScenario) {
-	if c.hasMigrationCompleted(marker) {
-		return
-	}
-
-	needsSave := false
-	for i := range c.Rules {
-		base, _ := typ.ParseScenarioProfile(c.Rules[i].Scenario)
-		if base != scenario {
-			continue
-		}
-		if c.Rules[i].Flags.SessionAffinity == 0 {
-			c.Rules[i].Flags.SessionAffinity = defaultSessionAffinitySeconds
-			needsSave = true
-		}
-	}
-
-	c.markMigrationCompleted(marker)
-	if needsSave {
-		_ = c.Save()
-		logrus.Infof("Migration %s completed: defaulted session_affinity on for %s rules", marker, scenario)
-	}
-}
-
-// migrate20260609 defaults session_affinity on for existing Claude Code rules.
-func migrate20260609(c *Config) {
-	defaultSessionAffinityForScenario(c, "20260609", typ.ScenarioClaudeCode)
-}
-
-// migrate20260609_2 defaults session_affinity on for existing Claude Desktop rules.
-func migrate20260609_2(c *Config) {
-	defaultSessionAffinityForScenario(c, "20260609_2", typ.ScenarioClaudeDesktop)
-}
-
-// migrate20260609_3 defaults session_affinity on for existing Codex rules.
-func migrate20260609_3(c *Config) {
-	defaultSessionAffinityForScenario(c, "20260609_3", typ.ScenarioCodex)
 }

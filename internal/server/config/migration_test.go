@@ -22,7 +22,7 @@ func TestMigrate20260606(t *testing.T) {
 	}
 
 	// migrate20260606 now only defaults SkipUsage on for the Xcode scenario;
-	// session_affinity has moved to a rule-only flag (migrate20260609*).
+	// session_affinity has moved to a rule-only flag (migrate20260610).
 	xcodeConfig := cfg.GetScenarioConfig(typ.ScenarioXcode)
 	if xcodeConfig == nil {
 		t.Error("Xcode scenario config not found")
@@ -132,150 +132,79 @@ func TestMigrate20260606_PartialCustomization(t *testing.T) {
 	}
 }
 
-func TestMigrate20260608_DefaultsClaudeCodeCompat(t *testing.T) {
+func TestMigrate20260610_SeedsRuleFlags(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
 			{UUID: "cc-profile", Scenario: typ.RuleScenario("claude_code:p1")},
-			{UUID: "already-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{ClaudeCodeCompat: true}},
-			{UUID: "openai", Scenario: typ.ScenarioOpenAI},
-		},
-	}
-
-	migrate20260608(c)
-
-	if !c.hasMigrationCompleted("20260608") {
-		t.Fatal("migration should be marked completed")
-	}
-	want := map[string]bool{
-		"built-in-cc": true,  // claude_code base → defaulted on
-		"cc-profile":  true,  // claude_code:<profile> → defaulted on
-		"already-on":  true,  // unchanged
-		"openai":      false, // non-claude_code → untouched
-	}
-	for _, r := range c.Rules {
-		if got := r.Flags.ClaudeCodeCompat; got != want[r.UUID] {
-			t.Errorf("rule %q ClaudeCodeCompat = %v, want %v", r.UUID, got, want[r.UUID])
-		}
-	}
-}
-
-func TestMigrate20260608_OneTime_PreservesUserOff(t *testing.T) {
-	c := &Config{
-		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
-	}
-
-	migrate20260608(c)
-	if !c.Rules[0].Flags.ClaudeCodeCompat {
-		t.Fatal("first run should default the flag on")
-	}
-
-	// User turns it off; a later boot must not re-enable it.
-	c.Rules[0].Flags.ClaudeCodeCompat = false
-	migrate20260608(c)
-	if c.Rules[0].Flags.ClaudeCodeCompat {
-		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
-	}
-}
-
-func TestMigrate20260608_2_DefaultsCleanHeader(t *testing.T) {
-	c := &Config{
-		Rules: []typ.Rule{
-			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
-			{UUID: "cc-profile", Scenario: typ.RuleScenario("claude_code:p1")},
-			{UUID: "already-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{CleanHeader: true}},
-			{UUID: "desktop", Scenario: typ.ScenarioClaudeDesktop},
-			{UUID: "openai", Scenario: typ.ScenarioOpenAI},
-		},
-	}
-
-	migrate20260608_2(c)
-
-	if !c.hasMigrationCompleted("20260608_2") {
-		t.Fatal("migration should be marked completed")
-	}
-	want := map[string]bool{
-		"built-in-cc": true,  // claude_code base → defaulted on
-		"cc-profile":  true,  // claude_code:<profile> → defaulted on
-		"already-on":  true,  // unchanged
-		"desktop":     false, // claude_desktop — handled by migrate20260608_3
-		"openai":      false, // non-claude_code → untouched
-	}
-	for _, r := range c.Rules {
-		if got := r.Flags.CleanHeader; got != want[r.UUID] {
-			t.Errorf("rule %q CleanHeader = %v, want %v", r.UUID, got, want[r.UUID])
-		}
-	}
-}
-
-func TestMigrate20260608_2_OneTime_PreservesUserOff(t *testing.T) {
-	c := &Config{
-		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
-	}
-
-	migrate20260608_2(c)
-	if !c.Rules[0].Flags.CleanHeader {
-		t.Fatal("first run should default the flag on")
-	}
-
-	// User turns it off; a later boot must not re-enable it.
-	c.Rules[0].Flags.CleanHeader = false
-	migrate20260608_2(c)
-	if c.Rules[0].Flags.CleanHeader {
-		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
-	}
-}
-
-func TestMigrate20260609_DefaultsSessionAffinity(t *testing.T) {
-	c := &Config{
-		Rules: []typ.Rule{
-			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
-			{UUID: "cc-profile", Scenario: typ.RuleScenario("claude_code:p1")},
-			{UUID: "already-set", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{SessionAffinity: 900}},
+			{UUID: "cc-compat-on", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{ClaudeCodeCompat: true}},
+			{UUID: "cc-affinity-set", Scenario: typ.ScenarioClaudeCode, Flags: typ.RuleFlags{SessionAffinity: 900}},
 			{UUID: "desktop", Scenario: typ.ScenarioClaudeDesktop},
 			{UUID: "codex", Scenario: typ.ScenarioCodex},
 			{UUID: "openai", Scenario: typ.ScenarioOpenAI},
 		},
 	}
 
-	migrate20260609(c)   // claude_code
-	migrate20260609_2(c) // claude_desktop
-	migrate20260609_3(c) // codex
+	migrate20260610(c)
 
-	for _, marker := range []string{"20260609", "20260609_2", "20260609_3"} {
-		if !c.hasMigrationCompleted(marker) {
-			t.Fatalf("migration %s should be marked completed", marker)
-		}
+	if !c.hasMigrationCompleted("20260610") {
+		t.Fatal("migration should be marked completed")
 	}
-	want := map[string]int{
-		"built-in-cc": defaultSessionAffinitySeconds, // claude_code base → defaulted on
-		"cc-profile":  defaultSessionAffinitySeconds, // claude_code:<profile> → defaulted on
-		"already-set": 900,                           // user value preserved
-		"desktop":     defaultSessionAffinitySeconds, // claude_desktop → defaulted on
-		"codex":       defaultSessionAffinitySeconds, // codex → defaulted on
-		"openai":      0,                             // out of scope → untouched
+
+	type want struct {
+		compat   bool
+		clean    bool
+		affinity int
+	}
+	const aff = defaultSessionAffinitySeconds
+	wants := map[string]want{
+		"built-in-cc":     {compat: true, clean: true, affinity: aff},  // claude_code base → all defaulted on
+		"cc-profile":      {compat: true, clean: true, affinity: aff},  // claude_code:<profile> → covered
+		"cc-compat-on":    {compat: true, clean: true, affinity: aff},  // already-on compat unchanged, others seeded
+		"cc-affinity-set": {compat: true, clean: true, affinity: 900},  // user affinity preserved
+		"desktop":         {compat: true, clean: true, affinity: aff},  // claude_desktop → all defaulted on
+		"codex":           {compat: false, clean: false, affinity: aff}, // codex → affinity only
+		"openai":          {compat: false, clean: false, affinity: 0},   // out of scope → untouched
 	}
 	for _, r := range c.Rules {
-		if got := r.Flags.SessionAffinity; got != want[r.UUID] {
-			t.Errorf("rule %q SessionAffinity = %d, want %d", r.UUID, got, want[r.UUID])
+		w := wants[r.UUID]
+		if r.Flags.ClaudeCodeCompat != w.compat {
+			t.Errorf("rule %q ClaudeCodeCompat = %v, want %v", r.UUID, r.Flags.ClaudeCodeCompat, w.compat)
+		}
+		if r.Flags.CleanHeader != w.clean {
+			t.Errorf("rule %q CleanHeader = %v, want %v", r.UUID, r.Flags.CleanHeader, w.clean)
+		}
+		if r.Flags.SessionAffinity != w.affinity {
+			t.Errorf("rule %q SessionAffinity = %d, want %d", r.UUID, r.Flags.SessionAffinity, w.affinity)
 		}
 	}
 }
 
-func TestMigrate20260609_OneTime_PreservesUserDisabled(t *testing.T) {
+func TestMigrate20260610_OneTime_PreservesUserOff(t *testing.T) {
 	c := &Config{
-		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
+		Rules: []typ.Rule{
+			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
+			{UUID: "codex", Scenario: typ.ScenarioCodex},
+		},
 	}
 
-	migrate20260609(c)
-	if c.Rules[0].Flags.SessionAffinity != defaultSessionAffinitySeconds {
-		t.Fatal("first run should default session affinity on")
+	migrate20260610(c)
+	if !c.Rules[0].Flags.ClaudeCodeCompat || !c.Rules[0].Flags.CleanHeader ||
+		c.Rules[0].Flags.SessionAffinity != defaultSessionAffinitySeconds {
+		t.Fatal("first run should seed the default flags on the CC rule")
+	}
+	if c.Rules[1].Flags.SessionAffinity != defaultSessionAffinitySeconds {
+		t.Fatal("first run should seed affinity on the Codex rule")
 	}
 
-	// User disables it (0); a later boot must not re-enable it.
+	// User turns everything off; a later boot must not re-enable any of it.
+	c.Rules[0].Flags.ClaudeCodeCompat = false
+	c.Rules[0].Flags.CleanHeader = false
 	c.Rules[0].Flags.SessionAffinity = 0
-	migrate20260609(c)
-	if c.Rules[0].Flags.SessionAffinity != 0 {
-		t.Error("migration re-enabled a user-disabled affinity; one-time gate is broken")
+	c.Rules[1].Flags.SessionAffinity = 0
+	migrate20260610(c)
+	if c.Rules[0].Flags.ClaudeCodeCompat || c.Rules[0].Flags.CleanHeader ||
+		c.Rules[0].Flags.SessionAffinity != 0 || c.Rules[1].Flags.SessionAffinity != 0 {
+		t.Error("migration re-enabled user-disabled flags; one-time gate is broken")
 	}
 }
