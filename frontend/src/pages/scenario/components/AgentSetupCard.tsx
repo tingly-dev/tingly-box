@@ -18,6 +18,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import UnifiedCard from '@/components/UnifiedCard';
 import { api } from '@/services/api';
+import { SPOTLIGHT_ADD_MODEL_EVENT } from '@/components/nodes/ActionAddNode';
 
 export interface AgentApplyResult {
     success: boolean;
@@ -66,12 +67,20 @@ export const hasModelOnAnyRule = (rules: any[] | null | undefined): boolean =>
     Array.isArray(rules) &&
     rules.some(r => Array.isArray(r?.services) && r.services.some((s: any) => s?.provider && s?.model));
 
-/** Smoothly scroll the "Models and Forwarding Rules" card into view. */
+/**
+ * Smoothly scroll the "Models and Forwarding Rules" card into view, then
+ * spotlight the "+ Add model" target so "Select a Model" actually points the
+ * user at where to click — not just near it. The pulse is fired after the
+ * scroll settles so it lands in view.
+ */
 export const scrollToModelsCard = () => {
     document.getElementById('models-and-forwarding-rules')?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
     });
+    window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent(SPOTLIGHT_ADD_MODEL_EVENT));
+    }, 450);
 };
 
 const StepIndicator: React.FC<{ step: number; done: boolean; active: boolean }> = ({ step, done, active }) => (
