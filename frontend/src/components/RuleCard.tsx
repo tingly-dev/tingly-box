@@ -16,6 +16,7 @@ import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import OneMContextSwitch from '@/components/rule-card/OneMContextSwitch';
+import OneMConfirmDialog, { oneMEffectForScenario, type OneMEffect } from '@/components/rule-card/OneMConfirmDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
@@ -266,6 +267,68 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         void updateField(configRecord, setConfigRecord, 'flags', next);
     }, [configRecord, updateField, setConfigRecord]);
 
+    // ── 1M context switch (context_1m flag) ────────────────────────────────
+    // Toggling 1M opens a confirm dialog instead of silently saving: it spells
+    // out what takes effect where, and — for Codex — offers a one-click config
+    // apply plus the restart reminder. Cancel reverts (the switch is controlled
+    // by the flag, which we only write on confirm). See .design/one-m-context.md.
+    const scenarioBase = (rule.scenario || '').split(':')[0];
+    const oneMNeedsDialog = scenarioBase === 'codex' || scenarioBase === 'claude_code';
+    const oneMEffect: OneMEffect = oneMEffectForScenario(rule.scenario);
+    const oneMOn = !!getFlagValue(configRecord?.flags, 'context_1m');
+
+    const [oneMDialog, setOneMDialog] = useState<{
+        open: boolean;
+        enabling: boolean;
+        phase: 'confirm' | 'applied';
+        busy: boolean;
+        error?: string;
+    }>({ open: false, enabling: false, phase: 'confirm', busy: false });
+
+    const handleOneMSwitch = useCallback((next: boolean) => {
+        if (!configRecord) return;
+        if (!oneMNeedsDialog) {
+            // Plain gateway scenarios: nothing to apply / restart — just save.
+            handleToggleFlagFromCard('context_1m');
+            return;
+        }
+        setOneMDialog({ open: true, enabling: next, phase: 'confirm', busy: false, error: undefined });
+    }, [configRecord, oneMNeedsDialog, handleToggleFlagFromCard]);
+
+    const handleOneMConfirm = useCallback(async () => {
+        if (!configRecord) return;
+        setOneMDialog((d) => ({ ...d, busy: true, error: undefined }));
+
+        // 1. Persist the rule flag (gateway honors it from the next request).
+        const nextFlags = setFlagValue(configRecord.flags || {}, 'context_1m', oneMDialog.enabling);
+        const saved = await updateField(configRecord, setConfigRecord, 'flags', nextFlags);
+        if (!saved) {
+            setOneMDialog((d) => ({ ...d, busy: false, error: 'Failed to save the rule flag.' }));
+            return;
+        }
+
+        // 2. Codex only: re-apply the model catalog so codex picks up the new
+        //    context window (the flag alone does nothing for Codex).
+        if (oneMEffect === 'codex') {
+            try {
+                const res = await api.applyCodexConfig();
+                if (!res?.success) {
+                    setOneMDialog((d) => ({ ...d, busy: false, error: res?.message || res?.error || 'Failed to apply Codex config.' }));
+                    return;
+                }
+            } catch (e) {
+                setOneMDialog((d) => ({ ...d, busy: false, error: e instanceof Error ? e.message : 'Failed to apply Codex config.' }));
+                return;
+            }
+        }
+
+        setOneMDialog((d) => ({ ...d, busy: false, phase: 'applied' }));
+    }, [configRecord, oneMDialog.enabling, oneMEffect, updateField, setConfigRecord]);
+
+    const handleOneMClose = useCallback(() => {
+        setOneMDialog((d) => ({ ...d, open: false }));
+    }, []);
+
     if (!configRecord) return null;
 
     // Promoted per-rule 1M context switch, rendered inline in the header next to
@@ -273,9 +336,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // truth) — see .design/one-m-context.md.
     const headerExtras = (
         <OneMContextSwitch
-            checked={!!getFlagValue(configRecord.flags, 'context_1m')}
-            onToggle={() => handleToggleFlagFromCard('context_1m')}
-            disabled={saving}
+            checked={oneMOn}
+            onToggle={handleOneMSwitch}
+            disabled={saving || oneMDialog.busy}
         />
     );
 
@@ -351,6 +414,19 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 }}
                 onClose={() => setFlagDialogOpen(false)}
                 onSave={handleSaveFlags}
+            />
+
+            {/* 1M context confirm + apply dialog */}
+            <OneMConfirmDialog
+                open={oneMDialog.open}
+                enabling={oneMDialog.enabling}
+                effect={oneMEffect}
+                phase={oneMDialog.phase}
+                busy={oneMDialog.busy}
+                error={oneMDialog.error}
+                onConfirm={handleOneMConfirm}
+                onCancel={handleOneMClose}
+                onClose={handleOneMClose}
             />
 
             {/* Flag Catalog Dialog - rich UI for picking + configuring rule flags */}
