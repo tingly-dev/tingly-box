@@ -1,0 +1,158 @@
+name: Harness Matrix
+
+run-name: >-
+  🧪 Harness ${{ github.event_name == 'workflow_dispatch'
+    && format('(focus={0})', github.event.inputs.focus)
+    || (startsWith(github.ref, 'refs/tags/') && format('(tag {0})', github.ref_name))
+    || format('(branch {0})', github.ref_name) }}
+  by @${{ github.actor }}
+
+# Runs every hermetic harness mode in parallel to validate each change.
+# Triggers: CI branch push (ci/**), manual dispatch, and release tag (v*).
+# See .design/harness-matrix.md and cli/harness/README.md for the modes.
+on:
+  push:
+    branches:
+      - 'ci/**'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: 'Which axis to run (all = full parallel set)'
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - single
+          - transitive
+          - idempotent
+          - flags
+          - replay
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.26'
+
+# Cancel superseded runs on the same branch, but never cancel release-tag runs.
+concurrency:
+  group: harness-matrix-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  harness:
+    name: ${{ matrix.leg.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        leg:
+          - name: matrix-single
+            tier: matrix
+            focus: single
+            cmd: matrix --mode=single --json
+          - name: matrix-transitive
+            tier: matrix
+            focus: transitive
+            cmd: matrix --mode=transitive --json
+          - name: matrix-idempotent
+            tier: matrix
+            focus: idempotent
+            cmd: matrix --mode=idempotent --json
+          - name: matrix-flags
+            tier: matrix
+            focus: flags
+            cmd: matrix --mode=flags --json
+          - name: replay-virtual
+            tier: replay
+            focus: replay
+            cmd: replay batch --upstream=virtual
+          - name: replay-vmodel
+            tier: replay
+            focus: replay
+            cmd: replay batch --upstream=vmodel
+    steps:
+      - name: Skip unfocused leg
+        id: gate
+        run: |
+          FOCUS="${{ github.event.inputs.focus || 'all' }}"
+          LEG_FOCUS="${{ matrix.leg.focus }}"
+          if [ "$FOCUS" != "all" ] && [ "$FOCUS" != "$LEG_FOCUS" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ focus=$FOCUS — skipping ${{ matrix.leg.name }}"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout code
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Go
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run harness — ${{ matrix.leg.name }}
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -o pipefail
+          echo "▶️ go run ./cli/harness ${{ matrix.leg.cmd }}"
+          go run ./cli/harness ${{ matrix.leg.cmd }} | tee "harness-${{ matrix.leg.name }}.log"
+
+      # matrix legs emit JSON — keep it for inspection and surface a summary.
+      - name: Upload matrix JSON
+        if: steps.gate.outputs.run == 'true' && matrix.leg.tier == 'matrix' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.leg.name }}-json
+          path: harness-${{ matrix.leg.name }}.log
+          if-no-files-found: ignore
+
+      - name: Write step summary
+        if: steps.gate.outputs.run == 'true' && always()
+        run: |
+          STATUS="${{ job.status }}"
+          {
+            echo "### ${{ matrix.leg.name }} — \`$STATUS\`"
+            echo ""
+            echo '```'
+            echo "go run ./cli/harness ${{ matrix.leg.cmd }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Single required status check that gates ci/** merges and release tags.
+  result:
+    name: Harness result
+    runs-on: ubuntu-latest
+    needs: harness
+    if: always()
+    steps:
+      - name: Evaluate harness outcome
+        run: |
+          RESULT="${{ needs.harness.result }}"
+          echo "Harness matrix result: $RESULT"
+          # 'success' when every leg passed or was skipped; otherwise fail.
+          if [ "$RESULT" = "success" ] || [ "$RESULT" = "skipped" ]; then
+            echo "✅ All harness legs passed."
+          else
+            echo "❌ One or more harness legs failed (result=$RESULT)."
+            exit 1
+          fi
