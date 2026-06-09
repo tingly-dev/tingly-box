@@ -169,23 +169,6 @@ func stainlessArch() string {
 	return runtime.GOARCH // e.g., "amd64", "arm64"
 }
 
-// claudeModelPrefixes that support context-1m beta flag.
-var context1mModelPrefixes = []string{
-	"claude-sonnet-4-6",
-	"claude-opus-4-6",
-}
-
-// supportsContext1M checks if the model supports the context-1m-2025-08-07 beta flag.
-func supportsContext1M(model string) bool {
-	m := strings.ToLower(model)
-	for _, prefix := range context1mModelPrefixes {
-		if strings.HasPrefix(m, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
 // IsClaudeOAuthToken checks if the given API key is a Claude OAuth token
 // by checking for the "sk-ant-oat" prefix.
 func IsClaudeOAuthToken(apiKey string) bool {
