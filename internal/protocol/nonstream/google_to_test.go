@@ -672,6 +672,33 @@ func TestConvertGoogleToAnthropicResponse(t *testing.T) {
 		}
 	})
 
+	t.Run("maps cached content to cache_read_input_tokens", func(t *testing.T) {
+		resp := &genai.GenerateContentResponse{
+			Candidates: []*genai.Candidate{
+				{
+					Content:      &genai.Content{Role: "model", Parts: []*genai.Part{genai.NewPartFromText("hi")}},
+					FinishReason: genai.FinishReasonStop,
+				},
+			},
+			UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+				PromptTokenCount:        30,
+				CandidatesTokenCount:    5,
+				CachedContentTokenCount: 12,
+			},
+		}
+
+		anthropicResp := ConvertGoogleToAnthropicResponse(resp, "gemini-pro")
+
+		// Gemini cached-content tokens must surface as Anthropic cache-read in the
+		// client-facing response body, not be dropped to 0.
+		if anthropicResp.Usage.CacheReadInputTokens != 12 {
+			t.Errorf("expected cache_read_input_tokens 12, got %d", anthropicResp.Usage.CacheReadInputTokens)
+		}
+		if anthropicResp.Usage.InputTokens != 30 {
+			t.Errorf("expected input_tokens 30, got %d", anthropicResp.Usage.InputTokens)
+		}
+	})
+
 	t.Run("with function call", func(t *testing.T) {
 		resp := &genai.GenerateContentResponse{
 			Candidates: []*genai.Candidate{
