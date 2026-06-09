@@ -17,6 +17,7 @@ import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import OneMContextSwitch from '@/components/rule-card/OneMContextSwitch';
 import OneMConfirmDialog, { oneMEffectForScenario, type OneMEffect } from '@/components/rule-card/OneMConfirmDialog';
+import { derivePrefsFromRules } from '@/pages/scenario/components/ClaudeCodeQuickConfig';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
@@ -42,6 +43,31 @@ async function loadFlagRegistry(): Promise<FlagSpec[]> {
         }
     })();
     return _flagRegistryPromise;
+}
+
+// applyClaudeCodeFromRules regenerates ~/.claude/settings.json from the current
+// Claude Code routing rules (model slots carry the [1m] suffix derived from each
+// rule's context_1m flag) and re-applies it. This is exactly what the Claude
+// Code Quick Config "Apply" does by default — the rules are the source of truth
+// — so the rule-card one-click apply produces the same settings.json without the
+// modal. See .design/one-m-context.md.
+async function applyClaudeCodeFromRules(): Promise<{ success: boolean; message?: string }> {
+    const [rulesRes, scRes] = await Promise.all([
+        api.getRules('claude_code'),
+        api.getScenarioConfig('claude_code'),
+    ]);
+    const ccRules: any[] = rulesRes?.data || [];
+    const f = scRes?.data?.flags || {};
+    const mode: 'unified' | 'separate' | 'smart' = f.unified ? 'unified' : f.smart ? 'smart' : 'separate';
+    // Mirror UseClaudeCodePage's per-mode slice: unified uses the single
+    // built-in-cc rule; the other modes use the per-variant rules.
+    const sliced = mode === 'unified'
+        ? ccRules.filter((r) => r?.uuid === 'built-in-cc')
+        : ccRules.filter((r) => r?.uuid !== 'built-in-cc');
+    const rulesForDerive = sliced.length ? sliced : ccRules;
+    const prefs = derivePrefsFromRules({ rules: rulesForDerive, mode });
+    const res = await api.applyClaudeConfig(prefs as unknown as Record<string, string>);
+    return { success: !!res?.success, message: res?.message || res?.error };
 }
 
 export interface RuleCardProps {
@@ -272,9 +298,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     // out what takes effect where, and — for Codex — offers a one-click config
     // apply plus the restart reminder. Cancel reverts (the switch is controlled
     // by the flag, which we only write on confirm). See .design/one-m-context.md.
-    const scenarioBase = (rule.scenario || '').split(':')[0];
-    const oneMNeedsDialog = scenarioBase === 'codex' || scenarioBase === 'claude_code';
     const oneMEffect: OneMEffect = oneMEffectForScenario(rule.scenario);
+    // codex/claude both write an agent config file read at startup → confirm +
+    // apply + restart dialog. Other scenarios are gateway-only → toggle directly.
+    const oneMNeedsDialog = oneMEffect !== 'gateway';
     const oneMOn = !!getFlagValue(configRecord?.flags, 'context_1m');
 
     const [oneMDialog, setOneMDialog] = useState<{
@@ -307,19 +334,24 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             return;
         }
 
-        // 2. Codex only: re-apply the model catalog so codex picks up the new
-        //    context window (the flag alone does nothing for Codex).
-        if (oneMEffect === 'codex') {
-            try {
-                const res = await api.applyCodexConfig();
-                if (!res?.success) {
-                    setOneMDialog((d) => ({ ...d, busy: false, error: res?.message || res?.error || 'Failed to apply Codex config.' }));
-                    return;
-                }
-            } catch (e) {
-                setOneMDialog((d) => ({ ...d, busy: false, error: e instanceof Error ? e.message : 'Failed to apply Codex config.' }));
+        // 2. Re-apply the agent's config so the CLI picks up the new context
+        //    window on its next start (the flag alone is gateway-only; the agent
+        //    reads its own config file at startup).
+        try {
+            let res: { success: boolean; message?: string } | undefined;
+            if (oneMEffect === 'codex') {
+                const r = await api.applyCodexConfig();
+                res = { success: !!r?.success, message: r?.message || r?.error };
+            } else if (oneMEffect === 'claude') {
+                res = await applyClaudeCodeFromRules();
+            }
+            if (res && !res.success) {
+                setOneMDialog((d) => ({ ...d, busy: false, error: res!.message || 'Failed to apply agent config.' }));
                 return;
             }
+        } catch (e) {
+            setOneMDialog((d) => ({ ...d, busy: false, error: e instanceof Error ? e.message : 'Failed to apply agent config.' }));
+            return;
         }
 
         setOneMDialog((d) => ({ ...d, busy: false, phase: 'applied' }));
