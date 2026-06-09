@@ -15,25 +15,17 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { alpha, keyframes, styled, useTheme } from '@mui/material/styles';
+import { styled, useTheme } from '@mui/material/styles';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Provider } from '@/types/provider.ts';
 import { ApiStyleBadge } from '../ApiStyleBadge.tsx';
 import { ProbeV2Menu } from '../probe';
 import type { ConfigProvider } from '../RoutingGraphTypes.ts';
-import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox } from './styles.tsx';
+import { ServiceNodeContainer, NODE_LAYER_STYLES, ActionButtonsBox, nodeSpotlightSx } from './styles.tsx';
 import ServiceNodeContent from './ServiceNodeContent.tsx';
 import NodeTooltip from './NodeTooltip.tsx';
 import { useAddModelSpotlight } from './ActionAddNode.tsx';
-
-// Pulse ring used when guidance spotlights an existing service card to signal
-// "you can edit this one".
-const spotlightPulse = keyframes`
-    0%   { box-shadow: 0 0 0 0 var(--svc-ring); }
-    70%  { box-shadow: 0 0 0 9px transparent; }
-    100% { box-shadow: 0 0 0 0 transparent; }
-`;
 
 const ServiceNodeWrapper = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'forceShowActions',
@@ -264,11 +256,7 @@ export const ServiceNode: React.FC<ServiceNodeProps> = ({
                 onClick={onNodeClick}
                 sx={{
                     cursor: active ? 'pointer' : 'default',
-                    ...(spotlight && active ? {
-                        borderColor: 'primary.main',
-                        '--svc-ring': alpha(theme.palette.primary.main, 0.5),
-                        animation: `${spotlightPulse} 1.4s ease-out 3`,
-                    } : {}),
+                    ...(spotlight && active ? nodeSpotlightSx(theme) : {}),
                 }}
             >
                 {!provider.provider ? (

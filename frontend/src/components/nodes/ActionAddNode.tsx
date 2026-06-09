@@ -6,10 +6,10 @@ import {
     IconButton,
     Typography,
 } from '@mui/material';
-import { alpha, keyframes, styled } from '@mui/material/styles';
+import { styled } from '@mui/material/styles';
 import React from 'react';
 import NodeTooltip from './NodeTooltip';
-import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, SMALL_NODE_STYLES } from './styles';
+import { getRouteGraphBorderColor, graphNodeBaseHoverStyles, graphNodeHoverStyles, nodeSpotlightSx, SMALL_NODE_STYLES } from './styles';
 
 const { node } = { node: SMALL_NODE_STYLES };
 
@@ -42,12 +42,6 @@ export const useAddModelSpotlight = (active: boolean): boolean => {
     return spotlight;
 };
 
-const spotlightPulse = keyframes`
-    0%   { box-shadow: 0 0 0 0 var(--add-ring); }
-    70%  { box-shadow: 0 0 0 10px transparent; }
-    100% { box-shadow: 0 0 0 0 transparent; }
-`;
-
 // ActionAddNode Container
 const StyledAddProviderNode = styled(Box, {
     shouldForwardProp: (prop) => prop !== 'active' && prop !== 'warning' && prop !== 'spotlight',
@@ -73,12 +67,7 @@ const StyledAddProviderNode = styled(Box, {
     } : {},
     // Spotlight: mirror the hover look and pulse a ring so the node is
     // unmistakable when guidance sends the user here.
-    ...(spotlight && active ? {
-        borderStyle: 'solid',
-        borderColor: theme.palette.primary.main,
-        '--add-ring': alpha(theme.palette.primary.main, 0.55),
-        animation: `${spotlightPulse} 1.4s ease-out 3`,
-    } : {}),
+    ...(spotlight && active ? { borderStyle: 'solid', ...nodeSpotlightSx(theme) } : {}),
 }));
 
 export interface AddProviderNodeProps {

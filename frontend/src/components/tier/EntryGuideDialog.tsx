@@ -15,23 +15,21 @@ import {
     useTheme,
 } from '@mui/material';
 import { Close as CloseIcon } from '@/components/icons';
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ROUTING_GUIDE_STEPS, type GuideStep } from './diagrams';
+import { ROUTING_GUIDE_STEPS } from './diagrams';
 import { StaticGraphViewer } from './StaticGraphViewer';
 import { GuideToolbarPreview } from './GuideToolbarPreview';
 
 export interface EntryGuideDialogProps {
     open: boolean;
     onClose: () => void;
-    initialStep?: number;
     mode?: 'direct' | 'smart';
 }
 
 export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
     open,
     onClose,
-    initialStep = 0,
     mode = 'direct',
 }) => {
     const { t } = useTranslation();
@@ -45,7 +43,7 @@ export const EntryGuideDialog: React.FC<EntryGuideDialogProps> = ({
         () => ROUTING_GUIDE_STEPS.filter((step) => step.mode === mode),
         [mode],
     );
-    const [activeStep, setActiveStep] = React.useState(initialStep);
+    const [activeStep, setActiveStep] = React.useState(0);
     const totalSteps = filteredSteps.length;
     const safeActiveStep = Math.min(activeStep, totalSteps - 1);
     const currentStep = filteredSteps[safeActiveStep] || filteredSteps[0];

@@ -41,7 +41,9 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
               }
             : { opacity: 0.45 };
 
-    const Tag = () => (
+    // A "Click here" chip with a downward caret, floated above the target button.
+    // Plain element (not a nested component) so React doesn't remount it.
+    const tag = (
         <Typography
             component="span"
             sx={{
@@ -105,7 +107,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                     {t('templateActions.troubleshoot', { defaultValue: 'Troubleshoot' })}
                 </Button>
                 <Box sx={{ position: 'relative' }}>
-                    {highlight === 'connectAI' && <Tag />}
+                    {highlight === 'connectAI' && tag}
                     <Button
                         variant="outlined"
                         size="small"
@@ -117,7 +119,7 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                     </Button>
                 </Box>
                 <Box sx={{ position: 'relative' }}>
-                    {highlight === 'newRule' && <Tag />}
+                    {highlight === 'newRule' && tag}
                     <Button
                         variant="contained"
                         size="small"
