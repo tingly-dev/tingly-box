@@ -1,12 +1,24 @@
 import React from 'react';
 import { Box, Switch, Tooltip, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import { useTranslation } from 'react-i18next';
 
 export interface OneMContextSwitchProps {
     checked: boolean;
     onToggle: (next: boolean) => void;
     disabled?: boolean;
 }
+
+// Paired zh/en copy, keyed at render via i18n.language — same local-map pattern
+// the other rule-card / quick-config components use (see .design/claude-code-config.md §6).
+const TEXT_ZH = {
+    tooltip: '该 rule 的 1M（1,000,000-token）上下文窗口。Claude Code / Anthropic 走 context-1m beta，Codex 走更大的 catalog 上下文窗口；目标模型需支持。',
+    aria: '切换该 rule 的 1M 上下文窗口',
+};
+const TEXT_EN = {
+    tooltip: '1M (1,000,000-token) context window for this rule. Claude Code / Anthropic targets get the context-1m beta; Codex targets get a widened catalog context window. The routed model must support it.',
+    aria: 'Toggle 1M context window for this rule',
+};
 
 /**
  * OneMContextSwitch is the promoted per-rule control for the 1M context window
@@ -17,9 +29,11 @@ export interface OneMContextSwitchProps {
  * See .design/one-m-context.md.
  */
 export const OneMContextSwitch: React.FC<OneMContextSwitchProps> = ({ checked, onToggle, disabled }) => {
+    const { i18n } = useTranslation();
+    const t = i18n.language === 'zh' ? TEXT_ZH : TEXT_EN;
     return (
         <Tooltip
-            title="1M context window for this rule. Claude Code / Anthropic targets get the context-1m beta (and the [1m] model suffix in Quick Config); Codex targets get a widened catalog context_window. The routed model must support it."
+            title={t.tooltip}
             placement="top"
         >
             <Box
@@ -55,7 +69,7 @@ export const OneMContextSwitch: React.FC<OneMContextSwitchProps> = ({ checked, o
                     checked={checked}
                     disabled={disabled}
                     onChange={(e) => onToggle(e.target.checked)}
-                    slotProps={{ input: { 'aria-label': 'Toggle 1M context window for this rule' } }}
+                    slotProps={{ input: { 'aria-label': t.aria } }}
                 />
             </Box>
         </Tooltip>
