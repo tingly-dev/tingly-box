@@ -713,11 +713,6 @@
           "max_output": 32768
         },
         {
-          "id": "kimi-k2.6",
-          "context": 262144,
-          "max_output": 32768
-        },
-        {
           "id": "kimi-k2.5",
           "context": 262144,
           "max_output": 32768
@@ -780,11 +775,6 @@
           "max_output": 32768
         },
         {
-          "id": "kimi-k2.6",
-          "context": 262144,
-          "max_output": 32768
-        },
-        {
           "id": "kimi-k2.5",
           "context": 262144,
           "max_output": 32768
@@ -823,6 +813,44 @@
       "supports_models_endpoint": false,
       "oauth_provider": "qwen_code",
       "icon": "qwen"
+    },
+    "kimi-code": {
+      "id": "kimi-code",
+      "name": "Kimi Code (OAuth)",
+      "status": "active",
+      "valid": true,
+      "canonical_domain": "api.kimi.com",
+      "vendor_family": "moonshot",
+      "region": "global",
+      "plan": "oauth",
+      "website": "https://www.kimi.com/code",
+      "description": "Kimi Code API via OAuth device-code flow",
+      "auth_type": "oauth",
+      "api_doc": "https://www.kimi.com/code",
+      "model_doc": "https://www.kimi.com/code",
+      "pricing_doc": "https://www.kimi.com/code",
+      "base_url_openai": "https://api.kimi.com/coding/v1",
+      "base_url_anthropic": "https://api.kimi.com/coding/",
+      "models": [
+        {
+          "id": "kimi-for-coding",
+          "context": 262144,
+          "max_output": 65536
+        },
+        {
+          "id": "kimi-k2.6",
+          "context": 262144,
+          "max_output": 65536
+        },
+        {
+          "id": "kimi-k2.5",
+          "context": 262144,
+          "max_output": 65536
+        }
+      ],
+      "supports_models_endpoint": false,
+      "oauth_provider": "kimi_code",
+      "icon": "kimi"
     },
     "modelscope-cn": {
       "id": "modelscope-cn",
@@ -1302,11 +1330,6 @@
           "id": "deepseek-v4-flash"
         },
         {
-          "id": "kimi-k2.6",
-          "context": 262144,
-          "max_output": 65535
-        },
-        {
           "id": "kimi-k2.5",
           "context": 262144,
           "max_output": 65535
@@ -1378,10 +1401,6 @@
         },
         {
           "id": "glm-5.1"
-        },
-        {
-          "id": "kimi-k2.6",
-          "context": 262144
         },
         {
           "id": "kimi-k2.5",
