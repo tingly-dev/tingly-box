@@ -271,6 +271,13 @@ export default {
       "outcomeSplit": "Will create 2 separate base URLs (sharing this key).",
       "outcomeMerged": "Will keep 1 base URL serving both OpenAI and Anthropic."
     },
+    "customFusion": {
+      "bothLabel": "Base URL (OpenAI & Anthropic)",
+      "openAILabel": "OpenAI Base URL",
+      "anthropicLabel": "Anthropic Base URL",
+      "differsLink": "Anthropic endpoint differs?",
+      "sameLink": "Use the same URL"
+    },
     "keyName": {
       "label": "Name",
       "placeholder": "e.g., OpenAI",

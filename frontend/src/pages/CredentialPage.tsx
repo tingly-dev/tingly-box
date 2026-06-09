@@ -238,19 +238,27 @@ const CredentialPage = () => {
             | { openai?: string; anthropic?: string }
             | undefined;
 
+        // Source URLs are template-driven (providerBaseUrls) or, for custom
+        // endpoints, the form's own fields. apiBase is the OpenAI/primary URL by
+        // convention; a custom second URL lands in apiBaseAnthropic.
+        // `||` (not `??`) so an empty-string fusion field — e.g. a custom
+        // same-address case where apiBaseAnthropic is '' — falls back to apiBase.
+        const openaiUrl =
+            providerBaseUrls?.openai || (fd as any).apiBaseOpenAI || fd.apiBase;
+        const anthropicUrl =
+            providerBaseUrls?.anthropic || (fd as any).apiBaseAnthropic || fd.apiBase;
+
         const bothProtocols =
-            protocols.length === 2 &&
-            !!providerBaseUrls?.openai &&
-            !!providerBaseUrls?.anthropic;
+            protocols.length === 2 && !!openaiUrl && !!anthropicUrl;
         const shouldCreateFusion = !!(fd as any).createFusionProvider;
 
         if (bothProtocols && shouldCreateFusion) {
             return {
                 name: fd.name,
-                api_base: providerBaseUrls!.openai,
+                api_base: openaiUrl,
                 api_style: 'openai' as const,
-                api_base_openai: providerBaseUrls!.openai,
-                api_base_anthropic: providerBaseUrls!.anthropic,
+                api_base_openai: openaiUrl,
+                api_base_anthropic: anthropicUrl,
                 token: fd.token,
                 no_key_required: (fd as any).noKeyRequired || false,
                 enabled: true,
@@ -275,13 +283,13 @@ const CredentialPage = () => {
                 {
                     ...baseRecord,
                     name: fd.name,
-                    api_base: providerBaseUrls!.openai,
+                    api_base: openaiUrl,
                     api_style: 'openai' as const,
                 },
                 {
                     ...baseRecord,
                     name: fd.name,
-                    api_base: providerBaseUrls!.anthropic,
+                    api_base: anthropicUrl,
                     api_style: 'anthropic' as const,
                 },
             ];

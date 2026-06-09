@@ -272,6 +272,13 @@ export default {
       "outcomeSplit": "将创建 2 条独立 Base URL（共用同一密钥）。",
       "outcomeMerged": "将保留 1 条 Base URL，同时服务 OpenAI 与 Anthropic。"
     },
+    "customFusion": {
+      "bothLabel": "Base URL（OpenAI 与 Anthropic）",
+      "openAILabel": "OpenAI Base URL",
+      "anthropicLabel": "Anthropic Base URL",
+      "differsLink": "Anthropic 端点地址不同？",
+      "sameLink": "使用相同 URL"
+    },
     "keyName": {
       "label": "名称",
       "placeholder": "例如：OpenAI",
