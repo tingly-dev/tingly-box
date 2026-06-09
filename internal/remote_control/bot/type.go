@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"time"
 
 	"github.com/tingly-dev/tingly-box/agentboot"
 )
@@ -52,7 +53,8 @@ type Lifecycle interface {
 
 // runningBot tracks a running bot instance
 type runningBot struct {
-	cancel   context.CancelFunc
-	stopped  bool          // marker to indicate if the bot is being stopped
-	doneChan chan struct{} // closed when the goroutine finishes
+	cancel    context.CancelFunc
+	stopped   bool          // marker to indicate if the bot is being stopped
+	doneChan  chan struct{} // closed when the goroutine finishes
+	startedAt time.Time     // when the bot goroutine was launched (for restart backoff)
 }

@@ -178,6 +178,10 @@ func (s *Server) StartRemoteCoder() error {
 
 	logrus.Info("Starting remote control service...")
 
+	// Bind crash-recovery restarts to this service's lifecycle so stopping the
+	// remote coder cancels any pending restart instead of resurrecting a bot.
+	s.imbotSettingsHandler.SetBaseContext(ctx)
+
 	// Start all enabled bots through the imbotsettings handler
 	go func() {
 		if err := s.imbotSettingsHandler.StartAllEnabled(ctx); err != nil && ctx.Err() == nil {

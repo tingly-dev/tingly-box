@@ -108,7 +108,12 @@ func NewBotManager(ctx context.Context, cfg *config.Config) (*BotManager, error)
 		config:       cfg,
 	}
 
-	go bm.periodicBotSync(ctx)
+	// Govern crash-recovery restarts with the lifecycle context. Enabled bots
+	// are started by StartRemoteCoder/StartAllEnabled and kept alive in-place by
+	// the internal manager's event-driven restart-on-crash (with backoff),
+	// replacing the former 30s reconciliation poll. StartRemoteCoder refreshes
+	// this with the remote-control service context via SetBaseContext.
+	internalMgr.SetBaseContext(ctx)
 
 	logrus.Info("BotManager initialized successfully")
 	return bm, nil
@@ -344,6 +349,16 @@ func (bm *BotManager) Sync(ctx context.Context) error {
 	defer bm.mu.Unlock()
 
 	return bm.manager.Sync(ctx)
+}
+
+// SetBaseContext sets the context that governs crash-recovery restarts of bots.
+// Canceling it (e.g. when the remote-control service stops) abandons any pending
+// restart instead of resurrecting a bot after stop.
+func (bm *BotManager) SetBaseContext(ctx context.Context) {
+	if bm == nil {
+		return
+	}
+	bm.manager.SetBaseContext(ctx)
 }
 
 // Shutdown stops all running bots and cleans up resources.

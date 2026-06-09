@@ -216,20 +216,64 @@ type Manager struct {
 	pairing    *PairingManager   // Pairing-code (TOFU) manager
 	audit      *audit.Logger     // Audit logger for security events
 	channels   *channel.Registry // Remote channel registry for /tingly/:scenario routing (optional)
+
+	// baseCtx governs the lifetime of crash-recovery restarts. It is set to the
+	// remote-control service context so that stopping the service (or shutting
+	// down) cancels any pending restart instead of resurrecting bots after stop.
+	baseCtx context.Context
+	// restartAttempts tracks consecutive crash-restart attempts per bot UUID so
+	// a crash loop backs off instead of hot-spinning. Reset once a bot has run
+	// healthily, is stopped intentionally, or is disabled. Guarded by mu.
+	restartAttempts map[string]int
 }
+
+// Crash-restart backoff tuning. A bot that exits unexpectedly while still
+// enabled is restarted in place with exponential backoff, replacing the old
+// 30s reconciliation poll with event-driven self-healing.
+const (
+	restartBaseDelay  = 3 * time.Second  // first retry delay
+	restartMaxDelay   = 60 * time.Second // backoff cap (also the steady-state retry for a permanently failing bot)
+	restartHealthyRun = 60 * time.Second // a bot that ran at least this long before dying is treated as a fresh failure
+	restartMaxShift   = 6                 // cap the backoff exponent so the shift never overflows
+)
 
 // NewManager creates a new bot manager with a settings store
 func NewManager(store SettingsStore, sessionMgr *session.Manager, agentService *agentboot.AgentService,
 ) *Manager {
 	auditLog := audit.NewLogger(audit.Config{Console: true})
 	return &Manager{
-		running:      make(map[string]*runningBot),
-		store:        store,
-		sessionMgr:   sessionMgr,
-		agentService: agentService,
-		audit:        auditLog,
-		pairing:      NewPairingManager(auditLog),
+		running:         make(map[string]*runningBot),
+		store:           store,
+		sessionMgr:      sessionMgr,
+		agentService:    agentService,
+		audit:           auditLog,
+		pairing:         NewPairingManager(auditLog),
+		baseCtx:         context.Background(),
+		restartAttempts: make(map[string]int),
 	}
+}
+
+// SetBaseContext sets the context that governs crash-recovery restarts. When
+// this context is canceled (e.g. the remote-control service is stopped), any
+// pending restart is abandoned instead of bringing a bot back after stop.
+func (m *Manager) SetBaseContext(ctx context.Context) {
+	if ctx == nil {
+		return
+	}
+	m.mu.Lock()
+	m.baseCtx = ctx
+	m.mu.Unlock()
+}
+
+// baseContext returns the restart-governing context, never nil.
+func (m *Manager) baseContext() context.Context {
+	m.mu.RLock()
+	ctx := m.baseCtx
+	m.mu.RUnlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 // SetChannelRegistry wires a remote channel registry so each running
@@ -409,7 +453,7 @@ func (m *Manager) Start(parentCtx context.Context, uuid string) error {
 	// Create cancellable context for this bot
 	ctx, cancel := context.WithCancel(parentCtx)
 	doneChan := make(chan struct{})
-	m.running[uuid] = &runningBot{cancel: cancel, doneChan: doneChan}
+	m.running[uuid] = &runningBot{cancel: cancel, doneChan: doneChan, startedAt: time.Now()}
 
 	// Start bot in goroutine (dataPath and tbClient already captured above)
 	pairing := m.pairing
@@ -439,9 +483,11 @@ func (m *Manager) runBotSupervised(
 	channels *channel.Registry,
 	doneChan chan struct{},
 ) {
-	defer close(doneChan)
-	defer m.removeRunning(uuid)
+	startedAt := time.Now()
 
+	// Single deferred exit handler so the order is unambiguous: recover any
+	// panic, signal completion, deregister the bot (capturing whether the exit
+	// was an intentional Stop), then decide whether to auto-restart.
 	defer func() {
 		if r := recover(); r != nil {
 			stack := string(debug.Stack())
@@ -461,12 +507,162 @@ func (m *Manager) runBotSupervised(
 				})
 			}
 		}
+		close(doneChan)
+		intentional := m.finishRunning(uuid)
+		m.afterBotExit(uuid, s, startedAt, intentional)
 	}()
 
 	if err := runBotWithSettings(ctx, s, dataPath, m.sessionMgr, m.agentService, tbClient, pairing, auditLog, store, channels); err != nil {
 		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot stopped with error")
 	}
 	logrus.WithField("uuid", uuid).Info("Bot stopped")
+}
+
+// finishRunning removes a bot from the running map and reports whether its exit
+// was the result of an intentional Stop (so callers can skip auto-restart).
+func (m *Manager) finishRunning(uuid string) (intentional bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if rb, ok := m.running[uuid]; ok {
+		intentional = rb.stopped
+	}
+	delete(m.running, uuid)
+	return intentional
+}
+
+// afterBotExit decides whether a just-exited bot should be restarted. A bot
+// that was stopped intentionally, disabled, or whose governing context is
+// canceled is left down; an enabled bot that crashed or lost its connection is
+// rescheduled with exponential backoff. This is the event-driven replacement
+// for the former 30s reconciliation poll.
+func (m *Manager) afterBotExit(uuid string, s BotSetting, startedAt time.Time, intentional bool) {
+	if intentional {
+		m.clearRestartAttempts(uuid)
+		return
+	}
+
+	baseCtx := m.baseContext()
+	if baseCtx.Err() != nil {
+		// Remote-control service is stopping/shutting down.
+		m.clearRestartAttempts(uuid)
+		return
+	}
+
+	enabled, err := m.isEnabledInStore(uuid)
+	if err != nil {
+		logrus.WithError(err).WithField("uuid", uuid).Warn("Could not check enabled state after bot exit; not restarting")
+		return
+	}
+	if !enabled {
+		// Disabled or deleted while running; nothing to recover.
+		m.clearRestartAttempts(uuid)
+		return
+	}
+
+	delay, attempt := m.nextRestartDelay(uuid, time.Since(startedAt))
+	logrus.WithFields(logrus.Fields{
+		"uuid":     uuid,
+		"name":     s.Name,
+		"platform": s.Platform,
+		"attempt":  attempt,
+		"delay":    delay.String(),
+	}).Warn("Bot exited unexpectedly while still enabled; scheduling restart")
+
+	go m.restartAfter(baseCtx, uuid, delay)
+}
+
+// restartAfter waits for the backoff delay (or context cancellation) and then
+// restarts the bot. If the Start itself fails — meaning no supervised goroutine
+// was created to drive the next attempt — it reschedules the retry from here so
+// recovery does not stall on a transient startup error.
+func (m *Manager) restartAfter(baseCtx context.Context, uuid string, delay time.Duration) {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-baseCtx.Done():
+		return
+	case <-timer.C:
+	}
+
+	// Re-check just before starting: the bot may have been disabled (or deleted)
+	// during the backoff window, in which case there is nothing to recover.
+	if enabled, err := m.isEnabledInStore(uuid); err == nil && !enabled {
+		m.clearRestartAttempts(uuid)
+		return
+	}
+
+	if err := m.Start(baseCtx, uuid); err != nil {
+		logrus.WithError(err).WithField("uuid", uuid).Warn("Bot restart attempt failed; will retry")
+		enabled, e := m.isEnabledInStore(uuid)
+		if e != nil || !enabled {
+			m.clearRestartAttempts(uuid)
+			return
+		}
+		next, _ := m.nextRestartDelay(uuid, 0)
+		go m.restartAfter(baseCtx, uuid, next)
+	}
+	// On success the supervised goroutine owns the bot again; its eventual exit
+	// re-enters afterBotExit and resets the attempt counter once the bot has
+	// run long enough.
+}
+
+// nextRestartDelay advances the per-bot restart attempt counter and returns the
+// backoff delay. A bot that ran healthily (>= restartHealthyRun) before dying is
+// treated as a fresh failure so a long-lived bot recovers promptly rather than
+// inheriting an old crash-loop backoff.
+func (m *Manager) nextRestartDelay(uuid string, ranFor time.Duration) (time.Duration, int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if ranFor >= restartHealthyRun {
+		m.restartAttempts[uuid] = 0
+	}
+	m.restartAttempts[uuid]++
+	attempt := m.restartAttempts[uuid]
+
+	shift := attempt - 1
+	if shift > restartMaxShift {
+		shift = restartMaxShift
+	}
+	delay := restartBaseDelay << uint(shift)
+	if delay <= 0 || delay > restartMaxDelay {
+		delay = restartMaxDelay
+	}
+	return delay, attempt
+}
+
+// clearRestartAttempts forgets any crash-restart backoff state for a bot.
+func (m *Manager) clearRestartAttempts(uuid string) {
+	m.mu.Lock()
+	delete(m.restartAttempts, uuid)
+	m.mu.Unlock()
+}
+
+// isEnabledInStore reports whether the given bot is currently enabled in the
+// settings store.
+func (m *Manager) isEnabledInStore(uuid string) (bool, error) {
+	settingsAny, err := m.store.ListEnabledSettingsInterface()
+	if err != nil {
+		return false, err
+	}
+	switch s := settingsAny.(type) {
+	case []db.Settings:
+		for _, setting := range s {
+			if setting.UUID == uuid {
+				return true, nil
+			}
+		}
+	case []BotSetting:
+		for _, setting := range s {
+			if setting.UUID == uuid {
+				return true, nil
+			}
+		}
+	default:
+		return false, fmt.Errorf("unknown settings list type")
+	}
+	return false, nil
 }
 
 // Stop stops a bot by UUID
@@ -630,11 +826,4 @@ func (m *Manager) Sync(ctx context.Context) error {
 // It's an alias for Sync() with clearer naming for specific use cases.
 func (m *Manager) StartEnabledStopDisabled(ctx context.Context) error {
 	return m.Sync(ctx)
-}
-
-// removeRunning removes a bot from the running map (must be called with lock held or from within locked method)
-func (m *Manager) removeRunning(uuid string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.running, uuid)
 }
