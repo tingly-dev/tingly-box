@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -174,17 +175,7 @@ func messageRoles(body map[string]any) []string {
 func setupBothModeRoute(env *TestEnv, s Scenario, flags typ.RuleFlags) string {
 	env.virtual.RegisterScenario(s)
 	providerName := "flag-both-" + s.Name
-	provider := &typ.Provider{
-		UUID:               providerName,
-		Name:               providerName,
-		APIBase:            env.virtual.URL() + "/v1",
-		APIStyle:           protocol.APIStyleOpenAI,
-		OpenAIEndpointMode: ai.EndpointModeBoth,
-		Token:              "virtual-token",
-		Enabled:            true,
-		Timeout:            int64(constant.DefaultRequestTimeout),
-	}
-	_ = env.appConfig.AddProvider(provider)
+	registerProvider(env, providerName, env.virtual.URL(), ai.EndpointModeBoth)
 
 	reqModel := "pv-flag-both-" + s.Name
 	providerModel := "virtual-model-" + s.Name
@@ -204,12 +195,25 @@ func setupBothModeRoute(env *TestEnv, s Scenario, flags typ.RuleFlags) string {
 	return reqModel
 }
 
-// newCountingChatServer starts a minimal OpenAI provider that returns a fixed
-// chat completion (assistant content == content) and counts the requests it
-// received, so a test can tell which upstream a request was routed to.
-func newCountingChatServer(t flagTB, content string) (baseURL string, hits *int64) {
+// newCountingServer starts an httptest provider that writes handler's response
+// and counts the requests it received, so a test can tell which upstream a
+// request was routed to. Unlike failover.go's vmodel-backed startFailingProvider,
+// this returns a single canned response decoupled from the model registry — flag
+// tests need a fixed body/header or an exact SSE description, not model lookups.
+func newCountingServer(t flagTB, handler func(w http.ResponseWriter)) (baseURL string, hits *int64) {
 	t.Helper()
 	var n int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&n, 1)
+		handler(w)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, &n
+}
+
+// newCountingChatServer is a counting provider that returns a fixed non-stream
+// chat completion (assistant content == content).
+func newCountingChatServer(t flagTB, content string) (baseURL string, hits *int64) {
 	body := mustMarshal(map[string]any{
 		"id": "chatcmpl-flag", "object": "chat.completion", "created": 0, "model": "m",
 		"choices": []map[string]any{{
@@ -219,21 +223,16 @@ func newCountingChatServer(t flagTB, content string) (baseURL string, hits *int6
 		}},
 		"usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
 	})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt64(&n, 1)
+	return newCountingServer(t, func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(body)
-	}))
-	t.Cleanup(srv.Close)
-	return srv.URL, &n
+	})
 }
 
-// newDescriberServer starts a mock vision provider that answers the describer's
-// request with an SSE stream (the vision adapter always uses the streaming
-// OpenAI endpoint), whose assistant content is description. Counts requests.
+// newDescriberServer is a counting provider that answers with an SSE stream (the
+// vision adapter always uses the streaming OpenAI endpoint), whose assistant
+// content is description.
 func newDescriberServer(t flagTB, description string) (baseURL string, hits *int64) {
-	t.Helper()
-	var n int64
 	delta := mustMarshal(map[string]any{
 		"id": "desc", "object": "chat.completion.chunk", "created": 0, "model": "vision-model",
 		"choices": []map[string]any{{"index": 0, "delta": map[string]any{"role": "assistant", "content": description}, "finish_reason": nil}},
@@ -243,26 +242,29 @@ func newDescriberServer(t flagTB, description string) (baseURL string, hits *int
 		"choices": []map[string]any{{"index": 0, "delta": map[string]any{}, "finish_reason": "stop"}},
 	})
 	lines := []string{"data: " + string(delta), "data: " + string(done), "data: [DONE]"}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt64(&n, 1)
+	return newCountingServer(t, func(w http.ResponseWriter) {
 		sse.WriteSSEResponse(w, lines)
-	}))
-	t.Cleanup(srv.Close)
-	return srv.URL, &n
+	})
 }
 
-// registerOpenAIProvider registers a passthrough OpenAI provider pointing at the
-// /v1 root of base.
-func registerOpenAIProvider(env *TestEnv, uuid, base string) {
+// registerProvider registers an OpenAI-style provider pointing at the /v1 root of
+// base, with the given endpoint mode.
+func registerProvider(env *TestEnv, uuid, base string, mode ai.OpenAIEndpointMode) {
 	_ = env.appConfig.AddProvider(&typ.Provider{
-		UUID:     uuid,
-		Name:     uuid,
-		APIBase:  base + "/v1",
-		APIStyle: protocol.APIStyleOpenAI,
-		Token:    "virtual-token",
-		Enabled:  true,
-		Timeout:  int64(constant.DefaultRequestTimeout),
+		UUID:               uuid,
+		Name:               uuid,
+		APIBase:            base + "/v1",
+		APIStyle:           protocol.APIStyleOpenAI,
+		OpenAIEndpointMode: mode,
+		Token:              "virtual-token",
+		Enabled:            true,
+		Timeout:            int64(constant.DefaultRequestTimeout),
 	})
+}
+
+// registerOpenAIProvider registers a default (chat) OpenAI provider.
+func registerOpenAIProvider(env *TestEnv, uuid, base string) {
+	registerProvider(env, uuid, base, ai.EndpointModeUnknown)
 }
 
 // assertFlattenedContent verifies cursor compatibility flattened every message's
@@ -279,15 +281,6 @@ func assertFlattenedContent(t flagTB, body map[string]any) {
 			t.Errorf("cursor compat left message[%d] content un-flattened; got %T", i, m["content"])
 		}
 	}
-}
-
-func containsStr(xs []string, want string) bool {
-	for _, x := range xs {
-		if x == want {
-			return true
-		}
-	}
-	return false
 }
 
 func keysOf(m map[string]any) []string {
@@ -357,10 +350,10 @@ func ruleFlagCases() []flagCase {
 			// The unified request already carries the web_search + keep_me tools.
 			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
 			names := upstreamToolNames(env.virtual.LastRequest(EndpointChat).JSON())
-			if containsStr(names, "web_search") {
+			if slices.Contains(names, "web_search") {
 				t.Errorf("blocked tool web_search still forwarded; tools=%v", names)
 			}
-			if !containsStr(names, "keep_me") {
+			if !slices.Contains(names, "keep_me") {
 				t.Errorf("non-blocked tool keep_me missing; tools=%v", names)
 			}
 		}},
@@ -401,7 +394,7 @@ func ruleFlagCases() []flagCase {
 				}
 			}, nil)
 			roles := messageRoles(env.virtual.LastRequest(EndpointAnthropic).JSON())
-			if containsStr(roles, "system") {
+			if slices.Contains(roles, "system") {
 				t.Errorf("system-role message survived claude_code_compat fold; roles=%v", roles)
 			}
 		}},
