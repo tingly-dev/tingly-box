@@ -441,21 +441,59 @@ interface DerivePrefsInput {
 }
 
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
+    // Debug: log the rules data to understand the structure
+    console.log('derivePrefsFromRules - rules:', rules);
+    console.log('derivePrefsFromRules - mode:', mode);
+    if (rules.length > 0) {
+        console.log('First rule structure:', JSON.stringify(rules[0], null, 2));
+    }
+
     const modelForVariant = (variant: string, fallback: string): string => {
         if (mode === 'unified') return rules[0]?.request_model || fallback;
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
         return rule?.request_model || fallback;
     };
 
+    // Get the 1M context window flag from a specific rule
+    const getContext1MStateForRule = (rule: any): boolean => {
+        if (!rule || !rule.flags) return false;
+        // Handle both snake_case (from API) and camelCase (already converted)
+        return (rule.flags?.context_1m || rule.flags?.context1m) || false;
+    };
+
+    // Get the 1M state for a specific variant (only used in separate mode)
+    const getContext1MStateForVariant = (variant: string): boolean => {
+        if (mode === 'unified') {
+            // In unified mode, use the first rule's context1m state
+            return getContext1MStateForRule(rules[0]);
+        }
+        // In separate mode, check the specific rule for this variant
+        const rule = rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
+        return getContext1MStateForRule(rule);
+    };
+
+    const context1MEnabled = mode === 'unified'
+        ? getContext1MStateForRule(rules[0])
+        : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'built-in-cc-default'));
+
+    console.log('Mode:', mode, 'Overall context1M enabled:', context1MEnabled);
+
     const isUnified = mode !== 'separate';
     const defaultModel = isUnified ? 'tingly/cc' : 'tingly/cc-default';
 
+    // Apply 1M suffix to models if their corresponding rule has context1m enabled
+    const apply1MSuffix = (model: string, variant: string): string => {
+        const variantContext1M = getContext1MStateForVariant(variant);
+        console.log(`Variant ${variant}: context1m=${variantContext1M}, model=${model}`);
+        return with1M(model, variantContext1M);
+    };
+
     return {
-        ANTHROPIC_MODEL: modelForVariant('default', defaultModel),
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: modelForVariant('haiku', isUnified ? defaultModel : 'tingly/cc-haiku'),
-        ANTHROPIC_DEFAULT_SONNET_MODEL: modelForVariant('sonnet', isUnified ? defaultModel : 'tingly/cc-sonnet'),
-        ANTHROPIC_DEFAULT_OPUS_MODEL: modelForVariant('opus', isUnified ? defaultModel : 'tingly/cc-opus'),
-        CLAUDE_CODE_SUBAGENT_MODEL: modelForVariant('subagent', isUnified ? defaultModel : 'tingly/cc-subagent'),
+        ANTHROPIC_MODEL: apply1MSuffix(modelForVariant('default', defaultModel), 'default'),
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku', isUnified ? defaultModel : 'tingly/cc-haiku'), 'haiku'),
+        ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet', isUnified ? defaultModel : 'tingly/cc-sonnet'), 'sonnet'),
+        ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus', isUnified ? defaultModel : 'tingly/cc-opus'), 'opus'),
+        CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent', isUnified ? defaultModel : 'tingly/cc-subagent'), 'subagent'),
 
         API_TIMEOUT_MS: '3000000',
         CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
@@ -594,7 +632,15 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                             <Switch
                                 size="small"
                                 checked={has1M(value)}
-                                onChange={(_, c) => setValue(with1M(value, c))}
+                                disabled={true}
+                                sx={{
+                                    '& .Mui-checked': {
+                                        color: has1M(value) ? 'primary.main' : 'text.disabled',
+                                    },
+                                    '& .Mui-checked + .MuiSwitch-track': {
+                                        backgroundColor: has1M(value) ? 'primary.main' : 'text.disabled',
+                                    },
+                                }}
                             />
                         </Box>
                     </Tooltip>
