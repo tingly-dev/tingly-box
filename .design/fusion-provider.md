@@ -35,7 +35,7 @@ directly.  By convention, `APIBase` is set to the OpenAI URL.
 |---|---|
 | `AuthType` must be `api_key` | OAuth tokens are issuer-specific; the token's scope is tied to one protocol endpoint |
 | `APIStyle` must not be `google` | Google auth is per-project, not per-endpoint |
-| Template required for the upgrade path | Free-form entries have no second URL to discover |
+| Template **optional** | A template pre-fills both URLs; custom endpoints supply the second URL manually (see Add flow). |
 
 ---
 
@@ -82,8 +82,30 @@ are checked, a **Fusion mode** toggle appears below the protocol selector.
 A topology hint below the toggle tells the user which outcome is selected
 ("merged into one" vs "saved as two separate providers").
 
-Free-form (no template match): fusion is not available — the second URL cannot
-be inferred.
+### Custom endpoint (no template)
+
+A free-form **Custom endpoint** can also be a fusion provider — the second URL is
+entered manually instead of inferred from a template.
+
+- The single Base URL field is the OpenAI / primary URL. When **both** protocols
+  are ticked, the Fusion toggle and topology hint appear just as for templates.
+- By default both protocols share that one URL (same address ⇒
+  `api_base_openai == api_base_anthropic`). An **"Anthropic endpoint differs?"**
+  link reveals a second labelled field (*OpenAI Base URL* / *Anthropic Base URL*)
+  for providers that serve each protocol at a distinct address; **"Use the same
+  URL"** collapses it back.
+- Fusion toggle **on** ⇒ one fusion record (URLs may be equal or distinct);
+  **off** ⇒ two split single-protocol records, each carrying its own URL.
+
+The URL source in `buildAddProviderPayload` is therefore template-driven
+(`providerBaseUrls`) **or** form-driven (`apiBaseOpenAI`/`apiBaseAnthropic`,
+falling back to `apiBase`) — the backend payload is identical either way.
+
+> **Known gap:** upgrading an *existing* single-protocol custom provider to fusion
+> via the edit dialog is not yet wired (the edit-mode upgrade toggle still keys off
+> a matched template). Downgrade of an existing custom fusion provider works, since
+> `isExistingFusion` derives from the stored URLs. Add-mode custom fusion is fully
+> supported.
 
 ---
 
@@ -148,6 +170,11 @@ Deselecting the **last** protocol is blocked — at least one must remain.
 | `createFusionProvider` | Tracks the fusion toggle state (also written to parent as `createFusionProvider` field) |
 | `effectiveLocked` | `fusionLocked \|\| protocolLocked`; passed to `ProtocolSelector` as `fusionLocked` |
 | `showFusionToggle` | add: `protocolOpenAI && protocolAnthropic`; edit: `!isExistingFusion && hasBothBaseUrls` |
+| `showSecondUrl` / `anthropicUrlValue` | custom mode only: progressive-disclosure of a second (Anthropic) URL field and its local value. Committed to `data.apiBaseAnthropic` on blur/submit. |
+
+In custom mode `syncProtocolsToParent` does **not** clear the fusion URL fields
+(the URL text inputs own them); it only clears the unused side when the user drops
+back to a single protocol. `showTopologyHint` also fires in custom mode.
 
 `handleFusionDowngrade(nextOpenAI, nextAnthropic)` — called from protocol toggle
 handlers when `isExistingFusion` is true.  Reads from `initialFusionRef` and
