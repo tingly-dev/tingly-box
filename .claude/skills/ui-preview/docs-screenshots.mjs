@@ -52,6 +52,12 @@ async function makePage(browser, theme = 'light') {
     await page.addInitScript((t) => {
         localStorage.setItem('user_auth_token', 'mock-token-for-screenshots');
         localStorage.setItem('tingly-theme-mode', t);
+        // Suppress first-run education overlays that would block product content
+        localStorage.setItem('tb.routingGuideAutoShown', '1');
+        // Collapse agent setup cards so routing rules are front-and-center
+        for (const key of ['claude_code', 'codex', 'vscode', 'openai', 'xcode']) {
+            localStorage.setItem(`setup-card-collapsed-${key}`, 'true');
+        }
     }, theme);
     return page;
 }
@@ -102,14 +108,16 @@ await shoot(browser, '/agent/openai', '4-model-select.png', {
     settle: 3000,
     interact: async (page) => {
         try {
-            const newRuleBtn = page.getByRole('button', { name: /Create new routing rule/i });
-            await newRuleBtn.waitFor({ timeout: 6000 });
-            await newRuleBtn.click();
+            // Use JS click — getByRole/waitFor fails for this button despite it being visible
+            await page.evaluate(() => {
+                document.querySelector('button[aria-label="Create new routing rule"]')?.click();
+            });
             // Wait for the dialog title to appear (dialog animates in after ~2-3s)
-            await page.getByText('Select a model for your new rule').waitFor({ timeout: 8000 });
+            const dialog = page.locator('[role="dialog"]').filter({ hasText: 'Select a model for your new rule' });
+            await dialog.waitFor({ timeout: 8000 });
             await page.waitForTimeout(400);
             // Click the first Anthropic tab to trigger model list fetch on the right panel
-            await page.getByRole('dialog').getByText('Anthropic').first().click();
+            await dialog.getByText('Anthropic').first().click();
             await page.waitForTimeout(2000);
         } catch (e) { console.warn('  ⚠ model-select dialog failed:', e.message.slice(0, 80)); }
     },
