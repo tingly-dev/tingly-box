@@ -129,15 +129,33 @@ not in the map keep the conservative 200000 default.
   `RoutingGraphTypes.ts`; the generic snake↔camel flag conversion carries it
   with no per-field code.
 - `ModelRequestHeader` gains a `titleExtras` slot; `UnifiedRoutingGraph`
-  threads `headerExtras`; `RuleCard` renders a compact **1M** switch there,
-  reading/writing `context_1m` via the existing `getFlagValue` /
-  `handleToggleFlagFromCard` helpers. Visible on every rule (requirement #1).
+  threads `headerExtras`; `RuleCard` renders a compact **1M** switch there
+  (`OneMContextSwitch`). Visible on every rule (requirement #1).
 - `context_1m` is filtered out of `RulePluginsCard` and `FlagCatalogDialog`
   so it has exactly one visible home (the promoted switch), not two.
 
----
+## 6. Toggle lifecycle: confirm dialog, not silent save
 
-## 6. Touch list
+Flipping the 1M switch does not silently persist — it opens
+`OneMConfirmDialog`, which spells out what takes effect where and lets the user
+**Apply** or **Cancel** (cancel reverts: the switch is controlled by the flag,
+which is only written on confirm). The dialog is scenario-aware because 1M's
+effectiveness genuinely differs:
+
+| Scenario | What 1M needs | Dialog behavior |
+|---|---|---|
+| **Codex** | catalog rewrite + **codex restart** (the flag alone does nothing; only the catalog's context_window reaches codex) | Primary **Apply Codex config** → one-click `api.applyCodexConfig()` (merged, preserves user keys) → dialog flips to a **restart `codex`** reminder |
+| **Claude Code** | nothing — the gateway honors the rule flag on the **next request**, no apply / restart (the `[1m]` settings.json suffix is redundant) | Primary **Enable** commits the flag; copy states it's live immediately and points to Quick Config only if the user wants the settings.json sync |
+| other (anthropic/openai) | gateway-immediate, no agent artifact | no dialog — the switch saves directly |
+
+The honest core: the "must restart the agent" message attaches to **writing the
+agent's config files**, which only happens for Codex here. We do not claim a
+restart is needed for Claude Code (it isn't), and we do not auto-apply Claude
+Code's `settings.json` from the rule card (it requires the full Quick Config
+prefs, which the card does not have — applying with derived defaults would
+clobber the user's tunables).
+
+## 8. Touch list
 
 Backend: `internal/typ/type.go`, `internal/typ/flag_registry.go`,
 `internal/typ/id.go`, `internal/server/anthropic.go`,
@@ -148,4 +166,5 @@ Backend: `internal/typ/type.go`, `internal/typ/flag_registry.go`,
 
 Frontend: `RoutingGraphTypes.ts`, `ModelRequestHeader.tsx`,
 `UnifiedRoutingGraph.tsx`, `RuleCard.tsx`, `RulePluginsCard.tsx`,
-`FlagCatalogDialog.tsx`, `ClaudeCodeQuickConfig.tsx`.
+`FlagCatalogDialog.tsx`, `ClaudeCodeQuickConfig.tsx`,
+`OneMContextSwitch.tsx`, `OneMConfirmDialog.tsx`.
