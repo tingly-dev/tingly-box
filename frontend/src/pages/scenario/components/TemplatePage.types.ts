@@ -5,9 +5,17 @@ import type { Provider } from '@/types/provider';
  * Props for using TemplatePage with internally-managed state (recommended).
  * Only provide `scenario` and TemplatePage will handle all data fetching internally.
  */
+// How the per-rule "1M context window" switch behaves for this page. Only the
+// three scenarios that actually use 1M pass it; everything else omits it and
+// the switch stays hidden. 'rename' carries [1m] in the model name (Claude
+// Code / Claude Desktop client convention); 'flag' sets the context_1m flag
+// (Codex catalog context window). See .design/one-m-context.md.
+export type OneMMode = 'rename' | 'flag';
+
 export interface TemplatePageInternalProps {
     scenario: string;
     title?: string | React.ReactNode;
+    oneMMode?: OneMMode;
     collapsible?: boolean;
     allowDeleteRule?: boolean;
     allowToggleRule?: boolean;
@@ -46,6 +54,7 @@ export interface TemplatePageExternalProps {
     allowAddRule?: boolean;
     newlyCreatedRuleUuids?: Set<string>; // @deprecated - not used, kept for API compatibility
     scenario?: string;
+    oneMMode?: OneMMode;
     showAddApiKeyButton?: boolean;
     showCreateRuleButton?: boolean;
     showExpandCollapseButton?: boolean;

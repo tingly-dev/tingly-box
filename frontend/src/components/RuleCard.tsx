@@ -20,9 +20,6 @@ import {
     parseRuleFlags,
     hasOneM,
     withOneM,
-    isClaudeCodeScenario,
-    isClaudeDesktopScenario,
-    isCodexScenario,
 } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
@@ -66,6 +63,10 @@ export interface RuleCardProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
+    // 1M context-window mode for this rule's page. Set by the three Use* pages
+    // that use 1M ('rename' = [1m] in the model name for Claude Code / Claude
+    // Desktop; 'flag' = context_1m flag for Codex). Absent -> switch hidden.
+    oneMMode?: 'rename' | 'flag';
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -84,6 +85,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     onToggleExpanded,
+    oneMMode,
 }) => {
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
@@ -275,21 +277,19 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     if (!configRecord) return null;
 
-    // 1M context window is per-scenario "special" — only Claude Code, Claude
-    // Desktop and Codex actually use it. The two families differ in HOW 1M is
-    // carried, so the toggle handler branches accordingly:
-    //   - Claude Code / Claude Desktop: the [1m] suffix is a client convention
+    // 1M context window — only the three Use* pages that use it pass oneMMode;
+    // the mode decides how 1M is carried (the page owns that decision):
+    //   - 'rename' (Claude Code / Claude Desktop): [1m] is a client convention
     //     baked into the model name, so toggling renames request_model
-    //     (e.g. "ds" -> "ds[1m]"). The renamed rule flows into the generated
-    //     env / inferenceModels and routing matches it ([1m]-tolerant).
-    //   - Codex: there is no wire suffix; 1M is purely a catalog context_window,
+    //     ("ds" -> "ds[1m]"). It flows into the generated env / inferenceModels
+    //     and routing matches it ([1m]-tolerant).
+    //   - 'flag' (Codex): no wire suffix; 1M is purely a catalog context_window,
     //     so toggling flips the context_1m flag (read at catalog-render time).
-    const isCCFamily = isClaudeCodeScenario(rule.scenario) || isClaudeDesktopScenario(rule.scenario);
-    const isCodex = isCodexScenario(rule.scenario);
-    const showOneM = isCCFamily || isCodex;
-    const oneMOn = isCCFamily ? hasOneM(configRecord.requestModel) : configRecord.context1M === true;
+    const isRename = oneMMode === 'rename';
+    const showOneM = oneMMode !== undefined;
+    const oneMOn = isRename ? hasOneM(configRecord.requestModel) : configRecord.context1M === true;
     const handleToggleOneM = (on: boolean) => {
-        if (isCCFamily) {
+        if (isRename) {
             void updateField(configRecord, setConfigRecord, 'requestModel', withOneM(configRecord.requestModel, on));
         } else {
             void updateField(configRecord, setConfigRecord, 'context1M', on);
@@ -343,9 +343,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                     show: showOneM,
                     on: oneMOn,
                     onToggle: handleToggleOneM,
-                    tooltip: isCodex
-                        ? 'Enable the 1M context window (sets this model\'s catalog context window to 1M). Re-apply the Codex config to take effect.'
-                        : 'Enable the 1M context window (renames the model to [1m] so the client requests it). Re-apply the config and restart.',
+                    tooltip: isRename
+                        ? 'Enable the 1M context window (renames the model to [1m] so the client requests it). Re-apply the config and restart.'
+                        : 'Enable the 1M context window (sets this model\'s catalog context window to 1M). Re-apply the Codex config to take effect.',
                 }}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}
