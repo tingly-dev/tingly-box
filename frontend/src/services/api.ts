@@ -1031,6 +1031,13 @@ export const api = {
                 headers,
                 body: data
             });
+            // On a non-2xx the body lands in response.error (e.g. the backend's
+            // {success:false, error:"..."}); surface it so callers can show the
+            // real reason and decide whether to guide the user to reauthorize.
+            const err = (response as any).error;
+            if (err) {
+                return {success: false, error: 'Request failed', data: err};
+            }
             return response.data;
         } catch (error: any) {
             return {success: false, error: error.message};
