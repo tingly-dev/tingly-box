@@ -10,7 +10,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {api} from '@/services/api';
 import {toggleButtonGroupStyle, toggleButtonStyle} from "@/styles/toggleStyles";
-import { Info as InfoIcon } from '@/components/icons';
+import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import {
     Box,
     Button,
@@ -22,7 +22,8 @@ import {
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
-    Typography
+    Typography,
+    Alert
 } from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -57,6 +58,8 @@ const UseClaudeCodePageContent: React.FC = () => {
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [connectProviderOpen, setConnectProviderOpen] = useState(false);
+    const [context1MDialogOpen, setContext1MDialogOpen] = useState(false);
+    const [pendingContext1MState, setPendingContext1MState] = useState<boolean | null>(null);
 
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
@@ -125,6 +128,22 @@ const UseClaudeCodePageContent: React.FC = () => {
     const cancelModeChange = () => {
         setConfirmDialogOpen(false);
         setPendingMode(null);
+    };
+
+    // Handle 1M context window toggle
+    const handleContext1MToggle = (newState: boolean) => {
+        setPendingContext1MState(newState);
+        setContext1MDialogOpen(true);
+    };
+
+    // Confirm 1M context change
+    const confirmContext1MChange = () => {
+        setContext1MDialogOpen(false);
+        const message = pendingContext1MState
+            ? '1M context window enabled. Model names have been updated with [1m] suffix. Please reapply the configuration to Claude Code and restart Claude Code for the changes to take effect.'
+            : '1M context window disabled. Model names have been updated. Please reapply the configuration to Claude Code and restart Claude Code for the changes to take effect.';
+        showNotification(message, 'success');
+        setPendingContext1MState(null);
     };
 
     useEffect(() => {
@@ -277,6 +296,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}
+                    onContext1MToggle={handleContext1MToggle}
                 />
 
                 <Dialog
@@ -299,6 +319,39 @@ const UseClaudeCodePageContent: React.FC = () => {
                             Cancel
                         </Button>
                         <Button onClick={confirmModeChange} variant="contained">
+                            Confirm
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* 1M Context Window Toggle Confirmation Dialog */}
+                <Dialog open={context1MDialogOpen} onClose={() => setContext1MDialogOpen(false)} maxWidth="sm" fullWidth>
+                    <DialogTitle>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <RestartIcon color="primary" />
+                            <span>1M Context Window Change</span>
+                        </Box>
+                    </DialogTitle>
+                    <DialogContent>
+                        <Alert severity="info" sx={{ mb: 2 }}>
+                            {pendingContext1MState
+                                ? 'Enabling 1M context window will update model names with [1m] suffix.'
+                                : 'Disabling 1M context window will remove [1m] suffix from model names.'}
+                        </Alert>
+                        <Typography variant="body1" sx={{ mb: 1 }}>
+                            You are about to {pendingContext1MState ? 'enable' : 'disable'} the 1M context window feature.
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            This will update model names and requires you to:
+                            1. Reapply the configuration to Claude Code
+                            2. Restart Claude Code for changes to take effect
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+                        <Button onClick={() => setContext1MDialogOpen(false)} color="inherit">
+                            Cancel
+                        </Button>
+                        <Button onClick={confirmContext1MChange} variant="contained">
                             Confirm
                         </Button>
                     </DialogActions>
