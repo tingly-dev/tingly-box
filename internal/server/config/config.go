@@ -809,15 +809,18 @@ func IsWildcardRuleName(name string) bool {
 }
 
 // MatchRuleByModelAndScenario finds a rule by model name with wildcard support.
-// Priority: exact match > [1m]-stripped match > wildcard match.
+// Priority: exact match > [1m]-tolerant match > wildcard match.
 //
-// The [1m]-stripped layer exists because Claude Code, when 1M context is
-// enabled, appends a "[1m]" suffix to the model name it sends on the wire
-// (e.g. "tingly/cc-sonnet[1m]"). Rules persist a clean request_model plus a
-// separate Context1M flag, so a rule "tingly/cc-sonnet" with Context1M=true
-// is the canonical match for an incoming "tingly/cc-sonnet[1m]". The exact
-// branch still wins so any rule that literally carries the suffix (legacy or
-// hand-edited) keeps matching.
+// The [1m]-tolerant layer makes routing robust to the "[1m]" context-window
+// suffix appearing on one side but not the other. For Claude Code / Claude
+// Desktop the suffix is carried directly on the rule's request_model (toggling
+// 1M renames "ds" -> "ds[1m]") and the client echoes that exact name, so the
+// exact branch normally wins. But some launch paths still emit the clean name
+// (e.g. the hardcoded CC env), and hand-edited / legacy configs may carry the
+// suffix on either side. Comparing both sides with the suffix stripped lets a
+// clean "ds" reach a "ds[1m]" rule and vice versa. Exact match is tried first,
+// so when both a clean and a [1m] variant of a rule exist, each keeps matching
+// its own literal name.
 func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.RuleScenario) *typ.Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -829,13 +832,16 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 		}
 	}
 
-	// Then, try with the [1m] context-window suffix stripped — the canonical
-	// "rule = clean name, flag = context window" form.
-	if stripped := typ.StripContextWindow1M(requestModel); stripped != requestModel {
-		for _, rule := range c.Rules {
-			if rule.RequestModel == stripped && rule.GetScenario() == scenario {
-				return &rule
-			}
+	// Then, try a [1m]-tolerant match: compare both the incoming model and the
+	// rule's request_model with the [1m] suffix stripped. Covers "ds" -> "ds[1m]"
+	// and "ds[1m]" -> "ds" without requiring the suffix to line up exactly.
+	strippedReq := typ.StripContextWindow1M(requestModel)
+	for _, rule := range c.Rules {
+		if rule.GetScenario() != scenario {
+			continue
+		}
+		if typ.StripContextWindow1M(rule.RequestModel) == strippedReq {
+			return &rule
 		}
 	}
 

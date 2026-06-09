@@ -1,70 +1,77 @@
 # 1M Context Window — 4 Scenario Cases
 
-> Audience: tingly-box contributors. How 1M context window is handled for
-> each agent scenario.
+> Audience: tingly-box contributors. How the 1M context window is handled
+> per agent scenario.
 
 ## Problem
 
-Models support 1M context, but agent configs (CC, Claude Desktop, Codex)
-are one-time: no way to independently toggle 1M or propagate it to profiles.
+Models support 1M context, but agent configs (Claude Code, Claude Desktop,
+Codex) are one-time: no way to independently toggle 1M per model or propagate
+it to profiles.
 
-## Approach: `Rule.Context1M` flag + scenario-specific materialisation
+## Approach
 
-`rule.request_model` stays **clean** (e.g. `"tingly/cc-sonnet"`). A separate
-`Rule.Context1M bool` flag is the single source of truth. Each scenario
-reads this flag at config-generation time and materialises it in the
-format that scenario's client expects.
+1M is only meaningful for three scenarios, and they differ in *how* the
+client perceives it — so each is handled where it lives, not through generic
+infrastructure. The 1M switch sits on the rule card's model node
+(`ModelRequestHeader.oneM`); its handler in `RuleCard` branches by scenario.
 
-### Case 1 — Claude Code
+### Case 1 — Claude Code  &  Case 2 — Claude Desktop
 
-`resolveCCModelSlots` reads `Context1M` and appends `[1m]` to the model
-name in the env vars written to `settings.json`:
+`[1m]` is a **client convention baked into the model name**. Toggling 1M
+**renames the rule's `request_model`** (e.g. `tingly/cc-sonnet` →
+`tingly/cc-sonnet[1m]`). That renamed name is both the tingly-box rule name
+and the model name the client is told to use:
 
-```
-rule: { request_model: "tingly/cc-sonnet", context_1m: true }
-→ env: ANTHROPIC_DEFAULT_SONNET_MODEL=tingly/cc-sonnet[1m]
-→ CC perceives [1m], sends context-1m-2025-08-07 beta header
-```
+- Claude Code: `derivePrefsFromRules` reads `request_model` verbatim into the
+  env (`ANTHROPIC_*_MODEL`), so the CC client perceives `[1m]` and sends the
+  `context-1m-2025-08-07` beta header.
+- Claude Desktop: `buildInferenceModelsJson` emits `request_model` verbatim
+  into the `inferenceModels` list.
 
-User must re-apply config and restart CC for the change to take effect.
-Profiles also work: `resolveCCModelSlots` resolves profile rules the same way.
-
-### Case 2 — Claude Desktop
-
-`buildInferenceModelsJson` appends `[1m]` to model names in the generated
-`inferenceModels` config when `context_1m` is set on the rule. User must
-re-apply the config snippet to `claude_desktop_config.json`.
+User re-applies the config and restarts the client to take effect.
 
 ### Case 3 — Codex
 
-`RenderCodexModelCatalog` sets `context_window: 1000000` (instead of 200k)
-for models with `Context1M=true`. `CollectCodexContext1M` reads the flag
-from codex-scenario rules. User must re-apply the Codex config.
+Codex has **no wire suffix** — 1M is purely a catalog `context_window`
+budget. Toggling 1M flips the `context_1m` flag on the rule (no rename).
+`CollectCodexContext1M` reads the flag and `RenderCodexModelCatalog` sets
+`context_window: 1000000` for those models. User re-applies the Codex config.
 
-### Case 4 — Others (OpenAI, Anthropic, etc.)
+### Case 4 — Others (OpenAI, Anthropic, …)
 
-The flag is stored on the rule. No client config materialisation needed —
-the server can use the flag to inform `/models` endpoint or future features.
+No 1M handling — the switch is hidden. Nothing to materialise.
 
-## Server-side routing
+## Routing — `MatchRuleByModelAndScenario`
 
-When CC sends `tingly/cc-sonnet[1m]`, `MatchRuleByModelAndScenario` strips
-`[1m]` and matches the clean rule:
+Because the rule name carries `[1m]` for CC/CD, an incoming `ds[1m]` matches
+the renamed rule exactly. To stay robust when the suffix appears on only one
+side (e.g. a launch path that emits the clean name, or hand-edited configs),
+matching is **`[1m]`-tolerant**: after an exact match fails, both the incoming
+model and each rule's `request_model` are compared with `[1m]` stripped.
 
 ```
-priority: exact match > strip-[1m] match > wildcard match
+priority: exact match > [1m]-tolerant (stripped) match > wildcard
 ```
+
+Rules are updated in place by UUID (`UpdateRule`), so a rename doesn't orphan
+rule state, and the uniqueness guard prevents a colliding name.
 
 ## Beta header forwarding
 
 Upstream #1157 (`mergeBetaFlags` + `claudeCodeAllowedUpstreamBetas` whitelist)
-allows `context-1m-2025-08-07` to pass through to Anthropic.
+forwards `context-1m-2025-08-07` through to Anthropic.
 
-## Frontend
+## Code map
 
-One toggle: the 1M switch on the rule card's model header
-(`ModelRequestHeader.oneM`), visible for CC / Claude Desktop / Codex
-scenarios. Writes `context_1m` via the existing autosave path.
-
-Quick Config derives env strings from `request_model + context_1m`
-(read-only — no inline 1M toggle in the modal).
+- `internal/typ/model_tag.go` — `[1m]` helpers (`HasContextWindow1M`,
+  `StripContextWindow1M`, `WithContextWindow1M`). Mirrored in
+  `frontend/src/components/rule-card/utils.ts`.
+- `internal/server/config/config.go::MatchRuleByModelAndScenario` —
+  `[1m]`-tolerant match.
+- `internal/server/config/apply_config.go` — `CollectCodexContext1M`,
+  `RenderCodexModelCatalog(models, context1M)`, `ApplyCodexConfig(..., context1M)`.
+- `internal/typ/type.go` — `Rule.Context1M` (Codex only).
+- Frontend: `RuleCard` scenario-aware toggle handler; `context_1m` round-trips
+  through `ruleToConfigRecord` / `buildRuleUpdatePayload` so the Codex flag
+  survives autosaves of other fields.

@@ -132,8 +132,7 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 			envUnified = sc.GetDefaultFlags().Unified
 		}
 	}
-	slots := resolveCCModelSlots(globalConfig, profileID, envUnified)
-	env := generateCCEnv(baseURL, apiKey, scenarioPath, slots)
+	env := generateCCEnv(baseURL, apiKey, scenarioPath, envUnified, profileID != "")
 
 	// Build settings file
 	var settingsPath string
@@ -347,85 +346,9 @@ func buildTempSettings(env map[string]string, scenarioPath string) (string, erro
 	return destPath, nil
 }
 
-// resolveCCModelSlots returns the 5 Claude Code model env vars, deriving each
-// model name from the corresponding routing rule and appending the [1m]
-// context-window suffix when the rule has Context1M=true. Falls back to tb's
-// canonical model names when a rule is absent.
-//
-// Rule selection mirrors the other materializers:
-//   - default scenario (no profile): the stable built-in-cc[-variant] UUIDs,
-//     matching tbclient.resolveClaudeCodeModels (robust to request_model edits).
-//   - profile scenario: the profile's rules, matched by their short
-//     request_model base name (profile rules use uuid.New(), not stable UUIDs).
-func resolveCCModelSlots(cfg *config.Config, profileID string, unified bool) map[string]string {
-	isProfile := profileID != ""
-	scenario := typ.ScenarioClaudeCode
-	if isProfile {
-		scenario = typ.ProfiledScenarioName(typ.ScenarioClaudeCode, profileID)
-	}
-
-	rules := cfg.GetRequestConfigs()
-	// pick resolves a slot: for profiles match by short base name, otherwise by
-	// the stable built-in UUID. Returns request_model + optional [1m] suffix
-	// (driven by the rule's Context1M flag), or the fallback when no rule matches.
-	pick := func(uuid, shortName, fallback string) string {
-		for i := range rules {
-			r := rules[i]
-			if r.GetScenario() != scenario {
-				continue
-			}
-			match := false
-			if isProfile {
-				if r.RequestModel == shortName {
-					match = true
-				}
-			} else if r.UUID == uuid {
-				match = true
-			}
-			if match {
-				return typ.WithContextWindow1M(r.RequestModel, r.Context1M)
-			}
-		}
-		return fallback
-	}
-
-	env := make(map[string]string, 5)
-	if unified {
-		fallback := "tingly/cc"
-		if isProfile {
-			fallback = "cc"
-		}
-		v := pick(config.RuleUUIDBuiltinCC, "cc", fallback)
-		env["ANTHROPIC_MODEL"] = v
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = v
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = v
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = v
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = v
-		return env
-	}
-
-	if isProfile {
-		env["ANTHROPIC_MODEL"] = pick("", "default", "default")
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = pick("", "haiku", "haiku")
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = pick("", "opus", "opus")
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = pick("", "sonnet", "sonnet")
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = pick("", "subagent", "subagent")
-		return env
-	}
-
-	env["ANTHROPIC_MODEL"] = pick(config.RuleUUIDBuiltinCCDefault, "default", "tingly/cc-default")
-	env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = pick(config.RuleUUIDBuiltinCCHaiku, "haiku", "tingly/cc-haiku")
-	env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = pick(config.RuleUUIDBuiltinCCOpus, "opus", "tingly/cc-opus")
-	env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = pick(config.RuleUUIDBuiltinCCSonnet, "sonnet", "tingly/cc-sonnet")
-	env["CLAUDE_CODE_SUBAGENT_MODEL"] = pick(config.RuleUUIDBuiltinCCSubagent, "subagent", "tingly/cc-subagent")
-	return env
-}
-
-// generateCCEnv builds the env vars map for Claude Code settings. The 5 model
-// slots are resolved from routing rules by resolveCCModelSlots (so a [1m]
-// suffix toggled on a rule flows into the launched env); everything else is
-// tb's canonical defaults plus the server-injected base URL and auth token.
-func generateCCEnv(baseURL, apiKey, scenarioPath string, slots map[string]string) map[string]string {
+// generateCCEnv builds the env vars map for Claude Code settings.
+// When isProfile is true, model names use short names (e.g. "default") instead of "tingly/cc-default".
+func generateCCEnv(baseURL, apiKey, scenarioPath string, unified bool, isProfile bool) map[string]string {
 	env := map[string]string{
 		"DISABLE_TELEMETRY":                        "1",
 		"DISABLE_ERROR_REPORTING":                  "1",
@@ -434,8 +357,38 @@ func generateCCEnv(baseURL, apiKey, scenarioPath string, slots map[string]string
 		"ANTHROPIC_BASE_URL":                       baseURL + "/tingly/" + scenarioPath,
 		"ANTHROPIC_AUTH_TOKEN":                     apiKey,
 	}
-	for k, v := range slots {
-		env[k] = v
+
+	if unified {
+		if isProfile {
+			// Profile unified mode: use "cc" to match the profile rule
+			env["ANTHROPIC_MODEL"] = "cc"
+			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "cc"
+			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "cc"
+			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "cc"
+			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "cc"
+		} else {
+			// Non-profile unified mode: use full model name
+			env["ANTHROPIC_MODEL"] = "tingly/cc"
+			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
+			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
+			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
+			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
+		}
+	} else if isProfile {
+		// Profile separate mode: use short names (rules have stripped prefix)
+		env["ANTHROPIC_MODEL"] = "default"
+		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "haiku"
+		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "opus"
+		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "sonnet"
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "subagent"
+	} else {
+		// Non-profile separate mode: use full model names
+		env["ANTHROPIC_MODEL"] = "tingly/cc-default"
+		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"
+		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc-opus"
+		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc-sonnet"
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc-subagent"
 	}
+
 	return env
 }

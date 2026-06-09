@@ -18,6 +18,8 @@ import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import {
     formatRuleFlags,
     parseRuleFlags,
+    hasOneM,
+    withOneM,
     isClaudeCodeScenario,
     isClaudeDesktopScenario,
     isCodexScenario,
@@ -271,21 +273,28 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         void updateField(configRecord, setConfigRecord, 'flags', next);
     }, [configRecord, updateField, setConfigRecord]);
 
-    // 1M toggle: flip the rule's Context1M flag. The flag is the single source
-    // of truth; config materialization (Claude Code env [1m] suffix / Codex
-    // catalog context_window) reads it at apply/launch time. autoSave persists
-    // it and toasts on failure (with rollback), so no extra reminder here.
-    const handleToggleOneM = useCallback((on: boolean) => {
-        if (!configRecord) return;
-        void updateField(configRecord, setConfigRecord, 'context1M', on);
-    }, [configRecord, updateField, setConfigRecord]);
-
     if (!configRecord) return null;
 
-    // 1M switch applies to Claude Code (env [1m] suffix) and Codex (catalog
-    // context window). It's a separate flag, not the model string, so wildcard
-    // rules are fine too.
-    const showOneM = isClaudeCodeScenario(rule.scenario) || isClaudeDesktopScenario(rule.scenario) || isCodexScenario(rule.scenario);
+    // 1M context window is per-scenario "special" — only Claude Code, Claude
+    // Desktop and Codex actually use it. The two families differ in HOW 1M is
+    // carried, so the toggle handler branches accordingly:
+    //   - Claude Code / Claude Desktop: the [1m] suffix is a client convention
+    //     baked into the model name, so toggling renames request_model
+    //     (e.g. "ds" -> "ds[1m]"). The renamed rule flows into the generated
+    //     env / inferenceModels and routing matches it ([1m]-tolerant).
+    //   - Codex: there is no wire suffix; 1M is purely a catalog context_window,
+    //     so toggling flips the context_1m flag (read at catalog-render time).
+    const isCCFamily = isClaudeCodeScenario(rule.scenario) || isClaudeDesktopScenario(rule.scenario);
+    const isCodex = isCodexScenario(rule.scenario);
+    const showOneM = isCCFamily || isCodex;
+    const oneMOn = isCCFamily ? hasOneM(configRecord.requestModel) : configRecord.context1M === true;
+    const handleToggleOneM = (on: boolean) => {
+        if (isCCFamily) {
+            void updateField(configRecord, setConfigRecord, 'requestModel', withOneM(configRecord.requestModel, on));
+        } else {
+            void updateField(configRecord, setConfigRecord, 'context1M', on);
+        }
+    };
 
     const extensionsCard = (
         <RulePluginsCard
@@ -332,8 +341,11 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 extensionsCard={extensionsCard}
                 oneM={{
                     show: showOneM,
-                    on: configRecord.context1M === true,
+                    on: oneMOn,
                     onToggle: handleToggleOneM,
+                    tooltip: isCodex
+                        ? 'Enable the 1M context window (sets this model\'s catalog context window to 1M). Re-apply the Codex config to take effect.'
+                        : 'Enable the 1M context window (renames the model to [1m] so the client requests it). Re-apply the config and restart.',
                 }}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}
