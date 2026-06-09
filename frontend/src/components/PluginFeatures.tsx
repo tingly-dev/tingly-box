@@ -5,9 +5,7 @@ import { ConfigRow } from './ConfigRow';
 import {
     PluginToggleButton,
     RecordingV2Control,
-    SessionAffinityControl,
     ThinkingEffortControl,
-    UserAgentControl,
     VisionProxyControl,
 } from './flags';
 import type { VisionService } from './flags';
@@ -41,8 +39,6 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
     const [features, setFeatures] = useState<Record<string, boolean>>({});
     const [effort, setEffort] = useState<string>('');
     const [recordV2Mode, setRecordV2Mode] = useState<string>('');
-    const [userAgent, setUserAgent] = useState<string>('');
-    const [sessionAffinity, setSessionAffinity] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<Record<string, boolean>>({});
 
@@ -55,12 +51,10 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
         try {
             setLoading(true);
 
-            const [effortResult, recordV2Result, uaResult, affinityResult, cfgResult, providersResult, ...featureResults] =
+            const [effortResult, recordV2Result, cfgResult, providersResult, ...featureResults] =
                 await Promise.all([
                     api.getScenarioStringFlag(scenario, 'thinking_effort'),
                     api.getScenarioStringFlag(scenario, 'recording_v2'),
-                    api.getScenarioStringFlag(scenario, 'custom_user_agent'),
-                    api.getScenarioIntFlag(scenario, 'session_affinity'),
                     api.getScenarioConfig(scenario),
                     api.getProviders(),
                     ...visibleFeatures.map(f => api.getScenarioFlag(scenario, f.key)),
@@ -71,12 +65,6 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             }
             if (recordV2Result?.success && recordV2Result?.data?.value !== undefined) {
                 setRecordV2Mode(recordV2Result.data.value);
-            }
-            if (uaResult?.success && uaResult?.data?.value !== undefined) {
-                setUserAgent(uaResult.data.value);
-            }
-            if (affinityResult?.success && affinityResult?.data?.value !== undefined) {
-                setSessionAffinity(affinityResult.data.value);
             }
 
             const ext = cfgResult?.data?.extensions || cfgResult?.data?.Extensions;
@@ -127,16 +115,6 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
 
     const setEffortLevel = makeStringFlagSetter('thinking_effort', effort, setEffort);
     const setRecordV2 = makeStringFlagSetter('recording_v2', recordV2Mode, setRecordV2Mode);
-    const setUserAgentValue = makeStringFlagSetter('custom_user_agent', userAgent, setUserAgent);
-
-    const handleSessionAffinityChange = (value: number) => {
-        if (updating.session_affinity || value === sessionAffinity) return;
-        setUpdating(prev => ({ ...prev, session_affinity: true }));
-        api.setScenarioIntFlag(scenario, 'session_affinity', value)
-            .then(result => result.success ? setSessionAffinity(value) : loadData())
-            .catch(() => loadData())
-            .finally(() => setUpdating(prev => ({ ...prev, session_affinity: false })));
-    };
 
     const handleVisionChange = async (next: VisionService | null) => {
         setUpdating(prev => ({ ...prev, vision_proxy_service: true }));
@@ -209,16 +187,6 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                                     value={recordV2Mode}
                                     disabled={updating.recording_v2 || false}
                                     onChange={setRecordV2}
-                                />
-                                <UserAgentControl
-                                    value={userAgent}
-                                    disabled={updating.custom_user_agent || false}
-                                    onChange={setUserAgentValue}
-                                />
-                                <SessionAffinityControl
-                                    value={sessionAffinity}
-                                    onChange={handleSessionAffinityChange}
-                                    disabled={updating.session_affinity || false}
                                 />
                             </Box>
                         ),
