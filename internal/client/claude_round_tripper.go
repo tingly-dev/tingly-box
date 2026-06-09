@@ -151,6 +151,9 @@ const (
 	// Model-specific beta flags
 	anthropicContext1m = "context-1m-2025-08-07"
 
+	// AnthropicContext1m is the exported version for use in other packages
+	AnthropicContext1m = anthropicContext1m
+
 	// Content negotiation
 	acceptHeader = "application/json"
 
