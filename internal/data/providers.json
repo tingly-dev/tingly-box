@@ -713,6 +713,11 @@
           "max_output": 32768
         },
         {
+          "id": "kimi-k2.6",
+          "context": 262144,
+          "max_output": 32768
+        },
+        {
           "id": "kimi-k2.5",
           "context": 262144,
           "max_output": 32768
@@ -772,6 +777,11 @@
         {
           "id": "minimax-m2.5",
           "context": 1048576,
+          "max_output": 32768
+        },
+        {
+          "id": "kimi-k2.6",
+          "context": 262144,
           "max_output": 32768
         },
         {
@@ -1292,6 +1302,11 @@
           "id": "deepseek-v4-flash"
         },
         {
+          "id": "kimi-k2.6",
+          "context": 262144,
+          "max_output": 65535
+        },
+        {
           "id": "kimi-k2.5",
           "context": 262144,
           "max_output": 65535
@@ -1363,6 +1378,10 @@
         },
         {
           "id": "glm-5.1"
+        },
+        {
+          "id": "kimi-k2.6",
+          "context": 262144
         },
         {
           "id": "kimi-k2.5",
