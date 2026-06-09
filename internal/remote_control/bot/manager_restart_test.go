@@ -1,74 +1,52 @@
 package bot
 
 import (
+	"context"
 	"testing"
-	"time"
 )
 
-// TestNextRestartDelay_Backoff locks in the crash-restart backoff schedule that
-// replaced the old 30s reconciliation poll: exponential growth from the base
-// delay, capped at restartMaxDelay, with the attempt counter advancing on every
-// consecutive failure.
-func TestNextRestartDelay_Backoff(t *testing.T) {
-	m := &Manager{restartAttempts: make(map[string]int)}
-	const uuid = "bot-x"
-
-	want := []time.Duration{
-		3 * time.Second,  // attempt 1: base
-		6 * time.Second,  // attempt 2
-		12 * time.Second, // attempt 3
-		24 * time.Second, // attempt 4
-		48 * time.Second, // attempt 5
-		60 * time.Second, // attempt 6: 96s capped to max
-		60 * time.Second, // attempt 7: still capped
+// TestFinishRunning reports the intentional-stop flag and deregisters the bot.
+// This is the single decision input for auto-restart: a bot that was stopped
+// intentionally (stopped=true) must not be restarted.
+func TestFinishRunning(t *testing.T) {
+	m := &Manager{
+		running: map[string]*runningBot{
+			"crashed": {stopped: false},
+			"stopped": {stopped: true},
+		},
+		baseCtx: context.Background(),
 	}
 
-	for i, w := range want {
-		got, attempt := m.nextRestartDelay(uuid, 0)
-		if attempt != i+1 {
-			t.Fatalf("step %d: attempt = %d, want %d", i, attempt, i+1)
-		}
-		if got != w {
-			t.Fatalf("attempt %d: delay = %v, want %v", attempt, got, w)
-		}
+	if intentional := m.finishRunning("crashed"); intentional {
+		t.Fatalf("crashed bot: intentional = true, want false")
 	}
-}
-
-// TestNextRestartDelay_HealthyRunResets verifies that a bot which ran healthily
-// before dying is treated as a fresh failure (immediate base-delay restart)
-// rather than inheriting a stale crash-loop backoff.
-func TestNextRestartDelay_HealthyRunResets(t *testing.T) {
-	m := &Manager{restartAttempts: make(map[string]int)}
-	const uuid = "bot-y"
-
-	// Drive the backoff up a few steps with rapid (unhealthy) crashes.
-	for i := 0; i < 4; i++ {
-		m.nextRestartDelay(uuid, 0)
+	if intentional := m.finishRunning("stopped"); !intentional {
+		t.Fatalf("stopped bot: intentional = false, want true")
 	}
 
-	// A subsequent exit after a healthy run resets to attempt 1 / base delay.
-	got, attempt := m.nextRestartDelay(uuid, restartHealthyRun)
-	if attempt != 1 {
-		t.Fatalf("after healthy run: attempt = %d, want 1", attempt)
+	if _, ok := m.running["crashed"]; ok {
+		t.Fatalf("crashed bot was not removed from running map")
 	}
-	if got != restartBaseDelay {
-		t.Fatalf("after healthy run: delay = %v, want %v", got, restartBaseDelay)
+	if _, ok := m.running["stopped"]; ok {
+		t.Fatalf("stopped bot was not removed from running map")
+	}
+
+	// Unknown UUID is a safe no-op reporting "not intentional".
+	if intentional := m.finishRunning("missing"); intentional {
+		t.Fatalf("missing bot: intentional = true, want false")
 	}
 }
 
-// TestClearRestartAttempts ensures backoff state is forgotten once a bot is no
-// longer being recovered (intentional stop / disabled), so a later restart
-// starts from the base delay.
-func TestClearRestartAttempts(t *testing.T) {
-	m := &Manager{restartAttempts: make(map[string]int)}
-	const uuid = "bot-z"
+// TestScheduleRestart_SkipsWhenShuttingDown ensures a canceled base context
+// (server shutdown) suppresses the restart so bots are not resurrected after
+// stop.
+func TestScheduleRestart_SkipsWhenShuttingDown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
-	m.nextRestartDelay(uuid, 0)
-	m.nextRestartDelay(uuid, 0)
-	m.clearRestartAttempts(uuid)
+	m := &Manager{running: map[string]*runningBot{}, baseCtx: ctx}
 
-	got, attempt := m.nextRestartDelay(uuid, 0)
-	if attempt != 1 || got != restartBaseDelay {
-		t.Fatalf("after clear: attempt = %d delay = %v, want 1 and %v", attempt, got, restartBaseDelay)
-	}
+	// With a canceled context scheduleRestart must return before touching the
+	// store (which is nil here — a panic would mean it didn't short-circuit).
+	m.scheduleRestart("any", BotSetting{UUID: "any"})
 }

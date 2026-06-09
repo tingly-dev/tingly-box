@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -123,49 +122,15 @@ func runRemoteAddInteractive(reader *bufio.Reader, appManager *AppManager) error
 		return fmt.Errorf("failed to save bot configuration: %w", err)
 	}
 
-	// If a tingly-box server is already running locally, ask it to reconcile bot
-	// state now so this newly enabled bot starts inside the server process
-	// without waiting for a restart. Best-effort: silently ignored if no server
-	// is running (the standalone `remote start` path below still applies).
-	notifyRunningServerReload(appManager)
-
 	fmt.Println()
 	PrintSuccess("Bot configuration saved successfully!")
 	fmt.Printf("UUID: %s\n", created.UUID)
 	fmt.Println()
-	fmt.Println("If a tingly-box server is running, this bot starts automatically.")
-	fmt.Println("To run it standalone instead:")
+	fmt.Println("To start this bot, run:")
 	fmt.Printf("  tingly-box remote start %s\n", created.UUID)
 	fmt.Println()
 
 	return nil
-}
-
-// notifyRunningServerReload best-effort asks a locally running tingly-box server
-// to reconcile bot state immediately (POST /api/v1/imbot-admin/reload). It is a
-// no-op when no server is reachable, so CLI bot management still works fully
-// offline.
-func notifyRunningServerReload(appManager *AppManager) {
-	port := appManager.GetServerPort()
-	if port == 0 {
-		return
-	}
-
-	url := fmt.Sprintf("http://localhost:%d/api/v1/imbot-admin/reload", port)
-	req, err := http.NewRequest(http.MethodPost, url, nil)
-	if err != nil {
-		return
-	}
-	if token := appManager.GetUserToken(); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return
-	}
-	_ = resp.Body.Close()
 }
 
 // getPlatformInfo returns platform info by name

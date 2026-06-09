@@ -26,7 +26,6 @@ type LifecycleController interface {
 	Sync(ctx context.Context) error
 	Shutdown()
 	SetChannelRegistry(reg *channel.Registry)
-	SetBaseContext(ctx context.Context)
 }
 
 // Handler handles ImBot settings HTTP requests
@@ -553,15 +552,6 @@ func (h *Handler) StartAllEnabled(ctx context.Context) error {
 		return fmt.Errorf("bot manager is nil")
 	}
 	return h.botMgr.StartAllEnabled(ctx)
-}
-
-// SetBaseContext binds crash-recovery restarts to the given lifecycle context
-// (delegates to BotManager).
-func (h *Handler) SetBaseContext(ctx context.Context) {
-	if h.botMgr == nil {
-		return
-	}
-	h.botMgr.SetBaseContext(ctx)
 }
 
 // RestartBotByUUID stops then starts a single bot. Used by both the admin
