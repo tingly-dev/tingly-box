@@ -6,7 +6,6 @@ import (
 
 	aiagent "github.com/tingly-dev/tingly-box/ai/agent"
 	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
-	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // Re-export types from ai/agent for backward compatibility
@@ -115,8 +114,7 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			return nil, fmt.Errorf("codex config not registered")
 		}
 		codexBaseURL := baseURL + "/tingly/codex"
-		// Collect codex models and their 1M-context set in a single pass.
-		models, context1mModels := aa.collectCodexRuleModels()
+		models, context1mModels := serverconfig.CollectCodexRuleModels(aa.config)
 		fileResult, err = config.Apply(&aiagent.CodexParams{
 			CodexBaseURL:    codexBaseURL,
 			APIKey:          apiKey,
@@ -180,26 +178,6 @@ func (aa *AgentApply) RestoreAgent(req *RestoreAgentRequest) (*RestoreAgentResul
 	return config.Restore()
 }
 
-// collectCodexRuleModels returns, in a single pass over the active Codex-scenario
-// rules, the deduplicated request_models (catalog slugs) and the set of those
-// slugs whose context_1m flag is set. The 1M set is keyed by request_model so it
-// lines up with the slugs CollectCodexModels produces.
-func (aa *AgentApply) collectCodexRuleModels() ([]string, map[string]bool) {
-	var models []string
-	context1m := map[string]bool{}
-	for _, rule := range aa.config.GetRequestConfigs() {
-		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
-			continue
-		}
-		models = append(models, rule.RequestModel)
-		if rule.Flags.Context1M {
-			if m := strings.TrimSpace(rule.RequestModel); m != "" {
-				context1m[m] = true
-			}
-		}
-	}
-	return CollectCodexModels(models), context1m
-}
 
 // getBaseURLAndToken returns the base URL and API token for configuration
 func (aa *AgentApply) getBaseURLAndToken() (string, string) {

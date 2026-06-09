@@ -26,7 +26,8 @@ type (
 		// AuthType is a tingly-box extension (not in Anthropic's wire format)
 		// consumed by the frontend to order model picker entries:
 		// oauth -> api_key -> vmodel.
-		AuthType string `json:"auth_type,omitempty"`
+		AuthType  string `json:"auth_type,omitempty"`
+		Context1M bool   `json:"context_1m,omitempty"`
 	}
 	AnthropicModelsResponse struct {
 		Data    []AnthropicModel `json:"data"`

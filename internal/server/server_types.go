@@ -324,7 +324,8 @@ type OpenAIModel struct {
 	// non-standard (OpenAI's models API has no such field) and consumed by
 	// the tingly-box frontend to order model picker entries:
 	// oauth -> api_key -> vmodel.
-	AuthType string `json:"auth_type,omitempty"`
+	AuthType   string `json:"auth_type,omitempty"`
+	Context1M  bool   `json:"context_1m,omitempty"`
 }
 
 // OpenAIModelsResponse represents OpenAI's models API response format

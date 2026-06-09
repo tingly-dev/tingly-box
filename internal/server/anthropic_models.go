@@ -67,6 +67,7 @@ func (s *Server) anthropicListModelsWithScenario(c *gin.Context, scenario *typ.R
 			DisplayName: displayName,
 			Type:        "model",
 			AuthType:    string(primaryAuthTypeForRule(cfg, rule)),
+			Context1M:   rule.Flags.Context1M,
 		})
 	}
 
