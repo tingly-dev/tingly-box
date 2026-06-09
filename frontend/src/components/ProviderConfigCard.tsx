@@ -213,7 +213,7 @@ export const ProviderConfigCard: React.FC<ProviderConfigCardProps> = ({
                 </Box>
             )}
 
-            {/* Scenario Features (Thinking Effort + Plugin) - Optional (when scenario is provided) */}
+            {/* Scenario Plugins (Thinking Effort + scenario-level plugins) - Optional (when scenario is provided) */}
             {scenario && (
                 <Box sx={{ px: 2, py: 0.5 }}>
                     <PluginFeatures scenario={scenario} />

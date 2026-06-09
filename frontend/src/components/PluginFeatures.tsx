@@ -24,9 +24,13 @@ interface PluginFeatureConfig {
     scenarios?: readonly string[];
 }
 
+// Scenario-level boolean plugins. Only flags that genuinely have a
+// scenario-level default belong here. `clean_header` was deliberately
+// dropped: it is now rule-only (backend `SetScenarioFlag` rejects it as an
+// unknown flag, so the toggle could never persist) — it lives on the per-rule
+// Plugins card instead. See .design/rule-flags.md §4 / §12.
 const PLUGIN_FEATURES: PluginFeatureConfig[] = [
     { key: 'smart_compact', label: 'Smart Compact', description: 'Remove thinking blocks from conversation history to reduce context' },
-    { key: 'clean_header', label: 'Clean Header', description: 'Remove Claude Code billing header from system messages', scenarios: ['claude_code'] as const },
 ];
 
 const VISION_PROXY_SERVICE_KEY = 'vision_proxy_service';
@@ -176,8 +180,8 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
             <ConfigRow
                 tabs={[
                     {
-                        key: 'plugin',
-                        label: 'Plugin',
+                        key: 'plugins',
+                        label: 'Plugins',
                         content: (
                             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 1, width: '100%' }}>
                                 <ThinkingEffortControl
@@ -220,7 +224,7 @@ const PluginFeatures: React.FC<PluginFeaturesProps> = ({ scenario }) => {
                         ),
                     },
                 ]}
-                activeTab="plugin"
+                activeTab="plugins"
                 onTabChange={() => {}}
                 maxWidth="responsive"
             />
