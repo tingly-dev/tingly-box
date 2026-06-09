@@ -28,14 +28,6 @@ import type {ConfigRecord} from './RoutingGraphTypes';
 // Routing mode controls display behavior
 export type RoutingMode = 'smart' | 'direct' | 'auto';
 
-// First-run education: the Direct guide auto-opens once for every user (new and
-// existing), then never auto-opens again — the "?" header button stays as the
-// manual re-entry point. `localStorage` persists the dismissal across sessions;
-// the module-level flag makes sure only the first graph on a page pops it (a
-// page can render many rule cards, each with its own graph).
-const ROUTING_GUIDE_SEEN_KEY = 'tb.routingGuideAutoShown';
-let routingGuideAutoOpenedThisSession = false;
-
 // Unified style configuration
 const RULE_GRAPH_STYLES = {
     node: {
@@ -238,36 +230,9 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         setShowEntryGuide(true);
     };
 
-    // Header "?" entry: open the walkthrough for whichever mode the user is in,
-    // so the guide matches the graph in front of them.
-    const handleShowGraphGuide = () => {
-        setEntryGuideMode(effectiveMode);
-        setShowEntryGuide(true);
-    };
-
     const handleEntryGuideClose = () => {
         setShowEntryGuide(false);
     };
-
-    // Auto-open the Direct guide on the user's first encounter with the routing
-    // graph. Records the dismissal immediately so it never nags again; users can
-    // still reopen it any time via the header "?" button.
-    useEffect(() => {
-        if (guideMode || routingGuideAutoOpenedThisSession) return;
-        let alreadySeen = false;
-        try {
-            alreadySeen = !!localStorage.getItem(ROUTING_GUIDE_SEEN_KEY);
-        } catch {
-            return; // storage unavailable — skip auto-open rather than risk looping
-        }
-        if (alreadySeen) return;
-        routingGuideAutoOpenedThisSession = true;
-        try {
-            localStorage.setItem(ROUTING_GUIDE_SEEN_KEY, '1');
-        } catch { /* best-effort */ }
-        setEntryGuideMode('direct');
-        setShowEntryGuide(true);
-    }, [guideMode]);
 
     // Determine effective mode
     const smartEnabled = record.smartEnabled || false;
@@ -496,7 +461,6 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 extraActions={extraActions}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
-                onShowGuide={guideMode ? undefined : handleShowGraphGuide}
             />
 
             {/* Tier Guide Dialog */}

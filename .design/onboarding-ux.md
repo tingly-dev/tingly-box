@@ -11,15 +11,27 @@ The graph already ships interactive education (`EntryGuideDialog` Direct/Smart
 walkthrough, `TierGuideDialog`), but it was only reachable by *hovering* a node —
 undiscoverable for a first-time user who doesn't know to hover.
 
-**Fix (discoverability):** a persistent `?` affordance ("How routing works") in
-the rule header (`ModelRequestHeader`), wired through `UnifiedRoutingGraph` to
-open `EntryGuideDialog` **in the mode the user is currently looking at**
-(`effectiveMode`), so the walkthrough matches the graph in front of them.
+**Fix (discoverability):** one persistent `?` affordance ("How routing works")
+at the **page level** — in the rule-list toolbar (`TemplatePageActions`, after
+`New Rule`), not per rule card. `TemplatePage` owns the `EntryGuideDialog` and
+opens it in Direct mode. A single, page-scoped entry avoids repeating the icon
+on every card (principle #9, reduce noise) and doubles as a standing hint that
+the guide can be reopened there.
 
-- `ModelRequestHeader` gains an optional `onShowGuide` prop; the button only
-  renders when a handler is supplied (hidden in `guideMode` demo graphs).
-- No intrusive auto-popup — discoverable, not forced (principle #10: education
-  stays available, never blocks).
+- The graph's `EntryNode` keeps its contextual "View direct/smart guide →"
+  links (mode-specific, inline in the selector) — those are separate from the
+  toolbar entry.
+
+**Fix (first-run):** the Direct guide auto-opens once per user (new *and*
+existing) the first time they land on a populated routing page, then records
+the dismissal in `localStorage` (`tb.routingGuideAutoShown`) and never
+auto-opens again. The toolbar `?` reopens it on demand (principle #10:
+education stays available, never blocks).
+
+**Fix (recognisability):** the Connect-AI / Add-model steps reference toolbar
+buttons that aren't in the graph, so the guide renders a faithful mock toolbar
+(`GuideToolbarPreview`) above the diagram with the relevant button pulsing and
+a "Click here" tag — users can see exactly what to click.
 
 **Fix (content gap):** the Direct walkthrough used to start mid-stream at
 "single provider" and never explained how you *get* there. It now starts from

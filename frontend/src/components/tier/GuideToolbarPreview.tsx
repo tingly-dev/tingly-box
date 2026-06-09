@@ -46,18 +46,32 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
             component="span"
             sx={{
                 position: 'absolute',
-                top: -10,
-                right: 6,
+                bottom: 'calc(100% + 5px)',
+                left: '50%',
+                transform: 'translateX(-50%)',
                 fontSize: '0.6rem',
                 fontWeight: 700,
                 letterSpacing: '0.02em',
                 color: 'primary.contrastText',
                 bgcolor: 'primary.main',
                 px: 0.75,
-                py: 0.1,
+                py: 0.15,
                 borderRadius: 1,
                 whiteSpace: 'nowrap',
                 boxShadow: 1,
+                pointerEvents: 'none',
+                // little downward caret pointing at the button
+                '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    top: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    borderLeft: '4px solid transparent',
+                    borderRight: '4px solid transparent',
+                    borderTop: '4px solid',
+                    borderTopColor: 'primary.main',
+                },
             }}
         >
             {t('rule.routing.guide.clickHere', { defaultValue: 'Click here' })}
@@ -71,7 +85,8 @@ export const GuideToolbarPreview: React.FC<GuideToolbarPreviewProps> = ({ highli
                 maxWidth: 700,
                 mb: 1.5,
                 px: 1.5,
-                py: 1,
+                pt: 3,
+                pb: 1,
                 borderRadius: 1,
                 border: '1px dashed',
                 borderColor: 'divider',

@@ -363,7 +363,8 @@ export default {
     "expandAllRules": "Expand all rules",
     "connectAI": "Connect AI",
     "newRule": "New Rule",
-    "createNewRule": "Create new routing rule"
+    "createNewRule": "Create new routing rule",
+    "howRoutingWorks": "How routing works"
   },
   "probe": {
     "testRule": "Test Rule",

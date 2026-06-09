@@ -364,7 +364,8 @@ export default {
     "expandAllRules": "展开所有规则",
     "connectAI": "连接 AI",
     "newRule": "新建规则",
-    "createNewRule": "创建新的路由规则"
+    "createNewRule": "创建新的路由规则",
+    "howRoutingWorks": "路由原理"
   },
   "probe": {
     "testRule": "测试规则",

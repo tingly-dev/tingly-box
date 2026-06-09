@@ -10,6 +10,7 @@ import ImportModal from '@/components/ImportModal';
 import ProviderFormDialog from '@/components/ProviderFormDialog';
 import ConnectProviderDialog from '@/components/ConnectProviderDialog';
 import UnifiedCard from '@/components/UnifiedCard';
+import { EntryGuideDialog } from '@/components/tier/EntryGuideDialog';
 import type {TabTemplatePageProps} from './TemplatePage.types';
 import {TemplatePageActions} from './TemplatePageActions';
 import {useTemplatePageRules} from '@/pages/scenario/hooks/useTemplatePageRules';
@@ -19,6 +20,13 @@ import {useProviderDialog} from '@/hooks/useProviderDialog';
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal';
 import {useScenarioPageModal} from '@/pages/scenario/context/ScenarioPageContext';
 import api from '@/services/api';
+
+// First-run education: the Direct routing guide auto-opens once per user (new
+// and existing), then never again — the toolbar "?" stays as the manual
+// re-entry point. localStorage persists the dismissal across sessions; the
+// module flag guards against StrictMode double-invoke / quick remounts.
+const ROUTING_GUIDE_SEEN_KEY = 'tb.routingGuideAutoShown';
+let routingGuideAutoOpenedThisSession = false;
 
 /**
  * TemplatePage component that supports two modes:
@@ -85,6 +93,27 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
     const [logDialogOpen, setLogDialogOpen] = useState<boolean>(false);
     const [importing, setImporting] = useState<boolean>(false);
     const [importError, setImportError] = useState<{ open: boolean; message: string }>({open: false, message: ''});
+    const [showGuide, setShowGuide] = useState<boolean>(false);
+
+    // Auto-open the Direct guide the first time a user lands on a populated
+    // routing page. Records the dismissal immediately so it never nags again;
+    // the toolbar "?" reopens it on demand.
+    const hasContent = providers.length > 0 && rules.length > 0;
+    useEffect(() => {
+        if (!hasContent || routingGuideAutoOpenedThisSession) return;
+        let alreadySeen = false;
+        try {
+            alreadySeen = !!localStorage.getItem(ROUTING_GUIDE_SEEN_KEY);
+        } catch {
+            return; // storage unavailable — skip rather than risk re-opening
+        }
+        if (alreadySeen) return;
+        routingGuideAutoOpenedThisSession = true;
+        try {
+            localStorage.setItem(ROUTING_GUIDE_SEEN_KEY, '1');
+        } catch { /* best-effort */ }
+        setShowGuide(true);
+    }, [hasContent]);
 
     // Custom hooks
     const {
@@ -338,6 +367,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
             onCreateRule={handleCreateRule}
             showExpandCollapseButton={showExpandCollapseButton}
             onViewLogs={scenario ? () => setLogDialogOpen(true) : undefined}
+            onShowGuide={() => setShowGuide(true)}
             scenario={scenario}
         />
     );
@@ -487,6 +517,12 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                     scenario={scenario}
                 />
             )}
+
+            <EntryGuideDialog
+                open={showGuide}
+                onClose={() => setShowGuide(false)}
+                mode="direct"
+            />
         </>
     );
 };
