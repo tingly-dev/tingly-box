@@ -2,6 +2,10 @@
 
 > For contributors working with `internal/protocoltest/`, `cli/harness/`,
 > or adding new protocol conversion paths / scenarios.
+>
+> Related: per-rule **flag** behavior is tested by a separate, registry-driven
+> suite — see [`rule-flag-testing.md`](./rule-flag-testing.md). The matrix
+> itself stays flag-free (it exercises protocol conversion, not rule flags).
 
 ---
 
@@ -18,7 +22,15 @@ Three levels of validation, each more demanding:
 |-------|----------------|-------------|
 | **Single-hop** | A→B preserves semantics | `Matrix.Run(t)` / `Matrix.ExecuteAll()` |
 | **Two-hop (transitive)** | A→B→C preserves semantics across chained conversions | `Matrix.RunTransitive(t)` / `Matrix.ExecuteAllTransitive()` |
-| **Idempotent (round-trip)** | `g(f(A)) == A` — converting A→B then B→A recovers the original | `Matrix.RunIdempotent(t)` |
+| **Idempotent (round-trip)** | `g(f(A)) == A` — converting A→B then B→A recovers the original | `Matrix.RunIdempotent(t)` / `Matrix.ExecuteAllIdempotent()` |
+
+Two-hop and idempotence are **different** validations and must not be
+conflated: two-hop checks semantic preservation across a *chain of distinct*
+conversions (A→B→C), while idempotence checks that a *round-trip* recovers the
+original (A→B→A with `g(f(A)) == A` assertions). The transitive run does emit
+some chains where C happens to equal A, but those only run the scenario's
+normal assertions after two hops — they do **not** assert idempotence. True
+idempotence lives in its own path (`idempotent.go`).
 
 ---
 
@@ -89,15 +101,30 @@ go test -tags e2e ./internal/protocoltest/... -run TestIdempotent
 
 ### CLI (`cli/harness`)
 
+`--mode` selects which sections run. Unlike the `go test` path, the CLI can run
+idempotence directly (`ExecuteAllIdempotent`, the `testing.T`-free counterpart
+of `RunIdempotent`).
+
+| `--mode` | single (A→B) | transitive (A→B→C) | idempotent (`g(f(A))==A`) |
+|----------|:---:|:---:|:---:|
+| `default` *(no flag)* | ✅ | — | ✅ |
+| `all` | ✅ | ✅ | ✅ |
+| `single` | ✅ | — | — |
+| `transitive` | — | ✅ | — |
+| `idempotent` | — | — | ✅ |
+
 ```bash
-# Everything (default)
+# Default: single-hop + idempotent round-trips. Two-hop is OFF by default
+# (it is the slowest section and overlaps single-hop coverage).
 go run ./cli/harness matrix
 
-# Single-hop only
-go run ./cli/harness matrix --mode=single
+# Everything
+go run ./cli/harness matrix --mode=all
 
-# Two-hop only
+# A single section
+go run ./cli/harness matrix --mode=single
 go run ./cli/harness matrix --mode=transitive
+go run ./cli/harness matrix --mode=idempotent
 
 # Filter by scenario / source / target
 go run ./cli/harness matrix --scenario text --source anthropic_v1
@@ -208,3 +235,51 @@ This is the shared core used by both the `testing.T` path
 (`assertSemanticEquivalence`) and the CLI path
 (`executeTransitiveChain`). The `testing.T` version just loops and
 calls `t.Errorf` per entry — no duplicated field checks.
+
+---
+
+## 8. Error scenarios (pre-content vs mid-stream)
+
+Error scenarios are modeled by `ErrorInjection.Stage`, and the two stages have
+very different observable shapes — conflating them hides real gateway bugs.
+
+| Stage | Real-world shape | Mock | Scenarios |
+|-------|------------------|------|-----------|
+| **PreContent** | upstream rejects at the HTTP status line, before any SSE frame | fails with the HTTP status — for streaming too, via `MockResponseBuilder.StreamHTTPError` | `error` (429), `error-500`, `error-auth-401` |
+| **MidStream** | upstream starts a normal 200 stream, emits partial content, then the connection drops | `buildMidStreamTruncated`: 200 + partial content, terminal frames omitted (`[DONE]` / `message_stop` / `response.completed`) | `error-midstream-close` |
+
+`BuildErrorFromSpec` routes on the stage. The earlier (now-fixed) behavior
+served *all* streaming errors as `200 + an SSE error line`, which no real
+provider does and which the gateway cannot surface as an HTTP status.
+
+These scenarios lock two gateway behaviors:
+
+- **Upstream status propagation** — a forwarding failure returns the upstream
+  HTTP status (401/429/4xx), not a flat 500. `protocol.UpstreamStatus(err,
+  fallback)` extracts it from the vendor SDK error types; the non-stream
+  handlers and the streaming pre-frame helpers (`SendStreamingError`,
+  `SendForwardingError`) all use it.
+- **Truncated-stream termination** — a Responses stream that ends without
+  `response.completed` must still terminate: the Responses→Chat converter emits
+  a fallback terminal chunk and sets `completed=true` so it does not re-emit
+  forever (an unbounded-flush OOM otherwise).
+
+All error scenarios set `SkipTransitive: true` — a wrapped error shape is not
+worth comparing across hops (and idempotence skips `error` for the same reason).
+
+---
+
+## 9. Inspecting the forwarded request (capture & flags)
+
+The matrix asserts on the parsed *response*, but some checks need the *request
+the gateway actually forwarded upstream*. The `VirtualServer` mock records it:
+
+| Helper | Purpose |
+|--------|---------|
+| `VirtualServer.LastRequest(kind)` | the forwarded request (method, path, headers, body) for a provider endpoint — assert field rewrites, header overrides, stripped tools, folded messages, … |
+| `VirtualServer.EndpointHits(kind)` | how many requests hit each provider endpoint — assert which endpoint the gateway chose |
+| `TestEnv.SetupRouteWithFlags(src, tgt, scenario, flags)` | wires a route with `rule.Flags` set, so the request traverses the real flag-resolution + transform path |
+
+These power the per-rule **flag** behavior suite, which is documented
+separately: [`rule-flag-testing.md`](./rule-flag-testing.md). Keep the matrix
+itself flag-free — flags are an orthogonal axis and live in their own suite.
