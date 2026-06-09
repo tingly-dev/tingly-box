@@ -248,6 +248,9 @@ export default {
       "helperAnthropic": "用于 Anthropic 兼容的 AI 提供商，通常与 Claude Code 一起使用。",
       "openAI": "OpenAI 兼容",
       "anthropic": "Anthropic 兼容",
+      "recommendedBadge": "推荐",
+      "customOpenAIHint": "大多数端点使用 OpenAI API —— 除非确定，否则从这里开始。",
+      "customAnthropicHint": "仅当您的端点明确支持 Anthropic（Claude）API 时选择。",
       "switchWarning": "API 风格已更改。基础 URL 已重置。请选择兼容的提供商。"
     },
     "provider": {

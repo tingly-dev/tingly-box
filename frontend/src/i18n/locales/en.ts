@@ -247,6 +247,9 @@ export default {
       "helperAnthropic": "For Anthropic-compatible AI providers, commonly used with Claude Code.",
       "openAI": "OpenAI Compatible",
       "anthropic": "Anthropic Compatible",
+      "recommendedBadge": "Recommended",
+      "customOpenAIHint": "Most endpoints speak the OpenAI API — start here unless you know otherwise.",
+      "customAnthropicHint": "Only if your endpoint explicitly supports the Anthropic (Claude) API.",
       "switchWarning": "API style changed. Base URL has been reset. Please select a compatible provider."
     },
     "provider": {

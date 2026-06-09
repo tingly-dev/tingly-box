@@ -16,6 +16,7 @@ import {
     Check as CheckIcon,
     Close as CloseIcon,
     ExpandMore as ExpandMoreIcon,
+    HelpOutline as HelpOutlineIcon,
 } from '@/components/icons';
 import { isWildcardModelName } from '@/components/rule-card/utils';
 import { notify } from '@/utils/notify';
@@ -81,6 +82,9 @@ export interface ModelRequestHeaderProps {
     extraActions?: React.ReactNode;
     isExpanded?: boolean;
     onToggleExpanded?: () => void;
+    // When provided, renders a persistent "?" affordance that opens the routing
+    // guide — makes the node-level education discoverable for first-time users.
+    onShowGuide?: () => void;
 }
 
 export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
@@ -95,6 +99,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     extraActions,
     isExpanded = true,
     onToggleExpanded,
+    onShowGuide,
 }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(modelName);
@@ -253,6 +258,24 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     const renderActions = () => {
         return (
             <ActionsSection>
+                {/* Guide button — always-visible entry into the routing walkthrough */}
+                {onShowGuide && (
+                    <Tooltip title="How routing works">
+                        <IconButton
+                            size="small"
+                            aria-label="How routing works"
+                            onClick={(e) => { e.stopPropagation(); onShowGuide(); }}
+                            sx={{
+                                p: 0.5,
+                                color: 'text.secondary',
+                                '&:hover': { color: 'primary.main' },
+                            }}
+                        >
+                            <HelpOutlineIcon sx={{ fontSize: '1.05rem' }} />
+                        </IconButton>
+                    </Tooltip>
+                )}
+
                 {/* Extra Actions (from parent) */}
                 {extraActions && (
                     <Box onClick={(e) => e.stopPropagation()}>

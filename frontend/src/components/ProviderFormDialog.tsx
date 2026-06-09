@@ -213,6 +213,12 @@ const ProviderFormDialog = ({
                 // auto-select the provider's supported protocols
                 setProtocolOpenAI(!!matchingProvider.baseUrlOpenAI);
                 setProtocolAnthropic(!!matchingProvider.baseUrlAnthropic);
+            } else if (customMode) {
+                // Custom endpoints are OpenAI-compatible in the vast majority of
+                // cases — pre-select OpenAI so users aren't stuck with nothing
+                // chosen, and let the recommendation hint steer the rare exception.
+                setProtocolOpenAI(true);
+                setProtocolAnthropic(false);
             } else {
                 setProtocolOpenAI(false);
                 setProtocolAnthropic(false);
@@ -735,6 +741,7 @@ const ProviderFormDialog = ({
                             openAICapabilities={openAICapabilities}
                             onToggleOpenAI={toggleOpenAIProtocol}
                             onToggleAnthropic={toggleAnthropicProtocol}
+                            recommendOpenAI={customMode}
                         />
 
                         {showFusionToggle && (

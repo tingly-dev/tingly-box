@@ -230,6 +230,13 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
         setShowEntryGuide(true);
     };
 
+    // Header "?" entry: open the walkthrough for whichever mode the user is in,
+    // so the guide matches the graph in front of them.
+    const handleShowGraphGuide = () => {
+        setEntryGuideMode(effectiveMode);
+        setShowEntryGuide(true);
+    };
+
     const handleEntryGuideClose = () => {
         setShowEntryGuide(false);
     };
@@ -461,6 +468,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 extraActions={extraActions}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
+                onShowGuide={guideMode ? undefined : handleShowGraphGuide}
             />
 
             {/* Tier Guide Dialog */}
