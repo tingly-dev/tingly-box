@@ -78,11 +78,12 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		}
 
 		models = append(models, OpenAIModel{
-			ID:       rule.RequestModel,
-			Object:   "model",
-			Created:  created,
-			OwnedBy:  ownedBy,
-			AuthType: string(primaryAuthTypeForRule(cfg, rule)),
+			ID:        rule.RequestModel,
+			Object:    "model",
+			Created:   created,
+			OwnedBy:   ownedBy,
+			AuthType:  string(primaryAuthTypeForRule(cfg, rule)),
+			Context1M: rule.Flags.Context1M,
 		})
 	}
 

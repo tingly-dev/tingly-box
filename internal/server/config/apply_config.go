@@ -14,6 +14,7 @@ import (
 
 	tomlpkg "github.com/pelletier/go-toml/v2"
 	"github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // defaultBackupRetention is the default number of backup files to keep per
@@ -1168,6 +1169,33 @@ const (
 	// rule enabled the 1M context flag.
 	codex1MContextWindow = 1000000
 )
+
+// CollectCodexRuleModels returns the deduplicated request_models of every
+// active Codex-scenario rule, plus the set of those slugs whose context_1m
+// flag is set so the catalog can widen their context_window.
+func CollectCodexRuleModels(cfg *Config) ([]string, map[string]bool) {
+	seen := map[string]struct{}{}
+	var out []string
+	oneM := map[string]bool{}
+	for _, rule := range cfg.GetRequestConfigs() {
+		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
+			continue
+		}
+		model := strings.TrimSpace(rule.RequestModel)
+		if model == "" {
+			continue
+		}
+		if rule.Flags.Context1M {
+			oneM[model] = true
+		}
+		if _, dup := seen[model]; dup {
+			continue
+		}
+		seen[model] = struct{}{}
+		out = append(out, model)
+	}
+	return out, oneM
+}
 
 // renderCodexModelCatalog produces the JSON payload for
 // ~/.codex/tingly-model-catalog.json. Each model becomes one ModelInfo entry
