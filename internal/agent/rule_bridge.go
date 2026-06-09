@@ -115,16 +115,15 @@ func (aa *AgentApply) ApplyAgent(req *ApplyAgentRequest) (*ApplyAgentResult, err
 			return nil, fmt.Errorf("codex config not registered")
 		}
 		codexBaseURL := baseURL + "/tingly/codex"
-		// Collect models with business logic
-		rawModels := aa.collectCodexRuleModels()
-		models := CollectCodexModels(rawModels)
+		// Collect codex models and their 1M-context set in a single pass.
+		models, context1mModels := aa.collectCodexRuleModels()
 		fileResult, err = config.Apply(&aiagent.CodexParams{
 			CodexBaseURL:    codexBaseURL,
 			APIKey:          apiKey,
 			Models:          models,
 			Prefs:           serverconfig.DefaultCodexPrefs(),
 			WriteCatalog:    true,
-			Context1MModels: aa.collectCodexContext1MModels(),
+			Context1MModels: context1mModels,
 		})
 	}
 
@@ -181,35 +180,25 @@ func (aa *AgentApply) RestoreAgent(req *RestoreAgentRequest) (*RestoreAgentResul
 	return config.Restore()
 }
 
-// collectCodexRuleModels returns the request_models of every active rule under
-// the Codex scenario, deduplicated and in declaration order.
-func (aa *AgentApply) collectCodexRuleModels() []string {
+// collectCodexRuleModels returns, in a single pass over the active Codex-scenario
+// rules, the deduplicated request_models (catalog slugs) and the set of those
+// slugs whose context_1m flag is set. The 1M set is keyed by request_model so it
+// lines up with the slugs CollectCodexModels produces.
+func (aa *AgentApply) collectCodexRuleModels() ([]string, map[string]bool) {
 	var models []string
+	context1m := map[string]bool{}
 	for _, rule := range aa.config.GetRequestConfigs() {
 		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
 			continue
 		}
 		models = append(models, rule.RequestModel)
-	}
-	return CollectCodexModels(models)
-}
-
-// collectCodexContext1MModels returns the set of active Codex-rule request
-// models whose context_1m flag is set. Keyed by request_model so it lines up
-// with the catalog slugs produced by collectCodexRuleModels / CollectCodexModels.
-func (aa *AgentApply) collectCodexContext1MModels() map[string]bool {
-	out := map[string]bool{}
-	for _, rule := range aa.config.GetRequestConfigs() {
-		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
-			continue
-		}
 		if rule.Flags.Context1M {
 			if m := strings.TrimSpace(rule.RequestModel); m != "" {
-				out[m] = true
+				context1m[m] = true
 			}
 		}
 	}
-	return out
+	return CollectCodexModels(models), context1m
 }
 
 // getBaseURLAndToken returns the base URL and API token for configuration
