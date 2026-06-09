@@ -9,7 +9,7 @@ import {
     Typography,
     alpha,
 } from '@mui/material';
-import { AiAgents as IconAiAgents, Photo as IconPhoto, Vector as IconVector } from '@/components/icons';
+import { AiAgents as IconAiAgents, Photo as IconPhoto, Vector as IconVector, Users as IconUsers } from '@/components/icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -127,11 +127,19 @@ export const SCENARIOS: ScenarioDescriptor[] = [
         icon: (size) => <OpenClaw size={size} />,
         hideable: true,
     },
+    {
+        id: 'team',
+        labelKey: 'layout.nav.useTeam',
+        descKey: 'scenarioOverview.descriptions.team',
+        path: '/agent/team',
+        icon: (size) => <IconUsers sx={{ fontSize: size }} />,
+        hideable: true,
+    },
 ];
 
 const STORAGE_KEY = 'scenario.hiddenScenarios';
 const VISIBILITY_EVENT = 'scenario-visibility-change';
-const DEFAULT_HIDDEN = ['agent'];
+const DEFAULT_HIDDEN = ['agent', 'team'];
 
 const readHidden = (): string[] => {
     try {

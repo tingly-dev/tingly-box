@@ -23,6 +23,7 @@ import {
     Lock as IconLock,
     Vector as IconVector,
     Photo as IconPhoto,
+    Users as IconUsers,
     Science as IconFlask,
     PlayArrow as IconPlayerPlay,
     Handyman as IconTools,
@@ -106,6 +107,7 @@ export function useActivityItems(): ActivityItem[] {
         ]);
         const agentTools = visible([
             { id: 'agent', nav: { path: '/agent/agent', label: t('common.openClaw', { defaultValue: 'OpenClaw' }), icon: <OpenClaw size={20} /> } },
+            { id: 'team', nav: { path: '/agent/team', label: t('layout.nav.useTeam', { defaultValue: 'Team' }), icon: <IconUsers sx={{ fontSize: 20 }} /> } },
         ]);
 
         const scenarioChildren: NavItem[] = [];

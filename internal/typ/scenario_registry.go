@@ -88,6 +88,16 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowRuleBinding:   true,
 			AllowDirectPathUse: true,
 		}
+	case ScenarioTeam:
+		// Centrally deployed model shared across a team. Accepts both OpenAI
+		// and Anthropic transports so any agent/client can point at
+		// /tingly/team regardless of protocol.
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportAnthropic},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+		}
 	case ScenarioCodex, ScenarioOpenCode, ScenarioXcode, ScenarioVSCode:
 		return ScenarioDescriptor{
 			ID:                 scenario,
