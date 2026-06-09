@@ -85,7 +85,11 @@ export const useProviderDialog = (
 
         if (selection.kind === 'local') {
             const lp = selection.provider as any;
-            setCustomMode(false);
+            // Self-hosted endpoints behave like Custom: the localhost:port base URL
+            // is only a pre-fill, not a fixed value — users run on their own host
+            // and port, so the field must stay editable. (customMode = true renders
+            // the editable URL input; the form seeds it from apiBase below.)
+            setCustomMode(true);
             setProviderFormData({
                 name: lp.alias || lp.name,
                 apiBase: lp.url || lp.baseUrlOpenAI || lp.baseUrlAnthropic || '',
