@@ -2,13 +2,17 @@ package protocoltest
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -187,6 +191,67 @@ func setupBothModeRoute(env *TestEnv, s Scenario, flags typ.RuleFlags) string {
 	return reqModel
 }
 
+// newCountingChatServer starts a minimal OpenAI provider that returns a fixed
+// chat completion (assistant content == content) and counts the requests it
+// received, so a test can tell which upstream a request was routed to.
+func newCountingChatServer(t *testing.T, content string) (baseURL string, hits *int64) {
+	t.Helper()
+	var n int64
+	body := mustMarshal(map[string]any{
+		"id": "chatcmpl-flag", "object": "chat.completion", "created": 0, "model": "m",
+		"choices": []map[string]any{{
+			"index":         0,
+			"message":       map[string]any{"role": "assistant", "content": content},
+			"finish_reason": "stop",
+		}},
+		"usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&n, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, &n
+}
+
+// newDescriberServer starts a mock vision provider that answers the describer's
+// request with an SSE stream (the vision adapter always uses the streaming
+// OpenAI endpoint), whose assistant content is description. Counts requests.
+func newDescriberServer(t *testing.T, description string) (baseURL string, hits *int64) {
+	t.Helper()
+	var n int64
+	delta := mustMarshal(map[string]any{
+		"id": "desc", "object": "chat.completion.chunk", "created": 0, "model": "vision-model",
+		"choices": []map[string]any{{"index": 0, "delta": map[string]any{"role": "assistant", "content": description}, "finish_reason": nil}},
+	})
+	done := mustMarshal(map[string]any{
+		"id": "desc", "object": "chat.completion.chunk", "created": 0, "model": "vision-model",
+		"choices": []map[string]any{{"index": 0, "delta": map[string]any{}, "finish_reason": "stop"}},
+	})
+	lines := []string{"data: " + string(delta), "data: " + string(done), "data: [DONE]"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&n, 1)
+		sse.WriteSSEResponse(w, lines)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, &n
+}
+
+// registerOpenAIProvider registers a passthrough OpenAI provider pointing at the
+// /v1 root of base.
+func registerOpenAIProvider(env *TestEnv, uuid, base string) {
+	_ = env.appConfig.AddProvider(&typ.Provider{
+		UUID:     uuid,
+		Name:     uuid,
+		APIBase:  base + "/v1",
+		APIStyle: protocol.APIStyleOpenAI,
+		Token:    "virtual-token",
+		Enabled:  true,
+		Timeout:  int64(constant.DefaultRequestTimeout),
+	})
+}
+
 func ruleFlagCases() []flagCase {
 	return []flagCase{
 		// ── custom_user_agent ────────────────────────────────────────────────
@@ -334,28 +399,80 @@ func ruleFlagCases() []flagCase {
 		}},
 
 		// ── session_affinity ─────────────────────────────────────────────────
-		// Behavioral pinning is covered by the loadbalance affinity tests; here
-		// we only verify the flag is accepted and the request still completes
-		// through the gateway (guards against wiring/parse regressions).
+		// Two distinguishable upstreams behind one rule: with affinity on, every
+		// request carrying the same session id must pin to the upstream the first
+		// request landed on (all hits on one server, none on the other).
 		{key: "session_affinity", run: func(t *testing.T, env *TestEnv) {
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), typ.RuleFlags{SessionAffinity: 3600})
-			res := sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil,
-				map[string]string{"X-Tingly-Session-ID": "flag-affinity-session"})
-			if res.HTTPStatus != 200 {
-				t.Errorf("session_affinity request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 200))
+			urlA, hitsA := newCountingChatServer(t, "from-A")
+			urlB, hitsB := newCountingChatServer(t, "from-B")
+			registerOpenAIProvider(env, "aff-A", urlA)
+			registerOpenAIProvider(env, "aff-B", urlB)
+
+			const reqModel = "pv-flag-affinity"
+			rule := typ.Rule{
+				UUID:          reqModel,
+				Scenario:      typ.ScenarioOpenAI,
+				RequestModel:  reqModel,
+				ResponseModel: "affinity-model",
+				Services: []*loadbalance.Service{
+					{Provider: "aff-A", Model: "affinity-model", Weight: 1, Active: true, TimeWindow: 300},
+					{Provider: "aff-B", Model: "affinity-model", Weight: 1, Active: true, TimeWindow: 300},
+				},
+				LBTactic: typ.Tactic{Type: loadbalance.TacticAdaptive, Params: typ.DefaultAdaptiveParams()},
+				Active:   true,
+				Flags:    typ.RuleFlags{SessionAffinity: 3600},
+			}
+			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+
+			const n = 5
+			for i := 0; i < n; i++ {
+				res := sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, reqModel, false, nil,
+					map[string]string{"X-Tingly-Session-ID": "flag-affinity-session"})
+				if res.HTTPStatus != 200 {
+					t.Fatalf("request %d failed: status=%d body=%s", i, res.HTTPStatus, truncate(string(res.RawBody), 200))
+				}
+			}
+			a, b := atomic.LoadInt64(hitsA), atomic.LoadInt64(hitsB)
+			if a+b != n {
+				t.Fatalf("expected %d upstream hits total, got A=%d B=%d", n, a, b)
+			}
+			if a != n && b != n {
+				t.Errorf("session affinity did not pin: hits split A=%d B=%d (want all %d on one)", a, b, n)
 			}
 		}},
 
 		// ── vision_proxy_service ─────────────────────────────────────────────
-		// The vision proxy describe path has its own dedicated tests; a text-only
-		// request leaves it dormant, so here we only assert the flag wires up
-		// cleanly and a normal request still succeeds end-to-end.
+		// A request whose latest turn carries an image must have that image
+		// described by the configured describer service and replaced with text
+		// before it reaches the downstream model — so the upstream request the
+		// main provider receives carries no image block, but does carry the
+		// describer's text.
 		{key: "vision_proxy_service", run: func(t *testing.T, env *TestEnv) {
-			flags := typ.RuleFlags{VisionProxyService: &typ.VisionProxyService{Provider: "describer", Model: "vision-model"}}
-			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(), flags)
-			res := sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, nil, nil)
-			if res.HTTPStatus != 200 {
-				t.Errorf("vision_proxy_service request failed: status=%d body=%s", res.HTTPStatus, truncate(string(res.RawBody), 200))
+			descURL, descHits := newDescriberServer(t, "a red bicycle leaning on a wall")
+			registerOpenAIProvider(env, "vision-describer", descURL)
+			model := env.SetupRouteWithFlags(protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, flagScenario(),
+				typ.RuleFlags{VisionProxyService: &typ.VisionProxyService{Provider: "vision-describer", Model: "vision-model"}})
+
+			sendFlag(t, env, protocol.TypeOpenAIChat, protocol.TypeOpenAIChat, model, false, func(m map[string]any) {
+				m["messages"] = []map[string]any{
+					{"role": "user", "content": []map[string]any{
+						{"type": "text", "text": "What is in this image?"},
+						{"type": "image_url", "image_url": map[string]any{
+							"url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+						}},
+					}},
+				}
+			}, nil)
+
+			up := string(env.virtual.LastRequest(EndpointChat).Body)
+			if strings.Contains(up, "image_url") {
+				t.Errorf("vision proxy left an image_url block in the upstream request: %s", truncate(up, 300))
+			}
+			if atomic.LoadInt64(descHits) == 0 {
+				t.Error("vision proxy did not call the describer service")
+			}
+			if !strings.Contains(up, "red bicycle") {
+				t.Errorf("describer output not spliced into the upstream text; body=%s", truncate(up, 400))
 			}
 		}},
 	}
