@@ -3,6 +3,7 @@ package typ
 import (
 	"context"
 	"encoding/json"
+	"strings"
 )
 
 // SessionSource identifies where a session ID was resolved from.
@@ -116,6 +117,10 @@ const SessionIDKey contextKey = "session_id"
 // outbound HTTP transport.
 const CustomUserAgentKey contextKey = "custom_user_agent"
 
+// Context1MKey carries the per-request 1M-context intent down to the Claude
+// Code OAuth transport, which turns it into the context-1m beta flag.
+const Context1MKey contextKey = "context_1m"
+
 // UserAgentNone is the sentinel custom_user_agent value that strips the
 // outbound User-Agent header entirely (the request is sent with no User-Agent),
 // as opposed to an empty value which means "do not override". Some upstreams
@@ -140,6 +145,45 @@ func GetSessionID(ctx context.Context) SessionID {
 		return sid
 	}
 	return SessionID{}
+}
+
+// Context1MSuffix is the model-id suffix that requests the 1M context window.
+// Claude Code carries the per-rule 1M intent on the wire by appending this to
+// the model name (e.g. "tingly/cc-sonnet[1m]"); the gateway strips it for rule
+// matching and turns it into the upstream context-1m beta flag.
+const Context1MSuffix = "[1m]"
+
+// StripContext1MSuffix removes a trailing Context1MSuffix from a model name and
+// reports whether it was present. The base name is what rule matching and the
+// upstream model field should use; the bool is the 1M intent carried by the
+// suffix. It is a no-op for models without the suffix.
+func StripContext1MSuffix(model string) (base string, had bool) {
+	if strings.HasSuffix(model, Context1MSuffix) {
+		return strings.TrimSuffix(model, Context1MSuffix), true
+	}
+	return model, false
+}
+
+// WithContext1M attaches the per-request 1M-context intent so an outbound
+// transport (claudeRoundTripper) can add the context-1m beta flag at request
+// time. Only attaches when want is true so the zero case leaves ctx untouched.
+func WithContext1M(ctx context.Context, want bool) context.Context {
+	if !want {
+		return ctx
+	}
+	return context.WithValue(ctx, Context1MKey, true)
+}
+
+// GetContext1M reports whether the 1M context window was requested for this
+// request (via rule flag or `[1m]` model suffix).
+func GetContext1M(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	if v, ok := ctx.Value(Context1MKey).(bool); ok {
+		return v
+	}
+	return false
 }
 
 // WithCustomUserAgent attaches a User-Agent override that an outbound HTTP

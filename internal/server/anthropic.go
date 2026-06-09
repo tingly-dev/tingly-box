@@ -143,6 +143,12 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 		reqParams = &messages.MessageNewParams
 	}
 
+	// Strip the `[1m]` suffix the client may have appended to carry the 1M
+	// context intent. Routing and the echoed response_model use the clean name;
+	// suffix1m records that the suffix was present so we can OR it with the
+	// rule's own context_1m flag below.
+	requestModel, suffix1m := typ.StripContext1MSuffix(requestModel)
+
 	// Check if this is the request requestModel name first
 	rule, err = s.determineRuleWithScenario(c, scenarioType, requestModel)
 	if err != nil {
@@ -153,6 +159,12 @@ func (s *Server) HandleAnthropicMessages(c *gin.Context) {
 			},
 		})
 		return
+	}
+
+	// Attach the 1M-context intent (suffix OR rule flag) to the request context
+	// so the Claude Code OAuth transport adds the context-1m beta upstream.
+	if suffix1m || rule.Flags.Context1M {
+		c.Request = c.Request.WithContext(typ.WithContext1M(c.Request.Context(), true))
 	}
 
 	s.applyVisionProxy(c, scenarioType, rule, reqParams)

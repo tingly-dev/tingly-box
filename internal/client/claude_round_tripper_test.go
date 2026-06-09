@@ -6,6 +6,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // mockTransport is a minimal http.RoundTripper for testing.
@@ -38,6 +39,26 @@ func TestAnthropicBetaFlags(t *testing.T) {
 	} {
 		assert.Contains(t, anthropicBeta, flag, "anthropicBeta should contain %s", flag)
 	}
+}
+
+// applyClaudeCodeHeaders should append the context-1m beta only when the
+// request context carries the 1M intent (typ.WithContext1M). No model
+// validation — the intent alone drives it.
+func TestApplyClaudeCodeHeaders_Context1M(t *testing.T) {
+	build := func(want1m bool) string {
+		req, _ := http.NewRequest(http.MethodPost, "https://api.anthropic.com/v1/messages", nil)
+		req.Header.Set("X-Api-Key", "sk-ant-oat-test")
+		req = req.WithContext(typ.WithContext1M(req.Context(), want1m))
+		rt := &claudeRoundTripper{}
+		rt.applyClaudeCodeHeaders(req, true, "tingly/cc-sonnet", "")
+		return req.Header.Get("anthropic-beta")
+	}
+
+	on := build(true)
+	assert.Contains(t, on, anthropicContext1m, "1M intent should add context-1m beta")
+
+	off := build(false)
+	assert.NotContains(t, off, anthropicContext1m, "no 1M intent should not add context-1m beta")
 }
 
 func TestMergeBetaFlags(t *testing.T) {
@@ -104,8 +125,8 @@ func TestClassifyUpstreamBetaFlag(t *testing.T) {
 		wantKeep   bool
 		wantReason string
 	}{
-		{"claude-code-20250219", true, ""},                  // required baseline
-		{"context-1m-2025-08-07", true, ""},                 // allowed upstream addition
+		{"claude-code-20250219", true, ""},  // required baseline
+		{"context-1m-2025-08-07", true, ""}, // allowed upstream addition
 		{"message-batches-2024-09-24", false, "not-fingerprint-safe"},
 		{"managed-agents-2026-04-01", false, "not-fingerprint-safe"},
 		{"not-a-real-flag", false, "unknown"},

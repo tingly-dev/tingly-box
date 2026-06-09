@@ -80,7 +80,9 @@ export const RulePluginsCard: React.FC<RulePluginsCardProps> = ({
     onOpenCatalog,
     onToggleFlag,
 }) => {
-    const enabled = (registry || []).filter((spec) => isFlagActive(spec, flags));
+    // context_1m has a promoted switch in the rule header (OneMContextSwitch),
+    // so it is excluded here to keep a single visual home for the concept.
+    const enabled = (registry || []).filter((spec) => spec.key !== 'context_1m' && isFlagActive(spec, flags || {}));
 
     return (
         <StyledPluginsCard active={active} onClick={onOpenCatalog}>

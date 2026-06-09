@@ -104,6 +104,9 @@ export interface UnifiedRoutingGraphProps {
     // Slots
     extraActions?: React.ReactNode;
     extensionsCard?: React.ReactNode;
+    // headerExtras renders inline next to the request-model name in the header
+    // (e.g. the per-rule 1M context switch).
+    headerExtras?: React.ReactNode;
 
     // Scroll control: when true, auto-scroll to 80% position (for guide mode)
     autoScroll?: boolean;
@@ -185,6 +188,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                             onSwitchRoutingMode,
                                                                             extraActions,
                                                                             extensionsCard,
+                                                                            headerExtras,
                                                                             autoScroll,
                                                                         }) => {
     const {t} = useTranslation();
@@ -459,6 +463,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 collapsible={collapsible}
                 onClick={collapsible ? onToggleExpanded : undefined}
                 extraActions={extraActions}
+                titleExtras={headerExtras}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
             />

@@ -79,6 +79,10 @@ export interface ModelRequestHeaderProps {
     collapsible?: boolean;
     // Additional props for unified use
     extraActions?: React.ReactNode;
+    // titleExtras renders inline next to the model name (e.g. the 1M context
+    // switch). Kept separate from extraActions so it sits with the subject, not
+    // the trailing action icons.
+    titleExtras?: React.ReactNode;
     isExpanded?: boolean;
     onToggleExpanded?: () => void;
 }
@@ -93,6 +97,7 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     onClick,
     collapsible = false,
     extraActions,
+    titleExtras,
     isExpanded = true,
     onToggleExpanded,
 }) => {
@@ -292,6 +297,11 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
         >
             <TitleSection>
                 {renderTitle()}
+                {titleExtras && !editMode && (
+                    <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', alignItems: 'center' }}>
+                        {titleExtras}
+                    </Box>
+                )}
                 {subtitle && !editMode && (
                     <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
                         {subtitle}

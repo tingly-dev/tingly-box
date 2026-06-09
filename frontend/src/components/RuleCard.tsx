@@ -15,6 +15,7 @@ import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialo
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
+import OneMContextSwitch from '@/components/rule-card/OneMContextSwitch';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
@@ -267,6 +268,17 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     if (!configRecord) return null;
 
+    // Promoted per-rule 1M context switch, rendered inline in the header next to
+    // the request model. Backed by the context_1m rule flag (single source of
+    // truth) — see .design/one-m-context.md.
+    const headerExtras = (
+        <OneMContextSwitch
+            checked={!!getFlagValue(configRecord.flags, 'context_1m')}
+            onToggle={() => handleToggleFlagFromCard('context_1m')}
+            disabled={saving}
+        />
+    );
+
     const extensionsCard = (
         <RulePluginsCard
             flags={configRecord.flags}
@@ -310,6 +322,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onToggleExpanded={handleToggleExpanded}
                 extraActions={extraActions}
                 extensionsCard={extensionsCard}
+                headerExtras={headerExtras}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}
                 onTierChange={handleProviderTierChange}

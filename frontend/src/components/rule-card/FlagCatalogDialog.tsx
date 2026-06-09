@@ -102,11 +102,18 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         }
     }, [open, flags]);
 
+    // context_1m has a promoted switch in the rule header (OneMContextSwitch),
+    // so it is hidden from the generic catalog to keep one visual home.
+    const visibleRegistry = useMemo(
+        () => (registry || []).filter((s) => s.key !== 'context_1m'),
+        [registry],
+    );
+
     // Group registry entries by category, preserving backend order within each
     // group, then sort groups by CATEGORY_ORDER (unknown categories appended).
     const grouped = useMemo(() => {
         const groups = new Map<string, FlagSpec[]>();
-        (registry || []).forEach((spec) => {
+        visibleRegistry.forEach((spec) => {
             if (!groups.has(spec.category)) groups.set(spec.category, []);
             groups.get(spec.category)!.push(spec);
         });
@@ -114,7 +121,7 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
         const orderedSet = new Set(ordered);
         groups.forEach((_, cat) => { if (!orderedSet.has(cat)) ordered.push(cat); });
         return ordered.map((cat) => ({ category: cat, specs: groups.get(cat) || [] }));
-    }, [registry]);
+    }, [visibleRegistry]);
 
     // Default the selected category to the first one with content.
     useEffect(() => {
@@ -124,12 +131,12 @@ export const FlagCatalogDialog: React.FC<FlagCatalogDialogProps> = ({
     }, [open, grouped, activeCategory]);
 
     const activeFlags = useMemo(() => {
-        return (registry || []).filter((spec) => isFlagActive(spec, draft));
-    }, [registry, draft]);
+        return visibleRegistry.filter((spec) => isFlagActive(spec, draft));
+    }, [visibleRegistry, draft]);
 
     const currentGroup = grouped.find((g) => g.category === activeCategory);
 
-    const specLookup = useMemo(() => new Map((registry || []).map((s) => [s.key, s])), [registry]);
+    const specLookup = useMemo(() => new Map(visibleRegistry.map((s) => [s.key, s])), [visibleRegistry]);
 
     const handleToggle = (key: string, value: boolean) => {
         setDraft((d) => setFlagValue(d, key, value));

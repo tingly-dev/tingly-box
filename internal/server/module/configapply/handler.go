@@ -644,9 +644,13 @@ console.log("OpenCode config written to", configPath);`, modelsJSON, configBaseU
 
 // collectCodexRuleModels returns the request_models of every active rule in
 // the Codex scenario, deduplicated and in declaration order.
-func collectCodexRuleModels(cfg *config.Config) []string {
+// collectCodexRuleModels returns the deduplicated request_models of every
+// active Codex-scenario rule (catalog slugs), plus the set of those slugs whose
+// context_1m flag is set so the catalog can widen their context_window.
+func collectCodexRuleModels(cfg *config.Config) ([]string, map[string]bool) {
 	seen := map[string]struct{}{}
 	var out []string
+	oneM := map[string]bool{}
 	for _, rule := range cfg.GetRequestConfigs() {
 		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active {
 			continue
@@ -655,13 +659,16 @@ func collectCodexRuleModels(cfg *config.Config) []string {
 		if model == "" {
 			continue
 		}
+		if rule.Flags.Context1M {
+			oneM[model] = true
+		}
 		if _, dup := seen[model]; dup {
 			continue
 		}
 		seen[model] = struct{}{}
 		out = append(out, model)
 	}
-	return out
+	return out, oneM
 }
 
 // ApplyCodexConfigFromState applies the Codex CLI configuration derived from
@@ -685,7 +692,7 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 		prefs = config.DefaultCodexPrefs()
 	}
 
-	models := collectCodexRuleModels(cfg)
+	models, context1mModels := collectCodexRuleModels(cfg)
 
 	port := h.config.ServerPort
 	if port == 0 {
@@ -720,7 +727,7 @@ func (h *Handler) ApplyCodexConfigFromState(c *gin.Context) {
 	if authMode == config.CodexAuthChatGPT {
 		configResult, err = config.ClearCodexGatewayConfig()
 	} else {
-		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog)
+		configResult, err = config.ApplyCodexConfig(codexBaseURL, models, prefs, writeCatalog, context1mModels)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ApplyCodexConfigResponse{
@@ -792,7 +799,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 		prefs = config.DefaultCodexPrefs()
 	}
 
-	models := collectCodexRuleModels(cfg)
+	models, context1mModels := collectCodexRuleModels(cfg)
 
 	port := h.config.ServerPort
 	if port == 0 {
@@ -827,7 +834,7 @@ func (h *Handler) GetCodexConfigPreview(c *gin.Context) {
 		Models:     models,
 	}
 	if writeCatalog && len(models) > 0 {
-		catalogBytes, err := config.RenderCodexModelCatalog(models)
+		catalogBytes, err := config.RenderCodexModelCatalog(models, context1mModels)
 		if err == nil {
 			resp.CatalogJson = string(catalogBytes)
 		}

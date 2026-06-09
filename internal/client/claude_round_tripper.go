@@ -13,6 +13,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // knownAnthropicBetas is the universe of valid anthropic-beta flag values
@@ -569,6 +570,15 @@ func (t *claudeRoundTripper) applyClaudeCodeHeaders(req *http.Request, isOAuthTo
 	// order preserved). Required flags stay at the front so the Claude
 	// Code fingerprint matches.
 	baseBetas := mergeBetaFlags(claudeCodeRequiredBetasOrdered, upstreamBetas, anthropicOAuthBeta)
+
+	// Add the 1M context beta when the request carries the intent (rule
+	// context_1m flag or `[1m]` model suffix, attached upstream via
+	// typ.WithContext1M). No model allow-list check — send and let the upstream
+	// accept or reject. context-1m is fingerprint-safe (claudeCodeAllowedUpstreamBetas),
+	// so appending it does not break the claude-cli signature.
+	if typ.GetContext1M(req.Context()) && !strings.Contains(baseBetas, anthropicContext1m) {
+		baseBetas = baseBetas + "," + anthropicContext1m
+	}
 
 	// Set all headers via map
 	headers := map[string]string{
