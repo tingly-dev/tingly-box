@@ -87,7 +87,10 @@ When `want1m`, the handler attaches it to the request context
 `claudeRoundTripper.RoundTrip` (the Claude Code OAuth transport) reads
 `typ.GetContext1M(req.Context())` and, when set, appends
 `context-1m-2025-08-07` to the merged `anthropic-beta` header. No model
-allow-list check (`supportsContext1M` is retained but unused by this path).
+allow-list check: a gateway shouldn't hard-code which models support a 1M
+window — we send the beta whenever the rule asks for it and let the upstream
+accept or reject. (The old `supportsContext1M` model allow-list was removed for
+this reason.)
 
 Why here: the round tripper is the single choke point that rebuilds the beta
 header for OAuth traffic (it clears + re-emits `anthropic-*` headers to
