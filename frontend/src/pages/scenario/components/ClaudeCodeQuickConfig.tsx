@@ -1,5 +1,6 @@
 import {
     Box,
+    Collapse,
     Divider,
     IconButton,
     InputAdornment,
@@ -11,6 +12,7 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { RestartAlt as RestartAltIcon } from '@/components/icons';
+import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -59,34 +61,35 @@ interface FieldStruct {
     group: Group;
     kind: Kind;
     unit?: string;
+    advanced?: boolean; // Mark advanced fields that should be collapsed by default
 }
 
 const FIELD_STRUCT: FieldStruct[] = [
-    // Models
-    { envName: 'ANTHROPIC_MODEL', group: 'model', kind: 'model' },
-    { envName: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', group: 'model', kind: 'model' },
-    { envName: 'ANTHROPIC_DEFAULT_SONNET_MODEL', group: 'model', kind: 'model' },
-    { envName: 'ANTHROPIC_DEFAULT_OPUS_MODEL', group: 'model', kind: 'model' },
-    { envName: 'CLAUDE_CODE_SUBAGENT_MODEL', group: 'model', kind: 'model' },
-    // Limits
-    { envName: 'API_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens' },
-    { envName: 'MAX_THINKING_TOKENS', group: 'limits', kind: 'int', unit: 'tokens' },
-    { envName: 'BASH_DEFAULT_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'BASH_MAX_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'MCP_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'MCP_TOOL_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'MAX_MCP_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens' },
-    // Switches
-    { envName: 'DISABLE_TELEMETRY', group: 'switches', kind: 'bool' },
-    { envName: 'DISABLE_ERROR_REPORTING', group: 'switches', kind: 'bool' },
-    { envName: 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', group: 'switches', kind: 'bool' },
-    { envName: 'DISABLE_AUTOUPDATER', group: 'switches', kind: 'bool' },
-    { envName: 'USE_BUILTIN_RIPGREP', group: 'switches', kind: 'bool' },
-    // Network proxy
-    { envName: 'HTTP_PROXY', group: 'network', kind: 'text' },
-    { envName: 'HTTPS_PROXY', group: 'network', kind: 'text' },
-    { envName: 'NO_PROXY', group: 'network', kind: 'text' },
+    // Models (always visible - most commonly adjusted)
+    { envName: 'ANTHROPIC_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'ANTHROPIC_DEFAULT_SONNET_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'ANTHROPIC_DEFAULT_OPUS_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'CLAUDE_CODE_SUBAGENT_MODEL', group: 'model', kind: 'model', advanced: false },
+    // Limits (advanced - rarely changed)
+    { envName: 'API_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
+    { envName: 'MAX_THINKING_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
+    { envName: 'BASH_DEFAULT_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'BASH_MAX_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'MCP_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'MCP_TOOL_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'MAX_MCP_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
+    // Switches (advanced - usually don't need to change)
+    { envName: 'DISABLE_TELEMETRY', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'DISABLE_ERROR_REPORTING', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'DISABLE_AUTOUPDATER', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'USE_BUILTIN_RIPGREP', group: 'switches', kind: 'bool', advanced: true },
+    // Network proxy (advanced - rarely needed)
+    { envName: 'HTTP_PROXY', group: 'network', kind: 'text', advanced: true },
+    { envName: 'HTTPS_PROXY', group: 'network', kind: 'text', advanced: true },
+    { envName: 'NO_PROXY', group: 'network', kind: 'text', advanced: true },
 ];
 
 // ── Localized text bundles ─────────────────────────────────────────────
@@ -660,29 +663,51 @@ interface SectionProps {
 }
 
 const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
+    const [expanded, setExpanded] = React.useState(group === 'model'); // Only model group expanded by default
     const meta = SECTION_TEXT[lang][group];
     const fieldsText = FIELDS_TEXT[lang];
     const oneMTooltip = UI_TEXT[lang].oneMTooltip;
     const fields = FIELD_STRUCT.filter(f => f.group === group);
+    const hasAdvancedFields = fields.some(f => f.advanced);
+
+    const toggleExpanded = () => setExpanded(!expanded);
+
     return (
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
+                    <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+                </Box>
+                {hasAdvancedFields && (
+                    <IconButton
+                        size="small"
+                        onClick={toggleExpanded}
+                        sx={{
+                            transition: 'transform 0.2s',
+                            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            p: 0.5,
+                        }}
+                    >
+                        <ExpandMoreIcon fontSize="small" />
+                    </IconButton>
+                )}
             </Box>
-            <Divider />
-            <Stack divider={<Divider flexItem />}>
-                {fields.map(f => (
-                    <FieldRow
-                        key={f.envName}
-                        field={f}
-                        text={fieldsText[f.envName]}
-                        oneMTooltip={oneMTooltip}
-                        prefs={prefs}
-                        setPrefs={setPrefs}
-                    />
-                ))}
-            </Stack>
+            <Collapse in={expanded} timeout={300}>
+                <Divider />
+                <Stack divider={<Divider flexItem />}>
+                    {fields.map(f => (
+                        <FieldRow
+                            key={f.envName}
+                            field={f}
+                            text={fieldsText[f.envName]}
+                            oneMTooltip={oneMTooltip}
+                            prefs={prefs}
+                            setPrefs={setPrefs}
+                        />
+                    ))}
+                </Stack>
+            </Collapse>
         </Box>
     );
 };
