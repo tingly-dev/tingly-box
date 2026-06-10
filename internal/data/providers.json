@@ -180,6 +180,7 @@
         },
         {
           "id": "claude-fable-5",
+          "descritpion": "Limited time available",
           "context": 1000000,
           "max_output": 128000
         }
@@ -1096,6 +1097,7 @@
         },
         {
           "id": "glm-4.7",
+          "description": "hi",
           "context": 200000,
           "max_output": 128000
         }

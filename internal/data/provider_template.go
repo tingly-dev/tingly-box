@@ -31,9 +31,10 @@ const TemplateGitHubURL = "https://raw.githubusercontent.com/tingly-dev/tingly-b
 
 // ModelInfo represents detailed information about a model
 type ModelInfo struct {
-	ID        string `json:"id"`
-	Context   int    `json:"context,omitempty"`
-	MaxOutput int    `json:"max_output,omitempty"`
+	ID          string `json:"id"`
+	Description string `json:"description,omitempty"`
+	Context     int    `json:"context,omitempty"`
+	MaxOutput   int    `json:"max_output,omitempty"`
 }
 
 // NamingRules defines the naming conventions for provider IDs
