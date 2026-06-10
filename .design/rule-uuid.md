@@ -1,12 +1,28 @@
-# Profile Rule UUID Convention
+# Rule UUID Conventions
 
-## Problem
+Rule UUIDs in tingly-box are not all random identifiers — built-in rules use
+deterministic, human-readable UUIDs so that every consumer (frontend quick
+config, `tbclient`, TUI quickstart, config migrations) can address them by a
+stable constant:
 
-Built-in rules use deterministic, human-readable UUIDs (`built-in-cc`,
-`built-in-cc-haiku`, `builtin:claude_desktop:claude-haiku-4-5`), and every
-consumer that needs to address a built-in rule relies on that stability:
-the frontend quick config, `tbclient`, the TUI quickstart, and several
-config migrations all look rules up by these constants.
+| Kind | Format | Example |
+|---|---|---|
+| Legacy built-ins | hyphenated string | `built-in-cc`, `built-in-cc-haiku`, `built-in-codex` |
+| Newer built-ins | `builtin:<scenario>:<model>` | `builtin:claude_desktop:claude-haiku-4-5` |
+| SmartGuide internal | `_internal_smart_guide_<botUUID>` | — |
+| User-created rules | random v4 UUID | — |
+
+The constants live in `internal/server/config/migration.go`
+(`RuleUUIDBuiltin*`). Anything that is system-seeded must have a
+deterministic UUID; randomness is reserved for rules the user creates.
+
+## Profile rules
+
+Currently the only profiled surface is Claude Code (`claude_code:p1`, …),
+so this is the only section at this stage; new profiled scenarios should
+follow the same scheme.
+
+### Problem
 
 Profile rules (the per-profile copies created for `claude_code:p1`,
 `claude_code:p2`, …) were created with **random v4 UUIDs**
@@ -22,7 +38,7 @@ and produced linkage side effects:
 - delete + recreate of a profile produced brand-new identities even though
   profile IDs themselves are recycled (`p1` is reused after deletion).
 
-## Convention
+### Convention
 
 A profile rule's UUID is the main-scenario built-in UUID plus the profile
 suffix, using the same `:` separator as profiled scenario names:
@@ -49,7 +65,7 @@ Helpers live in `internal/server/config/migration.go`:
 `newCCProfileRules` (config.go) derives the profile ID from the profiled
 scenario and assigns canonical UUIDs at creation time.
 
-## Migration (`migrate20260611`)
+### Migration (`migrate20260611`)
 
 Normalizes existing configs:
 
@@ -65,9 +81,9 @@ Normalizes existing configs:
   `UsageStore.RenameRuleUUID` (historical usage attribution). Daily/monthly
   usage aggregates do not carry `rule_uuid` and need no migration.
 
-## Profile deletion
+### Profile deletion
 
-Because profile IDs are recycled, `DeleteProfile` now purges the deleted
+Because profile IDs are recycled, `DeleteProfile` purges the deleted
 rules' rows from `rule_service_index` (`RuleStateStore.DeleteRules`).
 Otherwise a future profile reusing the same ID would inherit the old
 profile's service pinning. Usage records are intentionally kept — they are
