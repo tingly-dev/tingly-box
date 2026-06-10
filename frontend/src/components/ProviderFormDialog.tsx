@@ -274,7 +274,7 @@ const ProviderFormDialog = ({
             setUseGlobalProxy(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, fusionMode]);
+    }, [open]);
 
     // Helper: push protocol-related fields to parent in one batch.
     // Called only from user-driven handlers (not from a render-triggered effect).
@@ -377,52 +377,37 @@ const ProviderFormDialog = ({
         // Disallowing both-false: ignore the toggle if it would leave no protocol.
     };
 
+    // Custom endpoints are strictly single-protocol (radio semantics):
+    // selecting one clears the other; the active option can't be unselected.
+    const selectCustomProtocol = (openai: boolean) => {
+        setProtocolOpenAI(openai);
+        setProtocolAnthropic(!openai);
+        setVerificationResult(null);
+        syncProtocolsToParent(openai, !openai, selectedProvider);
+    };
+
     const toggleOpenAIProtocol = () => {
         if (effectiveLocked) return;
         if (selectedProvider && !selectedProvider.supportsOpenAI) return;
-        // Custom endpoints are strictly single-protocol: selecting one clears the
-        // other; the active option can't be unselected (radio semantics).
-        if (customMode) {
-            if (protocolOpenAI) return;
-            setProtocolOpenAI(true);
-            setProtocolAnthropic(false);
-            setVerificationResult(null);
-            syncProtocolsToParent(true, false, selectedProvider);
-            return;
-        }
+        if (customMode) { if (!protocolOpenAI) selectCustomProtocol(true); return; }
         const next = !protocolOpenAI;
-        // Prevent deselecting the last protocol on a fusion provider.
         if (isExistingFusion && !next && !protocolAnthropic) return;
         setProtocolOpenAI(next);
         setVerificationResult(null);
-        if (isExistingFusion) {
-            handleFusionDowngrade(next, protocolAnthropic);
-        } else {
-            syncProtocolsToParent(next, protocolAnthropic, selectedProvider);
-        }
+        if (isExistingFusion) handleFusionDowngrade(next, protocolAnthropic);
+        else syncProtocolsToParent(next, protocolAnthropic, selectedProvider);
     };
 
     const toggleAnthropicProtocol = () => {
         if (effectiveLocked) return;
         if (selectedProvider && !selectedProvider.supportsAnthropic) return;
-        if (customMode) {
-            if (protocolAnthropic) return;
-            setProtocolAnthropic(true);
-            setProtocolOpenAI(false);
-            setVerificationResult(null);
-            syncProtocolsToParent(false, true, selectedProvider);
-            return;
-        }
+        if (customMode) { if (!protocolAnthropic) selectCustomProtocol(false); return; }
         const next = !protocolAnthropic;
-        // Prevent deselecting the last protocol on a fusion provider.
         if (isExistingFusion && !next && !protocolOpenAI) return;
         setProtocolAnthropic(next);
         setVerificationResult(null);
-        if (isExistingFusion) {
-            handleFusionDowngrade(protocolOpenAI, next);
-        } else {
-            syncProtocolsToParent(protocolOpenAI, next, selectedProvider);
-        }
+        if (isExistingFusion) handleFusionDowngrade(protocolOpenAI, next);
+        else syncProtocolsToParent(protocolOpenAI, next, selectedProvider);
     };
 
     const handleProviderSelect = (newValue: string | UniqueProvider | null) => {
@@ -624,8 +609,6 @@ const ProviderFormDialog = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const resolved: Partial<EnhancedProviderFormData> = {};
-
         if (fusionMode) {
             // Fusion form: two URLs, one key, always a single fused record.
             const openai = fusOpenAIUrl.trim();
@@ -634,20 +617,15 @@ const ProviderFormDialog = ({
                 setBaseUrlError(true);
                 return;
             }
-            const cb = onChangeRef.current;
-            cb('apiBaseOpenAI', openai);
-            cb('apiBaseAnthropic', anthropic);
-            cb('apiBase', openai);
-            cb('apiStyle', 'openai');
-            cb('protocols', ['openai', 'anthropic']);
-            cb('createFusionProvider', true);
-            resolved.apiBaseOpenAI = openai;
-            resolved.apiBaseAnthropic = anthropic;
-            resolved.apiBase = openai;
-            resolved.apiStyle = 'openai';
+            const resolved: Partial<EnhancedProviderFormData> = {
+                apiBaseOpenAI: openai,
+                apiBaseAnthropic: anthropic,
+                apiBase: openai,
+                apiStyle: 'openai',
+                createFusionProvider: true,
+                name: ensureName(),
+            };
             (resolved as any).protocols = ['openai', 'anthropic'];
-            resolved.createFusionProvider = true;
-            resolved.name = ensureName();
             setSubmitting(true);
             try {
                 await onSubmit(e, resolved);
@@ -656,8 +634,6 @@ const ProviderFormDialog = ({
             }
             return;
         }
-
-        const effectiveBase = data.apiBase || providerInputValue;
         if (!effectiveBase.trim()) {
             setBaseUrlError(true);
             return;
@@ -668,6 +644,7 @@ const ProviderFormDialog = ({
         // parent's submit closure would otherwise read stale values — that's
         // why a free-typed provider could not be added without first clicking
         // "Test Connection" (which triggered extra renders that flushed state).
+        const resolved: Partial<EnhancedProviderFormData> = {};
 
         // Make sure any free-form text in the provider input is committed before submit.
         if (!selectedProvider && data.apiBase !== providerInputValue) {
