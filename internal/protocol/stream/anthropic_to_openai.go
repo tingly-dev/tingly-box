@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gin-gonic/gin"
-	"github.com/openai/openai-go/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
@@ -107,52 +105,6 @@ func AnthropicToOpenAIStreamWithMCPHooks(hc *protocol.HandleContext, req *anthro
 	return usage, nil
 }
 
-// sendOpenAIStreamChunk sends a ChatCompletionChunk as SSE
-func sendOpenAIStreamChunk(c *gin.Context, chunk openai.ChatCompletionChunk, disableStreamUsage bool) {
-	chunkMap, err := chunkToMap(chunk)
-	if err != nil {
-		logrus.WithContext(c.Request.Context()).Errorf("Failed to convert chunk to map: %v", err)
-		return
-	}
-
-	// Cursor compatibility path must not expose usage in stream chunks.
-	if disableStreamUsage {
-		delete(chunkMap, "usage")
-	}
-
-	OpenAISSE(c, chunkMap)
-}
-
-func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error) {
-	bytes, err := json.Marshal(chunk)
-	if err != nil {
-		return nil, err
-	}
-	var chunkMap map[string]interface{}
-	if err := json.Unmarshal(bytes, &chunkMap); err != nil {
-		return nil, err
-	}
-	// The SDK chunk struct marshals unset fields as zero values, so a delta
-	// without a role serializes as "role":"". Strict clients (e.g. Vercel AI
-	// SDK) validate role against the "assistant" enum and reject "", so drop
-	// the field entirely when it is empty — matching OpenAI's real final
-	// chunk, which sends "delta":{}.
-	if choices, ok := chunkMap["choices"].([]interface{}); ok {
-		for _, choice := range choices {
-			choiceMap, ok := choice.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if delta, ok := choiceMap["delta"].(map[string]interface{}); ok {
-				if role, ok := delta["role"].(string); ok && role == "" {
-					delete(delta, "role")
-				}
-			}
-		}
-	}
-	return chunkMap, nil
-}
-
 // sendOpenAIStreamChunkForce helper function to send a chunk in OpenAI format
 func sendOpenAIStreamChunkForce(c *gin.Context, chunk map[string]interface{}) {
 	OpenAISSE(c, chunk)
@@ -167,43 +119,4 @@ func sendOpenAIStreamError(c *gin.Context, message, errorType string) {
 		},
 	}
 	OpenAISSE(c, errorMap)
-}
-
-// createReasoningContentChunk creates a chunk with reasoning_content field
-// This is a workaround for OpenAI's extended thinking format which is not natively supported in the SDK
-func createReasoningContentChunk(chatID string, created int64, model, reasoning string) openai.ChatCompletionChunk {
-	chunk := openai.ChatCompletionChunk{
-		ID:      chatID,
-		Created: created,
-		Model:   model,
-		Choices: []openai.ChatCompletionChunkChoice{
-			{
-				Index: 0,
-				Delta: openai.ChatCompletionChunkChoiceDelta{
-					Content: "",
-				},
-			},
-		},
-	}
-
-	if reasoning == "" {
-		return chunk
-	}
-
-	chunkJSON, _ := json.Marshal(chunk)
-	var chunkMap map[string]interface{}
-	json.Unmarshal(chunkJSON, &chunkMap)
-
-	if choices, ok := chunkMap["choices"].([]interface{}); ok && len(choices) > 0 {
-		if choice, ok := choices[0].(map[string]interface{}); ok {
-			if delta, ok := choice["delta"].(map[string]interface{}); ok {
-				delta["reasoning_content"] = reasoning
-			}
-		}
-	}
-
-	updatedJSON, _ := json.Marshal(chunkMap)
-	json.Unmarshal(updatedJSON, &chunk)
-
-	return chunk
 }

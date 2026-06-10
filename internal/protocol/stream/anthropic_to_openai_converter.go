@@ -7,14 +7,19 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
-	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // anthropicToOpenAIConverter is a stateful iterator that reads Anthropic Beta stream
-// events and emits OpenAI Chat Completion chunk maps.
+// events and emits OpenAI Chat Completion wire chunks.
+//
+// Chunks are built with wire DTOs (omitempty outbound shapes) rather than the
+// openai-go SDK response structs: the SDK types marshal unset fields as zero
+// values ("role":"", "finish_reason":"", zero usage on every chunk), which
+// strict clients reject.
 type anthropicToOpenAIConverter struct {
 	stream             *anthropicstream.Stream[anthropic.BetaRawMessageStreamEventUnion]
 	responseModel      string
@@ -98,20 +103,7 @@ func (c *anthropicToOpenAIConverter) HookErr() error {
 func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessageStreamEventUnion) {
 	switch event.Type {
 	case "message_start":
-		chunk := openai.ChatCompletionChunk{
-			ID:      c.chatID,
-			Created: c.created,
-			Model:   c.responseModel,
-			Choices: []openai.ChatCompletionChunkChoice{
-				{
-					Index: 0,
-					Delta: openai.ChatCompletionChunkChoiceDelta{
-						Role: "assistant",
-					},
-				},
-			},
-		}
-		c.emitChunk(chunk)
+		c.emitChunk(wire.ChatStreamDelta{Role: "assistant"}, nil)
 		c.acc.ConsumeBeta(event)
 
 	case "content_block_start":
@@ -124,31 +116,20 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 			c.suppressToolCall = c.hooks != nil && c.hooks.ShouldSuppressTool != nil && c.hooks.ShouldSuppressTool(c.toolCallName)
 			if !c.suppressToolCall {
 				c.hasToolCalls = true
-				chunk := openai.ChatCompletionChunk{
-					ID:      c.chatID,
-					Created: c.created,
-					Model:   c.responseModel,
-					Choices: []openai.ChatCompletionChunkChoice{
+				emptyArgs := ""
+				c.emitChunk(wire.ChatStreamDelta{
+					ToolCalls: []wire.ChatStreamToolCall{
 						{
 							Index: 0,
-							Delta: openai.ChatCompletionChunkChoiceDelta{
-								Role: "assistant",
-								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
-									{
-										Index: 0,
-										ID:    c.toolCallID,
-										Type:  "function",
-										Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
-											Name:      c.toolCallName,
-											Arguments: "",
-										},
-									},
-								},
+							ID:    c.toolCallID,
+							Type:  "function",
+							Function: wire.ChatStreamToolFunction{
+								Name:      c.toolCallName,
+								Arguments: &emptyArgs,
 							},
 						},
 					},
-				}
-				c.emitChunk(chunk)
+				}, nil)
 			}
 		} else if event.ContentBlock.Type == "thinking" {
 			c.thinkingText.Reset()
@@ -159,54 +140,24 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 
 	case "content_block_delta":
 		if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
-			text := event.Delta.Text
-			chunk := openai.ChatCompletionChunk{
-				ID:      c.chatID,
-				Created: c.created,
-				Model:   c.responseModel,
-				Choices: []openai.ChatCompletionChunkChoice{
-					{
-						Index: 0,
-						Delta: openai.ChatCompletionChunkChoiceDelta{
-							Role:    "assistant",
-							Content: text,
-						},
-					},
-				},
-			}
-			c.emitChunk(chunk)
+			c.emitChunk(wire.ChatStreamDelta{Content: event.Delta.Text}, nil)
 		} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
 			args := event.Delta.PartialJSON
 			c.toolCallArgs.WriteString(args)
 			if !c.suppressToolCall {
-				chunk := openai.ChatCompletionChunk{
-					ID:      c.chatID,
-					Created: c.created,
-					Model:   c.responseModel,
-					Choices: []openai.ChatCompletionChunkChoice{
+				c.emitChunk(wire.ChatStreamDelta{
+					ToolCalls: []wire.ChatStreamToolCall{
 						{
-							Index: 0,
-							Delta: openai.ChatCompletionChunkChoiceDelta{
-								Role: "assistant",
-								ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
-									{
-										Index: 0,
-										Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
-											Arguments: args,
-										},
-									},
-								},
-							},
+							Index:    0,
+							Function: wire.ChatStreamToolFunction{Arguments: &args},
 						},
 					},
-				}
-				c.emitChunk(chunk)
+				}, nil)
 			}
 		} else if event.Delta.Type == "thinking_delta" && event.Delta.Thinking != "" {
 			thinking := event.Delta.Thinking
 			c.thinkingText.WriteString(thinking)
-			chunk := createReasoningContentChunk(c.chatID, c.created, c.responseModel, thinking)
-			c.emitChunk(chunk)
+			c.emitChunk(wire.ChatStreamDelta{ReasoningContent: thinking}, nil)
 		}
 		// signature_delta is intentionally ignored
 
@@ -238,38 +189,47 @@ func (c *anthropicToOpenAIConverter) processEvent(event *anthropic.BetaRawMessag
 		if c.hasToolCalls {
 			finishReason = openaiFinishReasonToolCalls
 		}
-		delta := openai.ChatCompletionChunkChoiceDelta{}
-		if c.hasToolCalls {
-			delta.Content = ""
-		}
-		chunk := openai.ChatCompletionChunk{
-			ID:      c.chatID,
-			Created: c.created,
-			Model:   c.responseModel,
-			Choices: []openai.ChatCompletionChunkChoice{
-				{
-					Index:        0,
-					Delta:        delta,
-					FinishReason: finishReason,
-				},
-			},
-		}
+		chunk := c.newChunk(wire.ChatStreamDelta{}, &finishReason)
 		if !c.disableStreamUsage && c.acc.HasUsage() {
-			chunk.Usage = usagepkg.ChatUsage(c.acc.Result())
+			chunk.Usage = chatStreamUsageWire(c.acc.Result())
 		}
-		c.emitChunk(chunk)
+		c.pending = append(c.pending, chunk)
 		c.done = true
 	}
 }
 
-// emitChunk converts a ChatCompletionChunk to a map and appends to pending.
-func (c *anthropicToOpenAIConverter) emitChunk(chunk openai.ChatCompletionChunk) {
-	m, err := chunkToMap(chunk)
-	if err != nil {
-		return
+// emitChunk appends a wire chunk with the given delta to the pending queue.
+func (c *anthropicToOpenAIConverter) emitChunk(delta wire.ChatStreamDelta, finishReason *string) {
+	c.pending = append(c.pending, c.newChunk(delta, finishReason))
+}
+
+func (c *anthropicToOpenAIConverter) newChunk(delta wire.ChatStreamDelta, finishReason *string) wire.ChatStreamChunk {
+	return wire.ChatStreamChunk{
+		ID:      c.chatID,
+		Object:  "chat.completion.chunk",
+		Created: c.created,
+		Model:   c.responseModel,
+		Choices: []wire.ChatStreamChoice{
+			{Index: 0, Delta: delta, FinishReason: finishReason},
+		},
 	}
-	if c.disableStreamUsage {
-		delete(m, "usage")
+}
+
+// chatStreamUsageWire converts normalized TokenUsage into the Chat Completions
+// stream usage wire shape. Same semantics as usagepkg.ChatUsage: prompt_tokens
+// is the TOTAL (uncached + cached), cached_tokens a reported subset.
+func chatStreamUsageWire(u *protocol.TokenUsage) *wire.ChatStreamUsage {
+	totalInput := u.InputTokens + u.CacheInputTokens
+	su := &wire.ChatStreamUsage{
+		PromptTokens:     int64(totalInput),
+		CompletionTokens: int64(u.OutputTokens),
+		TotalTokens:      int64(totalInput + u.OutputTokens),
 	}
-	c.pending = append(c.pending, m)
+	if u.CacheInputTokens > 0 {
+		su.PromptTokensDetails = &wire.ChatStreamPromptTokenDetails{CachedTokens: int64(u.CacheInputTokens)}
+	}
+	if u.ReasoningTokens > 0 {
+		su.CompletionTokensDetails = &wire.ChatStreamOutputTokenDetails{ReasoningTokens: int64(u.ReasoningTokens)}
+	}
+	return su
 }
