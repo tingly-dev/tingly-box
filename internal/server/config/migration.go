@@ -32,25 +32,27 @@ const (
 	RuleUUIDBuiltinClaudeDesktopHaiku45  = "builtin:claude_desktop:claude-haiku-4-5"
 )
 
-// ProfileRuleUUID returns the canonical UUID for a profile copy of a built-in
-// rule: "<builtin-uuid>:<profileID>" (e.g. "built-in-cc-haiku:p1"), mirroring
-// the profiled scenario naming "claude_code:p1". This keeps profile rule
-// identity deterministic so consumers can address a profile's tier rules the
-// same way they address the main scenario's built-ins.
-func ProfileRuleUUID(builtinUUID, profileID string) string {
-	return builtinUUID + typ.ProfileSeparator + profileID
+// BuiltinRuleUUID builds a built-in rule UUID in the modern
+// "builtin:<scenario>:<model>" form — the target convention all built-in rules
+// will eventually converge on (the legacy "built-in-*" constants above predate
+// it). Works for profiled scenarios too, since the scenario name carries the
+// profile suffix: BuiltinRuleUUID("claude_code:p1", "haiku") =
+// "builtin:claude_code:p1:haiku".
+func BuiltinRuleUUID(scenario typ.RuleScenario, model string) string {
+	return "builtin:" + string(scenario) + ":" + model
 }
 
-// ccProfileBuiltinByModel maps a Claude Code profile rule's request model
-// (the short tier name profile rules route on) to the main-scenario built-in
-// rule UUID it mirrors.
-var ccProfileBuiltinByModel = map[string]string{
-	"cc":       RuleUUIDBuiltinCC,
-	"default":  RuleUUIDBuiltinCCDefault,
-	"haiku":    RuleUUIDBuiltinCCHaiku,
-	"sonnet":   RuleUUIDBuiltinCCSonnet,
-	"opus":     RuleUUIDBuiltinCCOpus,
-	"subagent": RuleUUIDBuiltinCCSubagent,
+// ccProfileTiers is the set of request models a system-seeded Claude Code
+// profile rule routes on (unified "cc", or the five separate-mode tiers).
+// Profile rules with any other request model are user-customized and keep
+// whatever UUID they have.
+var ccProfileTiers = map[string]bool{
+	"cc":       true,
+	"default":  true,
+	"haiku":    true,
+	"sonnet":   true,
+	"opus":     true,
+	"subagent": true,
 }
 
 // --- Shared migration helpers -------------------------------------------------
@@ -667,10 +669,10 @@ func migrate20260610(c *Config) {
 }
 
 // migrate20260611 normalizes Claude Code profile rule UUIDs to the canonical
-// "<builtin-uuid>:<profileID>" form (e.g. "built-in-cc-haiku:p1"). Profile
-// rules used to be created with random v4 UUIDs, which broke the convention
-// that built-in rules are addressable by stable UUIDs and made profile rule
-// identity non-reproducible.
+// "builtin:<profiled-scenario>:<tier>" form (e.g. "builtin:claude_code:p1:haiku").
+// Profile rules used to be created with random v4 UUIDs, which broke the
+// convention that built-in rules are addressable by stable UUIDs and made
+// profile rule identity non-reproducible.
 //
 // The pass is intentionally not marker-gated: it is idempotent (rules already
 // canonical are skipped) and self-healing, so a config written by an older
@@ -688,11 +690,10 @@ func migrate20260611(c *Config) {
 		if profileID == "" || base != typ.ScenarioClaudeCode {
 			continue
 		}
-		builtinUUID, ok := ccProfileBuiltinByModel[rule.RequestModel]
-		if !ok {
+		if !ccProfileTiers[rule.RequestModel] {
 			continue
 		}
-		canonical := ProfileRuleUUID(builtinUUID, profileID)
+		canonical := BuiltinRuleUUID(rule.Scenario, rule.RequestModel)
 		if rule.UUID == canonical {
 			continue
 		}

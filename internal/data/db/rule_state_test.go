@@ -23,15 +23,15 @@ func TestRuleStateStore_RenameRuleUUID(t *testing.T) {
 		t.Fatalf("SetServiceID error: %v", err)
 	}
 	// A stale row under the target identity must be replaced, not merged.
-	if err := store.SetServiceID("built-in-cc-haiku:p1", "stale:model"); err != nil {
+	if err := store.SetServiceID("builtin:claude_code:p1:haiku", "stale:model"); err != nil {
 		t.Fatalf("SetServiceID error: %v", err)
 	}
 
-	if err := store.RenameRuleUUID("old-uuid", "built-in-cc-haiku:p1"); err != nil {
+	if err := store.RenameRuleUUID("old-uuid", "builtin:claude_code:p1:haiku"); err != nil {
 		t.Fatalf("RenameRuleUUID error: %v", err)
 	}
 
-	got, err := store.GetServiceID("built-in-cc-haiku:p1")
+	got, err := store.GetServiceID("builtin:claude_code:p1:haiku")
 	if err != nil {
 		t.Fatalf("GetServiceID error: %v", err)
 	}
@@ -46,17 +46,17 @@ func TestRuleStateStore_RenameRuleUUID(t *testing.T) {
 func TestRuleStateStore_DeleteRules(t *testing.T) {
 	store := newTestRuleStateStore(t)
 
-	if err := store.SetServiceID("built-in-cc:p1", "a:b"); err != nil {
+	if err := store.SetServiceID("builtin:claude_code:p1:cc", "a:b"); err != nil {
 		t.Fatalf("SetServiceID error: %v", err)
 	}
 	if err := store.SetServiceID("keep", "c:d"); err != nil {
 		t.Fatalf("SetServiceID error: %v", err)
 	}
 
-	if err := store.DeleteRules([]string{"built-in-cc:p1"}); err != nil {
+	if err := store.DeleteRules([]string{"builtin:claude_code:p1:cc"}); err != nil {
 		t.Fatalf("DeleteRules error: %v", err)
 	}
-	if got, _ := store.GetServiceID("built-in-cc:p1"); got != "" {
+	if got, _ := store.GetServiceID("builtin:claude_code:p1:cc"); got != "" {
 		t.Errorf("deleted key should be gone, got %q", got)
 	}
 	if got, _ := store.GetServiceID("keep"); got != "c:d" {

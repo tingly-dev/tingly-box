@@ -201,7 +201,7 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 			// Unified-mode profile rule.
 			{UUID: "5f1c2a9e-0000-0000-0000-000000000003", Scenario: p2, RequestModel: "cc"},
 			// Already canonical → untouched.
-			{UUID: "built-in-cc-opus:p1", Scenario: p1, RequestModel: "opus"},
+			{UUID: "builtin:claude_code:p1:opus", Scenario: p1, RequestModel: "opus"},
 			// Custom request model with no built-in counterpart → untouched.
 			{UUID: "5f1c2a9e-0000-0000-0000-000000000004", Scenario: p1, RequestModel: "my-custom"},
 			// Main-scenario built-in (not profiled) → untouched.
@@ -212,10 +212,10 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 	migrate20260611(c)
 
 	wants := map[int]string{
-		0: "built-in-cc-haiku:p1",
-		1: "built-in-cc-sonnet:p1",
-		2: "built-in-cc:p2",
-		3: "built-in-cc-opus:p1",
+		0: "builtin:claude_code:p1:haiku",
+		1: "builtin:claude_code:p1:sonnet",
+		2: "builtin:claude_code:p2:cc",
+		3: "builtin:claude_code:p1:opus",
 		4: "5f1c2a9e-0000-0000-0000-000000000004",
 		5: RuleUUIDBuiltinCCHaiku,
 	}
@@ -239,7 +239,7 @@ func TestMigrate20260611_SkipsOnCanonicalCollision(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			// Canonical identity already held by another rule.
-			{UUID: "built-in-cc-haiku:p1", Scenario: p1, RequestModel: "haiku"},
+			{UUID: "builtin:claude_code:p1:haiku", Scenario: p1, RequestModel: "haiku"},
 			// Duplicate tier rule with a random UUID — must not steal the identity.
 			{UUID: "5f1c2a9e-0000-0000-0000-00000000000a", Scenario: p1, RequestModel: "haiku"},
 		},
@@ -247,7 +247,7 @@ func TestMigrate20260611_SkipsOnCanonicalCollision(t *testing.T) {
 
 	migrate20260611(c)
 
-	if c.Rules[0].UUID != "built-in-cc-haiku:p1" {
+	if c.Rules[0].UUID != "builtin:claude_code:p1:haiku" {
 		t.Errorf("canonical rule UUID changed: %q", c.Rules[0].UUID)
 	}
 	if c.Rules[1].UUID != "5f1c2a9e-0000-0000-0000-00000000000a" {
@@ -258,11 +258,11 @@ func TestMigrate20260611_SkipsOnCanonicalCollision(t *testing.T) {
 func TestNewCCProfileRules_CanonicalUUIDs(t *testing.T) {
 	separate := newCCProfileRules(typ.RuleScenario("claude_code:p3"), false)
 	wantSeparate := map[string]string{
-		"default":  "built-in-cc-default:p3",
-		"haiku":    "built-in-cc-haiku:p3",
-		"sonnet":   "built-in-cc-sonnet:p3",
-		"opus":     "built-in-cc-opus:p3",
-		"subagent": "built-in-cc-subagent:p3",
+		"default":  "builtin:claude_code:p3:default",
+		"haiku":    "builtin:claude_code:p3:haiku",
+		"sonnet":   "builtin:claude_code:p3:sonnet",
+		"opus":     "builtin:claude_code:p3:opus",
+		"subagent": "builtin:claude_code:p3:subagent",
 	}
 	if len(separate) != len(wantSeparate) {
 		t.Fatalf("separate mode rule count = %d, want %d", len(separate), len(wantSeparate))
@@ -274,8 +274,8 @@ func TestNewCCProfileRules_CanonicalUUIDs(t *testing.T) {
 	}
 
 	unified := newCCProfileRules(typ.RuleScenario("claude_code:p3"), true)
-	if len(unified) != 1 || unified[0].UUID != "built-in-cc:p3" {
-		t.Errorf("unified rule UUID = %+v, want built-in-cc:p3", unified)
+	if len(unified) != 1 || unified[0].UUID != "builtin:claude_code:p3:cc" {
+		t.Errorf("unified rule UUID = %+v, want builtin:claude_code:p3:cc", unified)
 	}
 }
 

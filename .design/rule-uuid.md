@@ -8,13 +8,19 @@ stable constant:
 | Kind | Format | Example |
 |---|---|---|
 | Legacy built-ins | hyphenated string | `built-in-cc`, `built-in-cc-haiku`, `built-in-codex` |
-| Newer built-ins | `builtin:<scenario>:<model>` | `builtin:claude_desktop:claude-haiku-4-5` |
+| Modern built-ins | `builtin:<scenario>:<model>` | `builtin:claude_desktop:claude-haiku-4-5` |
 | SmartGuide internal | `_internal_smart_guide_<botUUID>` | — |
 | User-created rules | random v4 UUID | — |
 
 The constants live in `internal/server/config/migration.go`
-(`RuleUUIDBuiltin*`). Anything that is system-seeded must have a
+(`RuleUUIDBuiltin*`), alongside `BuiltinRuleUUID(scenario, model)` which
+builds the modern form. Anything that is system-seeded must have a
 deterministic UUID; randomness is reserved for rules the user creates.
+
+**Direction:** `builtin:<scenario>:<model>` is the target convention. The
+legacy `built-in-*` UUIDs will eventually be migrated onto it (a larger
+change touching every consumer that hardcodes them); new system-seeded
+rules must use the modern form from day one.
 
 ## Profile rules
 
@@ -40,30 +46,29 @@ and produced linkage side effects:
 
 ### Convention
 
-A profile rule's UUID is the main-scenario built-in UUID plus the profile
-suffix, using the same `:` separator as profiled scenario names:
+A profile rule's UUID applies the modern built-in form directly, with the
+profiled scenario name as the scenario segment:
 
 ```
-<builtin-uuid>:<profileID>
+builtin:<base>:<profileID>:<tier>     // BuiltinRuleUUID(profiledScenario, tier)
 ```
 
-| Tier (request_model) | Built-in (main scenario) | Profile p1            |
-|----------------------|--------------------------|-----------------------|
-| `cc` (unified)       | `built-in-cc`            | `built-in-cc:p1`      |
-| `default`            | `built-in-cc-default`    | `built-in-cc-default:p1` |
-| `haiku`              | `built-in-cc-haiku`      | `built-in-cc-haiku:p1`   |
-| `sonnet`             | `built-in-cc-sonnet`     | `built-in-cc-sonnet:p1`  |
-| `opus`               | `built-in-cc-opus`       | `built-in-cc-opus:p1`    |
-| `subagent`           | `built-in-cc-subagent`   | `built-in-cc-subagent:p1` |
+| Tier (request_model) | Profile p1 |
+|----------------------|------------------------------|
+| `cc` (unified)       | `builtin:claude_code:p1:cc`  |
+| `default`            | `builtin:claude_code:p1:default` |
+| `haiku`              | `builtin:claude_code:p1:haiku`   |
+| `sonnet`             | `builtin:claude_code:p1:sonnet`  |
+| `opus`               | `builtin:claude_code:p1:opus`    |
+| `subagent`           | `builtin:claude_code:p1:subagent` |
 
-Helpers live in `internal/server/config/migration.go`:
+Profile rules are therefore already on the target convention — when the
+legacy `built-in-cc-*` main-scenario rules are unified later, profiles
+need no further migration.
 
-- `ProfileRuleUUID(builtinUUID, profileID)` — builds the canonical UUID;
-- `ccProfileBuiltinByModel` — maps the short tier name a profile rule
-  routes on to its built-in counterpart.
-
-`newCCProfileRules` (config.go) derives the profile ID from the profiled
-scenario and assigns canonical UUIDs at creation time.
+`ccProfileTiers` (migration.go) is the set of system-seeded tier names;
+`newCCProfileRules` (config.go) assigns canonical UUIDs at creation time
+via `BuiltinRuleUUID(profiledScenario, requestModel)`.
 
 ### Migration (`migrate20260611`)
 
