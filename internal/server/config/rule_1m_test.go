@@ -77,3 +77,27 @@ func TestUpdateRule_DesktopSyncsContext1MName(t *testing.T) {
 		t.Errorf("claude_code rule must keep its bare name, got %q", got)
 	}
 }
+
+func TestContext1MSuffixSelfHealing(t *testing.T) {
+	// Dirty names with duplicated suffixes (from older builds) normalize to
+	// exactly one suffix when enabled and none when disabled.
+	if got := syncContext1MSuffix("cc[1m][1m]", true); got != "cc[1m]" {
+		t.Errorf("sync(enabled) = %q, want %q", got, "cc[1m]")
+	}
+	if got := syncContext1MSuffix("cc[1m][1m]", false); got != "cc" {
+		t.Errorf("sync(disabled) = %q, want %q", got, "cc")
+	}
+	if got := TrimContext1M("cc[1m][1m]"); got != "cc" {
+		t.Errorf("TrimContext1M = %q, want %q", got, "cc")
+	}
+
+	// Matching normalizes dirty incoming names too.
+	c := &Config{
+		Rules: []typ.Rule{
+			{UUID: "p1", Scenario: typ.RuleScenario("claude_code:p1"), RequestModel: "cc[1m]"},
+		},
+	}
+	if r := c.MatchRuleByModelAndScenario("cc[1m][1m]", typ.RuleScenario("claude_code:p1")); r == nil || r.UUID != "p1" {
+		t.Errorf("double-suffixed request should match single-suffixed rule, got %+v", r)
+	}
+}

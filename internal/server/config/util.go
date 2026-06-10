@@ -17,23 +17,28 @@ import (
 const Context1MSuffix = "[1m]"
 
 // TrimContext1M removes the [1m] context-window suffix from a model name.
+// Repeated suffixes (dirty data from older builds) are stripped entirely so
+// matching and env generation self-heal.
 func TrimContext1M(model string) string {
-	return strings.TrimSuffix(model, Context1MSuffix)
+	for strings.HasSuffix(model, Context1MSuffix) {
+		model = strings.TrimSuffix(model, Context1MSuffix)
+	}
+	return model
 }
 
 // syncContext1MSuffix keeps a model name's [1m] suffix in sync with the
-// rule's context_1m flag: appended when enabled, stripped when disabled.
+// rule's context_1m flag: exactly one suffix when enabled, none when
+// disabled. Normalizing through TrimContext1M (instead of append-if-missing)
+// repairs names that picked up duplicated suffixes from older builds.
 func syncContext1MSuffix(model string, enabled bool) string {
 	if model == "" {
 		return model
 	}
-	if enabled && !strings.HasSuffix(model, Context1MSuffix) {
-		return model + Context1MSuffix
+	base := TrimContext1M(model)
+	if enabled {
+		return base + Context1MSuffix
 	}
-	if !enabled {
-		return strings.TrimSuffix(model, Context1MSuffix)
-	}
-	return model
+	return base
 }
 
 // generateSecret generates a random secret for JWT
