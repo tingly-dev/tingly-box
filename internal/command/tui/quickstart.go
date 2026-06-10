@@ -509,15 +509,15 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 		uuid string
 		desc string
 	}{
-		{serverconfig.RuleUUIDBuiltinOpenAI, "OpenAI scenario"},
-		{serverconfig.RuleUUIDBuiltinAnthropic, "Anthropic scenario"},
+		{serverconfig.RuleUUIDOpenAI, "OpenAI scenario"},
+		{serverconfig.RuleUIDAnthropic, "Anthropic scenario"},
 		{serverconfig.RuleUUIDCC, "Claude Code · unified"},
 		{serverconfig.RuleUUIDCCDefault, "Claude Code · default"},
 		{serverconfig.RuleUUIDCCHaiku, "Claude Code · haiku"},
 		{serverconfig.RuleUUIDCCOpus, "Claude Code · opus"},
 		{serverconfig.RuleUUIDCCSonnet, "Claude Code · sonnet"},
 		{serverconfig.RuleUUIDCCSubagent, "Claude Code · subagent"},
-		{"built-in-opencode", "OpenCode scenario"},
+		{serverconfig.RuleUUIDOpenCode, "OpenCode scenario"},
 	}
 
 	type rv struct{ uuid, desc string }

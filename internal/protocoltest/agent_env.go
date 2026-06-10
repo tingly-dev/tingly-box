@@ -269,10 +269,10 @@ func (env *AgentTestEnv) SetupAgent(AgentType AgentType, providerName string, mo
 		builtinUUID = "builtin:claude_code:cc"
 		requestModel = "tingly/cc"
 	case AgentTypeCodex:
-		builtinUUID = "built-in-codex"
+		builtinUUID = serverconfig.RuleUUIDCodex
 		requestModel = "tingly-codex"
 	case AgentTypeOpenCode:
-		builtinUUID = "built-in-opencode"
+		builtinUUID = serverconfig.RuleUUIDOpenCode
 		requestModel = "tingly-opencode"
 	default:
 		return fmt.Errorf("unknown Agent type: %s", AgentType)
@@ -334,10 +334,10 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 		builtinUUID = "builtin:claude_code:cc"
 		requestModel = "tingly/cc"
 	case AgentTypeCodex:
-		builtinUUID = "built-in-codex"
+		builtinUUID = serverconfig.RuleUUIDCodex
 		requestModel = "tingly-codex"
 	case AgentTypeOpenCode:
-		builtinUUID = "built-in-opencode"
+		builtinUUID = serverconfig.RuleUUIDOpenCode
 		requestModel = "tingly-opencode"
 	default:
 		return fmt.Errorf("unknown Agent type: %s", AgentType)

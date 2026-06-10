@@ -13,11 +13,22 @@ import (
 
 // Built-in rule UUID constants
 const (
-	RuleUUIDTingly           = "tingly"
+	// Very old / pre-scenario-split legacy UUIDs. Still present in configs
+	// written before the scenario model was introduced.
+	RuleUUIDTingly     = "tingly"
+	RuleUUIDClaudeCode = "claude-code"
+
+	// Legacy built-in UUIDs (hyphenated "built-in-*" form). Live configs are
+	// renamed to the modern RuleUUID* values by migrate20260612; these
+	// constants remain so older migrations and compatibility fallbacks can
+	// still address pre-rename configs.
 	RuleUUIDBuiltinOpenAI    = "built-in-openai"
 	RuleUUIDBuiltinAnthropic = "built-in-anthropic"
 	RuleUUIDBuiltinCodex     = "built-in-codex"
-	RuleUUIDClaudeCode       = "claude-code"
+	RuleUUIDBuiltinOpenCode  = "built-in-opencode"
+	RuleUUIDBuiltinAgent     = "built-in-agent"
+	RuleUUIDBuiltinAgentClaw = "built-in-agent-claw"
+	RuleUUIDBuiltinTeam      = "built-in-team"
 
 	// Legacy Claude Code built-in UUIDs. Live configs are renamed to the
 	// modern RuleUUIDCC* values by migrate20260611; these constants remain so
@@ -29,6 +40,16 @@ const (
 	RuleUUIDBuiltinCCOpus     = "built-in-cc-opus"
 	RuleUUIDBuiltinCCDefault  = "built-in-cc-default"
 	RuleUUIDBuiltinCCSubagent = "built-in-cc-subagent"
+
+	// Modern built-in rules — "builtin:<scenario>:<tier>" form.
+	// These are the target UUIDs after migrate20260612 renames the legacy ones.
+	RuleUUIDOpenAI    = "builtin:openai:default"
+	RuleUIDAnthropic  = "builtin:anthropic:default"
+	RuleUUIDCodex     = "builtin:codex:default"
+	RuleUUIDOpenCode  = "builtin:opencode:default"
+	RuleUUIDAgent     = "builtin:agent:default"
+	RuleUUIDAgentClaw = "builtin:agent:claw"
+	RuleUUIDTeam      = "builtin:team:default"
 
 	// Claude Code built-in rules (modern "builtin:<scenario>:<tier>" form)
 	RuleUUIDCC         = "builtin:claude_code:cc"
@@ -56,6 +77,20 @@ var legacyCCRuleUUIDs = map[string]string{
 	RuleUUIDBuiltinCCSonnet:   RuleUUIDCCSonnet,
 	RuleUUIDBuiltinCCOpus:     RuleUUIDCCOpus,
 	RuleUUIDBuiltinCCSubagent: RuleUUIDCCSubagent,
+}
+
+// legacySimpleRuleUUIDs maps the remaining legacy built-in UUIDs (all
+// non-CC single-rule scenarios) to their modern "builtin:<scenario>:<model>"
+// counterparts. Used by migrate20260612 and defaultRuleByUUID.
+var legacySimpleRuleUUIDs = map[string]string{
+	RuleUUIDTingly:           RuleUUIDOpenAI, // very old "tingly" rule preceded the openai scenario
+	RuleUUIDBuiltinOpenAI:    RuleUUIDOpenAI,
+	RuleUUIDBuiltinAnthropic: RuleUIDAnthropic,
+	RuleUUIDBuiltinCodex:     RuleUUIDCodex,
+	RuleUUIDBuiltinOpenCode:  RuleUUIDOpenCode,
+	RuleUUIDBuiltinAgent:     RuleUUIDAgent,
+	RuleUUIDBuiltinAgentClaw: RuleUUIDAgentClaw,
+	RuleUUIDBuiltinTeam:      RuleUUIDTeam,
 }
 
 // BuiltinRuleUUID builds a built-in rule UUID in the modern
@@ -89,7 +124,14 @@ var ccProfileTiers = map[string]bool{
 // those moves so each migration reads as intent, not bookkeeping.
 
 // findRuleByUUID returns a pointer to the rule with the given UUID, or nil.
+// Legacy simple-rule UUIDs (openai, anthropic, codex, …) are resolved to
+// their modern "builtin:<scenario>:<model>" aliases so that older migrations
+// which guard on the legacy UUID (e.g. migrate20260306) keep finding the
+// rule after migrate20260612 has renamed it.
 func (c *Config) findRuleByUUID(uuid string) *typ.Rule {
+	if modern, ok := legacySimpleRuleUUIDs[uuid]; ok {
+		uuid = modern
+	}
 	for i := range c.Rules {
 		if c.Rules[i].UUID == uuid {
 			return &c.Rules[i]
@@ -99,10 +141,12 @@ func (c *Config) findRuleByUUID(uuid string) *typ.Rule {
 }
 
 // defaultRuleByUUID looks up a built-in rule template (from DefaultRules) by
-// UUID. Legacy Claude Code UUIDs are resolved to their modern aliases so
-// migrations written before the rename keep finding their templates.
+// UUID. Legacy UUIDs (CC and simple scenarios) are resolved to their modern
+// aliases so migrations written before the rename keep finding their templates.
 func defaultRuleByUUID(uuid string) (typ.Rule, bool) {
 	if modern, ok := legacyCCRuleUUIDs[uuid]; ok {
+		uuid = modern
+	} else if modern, ok := legacySimpleRuleUUIDs[uuid]; ok {
 		uuid = modern
 	}
 	for _, r := range DefaultRules {
@@ -163,6 +207,7 @@ func Migrate(c *Config) error {
 	migrate20260606(c) // Default SkipUsage on for the Xcode scenario
 	migrate20260610(c) // Seed default rule flags (claude_code_compat / clean_header / session_affinity) for CC / Desktop / Codex rules
 	migrate20260611(c) // Normalize Claude Code profile rule UUIDs to "<builtin-uuid>:<profileID>"
+	migrate20260612(c) // Rename remaining legacy built-in UUIDs to "builtin:<scenario>:<model>" form
 	return nil
 }
 
@@ -778,4 +823,58 @@ func migrate20260611(c *Config) {
 
 	_ = c.Save()
 	logrus.Infof("Migration 20260611 completed: normalized %d Claude Code rule UUID(s)", len(renames))
+}
+
+// migrate20260612 renames the remaining legacy built-in rule UUIDs
+// (openai / anthropic / codex / opencode / agent / team / tingly) to the
+// modern "builtin:<scenario>:<request_model>" form established by
+// migrate20260611 for Claude Code.
+//
+// The pass is idempotent and not marker-gated: rules already carrying a
+// modern UUID are skipped, so a config written by a newer build is left
+// intact on every restart. A rename is skipped (with a warning) if the
+// canonical UUID is already taken, preventing accidental UUID collisions.
+// SQLite state keyed by rule UUID is re-keyed alongside each rule so
+// load-balancer position and usage history survive the rename.
+func migrate20260612(c *Config) {
+	renames := map[string]string{}
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		canonical, ok := legacySimpleRuleUUIDs[rule.UUID]
+		if !ok {
+			continue
+		}
+		if rule.UUID == canonical {
+			continue
+		}
+		if c.findRuleByUUID(canonical) != nil {
+			logrus.WithFields(logrus.Fields{
+				"rule_uuid": rule.UUID,
+				"canonical": canonical,
+			}).Warn("Migration 20260612: canonical rule UUID already taken, skipping rename")
+			continue
+		}
+		renames[rule.UUID] = canonical
+		rule.UUID = canonical
+	}
+
+	if len(renames) == 0 {
+		return
+	}
+
+	for oldUUID, newUUID := range renames {
+		if c.ruleStateStore != nil {
+			if err := c.ruleStateStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
+				logrus.WithError(err).Warnf("Migration 20260612: failed to rename rule state %s -> %s", oldUUID, newUUID)
+			}
+		}
+		if c.usageStore != nil {
+			if err := c.usageStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
+				logrus.WithError(err).Warnf("Migration 20260612: failed to rename usage records %s -> %s", oldUUID, newUUID)
+			}
+		}
+	}
+
+	_ = c.Save()
+	logrus.Infof("Migration 20260612 completed: renamed %d built-in rule UUID(s) to modern form", len(renames))
 }

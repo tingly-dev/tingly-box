@@ -16,33 +16,33 @@ const defaultSessionAffinitySeconds = 1800
 func init() {
 	DefaultRules = []typ.Rule{
 		{
-			UUID:          "built-in-anthropic",
+			UUID:          RuleUIDAnthropic,
 			Scenario:      typ.ScenarioAnthropic,
 			RequestModel:  "tingly-claude",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with Anthropic",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticAdaptive,
 				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
 		{
-			UUID:          "built-in-agent",
+			UUID:          RuleUUIDAgent,
 			Scenario:      typ.ScenarioAgent,
 			RequestModel:  "tingly-agent",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for agent",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticAdaptive,
 				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
 		{
-			UUID:          "built-in-agent-claw",
+			UUID:          RuleUUIDAgentClaw,
 			Scenario:      typ.ScenarioAgent,
 			RequestModel:  "tingly-claw",
 			ResponseModel: "",
@@ -55,33 +55,33 @@ func init() {
 			Active: true,
 		},
 		{
-			UUID:          "built-in-team",
+			UUID:          RuleUUIDTeam,
 			Scenario:      typ.ScenarioTeam,
 			RequestModel:  "tingly-team",
 			ResponseModel: "",
 			Description:   "Default proxy rule for team (shared central model deployment)",
-			Services:      []*loadbalance.Service{}, // Empty services initially; operator binds the central provider/model
-			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticAdaptive,
 				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
 		{
-			UUID:          "built-in-openai",
+			UUID:          RuleUUIDOpenAI,
 			Scenario:      typ.ScenarioOpenAI,
 			RequestModel:  "tingly-gpt",
 			ResponseModel: "",
 			Description:   "Default proxy rule in tingly-box for general use with OpenAI",
-			Services:      []*loadbalance.Service{}, // Empty services initially
-			LBTactic: typ.Tactic{ // Initialize with default adaptive tactic
+			Services:      []*loadbalance.Service{},
+			LBTactic: typ.Tactic{
 				Type:   loadbalance.TacticAdaptive,
 				Params: typ.DefaultAdaptiveParams(),
 			},
 			Active: true,
 		},
 		{
-			UUID:          "built-in-codex",
+			UUID:          RuleUUIDCodex,
 			Scenario:      typ.ScenarioCodex,
 			RequestModel:  "tingly-codex",
 			ResponseModel: "",
@@ -102,7 +102,7 @@ func init() {
 		ccRule(RuleUUIDCCDefault, "tingly/cc-default", "Claude Code - Default model - for general task"),
 		ccRule(RuleUUIDCCSubagent, "tingly/cc-subagent", "Claude Code - Subagent model - model to use for subagents"),
 		{
-			UUID:          "built-in-opencode",
+			UUID:          RuleUUIDOpenCode,
 			Scenario:      typ.ScenarioOpenCode,
 			RequestModel:  "tingly-opencode",
 			ResponseModel: "",

@@ -7,7 +7,7 @@ stable constant:
 
 | Kind | Format | Example |
 |---|---|---|
-| Modern built-ins | `builtin:<scenario>:<model>` | `builtin:claude_code:haiku`, `builtin:claude_desktop:claude-haiku-4-5` |
+| Modern built-ins | `builtin:<scenario>:<tier>` | `builtin:claude_code:haiku`, `builtin:openai:default`, `builtin:claude_desktop:claude-haiku-4-5` |
 | Legacy built-ins | hyphenated string | `built-in-openai`, `built-in-codex`, `built-in-opencode` |
 | SmartGuide internal | `_internal_smart_guide_<botUUID>` | — |
 | User-created rules | random v4 UUID | — |
@@ -19,10 +19,8 @@ that is system-seeded must have a deterministic UUID; randomness is
 reserved for rules the user creates.
 
 **Direction:** `builtin:<scenario>:<model>` is the target convention.
-Claude Code (main scenario + profiles) and Claude Desktop are already on
-it; the remaining legacy built-ins (openai / anthropic / codex / opencode
-/ tingly) will be migrated when their scenarios are next touched. New
-system-seeded rules must use the modern form from day one.
+All system-seeded built-ins now use this form. New system-seeded rules
+must use the modern form from day one.
 
 ## Claude Code main scenario
 
