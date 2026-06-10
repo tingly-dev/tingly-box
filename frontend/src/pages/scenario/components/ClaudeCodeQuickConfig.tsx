@@ -1,5 +1,6 @@
 import {
     Box,
+    Collapse,
     Divider,
     IconButton,
     InputAdornment,
@@ -11,8 +12,10 @@ import {
 } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { RestartAlt as RestartAltIcon } from '@/components/icons';
+import { ExpandMore as ExpandMoreIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { has1M, with1M } from '@/components/rule-card/modelNameUtils';
 
 // ClaudeCodePrefs mirrors the Go struct in internal/agent/prefs.go.
 // Keys are the literal Claude Code env var names so the object can be
@@ -59,34 +62,35 @@ interface FieldStruct {
     group: Group;
     kind: Kind;
     unit?: string;
+    advanced?: boolean; // Mark advanced fields that should be collapsed by default
 }
 
 const FIELD_STRUCT: FieldStruct[] = [
-    // Models
-    { envName: 'ANTHROPIC_MODEL', group: 'model', kind: 'model' },
-    { envName: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', group: 'model', kind: 'model' },
-    { envName: 'ANTHROPIC_DEFAULT_SONNET_MODEL', group: 'model', kind: 'model' },
-    { envName: 'ANTHROPIC_DEFAULT_OPUS_MODEL', group: 'model', kind: 'model' },
-    { envName: 'CLAUDE_CODE_SUBAGENT_MODEL', group: 'model', kind: 'model' },
-    // Limits
-    { envName: 'API_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens' },
-    { envName: 'MAX_THINKING_TOKENS', group: 'limits', kind: 'int', unit: 'tokens' },
-    { envName: 'BASH_DEFAULT_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'BASH_MAX_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'MCP_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'MCP_TOOL_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms' },
-    { envName: 'MAX_MCP_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens' },
-    // Switches
-    { envName: 'DISABLE_TELEMETRY', group: 'switches', kind: 'bool' },
-    { envName: 'DISABLE_ERROR_REPORTING', group: 'switches', kind: 'bool' },
-    { envName: 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', group: 'switches', kind: 'bool' },
-    { envName: 'DISABLE_AUTOUPDATER', group: 'switches', kind: 'bool' },
-    { envName: 'USE_BUILTIN_RIPGREP', group: 'switches', kind: 'bool' },
-    // Network proxy
-    { envName: 'HTTP_PROXY', group: 'network', kind: 'text' },
-    { envName: 'HTTPS_PROXY', group: 'network', kind: 'text' },
-    { envName: 'NO_PROXY', group: 'network', kind: 'text' },
+    // Models (always visible - most commonly adjusted)
+    { envName: 'ANTHROPIC_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'ANTHROPIC_DEFAULT_HAIKU_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'ANTHROPIC_DEFAULT_SONNET_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'ANTHROPIC_DEFAULT_OPUS_MODEL', group: 'model', kind: 'model', advanced: false },
+    { envName: 'CLAUDE_CODE_SUBAGENT_MODEL', group: 'model', kind: 'model', advanced: false },
+    // Limits (advanced - rarely changed)
+    { envName: 'API_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
+    { envName: 'MAX_THINKING_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
+    { envName: 'BASH_DEFAULT_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'BASH_MAX_TIMEOUT_MS', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'MCP_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'MCP_TOOL_TIMEOUT', group: 'limits', kind: 'int', unit: 'ms', advanced: true },
+    { envName: 'MAX_MCP_OUTPUT_TOKENS', group: 'limits', kind: 'int', unit: 'tokens', advanced: true },
+    // Switches (advanced - usually don't need to change)
+    { envName: 'DISABLE_TELEMETRY', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'DISABLE_ERROR_REPORTING', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'DISABLE_AUTOUPDATER', group: 'switches', kind: 'bool', advanced: true },
+    { envName: 'USE_BUILTIN_RIPGREP', group: 'switches', kind: 'bool', advanced: true },
+    // Network proxy (advanced - rarely needed)
+    { envName: 'HTTP_PROXY', group: 'network', kind: 'text', advanced: true },
+    { envName: 'HTTPS_PROXY', group: 'network', kind: 'text', advanced: true },
+    { envName: 'NO_PROXY', group: 'network', kind: 'text', advanced: true },
 ];
 
 // ── Localized text bundles ─────────────────────────────────────────────
@@ -419,17 +423,6 @@ const useLang = (): Lang => {
     return i18n.language === 'zh' ? 'zh' : 'en';
 };
 
-// ── 1M-context suffix helpers ──────────────────────────────────────────
-// 1M is part of the model string itself; the suffix lives on the wire,
-// not as a separate prefs field. The UI just toggles the trailing [1m].
-
-const ONE_M_SUFFIX = '[1m]';
-const has1M = (v: string | undefined) => !!v && v.endsWith(ONE_M_SUFFIX);
-const with1M = (v: string | undefined, on: boolean): string => {
-    const base = (v || '').replace(/\[1m\]$/, '');
-    return on ? base + ONE_M_SUFFIX : base;
-};
-
 // ── Default prefs derivation ───────────────────────────────────────────
 // Build initial prefs from the active routing rules, mirroring how the
 // legacy modal picks models per slot. Anything not derivable falls back
@@ -447,15 +440,45 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
         return rule?.request_model || fallback;
     };
 
+    // Get the 1M context window flag from a specific rule. Rules here come
+    // straight from the API (snake_case flags); accept the camelCase shape
+    // too in case a converted rule object is passed in.
+    const getContext1MStateForRule = (rule: any): boolean => {
+        if (!rule || !rule.flags) return false;
+        return rule.flags?.context_1m || rule.flags?.context1m || false;
+    };
+
+    // Get the 1M state for a specific variant (only used in separate mode)
+    const getContext1MStateForVariant = (variant: string): boolean => {
+        if (mode === 'unified') {
+            // In unified mode, use the first rule's context1m state
+            return getContext1MStateForRule(rules[0]);
+        }
+        // In separate mode, check the specific rule for this variant
+        const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
+        return getContext1MStateForRule(rule);
+    };
+
+    const context1MEnabled = mode === 'unified'
+        ? getContext1MStateForRule(rules[0])
+        : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'builtin:claude_code:default'));
+
+
     const isUnified = mode !== 'separate';
     const defaultModel = isUnified ? 'tingly/cc' : 'tingly/cc-default';
 
+    // Apply 1M suffix to models if their corresponding rule has context1m enabled
+    const apply1MSuffix = (model: string, variant: string): string => {
+        const variantContext1M = getContext1MStateForVariant(variant);
+        return with1M(model, variantContext1M);
+    };
+
     return {
-        ANTHROPIC_MODEL: modelForVariant('default', defaultModel),
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: modelForVariant('haiku', isUnified ? defaultModel : 'tingly/cc-haiku'),
-        ANTHROPIC_DEFAULT_SONNET_MODEL: modelForVariant('sonnet', isUnified ? defaultModel : 'tingly/cc-sonnet'),
-        ANTHROPIC_DEFAULT_OPUS_MODEL: modelForVariant('opus', isUnified ? defaultModel : 'tingly/cc-opus'),
-        CLAUDE_CODE_SUBAGENT_MODEL: modelForVariant('subagent', isUnified ? defaultModel : 'tingly/cc-subagent'),
+        ANTHROPIC_MODEL: apply1MSuffix(modelForVariant('default', defaultModel), 'default'),
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: apply1MSuffix(modelForVariant('haiku', isUnified ? defaultModel : 'tingly/cc-haiku'), 'haiku'),
+        ANTHROPIC_DEFAULT_SONNET_MODEL: apply1MSuffix(modelForVariant('sonnet', isUnified ? defaultModel : 'tingly/cc-sonnet'), 'sonnet'),
+        ANTHROPIC_DEFAULT_OPUS_MODEL: apply1MSuffix(modelForVariant('opus', isUnified ? defaultModel : 'tingly/cc-opus'), 'opus'),
+        CLAUDE_CODE_SUBAGENT_MODEL: apply1MSuffix(modelForVariant('subagent', isUnified ? defaultModel : 'tingly/cc-subagent'), 'subagent'),
 
         API_TIMEOUT_MS: '3000000',
         CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000',
@@ -575,7 +598,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                         value={field.kind === 'model' ? value.replace(/\[1m\]$/, '') : value}
                         onChange={(e) => {
                             const next = e.target.value;
-                            setValue(field.kind === 'model' && has1M(value) ? next + ONE_M_SUFFIX : next);
+                            setValue(field.kind === 'model' ? with1M(next, has1M(value)) : next);
                         }}
                         placeholder={text.placeholder}
                         sx={{ width: field.kind === 'model' ? 280 : field.kind === 'text' ? 320 : 180 }}
@@ -594,7 +617,15 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, text, oneMTooltip, prefs, se
                             <Switch
                                 size="small"
                                 checked={has1M(value)}
-                                onChange={(_, c) => setValue(with1M(value, c))}
+                                disabled={true}
+                                sx={{
+                                    '& .Mui-checked': {
+                                        color: has1M(value) ? 'primary.main' : 'text.disabled',
+                                    },
+                                    '& .Mui-checked + .MuiSwitch-track': {
+                                        backgroundColor: has1M(value) ? 'primary.main' : 'text.disabled',
+                                    },
+                                }}
                             />
                         </Box>
                     </Tooltip>
@@ -614,29 +645,51 @@ interface SectionProps {
 }
 
 const Section: React.FC<SectionProps> = ({ group, lang, prefs, setPrefs }) => {
+    const [expanded, setExpanded] = React.useState(group === 'model'); // Only model group expanded by default
     const meta = SECTION_TEXT[lang][group];
     const fieldsText = FIELDS_TEXT[lang];
     const oneMTooltip = UI_TEXT[lang].oneMTooltip;
     const fields = FIELD_STRUCT.filter(f => f.group === group);
+    const hasAdvancedFields = fields.some(f => f.advanced);
+
+    const toggleExpanded = () => setExpanded(!expanded);
+
     return (
         <Box>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
-                <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{meta.title}</Typography>
+                    <Typography variant="caption" color="text.secondary">{meta.hint}</Typography>
+                </Box>
+                {hasAdvancedFields && (
+                    <IconButton
+                        size="small"
+                        onClick={toggleExpanded}
+                        sx={{
+                            transition: 'transform 0.2s',
+                            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            p: 0.5,
+                        }}
+                    >
+                        <ExpandMoreIcon fontSize="small" />
+                    </IconButton>
+                )}
             </Box>
-            <Divider />
-            <Stack divider={<Divider flexItem />}>
-                {fields.map(f => (
-                    <FieldRow
-                        key={f.envName}
-                        field={f}
-                        text={fieldsText[f.envName]}
-                        oneMTooltip={oneMTooltip}
-                        prefs={prefs}
-                        setPrefs={setPrefs}
-                    />
-                ))}
-            </Stack>
+            <Collapse in={expanded} timeout={300}>
+                <Divider />
+                <Stack divider={<Divider flexItem />}>
+                    {fields.map(f => (
+                        <FieldRow
+                            key={f.envName}
+                            field={f}
+                            text={fieldsText[f.envName]}
+                            oneMTooltip={oneMTooltip}
+                            prefs={prefs}
+                            setPrefs={setPrefs}
+                        />
+                    ))}
+                </Stack>
+            </Collapse>
         </Box>
     );
 };

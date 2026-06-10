@@ -8,6 +8,7 @@ import {
     Menu,
     MenuItem,
     ListItemText,
+    Switch,
 } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import React, { useState } from 'react';
@@ -81,6 +82,9 @@ export interface ModelRequestHeaderProps {
     extraActions?: React.ReactNode;
     isExpanded?: boolean;
     onToggleExpanded?: () => void;
+    // 1M context window props
+    context1M?: boolean;
+    onContext1MToggle?: () => void;
 }
 
 export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
@@ -95,6 +99,8 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
     extraActions,
     isExpanded = true,
     onToggleExpanded,
+    context1M = false,
+    onContext1MToggle,
 }) => {
     const [editMode, setEditMode] = useState(false);
     const [tempValue, setTempValue] = useState(modelName);
@@ -246,6 +252,42 @@ export const ModelRequestHeader: React.FC<ModelRequestHeaderProps> = ({
                         <EditIcon sx={{ fontSize: '0.95rem' }} />
                     </IconButton>
                 </Tooltip>
+
+                {/* 1M Context Toggle */}
+                {onContext1MToggle && (
+                    <Tooltip title={context1M ? "Disable 1M context window" : "Enable 1M context window"}>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                ml: 0.5,
+                                opacity: active ? 1 : 0.5,
+                                pointerEvents: active ? 'auto' : 'none',
+                            }}
+                        >
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 600,
+                                    color: context1M ? 'primary.main' : 'text.secondary',
+                                    userSelect: 'none'
+                                }}
+                            >
+                                1M
+                            </Typography>
+                            <Switch
+                                size="small"
+                                checked={context1M}
+                                onChange={(e) => {
+                                    e.stopPropagation();
+                                    onContext1MToggle();
+                                }}
+                            />
+                        </Box>
+                    </Tooltip>
+                )}
             </Box>
         );
     };

@@ -17,6 +17,7 @@ import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
 import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
+import { formatModelNameWithContext1M } from '@/components/rule-card/modelNameUtils';
 
 // Module-level cache so we only fetch the flag catalog once per session.
 // `undefined` = never fetched; `[]` = fetched but empty (don't re-fetch).
@@ -58,6 +59,7 @@ export interface RuleCardProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
+    onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -76,6 +78,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     onToggleExpanded,
+    onContext1MToggle,
 }) => {
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
@@ -291,9 +294,9 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             onToggleActive={() => updateField(configRecord, setConfigRecord, 'active', !configRecord.active)}
             onEditFlags={handleOpenFlagEditor}
             ruleUuid={rule.uuid}
-            ruleName={rule.request_model || rule.uuid}
+            ruleName={formatModelNameWithContext1M(rule.request_model || rule.uuid, configRecord.flags)}
             scenario={rule.scenario}
-            model={rule.request_model}
+            model={formatModelNameWithContext1M(rule.request_model, configRecord.flags)}
         />
     );
 
@@ -322,6 +325,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 onAddServiceToSmartRule={handleAddServiceToSmartRuleByUuid}
                 onDeleteServiceFromSmartRule={smartHandlers.handleDeleteServiceFromSmartRule}
                 onSwitchRoutingMode={handleRoutingModeSwitch}
+                onContext1MToggle={onContext1MToggle}
             />
 
             {/* Delete Confirmation Dialog */}

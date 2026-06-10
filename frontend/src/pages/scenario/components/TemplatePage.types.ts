@@ -57,6 +57,7 @@ export interface TemplatePageExternalProps {
     emptyStateTitle?: string;
     emptyStateDescription?: string;
     onAddApiKeyClick?: () => void;
+    onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
 }
 
 /**
