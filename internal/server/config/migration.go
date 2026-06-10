@@ -41,15 +41,15 @@ const (
 	RuleUUIDBuiltinCCDefault  = "built-in-cc-default"
 	RuleUUIDBuiltinCCSubagent = "built-in-cc-subagent"
 
-	// Modern built-in rules — "builtin:<scenario>:<request_model>" form.
+	// Modern built-in rules — "builtin:<scenario>:<tier>" form.
 	// These are the target UUIDs after migrate20260612 renames the legacy ones.
-	RuleUUIDOpenAI    = "builtin:openai:tingly-gpt"
-	RuleUIDAnthropic  = "builtin:anthropic:tingly-claude"
-	RuleUUIDCodex     = "builtin:codex:tingly-codex"
-	RuleUUIDOpenCode  = "builtin:opencode:tingly-opencode"
-	RuleUUIDAgent     = "builtin:agent:tingly-agent"
-	RuleUUIDAgentClaw = "builtin:agent:tingly-claw"
-	RuleUUIDTeam      = "builtin:team:tingly-team"
+	RuleUUIDOpenAI    = "builtin:openai:default"
+	RuleUIDAnthropic  = "builtin:anthropic:default"
+	RuleUUIDCodex     = "builtin:codex:default"
+	RuleUUIDOpenCode  = "builtin:opencode:default"
+	RuleUUIDAgent     = "builtin:agent:default"
+	RuleUUIDAgentClaw = "builtin:agent:claw"
+	RuleUUIDTeam      = "builtin:team:default"
 
 	// Claude Code built-in rules (modern "builtin:<scenario>:<tier>" form)
 	RuleUUIDCC         = "builtin:claude_code:cc"

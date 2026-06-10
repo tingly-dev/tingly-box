@@ -7,7 +7,7 @@ stable constant:
 
 | Kind | Format | Example |
 |---|---|---|
-| Modern built-ins | `builtin:<scenario>:<model>` | `builtin:claude_code:haiku`, `builtin:claude_desktop:claude-haiku-4-5` |
+| Modern built-ins | `builtin:<scenario>:<tier>` | `builtin:claude_code:haiku`, `builtin:openai:default`, `builtin:claude_desktop:claude-haiku-4-5` |
 | Legacy built-ins | hyphenated string | `built-in-openai`, `built-in-codex`, `built-in-opencode` |
 | SmartGuide internal | `_internal_smart_guide_<botUUID>` | — |
 | User-created rules | random v4 UUID | — |
