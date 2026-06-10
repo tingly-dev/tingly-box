@@ -183,6 +183,64 @@ func TestAnthropicToOpenAIStream_NonStandardDelta(t *testing.T) {
 	assert.Equal(t, 20, usage.OutputTokens)
 }
 
+// TestAnthropicToOpenAIStream_FinalChunkOmitsEmptyRole verifies that chunks whose
+// delta has no role (e.g. the final finish_reason chunk) omit the field entirely
+// instead of serializing "role":"". Strict clients such as the Vercel AI SDK
+// validate delta.role against the "assistant" enum and reject empty strings.
+func TestAnthropicToOpenAIStream_FinalChunkOmitsEmptyRole(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := &closeNotifyRecorder{ResponseRecorder: httptest.NewRecorder()}
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/messages", nil)
+
+	events := []string{
+		buildAnthropicMessageStartJSON(t, 35, 0),
+		`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}`,
+		`{"type":"content_block_stop","index":0}`,
+		buildAnthropicOutputOnlyDeltaJSON(t, 18),
+		buildMessageStopJSON(),
+	}
+	decoder := newFakeAnthropicDecoder(events)
+	stream := anthropicstream.NewStream[anthropic.BetaRawMessageStreamEventUnion](decoder, nil)
+
+	_, err := AnthropicToOpenAIStream(protocol.NewHandleContext(c, "claude-3-5-sonnet"), nil, stream, "claude-3-5-sonnet", false)
+	require.NoError(t, err)
+
+	sawFinishChunk := false
+	for _, line := range strings.Split(w.Body.String(), "\n") {
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := strings.TrimPrefix(line, "data: ")
+		if strings.TrimSpace(payload) == "[DONE]" {
+			continue
+		}
+		var chunk map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(payload), &chunk))
+		choices, ok := chunk["choices"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, choice := range choices {
+			choiceMap := choice.(map[string]interface{})
+			delta, ok := choiceMap["delta"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if role, present := delta["role"]; present {
+				assert.Equal(t, "assistant", role, "delta.role must never be empty: %s", payload)
+			}
+			if fr, _ := choiceMap["finish_reason"].(string); fr == "stop" {
+				sawFinishChunk = true
+				_, present := delta["role"]
+				assert.False(t, present, "final chunk delta must omit role: %s", payload)
+			}
+		}
+	}
+	assert.True(t, sawFinishChunk, "stream must emit a finish_reason chunk")
+}
+
 // TestSendOpenAIStreamChunk tests the helper function
 func TestSendOpenAIStreamChunk(t *testing.T) {
 	gin.SetMode(gin.TestMode)

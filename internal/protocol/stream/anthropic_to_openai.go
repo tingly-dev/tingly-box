@@ -132,6 +132,24 @@ func chunkToMap(chunk openai.ChatCompletionChunk) (map[string]interface{}, error
 	if err := json.Unmarshal(bytes, &chunkMap); err != nil {
 		return nil, err
 	}
+	// The SDK chunk struct marshals unset fields as zero values, so a delta
+	// without a role serializes as "role":"". Strict clients (e.g. Vercel AI
+	// SDK) validate role against the "assistant" enum and reject "", so drop
+	// the field entirely when it is empty — matching OpenAI's real final
+	// chunk, which sends "delta":{}.
+	if choices, ok := chunkMap["choices"].([]interface{}); ok {
+		for _, choice := range choices {
+			choiceMap, ok := choice.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if delta, ok := choiceMap["delta"].(map[string]interface{}); ok {
+				if role, ok := delta["role"].(string); ok && role == "" {
+					delete(delta, "role")
+				}
+			}
+		}
+	}
 	return chunkMap, nil
 }
 
