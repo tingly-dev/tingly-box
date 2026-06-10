@@ -9,6 +9,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
+	serverconfig "github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -46,9 +47,9 @@ func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, u
 	case AgentTypeClaudeCode:
 		builtinUUID, requestModel = "builtin:claude_code:cc", "tingly/cc"
 	case AgentTypeCodex:
-		builtinUUID, requestModel = "built-in-codex", "tingly-codex"
+		builtinUUID, requestModel = serverconfig.RuleUUIDCodex, "tingly-codex"
 	case AgentTypeOpenCode:
-		builtinUUID, requestModel = "built-in-opencode", "tingly-opencode"
+		builtinUUID, requestModel = serverconfig.RuleUUIDOpenCode, "tingly-opencode"
 	default:
 		return fmt.Errorf("unknown Agent type: %s", agentType)
 	}
