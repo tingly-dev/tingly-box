@@ -133,9 +133,17 @@ func (c *ClaudeClient) Guard(ctx context.Context, req *anthropic.MessageNewParam
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
 	// Only default to disabled when the client specified neither, otherwise we would
 	// silently turn off effort-based thinking the client explicitly requested.
+	// Special models like claude-fable-5 do not support thinking.type.disabled.
+	model := req.Model
 	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
-	if !thinkingSet && req.OutputConfig.Effort == "" {
-		req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+
+	isSpecialModel := strings.Contains(model, "claude-fable")
+	if isSpecialModel {
+		req.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}}
+	} else {
+		if !thinkingSet && req.OutputConfig.Effort == "" {
+			req.Thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+		}
 	}
 
 	// Remap tool names to Claude Code TitleCase equivalents to avoid Anthropic fingerprinting
@@ -168,10 +176,18 @@ func (c *ClaudeClient) GuardBeta(ctx context.Context, req *anthropic.BetaMessage
 	// output_config.effort (the effort-based adaptive thinking used by newer models).
 	// Only default to disabled when the client specified neither, otherwise we would
 	// silently turn off effort-based thinking the client explicitly requested.
+	// Special models like claude-fable-5 do not support thinking.type.disabled.
+	model := string(req.Model)
 	effortSet := req.OutputConfig.Effort != ""
 	thinkingSet := req.Thinking.OfEnabled != nil || req.Thinking.OfAdaptive != nil || req.Thinking.OfDisabled != nil
-	if !thinkingSet && !effortSet {
-		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+
+	isSpecialModel := strings.Contains(model, "claude-fable")
+	if isSpecialModel {
+		req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfAdaptive: &anthropic.BetaThinkingConfigAdaptiveParam{}}
+	} else {
+		if !thinkingSet && !effortSet {
+			req.Thinking = anthropic.BetaThinkingConfigParamUnion{OfDisabled: &anthropic.BetaThinkingConfigDisabledParam{}}
+		}
 	}
 
 	// clear_thinking_20251015 is only valid when thinking is enabled or adaptive;
