@@ -2,7 +2,7 @@
 //
 // Why this exists: the routing graph (RuleCard -> RoutingGraph / SmartRoutingGraph)
 // needs real rule + provider data. Mock mode (`dev:mock`) does NOT populate it:
-//   - unified mode fetches `built-in-cc`, which the MSW handlers don't return;
+//   - unified mode fetches `builtin:claude_code:cc`, which the MSW handlers don't return;
 //   - switching to separate mode needs a config-apply the mock can't do.
 // So we run the actual Go server, seed data via its API, and drive the real UI.
 //

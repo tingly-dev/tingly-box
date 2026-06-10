@@ -132,7 +132,7 @@ func runCC(appManager *AppManager, profile string, portOverride int, claudeArgs 
 			envUnified = sc.GetDefaultFlags().Unified
 		}
 	}
-	env := generateCCEnv(baseURL, apiKey, scenarioPath, envUnified, profileID != "")
+	env := generateCCEnv(globalConfig, baseURL, apiKey, scenarioPath, envUnified, profileID != "")
 
 	// Build settings file
 	var settingsPath string
@@ -347,8 +347,15 @@ func buildTempSettings(env map[string]string, scenarioPath string) (string, erro
 }
 
 // generateCCEnv builds the env vars map for Claude Code settings.
-// When isProfile is true, model names use short names (e.g. "default") instead of "tingly/cc-default".
-func generateCCEnv(baseURL, apiKey, scenarioPath string, unified bool, isProfile bool) map[string]string {
+//
+// The per-tier model names are resolved from the rules the request will
+// actually hit, looked up by their canonical UUIDs: profile rules under
+// "builtin:<scenario>:<tier>" (e.g. "builtin:claude_code:p1:haiku"), main
+// scenario rules under the legacy built-in constants. Reading the rule's
+// request_model (instead of assuming the seeded name) keeps the env aligned
+// when a user renames a rule's model; the seeded name is the fallback when
+// the rule is missing or inactive.
+func generateCCEnv(cfg *config.Config, baseURL, apiKey, scenarioPath string, unified bool, isProfile bool) map[string]string {
 	env := map[string]string{
 		"DISABLE_TELEMETRY":                        "1",
 		"DISABLE_ERROR_REPORTING":                  "1",
@@ -358,36 +365,43 @@ func generateCCEnv(baseURL, apiKey, scenarioPath string, unified bool, isProfile
 		"ANTHROPIC_AUTH_TOKEN":                     apiKey,
 	}
 
-	if unified {
-		if isProfile {
-			// Profile unified mode: use "cc" to match the profile rule
-			env["ANTHROPIC_MODEL"] = "cc"
-			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "cc"
-			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "cc"
-			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "cc"
-			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "cc"
-		} else {
-			// Non-profile unified mode: use full model name
-			env["ANTHROPIC_MODEL"] = "tingly/cc"
-			env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc"
-			env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc"
-			env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc"
-			env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc"
+	ruleModel := func(fallback string, uuids ...string) string {
+		if cfg != nil {
+			for _, uuid := range uuids {
+				if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
+					if m := strings.TrimSpace(r.RequestModel); m != "" {
+						return m
+					}
+				}
+			}
 		}
-	} else if isProfile {
-		// Profile separate mode: use short names (rules have stripped prefix)
-		env["ANTHROPIC_MODEL"] = "default"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "haiku"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "opus"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "sonnet"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "subagent"
+		return fallback
+	}
+	// tierModel resolves one tier slot: profile rules by canonical profiled
+	// UUID with the short tier name as fallback, main scenario rules by the
+	// modern built-in UUID (legacy UUID as a compatibility fallback for
+	// configs not yet renamed by migration) with the canonical tingly/* name
+	// as the final fallback.
+	tierModel := func(tier, legacyUUID, legacyFallback string) string {
+		if isProfile {
+			return ruleModel(tier, config.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), tier))
+		}
+		return ruleModel(legacyFallback, config.BuiltinRuleUUID(typ.ScenarioClaudeCode, tier), legacyUUID)
+	}
+
+	if unified {
+		model := tierModel("cc", config.RuleUUIDBuiltinCC, "tingly/cc")
+		env["ANTHROPIC_MODEL"] = model
+		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = model
+		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = model
+		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
 	} else {
-		// Non-profile separate mode: use full model names
-		env["ANTHROPIC_MODEL"] = "tingly/cc-default"
-		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "tingly/cc-haiku"
-		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "tingly/cc-opus"
-		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "tingly/cc-sonnet"
-		env["CLAUDE_CODE_SUBAGENT_MODEL"] = "tingly/cc-subagent"
+		env["ANTHROPIC_MODEL"] = tierModel("default", config.RuleUUIDBuiltinCCDefault, "tingly/cc-default")
+		env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = tierModel("haiku", config.RuleUUIDBuiltinCCHaiku, "tingly/cc-haiku")
+		env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = tierModel("opus", config.RuleUUIDBuiltinCCOpus, "tingly/cc-opus")
+		env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = tierModel("sonnet", config.RuleUUIDBuiltinCCSonnet, "tingly/cc-sonnet")
+		env["CLAUDE_CODE_SUBAGENT_MODEL"] = tierModel("subagent", config.RuleUUIDBuiltinCCSubagent, "tingly/cc-subagent")
 	}
 
 	return env

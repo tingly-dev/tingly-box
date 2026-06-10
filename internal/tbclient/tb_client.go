@@ -193,8 +193,14 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 		}
 	}
 
-	ruleModel := func(uuid, fallback string) string {
+	// Look up by the modern "builtin:claude_code:<tier>" UUID first, with the
+	// legacy "built-in-cc*" UUID as a compatibility fallback for configs not
+	// yet renamed by migration.
+	ruleModel := func(uuid, legacyUUID, fallback string) string {
 		if m, ok := byUUID[uuid]; ok {
+			return m
+		}
+		if m, ok := byUUID[legacyUUID]; ok {
 			return m
 		}
 		return fallback
@@ -204,15 +210,15 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 	// → a single unified model for every tier.
 	if sc := c.config.GetScenarioConfig(typ.ScenarioClaudeCode); sc != nil && sc.GetDefaultFlags().Separate {
 		return claudeCodeModels{
-			def:      ruleModel("built-in-cc-default", "tingly/cc-default"),
-			haiku:    ruleModel("built-in-cc-haiku", "tingly/cc-haiku"),
-			sonnet:   ruleModel("built-in-cc-sonnet", "tingly/cc-sonnet"),
-			opus:     ruleModel("built-in-cc-opus", "tingly/cc-opus"),
-			subagent: ruleModel("built-in-cc-subagent", "tingly/cc-subagent"),
+			def:      ruleModel("builtin:claude_code:default", "built-in-cc-default", "tingly/cc-default"),
+			haiku:    ruleModel("builtin:claude_code:haiku", "built-in-cc-haiku", "tingly/cc-haiku"),
+			sonnet:   ruleModel("builtin:claude_code:sonnet", "built-in-cc-sonnet", "tingly/cc-sonnet"),
+			opus:     ruleModel("builtin:claude_code:opus", "built-in-cc-opus", "tingly/cc-opus"),
+			subagent: ruleModel("builtin:claude_code:subagent", "built-in-cc-subagent", "tingly/cc-subagent"),
 		}
 	}
 
-	unified := ruleModel("built-in-cc", "tingly/cc")
+	unified := ruleModel("builtin:claude_code:cc", "built-in-cc", "tingly/cc")
 	return claudeCodeModels{
 		def:      unified,
 		haiku:    unified,

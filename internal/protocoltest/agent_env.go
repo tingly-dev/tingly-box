@@ -266,7 +266,7 @@ func (env *AgentTestEnv) SetupAgent(AgentType AgentType, providerName string, mo
 	var requestModel string
 	switch AgentType {
 	case AgentTypeClaudeCode:
-		builtinUUID = "built-in-cc"
+		builtinUUID = "builtin:claude_code:cc"
 		requestModel = "tingly/cc"
 	case AgentTypeCodex:
 		builtinUUID = "built-in-codex"
@@ -331,7 +331,7 @@ func (env *AgentTestEnv) SetupRealAgent(AgentType AgentType, providerName string
 	var requestModel string
 	switch AgentType {
 	case AgentTypeClaudeCode:
-		builtinUUID = "built-in-cc"
+		builtinUUID = "builtin:claude_code:cc"
 		requestModel = "tingly/cc"
 	case AgentTypeCodex:
 		builtinUUID = "built-in-codex"

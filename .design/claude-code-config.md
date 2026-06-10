@@ -174,16 +174,16 @@ not runtime discovery.
 ### 5.1 The well-known UUIDs
 
 `internal/server/config/init.go` seeds these rules on first boot.
-`migration.go` keeps them as exported constants (`RuleUUIDBuiltinCC*`):
+`migration.go` keeps them as exported constants (`RuleUUIDCC*`):
 
 | Rule UUID | Initial `request_model` | Maps to env slot |
 |---|---|---|
-| `built-in-cc` | `tingly/cc` | (unified mode — all 5 slots) |
-| `built-in-cc-default` | `tingly/cc-default` | `ANTHROPIC_MODEL` |
-| `built-in-cc-haiku` | `tingly/cc-haiku` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
-| `built-in-cc-sonnet` | `tingly/cc-sonnet` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
-| `built-in-cc-opus` | `tingly/cc-opus` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
-| `built-in-cc-subagent` | `tingly/cc-subagent` | `CLAUDE_CODE_SUBAGENT_MODEL` |
+| `builtin:claude_code:cc` | `tingly/cc` | (unified mode — all 5 slots) |
+| `builtin:claude_code:default` | `tingly/cc-default` | `ANTHROPIC_MODEL` |
+| `builtin:claude_code:haiku` | `tingly/cc-haiku` | `ANTHROPIC_DEFAULT_HAIKU_MODEL` |
+| `builtin:claude_code:sonnet` | `tingly/cc-sonnet` | `ANTHROPIC_DEFAULT_SONNET_MODEL` |
+| `builtin:claude_code:opus` | `tingly/cc-opus` | `ANTHROPIC_DEFAULT_OPUS_MODEL` |
+| `builtin:claude_code:subagent` | `tingly/cc-subagent` | `CLAUDE_CODE_SUBAGENT_MODEL` |
 
 Users can edit each rule's `request_model` from the rules table on the
 page. The Quick Config seeds its form values from whatever is currently
@@ -198,12 +198,12 @@ the actual route topology.
 ```ts
 if (configMode === 'unified') {
     // Just the one rule
-    const result = await api.getRule("built-in-cc");
+    const result = await api.getRule("builtin:claude_code:cc");
     setRules([result.data]);
 } else {
     // All Claude Code rules except the unified-only one
     const result = await api.getRules(SCENARIO);
-    setRules(result.data.filter(r => r.uuid !== 'built-in-cc'));
+    setRules(result.data.filter(r => r.uuid !== 'builtin:claude_code:cc'));
 }
 ```
 
@@ -219,16 +219,16 @@ keys:
 ```ts
 const modelForVariant = (variant, fallback) => {
     if (mode === 'unified') return rules[0]?.request_model || fallback;
-    const rule = rules.find(r => r.uuid === `built-in-cc-${variant}`);
+    const rule = rules.find(r => r.uuid === `builtin:claude_code:${variant}`);
     return rule?.request_model || fallback;
 };
 ```
 
-- **unified**: `rules[0]` is the single `built-in-cc` rule; its
+- **unified**: `rules[0]` is the single `builtin:claude_code:cc` rule; its
   `request_model` populates all 5 slots.
 - **separate**: each of the 5 variants (`default` / `haiku` / `sonnet` /
   `opus` / `subagent`) does a UUID-exact `find` against
-  `built-in-cc-<variant>`.
+  `builtin:claude_code:<variant>`.
 
 If a rule is missing (e.g. user deleted it manually), the slot falls back
 to the tb-canonical default string. Form remains usable.
@@ -240,7 +240,7 @@ sends in API requests**:
 
 ```
 backend rule:                          frontend env:
-  built-in-cc-haiku                      ANTHROPIC_DEFAULT_HAIKU_MODEL=tingly/cc-haiku
+  builtin:claude_code:haiku                     ANTHROPIC_DEFAULT_HAIKU_MODEL=tingly/cc-haiku
     request_model = "tingly/cc-haiku"  →
     services      = [haiku-3-5]
                                        Claude Code sends:
@@ -248,7 +248,7 @@ backend rule:                          frontend env:
 
                                        tb receives, looks up by
                                        (scenario, request_model) →
-                                       finds built-in-cc-haiku →
+                                       finds builtin:claude_code:haiku →
                                        routes to its services
 ```
 

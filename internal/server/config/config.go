@@ -1421,10 +1421,13 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 // newCCProfileRules builds fresh rules for a claude_code profile.
 // unified=true → one rule "cc"; unified=false → five rules (default/haiku/sonnet/opus/subagent).
 // Rules are empty (no services, no smart routing) for users to configure.
+// UUIDs follow the modern built-in convention "builtin:<scenario>:<model>"
+// (e.g. "builtin:claude_code:p1:haiku"), so profile rules stay addressable by
+// a deterministic identity just like the main scenario's built-ins.
 func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Rule {
 	newRule := func(requestModel, description string) typ.Rule {
 		return typ.Rule{
-			UUID:         uuid.New().String(),
+			UUID:         BuiltinRuleUUID(profiledScenario, requestModel),
 			Scenario:     profiledScenario,
 			RequestModel: requestModel,
 			Description:  description,
@@ -1580,9 +1583,23 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 
 	// Remove all rules belonging to this profile
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
+	var removedUUIDs []string
 	c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
-		return r.Scenario == profiledScenario
+		if r.Scenario == profiledScenario {
+			removedUUIDs = append(removedUUIDs, r.UUID)
+			return true
+		}
+		return false
 	})
+
+	// Purge persisted load-balancer state for the removed rules. Profile rule
+	// UUIDs are deterministic and profile IDs are recycled, so a future profile
+	// with the same ID must not inherit this profile's service pinning.
+	if c.ruleStateStore != nil {
+		if err := c.ruleStateStore.DeleteRules(removedUUIDs); err != nil {
+			logrus.WithError(err).Warn("failed to clear rule state for deleted profile rules")
+		}
+	}
 
 	// Remove scenario config for this profile (if it exists)
 	c.Scenarios = slices.DeleteFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool {

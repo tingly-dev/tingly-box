@@ -170,7 +170,8 @@ func TestResolveClaudeCodeModels_UnifiedDefault(t *testing.T) {
 }
 
 func TestResolveClaudeCodeModels_UnifiedFromRule(t *testing.T) {
-	// Unified mode reads the built-in-cc rule's request_model for every tier.
+	// Unified mode reads the cc rule's request_model for every tier. Uses the
+	// legacy UUID to exercise the pre-migration compatibility fallback.
 	cfg := &serverconfig.Config{
 		Rules: []typ.Rule{ccRule("built-in-cc", "tingly/cc")},
 	}
@@ -204,11 +205,11 @@ func TestResolveClaudeCodeModels_Separate(t *testing.T) {
 	cfg := &serverconfig.Config{
 		Scenarios: []typ.ScenarioConfig{ccSeparateFlag()},
 		Rules: []typ.Rule{
-			ccRule("built-in-cc-default", "tingly/cc-default"),
-			ccRule("built-in-cc-haiku", "vendor/fast"),
-			ccRule("built-in-cc-sonnet", "tingly/cc-sonnet"),
-			ccRule("built-in-cc-opus", "vendor/smart"),
-			ccRule("built-in-cc-subagent", "tingly/cc-subagent"),
+			ccRule("builtin:claude_code:default", "tingly/cc-default"),
+			ccRule("builtin:claude_code:haiku", "vendor/fast"),
+			ccRule("builtin:claude_code:sonnet", "tingly/cc-sonnet"),
+			ccRule("builtin:claude_code:opus", "vendor/smart"),
+			ccRule("builtin:claude_code:subagent", "tingly/cc-subagent"),
 		},
 	}
 	client := NewTBClient(cfg, nil)
@@ -240,6 +241,22 @@ func TestResolveClaudeCodeModels_SeparateMissingTierFallsBack(t *testing.T) {
 	assert.Equal(t, "tingly/cc-sonnet", models.sonnet)
 	assert.Equal(t, "tingly/cc-opus", models.opus)
 	assert.Equal(t, "tingly/cc-subagent", models.subagent)
+}
+
+func TestResolveClaudeCodeModels_ModernUUIDWinsOverLegacy(t *testing.T) {
+	// If both the modern and the legacy rule somehow coexist, the modern one
+	// is authoritative.
+	cfg := &serverconfig.Config{
+		Rules: []typ.Rule{
+			ccRule("builtin:claude_code:cc", "modern/model"),
+			ccRule("built-in-cc", "legacy/model"),
+		},
+	}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "modern/model", models.def)
 }
 
 func TestResolveClaudeCodeModels_InactiveRuleIgnored(t *testing.T) {

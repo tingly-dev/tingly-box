@@ -209,6 +209,17 @@ func (us *UsageStore) RecordUsage(record *UsageRecord) error {
 	return us.db.Create(record).Error
 }
 
+// RenameRuleUUID re-attributes historical usage records from oldUUID to
+// newUUID so per-rule usage stats survive a rule UUID normalization.
+func (us *UsageStore) RenameRuleUUID(oldUUID, newUUID string) error {
+	us.mu.Lock()
+	defer us.mu.Unlock()
+
+	return us.db.Model(&UsageRecord{}).
+		Where("rule_uuid = ?", oldUUID).
+		Update("rule_uuid", newUUID).Error
+}
+
 // GetAggregatedStats returns aggregated usage statistics based on query parameters
 type UsageStatsQuery struct {
 	GroupBy   string // model, provider, scenario, rule, user, daily, hourly

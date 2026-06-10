@@ -443,7 +443,7 @@ interface DerivePrefsInput {
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
     const modelForVariant = (variant: string, fallback: string): string => {
         if (mode === 'unified') return rules[0]?.request_model || fallback;
-        const rule = rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
+        const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
         return rule?.request_model || fallback;
     };
 
