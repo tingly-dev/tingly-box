@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, AlertTitle, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, MenuItem, Radio, RadioGroup, Select, Tab, Tabs, Typography } from '@mui/material';
 import React from 'react';
 import CodeBlock from '@/components/CodeBlock';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs } from './CodexQuickConfig';
@@ -10,6 +10,7 @@ interface CodexConfigModalProps {
     open: boolean;
     onClose: () => void;
     copyToClipboard: (text: string, label: string) => Promise<void>;
+    pendingContext1MChange?: boolean | null;
 }
 
 type MainTab = 'quick' | 'manual';
@@ -49,6 +50,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     open,
     onClose,
     copyToClipboard,
+    pendingContext1MChange,
 }) => {
     // Keep token in context as a fallback for the auth.json preview while
     // the preview API request is in flight.
@@ -278,6 +280,32 @@ EOF`;
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
+                {/* 1M Context Change Warning */}
+                {pendingContext1MChange !== null && (
+                    <Alert
+                        severity={pendingContext1MChange ? "success" : "warning"}
+                        sx={{
+                            mb: 2,
+                            borderRadius: 2,
+                            '& .MuiAlert-icon': {
+                                fontSize: 28,
+                            }
+                        }}
+                    >
+                        <AlertTitle>
+                            {pendingContext1MChange ? '1M Context Window Enabled' : '1M Context Window Disabled'}
+                        </AlertTitle>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                            {pendingContext1MChange
+                                ? 'Model names have been updated with [1m] suffix for extended context support.'
+                                : 'Model names have been updated to remove [1m] suffix.'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            Please apply the configuration below and restart Codex for changes to take effect.
+                        </Typography>
+                    </Alert>
+                )}
+
                 <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
                         Auth source
