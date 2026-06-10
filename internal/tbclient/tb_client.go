@@ -189,6 +189,12 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 			continue
 		}
 		if m := strings.TrimSpace(rule.RequestModel); m != "" {
+			// A rule with the 1M context flag advertises itself to Claude Code
+			// via the [1m] model-name suffix (the client strips it back off and
+			// sends the context-1m beta header instead).
+			if rule.Flags.Context1M && !strings.HasSuffix(m, "[1m]") {
+				m += "[1m]"
+			}
 			byUUID[rule.UUID] = m
 		}
 	}

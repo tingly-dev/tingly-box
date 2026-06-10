@@ -212,6 +212,9 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc"},
 			// Main-scenario user rule with a random UUID → untouched.
 			{UUID: "5f1c2a9e-0000-0000-0000-000000000005", Scenario: typ.ScenarioClaudeCode, RequestModel: "haiku"},
+			// Tier rule renamed for 1M context → tier identified after
+			// stripping the [1m] suffix; request model kept as-is.
+			{UUID: "5f1c2a9e-0000-0000-0000-000000000006", Scenario: p2, RequestModel: "haiku[1m]"},
 		},
 	}
 
@@ -226,6 +229,7 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 		5: RuleUUIDCCHaiku,
 		6: RuleUUIDCC,
 		7: "5f1c2a9e-0000-0000-0000-000000000005",
+		8: "builtin:claude_code:p2:haiku",
 	}
 	for i, want := range wants {
 		if got := c.Rules[i].UUID; got != want {

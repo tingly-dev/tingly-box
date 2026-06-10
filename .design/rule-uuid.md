@@ -130,6 +130,15 @@ the seeded short names and silently broke if a user renamed a profile
 rule's `request_model`. Request routing itself matches by
 scenario + request_model and needs no UUID.
 
+1M context interacts with this path: a rule with the `context_1m` flag is
+advertised to Claude Code with a `[1m]` model-name suffix (the client
+strips it back off and sends the `context-1m` beta header). Both
+`generateCCEnv` and `tbclient.resolveClaudeCodeModels` append the suffix
+when the canonical rule carries the flag, so toggling 1M on a profile
+rule takes effect on the next `cc --profile` launch without any modal.
+The 1M auto-detection (`context_1m_integration.go`) matches on the base
+scenario, so profiled scenarios are covered.
+
 ### Profile deletion
 
 Because profile IDs are recycled, `DeleteProfile` purges the deleted

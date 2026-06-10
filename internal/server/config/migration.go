@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -732,11 +733,14 @@ func migrate20260611(c *Config) {
 				continue
 			}
 		} else {
-			// Profile: identify the tier by request model.
-			if !ccProfileTiers[rule.RequestModel] {
+			// Profile: identify the tier by request model. Strip the [1m]
+			// context-window suffix first so a tier rule renamed for 1M
+			// support (e.g. "haiku[1m]") still normalizes to its tier UUID.
+			tier := strings.TrimSuffix(rule.RequestModel, "[1m]")
+			if !ccProfileTiers[tier] {
 				continue
 			}
-			canonical = BuiltinRuleUUID(rule.Scenario, rule.RequestModel)
+			canonical = BuiltinRuleUUID(rule.Scenario, tier)
 		}
 		if rule.UUID == canonical {
 			continue

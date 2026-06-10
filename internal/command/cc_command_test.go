@@ -34,6 +34,31 @@ func TestGenerateCCEnv_ProfileSeparate_ResolvesModelsFromCanonicalRules(t *testi
 	}
 }
 
+func TestGenerateCCEnv_Profile_Context1MSuffix(t *testing.T) {
+	cfg := &config.Config{Rules: []typ.Rule{
+		// Flag set → env model advertises [1m] to Claude Code.
+		{UUID: "builtin:claude_code:p1:haiku", Scenario: "claude_code:p1", RequestModel: "haiku",
+			Flags: typ.RuleFlags{Context1M: true}, Active: true},
+		// Already suffixed (e.g. user renamed it) → no double suffix.
+		{UUID: "builtin:claude_code:p1:opus", Scenario: "claude_code:p1", RequestModel: "opus[1m]",
+			Flags: typ.RuleFlags{Context1M: true}, Active: true},
+		// Flag off → untouched.
+		{UUID: "builtin:claude_code:p1:sonnet", Scenario: "claude_code:p1", RequestModel: "sonnet", Active: true},
+	}}
+
+	env := generateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code:p1", false, true)
+
+	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "haiku[1m]" {
+		t.Errorf("haiku model = %q, want %q", got, "haiku[1m]")
+	}
+	if got := env["ANTHROPIC_DEFAULT_OPUS_MODEL"]; got != "opus[1m]" {
+		t.Errorf("opus model = %q, want %q (no double suffix)", got, "opus[1m]")
+	}
+	if got := env["ANTHROPIC_DEFAULT_SONNET_MODEL"]; got != "sonnet" {
+		t.Errorf("sonnet model = %q, want %q", got, "sonnet")
+	}
+}
+
 func TestGenerateCCEnv_ProfileUnified_ResolvesCCRule(t *testing.T) {
 	cfg := &config.Config{Rules: []typ.Rule{
 		{UUID: "builtin:claude_code:p2:cc", Scenario: "claude_code:p2", RequestModel: "renamed-cc", Active: true},
