@@ -14,6 +14,7 @@ import (
 
 	tomlpkg "github.com/pelletier/go-toml/v2"
 	"github.com/tingly-dev/tingly-box/internal"
+	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
 // defaultBackupRetention is the default number of backup files to keep per
@@ -965,6 +966,20 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 // and writes ~/.codex/tingly-model-catalog.json with one entry per supplied
 // model so Codex's `/model` picker can see them.
 //
+// This is the backward-compatible version that uses default context windows.
+// For context window support, use ApplyCodexConfigWithContextWindows.
+func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool) (*ApplyResult, error) {
+	return ApplyCodexConfigWithContextWindows(baseURL, models, prefs, writeCatalog, nil)
+}
+
+// ApplyCodexConfigWithContextWindows merges tingly-box Codex settings into ~/.codex/config.toml
+// and writes ~/.codex/tingly-model-catalog.json with one entry per supplied
+// model so Codex's `/model` picker can see them.
+//
+// The contextWindows parameter overrides the catalog's default context window
+// for specific models (e.g., 1M for models with the context_1m flag); nil uses
+// defaults.
+//
 // MERGE semantics: only fields tingly-box manages are overwritten. Everything
 // else the user put in config.toml — other top-level keys, other entries under
 // `[model_providers.*]`, and unrelated `[profiles.*]` blocks — is left alone.
@@ -993,7 +1008,7 @@ func (p *CodexPrefs) toConfig() map[string]interface{} {
 //
 // The previous config.toml and catalog (if any) are backed up before being
 // rewritten.
-func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool) (*ApplyResult, error) {
+func ApplyCodexConfigWithContextWindows(baseURL string, models []string, prefs *CodexPrefs, writeCatalog bool, contextWindows map[string]int) (*ApplyResult, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -1056,7 +1071,7 @@ func ApplyCodexConfig(baseURL string, models []string, prefs *CodexPrefs, writeC
 				return result, nil
 			}
 		}
-		catalogBytes, err := RenderCodexModelCatalog(models)
+		catalogBytes, err := RenderCodexModelCatalog(models, contextWindows)
 		if err != nil {
 			result.Message = fmt.Sprintf("Failed to render model catalog: %v", err)
 			return result, nil
@@ -1161,6 +1176,9 @@ const (
 	codexDefaultMaxContextWindow         = 200000
 	codexEffectiveContextWindowPercent   = 92
 	codexDefaultAutoCompactTokenLimitPct = 85
+
+	// 1M context window for models that support it (Sonnet 4.6+, Opus 4.6+)
+	codex1MContextWindow = 1000000
 )
 
 // renderCodexModelCatalog produces the JSON payload for
@@ -1170,7 +1188,10 @@ const (
 // no verbosity knob). Codex 0.124+ deserializes this into
 // `protocol::openai_models::ModelsResponse`; field names and value types must
 // stay in sync with that struct.
-func RenderCodexModelCatalog(models []string) ([]byte, error) {
+//
+// The contextWindows parameter allows overriding the default context window
+// for specific models (e.g., 1M context window models). If nil, uses default.
+func RenderCodexModelCatalog(models []string, contextWindows map[string]int) ([]byte, error) {
 	// supported_reasoning_levels is Vec<ReasoningEffortPreset>, not a bare
 	// string list — each element is an {effort, description} object. Values
 	// mirror Codex's bundled catalog for GPT-5 so /model shows the familiar
@@ -1183,6 +1204,14 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 	}
 	entries := make([]map[string]interface{}, 0, len(models))
 	for _, model := range models {
+		// Per-model override (e.g. 1M context); indexing a nil map is safe.
+		contextWindow := codexDefaultContextWindow
+		maxContextWindow := codexDefaultMaxContextWindow
+		if cw, ok := contextWindows[model]; ok {
+			contextWindow = cw
+			maxContextWindow = cw
+		}
+
 		entries = append(entries, map[string]interface{}{
 			"slug":                             model,
 			"display_name":                     model,
@@ -1199,9 +1228,9 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 			"support_verbosity":                false,
 			"truncation_policy":                map[string]interface{}{"mode": "tokens", "limit": 10000},
 			"supports_parallel_tool_calls":     true,
-			"context_window":                   codexDefaultContextWindow,
-			"max_context_window":               codexDefaultMaxContextWindow,
-			"auto_compact_token_limit":         codexAutoCompactTokenLimit(codexDefaultContextWindow),
+			"context_window":                   contextWindow,
+			"max_context_window":               maxContextWindow,
+			"auto_compact_token_limit":         codexAutoCompactTokenLimit(contextWindow),
 			"effective_context_window_percent": codexEffectiveContextWindowPercent,
 			"experimental_supported_tools":     []string{},
 			"input_modalities":                 []string{"text", "image"},
@@ -1217,6 +1246,23 @@ func RenderCodexModelCatalog(models []string) ([]byte, error) {
 
 func codexAutoCompactTokenLimit(contextWindow int) int {
 	return contextWindow * codexDefaultAutoCompactTokenLimitPct / 100
+}
+
+// BuildContextWindowsFromRules maps each active Codex rule carrying the
+// context_1m flag to the 1M context window. Keys are the rules' request
+// models verbatim — exactly the names collectCodexRuleModels feeds into the
+// catalog — so the override always lands on its catalog entry.
+func BuildContextWindowsFromRules(cfg *Config) map[string]int {
+	contextWindows := make(map[string]int)
+	for _, rule := range cfg.GetRequestConfigs() {
+		if rule.GetScenario() != typ.ScenarioCodex || !rule.Active || !rule.Flags.Context1M {
+			continue
+		}
+		if model := strings.TrimSpace(rule.RequestModel); model != "" {
+			contextWindows[model] = codex1MContextWindow
+		}
+	}
+	return contextWindows
 }
 
 var codexProfileKeyInvalid = regexp.MustCompile(`[^A-Za-z0-9_-]`)
