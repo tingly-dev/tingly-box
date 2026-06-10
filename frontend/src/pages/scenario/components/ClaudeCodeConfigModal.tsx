@@ -1,5 +1,6 @@
-import { Alert, AlertTitle, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Link, Tab, Tabs, Typography } from '@mui/material';
+import { Alert, AlertTitle, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, Link, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material';
 import { Close as CloseIcon } from '@/components/icons';
+import { InfoOutlined as InfoOutlinedIcon } from '@/components/icons';
 import { VisibilityOutlined as VisibilityOutlinedIcon } from '@/components/icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -112,6 +113,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     const [statusLineTab, setStatusLineTab] = React.useState<ScriptTab>('json');
     const [previewOpen, setPreviewOpen] = React.useState(false);
     const [applyResult, setApplyResult] = React.useState<AgentApplyResult | null>(null);
+    const [installStatusLine, setInstallStatusLine] = React.useState(true);
 
     // Prefs is the single source of truth for both tabs. Re-seed when the
     // modal isn't open so we never clobber the user's unsaved edits.
@@ -568,6 +570,27 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             </Box>
                         </Box>
                     )}
+
+                    {/* Status line checkbox — visible on both tabs */}
+                    <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={installStatusLine}
+                                    onChange={(e) => setInstallStatusLine(e.target.checked)}
+                                    size="small"
+                                />
+                            }
+                            label={
+                                <Stack direction="row" spacing={0.5} alignItems="center">
+                                    <Typography variant="body2">Install Tingly-Box Claude Code status line</Typography>
+                                    <Tooltip title="Adds a status line script to ~/.claude/settings.json that shows the current Tingly Box connection status in the Claude Code prompt." arrow placement="top">
+                                        <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled', cursor: 'help' }} />
+                                    </Tooltip>
+                                </Stack>
+                            }
+                        />
+                    </Box>
                 </DialogContent>
 
                 <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1, justifyContent: 'space-between' }}>
@@ -581,27 +604,17 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     </Button>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button onClick={onClose} color="inherit">
-                            {t('common.cancel')}
+                            Close
                         </Button>
                         {canApply && (
-                            <>
-                                <Button
-                                    onClick={() => handleApply(false)}
-                                    variant="outlined"
-                                    disabled={isApplyLoading}
-                                    startIcon={isApplyLoading ? <CircularProgress size={14} /> : null}
-                                >
-                                    {t('claudeCode.quickApply')}
-                                </Button>
-                                <Button
-                                    onClick={() => handleApply(true)}
-                                    variant="contained"
-                                    disabled={isApplyLoading}
-                                    startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : null}
-                                >
-                                    {t('claudeCode.quickApplyWithStatusLine')}
-                                </Button>
-                            </>
+                            <Button
+                                onClick={() => handleApply(installStatusLine)}
+                                variant="contained"
+                                disabled={isApplyLoading}
+                                startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : null}
+                            >
+                                {t('claudeCode.quickApply')}
+                            </Button>
                         )}
                     </Box>
                 </DialogActions>
@@ -630,7 +643,7 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setPreviewOpen(false)}>{t('common.cancel')}</Button>
+                    <Button onClick={() => setPreviewOpen(false)}>Close</Button>
                 </DialogActions>
             </Dialog>
         </>

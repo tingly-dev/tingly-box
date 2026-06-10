@@ -201,16 +201,6 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
         setInstallDone(true);
     };
 
-    const handleApply = async () => {
-        if (!onApply) return;
-        const result = await onApply();
-        setApplyResult(result);
-        if (result.success) {
-            localStorage.setItem(APPLY_DONE_KEY(agentKey), 'true');
-            setApplyDone(true);
-        }
-    };
-
     const handleApplyWithStatusLine = async () => {
         if (!onApplyWithStatusLine) return;
         const result = await onApplyWithStatusLine();
@@ -465,13 +455,8 @@ const AgentSetupCard: React.FC<AgentSetupCardProps> = ({
                                 </Typography>
                                 <Stack direction="row" spacing={1} flexWrap="wrap" gap={0.5}>
                                     {onApply && (
-                                        <Button variant="contained" size="small" disabled={isApplyLoading} onClick={handleApply} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
+                                        <Button variant="contained" size="small" disabled={isApplyLoading} onClick={handleApplyWithStatusLine} startIcon={isApplyLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
                                             {applyButtonLabel}
-                                        </Button>
-                                    )}
-                                    {onApplyWithStatusLine && (
-                                        <Button variant="outlined" size="small" disabled={isApplyLoading} onClick={handleApplyWithStatusLine}>
-                                            Auto Config + Status Line
                                         </Button>
                                     )}
                                     {onViewConfig && (

@@ -656,7 +656,7 @@ EOF`;
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button onClick={() => setSessionAction(null)} color="inherit" disabled={isSubmitting}>
-                        Cancel
+                        Close
                     </Button>
                     <Button
                         onClick={handleSessionAction}
