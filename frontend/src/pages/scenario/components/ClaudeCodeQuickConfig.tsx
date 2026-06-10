@@ -444,13 +444,6 @@ interface DerivePrefsInput {
 }
 
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
-    // Debug: log the rules data to understand the structure
-    console.log('derivePrefsFromRules - rules:', rules);
-    console.log('derivePrefsFromRules - mode:', mode);
-    if (rules.length > 0) {
-        console.log('First rule structure:', JSON.stringify(rules[0], null, 2));
-    }
-
     const modelForVariant = (variant: string, fallback: string): string => {
         if (mode === 'unified') return rules[0]?.request_model || fallback;
         const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
@@ -480,7 +473,6 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
         ? getContext1MStateForRule(rules[0])
         : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'builtin:claude_code:default'));
 
-    console.log('Mode:', mode, 'Overall context1M enabled:', context1MEnabled);
 
     const isUnified = mode !== 'separate';
     const defaultModel = isUnified ? 'tingly/cc' : 'tingly/cc-default';
@@ -488,7 +480,6 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     // Apply 1M suffix to models if their corresponding rule has context1m enabled
     const apply1MSuffix = (model: string, variant: string): string => {
         const variantContext1M = getContext1MStateForVariant(variant);
-        console.log(`Variant ${variant}: context1m=${variantContext1M}, model=${model}`);
         return with1M(model, variantContext1M);
     };
 

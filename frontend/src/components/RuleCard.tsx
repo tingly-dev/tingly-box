@@ -59,7 +59,7 @@ export interface RuleCardProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
-    onContext1MToggle?: (newState: boolean) => void;
+    onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({

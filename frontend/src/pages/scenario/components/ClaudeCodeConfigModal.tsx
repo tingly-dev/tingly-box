@@ -25,8 +25,8 @@ interface ClaudeCodeConfigModalProps {
     // which files were touched and where the backup landed.
     onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean) => Promise<AgentApplyResult>;
     isApplyLoading?: boolean;
-    // Pending 1M context change to show warning in the modal
-    pendingContext1MChange?: boolean | null;
+    // Pending 1M context change (scoped to the toggled rule) to preview in the modal
+    pendingContext1MChange?: { enabled: boolean; ruleUuid?: string } | null;
 }
 
 type MainTab = 'quick' | 'manual';
@@ -124,17 +124,23 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         }
     }, [open, configMode, rules]);
 
-    // When 1M context changes, regenerate prefs to reflect the new state
+    // When 1M context changes, regenerate prefs to reflect the new state.
+    // The pending change is scoped to the toggled rule — other tiers keep
+    // their own context_1m state (in separate mode each tier is independent).
     React.useEffect(() => {
-        if (open && pendingContext1MChange !== null) {
-            // Create temporary rules with the pending 1M state for accurate display
-            const tempRules = rules.map(rule => ({
-                ...rule,
-                flags: {
-                    ...rule.flags,
-                    context1m: pendingContext1MChange, // Use modern camelCase naming
+        if (open && pendingContext1MChange != null) {
+            const tempRules = rules.map(rule => {
+                if (pendingContext1MChange.ruleUuid && rule.uuid !== pendingContext1MChange.ruleUuid) {
+                    return rule;
                 }
-            }));
+                return {
+                    ...rule,
+                    flags: {
+                        ...rule.flags,
+                        context1m: pendingContext1MChange.enabled,
+                    },
+                };
+            });
             setPrefs(derivePrefsFromRules({ rules: tempRules, mode: configMode }));
         }
     }, [pendingContext1MChange, rules, configMode, open]);
@@ -302,9 +308,9 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
 
                 <DialogContent sx={{ p: 3 }}>
                     {/* 1M Context Change Warning */}
-                    {pendingContext1MChange !== null && (
+                    {pendingContext1MChange != null && (
                         <Alert
-                            severity={pendingContext1MChange ? "success" : "warning"}
+                            severity={pendingContext1MChange.enabled ? "success" : "warning"}
                             sx={{
                                 mb: 2,
                                 borderRadius: 2,
@@ -314,10 +320,10 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                             }}
                         >
                             <AlertTitle>
-                                {pendingContext1MChange ? '1M Context Window Enabled' : '1M Context Window Disabled'}
+                                {pendingContext1MChange.enabled ? '1M Context Window Enabled' : '1M Context Window Disabled'}
                             </AlertTitle>
                             <Typography variant="body2" sx={{ mb: 1 }}>
-                                {pendingContext1MChange
+                                {pendingContext1MChange.enabled
                                     ? 'Model names have been updated with [1m] suffix for extended context support.'
                                     : 'Model names have been updated to remove [1m] suffix.'}
                             </Typography>

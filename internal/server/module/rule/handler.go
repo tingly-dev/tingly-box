@@ -212,6 +212,14 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		return
 	}
 
+	// Echo what was actually persisted: UpdateRule may normalize the rule
+	// (e.g. Claude Desktop request models get the [1m] suffix synced with
+	// the context_1m flag), and the client refreshes its local state from
+	// this response.
+	if saved := h.config.GetRuleByUUID(uid); saved != nil {
+		rule = *saved
+	}
+
 	// Log the action
 	logrus.WithFields(logrus.Fields{
 		"action": "update_rule",

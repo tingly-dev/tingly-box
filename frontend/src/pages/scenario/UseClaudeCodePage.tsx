@@ -58,11 +58,12 @@ const UseClaudeCodePageContent: React.FC = () => {
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [connectProviderOpen, setConnectProviderOpen] = useState(false);
-    const [pendingContext1MChange, setPendingContext1MChange] = useState<boolean | null>(null);
+    const [pendingContext1MChange, setPendingContext1MChange] = useState<{ enabled: boolean; ruleUuid?: string } | null>(null);
 
-    const handleContext1MToggle = (newState: boolean) => {
-        // Store the pending change and directly open config panel
-        setPendingContext1MChange(newState);
+    const handleContext1MToggle = (newState: boolean, ruleUuid?: string) => {
+        // Store the pending change (scoped to the toggled rule) and open the
+        // config panel so the user can apply the matching env update.
+        setPendingContext1MChange({ enabled: newState, ruleUuid });
         setConfigModalOpen(true);
     };
 

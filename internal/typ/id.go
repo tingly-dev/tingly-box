@@ -161,3 +161,21 @@ func GetCustomUserAgent(ctx context.Context) string {
 	}
 	return ""
 }
+
+// Context1MKey carries the rule-level 1M-context hint down to the outbound
+// Anthropic transport, which appends the context-1m beta flag at request time.
+const Context1MKey contextKey = "context_1m"
+
+// WithContext1M marks the request as wanting Anthropic's 1M context window.
+func WithContext1M(ctx context.Context) context.Context {
+	return context.WithValue(ctx, Context1MKey, true)
+}
+
+// GetContext1M reports whether the request carries the 1M-context hint.
+func GetContext1M(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(Context1MKey).(bool)
+	return v
+}

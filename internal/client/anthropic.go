@@ -69,8 +69,11 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 	var transport http.RoundTripper
 	if provider.AuthType == typ.AuthTypeOAuth {
 		if provider.OAuthDetail != nil && provider.OAuthDetail.Issuer == ai.IssuerClaudeCode {
+			// context1m sits inside claudeRoundTripper so the 1M beta flag is
+			// appended after the fingerprint-managed header merge (context-1m
+			// is on the fingerprint-safe allowlist, so this is equivalent).
 			transport = &claudeRoundTripper{
-				RoundTripper: createSessionBoundTransport(provider, sessionID),
+				RoundTripper: &context1mBetaTransport{base: createSessionBoundTransport(provider, sessionID)},
 			}
 			logrus.Infof("Using session-bound transport for OAuth issuer: %s, session: %s",
 				provider.OAuthDetail.GetIssuer(), sessionID.Value)
@@ -78,7 +81,7 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 			// OAuth provider with an issuer other than ClaudeCode (or missing OAuthDetail).
 			// Use a session-bound transport so proxy_url is respected and env proxy is
 			// not inherited — same guarantee as the non-OAuth path below.
-			transport = createSessionBoundTransport(provider, sessionID)
+			transport = &context1mBetaTransport{base: createSessionBoundTransport(provider, sessionID)}
 		}
 	} else {
 		// Generic non-OAuth Anthropic provider. Apply the same User-Agent
@@ -91,7 +94,8 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 		// proxy variables (HTTP_PROXY / HTTPS_PROXY) are not inherited when no
 		// proxy is explicitly configured for the provider.
 		base := GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
-		transport = &customUserAgentTransport{base: base}
+		transport = &context1mBetaTransport{base: base}
+		transport = &customUserAgentTransport{base: transport}
 		transport = wrapWithUserAgent(transport, provider)
 		transport = wrapWithLogging(transport, provider)
 	}

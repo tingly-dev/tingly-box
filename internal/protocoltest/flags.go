@@ -480,6 +480,61 @@ func ruleFlagCases() []flagCase {
 			}
 		}},
 
+		// ── context_1m ───────────────────────────────────────────────────────
+		// Asserted on the real claude_code path: (1) a [1m]-suffixed incoming
+		// model still routes to its bare-named rule (suffix-normalized
+		// matching), and (2) the rule flag alone — the client sends no beta
+		// header here — gets the context-1m beta flag injected into the
+		// upstream request (context1mBetaTransport via the context hint).
+		{key: "context_1m", run: func(t flagTB, env *TestEnv) {
+			s := flagScenario()
+			env.virtual.RegisterScenario(s)
+			const providerName = "flag-1m-anthropic"
+			_ = env.appConfig.AddProvider(&typ.Provider{
+				UUID:     providerName,
+				Name:     providerName,
+				APIBase:  env.virtual.URL(),
+				APIStyle: protocol.APIStyleAnthropic,
+				Token:    "virtual-token",
+				Enabled:  true,
+				Timeout:  int64(constant.DefaultRequestTimeout),
+			})
+
+			const reqModel = "pv-flag-1m"
+			providerModel := "virtual-model-" + s.Name
+			rule := typ.Rule{
+				UUID:          reqModel,
+				Scenario:      typ.ScenarioClaudeCode,
+				RequestModel:  reqModel,
+				ResponseModel: providerModel,
+				Services: []*loadbalance.Service{
+					{Provider: providerName, Model: providerModel, Weight: 1, Active: true, TimeWindow: 300},
+				},
+				LBTactic: typ.Tactic{Type: loadbalance.TacticAdaptive, Params: typ.DefaultAdaptiveParams()},
+				Active:   true,
+				Flags:    typ.RuleFlags{Context1M: true},
+			}
+			_ = env.appConfig.GetGlobalConfig().AddRequestConfig(rule)
+
+			_, body := flagBaseRequest(protocol.TypeAnthropicV1, reqModel+"[1m]", false)
+			res, err := env.dispatch(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, s.Name,
+				"/tingly/claude_code/v1/messages", body, nil, false)
+			if err != nil {
+				t.Fatalf("dispatch: %v", err)
+			}
+			if res.HTTPStatus != 200 {
+				t.Fatalf("[1m]-suffixed model failed to route to its bare-named rule: status=%d body=%s",
+					res.HTTPStatus, truncate(string(res.RawBody), 300))
+			}
+			up := env.virtual.LastRequest(EndpointAnthropic)
+			if up == nil {
+				t.Fatal("no upstream request captured")
+			}
+			if beta := up.Headers.Get("anthropic-beta"); !strings.Contains(beta, "context-1m") {
+				t.Errorf("rule flag did not inject context-1m beta upstream; anthropic-beta=%q", beta)
+			}
+		}},
+
 		// ── vision_proxy_service ─────────────────────────────────────────────
 		// A request whose latest turn carries an image must have that image
 		// described by the configured describer service and replaced with text

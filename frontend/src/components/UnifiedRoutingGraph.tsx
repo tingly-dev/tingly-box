@@ -102,7 +102,7 @@ export interface UnifiedRoutingGraphProps {
     onSwitchRoutingMode?: () => void;
 
     // 1M context window toggle - receives the new state for scenario-specific handling
-    onContext1MToggle?: (newState: boolean) => void;
+    onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
 
     // Slots
     extraActions?: React.ReactNode;
@@ -472,7 +472,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                     const updatedFlags = { ...record.flags, context1m: newState };
                     onUpdateRecord?.('flags', updatedFlags);
                     // Notify parent for scenario-specific handling
-                    onContext1MToggle?.(newState);
+                    onContext1MToggle?.(newState, record.uuid);
                 }}
             />
 
