@@ -160,7 +160,23 @@ func resolveRuleFlagsWithScenario(
 	// single merge point, so the chat / v1 / beta handlers don't each repeat it.
 	applyCustomUserAgent(c, flags)
 
+	// Attach the 1M-context hint the same way: the outbound Anthropic transport
+	// (context1mBetaTransport) appends the context-1m beta flag at RoundTrip
+	// time.
+	applyContext1M(c, flags)
+
 	return flags
+}
+
+// applyContext1M attaches the 1M-context hint to the request context so the
+// outbound Anthropic transport injects the context-1m beta flag upstream.
+// Without this, the flag would only ever be advertised to clients ([1m] model
+// names) and never reach providers whose clients don't send it themselves.
+func applyContext1M(c *gin.Context, flags typ.RuleFlags) {
+	if !flags.Context1M || c == nil || c.Request == nil {
+		return
+	}
+	c.Request = c.Request.WithContext(typ.WithContext1M(c.Request.Context()))
 }
 
 // applyCustomUserAgent attaches the effective custom User-Agent (already merged

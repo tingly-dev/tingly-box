@@ -480,6 +480,23 @@ func ruleFlagCases() []flagCase {
 			}
 		}},
 
+		// ── context_1m ───────────────────────────────────────────────────────
+		// The rule flag alone — the client sends no beta header — must get the
+		// context-1m beta flag injected into the upstream request
+		// (context1mBetaTransport via the context hint attached at flag
+		// resolution time).
+		{key: "context_1m", run: func(t flagTB, env *TestEnv) {
+			model := env.SetupRouteWithFlags(protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, flagScenario(), typ.RuleFlags{Context1M: true})
+			sendFlag(t, env, protocol.TypeAnthropicV1, protocol.TypeAnthropicBeta, model, false, nil, nil)
+			up := env.virtual.LastRequest(EndpointAnthropic)
+			if up == nil {
+				t.Fatal("no upstream request captured")
+			}
+			if beta := up.Headers.Get("anthropic-beta"); !strings.Contains(beta, "context-1m") {
+				t.Errorf("rule flag did not inject context-1m beta upstream; anthropic-beta=%q", beta)
+			}
+		}},
+
 		// ── vision_proxy_service ─────────────────────────────────────────────
 		// A request whose latest turn carries an image must have that image
 		// described by the configured describer service and replaced with text

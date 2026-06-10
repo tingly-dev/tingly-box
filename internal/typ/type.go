@@ -250,6 +250,13 @@ type RuleFlags struct {
 	// vision proxy (ScenarioConfig.Extensions["vision_proxy_service"]), only
 	// narrower in scope; when both are set the rule-level service wins.
 	VisionProxyService *VisionProxyService `json:"vision_proxy_service,omitempty" yaml:"vision_proxy_service,omitempty"`
+
+	// Context1M enables Anthropic's 1M token context window for supported models
+	// (Sonnet 4.6+, Opus 4.6+). When enabled, the gateway injects the
+	// context-1m-2025-08-07 beta flag into the upstream request's
+	// anthropic-beta header. The model name sent to Anthropic is unchanged —
+	// only the beta header changes behavior.
+	Context1M bool `json:"context_1m,omitempty" yaml:"context_1m,omitempty"`
 }
 
 // VisionProxyService identifies the upstream used to describe images for the

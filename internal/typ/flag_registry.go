@@ -221,5 +221,12 @@ func RuleFlagRegistry() []FlagSpec {
 			Type:        FlagTypeBool,
 			Category:    FlagCategoryApp,
 		},
+		{
+			Key:         "context_1m",
+			Label:       "1M Context Window",
+			Description: "Enable Anthropic's 1M token context window for supported models (Sonnet 4.6+, Opus 4.6+). Injects the context-1m-2025-08-07 beta flag into the upstream anthropic-beta header; the model name sent to the provider is unchanged. Only enable for models that support the 1M context window.",
+			Type:        FlagTypeBool,
+			Category:    FlagCategoryRequestAnthropic,
+		},
 	}
 }
