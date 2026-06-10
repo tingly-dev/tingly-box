@@ -809,6 +809,21 @@ func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.R
 		}
 	}
 
+	// Claude scenarios advertise the 1M context window via a "[1m]"
+	// model-name suffix that may be present on either side independently:
+	// Claude Code strips it from outgoing requests while the env carries it,
+	// Claude Desktop picks names verbatim from /v1/models where renamed
+	// rules list it, and a stale client config may still send a suffix the
+	// rule no longer has. Normalize both sides before comparing.
+	if base := scenario.Base(); base == typ.ScenarioClaudeCode || base == typ.ScenarioClaudeDesktop {
+		want := TrimContext1M(requestModel)
+		for _, rule := range c.Rules {
+			if TrimContext1M(rule.RequestModel) == want && rule.GetScenario() == scenario {
+				return &rule
+			}
+		}
+	}
+
 	// Then, try wildcard match
 	for _, rule := range c.Rules {
 		if IsWildcardRuleName(rule.RequestModel) && rule.GetScenario() == scenario {
