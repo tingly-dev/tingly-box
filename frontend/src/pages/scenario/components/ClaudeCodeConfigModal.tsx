@@ -124,6 +124,21 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
         }
     }, [open, configMode, rules]);
 
+    // When 1M context changes, regenerate prefs to reflect the new state
+    React.useEffect(() => {
+        if (open && pendingContext1MChange !== null) {
+            // Create temporary rules with the pending 1M state for accurate display
+            const tempRules = rules.map(rule => ({
+                ...rule,
+                flags: {
+                    ...rule.flags,
+                    context1m: pendingContext1MChange, // Use modern camelCase naming
+                }
+            }));
+            setPrefs(derivePrefsFromRules({ rules: tempRules, mode: configMode }));
+        }
+    }, [pendingContext1MChange, rules, configMode, open]);
+
     // Editing prefs after a previous Apply invalidates the success state —
     // hide the old alert so the user can tell their next Apply hasn't run yet.
     const setPrefsAndClearResult = React.useCallback((next: ClaudeCodePrefs) => {
