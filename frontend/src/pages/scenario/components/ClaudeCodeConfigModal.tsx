@@ -25,6 +25,8 @@ interface ClaudeCodeConfigModalProps {
     // which files were touched and where the backup landed.
     onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean) => Promise<AgentApplyResult>;
     isApplyLoading?: boolean;
+    // Pending 1M context change to show warning in the modal
+    pendingContext1MChange?: boolean | null;
 }
 
 type MainTab = 'quick' | 'manual';
@@ -98,6 +100,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     copyToClipboard,
     onApplyWithPrefs,
     isApplyLoading = false,
+    pendingContext1MChange,
 }) => {
     const { token } = useScenarioPageModal();
     const { t, i18n } = useTranslation();
@@ -283,6 +286,32 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 </DialogTitle>
 
                 <DialogContent sx={{ p: 3 }}>
+                    {/* 1M Context Change Warning */}
+                    {pendingContext1MChange !== null && (
+                        <Alert
+                            severity={pendingContext1MChange ? "success" : "warning"}
+                            sx={{
+                                mb: 2,
+                                borderRadius: 2,
+                                '& .MuiAlert-icon': {
+                                    fontSize: 28,
+                                }
+                            }}
+                        >
+                            <AlertTitle>
+                                {pendingContext1MChange ? '1M Context Window Enabled' : '1M Context Window Disabled'}
+                            </AlertTitle>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                                {pendingContext1MChange
+                                    ? 'Model names have been updated with [1m] suffix for extended context support.'
+                                    : 'Model names have been updated to remove [1m] suffix.'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Please apply the configuration below and restart Claude Code for changes to take effect.
+                            </Typography>
+                        </Alert>
+                    )}
+
                     {applyResult && (
                         <Alert
                             severity={applyResult.success ? 'success' : 'error'}

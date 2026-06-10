@@ -27,6 +27,7 @@ interface ClaudeDesktopConfigModalProps {
     copyToClipboard: (text: string, label: string) => Promise<void>;
     rules?: any[];
     onRulesRefresh?: () => void;
+    pendingContext1MChange?: boolean | null;
 }
 
 const MODEL_PREFIX = 'claude-';
