@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -237,6 +239,80 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 		if got := c.Rules[i].UUID; got != want {
 			t.Errorf("second pass: rule %d UUID = %q, want %q", i, got, want)
 		}
+	}
+}
+
+// TestMigrate20260611_UpgradeFromLegacyConfig exercises the real startup path:
+// a config.json persisted by an older build (legacy main-scenario UUIDs,
+// random-UUID profile rules) is loaded via NewConfig, which runs the full
+// migration chain plus InsertDefaultRule.
+func TestMigrate20260611_UpgradeFromLegacyConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	legacy := `{
+		"rules": [
+			{"uuid": "built-in-cc", "scenario": "claude_code", "request_model": "tingly/cc", "active": true},
+			{"uuid": "built-in-cc-haiku", "scenario": "claude_code", "request_model": "vendor/fast", "active": true},
+			{"uuid": "11111111-2222-3333-4444-555555555555", "scenario": "claude_code:p1", "request_model": "haiku", "active": true}
+		],
+		"profiles": {"claude_code": [{"id": "p1", "name": "Test", "unified": false}]}
+	}`
+	if err := os.WriteFile(filepath.Join(tmpDir, "config.json"), []byte(legacy), 0644); err != nil {
+		t.Fatalf("write legacy config: %v", err)
+	}
+
+	cfg, err := NewConfig(WithConfigDir(tmpDir))
+	if err != nil {
+		t.Fatalf("NewConfig error: %v", err)
+	}
+
+	// Legacy main rules renamed, request models (incl. user-customized) preserved.
+	if r := cfg.GetRuleByUUID(RuleUUIDCC); r == nil || r.RequestModel != "tingly/cc" {
+		t.Errorf("built-in-cc not renamed to %s: %+v", RuleUUIDCC, r)
+	}
+	if r := cfg.GetRuleByUUID(RuleUUIDCCHaiku); r == nil || r.RequestModel != "vendor/fast" {
+		t.Errorf("built-in-cc-haiku not renamed with custom model preserved: %+v", r)
+	}
+	// Profile rule renamed by tier.
+	if r := cfg.GetRuleByUUID("builtin:claude_code:p1:haiku"); r == nil || r.RequestModel != "haiku" {
+		t.Errorf("profile haiku rule not renamed: %+v", r)
+	}
+	// No legacy UUIDs left, and InsertDefaultRule must not have duplicated
+	// renamed rules or resurrected legacy ones.
+	counts := map[string]int{}
+	for _, r := range cfg.Rules {
+		counts[r.UUID]++
+	}
+	for _, legacyUUID := range []string{RuleUUIDBuiltinCC, RuleUUIDBuiltinCCHaiku, RuleUUIDBuiltinCCDefault} {
+		if counts[legacyUUID] != 0 {
+			t.Errorf("legacy UUID %q still present after upgrade", legacyUUID)
+		}
+	}
+	for uuid, n := range counts {
+		if n > 1 {
+			t.Errorf("rule UUID %q duplicated %d times after upgrade", uuid, n)
+		}
+	}
+	// Missing built-ins (sonnet/opus/...) seeded by InsertDefaultRule with modern UUIDs.
+	if r := cfg.GetRuleByUUID(RuleUUIDCCOpus); r == nil {
+		t.Error("missing opus built-in should be seeded with the modern UUID")
+	}
+
+	// Second boot: stable, still no duplicates.
+	cfg2, err := NewConfig(WithConfigDir(tmpDir))
+	if err != nil {
+		t.Fatalf("NewConfig (reload) error: %v", err)
+	}
+	counts2 := map[string]int{}
+	for _, r := range cfg2.Rules {
+		counts2[r.UUID]++
+	}
+	for uuid, n := range counts2 {
+		if n > 1 {
+			t.Errorf("reload: rule UUID %q duplicated %d times", uuid, n)
+		}
+	}
+	if r := cfg2.GetRuleByUUID(RuleUUIDCCHaiku); r == nil || r.RequestModel != "vendor/fast" {
+		t.Errorf("reload: custom haiku model lost: %+v", r)
 	}
 }
 
