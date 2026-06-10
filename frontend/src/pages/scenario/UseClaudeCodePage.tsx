@@ -143,6 +143,10 @@ const UseClaudeCodePageContent: React.FC = () => {
             ? '1M context window enabled. Model names have been updated with [1m] suffix. Please reapply the configuration to Claude Code and restart Claude Code for the changes to take effect.'
             : '1M context window disabled. Model names have been updated. Please reapply the configuration to Claude Code and restart Claude Code for the changes to take effect.';
         showNotification(message, 'success');
+
+        // Auto-open the config panel so user can immediately reapply
+        setConfigModalOpen(true);
+
         setPendingContext1MState(null);
     };
 
