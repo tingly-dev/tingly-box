@@ -259,6 +259,24 @@ func TestResolveClaudeCodeModels_ModernUUIDWinsOverLegacy(t *testing.T) {
 	assert.Equal(t, "modern/model", models.def)
 }
 
+func TestResolveClaudeCodeModels_Context1MSuffix(t *testing.T) {
+	// A rule with the 1M context flag advertises [1m] in the resolved model;
+	// an already-suffixed model is not doubled.
+	flagged := ccRule("builtin:claude_code:cc", "tingly/cc")
+	flagged.Flags.Context1M = true
+	cfg := &serverconfig.Config{Rules: []typ.Rule{flagged}}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+	assert.Equal(t, "tingly/cc[1m]", models.def)
+
+	suffixed := ccRule("builtin:claude_code:cc", "team/coder[1m]")
+	suffixed.Flags.Context1M = true
+	cfg2 := &serverconfig.Config{Rules: []typ.Rule{suffixed}}
+	models2 := NewTBClient(cfg2, nil).resolveClaudeCodeModels()
+	assert.Equal(t, "team/coder[1m]", models2.def)
+}
+
 func TestResolveClaudeCodeModels_InactiveRuleIgnored(t *testing.T) {
 	// An inactive built-in-cc rule must not override the canonical fallback.
 	inactive := ccRule("built-in-cc", "should/not/use")
