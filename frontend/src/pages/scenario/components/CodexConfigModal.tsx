@@ -2,6 +2,7 @@ import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, 
 import React from 'react';
 import CodeBlock from '@/components/CodeBlock';
 import CodexQuickConfig, { type CodexPrefs, defaultCodexPrefs } from './CodexQuickConfig';
+import Context1MChangeBanner from './Context1MChangeBanner';
 import { shouldIgnoreDialogClose } from '@/components/dialogClose';
 import { api } from '@/services/api';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
@@ -10,6 +11,7 @@ interface CodexConfigModalProps {
     open: boolean;
     onClose: () => void;
     copyToClipboard: (text: string, label: string) => Promise<void>;
+    pendingContext1MChange?: boolean | null;
 }
 
 type MainTab = 'quick' | 'manual';
@@ -49,6 +51,7 @@ const CodexConfigModal: React.FC<CodexConfigModalProps> = ({
     open,
     onClose,
     copyToClipboard,
+    pendingContext1MChange,
 }) => {
     // Keep token in context as a fallback for the auth.json preview while
     // the preview API request is in flight.
@@ -278,6 +281,10 @@ EOF`;
             </DialogTitle>
 
             <DialogContent sx={{ p: 3 }}>
+                {pendingContext1MChange != null && (
+                    <Context1MChangeBanner enabled={pendingContext1MChange} clientName="Codex" />
+                )}
+
                 <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>
                         Auth source

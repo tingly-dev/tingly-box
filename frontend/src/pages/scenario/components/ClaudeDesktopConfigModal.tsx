@@ -18,6 +18,7 @@ import { Delete as DeleteIcon } from '@/components/icons';
 import { Add as AddIcon } from '@/components/icons';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import Context1MChangeBanner from './Context1MChangeBanner';
 import api from '@/services/api';
 
 interface ClaudeDesktopConfigModalProps {
@@ -27,6 +28,7 @@ interface ClaudeDesktopConfigModalProps {
     copyToClipboard: (text: string, label: string) => Promise<void>;
     rules?: any[];
     onRulesRefresh?: () => void;
+    pendingContext1MChange?: boolean | null;
 }
 
 const MODEL_PREFIX = 'claude-';
@@ -48,6 +50,7 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
     copyToClipboard,
     rules = [],
     onRulesRefresh,
+    pendingContext1MChange,
 }) => {
     const { token } = useScenarioPageModal();
     const [newModelName, setNewModelName] = useState('');
@@ -135,6 +138,9 @@ const ClaudeDesktopConfigModal: React.FC<ClaudeDesktopConfigModalProps> = ({
             </DialogTitle>
 
             <DialogContent sx={{ pt: 1 }}>
+                {pendingContext1MChange != null && (
+                    <Context1MChangeBanner enabled={pendingContext1MChange} clientName="Claude Desktop" requiresApply={false} />
+                )}
                 <Stack spacing={2}>
                     {/* Step 1 */}
                     <Box sx={{ p: 2, borderRadius: 1, border: 1, borderColor: 'divider' }}>

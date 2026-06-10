@@ -10,7 +10,7 @@ import UnifiedCard from "@/components/UnifiedCard.tsx";
 import {useScenarioPageInternal} from '@/pages/scenario/hooks/useScenarioPageInternal.ts';
 import {api} from '@/services/api';
 import {toggleButtonGroupStyle, toggleButtonStyle} from "@/styles/toggleStyles";
-import { Info as InfoIcon } from '@/components/icons';
+import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import {
     Box,
     Button,
@@ -22,7 +22,8 @@ import {
     ToggleButton,
     ToggleButtonGroup,
     Tooltip,
-    Typography
+    Typography,
+    Alert
 } from '@mui/material';
 import React, {useEffect, useState} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -57,6 +58,14 @@ const UseClaudeCodePageContent: React.FC = () => {
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [connectProviderOpen, setConnectProviderOpen] = useState(false);
+    const [pendingContext1MChange, setPendingContext1MChange] = useState<{ enabled: boolean; ruleUuid?: string } | null>(null);
+
+    const handleContext1MToggle = (newState: boolean, ruleUuid?: string) => {
+        // Store the pending change (scoped to the toggled rule) and open the
+        // config panel so the user can apply the matching env update.
+        setPendingContext1MChange({ enabled: newState, ruleUuid });
+        setConfigModalOpen(true);
+    };
 
     // Load scenario config to get config mode
     const loadScenarioConfig = async () => {
@@ -277,6 +286,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}
+                    onContext1MToggle={handleContext1MToggle}
                 />
 
                 <Dialog
@@ -306,7 +316,10 @@ const UseClaudeCodePageContent: React.FC = () => {
 
                 <ClaudeCodeConfigModal
                     open={configModalOpen}
-                    onClose={() => setConfigModalOpen(false)}
+                    onClose={() => {
+                        setConfigModalOpen(false);
+                        setPendingContext1MChange(null);
+                    }}
                     configMode={configMode}
                     baseUrl={baseUrl}
                     rules={rules}
@@ -315,6 +328,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                         applyPrefs(prefs as Record<string, string>, installStatusLine)
                     }
                     isApplyLoading={isApplyLoading}
+                    pendingContext1MChange={pendingContext1MChange}
                 />
 
                 <ConnectProviderFlow

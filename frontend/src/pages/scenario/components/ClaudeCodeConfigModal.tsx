@@ -9,6 +9,7 @@ import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageConte
 import ClaudeCodeQuickConfig, { derivePrefsFromRules, prefsToEnvPreview } from './ClaudeCodeQuickConfig';
 import type { ClaudeCodePrefs } from './ClaudeCodeQuickConfig';
 import type { AgentApplyResult } from './AgentSetupCard';
+import Context1MChangeBanner from './Context1MChangeBanner';
 
 type ConfigMode = 'unified' | 'separate' | 'smart';
 
@@ -25,6 +26,8 @@ interface ClaudeCodeConfigModalProps {
     // which files were touched and where the backup landed.
     onApplyWithPrefs?: (prefs: ClaudeCodePrefs, installStatusLine: boolean) => Promise<AgentApplyResult>;
     isApplyLoading?: boolean;
+    // Pending 1M context change (scoped to the toggled rule) to preview in the modal
+    pendingContext1MChange?: { enabled: boolean; ruleUuid?: string } | null;
 }
 
 type MainTab = 'quick' | 'manual';
@@ -98,6 +101,7 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
     copyToClipboard,
     onApplyWithPrefs,
     isApplyLoading = false,
+    pendingContext1MChange,
 }) => {
     const { token } = useScenarioPageModal();
     const { t, i18n } = useTranslation();
@@ -120,6 +124,27 @@ const ClaudeCodeConfigModal: React.FC<ClaudeCodeConfigModalProps> = ({
             setApplyResult(null);
         }
     }, [open, configMode, rules]);
+
+    // When 1M context changes, regenerate prefs to reflect the new state.
+    // The pending change is scoped to the toggled rule — other tiers keep
+    // their own context_1m state (in separate mode each tier is independent).
+    React.useEffect(() => {
+        if (open && pendingContext1MChange != null) {
+            const tempRules = rules.map(rule => {
+                if (pendingContext1MChange.ruleUuid && rule.uuid !== pendingContext1MChange.ruleUuid) {
+                    return rule;
+                }
+                return {
+                    ...rule,
+                    flags: {
+                        ...rule.flags,
+                        context1m: pendingContext1MChange.enabled,
+                    },
+                };
+            });
+            setPrefs(derivePrefsFromRules({ rules: tempRules, mode: configMode }));
+        }
+    }, [pendingContext1MChange, rules, configMode, open]);
 
     // Editing prefs after a previous Apply invalidates the success state —
     // hide the old alert so the user can tell their next Apply hasn't run yet.
@@ -283,6 +308,10 @@ node -e '${nodeCode.replace(/'/g, "'\\''")}'`;
                 </DialogTitle>
 
                 <DialogContent sx={{ p: 3 }}>
+                    {pendingContext1MChange != null && (
+                        <Context1MChangeBanner enabled={pendingContext1MChange.enabled} clientName="Claude Code" />
+                    )}
+
                     {applyResult && (
                         <Alert
                             severity={applyResult.success ? 'success' : 'error'}

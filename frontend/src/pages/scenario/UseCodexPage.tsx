@@ -6,8 +6,8 @@ import { defaultCodexPrefs } from "./components/CodexQuickConfig";
 import { api } from '@/services/api';
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, IconButton, Tooltip } from '@mui/material';
-import { Info as InfoIcon } from '@/components/icons';
+import { Box, Button, IconButton, Tooltip, Dialog, DialogActions, DialogContent, DialogTitle, Typography, Alert } from '@mui/material';
+import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -29,6 +29,7 @@ const UseCodexPageContent: React.FC = () => {
     const [configModalOpen, setConfigModalOpen] = useState(false);
     const [isApplyLoading, setIsApplyLoading] = useState(false);
     const [connectProviderOpen, setConnectProviderOpen] = useState(false);
+    const [pendingContext1MChange, setPendingContext1MChange] = useState<boolean | null>(null);
 
     const handleApply = async (): Promise<AgentApplyResult> => {
         try {
@@ -55,6 +56,12 @@ const UseCodexPageContent: React.FC = () => {
         } finally {
             setIsApplyLoading(false);
         }
+    };
+
+    const handleContext1MToggle = (newState: boolean) => {
+        // Store the pending change and directly open config panel
+        setPendingContext1MChange(newState);
+        setConfigModalOpen(true);
     };
 
     return (
@@ -110,12 +117,17 @@ const UseCodexPageContent: React.FC = () => {
                     title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
+                    onContext1MToggle={handleContext1MToggle}
                 />
 
                 <CodexConfigModal
                     open={configModalOpen}
-                    onClose={() => setConfigModalOpen(false)}
+                    onClose={() => {
+                        setConfigModalOpen(false);
+                        setPendingContext1MChange(null);
+                    }}
                     copyToClipboard={copyToClipboard}
+                    pendingContext1MChange={pendingContext1MChange}
                 />
 
                 <ConnectProviderFlow

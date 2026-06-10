@@ -63,7 +63,7 @@ const RULE_GRAPH_STYLES = {
     },
 } as const;
 
-const {header, graphContainer, graph} = RULE_GRAPH_STYLES;
+const {graphContainer, graph} = RULE_GRAPH_STYLES;
 
 export interface UnifiedRoutingGraphProps {
     // Mode control
@@ -100,6 +100,9 @@ export interface UnifiedRoutingGraphProps {
 
     // Routing mode switch
     onSwitchRoutingMode?: () => void;
+
+    // 1M context window toggle - receives the new state for scenario-specific handling
+    onContext1MToggle?: (newState: boolean, ruleUuid?: string) => void;
 
     // Slots
     extraActions?: React.ReactNode;
@@ -183,6 +186,7 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                                                                             onAddServiceToSmartRule,
                                                                             onDeleteServiceFromSmartRule,
                                                                             onSwitchRoutingMode,
+                                                                            onContext1MToggle,
                                                                             extraActions,
                                                                             extensionsCard,
                                                                             autoScroll,
@@ -461,6 +465,15 @@ export const UnifiedRoutingGraph: React.FC<UnifiedRoutingGraphProps> = ({
                 extraActions={extraActions}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
+                context1M={record.flags?.context1m || false}
+                onContext1MToggle={() => {
+                    const newState = !(record.flags?.context1m || false);
+                    // Update the flags
+                    const updatedFlags = { ...record.flags, context1m: newState };
+                    onUpdateRecord?.('flags', updatedFlags);
+                    // Notify parent for scenario-specific handling
+                    onContext1MToggle?.(newState, record.uuid);
+                }}
             />
 
             {/* Tier Guide Dialog */}

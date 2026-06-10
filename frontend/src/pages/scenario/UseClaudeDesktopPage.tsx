@@ -1,8 +1,8 @@
 import CardGrid from "@/components/CardGrid.tsx";
 import UnifiedCard from "@/components/UnifiedCard.tsx";
 import ProviderConfigCard from "@/components/ProviderConfigCard.tsx";
-import { Box, Button, Tooltip, IconButton } from '@mui/material';
-import { Info as InfoIcon } from '@/components/icons';
+import { Box, Button, Tooltip, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Typography, Alert } from '@mui/material';
+import { Info as InfoIcon, Refresh as RestartIcon } from '@/components/icons';
 import { useState } from 'react';
 import PageLayout from '@/components/PageLayout';
 import TemplatePage from './components/TemplatePage.tsx';
@@ -20,11 +20,19 @@ const UseClaudeDesktopPageContent: React.FC = () => {
         baseUrl,
         rules,
         loadRules,
+        showNotification,
     } = useScenarioPageInternal(scenario);
 
     const [configModalOpen, setConfigModalOpen] = useState(false);
+    const [pendingContext1MChange, setPendingContext1MChange] = useState<boolean | null>(null);
 
     const handleOpenConfigModal = () => {
+        setConfigModalOpen(true);
+    };
+
+    const handleContext1MToggle = (newState: boolean) => {
+        // Store the pending change and directly open config panel
+        setPendingContext1MChange(newState);
         setConfigModalOpen(true);
     };
 
@@ -70,15 +78,20 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                     title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
+                    onContext1MToggle={handleContext1MToggle}
                 />
 
                 <ClaudeDesktopConfigModal
                     open={configModalOpen}
-                    onClose={() => setConfigModalOpen(false)}
+                    onClose={() => {
+                        setConfigModalOpen(false);
+                        setPendingContext1MChange(null);
+                    }}
                     baseUrl={baseUrl}
                     copyToClipboard={copyToClipboard}
                     rules={rules}
                     onRulesRefresh={loadRules}
+                    pendingContext1MChange={pendingContext1MChange}
                 />
             </CardGrid>
         </PageLayout>
