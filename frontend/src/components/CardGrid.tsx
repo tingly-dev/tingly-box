@@ -30,7 +30,7 @@ const defaultColumns = {
 export const CardGrid = ({
   children,
   columns = defaultColumns,
-  spacing = 3,
+  spacing = 2,
   virtualized = false,
   itemHeight = 300,
   containerHeight: propContainerHeight = 600,
