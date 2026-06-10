@@ -49,7 +49,8 @@ type CLI struct {
 	Token command.TokenCmdKong `kong:"cmd,name='token',help='View or refresh tingly-box auth/model tokens'"`
 
 	// Claude Code
-	CC command.CCmdKong `kong:"cmd,help='Launch Claude Code',passthrough"`
+	CC      command.CCmdKong       `kong:"cmd,help='Launch Claude Code',passthrough"`
+	Profile command.ProfileCmdKong `kong:"cmd,help='Manage and use Claude Code profiles'"`
 
 	// Other commands
 	Swagger    command.SwaggerCmdKong    `kong:"cmd,hidden,help='Generate OpenAPI schema'"`
