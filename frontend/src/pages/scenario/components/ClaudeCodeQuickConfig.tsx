@@ -457,11 +457,12 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
         return rule?.request_model || fallback;
     };
 
-    // Get the 1M context window flag from a specific rule
+    // Get the 1M context window flag from a specific rule. Rules here come
+    // straight from the API (snake_case flags); accept the camelCase shape
+    // too in case a converted rule object is passed in.
     const getContext1MStateForRule = (rule: any): boolean => {
         if (!rule || !rule.flags) return false;
-        // Only use the modern camelCase naming convention
-        return rule.flags?.context1m || false;
+        return rule.flags?.context_1m || rule.flags?.context1m || false;
     };
 
     // Get the 1M state for a specific variant (only used in separate mode)
@@ -471,13 +472,13 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
             return getContext1MStateForRule(rules[0]);
         }
         // In separate mode, check the specific rule for this variant
-        const rule = rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
+        const rule = rules.find((r: any) => r?.uuid === `builtin:claude_code:${variant}`);
         return getContext1MStateForRule(rule);
     };
 
     const context1MEnabled = mode === 'unified'
         ? getContext1MStateForRule(rules[0])
-        : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'built-in-cc-default'));
+        : getContext1MStateForRule(rules.find((r: any) => r?.uuid === 'builtin:claude_code:default'));
 
     console.log('Mode:', mode, 'Overall context1M enabled:', context1MEnabled);
 

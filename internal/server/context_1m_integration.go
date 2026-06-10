@@ -25,12 +25,13 @@ func detectAndApplyContext1MFromIncomingRequest(c *gin.Context, rule *typ.Rule) 
 		return
 	}
 
-	// Check if this is a scenario where we should auto-detect context-1m
-	scenario := rule.Scenario
+	// Check if this is a scenario where we should auto-detect context-1m.
+	// Match on the base scenario so profile rules (e.g. "claude_code:p1")
+	// get the same treatment as the main scenario.
 	autoDetect := false
 	var nameSuffix string
 
-	switch scenario {
+	switch rule.Scenario.Base() {
 	case typ.ScenarioClaudeCode, typ.ScenarioClaudeDesktop:
 		// Claude Code/Desktop: auto-detect + name suffix
 		autoDetect = true
