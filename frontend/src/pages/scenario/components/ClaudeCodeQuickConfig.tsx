@@ -460,8 +460,8 @@ export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeC
     // Get the 1M context window flag from a specific rule
     const getContext1MStateForRule = (rule: any): boolean => {
         if (!rule || !rule.flags) return false;
-        // Handle both snake_case (from API) and camelCase (already converted)
-        return (rule.flags?.context_1m || rule.flags?.context1m) || false;
+        // Only use the modern camelCase naming convention
+        return rule.flags?.context1m || false;
     };
 
     // Get the 1M state for a specific variant (only used in separate mode)
