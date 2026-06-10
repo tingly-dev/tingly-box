@@ -96,7 +96,10 @@ endpoint").  It opens a purpose-built form (`ProviderFormDialog` with
 
 - two free-text URL fields — *OpenAI Base URL* + *Anthropic Base URL*;
 - one shared API key;
-- no protocol selector, no topology toggle, no progressive disclosure.
+- no protocol selector, no topology toggle, no progressive disclosure;
+- **Test Connection probes both endpoints** (parallel, per-side results) — a
+  fused provider answers both protocols, so verifying only one URL would leave
+  the other untested.
 
 It **always** produces a single fused record (`api_base_openai` +
 `api_base_anthropic` both set, `api_base = openai URL`, `api_style = openai`,
