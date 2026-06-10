@@ -4,11 +4,37 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tingly-dev/tingly-box/internal/constant"
 )
+
+// Context1MSuffix is the model-name suffix Claude clients use to advertise
+// the 1M context window (Claude Code strips it back off and sends the
+// context-1m beta header; Claude Desktop picks names verbatim from /v1/models).
+const Context1MSuffix = "[1m]"
+
+// TrimContext1M removes the [1m] context-window suffix from a model name.
+func TrimContext1M(model string) string {
+	return strings.TrimSuffix(model, Context1MSuffix)
+}
+
+// syncContext1MSuffix keeps a model name's [1m] suffix in sync with the
+// rule's context_1m flag: appended when enabled, stripped when disabled.
+func syncContext1MSuffix(model string, enabled bool) string {
+	if model == "" {
+		return model
+	}
+	if enabled && !strings.HasSuffix(model, Context1MSuffix) {
+		return model + Context1MSuffix
+	}
+	if !enabled {
+		return strings.TrimSuffix(model, Context1MSuffix)
+	}
+	return model
+}
 
 // generateSecret generates a random secret for JWT
 func generateSecret() string {

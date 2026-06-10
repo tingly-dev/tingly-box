@@ -374,8 +374,8 @@ func generateCCEnv(cfg *config.Config, baseURL, apiKey, scenarioPath string, uni
 						// context flag advertises itself to Claude Code via the
 						// [1m] model-name suffix (the client strips it back off
 						// and sends the context-1m beta header instead).
-						if r.Flags.Context1M && !strings.HasSuffix(m, "[1m]") {
-							m += "[1m]"
+						if r.Flags.Context1M && !strings.HasSuffix(m, config.Context1MSuffix) {
+							m += config.Context1MSuffix
 						}
 						return m
 					}

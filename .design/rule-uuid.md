@@ -139,6 +139,19 @@ rule takes effect on the next `cc --profile` launch without any modal.
 The 1M auto-detection (`context_1m_integration.go`) matches on the base
 scenario, so profiled scenarios are covered.
 
+Claude Desktop is special: it has no env channel — its model picker comes
+verbatim from `/v1/models`, which lists rule request models. Toggling
+`context_1m` on a claude_desktop rule therefore renames the rule itself
+(`UpdateRule` keeps the `[1m]` suffix in sync with the flag), so the
+picker shows the 1M variant and the picked name routes back exactly.
+
+Because the suffix can legitimately exist on either side independently
+(renamed rule vs. stale client config, suffixed env vs. bare rule),
+`MatchRuleByModelAndScenario` normalizes `[1m]` on **both** the incoming
+model and the rule name before comparing — for claude_code and
+claude_desktop base scenarios only (exact match still wins first; other
+scenarios keep strict matching).
+
 ### Profile deletion
 
 Because profile IDs are recycled, `DeleteProfile` purges the deleted

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -736,7 +735,7 @@ func migrate20260611(c *Config) {
 			// Profile: identify the tier by request model. Strip the [1m]
 			// context-window suffix first so a tier rule renamed for 1M
 			// support (e.g. "haiku[1m]") still normalizes to its tier UUID.
-			tier := strings.TrimSuffix(rule.RequestModel, "[1m]")
+			tier := TrimContext1M(rule.RequestModel)
 			if !ccProfileTiers[tier] {
 				continue
 			}
