@@ -115,11 +115,15 @@ export function useRuleAutoSave({ rule, onRuleChange, showNotification }: UseRul
 
                 const result = await api.updateRule(rule.uuid, ruleData);
                 if (result.success) {
+                    // Prefer the persisted values echoed by the server — it may
+                    // normalize the rule (e.g. Claude Desktop request models get
+                    // the [1m] suffix synced with the context_1m flag).
+                    const saved = result.data ?? {};
                     onRuleChange?.({
                         ...rule,
                         scenario: ruleData.scenario,
-                        request_model: ruleData.request_model,
-                        response_model: ruleData.response_model,
+                        request_model: saved.request_model ?? ruleData.request_model,
+                        response_model: saved.response_model ?? ruleData.response_model,
                         active: ruleData.active,
                         description: ruleData.description,
                         flags: ruleData.flags,

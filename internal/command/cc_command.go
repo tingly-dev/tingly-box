@@ -370,6 +370,13 @@ func generateCCEnv(cfg *config.Config, baseURL, apiKey, scenarioPath string, uni
 			for _, uuid := range uuids {
 				if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
 					if m := strings.TrimSpace(r.RequestModel); m != "" {
+						// Mirror the frontend quick-config: a rule with the 1M
+						// context flag advertises itself to Claude Code via the
+						// [1m] model-name suffix (the client strips it back off
+						// and sends the context-1m beta header instead).
+						if r.Flags.Context1M && !strings.HasSuffix(m, config.Context1MSuffix) {
+							m += config.Context1MSuffix
+						}
 						return m
 					}
 				}

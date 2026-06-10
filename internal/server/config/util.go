@@ -21,6 +21,21 @@ func TrimContext1M(model string) string {
 	return strings.TrimSuffix(model, Context1MSuffix)
 }
 
+// syncContext1MSuffix keeps a model name's [1m] suffix in sync with the
+// rule's context_1m flag: appended when enabled, stripped when disabled.
+func syncContext1MSuffix(model string, enabled bool) string {
+	if model == "" {
+		return model
+	}
+	if enabled && !strings.HasSuffix(model, Context1MSuffix) {
+		return model + Context1MSuffix
+	}
+	if !enabled {
+		return strings.TrimSuffix(model, Context1MSuffix)
+	}
+	return model
+}
+
 // generateSecret generates a random secret for JWT
 func generateSecret() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())

@@ -636,6 +636,17 @@ func (c *Config) UpdateRule(uid string, rule typ.Rule) error {
 		return err
 	}
 
+	// Claude Desktop pulls its model picker from /v1/models, which lists rule
+	// request models verbatim — the [1m] context-window advertisement must
+	// therefore live on the rule name itself. Keep the name suffix in sync
+	// with the context_1m flag so toggling the flag renames the rule.
+	// Claude Code is intentionally excluded: its [1m] advertisement travels
+	// via the launcher env, and the rule keeps its bare routing name.
+	if rule.Scenario.Is(typ.ScenarioClaudeDesktop) {
+		rule.RequestModel = syncContext1MSuffix(rule.RequestModel, rule.Flags.Context1M)
+		rule.ResponseModel = syncContext1MSuffix(rule.ResponseModel, rule.Flags.Context1M)
+	}
+
 	// Guard name unique
 	for _, rc := range c.Rules {
 		if rc.RequestModel == rule.RequestModel && rc.GetScenario() == rule.Scenario {
