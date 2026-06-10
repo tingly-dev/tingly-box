@@ -541,6 +541,56 @@ const ProviderFormDialog = ({
             return true;
         }
 
+        const probeMessages = {
+            failed: t('providerDialog.verification.failed'),
+            networkError: t('providerDialog.verification.networkError'),
+        };
+
+        // Fusion form: a fused provider answers BOTH protocols, so verifying
+        // only one URL would leave the other (often the just-typed one) untested.
+        // Probe both endpoints and report per-side results.
+        if (fusionMode) {
+            const openai = fusOpenAIUrl.trim();
+            const anthropic = fusAnthropicUrl.trim();
+            const effectiveName = ensureName();
+            if (!effectiveName || !openai || !anthropic || !data.token) {
+                setVerificationResult({
+                    success: false,
+                    message: t('providerDialog.verification.missingFields'),
+                });
+                return false;
+            }
+            setVerifying(true);
+            setVerificationResult(null);
+            const [oRes, aRes] = await Promise.all([
+                runProviderProbe(
+                    {name: effectiveName, apiStyle: 'openai', apiBase: openai, token: data.token, authType: data.authType},
+                    probeMessages,
+                ),
+                runProviderProbe(
+                    {name: effectiveName, apiStyle: 'anthropic', apiBase: anthropic, token: data.token, authType: data.authType},
+                    probeMessages,
+                ),
+            ]);
+            const success = oRes.success && aRes.success;
+            const sideLine = (label: string, r: VerificationResult) =>
+                `${r.success ? '✓' : '✗'} ${label}: ${r.message}`;
+            setVerificationResult({
+                success,
+                message: success
+                    ? t('providerDialog.fusionForm.verifyBothOk', {defaultValue: 'Both endpoints verified'})
+                    : !oRes.success && !aRes.success
+                        ? t('providerDialog.fusionForm.verifyBothFailed', {defaultValue: 'Both endpoints failed'})
+                        : t('providerDialog.fusionForm.verifyOneFailed', {
+                            defaultValue: '{{side}} endpoint failed',
+                            side: oRes.success ? 'Anthropic' : 'OpenAI',
+                        }),
+                details: [sideLine('OpenAI', oRes), sideLine('Anthropic', aRes)].join(' • '),
+            });
+            setVerifying(false);
+            return success;
+        }
+
         const apiStyle = protocolOpenAI ? 'openai' : protocolAnthropic ? 'anthropic' : undefined;
         const apiBase =
             protocolOpenAI && selectedProvider?.baseUrlOpenAI
@@ -564,10 +614,7 @@ const ProviderFormDialog = ({
 
         const result = await runProviderProbe(
             {name: effectiveName, apiStyle, apiBase, token: data.token, authType: data.authType},
-            {
-                failed: t('providerDialog.verification.failed'),
-                networkError: t('providerDialog.verification.networkError'),
-            },
+            probeMessages,
         );
         setVerificationResult(result);
         setVerifying(false);
@@ -876,8 +923,10 @@ const ProviderFormDialog = ({
                             />
                         )}
 
-                        {/* Edit-mode upgrade: turn a single endpoint into a fusion one. */}
-                        {mode === 'edit' && !fusionMode && data.authType !== 'oauth' && onConvertToFusion && (
+                        {/* Edit-mode upgrade: turn a single endpoint into a fusion one.
+                            Suppressed when the template-driven FusionToggle is visible —
+                            one upgrade affordance per dialog, never two. */}
+                        {mode === 'edit' && !fusionMode && !showFusionToggle && data.authType !== 'oauth' && onConvertToFusion && (
                             <Link
                                 component="button"
                                 type="button"

@@ -281,7 +281,10 @@ export default {
       "editTitle": "编辑 Fusion 端点",
       "anthropicPlaceholder": "https://api.example.com/anthropic",
       "help": "两种协议共用下方的 API Key，入站请求会被路由到对应的端点。",
-      "convertToSingle": "转为单端点"
+      "convertToSingle": "转为单端点",
+      "verifyBothOk": "两个端点均验证通过",
+      "verifyBothFailed": "两个端点均验证失败",
+      "verifyOneFailed": "{{side}} 端点验证失败"
     },
     "providerSingle": {
       "convertToFusion": "添加 Anthropic 端点（升级为 Fusion）"

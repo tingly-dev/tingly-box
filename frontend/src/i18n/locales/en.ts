@@ -280,7 +280,10 @@ export default {
       "editTitle": "Edit Fusion endpoint",
       "anthropicPlaceholder": "https://api.example.com/anthropic",
       "help": "Both protocols share the API key below. Inbound requests are routed to the matching endpoint.",
-      "convertToSingle": "Convert to a single endpoint"
+      "convertToSingle": "Convert to a single endpoint",
+      "verifyBothOk": "Both endpoints verified",
+      "verifyBothFailed": "Both endpoints failed",
+      "verifyOneFailed": "{{side}} endpoint failed"
     },
     "providerSingle": {
       "convertToFusion": "Add an Anthropic endpoint (make it a Fusion provider)"
