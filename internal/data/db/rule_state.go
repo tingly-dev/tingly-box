@@ -129,6 +129,36 @@ func (rs *RuleStateStore) HydrateRules(rules []typ.Rule) error {
 	return nil
 }
 
+// DeleteRules removes persisted state for the given rule UUIDs. Used when
+// rules are deleted so their identity can be safely reused later (profile
+// rule UUIDs are deterministic and profile IDs are recycled).
+func (rs *RuleStateStore) DeleteRules(ruleUUIDs []string) error {
+	if len(ruleUUIDs) == 0 {
+		return nil
+	}
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+
+	return rs.db.Where("rule_uuid IN ?", ruleUUIDs).Delete(&RuleServiceRecord{}).Error
+}
+
+// RenameRuleUUID re-keys a rule's persisted state from oldUUID to newUUID.
+// Any existing row under newUUID is replaced, since the renamed rule is the
+// authoritative owner of that identity.
+func (rs *RuleStateStore) RenameRuleUUID(oldUUID, newUUID string) error {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+
+	return rs.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("rule_uuid = ?", newUUID).Delete(&RuleServiceRecord{}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&RuleServiceRecord{}).
+			Where("rule_uuid = ?", oldUUID).
+			Update("rule_uuid", newUUID).Error
+	})
+}
+
 // ClearAll removes all persisted rule state
 func (rs *RuleStateStore) ClearAll() error {
 	rs.mu.Lock()

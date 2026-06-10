@@ -32,6 +32,27 @@ const (
 	RuleUUIDBuiltinClaudeDesktopHaiku45  = "builtin:claude_desktop:claude-haiku-4-5"
 )
 
+// ProfileRuleUUID returns the canonical UUID for a profile copy of a built-in
+// rule: "<builtin-uuid>:<profileID>" (e.g. "built-in-cc-haiku:p1"), mirroring
+// the profiled scenario naming "claude_code:p1". This keeps profile rule
+// identity deterministic so consumers can address a profile's tier rules the
+// same way they address the main scenario's built-ins.
+func ProfileRuleUUID(builtinUUID, profileID string) string {
+	return builtinUUID + typ.ProfileSeparator + profileID
+}
+
+// ccProfileBuiltinByModel maps a Claude Code profile rule's request model
+// (the short tier name profile rules route on) to the main-scenario built-in
+// rule UUID it mirrors.
+var ccProfileBuiltinByModel = map[string]string{
+	"cc":       RuleUUIDBuiltinCC,
+	"default":  RuleUUIDBuiltinCCDefault,
+	"haiku":    RuleUUIDBuiltinCCHaiku,
+	"sonnet":   RuleUUIDBuiltinCCSonnet,
+	"opus":     RuleUUIDBuiltinCCOpus,
+	"subagent": RuleUUIDBuiltinCCSubagent,
+}
+
 // --- Shared migration helpers -------------------------------------------------
 //
 // Several migrations seed or repair built-in rules with the same moves: look a
@@ -108,6 +129,7 @@ func Migrate(c *Config) error {
 	migrate20260521(c) // Add Claude Desktop haiku-4-5 built-in rule
 	migrate20260606(c) // Default SkipUsage on for the Xcode scenario
 	migrate20260610(c) // Seed default rule flags (claude_code_compat / clean_header / session_affinity) for CC / Desktop / Codex rules
+	migrate20260611(c) // Normalize Claude Code profile rule UUIDs to "<builtin-uuid>:<profileID>"
 	return nil
 }
 
@@ -592,7 +614,7 @@ func migrate20260606(c *Config) {
 // init.go seeds on the built-in rules:
 //
 //   - Claude Code / Claude Desktop rules (base scenario, profile-aware):
-//       claude_code_compat on, clean_header on, session_affinity = 1800s
+//     claude_code_compat on, clean_header on, session_affinity = 1800s
 //   - Codex rules: session_affinity = 1800s
 //
 // Rationale per flag:
@@ -642,4 +664,70 @@ func migrate20260610(c *Config) {
 		_ = c.Save()
 		logrus.Info("Migration 20260610 completed: seeded default rule flags (claude_code_compat / clean_header / session_affinity) for Claude Code, Claude Desktop, and Codex rules")
 	}
+}
+
+// migrate20260611 normalizes Claude Code profile rule UUIDs to the canonical
+// "<builtin-uuid>:<profileID>" form (e.g. "built-in-cc-haiku:p1"). Profile
+// rules used to be created with random v4 UUIDs, which broke the convention
+// that built-in rules are addressable by stable UUIDs and made profile rule
+// identity non-reproducible.
+//
+// The pass is intentionally not marker-gated: it is idempotent (rules already
+// canonical are skipped) and self-healing, so a config written by an older
+// build gets normalized on the next start. Rules whose request model has no
+// built-in counterpart (user-customized) are left untouched, and a rename is
+// skipped if the canonical UUID is already taken (e.g. duplicate tier rules).
+// SQLite state keyed by rule UUID — the load balancer's rule_service_index and
+// historical usage records — is re-keyed alongside the rule so per-rule state
+// survives the rename.
+func migrate20260611(c *Config) {
+	renames := map[string]string{}
+	for i := range c.Rules {
+		rule := &c.Rules[i]
+		base, profileID := typ.ParseScenarioProfile(rule.Scenario)
+		if profileID == "" || base != typ.ScenarioClaudeCode {
+			continue
+		}
+		builtinUUID, ok := ccProfileBuiltinByModel[rule.RequestModel]
+		if !ok {
+			continue
+		}
+		canonical := ProfileRuleUUID(builtinUUID, profileID)
+		if rule.UUID == canonical {
+			continue
+		}
+		if c.findRuleByUUID(canonical) != nil {
+			logrus.WithFields(logrus.Fields{
+				"rule_uuid":     rule.UUID,
+				"canonical":     canonical,
+				"request_model": rule.RequestModel,
+			}).Warn("Migration 20260611: canonical profile rule UUID already taken, skipping rename")
+			continue
+		}
+		renames[rule.UUID] = canonical
+		rule.UUID = canonical
+	}
+
+	if len(renames) == 0 {
+		return
+	}
+
+	// Carry SQLite state keyed by rule UUID over to the new identity.
+	// Best-effort: a failure here only loses the load-balancer position or
+	// per-rule usage attribution, never routing correctness.
+	for oldUUID, newUUID := range renames {
+		if c.ruleStateStore != nil {
+			if err := c.ruleStateStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
+				logrus.WithError(err).Warnf("Migration 20260611: failed to rename rule state %s -> %s", oldUUID, newUUID)
+			}
+		}
+		if c.usageStore != nil {
+			if err := c.usageStore.RenameRuleUUID(oldUUID, newUUID); err != nil {
+				logrus.WithError(err).Warnf("Migration 20260611: failed to rename usage records %s -> %s", oldUUID, newUUID)
+			}
+		}
+	}
+
+	_ = c.Save()
+	logrus.Infof("Migration 20260611 completed: normalized %d Claude Code profile rule UUID(s)", len(renames))
 }

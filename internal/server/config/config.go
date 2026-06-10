@@ -1421,10 +1421,14 @@ func (c *Config) GetProfile(baseScenario typ.RuleScenario, profileID string) (ty
 // newCCProfileRules builds fresh rules for a claude_code profile.
 // unified=true → one rule "cc"; unified=false → five rules (default/haiku/sonnet/opus/subagent).
 // Rules are empty (no services, no smart routing) for users to configure.
+// UUIDs follow the built-in convention: "<builtin-uuid>:<profileID>"
+// (e.g. "built-in-cc-haiku:p1"), so profile rules stay addressable by a
+// deterministic identity just like the main scenario's built-ins.
 func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Rule {
-	newRule := func(requestModel, description string) typ.Rule {
+	_, profileID := typ.ParseScenarioProfile(profiledScenario)
+	newRule := func(builtinUUID, requestModel, description string) typ.Rule {
 		return typ.Rule{
-			UUID:         uuid.New().String(),
+			UUID:         ProfileRuleUUID(builtinUUID, profileID),
 			Scenario:     profiledScenario,
 			RequestModel: requestModel,
 			Description:  description,
@@ -1443,15 +1447,15 @@ func newCCProfileRules(profiledScenario typ.RuleScenario, unified bool) []typ.Ru
 
 	if unified {
 		return []typ.Rule{
-			newRule("cc", "Claude Code profile - unified mode"),
+			newRule(RuleUUIDBuiltinCC, "cc", "Claude Code profile - unified mode"),
 		}
 	}
 	return []typ.Rule{
-		newRule("default", "Claude Code profile - default model"),
-		newRule("haiku", "Claude Code profile - haiku model"),
-		newRule("sonnet", "Claude Code profile - sonnet model"),
-		newRule("opus", "Claude Code profile - opus model"),
-		newRule("subagent", "Claude Code profile - subagent model"),
+		newRule(RuleUUIDBuiltinCCDefault, "default", "Claude Code profile - default model"),
+		newRule(RuleUUIDBuiltinCCHaiku, "haiku", "Claude Code profile - haiku model"),
+		newRule(RuleUUIDBuiltinCCSonnet, "sonnet", "Claude Code profile - sonnet model"),
+		newRule(RuleUUIDBuiltinCCOpus, "opus", "Claude Code profile - opus model"),
+		newRule(RuleUUIDBuiltinCCSubagent, "subagent", "Claude Code profile - subagent model"),
 	}
 }
 
@@ -1580,9 +1584,23 @@ func (c *Config) DeleteProfile(baseScenario typ.RuleScenario, profileID string) 
 
 	// Remove all rules belonging to this profile
 	profiledScenario := typ.ProfiledScenarioName(baseScenario, profileID)
+	var removedUUIDs []string
 	c.Rules = slices.DeleteFunc(c.Rules, func(r typ.Rule) bool {
-		return r.Scenario == profiledScenario
+		if r.Scenario == profiledScenario {
+			removedUUIDs = append(removedUUIDs, r.UUID)
+			return true
+		}
+		return false
 	})
+
+	// Purge persisted load-balancer state for the removed rules. Profile rule
+	// UUIDs are deterministic and profile IDs are recycled, so a future profile
+	// with the same ID must not inherit this profile's service pinning.
+	if c.ruleStateStore != nil {
+		if err := c.ruleStateStore.DeleteRules(removedUUIDs); err != nil {
+			logrus.WithError(err).Warn("failed to clear rule state for deleted profile rules")
+		}
+	}
 
 	// Remove scenario config for this profile (if it exists)
 	c.Scenarios = slices.DeleteFunc(c.Scenarios, func(sc typ.ScenarioConfig) bool {

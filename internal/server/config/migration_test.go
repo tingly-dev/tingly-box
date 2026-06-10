@@ -11,7 +11,7 @@ func TestMigrate20260110_CopiesCCServices(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("cc")}},
-			{UUID: RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode}, // empty → should inherit
+			{UUID: RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode},                                                // empty → should inherit
 			{UUID: RuleUUIDBuiltinCCSonnet, Scenario: typ.ScenarioClaudeCode, Services: []*loadbalance.Service{svc("own")}}, // own → kept
 		},
 	}
@@ -168,11 +168,11 @@ func TestMigrate20260610_SeedsRuleFlags(t *testing.T) {
 	}
 	const aff = defaultSessionAffinitySeconds
 	wants := map[string]want{
-		"built-in-cc":     {compat: true, clean: true, affinity: aff},  // claude_code base → all defaulted on
-		"cc-profile":      {compat: true, clean: true, affinity: aff},  // claude_code:<profile> → covered
-		"cc-compat-on":    {compat: true, clean: true, affinity: aff},  // already-on compat unchanged, others seeded
-		"cc-affinity-set": {compat: true, clean: true, affinity: 900},  // user affinity preserved
-		"desktop":         {compat: true, clean: true, affinity: aff},  // claude_desktop → all defaulted on
+		"built-in-cc":     {compat: true, clean: true, affinity: aff},   // claude_code base → all defaulted on
+		"cc-profile":      {compat: true, clean: true, affinity: aff},   // claude_code:<profile> → covered
+		"cc-compat-on":    {compat: true, clean: true, affinity: aff},   // already-on compat unchanged, others seeded
+		"cc-affinity-set": {compat: true, clean: true, affinity: 900},   // user affinity preserved
+		"desktop":         {compat: true, clean: true, affinity: aff},   // claude_desktop → all defaulted on
 		"codex":           {compat: false, clean: false, affinity: aff}, // codex → affinity only
 		"openai":          {compat: false, clean: false, affinity: 0},   // out of scope → untouched
 	}
@@ -187,6 +187,95 @@ func TestMigrate20260610_SeedsRuleFlags(t *testing.T) {
 		if r.Flags.SessionAffinity != w.affinity {
 			t.Errorf("rule %q SessionAffinity = %d, want %d", r.UUID, r.Flags.SessionAffinity, w.affinity)
 		}
+	}
+}
+
+func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
+	p1 := typ.RuleScenario("claude_code:p1")
+	p2 := typ.RuleScenario("claude_code:p2")
+	c := &Config{
+		Rules: []typ.Rule{
+			// Legacy random UUIDs → renamed to canonical.
+			{UUID: "5f1c2a9e-0000-0000-0000-000000000001", Scenario: p1, RequestModel: "haiku"},
+			{UUID: "5f1c2a9e-0000-0000-0000-000000000002", Scenario: p1, RequestModel: "sonnet"},
+			// Unified-mode profile rule.
+			{UUID: "5f1c2a9e-0000-0000-0000-000000000003", Scenario: p2, RequestModel: "cc"},
+			// Already canonical → untouched.
+			{UUID: "built-in-cc-opus:p1", Scenario: p1, RequestModel: "opus"},
+			// Custom request model with no built-in counterpart → untouched.
+			{UUID: "5f1c2a9e-0000-0000-0000-000000000004", Scenario: p1, RequestModel: "my-custom"},
+			// Main-scenario built-in (not profiled) → untouched.
+			{UUID: RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-haiku"},
+		},
+	}
+
+	migrate20260611(c)
+
+	wants := map[int]string{
+		0: "built-in-cc-haiku:p1",
+		1: "built-in-cc-sonnet:p1",
+		2: "built-in-cc:p2",
+		3: "built-in-cc-opus:p1",
+		4: "5f1c2a9e-0000-0000-0000-000000000004",
+		5: RuleUUIDBuiltinCCHaiku,
+	}
+	for i, want := range wants {
+		if got := c.Rules[i].UUID; got != want {
+			t.Errorf("rule %d UUID = %q, want %q", i, got, want)
+		}
+	}
+
+	// Idempotent: a second pass changes nothing.
+	migrate20260611(c)
+	for i, want := range wants {
+		if got := c.Rules[i].UUID; got != want {
+			t.Errorf("second pass: rule %d UUID = %q, want %q", i, got, want)
+		}
+	}
+}
+
+func TestMigrate20260611_SkipsOnCanonicalCollision(t *testing.T) {
+	p1 := typ.RuleScenario("claude_code:p1")
+	c := &Config{
+		Rules: []typ.Rule{
+			// Canonical identity already held by another rule.
+			{UUID: "built-in-cc-haiku:p1", Scenario: p1, RequestModel: "haiku"},
+			// Duplicate tier rule with a random UUID — must not steal the identity.
+			{UUID: "5f1c2a9e-0000-0000-0000-00000000000a", Scenario: p1, RequestModel: "haiku"},
+		},
+	}
+
+	migrate20260611(c)
+
+	if c.Rules[0].UUID != "built-in-cc-haiku:p1" {
+		t.Errorf("canonical rule UUID changed: %q", c.Rules[0].UUID)
+	}
+	if c.Rules[1].UUID != "5f1c2a9e-0000-0000-0000-00000000000a" {
+		t.Errorf("duplicate tier rule should keep its UUID on collision, got %q", c.Rules[1].UUID)
+	}
+}
+
+func TestNewCCProfileRules_CanonicalUUIDs(t *testing.T) {
+	separate := newCCProfileRules(typ.RuleScenario("claude_code:p3"), false)
+	wantSeparate := map[string]string{
+		"default":  "built-in-cc-default:p3",
+		"haiku":    "built-in-cc-haiku:p3",
+		"sonnet":   "built-in-cc-sonnet:p3",
+		"opus":     "built-in-cc-opus:p3",
+		"subagent": "built-in-cc-subagent:p3",
+	}
+	if len(separate) != len(wantSeparate) {
+		t.Fatalf("separate mode rule count = %d, want %d", len(separate), len(wantSeparate))
+	}
+	for _, r := range separate {
+		if want := wantSeparate[r.RequestModel]; r.UUID != want {
+			t.Errorf("separate rule %q UUID = %q, want %q", r.RequestModel, r.UUID, want)
+		}
+	}
+
+	unified := newCCProfileRules(typ.RuleScenario("claude_code:p3"), true)
+	if len(unified) != 1 || unified[0].UUID != "built-in-cc:p3" {
+		t.Errorf("unified rule UUID = %+v, want built-in-cc:p3", unified)
 	}
 }
 
