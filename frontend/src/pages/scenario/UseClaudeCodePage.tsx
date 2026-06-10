@@ -133,7 +133,7 @@ const UseClaudeCodePageContent: React.FC = () => {
         const loadDataAsync = async () => {
             setLoadingRule(true);
             if (configMode === 'unified') {
-                const result = await api.getRule("built-in-cc");
+                const result = await api.getRule("builtin:claude_code:cc");
                 if (isMounted) {
                     setRules(result.success ? [result.data] : []);
                     setLoadingRule(false);
@@ -142,7 +142,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                 const result = await api.getRules(SCENARIO);
                 if (isMounted) {
                     // Filter out the unified rule in separate mode
-                    const filtered = (result.success ? result.data : []).filter((r: any) => r.uuid !== 'built-in-cc');
+                    const filtered = (result.success ? result.data : []).filter((r: any) => r.uuid !== 'builtin:claude_code:cc');
                     setRules(filtered);
                     setLoadingRule(false);
                 }

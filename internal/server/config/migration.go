@@ -13,17 +13,30 @@ import (
 
 // Built-in rule UUID constants
 const (
-	RuleUUIDTingly            = "tingly"
-	RuleUUIDBuiltinOpenAI     = "built-in-openai"
-	RuleUUIDBuiltinAnthropic  = "built-in-anthropic"
-	RuleUUIDBuiltinCodex      = "built-in-codex"
+	RuleUUIDTingly           = "tingly"
+	RuleUUIDBuiltinOpenAI    = "built-in-openai"
+	RuleUUIDBuiltinAnthropic = "built-in-anthropic"
+	RuleUUIDBuiltinCodex     = "built-in-codex"
+	RuleUUIDClaudeCode       = "claude-code"
+
+	// Legacy Claude Code built-in UUIDs. Live configs are renamed to the
+	// modern RuleUUIDCC* values by migrate20260611; these constants remain so
+	// older migrations (which run before the rename) and compatibility
+	// fallbacks can still address pre-rename configs.
 	RuleUUIDBuiltinCC         = "built-in-cc"
-	RuleUUIDClaudeCode        = "claude-code"
 	RuleUUIDBuiltinCCHaiku    = "built-in-cc-haiku"
 	RuleUUIDBuiltinCCSonnet   = "built-in-cc-sonnet"
 	RuleUUIDBuiltinCCOpus     = "built-in-cc-opus"
 	RuleUUIDBuiltinCCDefault  = "built-in-cc-default"
 	RuleUUIDBuiltinCCSubagent = "built-in-cc-subagent"
+
+	// Claude Code built-in rules (modern "builtin:<scenario>:<tier>" form)
+	RuleUUIDCC         = "builtin:claude_code:cc"
+	RuleUUIDCCDefault  = "builtin:claude_code:default"
+	RuleUUIDCCHaiku    = "builtin:claude_code:haiku"
+	RuleUUIDCCSonnet   = "builtin:claude_code:sonnet"
+	RuleUUIDCCOpus     = "builtin:claude_code:opus"
+	RuleUUIDCCSubagent = "builtin:claude_code:subagent"
 
 	// Claude Desktop built-in rules (locked, using builtin: prefix)
 	RuleUUIDBuiltinClaudeDesktopSonnet46 = "builtin:claude_desktop:claude-sonnet-4-6"
@@ -31,6 +44,19 @@ const (
 	RuleUUIDBuiltinClaudeDesktopOpus47   = "builtin:claude_desktop:claude-opus-4-7"
 	RuleUUIDBuiltinClaudeDesktopHaiku45  = "builtin:claude_desktop:claude-haiku-4-5"
 )
+
+// legacyCCRuleUUIDs maps the legacy Claude Code built-in UUIDs to their modern
+// counterparts. Used by migrate20260611 to rename live configs and by
+// defaultRuleByUUID to keep older migrations (written against the legacy
+// names) able to pull templates from the modern DefaultRules.
+var legacyCCRuleUUIDs = map[string]string{
+	RuleUUIDBuiltinCC:         RuleUUIDCC,
+	RuleUUIDBuiltinCCDefault:  RuleUUIDCCDefault,
+	RuleUUIDBuiltinCCHaiku:    RuleUUIDCCHaiku,
+	RuleUUIDBuiltinCCSonnet:   RuleUUIDCCSonnet,
+	RuleUUIDBuiltinCCOpus:     RuleUUIDCCOpus,
+	RuleUUIDBuiltinCCSubagent: RuleUUIDCCSubagent,
+}
 
 // BuiltinRuleUUID builds a built-in rule UUID in the modern
 // "builtin:<scenario>:<model>" form — the target convention all built-in rules
@@ -72,8 +98,13 @@ func (c *Config) findRuleByUUID(uuid string) *typ.Rule {
 	return nil
 }
 
-// defaultRuleByUUID looks up a built-in rule template (from DefaultRules) by UUID.
+// defaultRuleByUUID looks up a built-in rule template (from DefaultRules) by
+// UUID. Legacy Claude Code UUIDs are resolved to their modern aliases so
+// migrations written before the rename keep finding their templates.
 func defaultRuleByUUID(uuid string) (typ.Rule, bool) {
+	if modern, ok := legacyCCRuleUUIDs[uuid]; ok {
+		uuid = modern
+	}
 	for _, r := range DefaultRules {
 		if r.UUID == uuid {
 			return r, true
@@ -668,11 +699,13 @@ func migrate20260610(c *Config) {
 	}
 }
 
-// migrate20260611 normalizes Claude Code profile rule UUIDs to the canonical
-// "builtin:<profiled-scenario>:<tier>" form (e.g. "builtin:claude_code:p1:haiku").
-// Profile rules used to be created with random v4 UUIDs, which broke the
-// convention that built-in rules are addressable by stable UUIDs and made
-// profile rule identity non-reproducible.
+// migrate20260611 normalizes Claude Code rule UUIDs to the canonical
+// "builtin:<scenario>:<tier>" form:
+//
+//   - main-scenario built-ins: legacy "built-in-cc-haiku" → "builtin:claude_code:haiku"
+//     (renamed by exact legacy-UUID match, so user-renamed request models don't matter);
+//   - profile rules: random v4 UUIDs → "builtin:claude_code:p1:haiku"
+//     (matched by request_model tier, since their old UUIDs carry no identity).
 //
 // The pass is intentionally not marker-gated: it is idempotent (rules already
 // canonical are skipped) and self-healing, so a config written by an older
@@ -687,13 +720,24 @@ func migrate20260611(c *Config) {
 	for i := range c.Rules {
 		rule := &c.Rules[i]
 		base, profileID := typ.ParseScenarioProfile(rule.Scenario)
-		if profileID == "" || base != typ.ScenarioClaudeCode {
+		if base != typ.ScenarioClaudeCode {
 			continue
 		}
-		if !ccProfileTiers[rule.RequestModel] {
-			continue
+
+		var canonical string
+		if profileID == "" {
+			// Main scenario: only the known legacy built-ins are renamed.
+			var ok bool
+			if canonical, ok = legacyCCRuleUUIDs[rule.UUID]; !ok {
+				continue
+			}
+		} else {
+			// Profile: identify the tier by request model.
+			if !ccProfileTiers[rule.RequestModel] {
+				continue
+			}
+			canonical = BuiltinRuleUUID(rule.Scenario, rule.RequestModel)
 		}
-		canonical := BuiltinRuleUUID(rule.Scenario, rule.RequestModel)
 		if rule.UUID == canonical {
 			continue
 		}
@@ -730,5 +774,5 @@ func migrate20260611(c *Config) {
 	}
 
 	_ = c.Save()
-	logrus.Infof("Migration 20260611 completed: normalized %d Claude Code profile rule UUID(s)", len(renames))
+	logrus.Infof("Migration 20260611 completed: normalized %d Claude Code rule UUID(s)", len(renames))
 }

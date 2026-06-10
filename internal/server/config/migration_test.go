@@ -204,8 +204,12 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 			{UUID: "builtin:claude_code:p1:opus", Scenario: p1, RequestModel: "opus"},
 			// Custom request model with no built-in counterpart → untouched.
 			{UUID: "5f1c2a9e-0000-0000-0000-000000000004", Scenario: p1, RequestModel: "my-custom"},
-			// Main-scenario built-in (not profiled) → untouched.
-			{UUID: RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc-haiku"},
+			// Main-scenario legacy built-in → renamed by exact UUID match,
+			// even with a user-renamed request model.
+			{UUID: RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast"},
+			{UUID: RuleUUIDBuiltinCC, Scenario: typ.ScenarioClaudeCode, RequestModel: "tingly/cc"},
+			// Main-scenario user rule with a random UUID → untouched.
+			{UUID: "5f1c2a9e-0000-0000-0000-000000000005", Scenario: typ.ScenarioClaudeCode, RequestModel: "haiku"},
 		},
 	}
 
@@ -217,7 +221,9 @@ func TestMigrate20260611_NormalizesProfileRuleUUIDs(t *testing.T) {
 		2: "builtin:claude_code:p2:cc",
 		3: "builtin:claude_code:p1:opus",
 		4: "5f1c2a9e-0000-0000-0000-000000000004",
-		5: RuleUUIDBuiltinCCHaiku,
+		5: RuleUUIDCCHaiku,
+		6: RuleUUIDCC,
+		7: "5f1c2a9e-0000-0000-0000-000000000005",
 	}
 	for i, want := range wants {
 		if got := c.Rules[i].UUID; got != want {

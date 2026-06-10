@@ -291,9 +291,9 @@ const mockV1Rules: Record<string, any[]> = {
     ],
     claude_code: [
         {
-            // Unified-mode rule fetched by GET /api/v1/rule/built-in-cc.
+            // Unified-mode rule fetched by GET /api/v1/rule/builtin:claude_code:cc.
             // Demonstrates smart routing with fabric conditions + tiered default fallback.
-            uuid: 'built-in-cc',
+            uuid: 'builtin:claude_code:cc',
             scenario: 'claude_code',
             request_model: 'claude-sonnet-4-6',
             response_model: '',

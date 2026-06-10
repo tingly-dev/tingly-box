@@ -114,7 +114,7 @@ runs assertions on the round-trip result. **No agent CLI is spawned.**
   │   POST /tingly/<agent>/v1/{messages,responses}             │
   │        │                                                   │
   │        ▼                                                   │
-  │   built-in rule  (built-in-cc / -codex / -opencode)        │
+  │   built-in rule  (builtin:claude_code:cc / codex / opencode)        │
   │        │  rule.Services[0] → provider                      │
   │        ▼                                                   │
   │   ┌─────────────┬──────────────┬─────────────────┐         │
@@ -236,7 +236,7 @@ providers.
 
 | agent      | API style          | gateway endpoint                  | built-in rule UUID  | RequestModel       |
 |------------|--------------------|-----------------------------------|---------------------|--------------------|
-| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `built-in-cc`       | `tingly/cc`        |
+| `claude`   | `anthropic`        | `/tingly/claude_code/v1/messages` | `builtin:claude_code:cc`       | `tingly/cc`        |
 | `codex`    | `openai` (Responses)| `/tingly/codex/v1/responses`      | `built-in-codex`    | `tingly-codex`     |
 | `opencode` | `anthropic`        | `/tingly/opencode/v1/messages`    | `built-in-opencode` | `tingly-opencode`  |
 

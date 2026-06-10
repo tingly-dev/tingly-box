@@ -54,7 +54,20 @@ func TestGenerateCCEnv_ProfileUnified_ResolvesCCRule(t *testing.T) {
 	}
 }
 
+func TestGenerateCCEnv_MainScenario_ResolvesModernBuiltins(t *testing.T) {
+	cfg := &config.Config{Rules: []typ.Rule{
+		{UUID: config.RuleUUIDCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast", Active: true},
+	}}
+
+	env := generateCCEnv(cfg, "http://localhost:12580", "tok", "claude_code", false, false)
+
+	if got := env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]; got != "vendor/fast" {
+		t.Errorf("haiku model = %q, want %q", got, "vendor/fast")
+	}
+}
+
 func TestGenerateCCEnv_MainScenario_ResolvesLegacyBuiltins(t *testing.T) {
+	// Pre-migration configs still carry the legacy built-in-cc-* UUIDs.
 	cfg := &config.Config{Rules: []typ.Rule{
 		{UUID: config.RuleUUIDBuiltinCCHaiku, Scenario: typ.ScenarioClaudeCode, RequestModel: "vendor/fast", Active: true},
 	}}

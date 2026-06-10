@@ -365,24 +365,28 @@ func generateCCEnv(cfg *config.Config, baseURL, apiKey, scenarioPath string, uni
 		"ANTHROPIC_AUTH_TOKEN":                     apiKey,
 	}
 
-	ruleModel := func(uuid, fallback string) string {
+	ruleModel := func(fallback string, uuids ...string) string {
 		if cfg != nil {
-			if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
-				if m := strings.TrimSpace(r.RequestModel); m != "" {
-					return m
+			for _, uuid := range uuids {
+				if r := cfg.GetRuleByUUID(uuid); r != nil && r.Active {
+					if m := strings.TrimSpace(r.RequestModel); m != "" {
+						return m
+					}
 				}
 			}
 		}
 		return fallback
 	}
 	// tierModel resolves one tier slot: profile rules by canonical profiled
-	// UUID with the short tier name as fallback, main scenario rules by their
-	// legacy built-in UUID with the canonical tingly/* name as fallback.
+	// UUID with the short tier name as fallback, main scenario rules by the
+	// modern built-in UUID (legacy UUID as a compatibility fallback for
+	// configs not yet renamed by migration) with the canonical tingly/* name
+	// as the final fallback.
 	tierModel := func(tier, legacyUUID, legacyFallback string) string {
 		if isProfile {
-			return ruleModel(config.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), tier), tier)
+			return ruleModel(tier, config.BuiltinRuleUUID(typ.RuleScenario(scenarioPath), tier))
 		}
-		return ruleModel(legacyUUID, legacyFallback)
+		return ruleModel(legacyFallback, config.BuiltinRuleUUID(typ.ScenarioClaudeCode, tier), legacyUUID)
 	}
 
 	if unified {

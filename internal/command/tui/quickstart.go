@@ -511,12 +511,12 @@ func qsRules(ctx StepContext, s quickstartState) (quickstartState, StepResult, e
 	}{
 		{serverconfig.RuleUUIDBuiltinOpenAI, "OpenAI scenario"},
 		{serverconfig.RuleUUIDBuiltinAnthropic, "Anthropic scenario"},
-		{serverconfig.RuleUUIDBuiltinCC, "Claude Code · unified"},
-		{serverconfig.RuleUUIDBuiltinCCDefault, "Claude Code · default"},
-		{serverconfig.RuleUUIDBuiltinCCHaiku, "Claude Code · haiku"},
-		{serverconfig.RuleUUIDBuiltinCCOpus, "Claude Code · opus"},
-		{serverconfig.RuleUUIDBuiltinCCSonnet, "Claude Code · sonnet"},
-		{serverconfig.RuleUUIDBuiltinCCSubagent, "Claude Code · subagent"},
+		{serverconfig.RuleUUIDCC, "Claude Code · unified"},
+		{serverconfig.RuleUUIDCCDefault, "Claude Code · default"},
+		{serverconfig.RuleUUIDCCHaiku, "Claude Code · haiku"},
+		{serverconfig.RuleUUIDCCOpus, "Claude Code · opus"},
+		{serverconfig.RuleUUIDCCSonnet, "Claude Code · sonnet"},
+		{serverconfig.RuleUUIDCCSubagent, "Claude Code · subagent"},
 		{"built-in-opencode", "OpenCode scenario"},
 	}
 

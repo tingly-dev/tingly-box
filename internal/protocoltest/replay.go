@@ -44,7 +44,7 @@ func (env *AgentTestEnv) repointBuiltinRule(agentType AgentType, providerUUID, u
 	var builtinUUID, requestModel string
 	switch agentType {
 	case AgentTypeClaudeCode:
-		builtinUUID, requestModel = "built-in-cc", "tingly/cc"
+		builtinUUID, requestModel = "builtin:claude_code:cc", "tingly/cc"
 	case AgentTypeCodex:
 		builtinUUID, requestModel = "built-in-codex", "tingly-codex"
 	case AgentTypeOpenCode:

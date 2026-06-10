@@ -54,7 +54,7 @@ Two modes, selected by an explicit flag:
   --config <file>        Real-provider mode
     Reads a list of real providers from a YAML config file. For each provider
     and model combination, spins up an isolated gateway, registers the provider,
-    binds the built-in rule (built-in-cc / built-in-codex / built-in-opencode)
+    binds the built-in rule (builtin:claude_code:cc / built-in-codex / built-in-opencode)
     to a Service pointing at that provider+model, and runs the agent CLI against
     the gateway. Reports pass/fail per entry.
 

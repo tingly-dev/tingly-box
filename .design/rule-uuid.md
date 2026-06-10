@@ -7,20 +7,45 @@ stable constant:
 
 | Kind | Format | Example |
 |---|---|---|
-| Legacy built-ins | hyphenated string | `built-in-cc`, `built-in-cc-haiku`, `built-in-codex` |
-| Modern built-ins | `builtin:<scenario>:<model>` | `builtin:claude_desktop:claude-haiku-4-5` |
+| Modern built-ins | `builtin:<scenario>:<model>` | `builtin:claude_code:haiku`, `builtin:claude_desktop:claude-haiku-4-5` |
+| Legacy built-ins | hyphenated string | `built-in-openai`, `built-in-codex`, `built-in-opencode` |
 | SmartGuide internal | `_internal_smart_guide_<botUUID>` | — |
 | User-created rules | random v4 UUID | — |
 
 The constants live in `internal/server/config/migration.go`
-(`RuleUUIDBuiltin*`), alongside `BuiltinRuleUUID(scenario, model)` which
-builds the modern form. Anything that is system-seeded must have a
-deterministic UUID; randomness is reserved for rules the user creates.
+(`RuleUUIDCC*` / `RuleUUIDBuiltin*`), alongside
+`BuiltinRuleUUID(scenario, model)` which builds the modern form. Anything
+that is system-seeded must have a deterministic UUID; randomness is
+reserved for rules the user creates.
 
-**Direction:** `builtin:<scenario>:<model>` is the target convention. The
-legacy `built-in-*` UUIDs will eventually be migrated onto it (a larger
-change touching every consumer that hardcodes them); new system-seeded
-rules must use the modern form from day one.
+**Direction:** `builtin:<scenario>:<model>` is the target convention.
+Claude Code (main scenario + profiles) and Claude Desktop are already on
+it; the remaining legacy built-ins (openai / anthropic / codex / opencode
+/ tingly) will be migrated when their scenarios are next touched. New
+system-seeded rules must use the modern form from day one.
+
+## Claude Code main scenario
+
+The six Claude Code built-ins migrated from legacy hyphenated UUIDs to
+the modern form (`migrate20260611`, renamed by exact legacy-UUID match so
+user-customized request models are irrelevant):
+
+| Legacy | Modern |
+|---|---|
+| `built-in-cc` | `builtin:claude_code:cc` |
+| `built-in-cc-default` | `builtin:claude_code:default` |
+| `built-in-cc-haiku` | `builtin:claude_code:haiku` |
+| `built-in-cc-sonnet` | `builtin:claude_code:sonnet` |
+| `built-in-cc-opus` | `builtin:claude_code:opus` |
+| `built-in-cc-subagent` | `builtin:claude_code:subagent` |
+
+The legacy constants (`RuleUUIDBuiltinCC*`) are kept for two reasons:
+older migrations in the `Migrate` chain run *before* the rename and must
+still address pre-rename configs, and runtime consumers (`generateCCEnv`,
+`tbclient.resolveClaudeCodeModels`) keep a legacy-UUID fallback for
+configs loaded without migration. `defaultRuleByUUID` resolves legacy
+aliases to the modern templates so old migrations keep finding them in
+`DefaultRules`.
 
 ## Profile rules
 
@@ -62,9 +87,10 @@ builtin:<base>:<profileID>:<tier>     // BuiltinRuleUUID(profiledScenario, tier)
 | `opus`               | `builtin:claude_code:p1:opus`    |
 | `subagent`           | `builtin:claude_code:p1:subagent` |
 
-Profile rules are therefore already on the target convention — when the
-legacy `built-in-cc-*` main-scenario rules are unified later, profiles
-need no further migration.
+Profile and main-scenario UUIDs share one builder: the profile form is
+just `BuiltinRuleUUID` applied to the profiled scenario name, so
+`builtin:claude_code:haiku` (main) and `builtin:claude_code:p1:haiku`
+(profile) come from the same rule.
 
 `ccProfileTiers` (migration.go) is the set of system-seeded tier names;
 `newCCProfileRules` (config.go) assigns canonical UUIDs at creation time
