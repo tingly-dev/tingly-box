@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // HandleOpenAIToAnthropicBetaStream processes OpenAI streaming events and converts them to Anthropic beta format.
@@ -201,13 +202,13 @@ func HandleResponsesToAnthropicBetaAssembly(c *gin.Context, stream ResponsesStre
 			}
 
 			// Send result
-			c.JSON(200, msg)
+			c.JSON(200, wire.AnthropicBetaMessageMap(&msg))
 			flusher.Flush()
 			return
 		},
 		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
 			// For error, still try to send what we have
-			c.JSON(200, msg)
+			c.JSON(200, wire.AnthropicBetaMessageMap(&msg))
 		},
 	})
 }

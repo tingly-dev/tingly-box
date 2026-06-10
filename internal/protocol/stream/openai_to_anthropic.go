@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // handleResponsesToAnthropicStream is the shared implementation for both v1 and beta
@@ -842,13 +843,13 @@ func HandleResponsesToAnthropicV1Assembly(c *gin.Context, stream ResponsesStream
 			}
 
 			// Send result
-			c.JSON(200, msg)
+			c.JSON(200, wire.AnthropicMessageMap(&msg))
 			flusher.Flush()
 			return
 		},
 		SendErrorEvent: func(event map[string]interface{}, flusher http.Flusher) {
 			// For error, still try to send what we have
-			c.JSON(200, msg)
+			c.JSON(200, wire.AnthropicMessageMap(&msg))
 		},
 	})
 }

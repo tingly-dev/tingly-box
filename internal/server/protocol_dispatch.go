@@ -22,6 +22,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
 	coretool "github.com/tingly-dev/tingly-box/internal/tool"
@@ -467,7 +468,7 @@ func (s *Server) passthroughAnthropicBeta(
 			recorder.SetAssembledResponse(anthropicResp)
 			recorder.RecordResponse(provider, reqCtx.RequestModel)
 		}
-		c.JSON(http.StatusOK, anthropicResp)
+		c.JSON(http.StatusOK, wire.AnthropicBetaMessageMap(anthropicResp))
 	}
 }
 
@@ -689,7 +690,7 @@ func (s *Server) dispatchGoogle(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			c.JSON(http.StatusOK, wire.AnthropicBetaMessageMap(anthropicResp))
 		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
@@ -697,7 +698,7 @@ func (s *Server) dispatchGoogle(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			c.JSON(http.StatusOK, wire.AnthropicBetaMessageMap(&anthropicResp))
 		}
 	}
 }
@@ -810,7 +811,7 @@ func (s *Server) dispatchOpenAIChat(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			c.JSON(http.StatusOK, wire.AnthropicBetaMessageMap(anthropicResp))
 		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, anthropicResp.ID)
@@ -818,7 +819,7 @@ func (s *Server) dispatchOpenAIChat(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			c.JSON(http.StatusOK, wire.AnthropicBetaMessageMap(&anthropicResp))
 		}
 	}
 }

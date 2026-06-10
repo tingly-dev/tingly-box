@@ -152,7 +152,13 @@ func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context,
 			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, message)
+		// Serve the upstream JSON verbatim; marshaling the SDK struct would
+		// emit zero values for fields the provider omitted.
+		if raw := message.RawJSON(); raw != "" {
+			c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(raw))
+		} else {
+			c.JSON(http.StatusOK, message)
+		}
 	case anthropicCountTokensV1:
 		var req anthropic.MessageCountTokensParams
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -166,7 +172,11 @@ func (s *Server) anthropicCountTokensViaAPI(c *gin.Context, ctx context.Context,
 			stream.SendInvalidRequestBodyError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, message)
+		if raw := message.RawJSON(); raw != "" {
+			c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(raw))
+		} else {
+			c.JSON(http.StatusOK, message)
+		}
 	}
 }
 

@@ -70,8 +70,6 @@ return protocol.ZeroTokenUsage(), nil
 |---|---|
 | `HandleOpenAIChatNonStream` | `FromOpenAIChatCompletion` |
 | `HandleOpenAIResponsesNonStream` | `FromOpenAIResponses` |
-| `HandleAnthropicV1NonStream` | `FromAnthropicMessage` |
-| `HandleAnthropicV1BetaNonStream` | `FromAnthropicBetaMessage` |
 
 ### `internal/protocol/stream/`
 

@@ -11,6 +11,7 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/stream"
 	usagepkg "github.com/tingly-dev/tingly-box/internal/protocol/usage"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
@@ -159,7 +160,7 @@ func (s *Server) nonstreamResponsesToAnthropic(c *gin.Context, proxyModel string
 		recorder.SetAssembledResponse(anthropicResp)
 		recorder.RecordResponse(provider, actualModel)
 	}
-	c.JSON(http.StatusOK, anthropicResp)
+	c.JSON(http.StatusOK, wire.AnthropicMessageMap(&anthropicResp))
 }
 
 // streamResponsesToAnthropic handles streaming Responses API request for v1

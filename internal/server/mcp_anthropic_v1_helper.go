@@ -9,11 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -337,7 +338,11 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 	}
 
 	// Return response
-	c.JSON(http.StatusOK, response)
+	if anthropicMsg != nil {
+		c.JSON(http.StatusOK, wire.AnthropicMessageMap(anthropicMsg))
+	} else {
+		c.JSON(http.StatusOK, response)
+	}
 }
 
 // dispatchGenericAnthropicV1Stream handles A→A streaming with generic interceptor
@@ -448,7 +453,11 @@ func (s *Server) dispatchGenericOpenAIChatNonStream(
 	s.updateAffinityMessageID(c, rule, string(response.ID))
 
 	// Return response (OpenAI format)
-	c.JSON(http.StatusOK, response)
+	if respMap, err := wire.OpenAIChatCompletionMap(response); err == nil {
+		c.JSON(http.StatusOK, respMap)
+	} else {
+		c.JSON(http.StatusOK, response)
+	}
 }
 
 // dispatchGenericOpenAIChatStream handles O→O streaming with generic interceptor
@@ -549,7 +558,7 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 	}
 
 	// Return response
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, wire.AnthropicBetaMessageMap(response))
 }
 
 // dispatchGenericAnthropicBetaStream handles Aβ→Aβ streaming with generic interceptor
