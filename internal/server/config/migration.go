@@ -49,7 +49,6 @@ const (
 	RuleUUIDOpenCode  = "builtin:opencode:default"
 	RuleUUIDAgent     = "builtin:agent:default"
 	RuleUUIDAgentClaw = "builtin:agent:claw"
-	RuleUUIDTeam      = "builtin:team:default"
 
 	// Claude Code built-in rules (modern "builtin:<scenario>:<tier>" form)
 	RuleUUIDCC         = "builtin:claude_code:cc"
@@ -90,7 +89,6 @@ var legacySimpleRuleUUIDs = map[string]string{
 	RuleUUIDBuiltinOpenCode:  RuleUUIDOpenCode,
 	RuleUUIDBuiltinAgent:     RuleUUIDAgent,
 	RuleUUIDBuiltinAgentClaw: RuleUUIDAgentClaw,
-	RuleUUIDBuiltinTeam:      RuleUUIDTeam,
 }
 
 // BuiltinRuleUUID builds a built-in rule UUID in the modern

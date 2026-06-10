@@ -55,19 +55,6 @@ func init() {
 			Active: true,
 		},
 		{
-			UUID:          RuleUUIDTeam,
-			Scenario:      typ.ScenarioTeam,
-			RequestModel:  "tingly-team",
-			ResponseModel: "",
-			Description:   "Default proxy rule for team (shared central model deployment)",
-			Services:      []*loadbalance.Service{},
-			LBTactic: typ.Tactic{
-				Type:   loadbalance.TacticAdaptive,
-				Params: typ.DefaultAdaptiveParams(),
-			},
-			Active: true,
-		},
-		{
 			UUID:          RuleUUIDOpenAI,
 			Scenario:      typ.ScenarioOpenAI,
 			RequestModel:  "tingly-gpt",
