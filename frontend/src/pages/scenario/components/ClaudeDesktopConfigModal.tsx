@@ -18,6 +18,7 @@ import { Delete as DeleteIcon } from '@/components/icons';
 import { Add as AddIcon } from '@/components/icons';
 import { ContentCopy as ContentCopyIcon } from '@/components/icons';
 import { useScenarioPageModal } from '@/pages/scenario/context/ScenarioPageContext';
+import { withOneM } from '@/components/rule-card/utils';
 import api from '@/services/api';
 
 interface ClaudeDesktopConfigModalProps {
@@ -32,13 +33,15 @@ interface ClaudeDesktopConfigModalProps {
 const MODEL_PREFIX = 'claude-';
 const buildInferenceModelsJson = (modelRules: any[]): string => {
     const entries = modelRules.map(r => {
-        // request_model carries the [1m] suffix directly when 1M is toggled on
-        // (the toggle renames the rule), so it flows through verbatim.
+        // [1m] is a client convention: rules with context_1m get the suffix
+        // here at render time (the stored rule name stays clean); routing is
+        // [1m]-tolerant so the suffixed name matches back.
+        const name = r.context_1m ? withOneM(r.request_model, true) : r.request_model;
         const label = r.description?.startsWith('label:') ? r.description.slice(6) : '';
         if (label) {
-            return `    {\n      "name": "${r.request_model}",\n      "labelOverride": "${label}"\n    }`;
+            return `    {\n      "name": "${name}",\n      "labelOverride": "${label}"\n    }`;
         }
-        return `    {\n      "name": "${r.request_model}"\n    }`;
+        return `    {\n      "name": "${name}"\n    }`;
     });
     return `"inferenceModels": [\n${entries.join(',\n')}\n  ]`;
 };

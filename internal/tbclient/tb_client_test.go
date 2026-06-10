@@ -199,6 +199,26 @@ func TestResolveClaudeCodeModels_UnifiedCustomRequestModel(t *testing.T) {
 	assert.Equal(t, "team/coder[1m]", models.subagent)
 }
 
+func TestResolveClaudeCodeModels_Context1MFlag(t *testing.T) {
+	// Context1M rules keep a clean request_model; the [1m] client convention
+	// is appended only at env-render time. Idempotent for legacy rules whose
+	// name already carries the suffix.
+	flagged := ccRule("built-in-cc", "team/coder")
+	flagged.Context1M = true
+	cfg := &serverconfig.Config{Rules: []typ.Rule{flagged}}
+	client := NewTBClient(cfg, nil)
+
+	models := client.resolveClaudeCodeModels()
+
+	assert.Equal(t, "team/coder[1m]", models.def)
+	assert.Equal(t, "team/coder[1m]", models.sonnet)
+
+	legacy := ccRule("built-in-cc", "team/coder[1m]")
+	legacy.Context1M = true
+	client = NewTBClient(&serverconfig.Config{Rules: []typ.Rule{legacy}}, nil)
+	assert.Equal(t, "team/coder[1m]", client.resolveClaudeCodeModels().def)
+}
+
 func TestResolveClaudeCodeModels_Separate(t *testing.T) {
 	// Separate mode reads each tier from its own built-in rule's request_model.
 	cfg := &serverconfig.Config{

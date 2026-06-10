@@ -812,15 +812,14 @@ func IsWildcardRuleName(name string) bool {
 // Priority: exact match > [1m]-tolerant match > wildcard match.
 //
 // The [1m]-tolerant layer makes routing robust to the "[1m]" context-window
-// suffix appearing on one side but not the other. For Claude Code / Claude
-// Desktop the suffix is carried directly on the rule's request_model (toggling
-// 1M renames "ds" -> "ds[1m]") and the client echoes that exact name, so the
-// exact branch normally wins. But some launch paths still emit the clean name
-// (e.g. the hardcoded CC env), and hand-edited / legacy configs may carry the
-// suffix on either side. Comparing both sides with the suffix stripped lets a
-// clean "ds" reach a "ds[1m]" rule and vice versa. Exact match is tried first,
-// so when both a clean and a [1m] variant of a rule exist, each keeps matching
-// its own literal name.
+// suffix appearing on one side but not the other. Rules store a clean
+// request_model plus the Context1M flag; the generated Claude Code / Claude
+// Desktop config appends [1m] at render time, so the client requests "ds[1m]"
+// while the rule says "ds". Hand-edited configs may also carry the suffix on
+// either side. Comparing both sides with the suffix stripped lets the suffixed
+// request reach the clean rule and vice versa. Exact match is tried first, so
+// when both a clean and a [1m]-named rule exist, each keeps matching its own
+// literal name.
 func (c *Config) MatchRuleByModelAndScenario(requestModel string, scenario typ.RuleScenario) *typ.Rule {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

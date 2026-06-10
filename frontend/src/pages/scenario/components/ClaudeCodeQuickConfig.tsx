@@ -437,15 +437,16 @@ interface DerivePrefsInput {
 }
 
 export const derivePrefsFromRules = ({ rules, mode }: DerivePrefsInput): ClaudeCodePrefs => {
-    // The rule's request_model already carries the [1m] suffix when 1M is on
-    // (toggling 1M renames the rule, e.g. "tingly/cc-sonnet" -> "...[1m]"), so
-    // it flows into the env verbatim and Claude Code's client perceives 1M.
-    // See .design/one-m-context.md.
+    // [1m] is a client convention, not part of the stored rule name: rules with
+    // context_1m render the suffix into the env here so the CC client perceives
+    // 1M; routing matches the suffixed name back to the clean rule. A manually
+    // [1m]-named rule still flows through verbatim. See .design/one-m-context.md.
     const modelForVariant = (variant: string, fallback: string): string => {
         const rule = mode === 'unified'
             ? rules[0]
             : rules.find((r: any) => r?.uuid === `built-in-cc-${variant}`);
-        return rule?.request_model || fallback;
+        const model = rule?.request_model || fallback;
+        return rule?.context_1m ? with1M(model, true) : model;
     };
 
     const isUnified = mode !== 'separate';

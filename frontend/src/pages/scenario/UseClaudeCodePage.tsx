@@ -277,7 +277,7 @@ const UseClaudeCodePageContent: React.FC = () => {
                     collapsible={true}
                     allowToggleRule={false}
                     allowAddRule={false}
-                    oneMMode="rename"
+                    showOneM
                 />
 
                 <Dialog

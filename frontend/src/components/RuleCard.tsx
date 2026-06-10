@@ -15,12 +15,7 @@ import SmartRuleCatalogDialog from '@/components/rule-card/SmartRuleCatalogDialo
 import GraphSettingsMenu from '@/components/GraphSettingsMenu';
 import RulePluginsCard from '@/components/rule-card/RulePluginsCard';
 import FlagCatalogDialog from '@/components/rule-card/FlagCatalogDialog';
-import {
-    formatRuleFlags,
-    parseRuleFlags,
-    hasOneM,
-    withOneM,
-} from '@/components/rule-card/utils';
+import { formatRuleFlags, parseRuleFlags } from '@/components/rule-card/utils';
 import { getFlagValue, setFlagValue } from '@/components/rule-card/flagHelpers';
 
 // Module-level cache so we only fetch the flag catalog once per session.
@@ -63,10 +58,10 @@ export interface RuleCardProps {
     onRuleDelete?: (ruleUuid: string) => void;
     allowToggleRule?: boolean;
     onToggleExpanded?: () => void;
-    // 1M context-window mode for this rule's page. Set by the three Use* pages
-    // that use 1M ('rename' = [1m] in the model name for Claude Code / Claude
-    // Desktop; 'flag' = context_1m flag for Codex). Absent -> switch hidden.
-    oneMMode?: 'rename' | 'flag';
+    // Show the per-rule 1M context-window switch (context_1m flag). Set by the
+    // three Use* pages that use 1M (Claude Code, Claude Desktop, Codex);
+    // absent/false -> switch hidden.
+    showOneM?: boolean;
 }
 
 export const RuleCard: React.FC<RuleCardProps> = ({
@@ -85,7 +80,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
     onRuleDelete,
     allowToggleRule = true,
     onToggleExpanded,
-    oneMMode,
+    showOneM,
 }) => {
     // Expansion state management
     const { expanded, handleToggleExpanded } = useRuleCardExpanded({
@@ -277,23 +272,16 @@ export const RuleCard: React.FC<RuleCardProps> = ({
 
     if (!configRecord) return null;
 
-    // 1M context window — only the three Use* pages that use it pass oneMMode;
-    // the mode decides how 1M is carried (the page owns that decision):
-    //   - 'rename' (Claude Code / Claude Desktop): [1m] is a client convention
-    //     baked into the model name, so toggling renames request_model
-    //     ("ds" -> "ds[1m]"). It flows into the generated env / inferenceModels
-    //     and routing matches it ([1m]-tolerant).
-    //   - 'flag' (Codex): no wire suffix; 1M is purely a catalog context_window,
-    //     so toggling flips the context_1m flag (read at catalog-render time).
-    const isRename = oneMMode === 'rename';
-    const showOneM = oneMMode !== undefined;
-    const oneMOn = isRename ? hasOneM(configRecord.requestModel) : configRecord.context1M === true;
+    // 1M context window — only the three Use* pages that use it pass showOneM.
+    // The toggle always flips the context_1m flag; the rule name stays clean.
+    // The [1m] suffix is a client convention (required by Claude Code / Claude
+    // Desktop, not by tb), so it's appended only when rendering the
+    // client-facing config from the flag (env / inferenceModels); Codex reads
+    // the flag at catalog-render time (context_window: 1M). Routing is
+    // [1m]-tolerant so the suffixed client name matches the clean rule.
+    const oneMOn = configRecord.context1M === true;
     const handleToggleOneM = (on: boolean) => {
-        if (isRename) {
-            void updateField(configRecord, setConfigRecord, 'requestModel', withOneM(configRecord.requestModel, on));
-        } else {
-            void updateField(configRecord, setConfigRecord, 'context1M', on);
-        }
+        void updateField(configRecord, setConfigRecord, 'context1M', on);
     };
 
     const extensionsCard = (
@@ -340,12 +328,10 @@ export const RuleCard: React.FC<RuleCardProps> = ({
                 extraActions={extraActions}
                 extensionsCard={extensionsCard}
                 oneM={{
-                    show: showOneM,
+                    show: showOneM === true,
                     on: oneMOn,
                     onToggle: handleToggleOneM,
-                    tooltip: isRename
-                        ? 'Enable the 1M context window (renames the model to [1m] so the client requests it). Re-apply the config and restart.'
-                        : 'Enable the 1M context window (sets this model\'s catalog context window to 1M). Re-apply the Codex config to take effect.',
+                    tooltip: 'Enable the 1M context window for this model. Re-apply the config to take effect.',
                 }}
                 onUpdateRecord={(field, value) => updateField(configRecord, setConfigRecord, field, value)}
                 onProviderNodeClick={handleProviderNodeClick}

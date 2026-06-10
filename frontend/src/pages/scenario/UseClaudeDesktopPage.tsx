@@ -70,7 +70,7 @@ const UseClaudeDesktopPageContent: React.FC = () => {
                     title="Models and Forwarding Rules"
                     collapsible={true}
                     allowDeleteRule={true}
-                    oneMMode="rename"
+                    showOneM
                 />
 
                 <ClaudeDesktopConfigModal

@@ -189,6 +189,13 @@ func (c *TBClientImpl) resolveClaudeCodeModels() claudeCodeModels {
 			continue
 		}
 		if m := strings.TrimSpace(rule.RequestModel); m != "" {
+			// [1m] is a client convention, not part of the stored rule name:
+			// rules with Context1M render the suffix into the env so the CC
+			// client perceives 1M; routing matches the suffixed name back to
+			// the clean rule ([1m]-tolerant).
+			if rule.Context1M {
+				m = typ.WithContextWindow1M(m)
+			}
 			byUUID[rule.UUID] = m
 		}
 	}

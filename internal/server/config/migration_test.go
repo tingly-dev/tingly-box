@@ -216,7 +216,7 @@ func TestMigrate20260608_OneTime_PreservesUserOff(t *testing.T) {
 	}
 }
 
-func TestMigrate20260609_DefaultsCleanHeader(t *testing.T) {
+func TestMigrate20260608_2_DefaultsCleanHeader(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{
 			{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode},
@@ -227,9 +227,9 @@ func TestMigrate20260609_DefaultsCleanHeader(t *testing.T) {
 		},
 	}
 
-	migrate20260609(c)
+	migrate20260608_2(c)
 
-	if !c.hasMigrationCompleted("20260609") {
+	if !c.hasMigrationCompleted("20260608_2") {
 		t.Fatal("migration should be marked completed")
 	}
 	want := map[string]bool{
@@ -246,19 +246,19 @@ func TestMigrate20260609_DefaultsCleanHeader(t *testing.T) {
 	}
 }
 
-func TestMigrate20260609_OneTime_PreservesUserOff(t *testing.T) {
+func TestMigrate20260608_2_OneTime_PreservesUserOff(t *testing.T) {
 	c := &Config{
 		Rules: []typ.Rule{{UUID: "built-in-cc", Scenario: typ.ScenarioClaudeCode}},
 	}
 
-	migrate20260609(c)
+	migrate20260608_2(c)
 	if !c.Rules[0].Flags.CleanHeader {
 		t.Fatal("first run should default the flag on")
 	}
 
 	// User turns it off; a later boot must not re-enable it.
 	c.Rules[0].Flags.CleanHeader = false
-	migrate20260609(c)
+	migrate20260608_2(c)
 	if c.Rules[0].Flags.CleanHeader {
 		t.Error("migration re-enabled a user-disabled flag; one-time gate is broken")
 	}
