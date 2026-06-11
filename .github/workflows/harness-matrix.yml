@@ -7,7 +7,9 @@ run-name: >-
     || format('(branch {0})', github.ref_name) }}
   by @${{ github.actor }}
 
-# Runs every hermetic harness mode in parallel to validate each change.
+# Runs every hermetic harness mode in parallel to validate each change,
+# including one matrix leg per client driver (http / gosdk / python / node /
+# aisdk) so the gateway is validated against every real client stack.
 # Triggers: CI branch push (ci/**), manual dispatch, and release tag (v*).
 # See .design/harness-matrix.md and cli/harness/README.md for the modes.
 on:
@@ -30,6 +32,9 @@ on:
           - idempotent
           - flags
           - gosdk
+          - python
+          - node
+          - aisdk
           - replay
 
 permissions:
@@ -67,9 +72,11 @@ jobs:
             tier: matrix
             focus: flags
             cmd: matrix --mode=flags --json
-          # Drives the matrix through the official Go SDKs (anthropic-sdk-go,
-          # openai-go) instead of raw HTTP, validating real-client wire
-          # behavior (SSE event dispatch, strict parsing, accumulators).
+          # One matrix leg per client driver: the same matrix driven through
+          # real client stacks instead of raw HTTP. gosdk uses the official Go
+          # SDKs in-process; python/node/aisdk run the real foreign SDKs via
+          # the subprocess drivers under tests/clients/ (setup picks the
+          # toolchain). See .design/harness-matrix.md "Client drivers".
           - name: matrix-single-gosdk
             tier: matrix
             focus: gosdk
@@ -78,6 +85,21 @@ jobs:
             tier: matrix
             focus: gosdk
             cmd: matrix --mode=idempotent --client=gosdk --json
+          - name: matrix-single-python
+            tier: matrix
+            focus: python
+            setup: python
+            cmd: matrix --mode=single --client=python --json
+          - name: matrix-single-node
+            tier: matrix
+            focus: node
+            setup: node
+            cmd: matrix --mode=single --client=node --json
+          - name: matrix-single-aisdk
+            tier: matrix
+            focus: aisdk
+            setup: aisdk
+            cmd: matrix --mode=single --client=aisdk --json
           - name: replay-virtual
             tier: replay
             focus: replay
@@ -121,6 +143,29 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+
+      # Per-client driver toolchains (only for legs that declare setup).
+      - name: Setup Python
+        if: steps.gate.outputs.run == 'true' && matrix.leg.setup == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tests/clients/python/requirements.txt
+
+      - name: Install Python SDKs
+        if: steps.gate.outputs.run == 'true' && matrix.leg.setup == 'python'
+        run: pip install -r tests/clients/python/requirements.txt
+
+      - name: Setup Node
+        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Node driver dependencies
+        if: steps.gate.outputs.run == 'true' && (matrix.leg.setup == 'node' || matrix.leg.setup == 'aisdk')
+        run: npm install --prefix tests/clients/${{ matrix.leg.setup }}
 
       - name: Run harness — ${{ matrix.leg.name }}
         if: steps.gate.outputs.run == 'true'

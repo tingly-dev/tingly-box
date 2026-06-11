@@ -1,5 +1,5 @@
 # Real Python SDKs for the harness matrix subprocess driver (driver.py).
-# Floor pins: the nightly job intentionally tracks current SDK releases so
+# Floor pins: the CI leg intentionally tracks current SDK releases so
 # upstream strictness changes surface as findings.
 anthropic>=0.49.0
 openai>=1.60.0

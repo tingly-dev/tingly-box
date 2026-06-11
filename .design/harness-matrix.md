@@ -149,13 +149,17 @@ strictly (pydantic), and accumulate streams with protocol-enforcing state
 machines. `--client` swaps the sending stack while reusing the same matrix,
 scenarios, and assertions:
 
-| `--client` | Stack | Runs |
-|------------|-------|------|
-| `http` *(default)* | raw JSON over `net/http` (`client_http.go`) | every PR (existing legs) |
-| `gosdk` | official `anthropic-sdk-go` + `openai-go`, in-process (`client_gosdk.go`) | every PR (`matrix-*-gosdk` legs) |
-| `python` | real `anthropic` + `openai` Python SDKs via subprocess driver | nightly (`harness-sdk-nightly.yml`) |
-| `node` | real `@anthropic-ai/sdk` + `openai` Node SDKs via subprocess driver | nightly |
-| `aisdk` | AI SDK by Vercel (`ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai`) via subprocess driver — the strictest client: zod-validates every response and stream event | nightly |
+| `--client` | Stack | CI leg (`harness-matrix.yml`) |
+|------------|-------|-------------------------------|
+| `http` *(default)* | raw JSON over `net/http` (`client_http.go`) | `matrix-single` / `matrix-transitive` / `matrix-idempotent` / `matrix-flags` |
+| `gosdk` | official `anthropic-sdk-go` + `openai-go`, in-process (`client_gosdk.go`) | `matrix-single-gosdk` / `matrix-idempotent-gosdk` |
+| `python` | real `anthropic` + `openai` Python SDKs via subprocess driver | `matrix-single-python` |
+| `node` | real `@anthropic-ai/sdk` + `openai` Node SDKs via subprocess driver | `matrix-single-node` |
+| `aisdk` | AI SDK by Vercel (`ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai`) via subprocess driver — the strictest client: zod-validates every response and stream event | `matrix-single-aisdk` |
+
+Every client mode runs as its own leg in the harness-matrix workflow; the
+subprocess legs install their toolchain (setup-python / setup-node +
+driver dependencies) before running.
 
 ```bash
 go run ./cli/harness matrix --mode=single --client=gosdk
