@@ -17,12 +17,66 @@ import (
 )
 
 type (
-	// AnthropicModel Model types - based on Anthropic's official models API format
+	// CapabilitySupport indicates whether a capability is supported.
+	CapabilitySupport struct {
+		Supported bool `json:"supported"`
+	}
+
+	// ContextManagementCapability describes context management support.
+	ContextManagementCapability struct {
+		Supported             bool              `json:"supported"`
+		ClearThinking20251015 CapabilitySupport `json:"clear_thinking_20251015,omitempty"`
+		ClearToolUses20250919 CapabilitySupport `json:"clear_tool_uses_20250919,omitempty"`
+		Compact20260112       CapabilitySupport `json:"compact_20260112,omitempty"`
+	}
+
+	// EffortCapability describes reasoning_effort support and levels.
+	EffortCapability struct {
+		Supported bool              `json:"supported"`
+		Low       CapabilitySupport `json:"low,omitempty"`
+		Medium    CapabilitySupport `json:"medium,omitempty"`
+		High      CapabilitySupport `json:"high,omitempty"`
+		XHigh     CapabilitySupport `json:"xhigh,omitempty"`
+		Max       CapabilitySupport `json:"max,omitempty"`
+	}
+
+	// ThinkingTypes describes supported thinking type configurations.
+	ThinkingTypes struct {
+		Adaptive CapabilitySupport `json:"adaptive,omitempty"`
+		Enabled  CapabilitySupport `json:"enabled,omitempty"`
+	}
+
+	// ThinkingCapability describes thinking support.
+	ThinkingCapability struct {
+		Supported bool           `json:"supported"`
+		Types     *ThinkingTypes `json:"types,omitempty"`
+	}
+
+	// ModelCapabilities maps to Anthropic's ModelCapabilities in /v1/models.
+	ModelCapabilities struct {
+		Batch             CapabilitySupport            `json:"batch"`
+		Citations         CapabilitySupport            `json:"citations"`
+		CodeExecution     CapabilitySupport            `json:"code_execution"`
+		ContextManagement *ContextManagementCapability `json:"context_management,omitempty"`
+		Effort            *EffortCapability            `json:"effort,omitempty"`
+		ImageInput        CapabilitySupport            `json:"image_input"`
+		PDFInput          CapabilitySupport            `json:"pdf_input"`
+		StructuredOutputs CapabilitySupport            `json:"structured_outputs"`
+		Thinking          *ThinkingCapability          `json:"thinking,omitempty"`
+	}
+
+	// AnthropicModel maps to Anthropic's native /v1/models response format.
 	AnthropicModel struct {
-		ID          string `json:"id"`
-		CreatedAt   string `json:"created_at"`
-		DisplayName string `json:"display_name"`
-		Type        string `json:"type"`
+		ID             string             `json:"id"`
+		CreatedAt      string             `json:"created_at"`
+		DisplayName    string             `json:"display_name"`
+		Type           string             `json:"type"`
+		Capabilities   *ModelCapabilities `json:"capabilities,omitempty"`
+		MaxInputTokens int                `json:"max_input_tokens,omitempty"`
+		MaxTokens      int                `json:"max_tokens,omitempty"`
+		// Description is a tingly-box extension (not in Anthropic's wire format)
+		// consumed by the frontend to show model description in the model picker.
+		Description string `json:"description,omitempty"`
 		// AuthType is a tingly-box extension (not in Anthropic's wire format)
 		// consumed by the frontend to order model picker entries:
 		// oauth -> api_key -> vmodel.

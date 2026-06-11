@@ -316,10 +316,13 @@ type FetchProviderModelsResponse struct {
 
 // OpenAIModel represents a model in OpenAI's models API format
 type OpenAIModel struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
+	ID          string `json:"id"`
+	Object      string `json:"object"`
+	Created     int64  `json:"created"`
+	OwnedBy     string `json:"owned_by"`
+	Description string `json:"description,omitempty"` // Model description
+	Context     int    `json:"context,omitempty"`     // Max context window
+	MaxOutput   int    `json:"max_output,omitempty"`  // Max output tokens
 	// AuthType reflects the primary backing provider's auth type. It is
 	// non-standard (OpenAI's models API has no such field) and consumed by
 	// the tingly-box frontend to order model picker entries:
@@ -332,7 +335,6 @@ type OpenAIModelsResponse struct {
 	Object string        `json:"object"`
 	Data   []OpenAIModel `json:"data"`
 }
-
 
 // =============================================
 // Probe API Models
@@ -438,4 +440,3 @@ type ProbeResponse struct {
 	Error   *ErrorDetail       `json:"error,omitempty"`
 	Data    *ProbeResponseData `json:"data,omitempty"`
 }
-

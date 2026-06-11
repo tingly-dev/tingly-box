@@ -26,6 +26,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { useModelSelectContext } from '@/contexts/ModelSelectContext';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { useNewModels } from '@/hooks/useNewModels';
+import { useModelDescriptions } from '@/hooks/useModelDescriptions';
 import CustomModelCard from './CustomModelCard';
 import ModelCard from './ModelCard';
 import RecentModelsSection from './RecentModelsSection';
@@ -109,6 +110,7 @@ export function ModelsPanel({
     const { refreshTrigger } = useModelSelectContext();
     const { recentModels } = useRecentModels();
     const { newModels, clearNewModels } = useNewModels();
+    const { getDescription } = useModelDescriptions();
 
     // Quota refresh state
     const [isRefreshingQuota, setIsRefreshingQuota] = useState(false);
@@ -342,6 +344,7 @@ export function ModelsPanel({
                                     isSelected={isProviderSelected && selectedModel === starModel}
                                     onClick={() => onModelSelect(provider, starModel)}
                                     variant="starred"
+                                    description={getDescription(starModel)}
                                 />
                             ))}
                         </Box>
@@ -384,6 +387,7 @@ export function ModelsPanel({
                                         isSelected={isModelSelected}
                                         onClick={() => onModelSelect(provider, model)}
                                         variant="standard"
+                                        description={getDescription(model)}
                                     />
                                 );
                             }
