@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -41,7 +43,17 @@ func NewAntigravityClient(provider *typ.Provider, model string, sessionID typ.Se
 		project:      project,
 		proxyURL:     provider.ProxyURL,
 	}
-	httpClient := &http.Client{Transport: wrapWithLogging(transport, provider)}
+
+	// MENTION: must set timeout, otherwise operations may fail unexpectedly
+	timeout := time.Duration(provider.Timeout) * time.Second
+	if provider.Timeout <= 0 {
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
+
+	httpClient := &http.Client{
+		Transport: wrapWithLogging(transport, provider),
+		Timeout:   timeout,
+	}
 
 	base, err := newGoogleClientFromHTTPClient(provider, httpClient)
 	if err != nil {

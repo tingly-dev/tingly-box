@@ -4,11 +4,13 @@ import (
 	"context"
 	"iter"
 	"net/http"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/genai"
 
 	"github.com/tingly-dev/tingly-box/ai"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -52,7 +54,16 @@ func NewGoogleClient(provider *typ.Provider, model string, sessionID typ.Session
 		transport = GetGlobalTransportPool().GetTransport(provider.UUID, model, provider.ProxyURL, ai.Issuer(""), sessionID)
 	}
 
-	httpClient := &http.Client{Transport: wrapWithLogging(transport, provider)}
+	// MENTION: must set timeout, otherwise operations may fail unexpectedly
+	timeout := time.Duration(provider.Timeout) * time.Second
+	if provider.Timeout <= 0 {
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
+
+	httpClient := &http.Client{
+		Transport: wrapWithLogging(transport, provider),
+		Timeout:   timeout,
+	}
 	return newGoogleClientFromHTTPClient(provider, httpClient)
 }
 
