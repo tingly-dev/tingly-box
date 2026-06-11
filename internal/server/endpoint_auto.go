@@ -67,14 +67,26 @@ func (s *Server) resolveAutoTarget(
 
 // autoDispatchFn is the callback for dispatchWithAutoFallback.
 // It performs transform + dispatch for a given target protocol, using
-// the provided gate. Returns true if dispatch executed (even on error),
-// false if the transform itself failed.
-type autoDispatchFn func(target protocol.APIType, gate *firstChunkGate) bool
+// the provided gate. Returns the provider/model that served the final
+// attempt (failover may have moved past the initially selected service)
+// and ok=true if dispatch executed (even on error); ok=false means the
+// transform itself failed.
+type autoDispatchFn func(target protocol.APIType, gate *firstChunkGate) (served *typ.Provider, servedModel string, ok bool)
+
+// gateSucceeded reports whether the attempt behind the gate produced a
+// success: either the stream committed its first chunk, or a buffered
+// non-error status is waiting to flush.
+func gateSucceeded(gate *firstChunkGate) bool {
+	return gate.Committed() || (gate.Status() > 0 && gate.Status() < http.StatusBadRequest)
+}
 
 // dispatchWithAutoFallback wraps a dispatch attempt with protocol
 // auto-detection. It tries the preferred target first; on retryable
 // failure it falls back to the alternate protocol. Successful protocol
-// choices are cached per provider+model.
+// choices are cached per provider+model, attributed to the service that
+// actually served the request — under multi-service failover that may
+// differ from the initially selected provider, and caching against the
+// initial one would pin a protocol it never confirmed.
 func (s *Server) dispatchWithAutoFallback(
 	c *gin.Context,
 	provider *typ.Provider,
@@ -91,10 +103,12 @@ func (s *Server) dispatchWithAutoFallback(
 	}()
 
 	// First attempt with preferred protocol
-	dispatch(preferredTarget, gate)
+	served, servedModel, ok := dispatch(preferredTarget, gate)
 
-	if gate.Committed() || (gate.Status() > 0 && gate.Status() < http.StatusBadRequest) {
-		s.endpointCache.Set(provider.UUID, model, preferredTarget)
+	if gateSucceeded(gate) {
+		if ok && served != nil {
+			s.endpointCache.Set(served.UUID, servedModel, preferredTarget)
+		}
 		return
 	}
 
@@ -116,9 +130,9 @@ func (s *Server) dispatchWithAutoFallback(
 	gate.Discard()
 	clearGinErrors(c)
 
-	dispatch(altTarget, gate)
+	served, servedModel, ok = dispatch(altTarget, gate)
 
-	if gate.Committed() || (gate.Status() > 0 && gate.Status() < http.StatusBadRequest) {
-		s.endpointCache.Set(provider.UUID, model, altTarget)
+	if gateSucceeded(gate) && ok && served != nil {
+		s.endpointCache.Set(served.UUID, servedModel, altTarget)
 	}
 }

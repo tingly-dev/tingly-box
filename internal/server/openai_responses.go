@@ -237,7 +237,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 	// Resolve flags with scenario injection, consistent with the chat/v1/beta
 	// handlers (this also applies the custom User-Agent to the request context).
 	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
-	doTransformAndDispatch := func(t protocol.APIType, gate *firstChunkGate) bool {
+	doTransformAndDispatch := func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
 		ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, t, provider)
 		reqCtx, err := s.transformOpenAIResponses(c, req, t, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 		if err != nil {
@@ -247,17 +247,17 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 					Type:    "invalid_request_error",
 				},
 			})
-			return false
+			return nil, "", false
 		}
 		// Carry the response-shaping hints for downstream dispatch, matching the
 		// chat handler (consumed by shouldStripUsage on the conversion sub-paths).
 		reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
 		reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
-		s.dispatchWithPriorityFailoverGated(c, rule, provider, string(req.Model),
+		served, servedModel := s.dispatchWithPriorityFailoverGated(c, rule, provider, string(req.Model),
 			func(p *typ.Provider, _ string) {
 				s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
 			}, gate)
-		return true
+		return served, servedModel, true
 	}
 
 	if autoFallbackEnabled {

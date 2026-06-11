@@ -325,6 +325,11 @@ func (s *Server) dispatchWithPriorityFailover(
 // externalGate is non-nil the caller owns the gate lifecycle (install on
 // c.Writer, defer restore+commit); the function reuses it instead of
 // creating a new one. Pass nil for the original self-managed behavior.
+//
+// Returns the provider/model of the final attempt so callers that key
+// state on the serving identity (e.g. the endpoint auto-detection cache)
+// attribute it to the service that actually handled the request, not the
+// initially selected one.
 func (s *Server) dispatchWithPriorityFailoverGated(
 	c *gin.Context,
 	rule *typ.Rule,
@@ -332,11 +337,11 @@ func (s *Server) dispatchWithPriorityFailoverGated(
 	initialModel string,
 	attempt dispatchAttempt,
 	externalGate *firstChunkGate,
-) {
+) (*typ.Provider, string) {
 	activeServices := rule.GetActiveServices()
 	if len(activeServices) <= 1 {
 		attempt(initialProvider, initialModel)
-		return
+		return initialProvider, initialModel
 	}
 
 	gate := externalGate
@@ -370,11 +375,11 @@ func (s *Server) dispatchWithPriorityFailoverGated(
 		// A committed gate means the stream's first real chunk reached
 		// the wire — bytes have left the process, retry is impossible.
 		if gate.Committed() {
-			return
+			return provider, model
 		}
 		status := gate.Status()
 		if !isRetryableStatus(status) {
-			return
+			return provider, model
 		}
 
 		nextProvider, nextService, err := s.selectFallbackService(rule, tried, initialProvider.APIStyle)
@@ -385,7 +390,7 @@ func (s *Server) dispatchWithPriorityFailoverGated(
 				"status":  status,
 				"error":   err.Error(),
 			}).Warnf("[failover] load balancer failed selecting fallback after %d attempt(s) status=%d: %v", i+1, status, err)
-			return
+			return provider, model
 		}
 		if nextProvider == nil || nextService == nil {
 			logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
@@ -393,7 +398,7 @@ func (s *Server) dispatchWithPriorityFailoverGated(
 				"attempt": i + 1,
 				"status":  status,
 			}).Warnf("[failover] giving up after %d attempt(s) status=%d (no more services)", i+1, status)
-			return
+			return provider, model
 		}
 		logrus.WithContext(c.Request.Context()).WithFields(logrus.Fields{
 			"stage":        "failover",
@@ -408,4 +413,5 @@ func (s *Server) dispatchWithPriorityFailoverGated(
 		provider = nextProvider
 		model = nextService.Model
 	}
+	return provider, model
 }

@@ -235,7 +235,7 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	// === Build transform-and-dispatch closure ===
 	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
 	// request context, so no separate call is needed here.)
-	doTransformAndDispatch := func(t protocol.APIType, gate *firstChunkGate) bool {
+	doTransformAndDispatch := func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
 		ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, t, provider)
 		reqCtx, err := s.transformOpenAIChat(c, req, t, provider, isStreaming, nil, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
 		if err != nil {
@@ -245,17 +245,17 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 					Type:    "api_error",
 				},
 			})
-			return false
+			return nil, "", false
 		}
 		reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
 		reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 		reqCtx.RequestModel = actualModel
 		reqCtx.ResponseModel = responseModel
-		s.dispatchWithPriorityFailoverGated(c, rule, provider, actualModel,
+		served, servedModel := s.dispatchWithPriorityFailoverGated(c, rule, provider, actualModel,
 			func(p *typ.Provider, _ string) {
 				s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
 			}, gate)
-		return true
+		return served, servedModel, true
 	}
 
 	if autoFallbackEnabled {
