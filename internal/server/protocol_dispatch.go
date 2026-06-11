@@ -467,7 +467,7 @@ func (s *Server) passthroughAnthropicBeta(
 			recorder.SetAssembledResponse(anthropicResp)
 			recorder.RecordResponse(provider, reqCtx.RequestModel)
 		}
-		c.JSON(http.StatusOK, anthropicResp)
+		nonstream.WriteAnthropicMessage(c, anthropicResp)
 	}
 }
 
@@ -689,7 +689,7 @@ func (s *Server) dispatchGoogle(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			nonstream.WriteAnthropicMessage(c, anthropicResp)
 		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertGoogleToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, string(anthropicResp.ID))
@@ -697,7 +697,7 @@ func (s *Server) dispatchGoogle(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			nonstream.WriteAnthropicMessage(c, anthropicResp)
 		}
 	}
 }
@@ -810,7 +810,7 @@ func (s *Server) dispatchOpenAIChat(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			nonstream.WriteAnthropicMessage(c, anthropicResp)
 		case protocol.TypeAnthropicBeta:
 			anthropicResp := nonstream.ConvertOpenAIToAnthropicBetaResponse(resp, responseModel)
 			s.updateAffinityMessageID(c, rule, anthropicResp.ID)
@@ -818,7 +818,7 @@ func (s *Server) dispatchOpenAIChat(
 				recorder.SetAssembledResponse(anthropicResp)
 				recorder.RecordResponse(provider, reqCtx.RequestModel)
 			}
-			c.JSON(http.StatusOK, anthropicResp)
+			nonstream.WriteAnthropicMessage(c, anthropicResp)
 		}
 	}
 }

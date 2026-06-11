@@ -9,11 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
 	guardrailsadapter "github.com/tingly-dev/tingly-box/internal/guardrails/adapter"
-	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/nonstream"
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/server/forwarding"
 	"github.com/tingly-dev/tingly-box/internal/server/module/mcp"
+	coretool "github.com/tingly-dev/tingly-box/internal/tool"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -337,7 +338,7 @@ func (s *Server) dispatchGenericAnthropicV1NonStream(
 	}
 
 	// Return response
-	c.JSON(http.StatusOK, response)
+	nonstream.WriteAnthropicMessage(c, response)
 }
 
 // dispatchGenericAnthropicV1Stream handles A→A streaming with generic interceptor
@@ -549,7 +550,7 @@ func (s *Server) dispatchGenericAnthropicBetaNonStream(
 	}
 
 	// Return response
-	c.JSON(http.StatusOK, response)
+	nonstream.WriteAnthropicMessage(c, response)
 }
 
 // dispatchGenericAnthropicBetaStream handles Aβ→Aβ streaming with generic interceptor

@@ -267,6 +267,17 @@ func (a *AnthropicBetaAdapter) FilterVirtualTools(response any, externalTools []
 		filtered = append(filtered, block)
 	}
 
+	if len(filtered) != len(msg.Content) {
+		// A virtual tool_use block was removed; re-parse so RawJSON reflects
+		// the filtered content (downstream writers prefer RawJSON).
+		msg.Content = filtered
+		if b, err := json.Marshal(msg); err == nil {
+			var fresh anthropic.BetaMessage
+			if json.Unmarshal(b, &fresh) == nil {
+				return &fresh, nil
+			}
+		}
+	}
 	msg.Content = filtered
 	return msg, nil
 }
@@ -308,6 +319,11 @@ func (a *AnthropicBetaAdapter) SendFinalMessage(c *gin.Context) error {
 		"delta": map[string]interface{}{
 			"stop_reason":   "end_turn",
 			"stop_sequence": nil,
+		},
+		// The Anthropic protocol requires usage on message_delta; strict SDK
+		// accumulators (e.g. Python) crash on a delta without it.
+		"usage": map[string]interface{}{
+			"output_tokens": 0,
 		},
 	})
 	if err := a.SendEvent(c, "message_delta", deltaJSON); err != nil {

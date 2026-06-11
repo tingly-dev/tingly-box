@@ -77,7 +77,25 @@ func (r *responsesToAnthropicConverter) Next() (interface{}, bool, error) {
 
 	for {
 		if !r.stream.Next() {
+			// Upstream cut without a terminal Responses event: surface an
+			// honest error event rather than fabricating a clean message_stop.
+			// Real SDK clients raise on it (the turn was truncated); lenient
+			// clients keep the partial content already sent.
+			if r.convErr == nil && !r.done {
+				r.emitAnthropic("error", map[string]interface{}{
+					"type": "error",
+					"error": map[string]interface{}{
+						"type":    "stream_error",
+						"message": "upstream stream ended before completion",
+					},
+				})
+			}
 			r.done = true
+			if len(r.pending) > 0 {
+				evt := r.pending[0]
+				r.pending = r.pending[1:]
+				return evt, false, nil
+			}
 			return nil, true, nil
 		}
 		r.processEvent(r.stream.Current())

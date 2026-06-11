@@ -84,7 +84,14 @@ func (c *openAIToAnthropicConverter) Next() (interface{}, bool, error) {
 	for {
 		if !c.stream.Next() {
 			if c.finishSeen && c.hookErr == nil {
+				// Upstream finished normally.
 				c.emitTerminalEvents()
+			} else if c.messageStarted && c.hookErr == nil {
+				// Upstream cut mid-stream after content started: surface an
+				// honest error event rather than fabricating a clean end_turn.
+				// Real SDK clients raise on it (the turn really was truncated);
+				// lenient clients keep the partial content already sent.
+				c.emitTruncatedError()
 			}
 			c.done = true
 			if len(c.pending) > 0 {
@@ -309,6 +316,18 @@ func (c *openAIToAnthropicConverter) emitTerminalEvents() {
 }
 
 // emit helpers — these build the event maps and push to pending.
+
+// emitTruncatedError queues an Anthropic `error` event for a stream that
+// ended mid-content without a finish signal (truncated upstream).
+func (c *openAIToAnthropicConverter) emitTruncatedError() {
+	c.emitAnthropic("error", map[string]interface{}{
+		"type": "error",
+		"error": map[string]interface{}{
+			"type":    "stream_error",
+			"message": "upstream stream ended before completion",
+		},
+	})
+}
 
 func (c *openAIToAnthropicConverter) emitAnthropic(eventType string, data map[string]interface{}) {
 	c.pending = append(c.pending, anthropicStreamEvent{eventType: eventType, data: data})

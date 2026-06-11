@@ -46,15 +46,6 @@ func MarshalAndSendErrorEvent(c *gin.Context, message, errorType, code string) {
 	}
 }
 
-// SendFinishEvent sends a message_stop event to indicate completion
-func SendFinishEvent(c *gin.Context) {
-	finishEvent := map[string]interface{}{
-		"type": "message_stop",
-	}
-	finishJSON, _ := json.Marshal(finishEvent)
-	c.SSEvent("", string(finishJSON))
-}
-
 // =============================================
 // HTTP Error Response Helpers
 // =============================================

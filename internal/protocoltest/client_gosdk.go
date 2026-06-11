@@ -104,10 +104,11 @@ func (c *goSDKClient) sendAnthropicV1(ctx context.Context, spec SendSpec) (*Roun
 		if res, rerr := anthropicErrorResult(result, err); rerr == nil {
 			return res, nil
 		}
-		// Mid-stream cut: keep whatever accumulated; the gateway replied 200.
-		if len(result.StreamEvents) == 0 {
-			return nil, fmt.Errorf("anthropic SDK stream: %w", err)
-		}
+		// Mid-stream error (e.g. an in-band error event for a truncated
+		// upstream): report it rather than presenting partial content as success.
+		result.HTTPStatus = 200
+		result.RawBody = []byte(err.Error())
+		return result, nil
 	}
 	result.HTTPStatus = 200
 	raw, err := json.Marshal(msg)
@@ -154,9 +155,9 @@ func (c *goSDKClient) sendAnthropicBeta(ctx context.Context, spec SendSpec) (*Ro
 		if res, rerr := anthropicErrorResult(result, err); rerr == nil {
 			return res, nil
 		}
-		if len(result.StreamEvents) == 0 {
-			return nil, fmt.Errorf("anthropic beta SDK stream: %w", err)
-		}
+		result.HTTPStatus = 200
+		result.RawBody = []byte(err.Error())
+		return result, nil
 	}
 	result.HTTPStatus = 200
 	raw, err := json.Marshal(msg)
@@ -208,9 +209,9 @@ func (c *goSDKClient) sendOpenAIChat(ctx context.Context, spec SendSpec) (*Round
 		if res, rerr := openaiErrorResult(result, err); rerr == nil {
 			return res, nil
 		}
-		if len(result.StreamEvents) == 0 {
-			return nil, fmt.Errorf("openai SDK stream: %w", err)
-		}
+		result.HTTPStatus = 200
+		result.RawBody = []byte(err.Error())
+		return result, nil
 	}
 	result.HTTPStatus = 200
 	raw, err := json.Marshal(acc.ChatCompletion)

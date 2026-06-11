@@ -14,10 +14,18 @@ import (
 // overriding the model field in the response when responseModel differs from the request model.
 // Corresponds to stream.HandleOpenAIResponsesStream.
 func HandleOpenAIResponsesPassthroughNonStream(hc *protocol.HandleContext, resp *responses.Response) (*protocol.TokenUsage, error) {
-	responseJSON, err := json.Marshal(resp)
-	if err != nil {
-		hc.SendError(err, "api_error", "marshal_failed")
-		return protocol.ZeroTokenUsage(), err
+	// Prefer the upstream's actual body: re-marshaling the SDK struct emits
+	// every union field with its zero value (e.g. output[].phase: "",
+	// content[].annotations: null), which strict clients like the AI SDK's
+	// zod schemas reject. RawJSON is empty only for locally-built responses.
+	responseJSON := []byte(resp.RawJSON())
+	if len(responseJSON) == 0 {
+		var err error
+		responseJSON, err = json.Marshal(resp)
+		if err != nil {
+			hc.SendError(err, "api_error", "marshal_failed")
+			return protocol.ZeroTokenUsage(), err
+		}
 	}
 	var responseMap map[string]any
 	if err := json.Unmarshal(responseJSON, &responseMap); err != nil {

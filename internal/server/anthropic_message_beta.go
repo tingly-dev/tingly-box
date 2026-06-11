@@ -189,7 +189,7 @@ func (s *Server) nonstreamResponsesToAnthropicBeta(c *gin.Context, proxyModel st
 		recorder.SetAssembledResponse(anthropicResp)
 		recorder.RecordResponse(provider, actualModel)
 	}
-	c.JSON(http.StatusOK, anthropicResp)
+	nonstream.WriteAnthropicMessage(c, anthropicResp)
 
 }
 

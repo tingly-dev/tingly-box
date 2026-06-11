@@ -93,13 +93,22 @@ def run_anthropic(req, beta):
             return normalize_anthropic_message(msg)
 
         count = 0
-        with svc.stream(**kwargs) as stream:
-            for _event in stream:
-                count += 1
-            msg = stream.get_final_message()
-        resp = normalize_anthropic_message(msg)
-        resp["stream_event_count"] = count
-        return resp
+        try:
+            with svc.stream(**kwargs) as stream:
+                for _event in stream:
+                    count += 1
+                msg = stream.get_final_message()
+            resp = normalize_anthropic_message(msg)
+            resp["stream_event_count"] = count
+            return resp
+        except anthropic.APIStatusError:
+            raise
+        except Exception as e:
+            # Mid-stream error event (truncated upstream): the SDK raised; the
+            # turn was not completed. Report it in-band rather than crashing.
+            return {"http_status": 200, "stream_event_count": count,
+                    "raw_body": str(e),
+                    "error": {"status": 0, "type": type(e).__name__, "message": str(e)}}
     except anthropic.APIStatusError as e:
         return api_error_response(e)
 

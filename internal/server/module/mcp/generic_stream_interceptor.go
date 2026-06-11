@@ -142,7 +142,7 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 		switch decision {
 		case DecisionNoTools:
 			logrus.Debugf("[MCP-Interceptor] Round %d: no tools, ending", i.round)
-			return i.adapter.SendFinalMessage(i.c)
+			return i.sendFinalEvents()
 
 		case DecisionPureVirtual:
 			logrus.Debugf("[MCP-Interceptor] Round %d: pure virtual, continuing", i.round)
@@ -170,7 +170,27 @@ func (i *GenericStreamInterceptor) Run(req any) error {
 
 	// Max rounds exceeded
 	logrus.Infof("[MCP-Interceptor] Max rounds (%d) exceeded", i.config.MaxRounds)
-	return i.adapter.SendFinalMessage(i.c)
+	return i.sendFinalEvents()
+}
+
+// sendFinalEvents terminates the client stream. When the upstream's terminal
+// events were captured (Anthropic-style message_delta / message_stop), they
+// are forwarded as-is so the client sees the real stop_reason and usage —
+// strict SDK accumulators (e.g. the Python SDK) reject a message_delta
+// without usage. Otherwise falls back to the adapter's synthesized final
+// message (e.g. [DONE] for OpenAI Chat).
+func (i *GenericStreamInterceptor) sendFinalEvents() error {
+	if i.roundMessageDelta == nil {
+		return i.adapter.SendFinalMessage(i.c)
+	}
+	if err := i.adapter.SendEvent(i.c, "message_delta", i.roundMessageDelta); err != nil {
+		return err
+	}
+	stop := i.roundMessageStop
+	if stop == nil {
+		stop, _ = json.Marshal(map[string]interface{}{"type": "message_stop"})
+	}
+	return i.adapter.SendEvent(i.c, "message_stop", stop)
 }
 
 // handlePureExternal hands non-virtual tools back to the client. Only virtual
@@ -401,8 +421,16 @@ func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) er
 		return nil
 
 	default:
-		// Pass through unknown events
-		return i.adapter.SendEvent(i.c, "message", []byte{})
+		// Pass through unknown events (e.g. thinking deltas) with their
+		// original payload. Replacing them with an empty frame breaks real
+		// SDK consumers: an `event:` line with empty JSON data aborts the
+		// official Anthropic stream decoders mid-stream.
+		payload, err := i.extractEventPayload(event)
+		if err != nil || len(payload) == 0 {
+			// Nothing forwardable; drop rather than emit an empty frame.
+			return nil
+		}
+		return i.adapter.SendEvent(i.c, "", payload)
 	}
 }
 

@@ -21,6 +21,7 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 	hc.SetupSSEHeaders()
 
 	acc := usage.NewAnthropicAccumulator()
+	var sawMessageStart, sawMessageStop bool
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
@@ -40,6 +41,12 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.MessageStreamEventUnion)
+			switch evt.Type {
+			case "message_start":
+				sawMessageStart = true
+			case "message_stop":
+				sawMessageStop = true
+			}
 
 			acc.Consume(evt)
 
@@ -95,7 +102,14 @@ func HandleAnthropic(hc *protocol.HandleContext, streamResp *anthropicstream.Str
 		return acc.Result(), err
 	}
 
-	SendFinishEvent(hc.GinContext)
+	// Upstream cut mid-stream (content started but never terminated): surface
+	// an honest error event rather than fabricating a clean message_stop. Real
+	// SDK clients raise on it (the turn was truncated); lenient clients keep
+	// the partial content already sent. Cleanly finished streams already
+	// forwarded their own message_delta / message_stop.
+	if sawMessageStart && !sawMessageStop {
+		MarshalAndSendErrorEvent(hc.GinContext, "upstream stream ended before completion", "stream_error", "incomplete_stream")
+	}
 
 	return acc.Result(), nil
 }
@@ -108,6 +122,7 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 	hc.SetupSSEHeaders()
 
 	acc := usage.NewAnthropicAccumulator()
+	var sawMessageStart, sawMessageStop bool
 
 	err := hc.ProcessStream(
 		func() (bool, error, interface{}) {
@@ -127,6 +142,12 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 		},
 		func(event interface{}) error {
 			evt := event.(*anthropic.BetaRawMessageStreamEventUnion)
+			switch evt.Type {
+			case "message_start":
+				sawMessageStart = true
+			case "message_stop":
+				sawMessageStop = true
+			}
 
 			acc.ConsumeBeta(evt)
 
@@ -182,7 +203,11 @@ func HandleAnthropicBeta(hc *protocol.HandleContext, streamResp *anthropicstream
 		return acc.Result(), err
 	}
 
-	SendFinishEvent(hc.GinContext)
+	// See HandleAnthropic: surface an honest error event when the upstream was
+	// cut after content started.
+	if sawMessageStart && !sawMessageStop {
+		MarshalAndSendErrorEvent(hc.GinContext, "upstream stream ended before completion", "stream_error", "incomplete_stream")
+	}
 
 	return acc.Result(), nil
 }

@@ -22,8 +22,12 @@ func ConvertOpenAIResponsesToChat(params *responses.ResponseNewParams, defaultMa
 		result.Messages = append(result.Messages, openai.SystemMessage(params.Instructions.Value))
 	}
 
-	// Convert input items to messages
-	if !param.IsOmitted(params.Input.OfInputItemList) {
+	// Convert input to messages. The Responses API accepts either a plain
+	// string (shorthand for a single user message — the SDKs' idiomatic form)
+	// or a list of input items.
+	if !param.IsOmitted(params.Input.OfString) && params.Input.OfString.Value != "" {
+		result.Messages = append(result.Messages, openai.UserMessage(params.Input.OfString.Value))
+	} else if !param.IsOmitted(params.Input.OfInputItemList) {
 		messages := ConvertResponsesInputToMessages(params.Input.OfInputItemList)
 		result.Messages = append(result.Messages, messages...)
 	}

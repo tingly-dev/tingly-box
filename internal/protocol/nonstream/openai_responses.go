@@ -3,6 +3,7 @@ package nonstream
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
@@ -31,11 +32,16 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 	output := []map[string]any{}
 	if messageContent != "" {
 		output = append(output, map[string]any{
+			// The real Responses API always assigns output items an id;
+			// strict clients (AI SDK zod) require it.
+			"id":     "msg_" + resp.ID,
 			"type":   "message",
 			"role":   "assistant",
 			"status": itemStatus,
 			"content": []map[string]any{
-				{"type": "output_text", "text": messageContent},
+				// The real Responses API always includes annotations on
+				// output_text; strict clients (AI SDK zod) require it.
+				{"type": "output_text", "text": messageContent, "annotations": []any{}},
 			},
 		})
 	}
@@ -55,12 +61,13 @@ func BuildResponsesPayloadFromChat(resp *openai.ChatCompletion, responseModel, a
 	}
 
 	result := map[string]any{
-		"id":     resp.ID,
-		"object": "response",
-		"model":  model,
-		"status": status,
-		"output": output,
-		"usage":  usageMap,
+		"id":         resp.ID,
+		"object":     "response",
+		"created_at": time.Now().Unix(),
+		"model":      model,
+		"status":     status,
+		"output":     output,
+		"usage":      usageMap,
 	}
 	if incompleteDetails != nil {
 		result["incomplete_details"] = incompleteDetails
@@ -99,8 +106,9 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 				continue
 			}
 			textParts = append(textParts, map[string]any{
-				"type": "output_text",
-				"text": block.Text,
+				"type":        "output_text",
+				"text":        block.Text,
+				"annotations": []any{},
 			})
 		case "tool_use":
 			argsJSON := "{}"
@@ -122,6 +130,7 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 
 	if len(textParts) > 0 {
 		msgItem := map[string]any{
+			"id":      "msg_" + resp.ID,
 			"type":    "message",
 			"role":    "assistant",
 			"status":  status,
@@ -144,12 +153,13 @@ func BuildResponsesPayloadFromAnthropicBeta(resp *anthropic.BetaMessage, respons
 	}
 
 	result := map[string]any{
-		"id":     resp.ID,
-		"object": "response",
-		"model":  model,
-		"status": status,
-		"output": output,
-		"usage":  usageMap,
+		"id":         resp.ID,
+		"object":     "response",
+		"created_at": time.Now().Unix(),
+		"model":      model,
+		"status":     status,
+		"output":     output,
+		"usage":      usageMap,
 	}
 	if incompleteDetails != nil {
 		result["incomplete_details"] = incompleteDetails

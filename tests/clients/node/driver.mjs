@@ -66,11 +66,19 @@ async function runAnthropic(req, beta) {
 
   const stream = svc.stream(params, opts);
   let count = 0;
-  for await (const _event of stream) count++;
-  const msg = await stream.finalMessage();
-  const resp = normalizeAnthropicMessage(msg);
-  resp.stream_event_count = count;
-  return resp;
+  try {
+    for await (const _event of stream) count++;
+    const msg = await stream.finalMessage();
+    const resp = normalizeAnthropicMessage(msg);
+    resp.stream_event_count = count;
+    return resp;
+  } catch (e) {
+    if (isAPIError(e)) return apiErrorResponse(e);
+    // Mid-stream error event (e.g. a truncated upstream): the SDK raised; the
+    // turn was not completed. Report it in-band rather than crashing.
+    return { http_status: 200, stream_event_count: count, raw_body: String(e?.message ?? e),
+      error: { status: 0, type: e?.name ?? "StreamError", message: String(e?.message ?? e) } };
+  }
 }
 
 // ── OpenAI Chat Completions ──────────────────────────────────────────────────

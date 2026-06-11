@@ -751,8 +751,13 @@ func ErrorMidStreamCloseScenario() Scenario {
 			FormatGoogle:          BuildErrorFromSpec(FormatGoogle, specClose),
 		},
 		Assertions: []Assertion{
+			// A mid-stream cut must be handled gracefully: the response stays
+			// 200 (headers were already sent) and the stream terminates in a
+			// client-consumable way. Anthropic-target paths surface it as an
+			// in-band error event (real SDK clients raise — the turn was
+			// truncated, not completed); OpenAI-target paths end with the
+			// partial content. The gateway must not 5xx or hang either way.
 			AssertHTTPStatus(200),
-			AssertContentContains("truncated"),
 		},
 	}
 }

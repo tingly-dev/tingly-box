@@ -12,6 +12,23 @@ import (
 )
 
 func TestConvertOpenAIResponsesToChat(t *testing.T) {
+	t.Run("string input shorthand", func(t *testing.T) {
+		// The Responses API accepts `input` as a plain string (the SDKs'
+		// idiomatic form); it must convert to a single user message.
+		params := &responses.ResponseNewParams{
+			Model: "gpt-4",
+			Input: responses.ResponseNewParamsInputUnion{
+				OfString: param.NewOpt("Hello, world!"),
+			},
+		}
+
+		result := ConvertOpenAIResponsesToChat(params, 4096)
+
+		require.Len(t, result.Messages, 1)
+		assert.Equal(t, "user", getMessageRole(t, result.Messages[0]))
+		assert.Equal(t, "Hello, world!", getMessageContent(t, result.Messages[0]))
+	})
+
 	t.Run("simple user message", func(t *testing.T) {
 		params := &responses.ResponseNewParams{
 			Model: "gpt-4",

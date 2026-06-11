@@ -1,5 +1,7 @@
 package wire
 
+import "encoding/json"
+
 // Responses stream DTOs preserve the minimal outbound JSON shape emitted by this proxy.
 // Keep these fields checked against openai-go Responses SDK event types when updating the SDK.
 
@@ -123,6 +125,29 @@ type ResponsesContentPartWire struct {
 	Type        string        `json:"type"`
 	Text        string        `json:"text,omitempty"`
 	Annotations []interface{} `json:"annotations,omitempty"`
+}
+
+// MarshalJSON ensures output_text parts always carry "text" and
+// "annotations" (an empty array when unset): the real Responses API always
+// includes both, and strict clients (the AI SDK's zod schemas) require them.
+func (p ResponsesContentPartWire) MarshalJSON() ([]byte, error) {
+	m := map[string]interface{}{"type": p.Type}
+	if p.Type == "output_text" {
+		m["text"] = p.Text
+		if p.Annotations != nil {
+			m["annotations"] = p.Annotations
+		} else {
+			m["annotations"] = []interface{}{}
+		}
+		return json.Marshal(m)
+	}
+	if p.Text != "" {
+		m["text"] = p.Text
+	}
+	if p.Annotations != nil {
+		m["annotations"] = p.Annotations
+	}
+	return json.Marshal(m)
 }
 
 type ResponsesContentPartAddedEvent struct {

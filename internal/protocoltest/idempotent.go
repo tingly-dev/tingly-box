@@ -160,10 +160,11 @@ func (m *Matrix) RunIdempotent(t *testing.T) {
 
 	for _, scenario := range m.Scenarios {
 		scenario := scenario
-		// Error propagation through two hops is out of scope: the inner
-		// gateway wraps upstream errors, so the byte-for-byte error shape is
-		// not expected to survive a round-trip.
-		if scenario.Name == "error" {
+		// Error / truncation scenarios are not round-trippable: the inner
+		// gateway wraps upstream errors and a mid-stream cut surfaces as an
+		// error on one hop but partial content on another, so the two paths
+		// legitimately diverge. SkipTransitive marks exactly these.
+		if scenario.SkipTransitive {
 			continue
 		}
 
@@ -255,10 +256,8 @@ func (m *Matrix) ExecuteAllIdempotent() []TestResult {
 	cases := DefaultIdempotentCases()
 
 	for _, scenario := range m.Scenarios {
-		// Error propagation through two hops is out of scope: the inner gateway
-		// wraps upstream errors, so the byte-for-byte error shape is not
-		// expected to survive a round-trip.
-		if scenario.Name == "error" {
+		// Error / truncation scenarios are not round-trippable (see RunIdempotent).
+		if scenario.SkipTransitive {
 			continue
 		}
 
