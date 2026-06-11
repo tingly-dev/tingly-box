@@ -29,6 +29,7 @@ on:
           - transitive
           - idempotent
           - flags
+          - gosdk
           - replay
 
 permissions:
@@ -66,6 +67,17 @@ jobs:
             tier: matrix
             focus: flags
             cmd: matrix --mode=flags --json
+          # Drives the matrix through the official Go SDKs (anthropic-sdk-go,
+          # openai-go) instead of raw HTTP, validating real-client wire
+          # behavior (SSE event dispatch, strict parsing, accumulators).
+          - name: matrix-single-gosdk
+            tier: matrix
+            focus: gosdk
+            cmd: matrix --mode=single --client=gosdk --json
+          - name: matrix-idempotent-gosdk
+            tier: matrix
+            focus: gosdk
+            cmd: matrix --mode=idempotent --client=gosdk --json
           - name: replay-virtual
             tier: replay
             focus: replay

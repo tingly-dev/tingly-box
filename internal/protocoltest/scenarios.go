@@ -586,10 +586,11 @@ func googleIncompleteResponse() MockResponseBuilder {
 
 func openAIResponsesIncompleteResponse() MockResponseBuilder {
 	body := map[string]interface{}{
-		"id":     "resp-validate-incomplete",
-		"object": "realtime.response",
-		"model":  "gpt-4o",
-		"status": "incomplete",
+		"id":         "resp-validate-incomplete",
+		"object":     "realtime.response",
+		"created_at": time.Now().Unix(),
+		"model":      "gpt-4o",
+		"status":     "incomplete",
 		"incomplete_details": map[string]interface{}{
 			"reason": "max_output_tokens",
 		},
@@ -600,7 +601,7 @@ func openAIResponsesIncompleteResponse() MockResponseBuilder {
 				"role":   "assistant",
 				"status": "incomplete",
 				"content": []map[string]interface{}{
-					{"type": "output_text", "text": "This response was truncated due to output limit."},
+					{"type": "output_text", "text": "This response was truncated due to output limit.", "annotations": []interface{}{}},
 				},
 			},
 		},
@@ -662,11 +663,11 @@ func googleIncompleteSSE() []string {
 
 func openAIResponsesIncompleteSSE() []string {
 	return []string{
-		`data: {"type":"response.created","response":{"id":"resp-validate-incomplete","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.created","response":{"id":"resp-validate-incomplete","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`,
 		`data: {"type":"response.output_item.added","response_id":"resp-validate-incomplete","item":{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
 		`data: {"type":"response.output_text.delta","response_id":"resp-validate-incomplete","item_id":"item-validate-incomplete","output_index":0,"content_index":0,"delta":"This response was truncated due to output limit."}`,
 		`data: {"type":"response.output_text.done","response_id":"resp-validate-incomplete","item_id":"item-validate-incomplete","output_index":0,"content_index":0,"text":"This response was truncated due to output limit."}`,
-		`data: {"type":"response.incomplete","response":{"id":"resp-validate-incomplete","object":"realtime.response","model":"gpt-4o","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"incomplete","content":[{"type":"output_text","text":"This response was truncated due to output limit."}]}],"usage":{"input_tokens":10,"output_tokens":50,"total_tokens":60}}}`,
+		`data: {"type":"response.incomplete","response":{"id":"resp-validate-incomplete","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"id":"item-validate-incomplete","type":"message","role":"assistant","status":"incomplete","content":[{"type":"output_text","text":"This response was truncated due to output limit.","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":50,"total_tokens":60}}}`,
 		`data: [DONE]`,
 	}
 }
@@ -760,10 +761,11 @@ func ErrorMidStreamCloseScenario() Scenario {
 
 func openAIResponsesTextResponse() MockResponseBuilder {
 	body := map[string]interface{}{
-		"id":     "resp-validate-text",
-		"object": "realtime.response",
-		"model":  "gpt-4o",
-		"status": "completed",
+		"id":         "resp-validate-text",
+		"object":     "realtime.response",
+		"created_at": time.Now().Unix(),
+		"model":      "gpt-4o",
+		"status":     "completed",
 		"output": []map[string]interface{}{
 			{
 				"id":     "item-validate-text",
@@ -771,7 +773,7 @@ func openAIResponsesTextResponse() MockResponseBuilder {
 				"role":   "assistant",
 				"status": "completed",
 				"content": []map[string]interface{}{
-					{"type": "output_text", "text": "The capital of France is Paris."},
+					{"type": "output_text", "text": "The capital of France is Paris.", "annotations": []interface{}{}},
 				},
 			},
 		},
@@ -789,10 +791,11 @@ func openAIResponsesTextResponse() MockResponseBuilder {
 
 func openAIResponsesToolUseResponse() MockResponseBuilder {
 	body := map[string]interface{}{
-		"id":     "resp-validate-tool",
-		"object": "realtime.response",
-		"model":  "gpt-4o",
-		"status": "completed",
+		"id":         "resp-validate-tool",
+		"object":     "realtime.response",
+		"created_at": time.Now().Unix(),
+		"model":      "gpt-4o",
+		"status":     "completed",
 		"output": []map[string]interface{}{
 			{
 				"id":        "call-validate-weather",
@@ -816,22 +819,22 @@ func openAIResponsesToolUseResponse() MockResponseBuilder {
 
 func openAIResponsesTextSSE() []string {
 	return []string{
-		`data: {"type":"response.created","response":{"id":"resp-validate-text","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.created","response":{"id":"resp-validate-text","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`,
 		`data: {"type":"response.output_item.added","response_id":"resp-validate-text","item":{"id":"item-validate-text","type":"message","role":"assistant","status":"in_progress","content":[]}}`,
 		`data: {"type":"response.output_text.delta","response_id":"resp-validate-text","item_id":"item-validate-text","output_index":0,"content_index":0,"delta":"The capital of France is Paris."}`,
 		`data: {"type":"response.output_text.done","response_id":"resp-validate-text","item_id":"item-validate-text","output_index":0,"content_index":0,"text":"The capital of France is Paris."}`,
-		`data: {"type":"response.completed","response":{"id":"resp-validate-text","object":"realtime.response","model":"gpt-4o","status":"completed","output":[{"id":"item-validate-text","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"The capital of France is Paris."}]}],"usage":{"input_tokens":10,"output_tokens":8,"total_tokens":18}}}`,
+		`data: {"type":"response.completed","response":{"id":"resp-validate-text","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"completed","output":[{"id":"item-validate-text","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"The capital of France is Paris.","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":8,"total_tokens":18}}}`,
 		`data: [DONE]`,
 	}
 }
 
 func openAIResponsesToolUseSSE() []string {
 	return []string{
-		`data: {"type":"response.created","response":{"id":"resp-validate-tool","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`,
+		`data: {"type":"response.created","response":{"id":"resp-validate-tool","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`,
 		`data: {"type":"response.output_item.added","response_id":"resp-validate-tool","item":{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","status":"in_progress"}}`,
 		`data: {"type":"response.function_call_arguments.delta","response_id":"resp-validate-tool","item_id":"call-validate-weather","output_index":0,"delta":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}`,
 		`data: {"type":"response.function_call_arguments.done","response_id":"resp-validate-tool","item_id":"call-validate-weather","output_index":0,"arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}`,
-		`data: {"type":"response.completed","response":{"id":"resp-validate-tool","object":"realtime.response","model":"gpt-4o","status":"completed","output":[{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}],"usage":{"input_tokens":15,"output_tokens":20,"total_tokens":35}}}`,
+		`data: {"type":"response.completed","response":{"id":"resp-validate-tool","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"completed","output":[{"id":"call-validate-weather","type":"function_call","call_id":"call_validate_weather_1","name":"get_weather","arguments":"{\"location\":\"Paris\",\"unit\":\"celsius\"}"}],"usage":{"input_tokens":15,"output_tokens":20,"total_tokens":35}}}`,
 		`data: [DONE]`,
 	}
 }
@@ -1020,17 +1023,17 @@ func buildMidStreamTruncated(format ResponseFormat, content string) MockResponse
 		}
 	case FormatOpenAIResponses:
 		body := map[string]interface{}{
-			"id": "resp-validate-midstream", "object": "realtime.response", "model": "gpt-4o", "status": "completed",
+			"id": "resp-validate-midstream", "object": "realtime.response", "created_at": time.Now().Unix(), "model": "gpt-4o", "status": "completed",
 			"output": []map[string]interface{}{{
 				"id": "item-validate-midstream", "type": "message", "role": "assistant", "status": "completed",
-				"content": []map[string]interface{}{{"type": "output_text", "text": content}},
+				"content": []map[string]interface{}{{"type": "output_text", "text": content, "annotations": []interface{}{}}},
 			}},
 			"usage": map[string]interface{}{"input_tokens": 10, "output_tokens": 8, "total_tokens": 18},
 		}
 		return MockResponseBuilder{
 			NonStream: func() (int, []byte) { return 200, mustMarshal(body) },
 			Stream: func() []string {
-				created := `data: {"type":"response.created","response":{"id":"resp-validate-midstream","object":"realtime.response","model":"gpt-4o","status":"in_progress","output":[]}}`
+				created := `data: {"type":"response.created","response":{"id":"resp-validate-midstream","object":"realtime.response","created_at":1700000000,"model":"gpt-4o","status":"in_progress","output":[]}}`
 				added := `data: {"type":"response.output_item.added","response_id":"resp-validate-midstream","item":{"id":"item-validate-midstream","type":"message","role":"assistant","status":"in_progress","content":[]}}`
 				delta := mustMarshal(map[string]interface{}{"type": "response.output_text.delta", "response_id": "resp-validate-midstream", "item_id": "item-validate-midstream", "output_index": 0, "content_index": 0, "delta": content})
 				// No response.output_text.done / response.completed / [DONE]: cut short.
