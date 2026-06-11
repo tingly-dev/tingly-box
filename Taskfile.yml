@@ -233,9 +233,12 @@ tasks:
             cd "$dir"
             head=$(git rev-parse HEAD 2>/dev/null || echo "N/A")
             branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "N/A")
+            log=$(git --no-pager log -n 2 --oneline 2>/dev/null || echo "N/A")
+
             echo "$name:"
             echo "  HEAD: $head"
             echo "  Branch: $branch"
+            echo "  Log: $log"
             echo ""
             cd - > /dev/null
           fi
