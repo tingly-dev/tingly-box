@@ -1,6 +1,7 @@
 package server
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,16 +11,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol/transform"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
-
-// indexOf returns the position of name in names, or -1 if absent.
-func indexOf(names []string, name string) int {
-	for i, n := range names {
-		if n == name {
-			return i
-		}
-	}
-	return -1
-}
 
 // chainNames runs the (zero-config) chain builder and returns the ordered
 // transform names. A zero Server has nil config, so recording and MCP are off —
@@ -64,17 +55,17 @@ func TestBuildTransformChain_PreVendorBeforeVendor(t *testing.T) {
 	}
 	names := chainNames(t, nil, preVendor)
 
-	consistency := indexOf(names, "consistency_normalize")
-	vendor := indexOf(names, "vendor_adjust")
-	thinking := indexOf(names, "rule_thinking")
-	maxTokens := indexOf(names, "openai_max_tokens_rewrite")
+	consistency := slices.Index(names, "consistency_normalize")
+	vendor := slices.Index(names, "vendor_adjust")
+	thinking := slices.Index(names, "rule_thinking")
+	maxTokens := slices.Index(names, "openai_max_tokens_rewrite")
 
 	require.NotEqual(t, -1, consistency)
 	require.NotEqual(t, -1, vendor)
 	require.NotEqual(t, -1, thinking)
 	require.NotEqual(t, -1, maxTokens)
 
-	// Extras sit after Consistency...
+	// preVendor transforms sit after Consistency...
 	assert.Greater(t, thinking, consistency, "rule_thinking must run after consistency_normalize")
 	assert.Greater(t, maxTokens, consistency, "openai_max_tokens_rewrite must run after consistency_normalize")
 	// ...and strictly before Vendor — nothing mutates the request after Vendor.
@@ -88,8 +79,8 @@ func TestBuildTransformChain_PreBaseBeforeBase(t *testing.T) {
 	preBase := []transform.Transform{transform.NewOpenAICursorCompatTransform()}
 	names := chainNames(t, preBase, nil)
 
-	cursor := indexOf(names, names[0]) // first slot is the pre-Base transform
-	base := indexOf(names, "base_convert")
+	cursor := slices.Index(names, "openai_cursor_compat")
+	base := slices.Index(names, "base_convert")
 
 	require.NotEqual(t, -1, base)
 	assert.Equal(t, 0, cursor, "pre-Base rule transform must be first in the chain")
