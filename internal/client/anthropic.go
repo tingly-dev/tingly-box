@@ -11,6 +11,7 @@ import (
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 
 	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/obs"
@@ -108,8 +109,12 @@ func NewAnthropicClient(provider *typ.Provider, model string, sessionID typ.Sess
 	// MENTION: extra will be applied at last to confirm override
 	options = append(options, extraOptions...)
 
-	// MENTION: must set time, otherwise nonstream and stream may work badly
-	options = append(options, anthropicOption.WithRequestTimeout(time.Duration(provider.Timeout)*time.Second))
+	// MENTION: must set timeout, otherwise nonstream and stream may work badly
+	timeout := time.Duration(provider.Timeout) * time.Second
+	if provider.Timeout <= 0 {
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
+	options = append(options, anthropicOption.WithRequestTimeout(timeout))
 
 	anthropicClient := anthropic.NewClient(options...)
 

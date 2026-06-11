@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicOption "github.com/anthropics/anthropic-sdk-go/option"
 	anthropicstream "github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/sirupsen/logrus"
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/ops"
@@ -53,6 +55,13 @@ func NewClaudeClient(provider *typ.Provider, model string, sessionID typ.Session
 
 	// Add beta query parameter
 	options = append(options, anthropicOption.WithQuery("beta", "true"))
+
+	// MENTION: must set timeout, otherwise nonstream and stream may work badly
+	timeout := time.Duration(provider.Timeout) * time.Second
+	if provider.Timeout <= 0 {
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
+	options = append(options, anthropicOption.WithRequestTimeout(timeout))
 
 	// Create SDK client
 	anthropicClient := anthropic.NewClient(options...)
