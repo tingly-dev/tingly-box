@@ -34,6 +34,7 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 	}
 
 	rules := cfg.GetRequestConfigs()
+	templateManager := cfg.GetTemplateManager()
 
 	var models []OpenAIModel
 	for _, rule := range rules {
@@ -48,6 +49,10 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 		var created int64
 		services := rule.GetServices()
 		providerDesc := make([]string, 0, len(services))
+
+		// Track provider for template lookup
+		var primaryProvider *typ.Provider
+
 		for i := range services {
 			svc := services[i]
 			// Skip nil services (defensive check after DB migration)
@@ -58,6 +63,9 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 			if svc.Active {
 				provider, err := cfg.GetProviderByUUID(svc.Provider)
 				if err == nil {
+					if primaryProvider == nil {
+						primaryProvider = provider
+					}
 					providerDesc = append(providerDesc, provider.Name)
 					// Parse LastUpdated timestamp if available
 					if provider.LastUpdated != "" {
@@ -77,12 +85,32 @@ func (s *Server) openAIListModelsWithScenario(c *gin.Context, scenario *typ.Rule
 			ownedBy += " via " + fmt.Sprintf("%v", providerDesc)
 		}
 
+		// Get model description from template if available
+		var description string
+		var context int
+		var maxOutput int
+		if templateManager != nil && primaryProvider != nil {
+			if tmpl, err := templateManager.GetTemplate(primaryProvider.Name); err == nil && tmpl != nil {
+				for _, modelInfo := range tmpl.Models {
+					if modelInfo.ID == rule.RequestModel {
+						description = modelInfo.Description
+						context = modelInfo.Context
+						maxOutput = modelInfo.MaxOutput
+						break
+					}
+				}
+			}
+		}
+
 		models = append(models, OpenAIModel{
-			ID:       rule.RequestModel,
-			Object:   "model",
-			Created:  created,
-			OwnedBy:  ownedBy,
-			AuthType: string(primaryAuthTypeForRule(cfg, rule)),
+			ID:          rule.RequestModel,
+			Object:      "model",
+			Created:     created,
+			OwnedBy:     ownedBy,
+			Description: description,
+			Context:     context,
+			MaxOutput:   maxOutput,
+			AuthType:    string(primaryAuthTypeForRule(cfg, rule)),
 		})
 	}
 
