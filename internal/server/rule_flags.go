@@ -56,7 +56,7 @@ func parseBlockTools(raw string) []string {
 // upstream-bound form, but still before Vendor finalizes the request.
 //
 // Returns nil when no rule-level flag requires a chain stage so callers can
-// pass the result straight to a variadic `preVendorTransforms ...transform.Transform`
+// pass the result straight to a `preVendorTransforms []transform.Transform`
 // parameter.
 //
 // Takes already-resolved flags so callers that need other fields off

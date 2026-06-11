@@ -269,7 +269,7 @@ handler                            transformXxxx                       chain
 - 所有 4 个 `transformXxxx`（`transformAnthropicV1`、
   `transformAnthropicBeta`、`transformOpenAIChat`、
   `transformOpenAIResponses`）都接受一个 `preBaseTransforms []transform.Transform`
-  位置参数 + variadic `preVendorTransforms ...transform.Transform`，直接透传给
+  位置参数 + 一个 `preVendorTransforms []transform.Transform`，直接透传给
   `BuildTransformChain`。（`smart_compact` 仍在 Anthropic V1 / Beta 两条
   handler 内单独 prepend 到最前，行为不变。）
 - `rulePreBaseTransforms(flags)` 和 `rulePreVendorTransforms(flags)`
