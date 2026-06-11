@@ -12,6 +12,7 @@ interface ModelCardProps {
     gridColumns?: number;
     loading?: boolean;
     showNewBadge?: boolean;
+    description?: string; // Model description from API
 }
 
 export default function ModelCard({
@@ -22,6 +23,7 @@ export default function ModelCard({
     gridColumns,
     loading = false,
     showNewBadge = false,
+    description,
 }: ModelCardProps) {
     const getCardStyles = () => {
         const baseStyles = {
@@ -77,9 +79,11 @@ export default function ModelCard({
                 py: 1,
                 px: 1,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
+                gap: 0.5,
                 '&:last-child': {
                     pb: 1,
                 }
@@ -87,22 +91,43 @@ export default function ModelCard({
                 {loading ? (
                     <CircularProgress size={20} />
                 ) : (
-                    <Typography
-                        variant="body2"
-                        sx={{
-                            fontWeight: 500,
-                            fontSize: '0.8rem',
-                            lineHeight: 1.2,
-                            wordBreak: 'break-word',
-                            textAlign: 'center',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '100%',
-                        }}
-                    >
-                        {model}
-                    </Typography>
+                    <>
+                        <Typography
+                            variant="body2"
+                            sx={{
+                                fontWeight: 500,
+                                fontSize: '0.8rem',
+                                lineHeight: 1.2,
+                                wordBreak: 'break-word',
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '100%',
+                            }}
+                        >
+                            {model}
+                        </Typography>
+                        {description && (
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    fontSize: '0.65rem',
+                                    lineHeight: 1.1,
+                                    color: 'text.secondary',
+                                    textAlign: 'center',
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    width: '100%',
+                                }}
+                            >
+                                {description}
+                            </Typography>
+                        )}
+                    </>
                 )}
                 {isSelected && !loading && (
                     <CheckCircle
