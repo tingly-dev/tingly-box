@@ -9,13 +9,13 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// rulePreBaseTransforms builds the per-rule list of pre-Base transforms to
-// prepend onto the protocol chain. Pre-Base transforms act on the *inbound*
-// request shape — they run before BaseTransform's protocol conversion, so the
-// type-switch inside each transform sees what the client actually sent.
+// rulePreBaseTransforms builds the per-rule list of pre-Base transforms for the
+// chain's INBOUND slot. Pre-Base transforms act on the *inbound* request shape —
+// they run before BaseTransform's protocol conversion, so the type-switch inside
+// each transform sees what the client actually sent.
 //
-// Returns nil when no rule-level flag requires a pre-Base stage so callers
-// can pass the result straight to prependPreBaseTransforms.
+// Returns nil when no rule-level flag requires a pre-Base stage so callers can
+// pass the result straight to BuildTransformChain's preBase parameter.
 func rulePreBaseTransforms(flags typ.RuleFlags) []transform.Transform {
 	var pre []transform.Transform
 	if flags.CursorCompat {
@@ -49,10 +49,11 @@ func parseBlockTools(raw string) []string {
 	return names
 }
 
-// ruleExtraTransforms builds the per-rule list of post-Base transforms to
-// append to the protocol chain. Post-Base transforms act on the *target*
-// request shape — they run after BaseTransform's protocol conversion, so the
-// type-switch inside each transform matches the upstream-bound form.
+// ruleExtraTransforms builds the per-rule list of post-Base transforms for the
+// chain's TARGET slot (after Consistency, before Vendor). Post-Base transforms
+// act on the *target* request shape — they run after BaseTransform's protocol
+// conversion, so the type-switch inside each transform matches the
+// upstream-bound form.
 //
 // Returns nil when no rule-level flag requires a chain stage so callers can
 // pass the result straight to a variadic `extraTransforms ...transform.Transform`

@@ -69,17 +69,23 @@
                                ▼
    ┌───────────────────────────────────────────────────────────────┐
    │   transformXxxx(..., preBase, extras...) :                     │
-   │     chain := BuildTransformChain(...)                          │
-   │     prependPreBaseTransforms(chain, preBase)                   │
-   │     appendExtraTransforms(chain, extras)                       │
+   │     chain := BuildTransformChain(..., preBase, extras)         │
    │     chain.Execute(ctx)                                         │
    │                                                                │
-   │     preBase → Base → MCP → Consistency → Vendor → extras       │
-   │   (pre-base stages)                       (post-base stages)   │
+   │   preBase → Base → MCP → Consistency → extras → Vendor → ▸rec  │
+   │   └ INBOUND slot                       └ TARGET slot           │
+   │                              Vendor + 录制 = 不可逾越的尾段     │
    └───────────────────────────┬───────────────────────────────────┘
                                ▼
                        upstream provider
 ```
+
+**不变式：除录制外，没有任何阶段在 `Vendor` 之后运行。** `Vendor` 直面
+provider、做最终且不可逆的改写（model alias、metadata、billing header、
+DeepSeek thinking patch 等），必须是最后一个 mutation；因此 rule 的 TARGET-slot
+extras 装在 `Consistency` 之后、`Vendor` **之前**。这同时修掉了一个隐患：
+StagePost 录制现在落在 `Vendor` 之后，抓到的是真正发出的请求（此前 extras 跑在
+录制之后，录到的"最终请求"与实际出站不一致）。
 
 ---
 
@@ -144,17 +150,19 @@ func RuleFlagRegistry() []FlagSpec { … }
 ## 5. 五种 flag 注入手法
 
 ```
-Type 1b-pre  Request body, pre-Base Transform
-         作为 Transform 接口的实现 prepend 到 chain 最前（BaseTransform
+Type 1b-pre  Request body, INBOUND slot（pre-Base Transform）
+         作为 Transform 接口的实现装在 chain 最前（BaseTransform
          之前）运行；type-switch 决定是否对 inbound request 形态生效。
          例：OpenAICursorCompatTransform —— 在 Base 把 OpenAI Chat 转
          成其他形态之前 flatten 富文本内容。聚合点：
          `internal/server/rule_flags.go::rulePreBaseTransforms`。
 
-Type 1b-post Request body, post-Base Transform（推荐用于跨协议 rewrite）
-         作为 Transform 接口的实现 append 到 chain 末尾，在 BaseTransform
-         完成协议转换之后运行；type-switch 决定是否对目标 request 形态
-         生效。例：OpenAIMaxTokensRewriteTransform。聚合点：
+Type 1b-post Request body, TARGET slot（post-Base Transform，推荐用于跨协议 rewrite）
+         作为 Transform 接口的实现装在 `Consistency` 之后、`Vendor`
+         **之前**，在 BaseTransform 完成协议转换之后运行；type-switch
+         决定是否对目标 request 形态生效。**绝不在 Vendor 之后**——Vendor
+         是直面 provider 的最终步骤，不可逾越。例：
+         OpenAIMaxTokensRewriteTransform、RuleThinkingTransform。聚合点：
          `internal/server/rule_flags.go::ruleExtraTransforms`。
 
 Type 2   Per-request context hint
@@ -181,9 +189,13 @@ Type 5   Routing behavior (service selection)
 ```
 
 任何新 flag 都应归入这几类之一。pre-Base 和 post-Base Transform 都是同一
-个 `Transform` 接口的实现，区别只在 chain 中的位置：pre 在 BaseTransform
-之前（看见 inbound 形态），post 在之后（看见目标形态）。聚合点
-`rulePreBaseTransforms` / `ruleExtraTransforms` 决定 flag 装哪边。
+个 `Transform` 接口的实现，区别只在 chain 中的位置：pre 装在 INBOUND slot
+（BaseTransform 之前，看见 inbound 形态），post 装在 TARGET slot
+（Consistency 之后、Vendor 之前，看见目标形态）。聚合点
+`rulePreBaseTransforms` / `ruleExtraTransforms` 决定 flag 装哪边。两个 slot
+之外，chain 的骨架（StagePre 录制 → Base → MCP → Consistency → Vendor →
+StagePost 录制）由 `BuildTransformChain` 固定，**Vendor + 录制是不可逾越的
+尾段**。
 
 ---
 
@@ -235,32 +247,35 @@ handler                            transformXxxx                       chain
   │             flags)                  │                                │
   │  (e.g. [OpenAIMaxTokensRewrite])    │                                │
   ├──────── preBase, extras... ────────►│                                │
-  │                                     │  chain := BuildTransformChain  │
-  │                                     │           (...)                │
+  │                                     │  chain := BuildTransformChain( │
+  │                                     │      ..., preBase, extras)      │
   │                                     ├──────────────────────────────►│
-  │                                     │  prependPreBaseTransforms(     │
-  │                                     │      chain, preBase)           │
-  │                                     │  appendExtraTransforms(        │
-  │                                     │      chain, extraTransforms)   │
   │                                     │  chain.Execute(ctx)            │
   │                                     ├──────────────────────────────►│
 ```
 
 关键约束：
 
-- `BuildTransformChain` 不感知 rule flag。它的输入是 scenario / provider
-  / recording——把哪些 rule Transform 要 prepend / append 的决策留给
-  handler。
+- `BuildTransformChain` 是唯一的 chain 装配点。它接受 scenario / provider
+  / recording，外加 `preBase []transform.Transform` 与
+  `extras []transform.Transform` 两个 slot 入参，把它们插进固定骨架的对应
+  位置（preBase 在最前的 INBOUND slot，extras 在 Consistency 之后、Vendor
+  之前的 TARGET slot）。它自身不解析 rule flag——具体装哪些 Transform 仍由
+  handler 通过聚合点决定，但**插哪个位置由 builder 统一保证**，handler 不再
+  各自 prepend / append。
 - 所有 4 个 `transformXxxx`（`transformAnthropicV1`、
   `transformAnthropicBeta`、`transformOpenAIChat`、
   `transformOpenAIResponses`）都接受一个 `preBaseTransforms []transform.Transform`
-  位置参数 + variadic `extraTransforms ...transform.Transform`，分别用
-  `prependPreBaseTransforms(chain, preBase)` 和
-  `appendExtraTransforms(chain, extras)` 装到 chain 两端。
+  位置参数 + variadic `extraTransforms ...transform.Transform`，直接透传给
+  `BuildTransformChain`。（`smart_compact` 仍在 Anthropic V1 / Beta 两条
+  handler 内单独 prepend 到最前，行为不变。）
 - `rulePreBaseTransforms(flags)` 和 `ruleExtraTransforms(flags)`
   （`internal/server/rule_flags.go`）是 rule→Transform 的两个聚合点。
   新增 rule-driven Transform 时，按"作用于 inbound 形态" / "作用于目标
   形态"二选一，往对应聚合点追加 case；handler 端不需要改动。
+- chain 顺序的回归护栏在
+  `internal/server/protocol_chain_builder_test.go`：`extras` 必须落在
+  `consistency_normalize` 之后、`vendor_adjust` 之前。
 
 ---
 
@@ -479,9 +494,10 @@ Plugins Card 操作。
 | string flag 的"启用"语义 | 空 = 未启用 | 独立 enable Switch + 文本 | 一个字段一个状态，UI 更简单；权衡是无法区分"空字符串"和"未配置" |
 | UA 链 vendor pin 是否不可覆盖 | 否，可被 provider/rule 覆盖 | vendor pin 强制 | 把 `provider.UserAgent` 当调试 override 更灵活；用 doc comment 规约 |
 | 请求字段重写：handler pre-chain mutate vs post-base Transform | post-base Transform | handler 链外直改 | 链外直改在跨协议路径（Anthropic→OpenAI）失效；Transform 在 Base 之后看到的是最终形态，所有 inbound 类型都能命中 |
+| post-base extras 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；extras 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |
 | Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/server/`。避免反向依赖 |
-| `BuildTransformChain` 是否感知 rule | 否 | 把 ruleFlags 传入 | chain builder 只懂 scenario/provider/recording；rule 级关心点放在 handler，通过 `extraTransforms ...transform.Transform` variadic 注入 |
+| `BuildTransformChain` 是否感知 rule | 否（只收已构造好的 Transform） | 把 ruleFlags 传入 | chain builder 不解析 flag，但作为唯一装配点接收 `preBase` / `extras` 两个 slot 入参并保证插入位置（INBOUND / TARGET slot）；rule→Transform 的决策仍在 handler 聚合点。早期版本由各 handler 自行 prepend/append，导致插入位置分散且 extras 误落在 Vendor 之后 |
 | 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Plugins 卡片 | 两套入口对同一字段会引发混淆 |
 | 前端 registry-driven vs per-flag switch/case | registry-driven | 每个 flag 一个 case | registry-driven 消除 ~293 行重复代码；新增 flag 零前端 UI 改动。代价是需要 snakeToCamel 动态映射（类型不够严格），但 `TestRuleFlagRegistry_KeysMatchStructFields` 保证 key 与 struct 同步 |
 | `Shared` / `InheritanceMode` 嵌入 FlagSpec | ✅ | 前端单独维护共享清单 | 继承语义是 flag 固有属性，放在 registry 可信源里前端零维护 |

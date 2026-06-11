@@ -8,40 +8,14 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
-// appendExtraTransforms tacks rule-driven post-Base transforms onto a chain
-// built by BuildTransformChain. Kept rule-agnostic — the caller decides what
-// to append.
-func appendExtraTransforms(chain *transform.TransformChain, extras []transform.Transform) {
-	for _, t := range extras {
-		chain.Add(t)
-	}
-}
-
-// prependPreBaseTransforms prepends rule-driven pre-Base transforms onto a
-// chain built by BuildTransformChain. They run before any existing stage
-// (including StagePre recording) — same position smart_compact uses — so the
-// type-switch in each transform sees the inbound request shape exactly as the
-// client sent it.
-func prependPreBaseTransforms(chain *transform.TransformChain, preBase []transform.Transform) {
-	if len(preBase) == 0 {
-		return
-	}
-	existing := chain.GetTransforms()
-	merged := make([]transform.Transform, 0, len(preBase)+len(existing))
-	merged = append(merged, preBase...)
-	merged = append(merged, existing...)
-	chain.SetTransforms(merged)
-}
-
 func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBetaMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
 
-	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
+	// Build transform chain with recording support. The rule-driven pre-Base and
+	// extra transforms are slotted into their canonical positions by the builder.
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder, preBaseTransforms, extraTransforms)
 	if err != nil {
 		return nil, err
 	}
-	prependPreBaseTransforms(chain, preBaseTransforms)
-	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -102,13 +76,12 @@ func (s *Server) transformAnthropicBeta(c *gin.Context, req protocol.AnthropicBe
 }
 
 func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMessagesRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
-	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
+	// Build transform chain with recording support. The rule-driven pre-Base and
+	// extra transforms are slotted into their canonical positions by the builder.
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder, preBaseTransforms, extraTransforms)
 	if err != nil {
 		return nil, err
 	}
-	prependPreBaseTransforms(chain, preBaseTransforms)
-	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -166,13 +139,12 @@ func (s *Server) transformAnthropicV1(c *gin.Context, req protocol.AnthropicMess
 }
 
 func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatCompletionRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, preBaseTransforms []transform.Transform, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
-	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
+	// Build transform chain with recording support. The rule-driven pre-Base and
+	// extra transforms are slotted into their canonical positions by the builder.
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder, preBaseTransforms, extraTransforms)
 	if err != nil {
 		return nil, err
 	}
-	prependPreBaseTransforms(chain, preBaseTransforms)
-	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
@@ -222,13 +194,12 @@ func (s *Server) transformOpenAIChat(c *gin.Context, req protocol.OpenAIChatComp
 }
 
 func (s *Server) transformOpenAIResponses(c *gin.Context, req protocol.ResponseCreateRequest, target protocol.APIType, provider *typ.Provider, isStreaming bool, protocolRecorder *ProtocolRecorder, scenarioType typ.RuleScenario, maxAllowed int, preBaseTransforms []transform.Transform, extraTransforms ...transform.Transform) (*transform.TransformContext, error) {
-	// Build transform chain with recording support
-	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder)
+	// Build transform chain with recording support. The rule-driven pre-Base and
+	// extra transforms are slotted into their canonical positions by the builder.
+	chain, err := s.BuildTransformChain(c, target, provider.APIBase, scenarioType, nil, protocolRecorder, preBaseTransforms, extraTransforms)
 	if err != nil {
 		return nil, err
 	}
-	prependPreBaseTransforms(chain, preBaseTransforms)
-	appendExtraTransforms(chain, extraTransforms)
 
 	// Create transform context
 	var scenarioFlags *typ.ScenarioFlags
