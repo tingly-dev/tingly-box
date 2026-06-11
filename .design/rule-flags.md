@@ -60,32 +60,35 @@
    │   flags := resolveRuleFlags(c, rule)                           │
    │   ├─ WithCustomUserAgent(ctx, flags.CustomUserAgent)           │  Type 2
    │   ├─ reqCtx.Extra["skip_usage"] = flags.SkipUsage              │  Type 3
-   │   ├─ preBase := rulePreBaseTransforms(flags)                   │  Type 1b-pre
+   │   ├─ preBase   := rulePreBaseTransforms(flags)                 │  Type 1b-pre
    │   │   → [transform.OpenAICursorCompatTransform{}]              │
-   │   └─ extras := ruleExtraTransforms(flags)                      │  Type 1b-post
+   │   └─ preVendor := rulePreVendorTransforms(flags)              │  Type 1b-post
    │       → [transform.OpenAIMaxTokensRewriteTransform{...}]       │
    └───────────────────────────┬───────────────────────────────────┘
                                │
                                ▼
    ┌───────────────────────────────────────────────────────────────┐
-   │   transformXxxx(..., preBase, extras...) :                     │
-   │     chain := BuildTransformChain(..., preBase, extras)         │
+   │   transformXxxx(..., preBase, preVendor...) :                  │
+   │     chain := BuildTransformChain(..., preBase, preVendor)      │
    │     chain.Execute(ctx)                                         │
    │                                                                │
-   │   preBase → Base → MCP → Consistency → extras → Vendor → ▸rec  │
-   │   └ INBOUND slot                       └ TARGET slot           │
+   │   preBase → Base → MCP → Consistency → preVendor → Vendor → ▸rec│
+   │   └ preBase slot                       └ preVendor slot        │
    │                              Vendor + 录制 = 不可逾越的尾段     │
    └───────────────────────────┬───────────────────────────────────┘
                                ▼
                        upstream provider
 ```
 
+两个动态插入位置本质都是"在某步之前"：**preBase**（Base 之前，看见入站形态）
+与 **preVendor**（Vendor 之前，看见目标形态）。
+
 **不变式：除录制外，没有任何阶段在 `Vendor` 之后运行。** `Vendor` 直面
 provider、做最终且不可逆的改写（model alias、metadata、billing header、
-DeepSeek thinking patch 等），必须是最后一个 mutation；因此 rule 的 TARGET-slot
-extras 装在 `Consistency` 之后、`Vendor` **之前**。这同时修掉了一个隐患：
-StagePost 录制现在落在 `Vendor` 之后，抓到的是真正发出的请求（此前 extras 跑在
-录制之后，录到的"最终请求"与实际出站不一致）。
+DeepSeek thinking patch 等），必须是最后一个 mutation；因此 rule 的 preVendor
+transforms 装在 `Consistency` 之后、`Vendor` **之前**。这同时修掉了一个隐患：
+StagePost 录制现在落在 `Vendor` 之后，抓到的是真正发出的请求（此前这些 transform
+跑在录制之后，录到的"最终请求"与实际出站不一致）。
 
 ---
 
@@ -150,20 +153,20 @@ func RuleFlagRegistry() []FlagSpec { … }
 ## 5. 五种 flag 注入手法
 
 ```
-Type 1b-pre  Request body, INBOUND slot（pre-Base Transform）
+Type 1b-pre  Request body, preBase slot（pre-Base Transform）
          作为 Transform 接口的实现装在 chain 最前（BaseTransform
          之前）运行；type-switch 决定是否对 inbound request 形态生效。
          例：OpenAICursorCompatTransform —— 在 Base 把 OpenAI Chat 转
          成其他形态之前 flatten 富文本内容。聚合点：
          `internal/server/rule_flags.go::rulePreBaseTransforms`。
 
-Type 1b-post Request body, TARGET slot（post-Base Transform，推荐用于跨协议 rewrite）
+Type 1b-post Request body, preVendor slot（post-Base Transform，推荐用于跨协议 rewrite）
          作为 Transform 接口的实现装在 `Consistency` 之后、`Vendor`
          **之前**，在 BaseTransform 完成协议转换之后运行；type-switch
          决定是否对目标 request 形态生效。**绝不在 Vendor 之后**——Vendor
          是直面 provider 的最终步骤，不可逾越。例：
          OpenAIMaxTokensRewriteTransform、RuleThinkingTransform。聚合点：
-         `internal/server/rule_flags.go::ruleExtraTransforms`。
+         `internal/server/rule_flags.go::rulePreVendorTransforms`。
 
 Type 2   Per-request context hint
          handler 把 c.Request 的 ctx 替换成带 hint 的；transport /
@@ -189,10 +192,10 @@ Type 5   Routing behavior (service selection)
 ```
 
 任何新 flag 都应归入这几类之一。pre-Base 和 post-Base Transform 都是同一
-个 `Transform` 接口的实现，区别只在 chain 中的位置：pre 装在 INBOUND slot
-（BaseTransform 之前，看见 inbound 形态），post 装在 TARGET slot
+个 `Transform` 接口的实现，区别只在 chain 中的位置：pre 装在 preBase slot
+（BaseTransform 之前，看见 inbound 形态），post 装在 preVendor slot
 （Consistency 之后、Vendor 之前，看见目标形态）。聚合点
-`rulePreBaseTransforms` / `ruleExtraTransforms` 决定 flag 装哪边。两个 slot
+`rulePreBaseTransforms` / `rulePreVendorTransforms` 决定 flag 装哪边。两个 slot
 之外，chain 的骨架（StagePre 录制 → Base → MCP → Consistency → Vendor →
 StagePost 录制）由 `BuildTransformChain` 固定，**Vendor + 录制是不可逾越的
 尾段**。
@@ -206,7 +209,7 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 | 层 | 位置 | 职责 | 例子 |
 |----|------|------|------|
 | **op（操作原语）** | `internal/protocol/transform/ops/` | 纯函数。对某个具体 request 类型做无副作用的字段改写。**不感知链路、不感知 rule、不感知 ctx**。 | `ops.ApplyMaxCompletionTokensRewrite(*openai.ChatCompletionNewParams)`、`ops.ApplyCursorCompatContentNormalization(*openai.ChatCompletionNewParams)` |
-| **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。pre/post 之分由聚合点（`rulePreBaseTransforms` / `ruleExtraTransforms`）决定，与 Transform 实现本身无关。 | `transform.OpenAIMaxTokensRewriteTransform`、`transform.OpenAICursorCompatTransform` |
+| **Transform（链路阶段，协议层）** | `internal/protocol/transform/` | 实现 `Transform` 接口。构造期接受配置；`Apply()` 里 type-switch `ctx.Request`，匹配目标类型时调 op。**仅依赖协议层 / SDK 类型**。pre/post 之分由聚合点（`rulePreBaseTransforms` / `rulePreVendorTransforms`）决定，与 Transform 实现本身无关。 | `transform.OpenAIMaxTokensRewriteTransform`、`transform.OpenAICursorCompatTransform` |
 | **Transform（链路阶段，server-domain）** | `internal/server/transform_*.go` | 同 Transform 接口，但需要 server-domain 类型（如 `*typ.ScenarioConfig`）。 | `ThinkingModeTransform`、`MaxTokensTransform`（Anthropic 上限）、`CleanHeaderTransform` |
 
 **为什么必须分两层？**
@@ -240,15 +243,15 @@ Type 1b（pre-Base 与 post-Base 同形）涉及两层抽象，**职责必须分
 handler                            transformXxxx                       chain
   │                                     │                                │
   │ flags  := resolveRuleFlags(c, rule) │                                │
-  │ preBase:= rulePreBaseTransforms(    │                                │
-  │             flags)                  │                                │
+  │ preBase  := rulePreBaseTransforms(  │                                │
+  │              flags)                 │                                │
   │  (e.g. [OpenAICursorCompat])        │                                │
-  │ extras := ruleExtraTransforms(      │                                │
-  │             flags)                  │                                │
+  │ preVendor:= rulePreVendorTransforms(│                                │
+  │              flags)                 │                                │
   │  (e.g. [OpenAIMaxTokensRewrite])    │                                │
-  ├──────── preBase, extras... ────────►│                                │
+  ├─────── preBase, preVendor... ──────►│                                │
   │                                     │  chain := BuildTransformChain( │
-  │                                     │      ..., preBase, extras)      │
+  │                                     │      ..., preBase, preVendor)   │
   │                                     ├──────────────────────────────►│
   │                                     │  chain.Execute(ctx)            │
   │                                     ├──────────────────────────────►│
@@ -258,23 +261,23 @@ handler                            transformXxxx                       chain
 
 - `BuildTransformChain` 是唯一的 chain 装配点。它接受 scenario / provider
   / recording，外加 `preBase []transform.Transform` 与
-  `extras []transform.Transform` 两个 slot 入参，把它们插进固定骨架的对应
-  位置（preBase 在最前的 INBOUND slot，extras 在 Consistency 之后、Vendor
-  之前的 TARGET slot）。它自身不解析 rule flag——具体装哪些 Transform 仍由
+  `preVendor []transform.Transform` 两个 slot 入参，把它们插进固定骨架的对应
+  位置（preBase 在最前的 preBase slot，preVendor 在 Consistency 之后、Vendor
+  之前的 preVendor slot）。它自身不解析 rule flag——具体装哪些 Transform 仍由
   handler 通过聚合点决定，但**插哪个位置由 builder 统一保证**，handler 不再
   各自 prepend / append。
 - 所有 4 个 `transformXxxx`（`transformAnthropicV1`、
   `transformAnthropicBeta`、`transformOpenAIChat`、
   `transformOpenAIResponses`）都接受一个 `preBaseTransforms []transform.Transform`
-  位置参数 + variadic `extraTransforms ...transform.Transform`，直接透传给
+  位置参数 + variadic `preVendorTransforms ...transform.Transform`，直接透传给
   `BuildTransformChain`。（`smart_compact` 仍在 Anthropic V1 / Beta 两条
   handler 内单独 prepend 到最前，行为不变。）
-- `rulePreBaseTransforms(flags)` 和 `ruleExtraTransforms(flags)`
+- `rulePreBaseTransforms(flags)` 和 `rulePreVendorTransforms(flags)`
   （`internal/server/rule_flags.go`）是 rule→Transform 的两个聚合点。
   新增 rule-driven Transform 时，按"作用于 inbound 形态" / "作用于目标
   形态"二选一，往对应聚合点追加 case；handler 端不需要改动。
 - chain 顺序的回归护栏在
-  `internal/server/protocol_chain_builder_test.go`：`extras` 必须落在
+  `internal/server/protocol_chain_builder_test.go`：`preVendor` 必须落在
   `consistency_normalize` 之后、`vendor_adjust` 之前。
 
 ---
@@ -440,9 +443,9 @@ Plugins Card 操作。
    │      • 作用于 inbound 形态（cursor_compat 类）→               │
    │        internal/server/rule_flags.go::rulePreBaseTransforms   │
    │      • 作用于目标形态（max_tokens 类）→                       │
-   │        internal/server/rule_flags.go::ruleExtraTransforms     │
+   │        internal/server/rule_flags.go::rulePreVendorTransforms │
    │   ④ handler 端无需改动——4 个 handler 都已调                  │
-   │      rulePreBaseTransforms(flags) / ruleExtraTransforms(flags)│
+   │      rulePreBaseTransforms(flags) / rulePreVendorTransforms(flags)│
    │                                                              │
    │ Type 2 (context-passed hint)                                 │
    │   ① 在 internal/typ/id.go 加 contextKey + 一对                │
@@ -494,10 +497,10 @@ Plugins Card 操作。
 | string flag 的"启用"语义 | 空 = 未启用 | 独立 enable Switch + 文本 | 一个字段一个状态，UI 更简单；权衡是无法区分"空字符串"和"未配置" |
 | UA 链 vendor pin 是否不可覆盖 | 否，可被 provider/rule 覆盖 | vendor pin 强制 | 把 `provider.UserAgent` 当调试 override 更灵活；用 doc comment 规约 |
 | 请求字段重写：handler pre-chain mutate vs post-base Transform | post-base Transform | handler 链外直改 | 链外直改在跨协议路径（Anthropic→OpenAI）失效；Transform 在 Base 之后看到的是最终形态，所有 inbound 类型都能命中 |
-| post-base extras 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；extras 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
+| preVendor transforms 的 chain 位置 | Consistency 之后、**Vendor 之前** | append 到 chain 末尾（Vendor 之后） | Vendor 直面 provider 做不可逆改写，必须是最后一个 mutation；preVendor 跑在 Vendor 之后会破坏"vendor 最终态"且让 StagePost 录制抓不到真实出站请求 |
 | op vs Transform 是否合并 | 分两层 | 把 op 直接做成 Transform | op 是纯函数原语（可独立测、可复用、可多端调用）；Transform 才感知 rule 与链路位置。合并会让原语难复用 |
 | Transform 放协议层包 vs server 包 | 视依赖而定 | 全部塞 server | 只依赖 SDK / 协议类型的放 `internal/protocol/transform/`；需要 server-domain 类型的放 `internal/server/`。避免反向依赖 |
-| `BuildTransformChain` 是否感知 rule | 否（只收已构造好的 Transform） | 把 ruleFlags 传入 | chain builder 不解析 flag，但作为唯一装配点接收 `preBase` / `extras` 两个 slot 入参并保证插入位置（INBOUND / TARGET slot）；rule→Transform 的决策仍在 handler 聚合点。早期版本由各 handler 自行 prepend/append，导致插入位置分散且 extras 误落在 Vendor 之后 |
+| `BuildTransformChain` 是否感知 rule | 否（只收已构造好的 Transform） | 把 ruleFlags 传入 | chain builder 不解析 flag，但作为唯一装配点接收 `preBase` / `preVendor` 两个 slot 入参并保证插入位置（preBase / preVendor slot）；rule→Transform 的决策仍在 handler 聚合点。早期版本由各 handler 自行 prepend/append，导致插入位置分散且 preVendor transforms 误落在 Vendor 之后 |
 | 取消路由图齿轮菜单中的 Cursor 专用项 | ✅ | 同时保留菜单项和 Plugins 卡片 | 两套入口对同一字段会引发混淆 |
 | 前端 registry-driven vs per-flag switch/case | registry-driven | 每个 flag 一个 case | registry-driven 消除 ~293 行重复代码；新增 flag 零前端 UI 改动。代价是需要 snakeToCamel 动态映射（类型不够严格），但 `TestRuleFlagRegistry_KeysMatchStructFields` 保证 key 与 struct 同步 |
 | `Shared` / `InheritanceMode` 嵌入 FlagSpec | ✅ | 前端单独维护共享清单 | 继承语义是 flag 固有属性，放在 registry 可信源里前端零维护 |

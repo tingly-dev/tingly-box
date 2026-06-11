@@ -160,15 +160,15 @@ func TestRulePreBaseTransforms_OtherFlagsAlone_NoTransform(t *testing.T) {
 	}
 }
 
-func TestRuleExtraTransforms_NoFlags(t *testing.T) {
-	got := ruleExtraTransforms(typ.RuleFlags{})
+func TestRulePreVendorTransforms_NoFlags(t *testing.T) {
+	got := rulePreVendorTransforms(typ.RuleFlags{})
 	if got != nil {
 		t.Errorf("expected nil for zero-value flags, got %d transforms", len(got))
 	}
 }
 
-func TestRuleExtraTransforms_UseMaxCompletionTokens(t *testing.T) {
-	got := ruleExtraTransforms(typ.RuleFlags{UseMaxCompletionTokens: true})
+func TestRulePreVendorTransforms_UseMaxCompletionTokens(t *testing.T) {
+	got := rulePreVendorTransforms(typ.RuleFlags{UseMaxCompletionTokens: true})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
@@ -181,8 +181,8 @@ func TestRuleExtraTransforms_UseMaxCompletionTokens(t *testing.T) {
 	}
 }
 
-func TestRuleExtraTransforms_UseMaxTokens(t *testing.T) {
-	got := ruleExtraTransforms(typ.RuleFlags{UseMaxTokens: true})
+func TestRulePreVendorTransforms_UseMaxTokens(t *testing.T) {
+	got := rulePreVendorTransforms(typ.RuleFlags{UseMaxTokens: true})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
@@ -192,8 +192,8 @@ func TestRuleExtraTransforms_UseMaxTokens(t *testing.T) {
 	}
 }
 
-func TestRuleExtraTransforms_ThinkingEffort(t *testing.T) {
-	got := ruleExtraTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
+func TestRulePreVendorTransforms_ThinkingEffort(t *testing.T) {
+	got := rulePreVendorTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortHigh})
 	if len(got) != 1 {
 		t.Fatalf("expected 1 transform, got %d", len(got))
 	}
@@ -206,19 +206,19 @@ func TestRuleExtraTransforms_ThinkingEffort(t *testing.T) {
 	}
 }
 
-func TestRuleExtraTransforms_ThinkingEffortEmpty_NoTransform(t *testing.T) {
-	got := ruleExtraTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault})
+func TestRulePreVendorTransforms_ThinkingEffortEmpty_NoTransform(t *testing.T) {
+	got := rulePreVendorTransforms(typ.RuleFlags{ThinkingEffort: typ.ThinkingEffortDefault})
 	if got != nil {
 		t.Errorf("empty thinking effort should add no transform, got %d", len(got))
 	}
 }
 
-func TestRuleExtraTransforms_CursorCompatAlone_NoTransform(t *testing.T) {
-	// CursorCompat is a pre-Base flag — it must not surface in the post-Base
-	// extras list. This is the safety net for the rule-flag-to-transform
-	// migration: if anyone wires cursor_compat into ruleExtraTransforms by
-	// mistake, this test goes red.
-	got := ruleExtraTransforms(typ.RuleFlags{
+func TestRulePreVendorTransforms_CursorCompatAlone_NoTransform(t *testing.T) {
+	// CursorCompat is a preBase flag — it must not surface in the preVendor
+	// list. This is the safety net for the rule-flag-to-transform migration: if
+	// anyone wires cursor_compat into rulePreVendorTransforms by mistake, this
+	// test goes red.
+	got := rulePreVendorTransforms(typ.RuleFlags{
 		CursorCompat:    true,
 		SkipUsage:       true,
 		CustomUserAgent: "Foo/1.0",

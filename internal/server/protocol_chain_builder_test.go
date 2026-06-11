@@ -24,7 +24,7 @@ func indexOf(names []string, name string) int {
 // chainNames runs the (zero-config) chain builder and returns the ordered
 // transform names. A zero Server has nil config, so recording and MCP are off —
 // leaving the canonical base order plus whatever rule transforms are slotted in.
-func chainNames(t *testing.T, preBase, extras []transform.Transform) []string {
+func chainNames(t *testing.T, preBase, preVendor []transform.Transform) []string {
 	t.Helper()
 	s := &Server{}
 	chain, err := s.BuildTransformChain(
@@ -35,7 +35,7 @@ func chainNames(t *testing.T, preBase, extras []transform.Transform) []string {
 		nil,
 		nil, // no recorder
 		preBase,
-		extras,
+		preVendor,
 	)
 	require.NoError(t, err)
 
@@ -53,16 +53,16 @@ func TestBuildTransformChain_BaseOrder(t *testing.T) {
 	assert.Equal(t, []string{"base_convert", "consistency_normalize", "vendor_adjust"}, names)
 }
 
-// TestBuildTransformChain_ExtrasBeforeVendor is the regression guard for the
-// core fix: rule "extras" (target-shape transforms) must run after Consistency
-// and BEFORE Vendor, so Vendor remains the final, immutable step facing the
-// provider.
-func TestBuildTransformChain_ExtrasBeforeVendor(t *testing.T) {
-	extras := []transform.Transform{
+// TestBuildTransformChain_PreVendorBeforeVendor is the regression guard for the
+// core fix: rule preVendor transforms (target-shape transforms) must run after
+// Consistency and BEFORE Vendor, so Vendor remains the final, immutable step
+// facing the provider.
+func TestBuildTransformChain_PreVendorBeforeVendor(t *testing.T) {
+	preVendor := []transform.Transform{
 		transform.NewRuleThinkingTransform(typ.ThinkingEffortHigh),
 		transform.NewOpenAIMaxTokensRewriteTransform(true, false),
 	}
-	names := chainNames(t, nil, extras)
+	names := chainNames(t, nil, preVendor)
 
 	consistency := indexOf(names, "consistency_normalize")
 	vendor := indexOf(names, "vendor_adjust")
