@@ -306,6 +306,11 @@ func (a *AnthropicV1Adapter) SendFinalMessage(c *gin.Context) error {
 			"stop_reason":   "end_turn",
 			"stop_sequence": nil,
 		},
+		// The Anthropic protocol requires usage on message_delta; strict SDK
+		// accumulators (e.g. Python) crash on a delta without it.
+		"usage": map[string]interface{}{
+			"output_tokens": 0,
+		},
 	})
 	if err := a.SendEvent(c, "message_delta", deltaJSON); err != nil {
 		return err
