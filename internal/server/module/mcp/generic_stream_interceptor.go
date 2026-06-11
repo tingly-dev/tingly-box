@@ -401,8 +401,16 @@ func (i *GenericStreamInterceptor) routeEvent(event any, eventType EventType) er
 		return nil
 
 	default:
-		// Pass through unknown events
-		return i.adapter.SendEvent(i.c, "message", []byte{})
+		// Pass through unknown events (e.g. thinking deltas) with their
+		// original payload. Replacing them with an empty frame breaks real
+		// SDK consumers: an `event:` line with empty JSON data aborts the
+		// official Anthropic stream decoders mid-stream.
+		payload, err := i.extractEventPayload(event)
+		if err != nil || len(payload) == 0 {
+			// Nothing forwardable; drop rather than emit an empty frame.
+			return nil
+		}
+		return i.adapter.SendEvent(i.c, "", payload)
 	}
 }
 

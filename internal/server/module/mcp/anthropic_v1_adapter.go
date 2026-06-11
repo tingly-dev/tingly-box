@@ -275,7 +275,20 @@ func (a *AnthropicV1Adapter) SetupSSEHeaders(c *gin.Context) {
 }
 
 func (a *AnthropicV1Adapter) SendEvent(c *gin.Context, eventType string, payload []byte) error {
-	c.SSEvent("", payload)
+	// Anthropic SSE requires a named `event:` line per frame: official SDKs
+	// dispatch on it and silently drop frames without one. Prefer the type
+	// embedded in the payload, falling back to the caller-supplied name.
+	name := eventType
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err == nil {
+		if typ, ok := raw["type"].(string); ok && typ != "" {
+			name = typ
+		}
+	}
+	if name == "" {
+		name = "message"
+	}
+	fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", name, payload)
 	c.Writer.Flush()
 	return nil
 }
@@ -294,11 +307,11 @@ func (a *AnthropicV1Adapter) SendFinalMessage(c *gin.Context) error {
 			"stop_sequence": nil,
 		},
 	})
-	c.SSEvent("", string(deltaJSON))
+	if err := a.SendEvent(c, "message_delta", deltaJSON); err != nil {
+		return err
+	}
 	stopJSON, _ := json.Marshal(map[string]interface{}{"type": "message_stop"})
-	c.SSEvent("", string(stopJSON))
-	c.Writer.Flush()
-	return nil
+	return a.SendEvent(c, "message_stop", stopJSON)
 }
 
 // Event processing
