@@ -50,11 +50,27 @@ func overrideToTarget(ov EndpointOverride) protocol.APIType {
 	return protocol.TypeOpenAIChat
 }
 
+// scenarioPreferredProtocol returns the protocol an auto-mode provider
+// should try first on a cache miss. Scenarios whose client ecosystem is
+// natively Responses-based (Codex) start with Responses regardless of the
+// incoming transport — providers serving such traffic overwhelmingly speak
+// Responses, so leading with it saves a wasted first round trip. All other
+// scenarios mirror the incoming API.
+func scenarioPreferredProtocol(scenario typ.RuleScenario, incoming IncomingAPIType) protocol.APIType {
+	switch scenario.Base() {
+	case typ.ScenarioCodex:
+		return protocol.TypeOpenAIResponses
+	default:
+		return incomingToTarget(incoming)
+	}
+}
+
 // resolveAutoTarget handles the auto-mode target resolution shared by both
-// OpenAI Chat and Responses handlers. It checks override → cache → default.
-// Returns the resolved target and whether auto-fallback should be enabled.
+// OpenAI Chat and Responses handlers. It checks override → cache →
+// scenario-preferred default. Returns the resolved target and whether
+// auto-fallback should be enabled.
 func (s *Server) resolveAutoTarget(
-	flags typ.RuleFlags, provider *typ.Provider, model string, incoming IncomingAPIType,
+	flags typ.RuleFlags, provider *typ.Provider, model string, scenario typ.RuleScenario, incoming IncomingAPIType,
 ) (target protocol.APIType, autoFallback bool) {
 	if ov := ParseEndpointOverride(flags.OpenAIEndpointOverride); ov == OverrideChat || ov == OverrideResponses {
 		return overrideToTarget(ov), false
@@ -62,7 +78,7 @@ func (s *Server) resolveAutoTarget(
 	if cached, ok := s.endpointCache.Get(provider.UUID, model); ok {
 		return cached, false
 	}
-	return incomingToTarget(incoming), true
+	return scenarioPreferredProtocol(scenario, incoming), true
 }
 
 // autoDispatchFn is the callback for dispatchWithAutoFallback.

@@ -27,6 +27,28 @@ func TestIncomingToTarget(t *testing.T) {
 	}
 }
 
+func TestScenarioPreferredProtocol(t *testing.T) {
+	tests := []struct {
+		name     string
+		scenario typ.RuleScenario
+		incoming IncomingAPIType
+		want     protocol.APIType
+	}{
+		{"codex prefers responses even on chat ingress", typ.ScenarioCodex, IncomingAPIChat, protocol.TypeOpenAIResponses},
+		{"codex prefers responses on responses ingress", typ.ScenarioCodex, IncomingAPIResponses, protocol.TypeOpenAIResponses},
+		{"codex profile suffix normalized", typ.RuleScenario("codex:p1"), IncomingAPIChat, protocol.TypeOpenAIResponses},
+		{"openai mirrors chat ingress", typ.ScenarioOpenAI, IncomingAPIChat, protocol.TypeOpenAIChat},
+		{"openai mirrors responses ingress", typ.ScenarioOpenAI, IncomingAPIResponses, protocol.TypeOpenAIResponses},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := scenarioPreferredProtocol(tt.scenario, tt.incoming); got != tt.want {
+				t.Errorf("scenarioPreferredProtocol(%q, %q) = %v, want %v", tt.scenario, tt.incoming, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestDispatchWithAutoFallback_CacheAttributedToServingProvider covers the
 // multi-service failover interaction: when the initial provider fails and a
 // fallback provider serves the request, the protocol cache entry must be
