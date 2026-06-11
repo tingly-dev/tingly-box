@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	"github.com/tingly-dev/tingly-box/internal/protocoltest"
@@ -23,6 +26,7 @@ type MatrixCmd struct {
 	Streaming  bool     `kong:"name='streaming',help='Run only streaming tests'"`
 	NonStream  bool     `kong:"name='non-streaming',help='Run only non-streaming tests'"`
 	Mode       string   `kong:"name='mode',default='default',enum='default,all,single,transitive,idempotent,flags',help='Section selection: default (single + idempotent round-trip; two-hop OFF), all (single + transitive + idempotent + flags), single (A→B only), transitive (A→B→C only), idempotent (round-trip g(f(A))==A only), flags (per-rule flag behavior only)'"`
+	Client     string   `kong:"name='client',default='http',enum='http,gosdk,python,node,aisdk',help='Client driver: http (raw JSON over net/http, default), gosdk (official anthropic-sdk-go / openai-go), python (real Python SDKs via subprocess driver), node (real Node SDKs via subprocess driver), aisdk (AI SDK by Vercel via subprocess driver)'"`
 	JsonOutput bool     `kong:"name='json',help='Output results as JSON'"`
 	Verbose    int      `kong:"name='verbose',short='v',type='counter',help='Verbose output (repeat for more detail)'"`
 	RecordDir  string   `kong:"name='record-dir',env='HARNESS_RECORD_DIR',help='Directory for recording requests/responses (default: disabled)'"`
@@ -52,6 +56,12 @@ func (*MatrixCmd) Help() string {
 
   # Run only single-hop (A→B) tests
   harness matrix --mode=single
+
+  # Drive requests through real client stacks instead of raw HTTP
+  harness matrix --mode=single --client=gosdk    # official Go SDKs, in-process
+  harness matrix --mode=single --client=python   # real Python SDKs (subprocess driver)
+  harness matrix --mode=single --client=node     # real Node SDKs (subprocess driver)
+  harness matrix --mode=single --client=aisdk    # AI SDK by Vercel (subprocess driver)
 
   # Run specific scenario only
   harness matrix --scenario text
@@ -90,9 +100,20 @@ func (m *MatrixCmd) Run() error {
 	if m.Streaming && m.NonStream {
 		return fmt.Errorf("cannot specify both --streaming and --non-streaming")
 	}
+	if m.Client != "http" && m.Mode == "flags" {
+		return fmt.Errorf("--mode=flags only supports --client=http (the flags suite drives raw requests with custom headers)")
+	}
+
+	client, err := resolveClient(m.Client)
+	if err != nil {
+		return err
+	}
 
 	// Build matrix with filters
 	matrix := protocoltest.DefaultMatrix()
+	if client != nil {
+		matrix = matrix.WithClient(client)
+	}
 
 	if len(m.Scenarios) > 0 {
 		matrix = matrix.OnlyScenarios(m.Scenarios...)
@@ -138,8 +159,10 @@ func (m *MatrixCmd) Run() error {
 	if m.Mode == "default" || m.Mode == "all" || m.Mode == "idempotent" {
 		combined = append(combined, matrix.ExecuteAllIdempotent()...)
 	}
-	if m.Mode == "all" || m.Mode == "flags" {
+	if (m.Mode == "all" || m.Mode == "flags") && m.Client == "http" {
 		combined = append(combined, matrix.ExecuteAllFlags()...)
+	} else if m.Mode == "all" {
+		logrus.Warnf("skipping flags section: only supported with --client=http")
 	}
 	results := filterResults(combined, m)
 
@@ -159,6 +182,77 @@ func (m *MatrixCmd) Run() error {
 		}
 	}
 	return nil
+}
+
+// resolveClient maps the --client flag to a protocoltest.Client driver.
+// Returns nil for "http" (the matrix default). For subprocess drivers it
+// fails fast with an actionable message when the interpreter or the driver's
+// dependencies are missing.
+func resolveClient(name string) (protocoltest.Client, error) {
+	switch name {
+	case "http", "":
+		return nil, nil
+	case "gosdk":
+		return protocoltest.NewGoSDKClient(), nil
+	case "python":
+		dir, err := driverDir()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := exec.LookPath("python3"); err != nil {
+			return nil, fmt.Errorf("--client=python requires python3 on PATH")
+		}
+		if out, err := exec.Command("python3", "-c", "import anthropic, openai").CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("--client=python requires the anthropic and openai packages: pip install -r %s\n%s",
+				filepath.Join(dir, "python", "requirements.txt"), out)
+		}
+		return protocoltest.NewPythonClient(dir), nil
+	case "node":
+		dir, err := nodeDriverDir(name, "node")
+		if err != nil {
+			return nil, err
+		}
+		return protocoltest.NewNodeClient(dir), nil
+	case "aisdk":
+		dir, err := nodeDriverDir(name, "aisdk")
+		if err != nil {
+			return nil, err
+		}
+		return protocoltest.NewAISDKClient(dir), nil
+	default:
+		return nil, fmt.Errorf("unknown client driver %q", name)
+	}
+}
+
+// nodeDriverDir validates a node-based subprocess driver (interpreter on PATH
+// and installed dependencies) and returns the tests/clients root.
+func nodeDriverDir(clientName, subdir string) (string, error) {
+	dir, err := driverDir()
+	if err != nil {
+		return "", err
+	}
+	if _, err := exec.LookPath("node"); err != nil {
+		return "", fmt.Errorf("--client=%s requires node on PATH", clientName)
+	}
+	if _, err := os.Stat(filepath.Join(dir, subdir, "node_modules")); err != nil {
+		return "", fmt.Errorf("--client=%s requires driver dependencies: npm install --prefix %s",
+			clientName, filepath.Join(dir, subdir))
+	}
+	return dir, nil
+}
+
+// driverDir locates the tests/clients directory holding the subprocess
+// drivers: $HARNESS_DRIVER_DIR if set, else tests/clients relative to the
+// working directory (i.e. running from the repo root).
+func driverDir() (string, error) {
+	if dir := os.Getenv("HARNESS_DRIVER_DIR"); dir != "" {
+		return dir, nil
+	}
+	dir := filepath.Join("tests", "clients")
+	if _, err := os.Stat(dir); err != nil {
+		return "", fmt.Errorf("driver directory %q not found: run from the repo root or set HARNESS_DRIVER_DIR", dir)
+	}
+	return dir, nil
 }
 
 // filterResults filters test results based on command options.

@@ -37,6 +37,7 @@ type Matrix struct {
 	ServerMode string // Server reuse mode: auto, all, pair
 	BatchCount int    // Number of times to run each test
 	MCPEnabled bool   // Enable MCP feature flag in test env
+	Client     Client // Client driver (nil = raw HTTP default)
 }
 
 // ServerMode constants
@@ -198,12 +199,24 @@ func (m *Matrix) WithMCPEnabled() *Matrix {
 	return out
 }
 
+// WithClient returns a copy of the Matrix that drives requests through the
+// given client driver (official SDKs, subprocess drivers) instead of the
+// default raw HTTP client.
+func (m *Matrix) WithClient(c Client) *Matrix {
+	out := m.clone()
+	out.Client = c
+	return out
+}
+
 // testEnvOpts returns the TestEnvOptions to apply when creating a TestEnv for this matrix.
 func (m *Matrix) testEnvOpts() []TestEnvOption {
 	var opts []TestEnvOption
 	opts = append(opts, NewTestEnvOptionWithRecordDir(m.RecordDir))
 	if m.MCPEnabled {
 		opts = append(opts, NewTestEnvOptionWithMCP())
+	}
+	if m.Client != nil {
+		opts = append(opts, NewTestEnvOptionWithClient(m.Client))
 	}
 	return opts
 }
@@ -213,6 +226,28 @@ var skipSourceScenarios = map[string]string{
 	// openai_responses source: tool_call conversion from provider back to Responses format loses tool calls
 	"openai_responses|tool_use":           "Responses API source: tool_use conversion incomplete",
 	"openai_responses|streaming_tool_use": "Responses API source: streaming tool_use conversion incomplete",
+}
+
+// clientSkipScenarios lists client|source|scenario[|mode] combinations that are
+// known incompatibilities between a specific client driver and a scenario.
+// Keeping them here makes them visible skips instead of silent failures;
+// every entry should describe the real finding it papers over.
+var clientSkipScenarios = map[string]string{}
+
+// clientSkipReason returns a skip reason when the matrix's client driver
+// cannot run the given source/scenario combination.
+func (m *Matrix) clientSkipReason(source protocol.APIType, scenarioName string) (string, bool) {
+	if m.Client == nil {
+		return "", false
+	}
+	if !m.Client.Supports(source) {
+		return fmt.Sprintf("client %q does not support source protocol %s", m.Client.Name(), source), true
+	}
+	key := fmt.Sprintf("%s|%s|%s", m.Client.Name(), source, scenarioName)
+	if reason, ok := clientSkipScenarios[key]; ok {
+		return reason, true
+	}
+	return "", false
 }
 
 // RunFull executes both single-hop and two-hop tests under t, organized as
@@ -260,6 +295,10 @@ func (m *Matrix) Run(t *testing.T) {
 									t.Skipf("skipped: %s", reason)
 									return
 								}
+								if reason, skip := m.clientSkipReason(pair.Source, scenario.Name); skip {
+									t.Skipf("skipped: %s", reason)
+									return
+								}
 
 								if streaming && !scenarioSupportsStreaming(scenario) {
 									t.Skip("scenario does not support streaming")
@@ -270,7 +309,7 @@ func (m *Matrix) Run(t *testing.T) {
 									return
 								}
 
-								env := NewTestEnv(t)
+								env := NewTestEnv(t, m.testEnvOpts()...)
 								defer env.Close()
 
 								env.SetupRoute(pair.Source, pair.Target, scenario)
@@ -415,7 +454,7 @@ func (m *Matrix) executeAllWithSingleServer() []TestResult {
 	var results []TestResult
 
 	// Create a single TestEnv for all tests
-	env, err := NewTestEnvForCLI(NewTestEnvOptionWithRecordDir(m.RecordDir))
+	env, err := NewTestEnvForCLI(m.testEnvOpts()...)
 	if err != nil {
 		// All tests fail with setup error
 		return m.allSetupError(err)
@@ -486,6 +525,18 @@ func (m *Matrix) executeAllWithPairServer() []TestResult {
 func (m *Matrix) executeTest(env *TestEnv, scenario Scenario, source, target protocol.APIType, streaming bool) *TestResult {
 	srcScenarioKey := fmt.Sprintf("%s|%s", source, scenario.Name)
 	if reason, skip := skipSourceScenarios[srcScenarioKey]; skip {
+		return &TestResult{
+			Name:       m.buildTestName(scenario.Name, source, target, streaming),
+			Scenario:   scenario.Name,
+			Source:     source,
+			Target:     target,
+			Streaming:  streaming,
+			Skipped:    true,
+			SkipReason: reason,
+		}
+	}
+
+	if reason, skip := m.clientSkipReason(source, scenario.Name); skip {
 		return &TestResult{
 			Name:       m.buildTestName(scenario.Name, source, target, streaming),
 			Scenario:   scenario.Name,

@@ -43,6 +43,7 @@ type TestEnv struct {
 	gatewayServer *httptest.Server // real HTTP server for streaming support
 	virtual       *VirtualServer
 	modelToken    string
+	client        Client // driver used by sendModel (default: raw HTTP)
 
 	mu          sync.Mutex
 	routeModels map[string]string // key → requestModel
@@ -56,6 +57,7 @@ type TestEnvOption func(*testEnvConfig)
 type testEnvConfig struct {
 	recordDir  string
 	mcpEnabled bool
+	client     Client
 }
 
 // NewTestEnvOptionWithRecordDir creates an option to set the record directory.
@@ -73,10 +75,24 @@ func NewTestEnvOptionWithMCP() TestEnvOption {
 	}
 }
 
+// NewTestEnvOptionWithClient creates an option to set the client driver used
+// for sending requests through the gateway. Defaults to the raw HTTP client.
+func NewTestEnvOptionWithClient(c Client) TestEnvOption {
+	return func(cfg *testEnvConfig) {
+		cfg.client = c
+	}
+}
+
 // NewTestEnv creates a TestEnv with a fresh gateway config and a new VirtualServer.
-// All resources are cleaned up via t.Cleanup.
-func NewTestEnv(t *testing.T) *TestEnv {
+// All resources are cleaned up via t.Cleanup. Only the client option is
+// honored in test mode; recording is a CLI-only concern.
+func NewTestEnv(t *testing.T, opts ...TestEnvOption) *TestEnv {
 	t.Helper()
+
+	cfg := &testEnvConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
 
 	configDir, err := os.MkdirTemp("", "pv-test-*")
 	if err != nil {
@@ -100,9 +116,18 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		gatewayServer: ts,
 		virtual:       NewVirtualServer(t),
 		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
+		client:        clientOrDefault(cfg.client),
 		routeModels:   make(map[string]string),
 		setupRoutes:   make(map[string]bool),
 	}
+}
+
+// clientOrDefault returns the configured client or the raw HTTP default.
+func clientOrDefault(c Client) Client {
+	if c != nil {
+		return c
+	}
+	return NewHTTPClient()
 }
 
 // Close cleans up resources. For testing mode, it's a no-op (resources are cleaned up via t.Cleanup).
@@ -163,11 +188,19 @@ func NewTestEnvForCLI(opts ...TestEnvOption) (*TestEnv, error) {
 		gatewayServer: ts,
 		virtual:       virtual,
 		modelToken:    appConfig.GetGlobalConfig().GetModelToken(),
+		client:        clientOrDefault(cfg.client),
 		routeModels:   make(map[string]string),
 		setupRoutes:   make(map[string]bool),
 		configDir:     configDir, // Store for cleanup
 	}, nil
 }
+
+// GatewayURL returns the base URL of the real gateway HTTP server, for client
+// drivers that speak real HTTP (SDKs, subprocess drivers).
+func (env *TestEnv) GatewayURL() string { return env.gatewayServer.URL }
+
+// ModelToken returns the gateway model token client drivers authenticate with.
+func (env *TestEnv) ModelToken() string { return env.modelToken }
 
 // VirtualURL returns the URL of the underlying virtual server.
 func (env *TestEnv) VirtualURL() string { return env.virtual.URL() }
@@ -321,8 +354,15 @@ func (env *TestEnv) SendAsCLI(source, target protocol.APIType, s Scenario, strea
 // httptest.ResponseRecorder does not support Gin's streaming/SSE machinery.
 // Non-streaming requests use the recorder for simplicity.
 func (env *TestEnv) sendModel(source, target protocol.APIType, scenarioName, requestModel string, streaming bool) (*RoundTripResult, error) {
-	path, body := buildRequest(source, requestModel, streaming)
-	return env.dispatch(source, target, scenarioName, path, body, nil, streaming)
+	return env.client.Send(env, SendSpec{
+		Source:       source,
+		Target:       target,
+		ScenarioName: scenarioName,
+		RequestModel: requestModel,
+		Streaming:    streaming,
+		GatewayURL:   env.gatewayServer.URL,
+		APIKey:       env.modelToken,
+	})
 }
 
 // dispatch drives a single request through the gateway and parses the result.

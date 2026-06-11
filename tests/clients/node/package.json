@@ -1,0 +1,10 @@
+{
+  "name": "tingly-box-harness-node-driver",
+  "private": true,
+  "type": "module",
+  "description": "Real Node SDK subprocess driver for the protocol matrix harness",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.57.0",
+    "openai": "^5.12.0"
+  }
+}

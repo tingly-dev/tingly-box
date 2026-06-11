@@ -51,6 +51,14 @@ go build -o harness ./cli/harness
 ./harness matrix
 ./harness matrix --scenario text --source anthropic_v1 --target openai_chat
 
+# Tier A through real client stacks (--client; see .design/harness-matrix.md
+# "Client drivers"): official Go SDKs in-process, or real Python/Node SDKs
+# via subprocess drivers under tests/clients/.
+./harness matrix --mode=single --client=gosdk
+./harness matrix --mode=single --client=python   # pip install -r tests/clients/python/requirements.txt
+./harness matrix --mode=single --client=node     # npm install --prefix tests/clients/node
+./harness matrix --mode=single --client=aisdk    # npm install --prefix tests/clients/aisdk (AI SDK by Vercel)
+
 # Tier B — replay captured fixtures through the gateway
 ./harness replay batch --upstream virtual     # deterministic mock upstream
 ./harness replay batch --upstream vmodel      # in-process vmodel dispatch

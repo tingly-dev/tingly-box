@@ -140,6 +140,79 @@ The `flags` section is documented in detail in
 [`rule-flag-testing.md`](./rule-flag-testing.md); `ExecuteAllFlags` reports one
 `TestResult` per flag (`Name: "flags/<key>"`, `Scenario: <key>`).
 
+### Client drivers (`--client`)
+
+By default the matrix sends hand-crafted JSON over Go's `net/http`. That
+validates conversion *semantics* but not real-client *wire behavior*: official
+SDKs dispatch SSE frames on the `event:` line, validate every response field
+strictly (pydantic), and accumulate streams with protocol-enforcing state
+machines. `--client` swaps the sending stack while reusing the same matrix,
+scenarios, and assertions:
+
+| `--client` | Stack | Runs |
+|------------|-------|------|
+| `http` *(default)* | raw JSON over `net/http` (`client_http.go`) | every PR (existing legs) |
+| `gosdk` | official `anthropic-sdk-go` + `openai-go`, in-process (`client_gosdk.go`) | every PR (`matrix-*-gosdk` legs) |
+| `python` | real `anthropic` + `openai` Python SDKs via subprocess driver | nightly (`harness-sdk-nightly.yml`) |
+| `node` | real `@anthropic-ai/sdk` + `openai` Node SDKs via subprocess driver | nightly |
+| `aisdk` | AI SDK by Vercel (`ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai`) via subprocess driver — the strictest client: zod-validates every response and stream event | nightly |
+
+```bash
+go run ./cli/harness matrix --mode=single --client=gosdk
+
+# Python/Node need their driver deps once:
+pip install -r tests/clients/python/requirements.txt
+go run ./cli/harness matrix --mode=single --client=python
+
+npm install --prefix tests/clients/node
+go run ./cli/harness matrix --mode=single --client=node
+
+npm install --prefix tests/clients/aisdk
+go run ./cli/harness matrix --mode=single --client=aisdk
+```
+
+**The seam.** `Client` (`client.go`) is the driver interface:
+`Send(env, SendSpec) (*RoundTripResult, error)`. `SendSpec` carries
+`{Source, RequestModel, Streaming, GatewayURL, APIKey}` — request bodies are
+scenario-independent, so a driver varies only by (source protocol × streaming).
+All matrix paths (single / transitive / idempotent) funnel through
+`TestEnv.sendModel`, which delegates to the configured client
+(`Matrix.WithClient` / `NewTestEnvOptionWithClient`). The `flags` suite drives
+raw requests with custom headers and stays http-only.
+
+Drivers report gateway/API errors **in the result** (`HTTPStatus`, `RawBody`),
+not as a `Send` error — error-scenario assertions must still run. A non-nil
+`Send` error means the driver itself broke.
+
+**Subprocess contract** (`client_subprocess.go` ⇄
+`tests/clients/{python,node}/driver.*`): one JSON object on stdin, one on
+stdout; non-zero exit = broken driver, API errors go in-band:
+
+```jsonc
+// stdin
+{"version":1,"source":"anthropic_v1","base_url":"http://127.0.0.1:PORT",
+ "api_key":"tb-...","model":"pv-...","stream":true,"scenario":"text",
+ "prompt":"...","timeout_ms":30000}
+// stdout
+{"http_status":200,"role":"assistant","content":"...","model":"...",
+ "finish_reason":"end_turn","thinking":"","tool_calls":[...],
+ "usage":{"input_tokens":10,"output_tokens":8},
+ "stream_event_count":7,"raw_body":"...",
+ "error":{"status":429,"type":"...","message":"..."}}
+```
+
+The contract itself is covered on every PR by a stub shell driver
+(`client_subprocess_test.go` + `tests/clients/testdata/stub_driver.sh`), so
+Python/Node are only needed where those SDKs actually run.
+
+**Known incompatibilities** go in `clientSkipScenarios`
+(`matrix.go`, key `client|source|scenario`) as *visible skips* with a reason —
+never silent failures. Drivers must not be weakened to paper over a gateway
+bug; the strictness is the point. The gosdk/python bring-up alone surfaced
+four real gateway bugs (missing `event:` lines on the v1 stream path, empty
+"passthrough" frames for thinking deltas, `message_delta` without `usage`,
+and Responses string-`input` dropped in responses→chat conversion).
+
 ---
 
 ## 4. Adding a new scenario

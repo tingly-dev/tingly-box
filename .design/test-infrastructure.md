@@ -64,3 +64,4 @@ Uses `//go:build e2e` tag for some tests. Not imported by any other package.
 | Test gateway routing / load balancing / auth | `servertest.TestServer` + `MockProviderServer` |
 | Test agent CLI integration | `protocoltest.AgentTestEnv` |
 | Run the full validation matrix from CLI | `cli/harness/` (imports `protocoltest`) |
+| Validate the gateway against real SDK clients (Go in-process, Python/Node subprocess) | `cli/harness matrix --client=...` — see "Client drivers" in [`harness-matrix.md`](./harness-matrix.md) |

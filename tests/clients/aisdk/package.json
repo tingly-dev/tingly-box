@@ -1,0 +1,11 @@
+{
+  "name": "tingly-box-harness-aisdk-driver",
+  "private": true,
+  "type": "module",
+  "description": "AI SDK by Vercel subprocess driver for the protocol matrix harness",
+  "dependencies": {
+    "ai": "^5.0.0",
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/openai": "^2.0.0"
+  }
+}
