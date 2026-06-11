@@ -85,8 +85,12 @@ func NewOpenAIClient(provider *typ.Provider, model string, sessionID typ.Session
 	// MENTION: extra will be applied at last to confirm override
 	options = append(options, extraOptions...)
 
-	// MENTION: must set time, otherwise nonstream and stream may work badly
-	options = append(options, option.WithRequestTimeout(time.Duration(provider.Timeout)*time.Second))
+	// MENTION: must set timeout, otherwise nonstream and stream may work badly
+	timeout := time.Duration(provider.Timeout) * time.Second
+	if provider.Timeout <= 0 {
+		timeout = time.Duration(constant.DefaultRequestTimeout) * time.Second
+	}
+	options = append(options, option.WithRequestTimeout(timeout))
 
 	openaiClient := openai.NewClient(options...)
 
