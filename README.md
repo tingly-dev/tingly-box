@@ -109,6 +109,30 @@ Any application is ready to use.
 
 </details>
 
+<details>
+<summary><strong>DeepSeek Best Compatibility</strong></summary>
+
+DeepSeek is optimized for mainstream agent workflows, offering broad compatibility across protocol adapters, agent clients, extended context, vision, web search, and cache optimization.
+
+| Module                           |      Status | What It Solves                                                        |
+| -------------------------------- | ----------: | --------------------------------------------------------------------- |
+| Model List                       | ✅ Supported | Keeps the official model list up to date in real time                 |
+| Protocol Adaptation              | ✅ Supported | Supports official Anthropic/OpenAI APIs with bidirectional conversion |
+| Reasoning Capability             | ✅ Supported | Provides compatibility with Thinking workflows                        |
+| Cache Hit Optimization           | ✅ Supported | Improves cache hit rates for DeepSeek requests                        |
+| Vision Proxy                     | ✅ Supported | Enables DeepSeek to understand and process images                     |
+| Web Search                       | ✅ Supported | Calls official Web tools through the Anthropic endpoint               |
+| 1M Context Window                | ✅ Supported | Enables one-click setup for 1M context                                |
+| Codex Adaptation                 | ✅ Supported | Ensures compatibility with mainstream agent workflows                 |
+| Claude Code / Desktop Adaptation | ✅ Supported | Ensures compatibility with mainstream agent workflows                 |
+
+Supports one-click configuration where available. For applications that require manual setup, detailed in-app configuration guides are provided.
+
+Any compatible application is ready to use.
+
+> Detailed configuration guides are available inside each application.
+
+</details>
 
 <details>
 <summary><strong>Remote Control Agent via IM Bots - TG / DingTalk / Feishu / Lark / Weixin / WecCom</strong></summary>
