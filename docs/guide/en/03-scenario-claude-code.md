@@ -44,7 +44,7 @@ A **4-step expandable card** shown on first use (progress persisted in browser l
 | 1. Connect AI Provider | Connected provider count | Expand to click **Connect** |
 | 2. Select a Model | Configured / pending | Expand to click **Choose Model** |
 | 3. Install Claude Code | Installed / pending | Expand to see npm official + mirror install commands (one-click copy) and **I've installed it** to mark manually |
-| 4. Auto Config | Applied / pending | Expand to run **Auto Config** or **Auto Config + Status Line**; **Skip** button lets you bypass this step if you don't need auto-config |
+| 4. Auto Config | Applied / pending | Expand to run **Quick Apply** (optionally check **Install Tingly-Box status line**); **Skip** button lets you bypass this step if you don't need auto-config |
 
 - Completed steps show a ✓ icon and can be re-expanded by clicking
 - Click **Reset** at the top to clear all step progress
@@ -87,12 +87,14 @@ Click **Auto Config** to open the **Claude Code Configuration Guide** modal with
   - `MAX_THINKING_TOKENS`: Thinking token budget (blank = model default)
   - `BASH_DEFAULT_TIMEOUT_MS`: Bash command default timeout
   - `BASH_MAX_TIMEOUT_MS`: Bash command max timeout
+  - `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`: Auto-compact trigger threshold (%, default 85). When context usage reaches this %, history is automatically compacted. Set to 0 to disable.
 
 - **Preview generated env**: Preview the env variable block that will be written to `~/.claude/settings.json`
 
-Bottom buttons:
-- **Auto Config**: Writes configuration to Claude Code's config file; shows a result list of created/updated/backed-up files
-- **Auto Config & Status Line**: Same as above, plus configures the Claude Code status bar integration
+- **Install Tingly-Box Claude Code status line** checkbox: When checked, also installs the status line script into `~/.claude/settings.json` — shows connection status in the Claude Code prompt.
+
+Bottom button:
+- **Quick Apply**: Writes the configuration (and optionally the status line) to Claude Code's config file; shows a result list of created/updated/backed-up files
 
 **Manual Tab**
 
@@ -116,6 +118,10 @@ Entry node (Direct/Smart) → IF condition (e.g. agent.claude_code = subagent) �
 - Top-right: **Logs** (view routing logs), **New Key** (add a forwarding rule), **Import**
 - Provider cards in the graph show model name and provider source
 
+#### 1M Context Window Toggle
+
+Each rule's model header shows a **1M** label with a toggle switch. Enabling it activates the `context_1m` flag for that rule — Tingly-Box appends `[1m]` to the model name in the generated env, signaling Claude Code to use 1M-token context windows. When you toggle this, the **Auto Config** modal opens automatically with a pending-change banner reminding you to re-apply the config and restart Claude Code.
+
 ---
 
 ## Profile Management
@@ -129,6 +135,18 @@ Claude Code supports multiple **Profiles** for projects or teams that need diffe
   - `npx -y tingly-box@{version} cc --profile {profileId}`
   - `tingly-box cc --profile {profileId}`
 
+### CLI: `tingly-box profile`
+
+The `tingly-box profile` CLI command lets you launch Claude Code with a saved profile directly from the terminal — no web UI needed:
+
+```bash
+tingly-box profile               # Interactive: list profiles and prompt to launch
+tingly-box profile p1            # Launch Claude Code with profile p1
+tingly-box profile --list        # List all profiles (non-interactive)
+tingly-box profile --show p1     # Show details for profile p1
+tingly-box profile p1 --port 12580  # Connect to a remote Tingly-Box instance
+```
+
 ---
 
 ## Common Configuration Flow
@@ -136,7 +154,7 @@ Claude Code supports multiple **Profiles** for projects or teams that need diffe
 1. Add at least one provider in [Credentials](./08-credentials.md)
 2. Open the Claude Code page and confirm the Base URL and API Key
 3. (Optional) Assign specific models to different request types in the forwarding rules
-4. Click **Auto Config** → review settings → **Auto Config** or **Auto Config & Status Line**
+4. Click **Auto Config** → review settings → **Quick Apply** (optionally enable status line checkbox)
 5. Start using Claude Code CLI
 
 ---

@@ -267,7 +267,50 @@ console.log('\nBatch 3: routing graph & extensions');
 }
 
 // Codex scenario page
-await shot('codex', '/agent/codex', null, 3500);
+await shot('codex', '/agent/codex', { waitMs: 3500 });
+
+// Connect AI form (step 2): open connect-ai picker, click a non-OAuth provider card
+{
+    const page = await ctx.newPage();
+    page.on('pageerror', err => console.error(`  [err] ${err.message.slice(0, 80)}`));
+    await page.goto(`${BASE}/credentials`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(2500);
+    const btn = page.getByRole('button', { name: /Connect AI/i });
+    await btn.waitFor({ timeout: 6000 });
+    await btn.click();
+    await page.waitForTimeout(2000);
+    // Click a non-OAuth provider to open the config form (e.g. "Custom endpoint")
+    // Target the card's subtitle text rather than the title to avoid hitting header text
+    const customCard = page.locator('text="Not listed? Bring your own URL"').first();
+    await customCard.click().catch(async () => {
+        // fallback: click "OpenAI" API key provider card
+        await page.locator('text=OpenAI').first().click().catch(() => {});
+    });
+    await page.waitForTimeout(1500);
+    const out = path.join(OUT_DIR, 'connect-ai-form.png');
+    await page.screenshot({ path: out, fullPage: false });
+    console.log(`  [${fs.statSync(out).size > 10000 ? 'OK  ' : 'BLNK'}] connect-ai-form.png  (${fs.statSync(out).size}b)`);
+    await page.close();
+}
+
+// Routing guide — open once-per-user routing guide by NOT suppressing it
+{
+    const page = await browser.newPage();
+    page.on('pageerror', err => console.error(`  [err] ${err.message.slice(0, 80)}`));
+    await page.addInitScript(() => {
+        localStorage.setItem('feature_guardrails', 'true');
+        localStorage.setItem('feature_mcp', 'true');
+        localStorage.setItem('onboarding_complete', 'true');
+        localStorage.setItem('onboarding_dismissed', 'true');
+        // intentionally NOT setting tb.routingGuideAutoShown so the routing guide auto-opens
+    });
+    await page.goto(`${BASE}/agent/claude_code`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(5000);
+    const out = path.join(OUT_DIR, 'routing-guide.png');
+    await page.screenshot({ path: out, fullPage: false });
+    console.log(`  [${fs.statSync(out).size > 10000 ? 'OK  ' : 'BLNK'}] routing-guide.png  (${fs.statSync(out).size}b)`);
+    await page.close();
+}
 
 // --- Done ------------------------------------------------------------------
 await browser.close();
