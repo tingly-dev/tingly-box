@@ -406,3 +406,34 @@ func ApplyAnthropicBetaDeepSeekThinkingPatch(req *anthropic.BetaMessageNewParams
 		}
 	}
 }
+
+// SanitizeAnthropicV1ThinkingConfig ensures thinking config consistency for
+// providers (notably DeepSeek) that enforce strict thinking/effort semantics.
+//
+// This function NEVER modifies message content (thinking blocks in context are
+// always preserved). It only adjusts the request-level thinking config header.
+func SanitizeAnthropicV1ThinkingConfig(req *anthropic.MessageNewParams) {
+	if req == nil {
+		return
+	}
+
+	// Explicitly disabled, no effort — respect the user's intent.
+	if req.Thinking.OfDisabled != nil {
+		req.OutputConfig.Effort = ""
+		return
+	}
+}
+
+// SanitizeAnthropicBetaThinkingConfig is the Beta-variant of
+// SanitizeAnthropicV1ThinkingConfig.
+func SanitizeAnthropicBetaThinkingConfig(req *anthropic.BetaMessageNewParams) {
+	if req == nil {
+		return
+	}
+
+	// Explicitly disabled, no effort — respect the user's intent.
+	if req.Thinking.OfDisabled != nil {
+		req.OutputConfig.Effort = ""
+		return
+	}
+}

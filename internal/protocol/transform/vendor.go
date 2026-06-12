@@ -67,6 +67,7 @@ func (t *VendorTransform) applyAnthropicV1(ctx *TransformContext, req *anthropic
 		req = ops.ApplyAnthropicV1ModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicV1MetadataTransform(req, ctx.configExtraForMetadata())
 	case strings.Contains(url, "api.deepseek.com"):
+		ops.SanitizeAnthropicV1ThinkingConfig(req)
 		ops.ApplyAnthropicV1DeepSeekThinkingPatch(req)
 	}
 	return req
@@ -81,6 +82,7 @@ func (t *VendorTransform) applyAnthropicBeta(ctx *TransformContext, req *anthrop
 		req = ops.ApplyAnthropicBetaModelTransform(req, string(req.Model))
 		req = ops.ApplyAnthropicBetaMetadataTransform(req, ctx.configExtraForMetadata())
 	case strings.Contains(url, "api.deepseek.com"):
+		ops.SanitizeAnthropicBetaThinkingConfig(req)
 		ops.ApplyAnthropicBetaDeepSeekThinkingPatch(req)
 	}
 	return req
