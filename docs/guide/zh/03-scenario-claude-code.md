@@ -136,9 +136,13 @@ Claude Code 支持多 **Profile**，适用于不同项目或团队需要不同 P
   - `npx -y tingly-box@{version} cc --profile {profileId}`
   - `tingly-box cc --profile {profileId}`
 
-### CLI：`tingly-box profile`
+### CLI：通过命令行启动 Profile
 
-`tingly-box profile` 命令允许直接在终端查看和启动已保存的 Profile，无需打开 Web UI。
+有两条命令可以在终端使用 Profile。
+
+#### `tingly-box profile` — 查看与启动
+
+专注于 Profile 管理，启动时不支持透传 Claude CLI 参数。
 
 **启动**
 
@@ -158,7 +162,21 @@ tingly-box profile --show p1     # 查看 Profile p1 的详细信息：
                                  #   规则列表：request_model → provider / model [active|inactive]
 ```
 
-> `--list` 与 `--show` 互斥。若 Profile 名称未找到，命令会自动回退到交互式选择器。
+> `--list` 与 `--show` 互斥。Profile 名称未找到时，启动和查看均会回退到交互式选择器。
+
+#### `tingly-box cc` — 带 Claude CLI 透传的启动方式
+
+需要同时传递 Claude Code 自身参数时使用此命令。Tingly-Box 先消费自己的参数，其余部分原样转发给 Claude CLI，无需 `--` 分隔符。
+
+```bash
+tingly-box cc                           # 使用默认 Profile 启动 Claude Code
+tingly-box cc --profile p1             # 使用 Profile p1 启动（短写：-p p1）
+tingly-box cc -p p1 --tingly-port 12580  # Profile p1，连接远程 Tingly-Box
+tingly-box cc -p p1 --dangerously-skip-permissions  # 将 Claude 参数原样透传
+tingly-box cc -p p1 /path/to/project   # 在 Claude Code 中打开指定目录
+```
+
+Tingly-Box 参数（`--profile`/`-p`、`--tingly-port`）必须放在所有 Claude 参数之前。遇到第一个无法识别的 token 后，后续内容均透传给 Claude。
 
 ---
 

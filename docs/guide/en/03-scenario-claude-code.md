@@ -135,9 +135,13 @@ Claude Code supports multiple **Profiles** for projects or teams that need diffe
   - `npx -y tingly-box@{version} cc --profile {profileId}`
   - `tingly-box cc --profile {profileId}`
 
-### CLI: `tingly-box profile`
+### CLI: launching with a profile
 
-The `tingly-box profile` CLI command lets you inspect and launch saved profiles directly from the terminal — no web UI needed.
+There are two CLI commands for working with profiles from the terminal.
+
+#### `tingly-box profile` — inspect and launch
+
+Focused on profile management. Launches without any Claude CLI passthrough.
 
 **Launch**
 
@@ -157,7 +161,21 @@ tingly-box profile --show p1     # Show details for profile p1:
                                  #   Rules table: request_model → provider / model [active|inactive]
 ```
 
-> `--list` and `--show` are mutually exclusive. If the profile name is not found, the command falls back to an interactive picker.
+> `--list` and `--show` are mutually exclusive. If the profile name is not found, both launch and inspect fall back to an interactive picker.
+
+#### `tingly-box cc` — launch with full Claude CLI passthrough
+
+Use this when you also need to pass Claude Code's own flags. Tingly-Box consumes its own flags first, then passes everything else verbatim to the Claude CLI — no `--` separator needed.
+
+```bash
+tingly-box cc                           # Launch Claude Code (default profile)
+tingly-box cc --profile p1             # Launch with profile p1  (short: -p p1)
+tingly-box cc -p p1 --tingly-port 12580  # Profile p1, remote Tingly-Box on port 12580
+tingly-box cc -p p1 --dangerously-skip-permissions  # Pass claude flags through unchanged
+tingly-box cc -p p1 /path/to/project   # Open a specific directory in Claude Code
+```
+
+Tingly-Box flags (`--profile`/`-p`, `--tingly-port`) must come before any Claude flags. The first unrecognized token ends Tingly-Box flag scanning and the rest goes to Claude.
 
 ---
 
