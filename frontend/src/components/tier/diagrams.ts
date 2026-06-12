@@ -472,7 +472,7 @@ export const TIER_DIAGRAM_DATA: Record<string, {
                 {
                     uuid: 'svc-4',
                     provider: 'provider-4',
-                    model: 'deepseek-chat',
+                    model: 'deepseek-v4-flash',
                     tier: 1,
                     active: true,
                 },
@@ -535,7 +535,7 @@ export const TIER_DIAGRAM_DATA: Record<string, {
                         {
                             uuid: 'svc-4',
                             provider: 'provider-4',
-                            model: 'deepseek-chat',
+                            model: 'deepseek-v4-flash',
                             active: true,
                         },
                     ],
