@@ -138,15 +138,27 @@ Claude Code 支持多 **Profile**，适用于不同项目或团队需要不同 P
 
 ### CLI：`tingly-box profile`
 
-`tingly-box profile` 命令允许直接在终端使用已保存的 Profile 启动 Claude Code，无需打开 Web UI：
+`tingly-box profile` 命令允许直接在终端查看和启动已保存的 Profile，无需打开 Web UI。
+
+**启动**
 
 ```bash
-tingly-box profile               # 交互式：列出 Profile 并提示选择启动
+tingly-box profile               # 交互式：列出 Profile，选择后启动 Claude Code
 tingly-box profile p1            # 使用 Profile p1 启动 Claude Code
-tingly-box profile --list        # 非交互式列出所有 Profile
-tingly-box profile --show p1     # 显示 Profile p1 的详细信息
-tingly-box profile p1 --port 12580  # 连接到远程 Tingly-Box 实例
+tingly-box profile p1 --port 12580  # 连接到指定端口的远程 Tingly-Box 实例
 ```
+
+**查看**
+
+```bash
+tingly-box profile --list        # 非交互式列出所有 Profile（ID · 名称 · 模式）
+tingly-box profile --show        # 交互式：选择一个 Profile 查看详情
+tingly-box profile --show p1     # 查看 Profile p1 的详细信息：
+                                 #   Profile ID/名称、Scenario 路径、模式（unified/separate）
+                                 #   规则列表：request_model → provider / model [active|inactive]
+```
+
+> `--list` 与 `--show` 互斥。若 Profile 名称未找到，命令会自动回退到交互式选择器。
 
 ---
 

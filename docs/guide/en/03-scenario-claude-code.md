@@ -137,15 +137,27 @@ Claude Code supports multiple **Profiles** for projects or teams that need diffe
 
 ### CLI: `tingly-box profile`
 
-The `tingly-box profile` CLI command lets you launch Claude Code with a saved profile directly from the terminal — no web UI needed:
+The `tingly-box profile` CLI command lets you inspect and launch saved profiles directly from the terminal — no web UI needed.
+
+**Launch**
 
 ```bash
-tingly-box profile               # Interactive: list profiles and prompt to launch
+tingly-box profile               # Interactive: list profiles, prompt to select and launch
 tingly-box profile p1            # Launch Claude Code with profile p1
-tingly-box profile --list        # List all profiles (non-interactive)
-tingly-box profile --show p1     # Show details for profile p1
-tingly-box profile p1 --port 12580  # Connect to a remote Tingly-Box instance
+tingly-box profile p1 --port 12580  # Launch against a remote Tingly-Box on port 12580
 ```
+
+**Inspect**
+
+```bash
+tingly-box profile --list        # List all profiles (non-interactive, ID · name · mode)
+tingly-box profile --show        # Interactive: pick a profile to inspect
+tingly-box profile --show p1     # Show details for profile p1:
+                                 #   Profile ID/name, Scenario path, Mode (unified/separate)
+                                 #   Rules table: request_model → provider / model [active|inactive]
+```
+
+> `--list` and `--show` are mutually exclusive. If the profile name is not found, the command falls back to an interactive picker.
 
 ---
 
