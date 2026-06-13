@@ -34,45 +34,29 @@ const FusionUrlFields = ({
                              onConvertToSingle,
                          }: FusionUrlFieldsProps) => {
     const {t} = useTranslation();
-
-    const fields = [
-        {
-            key: 'openai',
-            label: t('providerDialog.customFusion.openAILabel'),
-            placeholder: t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'}),
-            value: openAIUrl,
-            onChange: onOpenAIChange,
-            onBlur: onOpenAIBlur,
-            helperText: undefined as string | undefined,
-        },
-        {
-            key: 'anthropic',
-            label: t('providerDialog.customFusion.anthropicLabel'),
-            placeholder: t('providerDialog.fusionForm.anthropicPlaceholder', {defaultValue: 'https://api.example.com/anthropic'}),
-            value: anthropicUrl,
-            onChange: onAnthropicChange,
-            onBlur: onAnthropicBlur,
-            helperText: t('providerDialog.fusionForm.help', {defaultValue: 'Both protocols share the API key below. Inbound requests are routed to the matching endpoint.'}),
-        },
-    ];
+    const commonProps = {size: 'small' as const, fullWidth: true, required: true};
 
     return (
         <Stack spacing={2}>
-            {fields.map((f) => (
-                <TextField
-                    key={f.key}
-                    size="small"
-                    fullWidth
-                    required
-                    label={f.label}
-                    placeholder={f.placeholder}
-                    value={f.value}
-                    onChange={(e) => f.onChange(e.target.value)}
-                    onBlur={f.onBlur}
-                    error={baseUrlError && !f.value.trim()}
-                    helperText={f.helperText}
-                />
-            ))}
+            <TextField
+                {...commonProps}
+                label={t('providerDialog.customFusion.openAILabel')}
+                placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
+                value={openAIUrl}
+                onChange={(e) => onOpenAIChange(e.target.value)}
+                onBlur={onOpenAIBlur}
+                error={baseUrlError && !openAIUrl.trim()}
+            />
+            <TextField
+                {...commonProps}
+                label={t('providerDialog.customFusion.anthropicLabel')}
+                placeholder={t('providerDialog.fusionForm.anthropicPlaceholder', {defaultValue: 'https://api.example.com/anthropic'})}
+                value={anthropicUrl}
+                onChange={(e) => onAnthropicChange(e.target.value)}
+                onBlur={onAnthropicBlur}
+                error={baseUrlError && !anthropicUrl.trim()}
+                helperText={t('providerDialog.fusionForm.help', {defaultValue: 'Both protocols share the API key below. Inbound requests are routed to the matching endpoint.'})}
+            />
             {mode === 'edit' && onConvertToSingle && (
                 <Link
                     component="button"
