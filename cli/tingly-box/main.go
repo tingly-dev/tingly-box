@@ -28,6 +28,7 @@ var (
 type CLI struct {
 	ConfigDir string `kong:"flag,name='config-dir',help='Configuration directory'"`
 	Verbose   bool   `kong:"flag,name='verbose',short='v',help='Verbose output'"`
+	Source    string `kong:"flag,name='source',help='How tingly-box was launched (binary, npx, npx-bundle); recorded so shortcuts can match the install method'"`
 
 	// Server commands
 	Start   command.StartCmdKong   `kong:"cmd,help='Start the server'"`
@@ -35,6 +36,9 @@ type CLI struct {
 	Status  command.StatusCmdKong  `kong:"cmd,help='Show status'"`
 	Restart command.RestartCmdKong `kong:"cmd,help='Restart the server'"`
 	Open    command.OpenCmdKong    `kong:"cmd,help='Open web UI'"`
+
+	// Create a double-click shortcut (desktop / start menu) to launch Tingly Box
+	Shortcut command.ShortcutCmdKong `kong:"cmd,help='Create a desktop/start-menu shortcut to launch Tingly Box'"`
 
 	// Configuration management (unified). Subcommands: provider, rule.
 	Config command.ConfigCmdKong `kong:"cmd,help='Manage configuration (providers, rules)'"`
@@ -125,6 +129,10 @@ func main() {
 	}
 
 	appManager := command.NewAppManagerWithConfig(appConfig)
+
+	// Record how tingly-box was launched (best-effort) so `shortcut` can
+	// generate a launcher matching the install method (binary vs npx vs bundle).
+	command.PersistLaunchSource(appManager, cli.Source)
 
 	// Run the selected command
 	if err := ctx.Run(appManager); err != nil {

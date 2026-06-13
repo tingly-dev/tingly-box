@@ -40,6 +40,7 @@ type StartCmdKong struct {
 	PromptRestart        bool   `kong:"flag,name='prompt-restart',help='Prompt to restart if running'"`
 	RecordMode string `kong:"flag,name='record-mode',help='Record mode'"`
 	RecordDir  string `kong:"flag,name='record-dir',help='Record directory'"`
+	Expr       string `kong:"flag,name='expr',help='Experimental features'"`
 }
 
 func (s *StartCmdKong) Run(appManager *AppManager) error {
