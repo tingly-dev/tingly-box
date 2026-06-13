@@ -240,7 +240,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
     const filteredOAuth = needle
         ? oauthProviders.filter((p) => `${p.name} ${p.displayName}`.toLowerCase().includes(needle))
         : oauthProviders;
-    const showCustom = !needle || 'custom endpoint import'.includes(needle);
+    const showCustom = !needle || 'custom endpoint fusion import'.includes(needle);
 
     // Group key providers by region (CN vs Global vs Self-hosted)
     const {cnKeyProviders, globalKeyProviders, selfHostedProviders} = useMemo(() => {
