@@ -15,7 +15,7 @@ export function has1M(model: string | undefined): boolean {
 
 /** Returns the model name with the [1m] suffix toggled on or off. */
 export function with1M(model: string | undefined, on: boolean): string {
-    const base = (model || '').replace(/\[1m\]$/, '');
+    const base = (model || '').replace(/(\[1m\])+$/, '');
     return on && base !== '' ? base + ONE_M_SUFFIX : base;
 }
 
