@@ -4,13 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcard "github.com/larksuite/oapi-sdk-go/v3/card"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
-	larkevent "github.com/larksuite/oapi-sdk-go/v3/event"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 	"github.com/tingly-dev/tingly-box/imbot/interaction"
@@ -26,33 +32,27 @@ const (
 	DomainLark   Domain = "lark"
 )
 
-// getReceiveIdType determines the receive_id_type based on the target ID format
-// - "user_id": for user's user_id (global across apps, for P2P/direct chat)
-// - "open_id": for user's open_id (app-specific, for P2P/direct chat)
-// - "chat_id": for group/chat IDs
+// getReceiveIdType determines the receive_id_type for the Feishu/Lark send API
+// based on the target ID format.
 //
-// Feishu/Lark ID patterns:
-// - ou_xxxxxx: user's user_id (global, preferred for cross-app messaging)
-// - oc_xxxxxx: user's open_id (app-specific)
-// - cli_xxxxxx: group chat ID
-//
-// The most reliable approach is to check ID prefix.
+// Feishu/Lark ID prefixes (https://open.feishu.cn/document/server-docs/im-v1/message/create):
+//   - ou_xxxx: user open_id   -> "open_id"
+//   - on_xxxx: user union_id  -> "union_id"
+//   - oc_xxxx: chat id (p2p or group) -> "chat_id"
+//   - contains "@": email     -> "email"
+//   - otherwise: user_id (no fixed prefix) -> "user_id"
 func getReceiveIdType(targetID string) string {
-	if len(targetID) < 4 {
+	switch {
+	case strings.HasPrefix(targetID, "ou_"):
 		return "open_id"
-	}
-
-	prefix := targetID[:4]
-	switch prefix {
-	case "cli_":
+	case strings.HasPrefix(targetID, "on_"):
+		return "union_id"
+	case strings.HasPrefix(targetID, "oc_"):
 		return "chat_id"
-	case "ou_":
-		return "user_id" // Global user_id for cross-app messaging
-	case "oc_":
-		return "open_id" // App-specific open_id
+	case strings.Contains(targetID, "@"):
+		return "email"
 	default:
-		// Default to open_id for backward compatibility
-		return "open_id"
+		return "user_id"
 	}
 }
 
@@ -64,7 +64,6 @@ type Bot struct {
 	client      *lark.Client   // HTTP client for sending messages
 	wsClient    *larkws.Client // WebSocket client for receiving events
 	domain      Domain
-	adapter     *Adapter
 	eventCtx    context.Context
 	eventCancel context.CancelFunc
 }
@@ -111,9 +110,6 @@ func NewFeishuBot(config *core.Config) (*Bot, error) {
 
 // Connect connects to Feishu/Lark using Lark SDK (authentication + start receiving)
 func (b *Bot) Connect(ctx context.Context) error {
-	// Initialize adapter for message conversion
-	b.adapter = NewAdapter(b.Config())
-
 	// Test authentication via SDK
 	_, err := b.client.GetTenantAccessTokenBySelfBuiltApp(ctx, &larkcore.SelfBuiltTenantAccessTokenReq{
 		AppID:     b.Config().Auth.ClientID,
@@ -153,8 +149,14 @@ func (b *Bot) Disconnect(ctx context.Context) error {
 func (b *Bot) StartReceiving(ctx context.Context) error {
 	// Create event handler that converts Lark events to core.Message
 	// OnP2MessageReceiveV1 handles both v1.0 and v2.0 message receive events
+	// OnP2CardActionTrigger handles interactive card button clicks (keyboard callbacks)
+	// Reaction handlers are registered (as no-ops) so that, when the app subscribes
+	// to reaction events, the dispatcher does not log "not found handler" errors.
 	eventHandler := dispatcher.NewEventDispatcher("", "").
-		OnP2MessageReceiveV1(b.handleP2MessageReceiveV1)
+		OnP2MessageReceiveV1(b.handleP2MessageReceiveV1).
+		OnP2CardActionTrigger(b.handleCardActionTrigger).
+		OnP2MessageReactionCreatedV1(b.handleMessageReactionCreated).
+		OnP2MessageReactionDeletedV1(b.handleMessageReactionDeleted)
 
 	// Determine base URL for WebSocket
 	wsDomain := lark.FeishuBaseUrl
@@ -225,6 +227,93 @@ func (b *Bot) handleP2MessageReceiveV1(ctx context.Context, event *larkim.P2Mess
 	return nil
 }
 
+// handleCardActionTrigger handles interactive card button clicks.
+// It converts the callback into a core.Message shaped like the Telegram callback
+// flow (is_callback + callback_data metadata) so downstream routers can be shared.
+func (b *Bot) handleCardActionTrigger(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
+	if event == nil || event.Event == nil || event.Event.Action == nil {
+		return nil, nil
+	}
+
+	action := event.Event.Action
+
+	// Buttons built by buildInteractiveCard / FeishuCardRenderer store the routing
+	// string under the "callback" key of the button value map.
+	callbackData, _ := action.Value["callback"].(string)
+	if callbackData == "" {
+		// Not a routable button (e.g. URL button or form input); nothing to emit.
+		return nil, nil
+	}
+
+	var openMessageID, openChatID string
+	if event.Event.Context != nil {
+		openMessageID = event.Event.Context.OpenMessageID
+		openChatID = event.Event.Context.OpenChatID
+	}
+
+	// Resolve operator identity (the user who clicked the button).
+	var senderID, senderUserID string
+	if op := event.Event.Operator; op != nil {
+		if op.UserID != nil && *op.UserID != "" {
+			senderUserID = *op.UserID
+		}
+		if op.OpenID != "" {
+			senderID = op.OpenID
+		} else {
+			senderID = senderUserID
+		}
+	}
+
+	// Reply into the chat that hosts the card (chat_id, valid for p2p and group).
+	// This matches the reply target chosen by convertLarkMessageToCore, keeping the
+	// conversation key stable across messages and button clicks. Fall back to the
+	// operator id only if the chat context is somehow absent.
+	replyTarget := openChatID
+	if replyTarget == "" {
+		if senderID != "" {
+			replyTarget = senderID
+		} else {
+			replyTarget = senderUserID
+		}
+	}
+
+	b.Logger().Info("%s received card action: callback=%s msg=%s chat=%s", b.domain, callbackData, openMessageID, openChatID)
+
+	msg := core.NewMessageBuilder(core.Platform(b.domain)).
+		WithID(openMessageID).
+		WithTimestamp(time.Now().Unix()).
+		WithSender(senderID, "", "").
+		WithRecipient(replyTarget, string(core.ChatTypeDirect), "").
+		WithContent(core.NewTextContent("callback:" + callbackData)).
+		WithMetadata("is_callback", true).
+		WithMetadata("callback_data", callbackData).
+		WithMetadata("message_id", openMessageID).
+		WithMetadata("original_chat_id", openChatID).
+		WithMetadata("sender_user_id", senderUserID).
+		WithMetadata("feishu_card_token", event.Event.Token).
+		Build()
+
+	b.EmitMessage(*msg)
+
+	// Acknowledge the click without mutating the card; remote_control sends a fresh
+	// result message rather than editing the original card in place.
+	return nil, nil
+}
+
+// handleMessageReactionCreated acknowledges reaction-created events. The bot does
+// not act on inbound reactions, but registering a handler prevents the SDK
+// dispatcher from logging "not found handler" errors for subscribed events.
+func (b *Bot) handleMessageReactionCreated(ctx context.Context, event *larkim.P2MessageReactionCreatedV1) error {
+	b.Logger().Debug("%s reaction created (ignored)", b.domain)
+	return nil
+}
+
+// handleMessageReactionDeleted acknowledges reaction-deleted events (no-op).
+func (b *Bot) handleMessageReactionDeleted(ctx context.Context, event *larkim.P2MessageReactionDeletedV1) error {
+	b.Logger().Debug("%s reaction deleted (ignored)", b.domain)
+	return nil
+}
+
 // convertLarkMessageToCore converts a Lark P2MessageReceiveV1 event to core.Message
 func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.Message {
 	// Safety check
@@ -284,52 +373,44 @@ func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.M
 		b.Logger().Debug("Sender ID: %s, Sender UserID: %s", senderID, senderUserID)
 	}
 
-	// For direct messages, use user_id as the reply target to avoid "open_id cross app" error
-	// For group messages, use chat_id
-	if chatType == core.ChatTypeDirect {
-		// Direct message: use the sender's user_id (global) for sending replies
-		// This works across all apps in the same tenant
-		if senderUserID != "" {
-			replyTarget = senderUserID
-		} else {
-			// Fallback to senderID (might be open_id, could fail with cross-app error)
-			replyTarget = senderID
-		}
-	} else {
-		// Group/channel: use chat_id
+	// Reply to the chat that the message belongs to. chat_id (oc_...) is valid for
+	// both p2p and group chats and avoids the "open_id cross app" failure that arises
+	// when an app-specific open_id is reused as a receive_id. Using chat_id uniformly
+	// also keeps the conversation key consistent with card-action callbacks, so
+	// per-chat state (bind flow, directory browser) survives button interactions.
+	if chatID != "" {
 		replyTarget = chatID
+	} else if senderUserID != "" {
+		replyTarget = senderUserID
+	} else {
+		replyTarget = senderID
 	}
 
 	// Extract message content - Lark Content is JSON string like {"text":"hello"}
-	var textContent string
+	// or a media payload like {"image_key":"..."} / {"file_key":"...","file_name":"..."}.
+	var msgType string
+	if event.Event != nil && event.Event.Message != nil && event.Event.Message.MessageType != nil {
+		msgType = *event.Event.Message.MessageType
+	}
+	var rawContent string
+	var contentMap map[string]interface{}
 	if event.Event != nil && event.Event.Message != nil && event.Event.Message.Content != nil {
-		contentStr := *event.Event.Message.Content
-		b.Logger().Debug("Raw content: %s", contentStr)
-
-		// Parse the JSON content to extract actual text
-		// Format: {"text":"actual message content"} or more complex for rich text
-		var contentMap map[string]interface{}
-		if err := json.Unmarshal([]byte(contentStr), &contentMap); err == nil {
-			if text, ok := contentMap["text"].(string); ok {
-				textContent = text
-			} else {
-				textContent = contentStr // Fallback to raw string
-			}
-		} else {
+		rawContent = *event.Event.Message.Content
+		b.Logger().Debug("Raw content: %s", rawContent)
+		if err := json.Unmarshal([]byte(rawContent), &contentMap); err != nil {
 			b.Logger().Warn("Failed to parse content JSON: %v, using raw string", err)
-			textContent = contentStr // Fallback to raw string
 		}
 	}
-	b.Logger().Debug("Parsed text content: %s", textContent)
+
+	content := b.buildLarkContent(msgType, contentMap, rawContent, messageID)
 
 	// Build core.Message using the builder
-	// For direct messages, Recipient.ID should be the user_id (not chat_id) for sending replies
 	messageBuilder := core.NewMessageBuilder(core.Platform(b.domain)).
 		WithID(messageID).
 		WithTimestamp(time.Now().Unix()).
 		WithSender(senderID, "", "").
 		WithRecipient(replyTarget, string(chatType), "").
-		WithContent(core.NewTextContent(textContent))
+		WithContent(content)
 
 	// Add metadata for raw event access and original chat_id
 	messageBuilder.WithMetadata("raw_lark_event", event)
@@ -338,10 +419,90 @@ func (b *Bot) convertLarkMessageToCore(event *larkim.P2MessageReceiveV1) *core.M
 	messageBuilder.WithMetadata("sender_user_id", senderUserID)
 
 	msg := messageBuilder.Build()
-	b.Logger().Debug("Built core message: ID=%s, Sender=%s, Content length=%d",
-		msg.ID, msg.Sender.ID, len(textContent))
+	b.Logger().Debug("Built core message: ID=%s, Sender=%s, Type=%s", msg.ID, msg.Sender.ID, msgType)
 
 	return msg
+}
+
+// larkResourceURLScheme prefixes media URLs that must be fetched via the Feishu
+// resource API rather than plain HTTP. The remote bot's FileStore recognizes it.
+const larkResourceURLScheme = "feishu://"
+
+// buildLarkContent converts a parsed Lark message payload into core.Content,
+// producing media content (with a feishu:// resource URL) for image/file/audio/
+// media messages and text content otherwise.
+func (b *Bot) buildLarkContent(msgType string, content map[string]interface{}, rawContent, messageID string) core.Content {
+	str := func(k string) string {
+		if v, ok := content[k].(string); ok {
+			return v
+		}
+		return ""
+	}
+
+	switch msgType {
+	case "image":
+		if key := str("image_key"); key != "" {
+			return core.NewMediaContent([]core.MediaAttachment{
+				b.larkResourceAttachment("image", "image", key, "", messageID),
+			}, "")
+		}
+	case "file", "audio", "media":
+		if key := str("file_key"); key != "" {
+			return core.NewMediaContent([]core.MediaAttachment{
+				b.larkResourceAttachment(larkCoreMediaType(msgType), "file", key, str("file_name"), messageID),
+			}, "")
+		}
+	}
+
+	if text := str("text"); text != "" {
+		return core.NewTextContent(text)
+	}
+	return core.NewTextContent(rawContent)
+}
+
+// larkResourceAttachment builds a MediaAttachment that the FileStore downloads via
+// the Feishu resource API. resType is "image" or "file" per the resource endpoint.
+func (b *Bot) larkResourceAttachment(mediaType, resType, fileKey, fileName, messageID string) core.MediaAttachment {
+	mimeType := "image/png"
+	if resType != "image" {
+		mimeType = mimeFromFileName(fileName)
+	}
+	return core.MediaAttachment{
+		Type:     mediaType,
+		URL:      larkResourceURLScheme + fileKey,
+		MimeType: mimeType,
+		Filename: fileName,
+		Raw: map[string]interface{}{
+			"feishu_message_id": messageID,
+			"feishu_file_key":   fileKey,
+			"feishu_res_type":   resType,
+		},
+	}
+}
+
+// larkCoreMediaType maps a Lark message type to a core media attachment type.
+func larkCoreMediaType(msgType string) string {
+	switch msgType {
+	case "audio":
+		return "audio"
+	case "media":
+		return "video"
+	default:
+		return "document"
+	}
+}
+
+// mimeFromFileName infers a MIME type from a file name's extension.
+func mimeFromFileName(name string) string {
+	if ext := filepath.Ext(name); ext != "" {
+		if mt := mime.TypeByExtension(ext); mt != "" {
+			if i := strings.IndexByte(mt, ';'); i >= 0 {
+				mt = mt[:i]
+			}
+			return strings.TrimSpace(mt)
+		}
+	}
+	return "application/octet-stream"
 }
 
 // SendMessage sends a message using Lark SDK
@@ -378,6 +539,12 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 	// Validate text length
 	if err := b.ValidateTextLength(opts.Text); err != nil {
 		return nil, err
+	}
+
+	// Check for a pre-rendered interactive card (e.g. action menus). This takes
+	// precedence because the card JSON already encodes its own buttons/callbacks.
+	if cardJSON, ok := opts.Metadata["card_json"].(string); ok && cardJSON != "" {
+		return b.sendRawCard(ctx, target, cardJSON)
 	}
 
 	// Check for interactive card (keyboard)
@@ -446,6 +613,42 @@ func (b *Bot) sendText(ctx context.Context, target string, opts *core.SendMessag
 		MessageID: messageID,
 		Timestamp: 0,
 	}, nil
+}
+
+// createMessage sends a message of the given type/content to the target.
+func (b *Bot) createMessage(ctx context.Context, target, msgType, content string) (*core.SendResult, error) {
+	if b.client == nil || b.client.Im == nil {
+		return nil, fmt.Errorf("client.Im is nil")
+	}
+
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType(getReceiveIdType(target)).
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(target).
+			MsgType(msgType).
+			Content(content).
+			Build()).
+		Build()
+
+	resp, err := b.client.Im.Message.Create(ctx, req)
+	if err != nil {
+		b.Logger().Error("Failed to send %s message: %v", msgType, err)
+		return nil, core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
+	}
+	if resp.Code != 0 {
+		b.Logger().Error("API returned error code: %d, msg: %s", resp.Code, resp.Msg)
+		return nil, core.NewBotError(core.ErrPlatformError, fmt.Sprintf("API error: %s", resp.Msg), false)
+	}
+
+	b.UpdateLastActivity()
+	messageID := b.extractMessageIDFromResponse(resp)
+	b.Logger().Info("%s message sent successfully: ID=%s", msgType, messageID)
+	return &core.SendResult{MessageID: messageID, Timestamp: 0}, nil
+}
+
+// sendRawCard sends a pre-serialized interactive card JSON string.
+func (b *Bot) sendRawCard(ctx context.Context, target string, cardJSON string) (*core.SendResult, error) {
+	return b.createMessage(ctx, target, "interactive", cardJSON)
 }
 
 // sendInteractiveCard sends an interactive card with buttons
@@ -564,12 +767,149 @@ func (b *Bot) buildInteractiveCard(text string, replyMarkup interface{}) *larkca
 		Build()
 }
 
-// sendMedia sends media
+// sendMedia uploads each attachment and sends it as an image or file message.
+// Images are sent as "image" messages; everything else as "file" messages.
 func (b *Bot) sendMedia(ctx context.Context, target string, opts *core.SendMessageOptions) (*core.SendResult, error) {
 	if len(opts.Media) == 0 {
 		return nil, core.NewBotError(core.ErrUnknown, "no media to send", false)
 	}
-	return nil, core.NewMediaNotSupportedError(core.Platform(b.domain), opts.Media[0].Type)
+	if b.client == nil || b.client.Im == nil {
+		return nil, fmt.Errorf("client.Im is nil")
+	}
+
+	var last *core.SendResult
+	for _, m := range opts.Media {
+		var msgType, content string
+		switch m.Type {
+		case "image", "sticker", "gif":
+			key, err := b.uploadImage(ctx, m)
+			if err != nil {
+				return nil, err
+			}
+			msgType, content = "image", fmt.Sprintf(`{"image_key":%q}`, key)
+		default:
+			key, err := b.uploadFile(ctx, m)
+			if err != nil {
+				return nil, err
+			}
+			msgType, content = "file", fmt.Sprintf(`{"file_key":%q}`, key)
+		}
+
+		res, err := b.createMessage(ctx, target, msgType, content)
+		if err != nil {
+			return nil, err
+		}
+		last = res
+	}
+	return last, nil
+}
+
+// uploadImage uploads an image attachment and returns its image_key.
+func (b *Bot) uploadImage(ctx context.Context, m core.MediaAttachment) (string, error) {
+	reader, closeFn, err := openMediaReader(ctx, m.URL)
+	if err != nil {
+		return "", fmt.Errorf("open image %q: %w", m.URL, err)
+	}
+	defer closeFn()
+
+	req := larkim.NewCreateImageReqBuilder().
+		Body(larkim.NewCreateImageReqBodyBuilder().
+			ImageType("message").
+			Image(reader).
+			Build()).
+		Build()
+
+	resp, err := b.client.Im.Image.Create(ctx, req)
+	if err != nil {
+		return "", core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
+	}
+	if !resp.Success() || resp.Data == nil || resp.Data.ImageKey == nil {
+		return "", core.NewBotError(core.ErrPlatformError, fmt.Sprintf("upload image failed: code=%d msg=%s", resp.Code, resp.Msg), false)
+	}
+	return *resp.Data.ImageKey, nil
+}
+
+// uploadFile uploads a file attachment and returns its file_key.
+func (b *Bot) uploadFile(ctx context.Context, m core.MediaAttachment) (string, error) {
+	reader, closeFn, err := openMediaReader(ctx, m.URL)
+	if err != nil {
+		return "", fmt.Errorf("open file %q: %w", m.URL, err)
+	}
+	defer closeFn()
+
+	fileName := m.Filename
+	if fileName == "" {
+		fileName = filepath.Base(m.URL)
+	}
+	if fileName == "" || fileName == "." || fileName == "/" {
+		fileName = "file"
+	}
+
+	req := larkim.NewCreateFileReqBuilder().
+		Body(larkim.NewCreateFileReqBodyBuilder().
+			FileType(feishuFileType(fileName)).
+			FileName(fileName).
+			File(reader).
+			Build()).
+		Build()
+
+	resp, err := b.client.Im.File.Create(ctx, req)
+	if err != nil {
+		return "", core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
+	}
+	if !resp.Success() || resp.Data == nil || resp.Data.FileKey == nil {
+		return "", core.NewBotError(core.ErrPlatformError, fmt.Sprintf("upload file failed: code=%d msg=%s", resp.Code, resp.Msg), false)
+	}
+	return *resp.Data.FileKey, nil
+}
+
+// feishuFileType maps a file name to a Feishu file_type. The API accepts
+// opus/mp4/pdf/doc/xls/ppt and "stream" for anything else.
+func feishuFileType(name string) string {
+	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(name), ".")) {
+	case "pdf":
+		return "pdf"
+	case "doc", "docx":
+		return "doc"
+	case "xls", "xlsx":
+		return "xls"
+	case "ppt", "pptx":
+		return "ppt"
+	case "mp4":
+		return "mp4"
+	case "opus":
+		return "opus"
+	default:
+		return "stream"
+	}
+}
+
+// openMediaReader returns a reader for an outbound media URL. It supports local
+// file paths (optionally file://) and http(s) URLs. The returned close function
+// must always be called.
+func openMediaReader(ctx context.Context, mediaURL string) (io.Reader, func(), error) {
+	if strings.HasPrefix(mediaURL, "http://") || strings.HasPrefix(mediaURL, "https://") {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+		if err != nil {
+			return nil, func() {}, err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, func() {}, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, func() {}, fmt.Errorf("download failed: status %d", resp.StatusCode)
+		}
+		return resp.Body, func() { resp.Body.Close() }, nil
+	}
+
+	path := strings.TrimPrefix(mediaURL, "file://")
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	return f, func() { f.Close() }, nil
 }
 
 // extractMessageIDFromResponse extracts the message ID from a Lark API response
@@ -608,40 +948,6 @@ func (d Domain) DisplayName() string {
 	}
 }
 
-// SetCardHandler sets the callback handler for card interactions
-func (b *Bot) SetCardHandler(handler func(context.Context, *larkcard.CardAction) (interface{}, error)) {
-	// Card handler would be set up separately for webhook handling
-	// This is a placeholder for future implementation
-}
-
-// HandleCardAction handles an incoming card callback webhook
-func (b *Bot) HandleCardAction(ctx context.Context, eventReq *larkevent.EventReq) (*larkevent.EventResp, error) {
-	// Placeholder for card callback handling
-	return nil, fmt.Errorf("card action handling not implemented")
-}
-
-// HandleWebhook handles an incoming webhook event (for webhook mode, alternative to WebSocket)
-func (b *Bot) HandleWebhook(body []byte) error {
-	coreMessage, err := b.adapter.AdaptWebhook(context.Background(), body)
-	if err != nil {
-		b.Logger().Error("Failed to adapt webhook: %v", err)
-		return err
-	}
-
-	b.EmitMessage(*coreMessage)
-	return nil
-}
-
-// GetWebhookURL returns the webhook path for this platform
-func (b *Bot) GetWebhookURL(webhookPath string) string {
-	return fmt.Sprintf("/webhook/%s/%s", b.domain, webhookPath)
-}
-
-// VerifyWebhook verifies webhook signature
-func (b *Bot) VerifyWebhook(signature, timestamp, body string) bool {
-	return true
-}
-
 // SendText sends a simple text message
 func (b *Bot) SendText(ctx context.Context, target string, text string) (*core.SendResult, error) {
 	return b.SendMessage(ctx, target, &core.SendMessageOptions{Text: text})
@@ -650,6 +956,29 @@ func (b *Bot) SendText(ctx context.Context, target string, text string) (*core.S
 // SendMedia sends media
 func (b *Bot) SendMedia(ctx context.Context, target string, media []core.MediaAttachment) (*core.SendResult, error) {
 	return b.SendMessage(ctx, target, &core.SendMessageOptions{Media: media})
+}
+
+// DownloadMessageResource downloads an image or file attachment from a received
+// message via the Feishu resource API. resType must be "image" or "file".
+func (b *Bot) DownloadMessageResource(ctx context.Context, messageID, fileKey, resType string) (io.Reader, error) {
+	if b.client == nil || b.client.Im == nil {
+		return nil, fmt.Errorf("feishu client not initialized")
+	}
+
+	req := larkim.NewGetMessageResourceReqBuilder().
+		MessageId(messageID).
+		FileKey(fileKey).
+		Type(resType).
+		Build()
+
+	resp, err := b.client.Im.MessageResource.Get(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("feishu download resource: %w", err)
+	}
+	if !resp.Success() {
+		return nil, fmt.Errorf("feishu download resource failed: code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	return resp.File, nil
 }
 
 // React reacts to a message using Feishu SDK MessageReaction API.
@@ -677,100 +1006,63 @@ func (b *Bot) React(ctx context.Context, messageID string, emoji string) error {
 	return nil
 }
 
-// EditMessage edits a message
+// EditMessage edits a previously sent message.
+// Feishu only supports editing interactive (card) messages via the Patch API, so the
+// new content is wrapped in a markdown card before patching.
 func (b *Bot) EditMessage(ctx context.Context, messageID string, text string) error {
-	return fmt.Errorf("edit message not implemented")
-}
-
-// DeleteMessage deletes a message
-func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
-	return fmt.Errorf("delete message not implemented")
-}
-
-// SetQuickActions sets the bot's quick actions menu
-// This menu appears when users type / in a chat
-// Accepts either []map[string]string or a structured menu config
-//
-// Note: Feishu quick actions need to be configured manually in the app admin console
-// The API endpoint requires special permissions that may not be enabled by default
-func (b *Bot) SetQuickActions(actions interface{}) error {
-	if b.client == nil {
-		return fmt.Errorf("client is not initialized")
+	if b.client == nil || b.client.Im == nil {
+		return fmt.Errorf("feishu client not initialized")
+	}
+	if messageID == "" {
+		return core.NewBotError(core.ErrInvalidTarget, "message ID is required", false)
 	}
 
-	// Convert input to Feishu quick actions format
-	quickActions, err := b.convertToQuickActionsFormat(actions)
+	cardJSON, err := larkcard.NewMessageCard().
+		Config(larkcard.NewMessageCardConfig().WideScreenMode(true)).
+		Elements([]larkcard.MessageCardElement{
+			larkcard.NewMessageCardDiv().
+				Text(larkcard.NewMessageCardLarkMd().Content(text)),
+		}).
+		String()
 	if err != nil {
-		return fmt.Errorf("failed to convert actions: %w", err)
+		return fmt.Errorf("failed to build card: %w", err)
 	}
 
-	b.Logger().Info("Quick actions configured for %s bot: %d actions", b.domain, len(quickActions))
+	req := larkim.NewPatchMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewPatchMessageReqBodyBuilder().
+			Content(cardJSON).
+			Build()).
+		Build()
 
-	// Log the quick actions for manual configuration
-	for i, action := range quickActions {
-		b.Logger().Info("  [%d] %s - %s", i+1, action["text"], action["description"])
+	resp, err := b.client.Im.Message.Patch(ctx, req)
+	if err != nil {
+		return core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
+	}
+	if !resp.Success() {
+		return core.NewBotError(core.ErrPlatformError, fmt.Sprintf("API error: %s", resp.Msg), false)
 	}
 
-	b.Logger().Info("To enable quick actions in Feishu admin:")
-	b.Logger().Info("  1. Visit https://open.feishu.cn/app/[YOUR_APP]/dev/app")
-	b.Logger().Info("  2. Go to '能力添加' -> '快捷方式'")
-	b.Logger().Info("  3. Add commands from the list above")
-
+	b.UpdateLastActivity()
 	return nil
 }
 
-// GetQuickActions gets the current quick actions configuration
-func (b *Bot) GetQuickActions() (map[string]interface{}, error) {
-	if b.client == nil {
-		return nil, fmt.Errorf("client is not initialized")
+// DeleteMessage recalls a previously sent message by its open_message_id.
+func (b *Bot) DeleteMessage(ctx context.Context, messageID string) error {
+	if b.client == nil || b.client.Im == nil {
+		return fmt.Errorf("feishu client not initialized")
+	}
+	if messageID == "" {
+		return core.NewBotError(core.ErrInvalidTarget, "message ID is required", false)
 	}
 
-	// Return current quick actions configuration
-	// TODO: Implement actual API call when Feishu provides the endpoint
-	return map[string]interface{}{
-		"status":   "configured",
-		"platform": string(b.domain),
-	}, nil
-}
-
-// convertToQuickActionsFormat converts various input formats to Feishu quick actions
-func (b *Bot) convertToQuickActionsFormat(actions interface{}) ([]map[string]interface{}, error) {
-	var quickActions []map[string]interface{}
-
-	switch v := actions.(type) {
-	case []map[string]string:
-		// Convert from []map[string]string format
-		for _, action := range v {
-			id := action["id"]
-			if id == "" {
-				id = action["command"]
-			}
-			text := action["label"]
-			if text == "" {
-				text = action["text"]
-			}
-			description := action["description"]
-
-			quickActions = append(quickActions, map[string]interface{}{
-				"id": id,
-				"text": map[string]interface{}{
-					"tag":     "plain_text",
-					"content": text,
-				},
-				"description": description,
-			})
-		}
-
-	case map[string]interface{}:
-		// Handle structured config with "actions" key
-		if items, ok := v["actions"].([]map[string]interface{}); ok {
-			return items, nil
-		}
-		return nil, fmt.Errorf("invalid actions format in config map")
-
-	default:
-		return nil, fmt.Errorf("unsupported actions type: %T", actions)
+	req := larkim.NewDeleteMessageReqBuilder().MessageId(messageID).Build()
+	resp, err := b.client.Im.Message.Delete(ctx, req)
+	if err != nil {
+		return core.WrapError(err, core.Platform(b.domain), core.ErrPlatformError)
 	}
-
-	return quickActions, nil
+	if !resp.Success() {
+		return core.NewBotError(core.ErrPlatformError, fmt.Sprintf("API error: %s", resp.Msg), false)
+	}
+	return nil
 }
