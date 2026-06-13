@@ -16,6 +16,10 @@ type AgentInfo struct {
 
 	// Scenario is the corresponding routing rule scenario
 	Scenario string
+
+	// NPMPackage is the canonical npm package name used by `ci install`.
+	// Empty for agents that aren't distributed via npm.
+	NPMPackage string
 }
 
 // ListAgentInfo returns information about all supported agent types
@@ -29,7 +33,8 @@ func ListAgentInfo() []AgentInfo {
 				"~/.claude/settings.json",
 				"~/.claude.json",
 			},
-			Scenario: "claude_code",
+			Scenario:   "claude_code",
+			NPMPackage: "@anthropic-ai/claude-code",
 		},
 		{
 			Type:        AgentTypeOpenCode,
@@ -38,7 +43,8 @@ func ListAgentInfo() []AgentInfo {
 			ConfigFiles: []string{
 				"~/.config/opencode/opencode.json",
 			},
-			Scenario: "opencode",
+			Scenario:   "opencode",
+			NPMPackage: "opencode-ai",
 		},
 		{
 			Type:        AgentTypeCodex,
@@ -48,7 +54,8 @@ func ListAgentInfo() []AgentInfo {
 				"~/.codex/config.toml",
 				"~/.codex/auth.json",
 			},
-			Scenario: "codex",
+			Scenario:   "codex",
+			NPMPackage: "@openai/codex",
 		},
 	}
 }
