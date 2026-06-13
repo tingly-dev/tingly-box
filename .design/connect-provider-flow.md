@@ -40,6 +40,45 @@ Scrollbar is always visible on the card area.
 - **Custom / Fusion / Key provider / Self-hosted** → opens the form dialog (pre-filled)
 - **OAuth** → opens OAuthDialog in direct mode (skips the provider grid, straight to auth)
 
+### Flow at a glance
+
+```
+                       ┌──────────────────────────────┐
+                       │   "Connect AI"  (picker)     │
+                       │  search ▸ filter all cards   │
+                       └──────────────┬───────────────┘
+                                      │ onSelect(ConnectSelection)
+        ┌───────────────┬─────────────┼─────────────┬───────────────┐
+        │ kind:'custom' │ kind:'fusion'│ kind:'key'  │ kind:'local'  │ kind:'oauth'
+        ▼               ▼              ▼             ▼               ▼
+  ┌───────────┐  ┌─────────────┐ ┌──────────┐ ┌────────────┐ ┌──────────────┐
+  │ Custom    │  │ Fusion form │ │ preset   │ │ self-hosted│ │ OAuthDialog  │
+  │ endpoint  │  │ (fusionMode)│ │ pre-fill │ │ pre-fill   │ │ direct mode  │
+  │ 1 URL +   │  │ OpenAI URL +│ │ from     │ │ localhost  │ │ autoStart    │
+  │ proto     │  │ Anthropic   │ │ template │ │ :port +    │ │ ProviderId   │
+  │ radio     │  │ URL, 1 key  │ │          │ │ key conv.  │ │ ▸ sign in    │
+  └─────┬─────┘  └──────┬──────┘ └────┬─────┘ └─────┬──────┘ └──────┬───────┘
+        │               │             │             │               │
+        └───────────────┴──────┬──────┴─────────────┘               │
+                               ▼                                     ▼
+                    ┌─────────────────────┐                ┌──────────────────┐
+                    │  ProviderFormDialog  │                │  token stored on │
+                    │  (← Back re-opens    │                │  callback; new   │
+                    │   the picker)        │                │  provider record │
+                    └──────────┬───────────┘                └──────────────────┘
+                               │ submit
+                               ▼
+                    ┌─────────────────────┐
+                    │  api.addProvider     │  fusion → single record with
+                    │  (1 or 2 records)    │  api_base_openai + api_base_anthropic
+                    └─────────────────────┘
+```
+
+Three surfaces render this picker → form sequence and each wires the same
+`ConnectSelection` kinds (so the Fusion card must be handled in all three):
+`CredentialPage.tsx` (full edit/upgrade), `useProviderDialog.tsx` (onboarding
+templates), and `ConnectProviderFlow.tsx` (the scenario "Use …" pages).
+
 ---
 
 ## Step 2 — API key form
@@ -110,10 +149,14 @@ enter their key without unchecking a separate toggle.
 | File | Role |
 |---|---|
 | `frontend/src/components/ConnectProviderDialog.tsx` | Step 1 — unified picker; `SELF_HOSTED_PROVIDERS` constant with default keys |
-| `frontend/src/components/ProviderFormDialog.tsx` | Step 2 — API key / custom form; `onBack` prop for picker navigation |
+| `frontend/src/components/ProviderFormDialog.tsx` | Step 2 — API key / custom / fusion form; `onBack` prop for picker navigation |
 | `frontend/src/components/OAuthDialog.tsx` | Step 2 — OAuth flow; `autoStartProviderId` for direct mode |
-| `frontend/src/pages/CredentialPage.tsx` | Wires picker → form routing; `fromConnectPicker` + `isLocalProvider` state |
+| `frontend/src/pages/CredentialPage.tsx` | Wires picker → form routing (surface 1); `fromConnectPicker` + `isLocalProvider` + `isFusionMode` state |
+| `frontend/src/hooks/useProviderDialog.tsx` | Picker → form routing for onboarding templates (surface 2); `fusionMode` |
+| `frontend/src/components/ConnectProviderFlow.tsx` | Picker → form routing for scenario "Use …" pages (surface 3); `isFusionMode` |
 | `frontend/src/components/providerFormDialog/ApiKeyField.tsx` | Key field; `hideCheckbox` + `optionalEditable` props |
+| `frontend/src/components/providerFormDialog/CustomEndpointField.tsx` | Single base-URL input for custom mode; persistent "append /v1" tooltip |
+| `frontend/src/components/providerFormDialog/FusionUrlFields.tsx` | Two-URL body (OpenAI + Anthropic) for `fusionMode`; downgrade link |
 | `frontend/src/components/providerFormDialog/ProviderAutocomplete.tsx` | Base URL field; `required`/`error`/`helperText` props |
 | `frontend/src/components/providerFormDialog/VerificationResultPanel.tsx` | Test result panel; filters empty detail rows |
 | `internal/data/providers.json` | Provider templates; self-hosted entries use `type: "self-hosted"` |
