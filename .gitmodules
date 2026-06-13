@@ -1,12 +1,12 @@
 [submodule "libs/openai-go"]
 	path = libs/openai-go
 	url = https://github.com/tingly-dev/openai-go.git
-	branch = "tingly-dev-v3.37.0"
+	branch = "tingly-dev-v3.39.0"
 [submodule "libs/anthropic-sdk-go"]
 	path = libs/anthropic-sdk-go
 	url = https://github.com/tingly-dev/anthropic-sdk-go.git
-	branch = "tingly-dev-v1.45.0"
+	branch = "tingly-dev-v1.50.1"
 [submodule "libs/go-genai"]
 	path = libs/go-genai
 	url = https://github.com/tingly-dev/go-genai.git
-	branch = "upstream-v1.58.0"
+	branch = "upstream-v1.60.0"
