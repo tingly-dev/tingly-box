@@ -598,7 +598,7 @@
       "model_doc": "https://bailian.console.aliyun.com/console?tab=doc#/doc/?type=model&url=2987148",
       "pricing_doc": "https://bailian.console.aliyun.com/console?tab=doc#/doc/?type=model&url=2987148",
       "base_url_openai": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://dashscope.aliyuncs.com/apps/anthropic",
       "models": [
         {
           "id": "qwen-max",
@@ -1282,7 +1282,7 @@
       "model_doc": "https://www.volcengine.com/docs/82379/1330310",
       "pricing_doc": "https://www.volcengine.com/docs/82379/1099320",
       "base_url_openai": "https://ark.cn-beijing.volces.com/api/v3",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://ark.cn-beijing.volces.com/api/v3",
       "models": [],
       "supports_models_endpoint": false,
       "icon": "doubao"
