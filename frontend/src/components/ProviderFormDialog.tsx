@@ -17,7 +17,6 @@ import {
     Stack,
     Switch,
     TextField,
-    Tooltip,
     Typography,
 } from '@mui/material';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -25,7 +24,9 @@ import {useTranslation} from 'react-i18next';
 import {type UniqueProvider, useProviderTemplates} from '../services/serviceProviders';
 import {api} from '../services/api';
 import ApiKeyField from './providerFormDialog/ApiKeyField';
+import CustomEndpointField from './providerFormDialog/CustomEndpointField';
 import FusionToggle from './providerFormDialog/FusionToggle';
+import FusionUrlFields from './providerFormDialog/FusionUrlFields';
 import KeyNameField from './providerFormDialog/KeyNameField';
 import ProtocolSelector from './providerFormDialog/ProtocolSelector';
 import ProviderAutocomplete from './providerFormDialog/ProviderAutocomplete';
@@ -734,127 +735,42 @@ const ProviderFormDialog = ({
                         )}
 
                         {fusionMode ? (
-                          <Stack spacing={2}>
-                            <TextField
-                                size="small"
-                                fullWidth
-                                label={t('providerDialog.customFusion.openAILabel')}
-                                placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
-                                value={fusOpenAIUrl}
-                                onChange={(e) => {
-                                    setFusOpenAIUrl(e.target.value);
-                                    if (e.target.value.trim()) setBaseUrlError(false);
+                            <FusionUrlFields
+                                openAIUrl={fusOpenAIUrl}
+                                anthropicUrl={fusAnthropicUrl}
+                                onOpenAIChange={(v) => {
+                                    setFusOpenAIUrl(v);
+                                    if (v.trim()) setBaseUrlError(false);
                                     setVerificationResult(null);
                                 }}
-                                onBlur={() => onChangeRef.current('apiBaseOpenAI', fusOpenAIUrl)}
-                                required
-                                error={baseUrlError && !fusOpenAIUrl.trim()}
-                            />
-                            <TextField
-                                size="small"
-                                fullWidth
-                                label={t('providerDialog.customFusion.anthropicLabel')}
-                                placeholder={t('providerDialog.fusionForm.anthropicPlaceholder', {defaultValue: 'https://api.example.com/anthropic'})}
-                                value={fusAnthropicUrl}
-                                onChange={(e) => {
-                                    setFusAnthropicUrl(e.target.value);
-                                    if (e.target.value.trim()) setBaseUrlError(false);
+                                onAnthropicChange={(v) => {
+                                    setFusAnthropicUrl(v);
+                                    if (v.trim()) setBaseUrlError(false);
                                     setVerificationResult(null);
                                 }}
-                                onBlur={() => onChangeRef.current('apiBaseAnthropic', fusAnthropicUrl)}
-                                required
-                                error={baseUrlError && !fusAnthropicUrl.trim()}
-                                helperText={t('providerDialog.fusionForm.help', {defaultValue: 'Both protocols share the API key below. Inbound requests are routed to the matching endpoint.'})}
+                                onOpenAIBlur={() => onChangeRef.current('apiBaseOpenAI', fusOpenAIUrl)}
+                                onAnthropicBlur={() => onChangeRef.current('apiBaseAnthropic', fusAnthropicUrl)}
+                                baseUrlError={baseUrlError}
+                                mode={mode}
+                                onConvertToSingle={onConvertToSingle}
                             />
-                            {mode === 'edit' && onConvertToSingle && (
-                                <Link
-                                    component="button"
-                                    type="button"
-                                    variant="caption"
-                                    underline="hover"
-                                    sx={{alignSelf: 'flex-start'}}
-                                    onClick={onConvertToSingle}
-                                >
-                                    {t('providerDialog.fusionForm.convertToSingle', {defaultValue: 'Convert to a single endpoint'})}
-                                </Link>
-                            )}
-                          </Stack>
                         ) : customMode ? (
-                            <Tooltip
-                                open={showV1Hint}
-                                title={
-                                    <Stack direction="row" alignItems="center" spacing={0.75}>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {t('providerDialog.v1Hint.message', {
-                                                defaultValue: 'Most OpenAI-compatible APIs need a /v1 suffix.',
-                                            })}
-                                        </Typography>
-                                        <Link
-                                            component="button"
-                                            type="button"
-                                            variant="body2"
-                                            onClick={applyV1Suffix}
-                                            underline="always"
-                                            sx={{
-                                                fontWeight: 600,
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                        >
-                                            {t('providerDialog.v1Hint.apply', {defaultValue: 'Append /v1'})}
-                                        </Link>
-                                    </Stack>
-                                }
-                                placement="top"
-                                arrow
-                                disableFocusListener
-                                disableHoverListener
-                                disableTouchListener
-                                slotProps={{
-                                    tooltip: {
-                                        sx: {
-                                            bgcolor: 'background.paper',
-                                            color: 'text.primary',
-                                            border: 1,
-                                            borderColor: 'divider',
-                                            boxShadow: 2,
-                                            px: 1.5,
-                                            py: 1,
-                                        },
-                                    },
-                                    arrow: {
-                                        sx: {
-                                            fontSize: 16,
-                                            color: 'background.paper',
-                                            '&::before': {
-                                                border: 1,
-                                                borderColor: 'divider',
-                                            },
-                                        },
-                                    },
+                            <CustomEndpointField
+                                value={providerInputValue}
+                                onChange={(val) => {
+                                    setProviderInputValue(val);
+                                    if (val.trim()) setBaseUrlError(false);
                                 }}
-                            >
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    label={t('providerDialog.provider.label')}
-                                    placeholder={t('providerDialog.provider.customPlaceholder', {defaultValue: 'https://api.example.com/v1'})}
-                                    value={providerInputValue}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setProviderInputValue(val);
-                                        if (val.trim()) setBaseUrlError(false);
-                                    }}
-                                    onBlur={() => {
-                                        if (data.apiBase !== providerInputValue) {
-                                            onChangeRef.current('apiBase', providerInputValue);
-                                            onChangeRef.current('providerBaseUrls', undefined);
-                                        }
-                                    }}
-                                    required
-                                    error={baseUrlError}
-                                    helperText={baseUrlError ? t('providerDialog.provider.required', {defaultValue: 'Base URL is required'}) : undefined}
-                                />
-                            </Tooltip>
+                                onBlur={() => {
+                                    if (data.apiBase !== providerInputValue) {
+                                        onChangeRef.current('apiBase', providerInputValue);
+                                        onChangeRef.current('providerBaseUrls', undefined);
+                                    }
+                                }}
+                                error={baseUrlError}
+                                showV1Hint={showV1Hint}
+                                onApplyV1={applyV1Suffix}
+                            />
                         ) : (
                             <ProviderAutocomplete
                                 options={allProviders}
