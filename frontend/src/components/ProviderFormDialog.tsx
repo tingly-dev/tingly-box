@@ -624,8 +624,8 @@ const ProviderFormDialog = ({
                 apiStyle: 'openai',
                 createFusionProvider: true,
                 name: ensureName(),
+                protocols: ['openai', 'anthropic'] as any,
             };
-            (resolved as any).protocols = ['openai', 'anthropic'];
             setSubmitting(true);
             try {
                 await onSubmit(e, resolved);
@@ -634,6 +634,7 @@ const ProviderFormDialog = ({
             }
             return;
         }
+        const effectiveBase = data.apiBase || providerInputValue;
         if (!effectiveBase.trim()) {
             setBaseUrlError(true);
             return;
@@ -701,10 +702,11 @@ const ProviderFormDialog = ({
     // edit mode: shown for non-fusion providers when the template supports both sides (upgrade path)
     // Fusion toggle / topology hint are template-only concerns (presets keep the
     // split-vs-merge choice). Custom and fusion paths never show them.
-    const showFusionToggle = !customMode && !fusionMode && (mode === 'add'
+    const isPresetMode = !customMode && !fusionMode;
+    const showFusionToggle = isPresetMode && (mode === 'add'
         ? (protocolOpenAI && protocolAnthropic)
         : (!isExistingFusion && hasBothBaseUrls));
-    const showTopologyHint = !customMode && !fusionMode && protocolOpenAI && protocolAnthropic && hasBothBaseUrls;
+    const showTopologyHint = isPresetMode && protocolOpenAI && protocolAnthropic && hasBothBaseUrls;
     const willMergeBaseUrls = createFusionProvider;
 
     return (
