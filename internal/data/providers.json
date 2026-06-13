@@ -875,7 +875,7 @@
       "model_doc": "https://www.modelscope.cn/docs/model-service/API-Inference/models",
       "pricing_doc": "https://www.modelscope.cn/docs/model-service/API-Inference/pricing",
       "base_url_openai": "https://api-inference.modelscope.cn/v1",
-      "base_url_anthropic": null,
+      "base_url_anthropic": "https://api-inference.modelscope.cn",
       "models": [],
       "supports_models_endpoint": true,
       "icon": "modelscope"
