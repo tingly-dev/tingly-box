@@ -272,6 +272,23 @@ export default {
       "outcomeSplit": "将创建 2 条独立 Base URL（共用同一密钥）。",
       "outcomeMerged": "将保留 1 条 Base URL，同时服务 OpenAI 与 Anthropic。"
     },
+    "customFusion": {
+      "openAILabel": "OpenAI Base URL",
+      "anthropicLabel": "Anthropic Base URL"
+    },
+    "fusionForm": {
+      "title": "添加 Fusion 端点",
+      "editTitle": "编辑 Fusion 端点",
+      "anthropicPlaceholder": "https://api.example.com/anthropic",
+      "help": "两种协议共用下方的 API Key，入站请求会被路由到对应的端点。",
+      "convertToSingle": "转为单端点",
+      "verifyBothOk": "两个端点均验证通过",
+      "verifyBothFailed": "两个端点均验证失败",
+      "verifyOneFailed": "{{side}} 端点验证失败"
+    },
+    "providerSingle": {
+      "convertToFusion": "添加 Anthropic 端点（升级为 Fusion）"
+    },
     "keyName": {
       "label": "名称",
       "placeholder": "例如：OpenAI",

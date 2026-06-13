@@ -20,6 +20,7 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
     const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
     const [apiKeyDialogMode] = useState<'add'>('add');
     const [isLocalProvider, setIsLocalProvider] = useState(false);
+    const [isFusionMode, setIsFusionMode] = useState(false);
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
     const [oauthAutoStartId, setOAuthAutoStartId] = useState<string | null>(null);
     const [providerFormData, setProviderFormData] = useState<EnhancedProviderFormData>({
@@ -28,6 +29,7 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
 
     const handleConnectSelect = useCallback((selection: ConnectSelection) => {
         onClose();
+        setIsFusionMode(false);
         if (selection.kind === 'oauth') {
             setOAuthAutoStartId(selection.providerId);
             setOAuthDialogOpen(true);
@@ -41,6 +43,19 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
             setProviderFormData({
                 name: '', apiBase: '', apiStyle: undefined, token: '', enabled: true, noKeyRequired: false, proxyUrl: '',
             });
+            setApiKeyDialogOpen(true);
+            return;
+        }
+        if (selection.kind === 'fusion') {
+            // Fusion endpoint: two URLs (OpenAI + Anthropic) under one key, always
+            // saved as a single fused record. No protocol selector / topology toggle.
+            setIsLocalProvider(false);
+            setIsFusionMode(true);
+            setProviderFormData({
+                name: '', apiBase: '', apiStyle: 'openai', token: '', enabled: true, noKeyRequired: false, proxyUrl: '',
+                apiBaseOpenAI: '', apiBaseAnthropic: '', createFusionProvider: true,
+                protocols: ['openai', 'anthropic'],
+            } as any);
             setApiKeyDialogOpen(true);
             return;
         }
@@ -114,7 +129,7 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
             />
             <ProviderFormDialog
                 open={apiKeyDialogOpen}
-                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); }}
+                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setIsFusionMode(false); }}
                 onBack={() => { setApiKeyDialogOpen(false); onClose(); /* re-open handled by parent */ }}
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
@@ -122,6 +137,7 @@ const ConnectProviderFlow: React.FC<ConnectProviderFlowProps> = ({
                 onChange={handleFieldChange}
                 mode={apiKeyDialogMode}
                 optionalEditableToken={isLocalProvider}
+                fusionMode={isFusionMode}
             />
             <OAuthDialog
                 open={oauthDialogOpen}

@@ -35,7 +35,7 @@ directly.  By convention, `APIBase` is set to the OpenAI URL.
 |---|---|
 | `AuthType` must be `api_key` | OAuth tokens are issuer-specific; the token's scope is tied to one protocol endpoint |
 | `APIStyle` must not be `google` | Google auth is per-project, not per-endpoint |
-| Template required for the upgrade path | Free-form entries have no second URL to discover |
+| Template **optional** | A template pre-fills both URLs; custom endpoints supply the second URL manually (see Add flow). |
 
 ---
 
@@ -70,6 +70,11 @@ transformers.  The stored provider record is never mutated.
 See also: [connect-provider-flow.md](connect-provider-flow.md) for the full
 picker → form sequence.
 
+Fusion is reached two ways, kept on separate surfaces so each form answers one
+question:
+
+### Preset template (both protocols)
+
 When the user selects a provider template that has both `baseUrlOpenAI` and
 `baseUrlAnthropic`, the form lets them pick both protocol checkboxes.  Once both
 are checked, a **Fusion mode** toggle appears below the protocol selector.
@@ -80,16 +85,52 @@ are checked, a **Fusion mode** toggle appears below the protocol selector.
 | On | One fusion `Provider` record is created with both URLs and `APIStyle: openai` as primary. |
 
 A topology hint below the toggle tells the user which outcome is selected
-("merged into one" vs "saved as two separate providers").
+("merged into one" vs "saved as two separate providers").  Presets keep this
+split-vs-merge choice.
 
-Free-form (no template match): fusion is not available — the second URL cannot
-be inferred.
+### "Fusion endpoint" picker card (custom)
+
+The Connect AI picker has a dedicated **Fusion endpoint** card (next to "Custom
+endpoint").  It opens a purpose-built form (`ProviderFormDialog` with
+`fusionMode`) that is *born dual*:
+
+- two free-text URL fields — *OpenAI Base URL* + *Anthropic Base URL*;
+- one shared API key;
+- no protocol selector, no topology toggle, no progressive disclosure;
+- **Test Connection probes both endpoints** (parallel, per-side results) — a
+  fused provider answers both protocols, so verifying only one URL would leave
+  the other untested.
+
+It **always** produces a single fused record (`api_base_openai` +
+`api_base_anthropic` both set, `api_base = openai URL`, `api_style = openai`,
+`auth_type = api_key`).  The two URLs may be identical (degenerate but allowed).
+
+Plain **Custom endpoint** is therefore strictly single-protocol (a single URL +
+an OpenAI/Anthropic radio).  To get two independent records instead of a fused
+one, add two Custom entries — "split" is no longer a modeled mode on the custom
+side.
+
+`buildAddProviderPayload` sources the two URLs template-driven (`providerBaseUrls`)
+**or** form-driven (`apiBaseOpenAI`/`apiBaseAnthropic`, falling back to `apiBase`),
+so the backend payload is identical for both surfaces.
 
 ---
 
 ## Edit flow
 
-Edit mode enforces three rules that differ from add mode.
+How an existing provider opens depends on its stored shape:
+
+- **Both fusion URLs set** → opens the dedicated **Fusion endpoint** form
+  (`fusionMode`).  A *"Convert to a single endpoint"* link downgrades it (keeps
+  the OpenAI URL, clears both fusion fields, `APIStyle = openai`).
+- **Single protocol** (or matched preset) → opens the standard form.  A
+  *"Add an Anthropic endpoint (make it a Fusion provider)"* link upgrades it: the
+  current URL becomes the OpenAI side and the dialog switches to `fusionMode`
+  (`CredentialPage.handleConvertToFusion` / `handleConvertToSingle` flip the
+  parent's mode flags and patch `providerFormData`; the open-effect, keyed on
+  `[open, fusionMode]`, re-initialises the form for the new shape).
+
+The template-driven preset edit additionally enforces the three rules below.
 
 ### Rule 1 — Protocol lock for non-fusion providers
 
@@ -147,7 +188,12 @@ Deselecting the **last** protocol is blocked — at least one must remain.
 | `initialFusionRef` | Snapshot of `{ openAI, anthropic, apiBase, apiStyle }` taken on open |
 | `createFusionProvider` | Tracks the fusion toggle state (also written to parent as `createFusionProvider` field) |
 | `effectiveLocked` | `fusionLocked \|\| protocolLocked`; passed to `ProtocolSelector` as `fusionLocked` |
-| `showFusionToggle` | add: `protocolOpenAI && protocolAnthropic`; edit: `!isExistingFusion && hasBothBaseUrls` |
+| `showFusionToggle` | preset-only (`!customMode && !fusionMode`): add `protocolOpenAI && protocolAnthropic`; edit `!isExistingFusion && hasBothBaseUrls` |
+| `fusOpenAIUrl` / `fusAnthropicUrl` | `fusionMode` local mirrors for the two URL fields. Seeded from `data.apiBaseOpenAI`/`apiBaseAnthropic` on `[open, fusionMode]`; committed to parent on blur and in `handleSubmit`. |
+
+`customMode` is strictly single-protocol: `ProtocolSelector` renders radios
+(`singleSelect`) and the toggle handlers are mutually exclusive. The fusion toggle
+and topology hint are preset-only.
 
 `handleFusionDowngrade(nextOpenAI, nextAnthropic)` — called from protocol toggle
 handlers when `isExistingFusion` is true.  Reads from `initialFusionRef` and
