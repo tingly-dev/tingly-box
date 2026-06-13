@@ -216,17 +216,17 @@ type RequestConfig struct {
 
 // CreateProviderRequest represents the request to add a new provider
 type CreateProviderRequest struct {
-	Name             string `json:"name" binding:"required" description:"Provider name" example:"openai"`
-	APIBase          string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
-	APIStyle         string `json:"api_style" description:"API style" example:"openai"`
-	APIBaseOpenAI    string `json:"api_base_openai,omitempty" description:"Fusion-mode OpenAI-compatible base URL (optional, api_key auth only)" example:"https://api.example.com/v1"`
-	APIBaseAnthropic string `json:"api_base_anthropic,omitempty" description:"Fusion-mode Anthropic-compatible base URL (optional, api_key auth only)" example:"https://api.example.com"`
-	Token            string `json:"token" description:"API token" example:"sk-..."`
-	NoKeyRequired    bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
-	Enabled          bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
-	ProxyURL         string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://localhost:7890"`
-	UserAgent        string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent; empty uses the built-in/default for this provider" example:"my-gateway/1.0"`
-	AuthType         string `json:"auth_type,omitempty" description:"Auth type: api_key or oauth (default: api_key)" example:"api_key"`
+	Name               string `json:"name" binding:"required" description:"Provider name" example:"openai"`
+	APIBase            string `json:"api_base" binding:"required" description:"API base URL" example:"https://api.openai.com/v1"`
+	APIStyle           string `json:"api_style" description:"API style" example:"openai"`
+	APIBaseOpenAI      string `json:"api_base_openai,omitempty" description:"Fusion-mode OpenAI-compatible base URL (optional, api_key auth only)" example:"https://api.example.com/v1"`
+	APIBaseAnthropic   string `json:"api_base_anthropic,omitempty" description:"Fusion-mode Anthropic-compatible base URL (optional, api_key auth only)" example:"https://api.example.com"`
+	Token              string `json:"token" description:"API token" example:"sk-..."`
+	NoKeyRequired      bool   `json:"no_key_required" description:"Whether provider requires no API key" example:"false"`
+	Enabled            bool   `json:"enabled" description:"Whether provider is enabled" example:"true"`
+	ProxyURL           string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL (e.g., http://localhost:7890 or socks5://localhost:1080)" example:"http://localhost:7890"`
+	UserAgent          string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent; empty uses the built-in/default for this provider" example:"my-gateway/1.0"`
+	AuthType string `json:"auth_type,omitempty" description:"Auth type: api_key or oauth (default: api_key)" example:"api_key"`
 }
 
 // CreateProviderResponse represents the response for adding a provider
@@ -238,16 +238,16 @@ type CreateProviderResponse struct {
 
 // UpdateProviderRequest represents the request to update a provider
 type UpdateProviderRequest struct {
-	Name             *string `json:"name,omitempty" description:"New provider name"`
-	APIBase          *string `json:"api_base,omitempty" description:"New API base URL"`
-	APIStyle         *string `json:"api_style,omitempty" description:"New API style"`
-	APIBaseOpenAI    *string `json:"api_base_openai,omitempty" description:"New fusion-mode OpenAI-compatible base URL (empty string clears it)"`
-	APIBaseAnthropic *string `json:"api_base_anthropic,omitempty" description:"New fusion-mode Anthropic-compatible base URL (empty string clears it)"`
-	Token            *string `json:"token,omitempty" description:"New API token"`
-	NoKeyRequired    *bool   `json:"no_key_required,omitempty" description:"Whether provider requires no API key"`
-	Enabled          *bool   `json:"enabled,omitempty" description:"New enabled status"`
-	ProxyURL         *string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL"`
-	UserAgent        *string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent (empty string clears it and reverts to default)"`
+	Name               *string `json:"name,omitempty" description:"New provider name"`
+	APIBase            *string `json:"api_base,omitempty" description:"New API base URL"`
+	APIStyle           *string `json:"api_style,omitempty" description:"New API style"`
+	APIBaseOpenAI      *string `json:"api_base_openai,omitempty" description:"New fusion-mode OpenAI-compatible base URL (empty string clears it)"`
+	APIBaseAnthropic   *string `json:"api_base_anthropic,omitempty" description:"New fusion-mode Anthropic-compatible base URL (empty string clears it)"`
+	Token              *string `json:"token,omitempty" description:"New API token"`
+	NoKeyRequired      *bool   `json:"no_key_required,omitempty" description:"Whether provider requires no API key"`
+	Enabled            *bool   `json:"enabled,omitempty" description:"New enabled status"`
+	ProxyURL           *string `json:"proxy_url,omitempty" description:"HTTP or SOCKS proxy URL"`
+	UserAgent *string `json:"user_agent,omitempty" description:"Custom outbound HTTP User-Agent (empty string clears it and reverts to default)"`
 }
 
 // UpdateProviderResponse represents the response for updating a provider

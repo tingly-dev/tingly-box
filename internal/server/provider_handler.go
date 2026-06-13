@@ -149,19 +149,19 @@ func (s *Server) CreateProvider(c *gin.Context) {
 		return
 	}
 	provider := &typ.Provider{
-		UUID:             uid.String(),
-		Name:             req.Name,
-		APIBase:          req.APIBase,
-		APIStyle:         protocol.APIStyle(req.APIStyle),
-		APIBaseOpenAI:    req.APIBaseOpenAI,
-		APIBaseAnthropic: req.APIBaseAnthropic,
-		Token:            req.Token,
-		NoKeyRequired:    req.NoKeyRequired,
-		Enabled:          true, // always make new provider enabled
-		ProxyURL:         req.ProxyURL,
-		UserAgent:        req.UserAgent,
-		AuthType:         typ.AuthType(req.AuthType),
-		Timeout:          constant.DefaultRequestTimeout,
+		UUID:               uid.String(),
+		Name:               req.Name,
+		APIBase:            req.APIBase,
+		APIStyle:           protocol.APIStyle(req.APIStyle),
+		APIBaseOpenAI:      req.APIBaseOpenAI,
+		APIBaseAnthropic:   req.APIBaseAnthropic,
+		Token:              req.Token,
+		NoKeyRequired:      req.NoKeyRequired,
+		Enabled:            true, // always make new provider enabled
+		ProxyURL:           req.ProxyURL,
+		UserAgent:          req.UserAgent,
+		AuthType: typ.AuthType(req.AuthType),
+		Timeout:  constant.DefaultRequestTimeout,
 	}
 
 	err = s.config.AddProvider(provider)

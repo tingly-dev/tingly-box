@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/request"
@@ -191,6 +192,7 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 
 	// Determine target API type based on provider API style
 	target := protocol.TypeOpenAIResponses
+	autoFallbackEnabled := false
 	switch provider.APIStyle {
 	case protocol.APIStyleAnthropic:
 		target = protocol.TypeAnthropicBeta
@@ -204,18 +206,23 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		})
 		return
 	case protocol.APIStyleOpenAI:
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, resolveRuleFlags(c, rule), IncomingAPIResponses)
-		if routeErr != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: routeErr.Error(),
-					Type:    "invalid_request_error",
-					Code:    "unsupported_endpoint",
-				},
-			})
-			return
+		tempFlags := resolveRuleFlags(c, rule)
+		if ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
+			target, autoFallbackEnabled = s.resolveAutoTarget(tempFlags, provider, string(req.Model), scenarioType, IncomingAPIResponses)
+		} else {
+			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIResponses)
+			if routeErr != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: routeErr.Error(),
+						Type:    "invalid_request_error",
+						Code:    "unsupported_endpoint",
+					},
+				})
+				return
+			}
+			target = resolvedTarget
 		}
-		target = resolvedTarget
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -226,30 +233,40 @@ func (s *Server) ResponsesCreate(c *gin.Context, scenarioType typ.RuleScenario, 
 		return
 	}
 
+	// === Build transform-and-dispatch closure ===
 	// Resolve flags with scenario injection, consistent with the chat/v1/beta
 	// handlers (this also applies the custom User-Agent to the request context).
 	scenarioConfig := s.config.GetScenarioConfig(scenarioType)
-	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, target, provider)
-	reqCtx, err := s.transformOpenAIResponses(c, req, target, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Transform failed: " + err.Error(),
-				Type:    "invalid_request_error",
-			},
-		})
+	doTransformAndDispatch := func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+		ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIResponses, t, provider)
+		reqCtx, err := s.transformOpenAIResponses(c, req, t, provider, isStreaming, nil, scenarioType, maxAllowed, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Transform failed: " + err.Error(),
+					Type:    "invalid_request_error",
+				},
+			})
+			return nil, "", false
+		}
+		// Carry the response-shaping hints for downstream dispatch, matching the
+		// chat handler (consumed by shouldStripUsage on the conversion sub-paths).
+		reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
+		reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
+		served, servedModel := s.dispatchWithPriorityFailoverGated(c, rule, provider, string(req.Model),
+			func(p *typ.Provider, _ string) {
+				s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
+			}, gate)
+		return served, servedModel, true
+	}
+
+	if autoFallbackEnabled {
+		s.dispatchWithAutoFallback(c, provider, string(req.Model), target, doTransformAndDispatch)
 		return
 	}
-	// Carry the response-shaping hints for downstream dispatch, matching the
-	// chat handler (consumed by shouldStripUsage on the conversion sub-paths).
-	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
-	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
-	// Use unified dispatch with mid-request failover (non-streaming only).
-	s.dispatchWithPriorityFailover(c, rule, provider, string(req.Model),
-		func(p *typ.Provider, _ string) {
-			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
-		})
+	// === Normal (non-auto) path ===
+	doTransformAndDispatch(target, nil)
 }
 
 // convertToResponsesParams converts raw JSON to OpenAI SDK params format

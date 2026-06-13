@@ -27,18 +27,14 @@ const (
 //
 //  1. Rule flag (flags.OpenAIEndpointOverride). Overrides provider settings.
 //  2. provider.OpenAIEndpointMode:
-//     EndpointModeUnknown / zero value → Chat
 //     EndpointModeChat                 → Chat
 //     EndpointModeResponses            → Responses
 //     EndpointModeBoth                 → mirror incoming
+//     EndpointModeAuto / zero value    → mirror incoming (handler adds fallback)
 //
 // Rule override is honored unconditionally (per design intent). When an override
 // conflicts with the provider's declared mode, a warning is logged but the override
 // takes effect. This allows explicit routing control for debugging and special cases.
-//
-// Defaulting unknown providers to Chat (not "mirror incoming") is intentional:
-// most OpenAI-compatible vendors implement only /chat/completions. Providers
-// that genuinely support Responses must declare it via template or OAuth.
 //
 // When an incoming Responses request routes to Chat, Responses-only fields
 // (previous_response_id, include, background, truncation, reasoning) are
@@ -71,6 +67,8 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 
 	// Fall back to provider mode when no override specified
 	switch mode {
+	case ai.EndpointModeChat:
+		return protocol.TypeOpenAIChat, nil
 	case ai.EndpointModeResponses:
 		return protocol.TypeOpenAIResponses, nil
 	case ai.EndpointModeBoth:
@@ -78,7 +76,10 @@ func ResolveOpenAIEndpoint(provider *typ.Provider, flags typ.RuleFlags, incoming
 			return protocol.TypeOpenAIResponses, nil
 		}
 		return protocol.TypeOpenAIChat, nil
-	default: // EndpointModeChat / zero value
+	default: // EndpointModeAuto / zero value — handler manages cache + fallback
+		if incoming == IncomingAPIResponses {
+			return protocol.TypeOpenAIResponses, nil
+		}
 		return protocol.TypeOpenAIChat, nil
 	}
 }

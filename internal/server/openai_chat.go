@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/openai/openai-go/v3"
+	"github.com/tingly-dev/tingly-box/ai"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/packages/ssestream"
 	"github.com/openai/openai-go/v3/responses"
@@ -197,26 +198,30 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 	// === Determine target API type ===
 	apiStyle = provider.APIStyle
 	target := protocol.TypeOpenAIChat
+	autoFallbackEnabled := false
 	switch apiStyle {
 	case protocol.APIStyleAnthropic:
 		target = protocol.TypeAnthropicBeta
 	case protocol.APIStyleGoogle:
 		target = protocol.TypeGoogle
 	case protocol.APIStyleOpenAI:
-		// Need flags for endpoint resolution, but we'll re-resolve with scenario after target is determined
 		tempFlags := resolveRuleFlags(c, rule)
-		resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
-		if routeErr != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error: ErrorDetail{
-					Message: routeErr.Error(),
-					Type:    "invalid_request_error",
-					Code:    "unsupported_endpoint",
-				},
-			})
-			return
+		if ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
+			target, autoFallbackEnabled = s.resolveAutoTarget(tempFlags, provider, actualModel, scenarioType, IncomingAPIChat)
+		} else {
+			resolvedTarget, routeErr := ResolveOpenAIEndpoint(provider, tempFlags, IncomingAPIChat)
+			if routeErr != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Error: ErrorDetail{
+						Message: routeErr.Error(),
+						Type:    "invalid_request_error",
+						Code:    "unsupported_endpoint",
+					},
+				})
+				return
+			}
+			target = resolvedTarget
 		}
-		target = resolvedTarget
 	default:
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error: ErrorDetail{
@@ -227,32 +232,39 @@ func (s *Server) OpenAIChatCompletion(c *gin.Context, req protocol.OpenAIChatCom
 		return
 	}
 
-	// === Resolve flags with scenario injection ===
+	// === Build transform-and-dispatch closure ===
 	// (resolveRuleFlagsWithScenario also applies the custom User-Agent to the
 	// request context, so no separate call is needed here.)
-	ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, target, provider)
+	doTransformAndDispatch := func(t protocol.APIType, gate *firstChunkGate) (*typ.Provider, string, bool) {
+		ruleFlags := resolveRuleFlagsWithScenario(c, rule, scenarioType, scenarioConfig, protocol.TypeOpenAIChat, t, provider)
+		reqCtx, err := s.transformOpenAIChat(c, req, t, provider, isStreaming, nil, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error: ErrorDetail{
+					Message: "Transform failed: " + err.Error(),
+					Type:    "api_error",
+				},
+			})
+			return nil, "", false
+		}
+		reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
+		reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
+		reqCtx.RequestModel = actualModel
+		reqCtx.ResponseModel = responseModel
+		served, servedModel := s.dispatchWithPriorityFailoverGated(c, rule, provider, actualModel,
+			func(p *typ.Provider, _ string) {
+				s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
+			}, gate)
+		return served, servedModel, true
+	}
 
-	// === Transform via pipeline ===
-	reqCtx, err := s.transformOpenAIChat(c, req, target, provider, isStreaming, nil, scenarioType, rulePreBaseTransforms(ruleFlags), rulePreVendorTransforms(ruleFlags))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error: ErrorDetail{
-				Message: "Transform failed: " + err.Error(),
-				Type:    "api_error",
-			},
-		})
+	if autoFallbackEnabled {
+		s.dispatchWithAutoFallback(c, provider, actualModel, target, doTransformAndDispatch)
 		return
 	}
-	reqCtx.Extra["cursor_compat"] = ruleFlags.CursorCompat
-	reqCtx.Extra["skip_usage"] = ruleFlags.SkipUsage
 
-	// === Dispatch via transform chain ===
-	reqCtx.RequestModel = actualModel
-	reqCtx.ResponseModel = responseModel
-	s.dispatchWithPriorityFailover(c, rule, provider, actualModel,
-		func(p *typ.Provider, _ string) {
-			s.dispatchChainResult(c, reqCtx, rule, p, isStreaming, nil)
-		})
+	// === Normal (non-auto) path ===
+	doTransformAndDispatch(target, nil)
 }
 
 // nonstreamOpenAIChat handles non-streaming chat completion requests with MCP runtime support.

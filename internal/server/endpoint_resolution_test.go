@@ -9,7 +9,8 @@ import (
 )
 
 func TestResolveOpenAIEndpoint(t *testing.T) {
-	chatOnly := &typ.Provider{UUID: "p-chat"} // default mode = chat
+	chatOnly := &typ.Provider{UUID: "p-chat", OpenAIEndpointMode: ai.EndpointModeChat}
+	autoDefault := &typ.Provider{UUID: "p-default"} // zero value = auto
 	responsesOnly := &typ.Provider{UUID: "p-resp", OpenAIEndpointMode: ai.EndpointModeResponses}
 	both := &typ.Provider{UUID: "p-both", OpenAIEndpointMode: ai.EndpointModeBoth}
 
@@ -20,18 +21,32 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 		incoming IncomingAPIType
 		want     protocol.APIType
 	}{
-		// Default mode (chat) — provider ignores client's incoming API
+		// Explicit chat mode — forces chat regardless of incoming
 		{
-			name:     "default mode forces chat (chat incoming)",
+			name:     "chat mode forces chat (chat incoming)",
 			provider: chatOnly,
 			incoming: IncomingAPIChat,
 			want:     protocol.TypeOpenAIChat,
 		},
 		{
-			name:     "default mode forces chat (responses incoming, downgrade)",
+			name:     "chat mode forces chat (responses incoming, downgrade)",
 			provider: chatOnly,
 			incoming: IncomingAPIResponses,
 			want:     protocol.TypeOpenAIChat,
+		},
+
+		// Default (zero value) = auto — mirrors incoming
+		{
+			name:     "default mode mirrors chat",
+			provider: autoDefault,
+			incoming: IncomingAPIChat,
+			want:     protocol.TypeOpenAIChat,
+		},
+		{
+			name:     "default mode mirrors responses",
+			provider: autoDefault,
+			incoming: IncomingAPIResponses,
+			want:     protocol.TypeOpenAIResponses,
 		},
 
 		// Responses-only (Codex)
@@ -104,6 +119,20 @@ func TestResolveOpenAIEndpoint(t *testing.T) {
 			name:     "unknown flag value treated as no override",
 			provider: both,
 			flags:    typ.RuleFlags{OpenAIEndpointOverride: "bogus"},
+			incoming: IncomingAPIResponses,
+			want:     protocol.TypeOpenAIResponses,
+		},
+
+		// Explicit auto mode — same as zero value
+		{
+			name:     "explicit auto mode mirrors chat",
+			provider: &typ.Provider{UUID: "p-auto", OpenAIEndpointMode: ai.EndpointModeAuto},
+			incoming: IncomingAPIChat,
+			want:     protocol.TypeOpenAIChat,
+		},
+		{
+			name:     "explicit auto mode mirrors responses",
+			provider: &typ.Provider{UUID: "p-auto", OpenAIEndpointMode: ai.EndpointModeAuto},
 			incoming: IncomingAPIResponses,
 			want:     protocol.TypeOpenAIResponses,
 		},
