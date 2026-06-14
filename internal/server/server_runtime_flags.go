@@ -97,6 +97,14 @@ func (s *Server) mcpEnabled() bool {
 		s.config.GetScenarioFlag(typ.ScenarioClaudeCode, config.ExtensionMCP)
 }
 
+// autoEndpointEnabled checks if auto endpoint detection is enabled via scenario flag.
+func (s *Server) autoEndpointEnabled() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionAutoEndpoint)
+}
+
 // mcpStripDisabledToolsEnabled returns whether dangerous disabled MCP strip is enabled.
 func (s *Server) mcpStripDisabledToolsEnabled() bool {
 	if s.config == nil {

@@ -48,6 +48,13 @@ func (e *E2EService) SetEndpointCache(get EndpointCacheGetFn, set EndpointCacheS
 	e.endpointSet = set
 }
 
+func (e *E2EService) autoEndpointEnabled() bool {
+	if e.config == nil {
+		return false
+	}
+	return e.config.GetScenarioFlag(typ.ScenarioGlobal, config.ExtensionAutoEndpoint)
+}
+
 // Probe performs a non-streaming probe against the target described by req.
 func (e *E2EService) Probe(ctx context.Context, req *E2ERequest) (*E2EData, error) {
 	provider, model, probeHeaders, err := e.resolveTargetToProviderModel(ctx, req)
@@ -320,7 +327,7 @@ func (e *E2EService) ProbeProviderWithSDK(ctx context.Context, provider *typ.Pro
 		}
 		if isCodexOAuth(provider) {
 			result, err = probeOpenAIResponses(ctx, oc, model, message, mode)
-		} else if ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
+		} else if e.autoEndpointEnabled() && ai.IsAutoEndpointMode(provider.OpenAIEndpointMode) {
 			result, err = e.probeOpenAIAutoFallback(ctx, oc, provider, model, message, mode)
 		} else {
 			result, err = probeOpenAIChat(ctx, oc, model, message, mode)
