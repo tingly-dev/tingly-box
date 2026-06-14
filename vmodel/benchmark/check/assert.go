@@ -1,4 +1,4 @@
-package protocoltest
+package check
 
 import (
 	"fmt"

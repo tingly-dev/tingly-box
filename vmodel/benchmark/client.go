@@ -1,11 +1,24 @@
-// Package benchmark provides a load-testing client and an in-process server
-// factory for the virtualmodel HTTP service. The server side is a thin
-// factory over virtualmodel/virtualserver.Service so benchmarks reuse the
-// same vmodel registries as production code; the client side is a pooled
-// HTTP load generator that collects throughput / latency metrics.
+// Package benchmark is the vmodel benchmark: a shared, real-world mock-provider
+// foundation. It plays two complementary roles, and the word "benchmark" covers
+// both — keep them distinct:
 //
-// This package replaces the former pkg/benchmark, whose mock-server half
-// duplicated virtualserver and whose Model type duplicated vmodel.Model.
+//   - Load generator: BenchmarkClient / BenchmarkOptions / BenchmarkResult — a
+//     pooled HTTP load driver that collects throughput / latency metrics, plus
+//     LocalServer, a thin TCP load target over virtualserver.Service.
+//
+//   - Reference bench: Server (bench.go) — an observable mock-provider that
+//     wraps any inner provider handler with a request-capture / hit-count layer
+//     and offers two response strategies (NewProductionServer for real vmodel
+//     models, NewScenarioServer for fixture builders) over both in-process and
+//     real-TCP transports. The reusable check-logic and scenario fixtures live
+//     in the check/ and scenario/ sub-packages, consumed by protocoltest (and
+//     any other *test package or external Go project). See
+//     .design/vmodel-benchmark.md.
+//
+// Both roles reuse the same vmodel registries as production code, so fixtures
+// stay wire-format-correct. This package replaces the former pkg/benchmark,
+// whose mock-server half duplicated virtualserver and whose Model type
+// duplicated vmodel.Model.
 package benchmark
 
 import (

@@ -135,9 +135,12 @@ one shared vocabulary instead of re-deriving checks per package.
 
 ## Migration phases (foundation-first)
 
-1. **Phase 1 — foundation (this design).** Build `bench.go`, `capture.go`,
-   `check/`, `scenario/`; add tests; keep the load generator and example
-   untouched. Provide thin re-export aliases so existing imports keep compiling.
+1. **Phase 1 — foundation (✅ landed).** Built `bench.go`, `capture.go`,
+   `check/`, `scenario/` with tests; the load generator (`client.go`,
+   `LocalServer`) and examples are untouched. `protocoltest` now re-exports the
+   relocated `check`/`scenario` symbols via `aliases.go`, so its existing suite
+   doubles as the regression net for the elevated code. `servertest` is
+   unchanged.
 2. **Phase 2 — protocoltest (later).** `protocoltest.VirtualServer` becomes a
    thin wrapper over `bench.NewScenarioServer`; `Scenario`/`Assertion` re-export
    from `benchmark`. Parity by construction (same code, moved down).
