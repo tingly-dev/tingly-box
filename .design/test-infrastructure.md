@@ -65,3 +65,12 @@ Uses `//go:build e2e` tag for some tests. Not imported by any other package.
 | Test agent CLI integration | `protocoltest.AgentTestEnv` |
 | Run the full validation matrix from CLI | `cli/harness/` (imports `protocoltest`) |
 | Validate the gateway against real SDK clients (Go in-process, Python/Node subprocess) | `cli/harness matrix --client=...` — see "Client drivers" in [`harness-matrix.md`](./harness-matrix.md) |
+
+## Future direction
+
+The three mock layers above (`virtualserver`, `protocoltest.VirtualServer`,
+`servertest.MockProviderServer`) are being unified onto a single observable
+reference bench under `vmodel/benchmark` — shared transport, request capture,
+and a reusable check-logic layer (`check/`) with pluggable response generation.
+See [`vmodel-benchmark.md`](./vmodel-benchmark.md) for the design and migration
+phases. This table will be updated as Phases 2–3 land.
