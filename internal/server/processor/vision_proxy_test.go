@@ -8,6 +8,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -242,6 +244,57 @@ func openaiUserMessageWithImage(text, imageB64 string) openai.ChatCompletionMess
 	}
 }
 
+// responsesMessageItem builds an OpenAI Responses-API input item
+// (EasyInputMessageParam variant) with a text part and an optional image
+// part. Used to assemble multi-item fixtures for the historical-strip
+// tests on the Responses path.
+func responsesMessageItem(role responses.EasyInputMessageRole, text, imageB64 string) responses.ResponseInputItemUnionParam {
+	parts := responses.ResponseInputMessageContentListParam{
+		{OfInputText: &responses.ResponseInputTextParam{Text: text}},
+	}
+	if imageB64 != "" {
+		dataURL := "data:" + tinyPNGMediaType + ";base64," + imageB64
+		parts = append(parts, responses.ResponseInputContentUnionParam{
+			OfInputImage: &responses.ResponseInputImageParam{ImageURL: param.NewOpt(dataURL)},
+		})
+	}
+	return responses.ResponseInputItemUnionParam{
+		OfMessage: &responses.EasyInputMessageParam{
+			Role:    role,
+			Content: responses.EasyInputMessageContentUnionParam{OfInputItemContentList: parts},
+		},
+	}
+}
+
+// responsesInputMessageItem builds the alternate ResponseInputItemMessageParam
+// (`OfInputMessage`) variant — content list inline, no Easy wrapper. The
+// SDK uses this for system/developer/user messages that were already
+// serialised once.
+func responsesInputMessageItem(role, text, imageB64 string) responses.ResponseInputItemUnionParam {
+	parts := responses.ResponseInputMessageContentListParam{
+		{OfInputText: &responses.ResponseInputTextParam{Text: text}},
+	}
+	if imageB64 != "" {
+		dataURL := "data:" + tinyPNGMediaType + ";base64," + imageB64
+		parts = append(parts, responses.ResponseInputContentUnionParam{
+			OfInputImage: &responses.ResponseInputImageParam{ImageURL: param.NewOpt(dataURL)},
+		})
+	}
+	return responses.ResponseInputItemUnionParam{
+		OfInputMessage: &responses.ResponseInputItemMessageParam{
+			Role:    role,
+			Content: parts,
+		},
+	}
+}
+
+func responsesReqWithItems(items ...responses.ResponseInputItemUnionParam) *responses.ResponseNewParams {
+	return &responses.ResponseNewParams{
+		Model: "gpt-5",
+		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: items},
+	}
+}
+
 // countImages returns the number of remaining image blocks across all
 // supported request shapes; -1 for unsupported. Images inside tool_result
 // blocks count too — that path is part of the proxy contract.
@@ -294,8 +347,33 @@ func countImages(req any) int {
 			}
 		}
 		return n
+	case *responses.ResponseNewParams:
+		n := 0
+		for _, item := range r.Input.OfInputItemList {
+			n += countResponsesImagesInItem(item)
+		}
+		return n
 	}
 	return -1
+}
+
+func countResponsesImagesInItem(item responses.ResponseInputItemUnionParam) int {
+	n := 0
+	if item.OfMessage != nil {
+		for _, p := range item.OfMessage.Content.OfInputItemContentList {
+			if p.OfInputImage != nil {
+				n++
+			}
+		}
+	}
+	if item.OfInputMessage != nil {
+		for _, p := range item.OfInputMessage.Content {
+			if p.OfInputImage != nil {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 func collectText(req any) string {
@@ -339,6 +417,23 @@ func collectText(req any) string {
 			for _, p := range m.OfUser.Content.OfArrayOfContentParts {
 				if p.OfText != nil {
 					out += p.OfText.Text + "\n"
+				}
+			}
+		}
+	case *responses.ResponseNewParams:
+		for _, item := range r.Input.OfInputItemList {
+			if item.OfMessage != nil {
+				for _, p := range item.OfMessage.Content.OfInputItemContentList {
+					if p.OfInputText != nil {
+						out += p.OfInputText.Text + "\n"
+					}
+				}
+			}
+			if item.OfInputMessage != nil {
+				for _, p := range item.OfInputMessage.Content {
+					if p.OfInputText != nil {
+						out += p.OfInputText.Text + "\n"
+					}
 				}
 			}
 		}
@@ -534,4 +629,97 @@ func TestVisionProxy_NoUsableService_StripImagesAndReturnNil(t *testing.T) {
 	require.NoError(t, p.Process(pctx), "must not error when no usable service")
 	require.Equal(t, 0, fake.callCount(), "no service → no vision call")
 	require.Equal(t, 0, countImages(req), "image stripped so downstream still works")
+}
+
+// ---------------------------------------------------------------------------
+// Tests — OpenAI Responses API path
+// ---------------------------------------------------------------------------
+
+// TestVisionProxy_Responses_Success covers the happy path: a single input
+// item with an image on the latest turn is replaced by described text.
+// This is the regression test for the DeepSeek `unknown variant
+// 'image_url', expected 'text'` failure originating from /v1/responses.
+func TestVisionProxy_Responses_Success(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("a yellow rubber duck")
+	p := mkProcessor(t, fake, prov)
+
+	req := responsesReqWithItems(
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "what is this?", tinyPNGBase64),
+	)
+	pctx := mkPctx(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	require.Equal(t, 1, fake.callCount())
+	require.Equal(t, 0, countImages(req), "no input_image parts remain")
+	require.Contains(t, collectText(req), "a yellow rubber duck")
+}
+
+// TestVisionProxy_Responses_InputMessageVariant verifies the second
+// content-carrying union arm (ResponseInputItemMessageParam, via
+// OfInputMessage) is also walked.
+func TestVisionProxy_Responses_InputMessageVariant(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("a chart with three bars")
+	p := mkProcessor(t, fake, prov)
+
+	req := responsesReqWithItems(
+		responsesInputMessageItem("user", "interpret this chart", tinyPNGBase64),
+	)
+	pctx := mkPctx(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	require.Equal(t, 0, countImages(req))
+	require.Contains(t, collectText(req), "a chart with three bars")
+}
+
+// TestVisionProxy_Responses_HistoricalImagesStripped enforces the same
+// "describe latest, marker for history" split that the Anthropic /
+// Chat paths implement. Without this, a multi-turn Responses request
+// would re-describe every prior image — prohibitively expensive.
+func TestVisionProxy_Responses_HistoricalImagesStripped(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("latest description")
+	p := mkProcessor(t, fake, prov)
+
+	req := responsesReqWithItems(
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "earlier turn", tinyPNGBase64),
+		responsesMessageItem(responses.EasyInputMessageRoleAssistant, "previous reply", ""),
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "current question", tinyPNGBase64),
+	)
+	pctx := mkPctx(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	require.Equal(t, 1, fake.callCount(),
+		"only the LAST item's image triggers a describe call; historical images use the marker")
+	require.Equal(t, 0, countImages(req))
+
+	text := collectText(req)
+	require.Contains(t, text, "latest description")
+	require.Contains(t, text, "omitted from history")
+}
+
+// TestVisionProxy_Responses_MarshalNoImageURL is a serialization-level
+// regression: even if a new SDK arm is added that we forgot to walk,
+// the marshalled JSON must contain neither `"input_image"` nor
+// `"image_url"` after the proxy runs. This is the surface that DeepSeek
+// actually validates against.
+func TestVisionProxy_Responses_MarshalNoImageURL(t *testing.T) {
+	prov := mkProvider("openai-vision")
+	fake := newFakeVisionClient("ok")
+	p := mkProcessor(t, fake, prov)
+
+	req := responsesReqWithItems(
+		responsesMessageItem(responses.EasyInputMessageRoleUser, "older", tinyPNGBase64),
+		responsesInputMessageItem("user", "newer", tinyPNGBase64),
+	)
+	pctx := mkPctx(req, mkService(prov.UUID, true))
+
+	require.NoError(t, p.Process(pctx))
+	require.Equal(t, 0, countImages(req))
+
+	body, err := req.MarshalJSON()
+	require.NoError(t, err)
+	require.NotContains(t, string(body), `"input_image"`)
+	require.NotContains(t, string(body), `"image_url"`)
 }

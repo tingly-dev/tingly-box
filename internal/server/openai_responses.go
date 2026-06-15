@@ -108,7 +108,7 @@ func (s *Server) HandleResponsesCreate(c *gin.Context) {
 		return
 	}
 
-	s.applyVisionProxy(c, scenarioType, rule, req)
+	s.applyVisionProxy(c, scenarioType, rule, &req.ResponseNewParams)
 
 	// Select service using routing pipeline
 	provider, selectedService, err = s.routingSelector.SelectService(c, scenarioType, rule, req)

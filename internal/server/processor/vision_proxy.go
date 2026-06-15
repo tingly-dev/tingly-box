@@ -7,6 +7,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tingly-dev/tingly-box/internal/loadbalance"
@@ -80,6 +81,8 @@ func (p *VisionProxyProcessor) Process(pctx *smartrouting.ProcessorContext) erro
 		p.processV1(ctx, req, usable)
 	case *openai.ChatCompletionNewParams:
 		p.processOpenAI(ctx, req, usable)
+	case *responses.ResponseNewParams:
+		p.processResponses(ctx, req, usable)
 	default:
 		// Unknown request shape — leave it alone.
 	}
@@ -279,6 +282,65 @@ func extractBetaImageSource(img *anthropic.BetaImageBlockParam) (mediaType, b64,
 		return "", "", img.Source.OfURL.URL
 	}
 	return
+}
+
+// processResponses mirrors processBeta/processV1 for the OpenAI Responses
+// API: it walks every input item's content list, replacing each
+// `input_image` part with a text part. The latest item gets a real
+// description via the vision upstream; earlier items get the fixed
+// historical marker. Same rationale as processBeta — historical images
+// are too costly to describe and rarely needed for the current turn.
+//
+// Shapes handled: ResponseInputItemUnionParam.OfMessage (EasyInputMessageParam,
+// with EasyInputMessageContentUnionParam.OfInputItemContentList) and
+// ResponseInputItemUnionParam.OfInputMessage (ResponseInputItemMessageParam,
+// content list inline). Tool/function/output items don't carry
+// input_image parts in the current SDK union and are left alone.
+func (p *VisionProxyProcessor) processResponses(ctx context.Context, req *responses.ResponseNewParams, usable *loadbalance.Service) {
+	items := req.Input.OfInputItemList
+	if len(items) == 0 {
+		return
+	}
+	lastIdx := len(items) - 1
+	for mi := range items {
+		p.walkResponsesItem(ctx, &items[mi], usable, mi == lastIdx)
+	}
+}
+
+func (p *VisionProxyProcessor) walkResponsesItem(ctx context.Context, item *responses.ResponseInputItemUnionParam, usable *loadbalance.Service, isLast bool) {
+	if item.OfMessage != nil {
+		p.walkResponsesContentList(ctx, item.OfMessage.Content.OfInputItemContentList, usable, isLast)
+		return
+	}
+	if item.OfInputMessage != nil {
+		p.walkResponsesContentList(ctx, item.OfInputMessage.Content, usable, isLast)
+		return
+	}
+}
+
+func (p *VisionProxyProcessor) walkResponsesContentList(ctx context.Context, list responses.ResponseInputMessageContentListParam, usable *loadbalance.Service, isLast bool) {
+	for i := range list {
+		img := list[i].OfInputImage
+		if img == nil {
+			continue
+		}
+		text := p.responsesReplacementText(ctx, img, usable, isLast)
+		list[i] = responses.ResponseInputContentUnionParam{
+			OfInputText: &responses.ResponseInputTextParam{Text: text},
+		}
+	}
+}
+
+func (p *VisionProxyProcessor) responsesReplacementText(ctx context.Context, img *responses.ResponseInputImageParam, usable *loadbalance.Service, isLast bool) string {
+	if !isLast {
+		return imageHistoricalText
+	}
+	url := ""
+	if img.ImageURL.Valid() {
+		url = img.ImageURL.Value
+	}
+	mediaType, b64, remoteURL := request.ParseImageURLToAnthropicSource(url)
+	return p.describe(ctx, usable, mediaType, b64, remoteURL)
 }
 
 func extractV1ImageSource(img *anthropic.ImageBlockParam) (mediaType, b64, remoteURL string) {
