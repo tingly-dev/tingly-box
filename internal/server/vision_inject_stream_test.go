@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 )
 
 // decodeSSEData pulls every `data: {json}` payload from an SSE body and
@@ -132,6 +133,56 @@ func TestVisionStreamInject_Anthropic_SkipsNonText(t *testing.T) {
 	require.NoError(t, start.UnmarshalJSON([]byte(`{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`)))
 	require.NoError(t, hook(&start))
 	require.Empty(t, rec.Body.String(), "content_block_start must not trigger injection")
+}
+
+// TestVisionStreamInject_Responses_PrependsTextDelta covers the
+// converter-based OpenAI Responses path: events flow as concrete
+// wire.ResponsesEvent value types. Mutation isn't possible, but the
+// hook can write a synthetic response.output_text.delta bound to the
+// same (item_id, output_index, content_index) as the model's first
+// delta. The client accumulates deltas in the same content part →
+// description text lands ahead of the model text.
+func TestVisionStreamInject_Responses_PrependsTextDelta(t *testing.T) {
+	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	hc := protocol.NewHandleContext(c, "m")
+	hook := visionStreamInjectFactory(hc)
+	require.NotNil(t, hook)
+
+	real := wire.ResponsesOutputTextDeltaEvent{
+		Type:           "response.output_text.delta",
+		SequenceNumber: 7,
+		ItemID:         "item-x",
+		OutputIndex:    0,
+		ContentIndex:   0,
+		Delta:          "It's",
+	}
+	require.NoError(t, hook(real))
+	require.NoError(t, hook(real)) // second call: no re-injection
+
+	body := rec.Body.String()
+	require.Contains(t, body, "event: response.output_text.delta")
+	events := decodeSSEData(t, body)
+	require.Len(t, events, 1, "exactly one synthetic event emitted")
+	require.Equal(t, "response.output_text.delta", events[0]["type"])
+	require.Equal(t, "item-x", events[0]["item_id"])
+	require.EqualValues(t, 0, events[0]["output_index"])
+	require.EqualValues(t, 0, events[0]["content_index"])
+	require.Contains(t, events[0]["delta"], "<image-description>a yellow duck</image-description>")
+}
+
+// TestVisionStreamInject_Responses_SkipsNonText ensures the hook ignores
+// content_part.added / output_item.added (which arrive BEFORE the first
+// delta) — only the text-delta event has the framing needed to land
+// the synthetic delta correctly.
+func TestVisionStreamInject_Responses_SkipsNonText(t *testing.T) {
+	c, rec := newInjectGinCtx([]string{wrappedDuck})
+	hc := protocol.NewHandleContext(c, "m")
+	hook := visionStreamInjectFactory(hc)
+
+	require.NoError(t, hook(wire.ResponsesContentPartAddedEvent{
+		Type: "response.content_part.added", ItemID: "i", ContentIndex: 0,
+	}))
+	require.Empty(t, rec.Body.String(), "content_part.added must not trigger injection")
 }
 
 // TestVisionStreamInject_NoDescriptions_NoHook confirms zero overhead when

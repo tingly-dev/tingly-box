@@ -92,6 +92,13 @@ func (s *Server) UseAIEndpoints() {
 }
 
 func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
+	// Vision-proxy description injection for non-streaming responses.
+	// Streaming SSE is handled by the protocol-level OnStreamEvent hook
+	// (registered in server.go); this middleware short-circuits on
+	// text/event-stream Content-Type so a single group.Use covers both.
+	// See .design/vision-proxy-inject-description.md.
+	group.Use(VisionInjectNonStream())
+
 	// Chat completions endpoint (OpenAI compatible)
 	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
 
@@ -118,6 +125,8 @@ func (s *Server) SetupMixinEndpoints(group *gin.RouterGroup) {
 }
 
 func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
+	group.Use(VisionInjectNonStream())
+
 	// Chat completions endpoint (OpenAI compatible)
 	group.POST("/chat/completions", s.getModelAuthMiddleware(), s.HandleOpenAIChatCompletions)
 	// Models endpoint (OpenAI compatible)
@@ -129,6 +138,8 @@ func (s *Server) SetupOpenAIEndpoints(group *gin.RouterGroup) {
 }
 
 func (s *Server) SetupAnthropicEndpoints(group *gin.RouterGroup) {
+	group.Use(VisionInjectNonStream())
+
 	// Chat completions endpoint (Anthropic compatible)
 	group.POST("/messages", s.getModelAuthMiddleware(), s.HandleAnthropicMessages)
 	// Count tokens endpoint (Anthropic compatible)

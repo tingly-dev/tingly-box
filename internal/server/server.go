@@ -24,6 +24,7 @@ import (
 	mcpruntime "github.com/tingly-dev/tingly-box/internal/mcp/runtime"
 	"github.com/tingly-dev/tingly-box/internal/obs"
 	"github.com/tingly-dev/tingly-box/internal/probe"
+	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/server/advisortool"
 	"github.com/tingly-dev/tingly-box/internal/server/background"
 	"github.com/tingly-dev/tingly-box/internal/server/config"
@@ -404,6 +405,15 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 	// Register op-level processors (vision proxy, etc.) into the smart-routing
 	// registry. Idempotent — safe across config reloads.
 	server.visionProxyProcessor = processor.RegisterAll(server.clientPool, server.config, logrus.StandardLogger())
+
+	// Auto-attach the vision-proxy description injector to every streaming
+	// response built via protocol.NewHandleContext. When a request carries
+	// vision-proxy descriptions, the factory returns a hook that prepends a
+	// synthetic description event ahead of the model's first text — one
+	// register call covers OpenAI Chat / Responses + Anthropic V1 / Beta.
+	// See .design/vision-proxy-inject-description.md and
+	// internal/server/vision_inject_stream.go.
+	protocol.RegisterDefaultStreamEventHookFactory(visionStreamInjectFactory)
 
 	// Start affinity store background GC
 	affinityStore.StartGC()

@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go/v3"
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
+	"github.com/tingly-dev/tingly-box/internal/protocol/wire"
 	"github.com/tingly-dev/tingly-box/internal/server/processor"
 )
 
@@ -58,6 +59,14 @@ func visionStreamInjectFactory(hc *protocol.HandleContext) func(event interface{
 				writeSyntheticAnthropicText(hc, idx, prefix)
 				injected = true
 			}
+		case wire.ResponsesOutputTextDeltaEvent:
+			// Converter-based paths (OpenAI Responses) deliver concrete
+			// wire-event values rather than a single union. The text-delta
+			// arm carries item_id / output_index / content_index, the
+			// minimum framing needed to land a synthetic delta in the
+			// same content part the model is about to fill.
+			writeSyntheticResponsesText(hc, ev, prefix)
+			injected = true
 		}
 		return nil
 	}
@@ -141,4 +150,28 @@ func writeSyntheticAnthropicText(hc *protocol.HandleContext, index int, prefix s
 		return
 	}
 	hc.GinContext.Writer.WriteString(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", data))
+}
+
+// writeSyntheticResponsesText emits one extra response.output_text.delta
+// event that lands in the same content part the model's first text was
+// about to fill. The triple (item_id, output_index, content_index) is
+// what binds the delta to a specific content part; the sequence_number
+// echoes the real event's so clients that expect monotonic numbering
+// see a stable progression. The synthetic event runs BEFORE the model's
+// real delta (hooks fire before handleFunc) so the prefix appears at
+// the start of the assembled text.
+func writeSyntheticResponsesText(hc *protocol.HandleContext, real wire.ResponsesOutputTextDeltaEvent, prefix string) {
+	synthetic := wire.ResponsesOutputTextDeltaEvent{
+		Type:           "response.output_text.delta",
+		SequenceNumber: real.SequenceNumber,
+		ItemID:         real.ItemID,
+		OutputIndex:    real.OutputIndex,
+		ContentIndex:   real.ContentIndex,
+		Delta:          prefix,
+	}
+	data, err := json.Marshal(synthetic)
+	if err != nil {
+		return
+	}
+	hc.GinContext.Writer.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", synthetic.Type, data))
 }
