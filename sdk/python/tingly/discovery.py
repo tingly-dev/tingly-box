@@ -33,24 +33,20 @@ class Session:
 
 
 def probe_version(base_url: str, timeout: float = 5.0) -> Optional[str]:
-    """Return the gateway version if reachable, else ``None``."""
-    url = base_url.rstrip("/") + "/api/v1/info/version"
+    """Return a liveness marker if the gateway is reachable, else ``None``.
+
+    Uses the unauthenticated ``/api/v1/info/health`` endpoint (the version
+    endpoint requires the admin token, so it cannot be used for discovery).
+    Returns the string ``"ok"`` when healthy — callers only check for truthiness.
+    """
+    url = base_url.rstrip("/") + "/api/v1/info/health"
     try:
         resp = httpx.get(url, timeout=timeout)
     except httpx.HTTPError:
         return None
     if resp.status_code != 200:
         return None
-    try:
-        data = resp.json()
-    except ValueError:
-        return None
-    # tolerate both {version: ...} and {data: {version: ...}}
-    return (
-        data.get("version")
-        or (data.get("data") or {}).get("version")
-        or "unknown"
-    )
+    return "ok"
 
 
 def create_session(
