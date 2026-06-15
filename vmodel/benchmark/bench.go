@@ -37,6 +37,7 @@ import (
 type Server struct {
 	handler   http.Handler
 	rec       *recorder
+	svc       *virtualserver.Service                     // non-nil only for production servers
 	scenarios *vmodel.GenericRegistry[scenario.Scenario] // non-nil only for scenario servers
 
 	ts      *httptest.Server
@@ -57,6 +58,19 @@ func NewServer(inner http.Handler) *Server {
 // responses are wire-format-correct. Use this for servertest, load tests, and
 // external projects that want a realistic provider.
 func NewProductionServer() *Server {
+	router, svc := productionRouter()
+	s := NewServer(router)
+	s.svc = svc
+	return s
+}
+
+// productionRouter builds a gin engine serving the production
+// virtualserver.Service (the same default vmodel registries as /virtual/v1/*)
+// under /v1, /openai/v1, and /anthropic/v1, and returns the engine plus the
+// service so callers can register extra models. Shared by NewProductionServer
+// (which wraps it with capture) and LocalServer (the capture-free load target),
+// so the route wiring lives in exactly one place.
+func productionRouter() (*gin.Engine, *virtualserver.Service) {
 	svc := virtualserver.NewService()
 
 	gin.SetMode(gin.ReleaseMode)
@@ -65,8 +79,13 @@ func NewProductionServer() *Server {
 	for _, prefix := range []string{"/v1", "/openai/v1", "/anthropic/v1"} {
 		svc.SetupRoutes(router.Group(prefix))
 	}
-	return NewServer(router)
+	return router, svc
 }
+
+// Service returns the underlying virtualserver.Service for a production server
+// (so callers can register additional virtual models), or nil for scenario /
+// arbitrary-handler servers.
+func (s *Server) Service() *virtualserver.Service { return s.svc }
 
 // NewScenarioServer builds a Server whose inner handler serves registered
 // scenario fixtures (scenario.MockResponseBuilder) across all four provider

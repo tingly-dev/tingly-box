@@ -9,6 +9,7 @@ import (
 
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 	"github.com/tingly-dev/tingly-box/internal/protocol/sse"
+	"github.com/tingly-dev/tingly-box/vmodel/benchmark/check"
 )
 
 // ParsedResponse is the result of a request sent to a virtual server.
@@ -19,6 +20,32 @@ type ParsedResponse struct {
 	RawBody      []byte
 
 	sse.ParsedResult
+}
+
+// ToRoundTrip adapts a ParsedResponse into a check.RoundTripResult so the
+// reusable assertion library (vmodel/benchmark/check) can run against it. This
+// is the bridge that lets any consumer — protocoltest, the benchmark, or an
+// external Go project — send with this client and assert with check, without
+// hand-rolling the conversion.
+func (p *ParsedResponse) ToRoundTrip() *check.RoundTripResult {
+	r := &check.RoundTripResult{
+		IsStreaming:     p.IsStreaming,
+		HTTPStatus:      p.HTTPStatus,
+		RawBody:         p.RawBody,
+		StreamEvents:    p.StreamEvents,
+		Content:         p.Content,
+		Role:            p.Role,
+		Model:           p.Model,
+		FinishReason:    p.FinishReason,
+		ThinkingContent: p.ThinkingContent,
+	}
+	for _, tc := range p.ToolCalls {
+		r.ToolCalls = append(r.ToolCalls, check.ToolCallResult{ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments})
+	}
+	if p.Usage != nil {
+		r.Usage = &check.TokenUsage{InputTokens: p.Usage.InputTokens, OutputTokens: p.Usage.OutputTokens}
+	}
+	return r
 }
 
 // Client sends provider-native HTTP requests for testing vmodel endpoints.
@@ -93,7 +120,7 @@ func (c *Client) DoRequest(t *testing.T, method, url string, body interface{}, s
 	defer resp.Body.Close()
 
 	result := &ParsedResponse{
-		HTTPStatus: resp.StatusCode,
+		HTTPStatus:  resp.StatusCode,
 		IsStreaming: streaming,
 	}
 

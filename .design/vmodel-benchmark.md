@@ -126,12 +126,26 @@ one shared vocabulary instead of re-deriving checks per package.
 
 - **Primary — in-process Go import.** An external test suite imports
   `vmodel/benchmark` (+ `check`, `scenario`), spins a `Server` with
-  `InProcess()`, points its client at `Server.URL()`, and asserts with `check`.
-  This is exactly how `protocoltest` uses `VirtualServer` today, generalized.
-- **Secondary — simple runnable server.** The existing
-  `vmodel/benchmark/examples/server` stays as the canonical example: a `main`
-  that calls `Listen(addr)` and serves the production responder over loopback for
-  non-Go drivers. No new CLI surface beyond this example.
+  `InProcess()`, sends with `vmodeltest.Client`, and asserts with `check`. The
+  bridge between the two is `(*vmodeltest.ParsedResponse).ToRoundTrip()`, which
+  produces the `check.RoundTripResult` the assertion library consumes — so the
+  reusable check layer ships with its *producer*, not just the assertions. This
+  is exactly how `protocoltest` uses `VirtualServer` today, generalized.
+- **Secondary — simple runnable server.** `vmodel/benchmark/examples/server` is
+  the canonical example: a `main` that calls `NewProductionServer().Listen(addr)`
+  and serves the production responder (real vmodel models) over loopback for
+  non-Go drivers — i.e. it demonstrates the foundation itself. No new CLI surface
+  beyond this example.
+
+### Two production-backed servers, one router
+
+`NewProductionServer()` (observable: capture + endpoint hits) and `LocalServer`
+(the capture-free load target used by the load generator) both serve the same
+`virtualserver.Service` and share their route wiring via the package-private
+`productionRouter()` helper — so there is one place that mounts
+`/v1`,`/openai/v1`,`/anthropic/v1`. `LocalServer` deliberately omits the capture
+middleware to keep the load hot-path overhead-free; `Server.Service()` exposes
+the underlying service so production-server callers can register extra models.
 
 ## Migration phases (foundation-first)
 
