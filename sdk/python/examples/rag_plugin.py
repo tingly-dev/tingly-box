@@ -2,7 +2,7 @@
 
 Run it:
 
-    pip install -e ".[all]"          # from sdk/python
+    pip install -e .                 # from sdk/python
     python examples/rag_plugin.py    # serves on http://127.0.0.1:8765/v1
 
 Then wire it into tb in one step (creates the provider + a rule) so any client

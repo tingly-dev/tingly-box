@@ -17,7 +17,7 @@ def build_anthropic(base_url: str, token: str, timeout: float) -> Any:
     except ImportError as exc:  # pragma: no cover - import guard
         raise ImportError(
             "The Anthropic transport requires the `anthropic` package. "
-            "Install it with `pip install tingly[anthropic]`."
+            "Reinstall tingly (it ships with anthropic)."
         ) from exc
 
     return anthropic.Anthropic(
@@ -33,7 +33,7 @@ def build_async_anthropic(base_url: str, token: str, timeout: float) -> Any:
     except ImportError as exc:  # pragma: no cover - import guard
         raise ImportError(
             "The Anthropic transport requires the `anthropic` package. "
-            "Install it with `pip install tingly[anthropic]`."
+            "Reinstall tingly (it ships with anthropic)."
         ) from exc
 
     return anthropic.AsyncAnthropic(

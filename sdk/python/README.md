@@ -7,9 +7,11 @@ logging. You write the idea; the box handles the plumbing.
 ## Install
 
 ```bash
-pip install tingly            # core
-pip install "tingly[all]"     # + openai and anthropic SDKs
+pip install tingly
 ```
+
+Ships with the `openai` and `anthropic` SDKs so `tb.openai` / `tb.anthropic`
+give you full fine-grained control out of the box.
 
 ## Experiment ASAP
 

@@ -18,7 +18,7 @@ def build_openai(base_url: str, token: str, timeout: float) -> Any:
     except ImportError as exc:  # pragma: no cover - import guard
         raise ImportError(
             "The OpenAI transport requires the `openai` package. "
-            "Install it with `pip install tingly[openai]`."
+            "Reinstall tingly (it ships with openai)."
         ) from exc
 
     return openai.OpenAI(
@@ -34,7 +34,7 @@ def build_async_openai(base_url: str, token: str, timeout: float) -> Any:
     except ImportError as exc:  # pragma: no cover - import guard
         raise ImportError(
             "The OpenAI transport requires the `openai` package. "
-            "Install it with `pip install tingly[openai]`."
+            "Reinstall tingly (it ships with openai)."
         ) from exc
 
     return openai.AsyncOpenAI(
