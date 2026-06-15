@@ -1,220 +1,240 @@
 # Vision proxy: inject image descriptions into model response
 
-**Status**: Proposed
+**Status**: Proposed — revised
 **Date**: 2026-06-15
 **Branch**: `claude/vision-proxy-inject-description`
-**Supersedes**: nothing — extends behaviour defined in `.design/vision-proxy-scenario.md` and `.design/vision-proxy-rule.md`.
+**Supersedes**: original revision (commit `379935d`) — replaced after a hook-feasibility audit.
 
 ---
 
 ## Problem
 
-Today's vision proxy replaces image content parts in the **forwarded request** with a wrapper text containing the vision-upstream description. The replacement text is only ever seen by the downstream text-only model; the client never receives it. Consequences:
+Today's vision proxy replaces image content parts in the **forwarded request** with a wrapper text containing the vision-upstream description. The client never sees this text. Consequences:
 
 1. The description never lands in the conversation transcript on the client side.
-2. On the next turn, the client re-sends the original `image_url` in history (because it never knew the proxy transformed anything). The historical-strip path replaces those with a fixed marker — **all prior descriptions are lost forever**.
-3. Even ignoring cache concerns, future turns lose any ability to reason about previous images: the model has no access to descriptions it (or a sibling turn) saw a moment ago.
+2. On the next turn, the client re-sends the original `image_url` in history; historical-strip replaces it with a fixed marker — **all prior descriptions are lost forever**.
+3. Even ignoring cache concerns, future turns lose the ability to reason about previous images.
 
-User intent: preserve the description by **emitting it as part of the model's response** so the assistant transcript naturally carries the description. Subsequent turns sent by the client will then include the description text in the assistant message history, and a text-only model can reason about prior images by reading these descriptions.
+Goal: preserve descriptions by **emitting them as part of the model's response** so the assistant transcript carries them naturally into subsequent turns.
 
 ---
 
-## Design decisions (locked in with the user)
+## Design decisions (confirmed with user)
 
-1. **Approach** — inject description text into the model's response (not metadata, not prompt-shaping).
-2. **Wrapper format** — `<image-description>…</image-description>`. Both the request-side replacement *and* the response-side injection use the same wrapper, so request and response are symmetric and identifiable by any rendering layer.
-3. **Position** — prepended to the first text-bearing chunk / first text block of the model response. One injection per request, before any model output.
-4. **Multi-image** — each description is wrapped in its own pair of tags. Tags are separated by `\n` so each description is its own line; the whole block is bracketed by `\n\n` against the model's actual output to leave a clean visual break:
-   ```
-   <image-description>desc 1</image-description>
-   <image-description>desc 2</image-description>
-   
-   ...real model output starts here...
-   ```
-5. **Transport scope** — all four: OpenAI Chat, OpenAI Responses, Anthropic Messages V1, Anthropic Messages Beta. Both streaming and non-streaming for each.
+1. **Approach** — inject description text into the model's response.
+2. **Wrapper** — `<image-description>…</image-description>`, used by both the request-side replacement *and* the response-side injection (symmetric, greppable).
+3. **Position** — prepended before the first valid text content of the model response, with surrounding `\n`s for visual separation.
+4. **Multi-image** — each description wrapped in its own pair of tags.
+5. **Scope** — all four transports (OpenAI Chat, OpenAI Responses, Anthropic V1, Anthropic Beta), both streaming and non-streaming.
+
+---
+
+## Architectural pivot: response-writer middleware instead of per-handler patches
+
+The first revision proposed eight per-handler injection points (4 transports × 2 modes). User feedback: too invasive on the per-transport handlers — *"more elegant via a hook?"*.
+
+### What the codebase actually offers (hook audit, ranked)
+
+| Mechanism | Where | Read or Mutate? | Transport scope | Verdict |
+|---|---|---|---|---|
+| `HandleContext.WithOnStreamEvent` | `internal/protocol/context.go:92-97` | Read-only by convention (`func(interface{}) error`, no return-event channel). Mutation works only if event is an addressable pointer — implicit and brittle. | Streaming, all four transports | Not safe for mutation. Use rejected. |
+| `responseBodyWriter` (gin.ResponseWriter wrapper) | `internal/server/middleware/utils.go:10-18` | Mutates write stream (today only tees for logging, but the wrapper shape is exactly what we want). | All responses, all transports, all routes | **Recommended.** Centralises the intrusion to one place. |
+| `protocol/stream/*MCPHooks.OnToolCallsFinal` | `internal/protocol/stream/{anthropic,openai}_to_*.go` | Mutate, but scoped to tool calls only. | Per-format | Not relevant. |
+| Smart-routing `OpProcessor` (where vision proxy lives today) | `internal/smart_routing/processor.go:10-65` | Request-only — `ProcessorContext` has no `Response` field. | Request-only | Not applicable. |
+| Guardrails non-stream response funcs | `internal/server/guardrails_runtime.go:361-407` | Mutate non-stream response after assembly. | Non-stream only, per-format, called from `protocol_dispatch.go` | Per-format wiring — not the central chokepoint. |
+
+### Chosen approach: an injecting `gin.ResponseWriter` wrapper, installed once per route
+
+A route-level middleware wraps `c.Writer` with a small, transport-aware injector. Wrappers are installed at the existing route registration sites; handlers themselves are untouched.
+
+```text
+                      ┌──────────────────────────────────────┐
+                      │ Server.RegisterRoutes()              │
+                      │                                      │
+                      │  router.POST("/v1/chat/completions", │
+                      │      VisionInject(openaiChatHook),   │  ← one line per route
+                      │      s.HandleOpenAIChat)             │
+                      │  router.POST("/v1/responses", ...)   │
+                      │  router.POST("/v1/messages", ...)    │
+                      │  router.POST("/v1/messages/beta",...)│
+                      └──────────────────────────────────────┘
+                                       │
+                                       ▼
+                    ┌────────────────────────────────────────┐
+                    │ VisionInject middleware                │
+                    │                                        │
+                    │  if no descriptions on c → c.Next()    │
+                    │  else c.Writer = &injectingWriter{...} │
+                    │                                        │
+                    │  c.Next() — handler runs, writes via   │
+                    │  wrapped writer; first text payload    │
+                    │  gets prefix prepended.                │
+                    └────────────────────────────────────────┘
+                                       │
+                                       ▼
+                    ┌────────────────────────────────────────┐
+                    │ injectingWriter.Write(b)               │
+                    │                                        │
+                    │  if injected → forward(b)              │
+                    │  else        → hook(b) → ok?           │
+                    │                  yes  → forward(b')    │
+                    │                  no   → forward(b)     │
+                    └────────────────────────────────────────┘
+```
+
+`hook(b []byte) (out []byte, injected bool)` is the only per-transport piece. It receives a write payload — for SSE that's `event: ...\ndata: {...}\n\n`; for non-stream that's the full JSON body — and returns the same bytes with the prefix spliced into the first text payload (using `tidwall/sjson`).
+
+### Why this beats eight inline patches
+
+| Per-handler patches (v1)                          | Writer middleware (v2)                                      |
+|---------------------------------------------------|-------------------------------------------------------------|
+| 8 separate `find first text and prepend` callsites| 4 small `hook` functions, one per transport                 |
+| Handler logic interleaved with injection logic    | Handlers untouched; injection lives in `middleware/`        |
+| Each retry path needs its own clearing of state   | One `injected bool` per wrapped writer, reset by middleware |
+| Hard to disable globally (no opt-out)             | Middleware short-circuits via context flag if no descriptions present |
+
+### Why not pure gin-layer middleware with no per-transport hook?
+
+A truly transport-agnostic wrapper would need to recognise "this slice of bytes is the first model-text payload" without knowing the envelope. SSE/JSON shapes differ enough that one parser doesn't work. The per-transport `hook` function is the irreducible complexity; it just needs **one** owner (the middleware), not eight.
 
 ---
 
 ## Architecture
 
-Two layers:
+### A. Capture (request side)
 
-### A. Capture (request side, already mostly in place)
+Identical to v1 — collect descriptions during the existing vision-proxy pass.
 
-The vision-proxy processor already calls the upstream and gets back a description string in `describe()` (`internal/server/processor/vision_proxy.go:113-135`). Today the string is only used as the replacement text for the request. New: it also needs to be **collected** so the response layer can read it.
+1. `internal/server/processor/vision_proxy.go`
+   - Add `DescriptionCollector` (a `[]string` with `Append` / `Snapshot`). Constructed by the caller, attached to `ProcessorContext`.
+   - `describe()` calls `pctx.Descriptions.Append(wrapped)` on every successful describe AND every fail-strip.
+   - Update wrapper strings:
+     - success: `"\n<image-description>" + escape(desc) + "</image-description>\n"`
+     - unavailable: `"\n<image-description>(description unavailable)</image-description>\n"`
+     - historical: `"\n<image-description>(omitted from history)</image-description>\n"`
+   - Escape `<`, `>`, `&` in description bodies.
 
-- Add a per-request **`DescriptionCollector`** carried on the `smartrouting.ProcessorContext` (or a thin sub-struct attached to it). `describe()` appends each non-empty description to the collector.
-- `applyVisionProxy` (the gin-context-aware wrapper, `internal/server/vision_proxy.go:17`) transfers the collected descriptions onto the gin context via a typed key, e.g. `ctxKeyVisionDescriptions`.
-- Failed describes (currently collapsed to `[image: (description unavailable)]`) are also stored — they're useful information for the transcript. Stored as the same wrapped string the response layer will emit.
+2. `internal/server/vision_proxy.go`
+   - `applyVisionProxy` instantiates a fresh `DescriptionCollector`, attaches it to the `ProcessorContext`, then transfers the snapshot to `gin.Context` under `ctxKeyVisionDescriptions`.
 
-This keeps the processor package pure (no gin dependency) and concentrates the gin coupling at the existing boundary.
+### B. Inject (response side, single middleware)
 
-### B. Inject (response side, new)
+3. `internal/server/middleware/vision_inject.go` (new)
+   - `VisionInject(hook InjectHook) gin.HandlerFunc` — returns a middleware that:
+     - Reads `gin.Context.Get(ctxKeyVisionDescriptions)` once at entry.
+     - If empty or absent → `c.Next()` and return.
+     - Else builds the prefix via `BuildVisionDescriptionPrefix(descs)`, wraps `c.Writer` with `&injectingWriter{prefix, hook, false}`, `c.Next()`.
+   - `injectingWriter` implements `gin.ResponseWriter` (mostly by embedding). The first `Write` call goes through the hook; subsequent calls are pass-through.
+   - `type InjectHook func(prefix string, payload []byte) (out []byte, didInject bool)` — payload-level mutator.
 
-A small shared helper:
+4. `internal/server/middleware/vision_inject_hooks.go` (new)
+   - Four small functions, all of shape `InjectHook`:
+     - `OpenAIChatStreamHook` — match SSE `data: {...}\n\n`, parse JSON, look for first non-empty `choices.0.delta.content` (or stream-end `choices.0.message.content`), splice prefix in via `sjson.SetBytes`.
+     - `OpenAIResponsesStreamHook` — match SSE; for `response.output_text.delta`, splice prefix into the `delta` field; for `response.output_item.added`, splice into the first text part.
+     - `AnthropicStreamHook` (covers V1 and Beta — same event shape) — match SSE; for `content_block_delta` with `text_delta`, splice prefix into `delta.text`.
+     - `NonStreamJSONHook` — single payload contains the entire body; transport identified by path or content type. Three sub-cases:
+       - OpenAI Chat → splice into `choices.0.message.content`.
+       - OpenAI Responses → splice into the first `output.*.content.*.text` of type `output_text`.
+       - Anthropic V1/Beta → splice into the first text block's `text`.
 
-```go
-// internal/server/processor/vision_inject.go (new file, processor pkg)
-// Returns the full prefix string to prepend before the first model text,
-// or "" when there are no descriptions to inject.
-//
-// Each description is on its own line wrapped in <image-description>…</image-description>,
-// then a blank line separates the block from the model output.
-func BuildVisionDescriptionPrefix(descs []string) string { … }
-```
+   In practice the stream hooks are unified by content-type sniff: if the wrapped writer sees `text/event-stream` content-type in headers, it dispatches to the stream variant; else non-stream. So we may collapse to one `InjectHook` per transport (stream + non-stream share the same hook, which branches internally) — that drops the count from "4 hooks × 2 modes" to "4 hooks total".
 
-And a tiny gin-context accessor in `internal/server/`:
+5. Route wiring — one extra arg per route in `internal/server/server.go` / wherever the four POST routes are registered. Single-line change per route, no logic inside the handler.
 
-```go
-// internal/server/vision_proxy.go
-func consumeVisionDescriptions(c *gin.Context) []string { … }  // returns and clears
-```
+### C. Tag escaping
 
-`consumeVisionDescriptions` is called exactly once per request from the response handler — it returns the slice and removes it from the context so a second handler (e.g. a streaming retry) cannot double-inject.
-
-Then the per-transport patches are mechanical: in the "first text-bearing chunk" path, prepend `BuildVisionDescriptionPrefix(consumeVisionDescriptions(c))` to the first non-empty text and continue with normal handling.
-
----
-
-## Injection points (eight)
-
-There is no shared chokepoint after upstream conversion — each transport has its own streaming and non-streaming handler. Patching is per-handler but uses the same helper. All eight share the same first-text-only invariant (tracked by a small `injected bool` flag local to the handler scope).
-
-| # | Transport             | Mode      | File                                                              | Function                                    | Field to mutate                                  |
-|---|-----------------------|-----------|-------------------------------------------------------------------|---------------------------------------------|--------------------------------------------------|
-| 1 | OpenAI Chat           | streaming | `internal/protocol/stream/openai_passthrough.go`                  | `HandleOpenAIChatStream`                    | first non-empty `choices[].delta.content`        |
-| 2 | OpenAI Chat           | non-stream| `internal/server/openai_chat.go`                                  | `nonstreamOpenAIChat`                       | `choices[0].message.content`                     |
-| 3 | OpenAI Responses      | streaming | `internal/protocol/stream/openai_passthrough.go`                  | `HandleOpenAIResponsesStream`               | first `response.output_text.delta` event's `delta` field (or first text part of `response.output_item.added`, whichever fires first) |
-| 4 | OpenAI Responses      | non-stream| `internal/protocol/nonstream/openai_passthrough.go`               | `HandleOpenAIResponsesPassthroughNonStream` | first `output[*].content[*].text` of type `output_text` |
-| 5 | Anthropic V1          | streaming | `internal/protocol/stream/anthropic_passthrough.go`               | `HandleAnthropic`                           | first `content_block_delta` event of type `text_delta`, field `delta.text` |
-| 6 | Anthropic V1          | non-stream| `internal/protocol/nonstream/openai_to_anthropic.go`              | `ConvertResponsesToAnthropicV1Response`     | first text block's `.Text`                       |
-| 7 | Anthropic Beta        | streaming | `internal/protocol/stream/anthropic_passthrough.go`               | `HandleAnthropicBeta`                       | same as V1, beta event type                       |
-| 8 | Anthropic Beta        | non-stream| `internal/protocol/nonstream/openai_to_anthropic.go`              | `ConvertResponsesToAnthropicBetaResponse`   | first beta text block's `.Text`                  |
-
-### Streaming subtlety: "first text" identification
-
-For SSE handlers we cannot inject at "the first event" because the first event might be a role / start marker without text. The invariant is "first non-empty text fragment" — handlers maintain an `injected bool` initialised to false, and on each event, if it is a text-bearing delta with a non-empty text payload AND `!injected`, prepend the prefix to that payload and set `injected = true`. If no text fragment ever fires (rare: tool-only responses), the prefix is silently dropped — that's acceptable since there is no visible turn output to attach it to.
-
-For streaming events delivered as raw JSON bytes (`evt.RawJSON()`), the cheapest mutation is `gjson`/`sjson` (the project already uses `tidwall/gjson` and `tidwall/sjson`). Re-encoding the whole event with `encoding/json` round-trips is unnecessary and would lose field ordering.
-
-### Non-streaming subtlety: structure may have no text yet
-
-For non-streaming Anthropic, the response may contain only tool_use blocks. In that case we have two options:
-- (a) Silently drop the prefix (consistent with streaming behaviour).
-- (b) Prepend a synthetic text block to the `content[]` array.
-
-I propose **(a)** for consistency. If a future agent loop fires a tool turn without any text, the descriptions are still in the *input* of that turn (request-side replacement still happened), so the model already saw them — they just don't appear in the user-visible transcript for this turn. The next text turn will have its own descriptions if any new images are involved.
+Vision-upstream descriptions are untrusted text. Before wrapping we replace `&`, `<`, `>` with their HTML entities. The decoder side is opt-in; clients that ignore the tag don't need to decode. This prevents a description containing `</image-description>` from prematurely closing the tag in clients that do parse it.
 
 ---
 
-## Wrapper format changes (request side too)
+## Streaming subtlety: "first text" identification
 
-The current request-side text in `describe()` is:
+Not "first SSE event" — the first event is usually a role / start marker without text. The hook returns `(out, didInject=false)` for non-text events and the wrapper forwards the original bytes, leaving `injected = false` so the next event still gets a chance. Once the hook returns `didInject = true` the wrapper flips its flag and all subsequent writes pass through untouched.
 
-```go
-return "Here is an [image] with message and is parsed into description [image: " + desc + "]"
-```
-
-And `imageHistoricalText` is:
-
-```go
-const imageHistoricalText = "[image: (omitted from history)]"
-```
-
-Both change to the unified wrapper (newlines included so the placement inside a content_parts array is stable):
-
-```go
-// describe() returns:
-"\n<image-description>" + desc + "</image-description>\n"
-
-// describe() failure path:
-"\n<image-description>(description unavailable)</image-description>\n"
-
-// imageHistoricalText:
-"\n<image-description>(omitted from history)</image-description>\n"
-```
-
-This makes the wrapper a single, greppable invariant across the codebase. A client can confidently regex/parse `<image-description>(.+?)</image-description>` to extract or hide descriptions.
-
-(For request side these strings already go inside content parts wrapping is by-token, so the leading/trailing `\n` is the conservative choice — it survives concatenation if the host content joins parts without separators.)
+For non-streaming, the entire response body lands in one `Write` call (Gin's `c.JSON`), so the hook always succeeds on first attempt or never.
 
 ---
 
 ## Edge cases
 
-| Case                                                  | Behaviour                                                                                                  |
-|-------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
-| No images in request                                  | No descriptions collected; helper returns ""; injection is a no-op.                                        |
-| Vision upstream fails on every image                  | "(description unavailable)" is what gets stored *and* injected — the transcript explicitly records the failure. |
-| Streaming response has no text fragment (tool-only)   | Prefix dropped silently. Acceptable; see above.                                                            |
-| Concurrent requests on same Server                    | Collector lives on per-request `gin.Context` / `ProcessorContext`; no cross-request leakage.               |
-| Streaming retry after first SSE byte already sent     | `consumeVisionDescriptions` clears the context value, so a re-issued retry must explicitly opt back in. Today's retry loop reissues with the same context; we'll need to verify whether retries can resurrect the collector — see open question below. |
-| Description text containing `</image-description>`    | The vision upstream is text we don't trust to be tag-safe. We escape `<` and `>` in description bodies before wrapping (`html.EscapeString`-style; only `<` `>` `&` for minimal damage). Decoder side: opt-in. |
+| Case | Behaviour |
+|---|---|
+| No images in request | Collector empty; middleware sees empty slice; `c.Writer` unwrapped; zero overhead. |
+| Every vision call fails | `"(description unavailable)"` injected, surfaced to client — explicit failure record. |
+| Streaming response has no text (tool-only) | `didInject` never becomes true; prefix silently dropped. Acceptable: the input still saw the descriptions, and there is no visible text turn to anchor a prefix to. |
+| Concurrent requests | Collector on per-request `gin.Context`; wrapper state on per-request `injectingWriter`; no cross-request state. |
+| Streaming retry mid-response | `injected = true` is local to the wrapped writer. A retry inside the same request reuses the same wrapper, so the prefix only fires once on the visible byte stream. (Need to verify by reading `dispatchWithPriorityFailover` — see open question.) |
+| Description body contains `</image-description>` | Escaped to `&lt;/image-description&gt;` before wrapping. |
+| Client uses HTTP/2 push or other transports | Wrapper sits at `gin.ResponseWriter` layer; any writer Gin uses goes through the same interface. |
 
 ---
 
 ## Open questions
 
-1. **Streaming retries** — when the protocol-dispatch retry loop reissues a request mid-stream, do we want descriptions injected again at the start of the second attempt? Probably yes (since the client only sees one consolidated stream). Need to confirm by reading `dispatchWithPriorityFailover`.
-2. **Token accounting** — the injected prefix consumes output tokens from the model's accounting perspective if we count it. Today injection bytes are not produced by the model; they are not counted in upstream usage. Should they be added to usage tracked locally? Default: no — usage is "what the upstream charged us"; injection is overhead we shoulder. We may want a separate counter (`vision_proxy_injected_bytes`) for observability.
-3. **Renderers that don't know the tag** — for SDK clients that render raw text (CLI tools, plain webhooks), `<image-description>…</image-description>` will appear literally. Acceptable for v1; document in `.design/`. If readability becomes an issue, we add a flag (`extensions.vision_proxy_injection_format = "tag"|"markdown"|"plain"`) later.
+1. **Streaming retries** — the existing dispatch loop may reissue mid-stream after partial bytes were already written. Need to confirm that the second attempt's bytes flow through the same `injectingWriter` (they should, since `c.Writer` is replaced once at middleware time and never restored). The local `injected` flag should remain `true` across the retry boundary, preventing double-injection.
+2. **Token / usage accounting** — injected bytes are not produced by the upstream model. Today no usage adjustment is made; we keep it that way. Add an optional `vision_proxy_injected_bytes` observability counter (`logrus.WithField`).
+3. **Tag-unaware renderers** — CLI tools rendering raw text will see `<image-description>…</image-description>` literally. Acceptable for v1; document in a follow-up to `.design/vision-proxy-scenario.md` so client implementers know to filter or render.
+4. **Content-type sniff vs. route-level dispatch** — should each route register a transport-specific `InjectHook` (cleaner, explicit) or should the middleware sniff `Content-Type` header inside the wrapper (one registration, more magic)? Leaning towards explicit per-route registration since the four hooks need to exist anyway; route binding makes the intent obvious.
 
 ---
 
 ## Implementation plan
 
-### Phase 1 — Capture path
+### Phase 1 — Capture
 
 1. `internal/server/processor/vision_proxy.go`
-   - Add `DescriptionCollector` (a slice with `Append` / `Snapshot` methods, no map needed).
-   - `describe()` calls `collector.Append(wrappedString)` on every successful describe *and* every fail-strip (so both surfaces in the transcript).
-   - Drop the verbose `"Here is an [image] with message…"` wrapper; use `<image-description>…</image-description>\n` with leading `\n`.
-   - Update `imageHistoricalText` to the same wrapper.
-   - Escape `<`, `>`, `&` in description bodies.
+   - Add `DescriptionCollector` type.
+   - Adapt `describe()` and `imageHistoricalText` to the new wrapper format with escaping.
+   - Threading: `Process(pctx)` exposes `pctx.Descriptions` (new field on `smartrouting.ProcessorContext`).
 
-2. `internal/server/vision_proxy.go`
-   - `applyVisionProxy` attaches a fresh collector to the `ProcessorContext` before calling `Process`; afterwards stores `collector.Snapshot()` on `c` under `ctxKeyVisionDescriptions`.
-   - New `consumeVisionDescriptions(c) []string` accessor that reads-and-clears.
+2. `internal/smart_routing/processor.go`
+   - Add `Descriptions *DescriptionCollector` (or generic `Extras` map) on `ProcessorContext`. Smallest-surface change preferred.
 
-3. `internal/server/processor/vision_inject.go` (new)
-   - `BuildVisionDescriptionPrefix([]string) string` — the shared helper; pure function.
-   - Unit tested with empty/single/multi/escaped inputs.
+3. `internal/server/vision_proxy.go`
+   - `applyVisionProxy` creates a collector, attaches, then on return stores the snapshot via `c.Set(ctxKeyVisionDescriptions, descs)`.
 
-### Phase 2 — Per-transport injection (eight patches, all using the helper)
+4. Helper:
+   - `internal/server/processor/vision_inject_text.go` (new): `BuildVisionDescriptionPrefix(descs []string) string` pure function.
 
-Patches in the table above. Each handler:
-- Reads `consumeVisionDescriptions(c)` once at entry.
-- For non-streaming: prepends the prefix to the first text field, marshals, sends.
-- For streaming: holds a local `injected bool`; on the first text fragment whose payload is non-empty, prepend the prefix to that payload, set `injected = true`.
+### Phase 2 — Inject (middleware + 4 hooks)
+
+5. `internal/server/middleware/vision_inject.go` — `VisionInject(hook InjectHook) gin.HandlerFunc` and `injectingWriter`.
+
+6. `internal/server/middleware/vision_inject_hooks.go` — four `InjectHook` implementations (stream + non-stream sharing per-transport functions; sjson-based payload mutation).
+
+7. Route registration — add the middleware to the four POST routes; one line each.
 
 ### Phase 3 — Tests
 
-Per-transport, both modes — 8 happy-path tests:
-- Send a request with one image; assert the response (assembled / streamed) starts with `\n<image-description>…</image-description>\n\n` before the model's output.
-- Plus three behavioural tests shared across transports:
-  - **Multi-image**: two images → two stacked `<image-description>` tags, in encounter order.
-  - **No image**: assert no prefix is injected.
-  - **Tool-only response (streaming)**: assert no crash, descriptions silently dropped.
-- Plus a marshal-and-grep contract test on the helper: output regex matches `^(?:\n<image-description>[^<]*</image-description>\n)+\n$` or is empty.
+8. `middleware/vision_inject_test.go` — middleware behaviour against a fake handler that emits bytes:
+   - No descriptions → c.Writer untouched, byte-identical pass-through.
+   - Single description, streaming SSE → first `data:` line has prefix injected; subsequent lines untouched.
+   - Single description, non-stream JSON → JSON body has prefix in target field.
+   - Multi-description → all stacked in order.
+   - Tool-only stream → no injection, no error.
+   - Description with `<` / `>` → escaped.
+   - Marshal-and-grep regression: output regex `^(?:\n<image-description>[^<]*</image-description>\n)+\n` or empty.
+
+9. End-to-end test (extend `openai_responses_vision_test.go` style) for each transport: send a request with image, run the full handler with the middleware wired, assert injected prefix appears in the response stream/body.
 
 ### Phase 4 — Docs
 
-- Update `.design/vision-proxy-scenario.md` to mention the response-injection contract (cross-link this doc).
-- Add a CLAUDE.md / README note for client implementers: descriptions appear in the assistant transcript wrapped in `<image-description>…</image-description>`; suppress rendering if you want, but keep them in any history you replay to the model.
+10. Update `.design/vision-proxy-scenario.md` to cross-link this doc; add a section to README / CLAUDE.md for client implementers explaining the `<image-description>` contract.
 
 ---
 
 ## Out of scope (deferred)
 
-- Returning descriptions as structured metadata (Approach 3 from the design discussion) — kept as a possible add-on; current design doesn't preclude it.
-- Caching descriptions across turns by content hash — orthogonal optimisation.
-- Telling the model in the system prompt that `<image-description>` blocks are proxy-generated context — could improve grounding but is a behaviour change in model output we don't want to commit to in v1.
+- Returning descriptions as structured metadata in a separate field (kept as a possible add-on).
+- Caching descriptions across turns by content hash.
+- Adding a system-prompt note instructing the model to use `<image-description>` content.
+- Per-format injection toggle in scenario config (could be added later as an extension key).
 
 ---
 
 ## Risk summary
 
-- **User-visible output change**: yes — clients will see `<image-description>…</image-description>` strings in the transcript. This is the *point* of the feature. Mitigation: documented, greppable, easy to filter or render.
-- **Multi-injection on retry**: handled by clear-on-read on the gin context.
-- **Tag-injection from description body**: handled by escaping `<` `>` `&` before wrapping.
-- **Per-transport drift**: eight patches mean eight places to keep in sync. Mitigation: every handler calls the same `BuildVisionDescriptionPrefix` helper and the same `consumeVisionDescriptions` accessor; the only handler-specific code is "find first text payload and prepend".
+- **Client-visible output change** — yes, by design. Documented; greppable; suppressible by clients that decode the tag.
+- **Per-transport injector functions still required** — irreducible. But isolated to one file (`middleware/vision_inject_hooks.go`) rather than scattered across 8 handler sites.
+- **SSE byte-level parsing in the wrapper** — uses `sjson` (already a dependency), avoiding full JSON round-trips. The "match `data: ...\n\n`" framing is standard SSE and tested by the SDK.
+- **Retry / failover behaviour** — needs a confirming read of `dispatchWithPriorityFailover` before Phase 2 lands; documented as Open Question 1.
