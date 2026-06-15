@@ -1,4 +1,4 @@
-import {Add, Close, Computer, Key, Login, Search, Language, Description, Upload} from '@/components/icons';
+import {Add, Close, Computer, Key, Login, Search, Language, Description, Upload, Dual} from '@/components/icons';
 import RegionBadge from './RegionBadge';
 import {
     Box,
@@ -27,6 +27,7 @@ export type ConnectSelection =
     | {kind: 'oauth'; providerId: string}
     | {kind: 'local'; provider: UniqueProvider}
     | {kind: 'custom'}
+    | {kind: 'dual'}
     | {kind: 'import'};
 
 interface ConnectProviderDialogProps {
@@ -239,7 +240,7 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
     const filteredOAuth = needle
         ? oauthProviders.filter((p) => `${p.name} ${p.displayName}`.toLowerCase().includes(needle))
         : oauthProviders;
-    const showCustom = !needle || 'custom endpoint import'.includes(needle);
+    const showCustom = !needle || 'custom endpoint dual import'.includes(needle);
 
     // Group key providers by region (CN vs Global vs Self-hosted)
     const {cnKeyProviders, globalKeyProviders, selfHostedProviders} = useMemo(() => {
@@ -317,6 +318,13 @@ export const ProviderListContent: React.FC<ProviderListContentProps> = ({
                                 meta="Not listed? Bring your own URL"
                                 badge={keyBadge}
                                 onClick={() => onSelect({kind: 'custom'})}
+                            />
+                            <ProviderCard
+                                icon={<Dual/>}
+                                name="Dual endpoint"
+                                meta="Separate OpenAI & Anthropic URLs, one key"
+                                badge={keyBadge}
+                                onClick={() => onSelect({kind: 'dual'})}
                             />
                             <ProviderCard
                                 icon={<Upload/>}

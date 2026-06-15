@@ -30,10 +30,10 @@ Provider {
 ```
 
 `APIStyle` controls request/response translation: `openai` (default) or
-`anthropic`.  For providers that speak both natively, the optional fusion
+`anthropic`.  For providers that speak both natively, the optional dual
 fields `APIBaseOpenAI` / `APIBaseAnthropic` let the dispatcher pick the
 matching endpoint without protocol conversion.  See
-[`.design/fusion-provider.md`](../.design/fusion-provider.md) for the full
+[`.design/dual-provider.md`](../.design/dual-provider.md) for the full
 design, dispatch logic, and edit-mode rules.
 
 ---

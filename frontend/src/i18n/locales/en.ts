@@ -263,13 +263,30 @@ export default {
     "protocol": {
       "label": "Protocol"
     },
-    "fusion": {
-      "modeLabel": "Fusion mode",
+    "dual": {
+      "modeLabel": "Dual mode",
       "tooltipTitle": "How both protocols are saved",
       "normalModeDesc": "Normal mode (unchecked): creates two separate base URLs, one for OpenAI and one for Anthropic.",
-      "fusionModeDesc": "Fusion mode (checked): merges into one provider, switching between OpenAI and Anthropic on demand.",
+      "dualModeDesc": "Dual mode (checked): merges into one provider, switching between OpenAI and Anthropic on demand.",
       "outcomeSplit": "Will create 2 separate base URLs (sharing this key).",
       "outcomeMerged": "Will keep 1 base URL serving both OpenAI and Anthropic."
+    },
+    "customDual": {
+      "openAILabel": "OpenAI Base URL",
+      "anthropicLabel": "Anthropic Base URL"
+    },
+    "dualForm": {
+      "title": "Add Dual endpoint",
+      "editTitle": "Edit Dual endpoint",
+      "anthropicPlaceholder": "https://api.example.com/anthropic",
+      "help": "Both protocols share the API key below. Inbound requests are routed to the matching endpoint.",
+      "convertToSingle": "Convert to a single endpoint",
+      "verifyBothOk": "Both endpoints verified",
+      "verifyBothFailed": "Both endpoints failed",
+      "verifyOneFailed": "{{side}} endpoint failed"
+    },
+    "providerSingle": {
+      "convertToDual": "Add an Anthropic endpoint (make it a Dual provider)"
     },
     "keyName": {
       "label": "Name",

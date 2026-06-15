@@ -9,11 +9,11 @@ import (
 // APIBase and APIStyle reflect the best-fit endpoint for the inbound
 // clientStyle.
 //
-// Fusion-mode providers (api_key auth + APIBaseOpenAI/APIBaseAnthropic set)
+// Dual-mode providers (api_key auth + APIBaseOpenAI/APIBaseAnthropic set)
 // expose two distinct base URLs for the same credentials. When the inbound
-// client protocol matches a configured fusion URL, that URL is used directly
+// client protocol matches a configured dual URL, that URL is used directly
 // — no protocol translation is needed and the request is passed through
-// natively. When no fusion URL matches the inbound style, the legacy
+// natively. When no dual URL matches the inbound style, the legacy
 // APIBase/APIStyle pair is preserved so single-protocol providers behave
 // exactly as before.
 //

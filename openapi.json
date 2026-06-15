@@ -5510,12 +5510,12 @@
           },
           "api_base_anthropic": {
             "type": "string",
-            "description": "Fusion-mode Anthropic-compatible base URL (optional, api_key auth only)",
+            "description": "Dual-mode Anthropic-compatible base URL (optional, api_key auth only)",
             "example": "https://api.example.com"
           },
           "api_base_openai": {
             "type": "string",
-            "description": "Fusion-mode OpenAI-compatible base URL (optional, api_key auth only)",
+            "description": "Dual-mode OpenAI-compatible base URL (optional, api_key auth only)",
             "example": "https://api.example.com/v1"
           },
           "api_style": {
@@ -10205,11 +10205,11 @@
           },
           "api_base_anthropic": {
             "type": "string",
-            "description": "New fusion-mode Anthropic-compatible base URL (empty string clears it)"
+            "description": "New dual-mode Anthropic-compatible base URL (empty string clears it)"
           },
           "api_base_openai": {
             "type": "string",
-            "description": "New fusion-mode OpenAI-compatible base URL (empty string clears it)"
+            "description": "New dual-mode OpenAI-compatible base URL (empty string clears it)"
           },
           "api_style": {
             "type": "string",

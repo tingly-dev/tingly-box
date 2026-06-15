@@ -1,4 +1,4 @@
-import {Box, Checkbox, Chip, FormControl, FormLabel, Stack, Typography} from '@mui/material';
+import {Box, Checkbox, Chip, FormControl, FormLabel, Radio, Stack, Typography} from '@mui/material';
 import React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {UniqueProvider} from '../../services/serviceProviders';
@@ -9,7 +9,9 @@ interface ProtocolSelectorProps {
     selectedProvider: UniqueProvider | null;
     protocolOpenAI: boolean;
     protocolAnthropic: boolean;
-    fusionLocked: boolean;
+    dualLocked: boolean;
+    /** Custom endpoints are single-protocol: render mutually-exclusive radios. */
+    singleSelect?: boolean;
     openAICapabilities: string[];
     onToggleOpenAI: () => void;
     onToggleAnthropic: () => void;
@@ -23,16 +25,18 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
     selectedProvider,
     protocolOpenAI,
     protocolAnthropic,
-    fusionLocked,
+    dualLocked,
+    singleSelect = false,
     openAICapabilities,
     onToggleOpenAI,
     onToggleAnthropic,
     recommendOpenAI = false,
 }) => {
     const {t} = useTranslation();
+    const Toggle = singleSelect ? Radio : Checkbox;
 
-    const openAIDisabled = fusionLocked || (selectedProvider ? !selectedProvider.supportsOpenAI : false);
-    const anthropicDisabled = fusionLocked || (selectedProvider ? !selectedProvider.supportsAnthropic : false);
+    const openAIDisabled = dualLocked || (selectedProvider ? !selectedProvider.supportsOpenAI : false);
+    const anthropicDisabled = dualLocked || (selectedProvider ? !selectedProvider.supportsAnthropic : false);
 
     return (
         <FormControl component="fieldset">
@@ -45,12 +49,12 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                         borderRadius: 1,
                         px: 1.5,
                         py: 1,
-                        cursor: fusionLocked ? 'not-allowed' : 'pointer',
+                        cursor: dualLocked ? 'not-allowed' : 'pointer',
                         transition: 'all 0.15s',
                         bgcolor: protocolOpenAI ? 'action.selected' : 'transparent',
                         '&:hover': {
                             bgcolor:
-                                fusionLocked
+                                dualLocked
                                     ? protocolOpenAI
                                         ? 'action.selected'
                                         : 'transparent'
@@ -109,7 +113,7 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlOpenAI}/>
                             )}
                         </Box>
-                        <Checkbox
+                        <Toggle
                             size="small"
                             checked={protocolOpenAI}
                             disabled={openAIDisabled}
@@ -125,12 +129,12 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                         borderRadius: 1,
                         px: 1.5,
                         py: 1,
-                        cursor: fusionLocked ? 'not-allowed' : 'pointer',
+                        cursor: dualLocked ? 'not-allowed' : 'pointer',
                         transition: 'all 0.15s',
                         bgcolor: protocolAnthropic ? 'action.selected' : 'transparent',
                         '&:hover': {
                             bgcolor:
-                                fusionLocked
+                                dualLocked
                                     ? protocolAnthropic
                                         ? 'action.selected'
                                         : 'transparent'
@@ -160,7 +164,7 @@ const ProtocolSelector: React.FC<ProtocolSelectorProps> = ({
                                 <ProtocolBaseUrlDisplay url={selectedProvider.baseUrlAnthropic}/>
                             )}
                         </Box>
-                        <Checkbox
+                        <Toggle
                             size="small"
                             checked={protocolAnthropic}
                             disabled={anthropicDisabled}

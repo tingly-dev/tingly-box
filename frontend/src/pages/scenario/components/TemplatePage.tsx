@@ -203,6 +203,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
         handleConnectSelect,
         handleCloseConnect,
         customMode,
+        dualMode,
         fromConnectPicker,
     } = useProviderDialog(showNotification, {
         onProviderAdded: () => {
@@ -484,6 +485,7 @@ const TemplatePage: React.FC<TabTemplatePageProps> = (props) => {
                 onChange={handleFieldChange}
                 mode="add"
                 customMode={customMode}
+                dualMode={dualMode}
             />
 
             {showScrollTop && (

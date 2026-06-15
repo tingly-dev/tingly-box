@@ -53,6 +53,7 @@ const Onboarding: React.FC = () => {
     const [providerFormData, setProviderFormData] = useState<ProviderFormData>(emptyForm());
     const [isLocalProvider, setIsLocalProvider] = useState(false);
     const [isCustomMode, setIsCustomMode] = useState(false);
+    const [isDualMode, setIsDualMode] = useState(false);
 
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
@@ -93,6 +94,22 @@ const Onboarding: React.FC = () => {
         if (selection.kind === 'custom') {
             setIsCustomMode(true);
             openDialogWith(emptyForm());
+            return;
+        }
+
+        if (selection.kind === 'dual') {
+            // Dual endpoint: two URLs (OpenAI + Anthropic) under one key, always
+            // saved as a single record. No protocol selector / topology toggle.
+            setIsCustomMode(false);
+            setIsDualMode(true);
+            openDialogWith({
+                ...emptyForm(),
+                apiStyle: 'openai' as any,
+                apiBaseOpenAI: '',
+                apiBaseAnthropic: '',
+                createDualProvider: true,
+                protocols: ['openai', 'anthropic'],
+            });
             return;
         }
 
@@ -233,6 +250,7 @@ const Onboarding: React.FC = () => {
                     setApiKeyDialogOpen(false);
                     setIsLocalProvider(false);
                     setIsCustomMode(false);
+                    setIsDualMode(false);
                 }}
                 onSubmit={handleSubmit}
                 onForceAdd={handleForceAdd}
@@ -242,6 +260,7 @@ const Onboarding: React.FC = () => {
                 isFirstProvider
                 optionalEditableToken={isLocalProvider}
                 customMode={isCustomMode}
+                dualMode={isDualMode}
             />
 
             {/* OAuth Add Dialog - now functional in onboarding */}

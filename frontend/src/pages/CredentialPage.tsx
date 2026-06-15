@@ -61,6 +61,7 @@ const CredentialPage = () => {
     const [isLocalProvider, setIsLocalProvider] = useState(false);
     const [fromConnectPicker, setFromConnectPicker] = useState(false);
     const [isCustomMode, setIsCustomMode] = useState(false);
+    const [isDualMode, setIsDualMode] = useState(false);
 
     // OAuth Dialog state
     const [oauthDialogOpen, setOAuthDialogOpen] = useState(false);
@@ -110,7 +111,7 @@ const CredentialPage = () => {
                     noKeyRequired: false,
                     proxyUrl: '',
                     userAgent: '',
-                    createFusionProvider: false,
+                    createDualProvider: false,
                 } as any);
                 setApiKeyDialogOpen(true);
             }
@@ -144,7 +145,7 @@ const CredentialPage = () => {
             noKeyRequired: false,
             proxyUrl: '',
             userAgent: '',
-            createFusionProvider: false,
+            createDualProvider: false,
         } as any);
         setApiKeyDialogOpen(true);
     };
@@ -173,6 +174,29 @@ const CredentialPage = () => {
             setFromConnectPicker(true);
             setIsCustomMode(true);
             handleAddApiKey();
+            return;
+        }
+        if (selection.kind === 'dual') {
+            setFromConnectPicker(true);
+            setIsDualMode(true);
+            setApiKeyDialogMode('add');
+            setProviderFormData({
+                uuid: undefined,
+                name: '',
+                apiBase: '',
+                apiStyle: 'openai',
+                apiBaseOpenAI: '',
+                apiBaseAnthropic: '',
+                token: '',
+                enabled: true,
+                noKeyRequired: false,
+                proxyUrl: '',
+                userAgent: '',
+                authType: 'api_key',
+                createDualProvider: true,
+                protocols: ['openai', 'anthropic'],
+            } as any);
+            setApiKeyDialogOpen(true);
             return;
         }
         if (selection.kind === 'local') {
@@ -205,10 +229,40 @@ const CredentialPage = () => {
             noKeyRequired: false,
             proxyUrl: '',
             userAgent: '',
-            createFusionProvider: false,
+            createDualProvider: false,
             providerBaseUrls: {openai: p.baseUrlOpenAI, anthropic: p.baseUrlAnthropic},
         } as any);
         setApiKeyDialogOpen(true);
+    };
+
+    // Edit-mode upgrade: a single-endpoint provider becomes a dual one. Keep the
+    // current URL as the OpenAI side and let the user fill the Anthropic URL.
+    const handleConvertToDual = () => {
+        setProviderFormData((fd: any) => ({
+            ...fd,
+            apiBaseOpenAI: fd.apiBase || fd.apiBaseOpenAI || '',
+            apiBaseAnthropic: '',
+            apiStyle: 'openai',
+            createDualProvider: true,
+            protocols: ['openai', 'anthropic'],
+        }));
+        setIsCustomMode(false);
+        setIsDualMode(true);
+    };
+
+    // Edit-mode downgrade: a dual provider becomes a single OpenAI endpoint.
+    const handleConvertToSingle = () => {
+        setProviderFormData((fd: any) => ({
+            ...fd,
+            apiBase: fd.apiBaseOpenAI || fd.apiBase || '',
+            apiStyle: 'openai',
+            apiBaseOpenAI: '',
+            apiBaseAnthropic: '',
+            createDualProvider: false,
+            protocols: ['openai'],
+        }));
+        setIsDualMode(false);
+        setIsCustomMode(true);
     };
 
     const loadProviders = async () => {
@@ -223,8 +277,8 @@ const CredentialPage = () => {
     };
 
     // Build the body for an add request:
-    // - BOTH protocols + both base URLs + fusion toggle ON → single fusion-mode provider.
-    // - BOTH protocols + fusion toggle OFF → two separate single-protocol payloads.
+    // - BOTH protocols + both base URLs + dual toggle ON → single dual-mode provider.
+    // - BOTH protocols + dual toggle OFF → two separate single-protocol payloads.
     // - Single protocol selected → single provider payload.
     const buildAddProviderPayload = (override?: Partial<ProviderFormData>): any | any[] => {
         // Merge dialog-resolved fields (e.g. free-typed apiBase / auto name)
@@ -238,19 +292,27 @@ const CredentialPage = () => {
             | { openai?: string; anthropic?: string }
             | undefined;
 
-        const bothProtocols =
-            protocols.length === 2 &&
-            !!providerBaseUrls?.openai &&
-            !!providerBaseUrls?.anthropic;
-        const shouldCreateFusion = !!(fd as any).createFusionProvider;
+        // Source URLs are template-driven (providerBaseUrls) or, for custom
+        // endpoints, the form's own fields. apiBase is the OpenAI/primary URL by
+        // convention; a custom second URL lands in apiBaseAnthropic.
+        // `||` (not `??`) so an empty-string dual field — e.g. a custom
+        // same-address case where apiBaseAnthropic is '' — falls back to apiBase.
+        const openaiUrl =
+            providerBaseUrls?.openai || (fd as any).apiBaseOpenAI || fd.apiBase;
+        const anthropicUrl =
+            providerBaseUrls?.anthropic || (fd as any).apiBaseAnthropic || fd.apiBase;
 
-        if (bothProtocols && shouldCreateFusion) {
+        const bothProtocols =
+            protocols.length === 2 && !!openaiUrl && !!anthropicUrl;
+        const shouldCreateDual = !!(fd as any).createDualProvider;
+
+        if (bothProtocols && shouldCreateDual) {
             return {
                 name: fd.name,
-                api_base: providerBaseUrls!.openai,
+                api_base: openaiUrl,
                 api_style: 'openai' as const,
-                api_base_openai: providerBaseUrls!.openai,
-                api_base_anthropic: providerBaseUrls!.anthropic,
+                api_base_openai: openaiUrl,
+                api_base_anthropic: anthropicUrl,
                 token: fd.token,
                 no_key_required: (fd as any).noKeyRequired || false,
                 enabled: true,
@@ -260,7 +322,7 @@ const CredentialPage = () => {
             };
         }
 
-        if (bothProtocols && !shouldCreateFusion) {
+        if (bothProtocols && !shouldCreateDual) {
             // Legacy split: emit one record per protocol so the user gets
             // two independent Provider entries sharing the same credential.
             const baseRecord = {
@@ -275,13 +337,13 @@ const CredentialPage = () => {
                 {
                     ...baseRecord,
                     name: fd.name,
-                    api_base: providerBaseUrls!.openai,
+                    api_base: openaiUrl,
                     api_style: 'openai' as const,
                 },
                 {
                     ...baseRecord,
                     name: fd.name,
-                    api_base: providerBaseUrls!.anthropic,
+                    api_base: anthropicUrl,
                     api_style: 'anthropic' as const,
                 },
             ];
@@ -419,7 +481,12 @@ const CredentialPage = () => {
                 setOAuthDetailProvider(result.data);
                 setOAuthDetailDialogOpen(true);
             } else {
-                // Handle API Key edit
+                // Handle API Key edit. A provider with both dual URLs opens the
+                // dedicated Dual form; everything else opens the standard form
+                // (which offers an upgrade-to-dual action for single endpoints).
+                const isDual = !!provider.api_base_openai && !!provider.api_base_anthropic;
+                setIsDualMode(isDual);
+                setIsCustomMode(false);
                 setApiKeyDialogMode('edit');
                 setProviderFormData({
                     uuid: provider.uuid,
@@ -682,7 +749,7 @@ const CredentialPage = () => {
             {/* API Key Provider Dialog */}
             <ProviderFormDialog
                 open={apiKeyDialogOpen}
-                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); setIsCustomMode(false); }}
+                onClose={() => { setApiKeyDialogOpen(false); setIsLocalProvider(false); setFromConnectPicker(false); setIsCustomMode(false); setIsDualMode(false); }}
                 onBack={fromConnectPicker ? () => setConnectOpen(true) : undefined}
                 onSubmit={handleProviderSubmit}
                 onForceAdd={handleProviderForceAdd}
@@ -691,6 +758,9 @@ const CredentialPage = () => {
                 mode={apiKeyDialogMode}
                 optionalEditableToken={isLocalProvider}
                 customMode={isCustomMode}
+                dualMode={isDualMode}
+                onConvertToDual={handleConvertToDual}
+                onConvertToSingle={handleConvertToSingle}
             />
 
             {/* Unified provider picker */}

@@ -191,10 +191,10 @@ type Provider struct {
 	Models      []string `json:"models,omitempty"`       // Available models for this provider (cached)
 	LastUpdated string   `json:"last_updated,omitempty"` // Last update timestamp
 
-	// Fusion-mode optional fields. Independent of APIBase/APIStyle.
+	// Dual-mode optional fields. Independent of APIBase/APIStyle.
 	// When set, the dispatcher prefers the URL whose protocol natively matches
 	// the inbound client request (no transform needed). Falls back to APIBase
-	// + APIStyle when no fusion URL is configured for the inbound style.
+	// + APIStyle when no dual URL is configured for the inbound style.
 	APIBaseOpenAI    string `json:"api_base_openai,omitempty"`
 	APIBaseAnthropic string `json:"api_base_anthropic,omitempty"`
 
@@ -262,9 +262,9 @@ func (p *Provider) IsBuiltin() bool {
 	return p != nil && p.Source == ProviderSourceBuiltin
 }
 
-// HasFusionURL reports whether the provider has a fusion URL configured for
+// HasDualURL reports whether the provider has a dual URL configured for
 // the given inbound client style.
-func (p *Provider) HasFusionURL(clientStyle APIStyle) bool {
+func (p *Provider) HasDualURL(clientStyle APIStyle) bool {
 	if p == nil {
 		return false
 	}
@@ -277,9 +277,9 @@ func (p *Provider) HasFusionURL(clientStyle APIStyle) bool {
 	return false
 }
 
-// IsFusion reports whether the provider has BOTH fusion URLs configured.
-// OAuth providers are never considered fusion (issuer-bound to one protocol).
-func (p *Provider) IsFusion() bool {
+// IsDual reports whether the provider has BOTH dual URLs configured.
+// OAuth providers are never considered dual (issuer-bound to one protocol).
+func (p *Provider) IsDual() bool {
 	if p == nil || p.AuthType == AuthTypeOAuth {
 		return false
 	}
@@ -288,7 +288,7 @@ func (p *Provider) IsFusion() bool {
 
 // ResolveEndpoint returns the (baseURL, providerStyle) pair to use for an
 // inbound request whose client protocol is clientStyle. When a matching
-// fusion URL exists, it is preferred (so no protocol translation is needed).
+// dual URL exists, it is preferred (so no protocol translation is needed).
 // Otherwise the legacy APIBase + APIStyle pair is returned, preserving
 // backward-compatible single-protocol behavior.
 func (p *Provider) ResolveEndpoint(clientStyle APIStyle) (string, APIStyle) {

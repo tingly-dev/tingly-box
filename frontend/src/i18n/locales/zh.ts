@@ -264,13 +264,30 @@ export default {
     "protocol": {
       "label": "协议"
     },
-    "fusion": {
-      "modeLabel": "Fusion 模式",
+    "dual": {
+      "modeLabel": "Dual 模式",
       "tooltipTitle": "勾选两种协议时的保存方式",
       "normalModeDesc": "普通模式（未勾选）：创建两条独立 Base URL（OpenAI 与 Anthropic 各一条）。",
-      "fusionModeDesc": "Fusion 模式（已勾选）：合并为一个Provider，按需切换服务 OpenAI 与 Anthropic。",
+      "dualModeDesc": "Dual 模式（已勾选）：合并为一个Provider，按需切换服务 OpenAI 与 Anthropic。",
       "outcomeSplit": "将创建 2 条独立 Base URL（共用同一密钥）。",
       "outcomeMerged": "将保留 1 条 Base URL，同时服务 OpenAI 与 Anthropic。"
+    },
+    "customDual": {
+      "openAILabel": "OpenAI Base URL",
+      "anthropicLabel": "Anthropic Base URL"
+    },
+    "dualForm": {
+      "title": "添加 Dual 端点",
+      "editTitle": "编辑 Dual 端点",
+      "anthropicPlaceholder": "https://api.example.com/anthropic",
+      "help": "两种协议共用下方的 API Key，入站请求会被路由到对应的端点。",
+      "convertToSingle": "转为单端点",
+      "verifyBothOk": "两个端点均验证通过",
+      "verifyBothFailed": "两个端点均验证失败",
+      "verifyOneFailed": "{{side}} 端点验证失败"
+    },
+    "providerSingle": {
+      "convertToDual": "添加 Anthropic 端点（升级为 Dual）"
     },
     "keyName": {
       "label": "名称",
