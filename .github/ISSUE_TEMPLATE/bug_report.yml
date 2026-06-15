@@ -1,5 +1,6 @@
 name: Bug Report
 description: Report a bug in Tingly-Box
+title: "[BUG] "
 labels: ["bug"]
 body:
   - type: input
@@ -11,12 +12,19 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: system
+  - type: dropdown
+    id: os
     attributes:
-      label: System Information
-      description: OS, architecture, and any relevant environment details
-      placeholder: "e.g. macOS 14.0 arm64 / Ubuntu 22.04 x86_64"
+      label: OS & Architecture
+      description: Which operating system and CPU architecture are you running Tingly-Box on?
+      options:
+        - macOS Apple Silicon (M-chip)
+        - macOS Intel
+        - Windows x86_64
+        - Windows ARM64
+        - Linux x86_64
+        - Linux ARM64
+        - Other
     validations:
       required: true
 
