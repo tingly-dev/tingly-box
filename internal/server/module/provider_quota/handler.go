@@ -26,6 +26,9 @@ type Manager interface {
 	RefreshProvider(ctx context.Context, providerUUID string) (*quota.ProviderUsage, error)
 	// Summary 获取配额汇总
 	Summary(ctx context.Context) (*quota.Summary, error)
+	// IsProviderSupported reports whether the provider has a registered quota
+	// fetcher. Callers should skip quota fetching when this returns false.
+	IsProviderSupported(providerUUID string) bool
 	// StartAutoRefresh 启动自动刷新
 	StartAutoRefresh(ctx context.Context)
 	// StopAutoRefresh 停止自动刷新

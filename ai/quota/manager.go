@@ -227,6 +227,19 @@ func (m *Manager) isProviderEnabled(provider *typ.Provider) bool {
 	return true
 }
 
+// IsProviderSupported reports whether the provider has a registered quota
+// fetcher. When false, the caller should skip quota fetching rather than
+// emitting a misleading "unsupported provider type" error for the response.
+func (m *Manager) IsProviderSupported(providerUUID string) bool {
+	provider, err := m.providerMgr.GetProviderByUUID(providerUUID)
+	if err != nil || provider == nil {
+		return false
+	}
+	providerType := inferProviderType(provider)
+	_, ok := m.registry.Get(providerType)
+	return ok
+}
+
 // fetchProviderQuota 获取单个供应商的配额
 // 总是返回一个 ProviderUsage（成功或包含错误信息），并保存到 store。
 func (m *Manager) fetchProviderQuota(ctx context.Context, provider *typ.Provider) (*ProviderUsage, error) {

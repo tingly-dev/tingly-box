@@ -548,13 +548,19 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 	// Step 1: Try DB cache (API-sourced, 1h TTL)
 	models := providerModelManager.GetModels(uid)
 	source := ModelCacheSourceDB
-	expiresAt := time.Now().Add(1 * time.Hour)
+	// Default to far-future for sources that never expire (VModel); other
+	// sources override this below with their own TTL. Avoids serializing a
+	// zero time.Time ("0001-01-01T00:00:00Z") in the response.
+	const neverExpires = 20 * 365 * 24 * time.Hour
+	expiresAt := time.Now().Add(neverExpires)
 	lastUpdated := ""
 
 	if len(models) > 0 {
 		if _, updated, exists := providerModelManager.GetProviderInfo(uid); exists {
 			lastUpdated = updated
 		}
+		// DB cache has a 1h TTL (see data.ModelCacheTTL).
+		expiresAt = time.Now().Add(1 * time.Hour)
 	} else {
 		// Cache miss or stale — proceed to fallback
 		p, provErr := s.config.GetProviderByUUID(uid)
@@ -565,6 +571,7 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 					models = p.VModelDetail.Models
 					source = ModelCacheSourceVModel
 				}
+				// VModel lists are static — never expire.
 			} else {
 				// Step 2b: Try Provider API
 				apiErr := s.config.FetchAndSaveProviderModels(uid)
@@ -572,6 +579,8 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 					models = providerModelManager.GetModels(uid)
 					if len(models) > 0 {
 						source = ModelCacheSourceAPI
+						// Freshly fetched API models follow the DB cache TTL.
+						expiresAt = time.Now().Add(1 * time.Hour)
 					}
 				}
 
@@ -583,6 +592,7 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 						_ = providerModelManager.SaveModels(p, templateModels, db.ModelSourceTemplate)
 						models = templateModels
 						source = ModelCacheSourceTemplate
+						expiresAt = time.Now().Add(1 * time.Hour)
 					}
 				}
 			}
@@ -597,9 +607,11 @@ func (s *Server) GetProviderModelsByUUID(c *gin.Context) {
 		LastUpdated: lastUpdated,
 	}
 
-	// Attach quota information if quota manager is available
-	// Use GetQuotaNoCache to always get fresh data from DB (bypasses cache/expiration logic)
-	if s.quotaManager != nil {
+	// Attach quota information if quota manager is available AND the provider
+	// type is supported. Unsupported providers (e.g. unknown API base domains)
+	// would otherwise surface a misleading "unsupported provider type" error
+	// in the response — skip quota entirely in that case.
+	if s.quotaManager != nil && s.quotaManager.IsProviderSupported(uid) {
 		var ctx context.Context = c.Request.Context()
 		quotaData, err := s.quotaManager.GetQuotaNoCache(ctx, uid)
 		if err == nil && quotaData != nil {
