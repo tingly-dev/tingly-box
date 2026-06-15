@@ -15,6 +15,7 @@ from typing import Optional
 import httpx
 
 from .. import config as _config
+from .._http import safe_json
 from ..errors import AuthError, GatewayUnreachableError
 
 
@@ -58,7 +59,7 @@ def register(
         raise GatewayUnreachableError(f"could not reach tingly-box: {exc}") from exc
     if resp.status_code == 401:
         raise AuthError("tingly-box rejected the admin token during plugin register")
-    payload = _json(resp) or {}
+    payload = safe_json(resp) or {}
     if resp.status_code != 200 or not payload.get("success"):
         raise GatewayUnreachableError(
             f"plugin register failed: HTTP {resp.status_code} {resp.text[:200]}"
@@ -123,10 +124,3 @@ class Heartbeater:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
-
-
-def _json(resp: httpx.Response):
-    try:
-        return resp.json()
-    except ValueError:
-        return None

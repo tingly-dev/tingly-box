@@ -2566,6 +2566,12 @@ func (c *Config) validateRuleServices(rule typ.Rule) error {
 
 			provider, err := c.providerStore.GetByUUID(svc.Provider)
 			if err != nil {
+				// A live plugin instance is a valid (ephemeral) provider target.
+				if c.ephemeralResolver != nil {
+					if _, ok := c.ephemeralResolver.Resolve(svc.Provider); ok {
+						continue
+					}
+				}
 				return fmt.Errorf("smart routing service references non-existent provider '%s': %w", svc.Provider, err)
 			}
 			if provider == nil {

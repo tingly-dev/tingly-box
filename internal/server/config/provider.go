@@ -121,18 +121,20 @@ func (c *Config) AddProviderByName(name, apiBase, token string) error {
 // GetProviderByUUID returns a provider from database
 func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	if c.providerStore == nil {
+		c.mu.RUnlock()
 		return nil, fmt.Errorf("provider store not initialized")
 	}
-
 	provider, err := c.providerStore.GetByUUID(uuid)
+	resolver := c.ephemeralResolver
+	c.mu.RUnlock()
+
 	if err != nil {
 		// Fall back to the ephemeral resolver (live plugin instances that are not
-		// persisted). A miss here means the provider is truly unavailable.
-		if c.ephemeralResolver != nil {
-			if p, ok := c.ephemeralResolver.Resolve(uuid); ok {
+		// persisted). Called outside the config lock to avoid holding it across
+		// the registry's own lock. A miss means the provider is truly unavailable.
+		if resolver != nil {
+			if p, ok := resolver.Resolve(uuid); ok {
 				return p, nil
 			}
 		}

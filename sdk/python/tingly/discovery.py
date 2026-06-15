@@ -12,7 +12,7 @@ from typing import Optional
 
 import httpx
 
-from . import config as _config
+from ._http import safe_json
 from .errors import (
     AuthError,
     GatewayUnreachableError,
@@ -74,7 +74,7 @@ def create_session(
             "`tingly doctor --link`."
         )
 
-    payload = _safe_json(resp)
+    payload = safe_json(resp)
     if resp.status_code == 404:
         raise ScenarioNotFoundError(
             scenario, (payload or {}).get("valid_scenarios")
@@ -95,34 +95,3 @@ def create_session(
     )
 
 
-def discover_and_connect(
-    scenario: str,
-    base_url: Optional[str] = None,
-    token: Optional[str] = None,
-    name: Optional[str] = None,
-    timeout: float = 30.0,
-) -> Session:
-    """Resolve config, verify reachability, and mint a session."""
-    resolved = _config.resolve(base_url=base_url, token=token)
-
-    if probe_version(resolved.base_url) is None:
-        raise GatewayUnreachableError(
-            f"no tingly-box gateway responding at {resolved.base_url} "
-            f"(resolved via {resolved.source}). Is `tb` running? "
-            f"Set TINGLY_BOX_URL or run `tingly doctor`."
-        )
-
-    return create_session(
-        base_url=resolved.base_url,
-        admin_token=resolved.token or "",
-        scenario=scenario,
-        name=name,
-        timeout=timeout,
-    )
-
-
-def _safe_json(resp: httpx.Response) -> Optional[dict]:
-    try:
-        return resp.json()
-    except ValueError:
-        return None
