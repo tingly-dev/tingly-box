@@ -1,15 +1,12 @@
 """A RAG plugin served as an OpenAI-compatible upstream for tingly-box.
 
-Run it:
+Run it (serves on :8765 AND self-registers with tb while running):
 
     pip install -e .                 # from sdk/python
-    python examples/rag_plugin.py    # serves on http://127.0.0.1:8765/v1
+    python examples/rag_plugin.py
 
-Then wire it into tb in one step (creates the provider + a rule) so any client
-can select model `plugin/rag-demo`:
-
-    tingly plugin register rag-demo --url http://127.0.0.1:8765/v1 \
-        --model-id plugin/rag-demo --scenario experiment
+Registration is dynamic/ephemeral: the plugin leases a spot in tb, heartbeats to
+keep it, and deregisters on exit. Nothing is persisted.
 
 Now `model="plugin/rag-demo"` from Claude Code, Cursor, the tb UI, or another
 `tingly.connect()` experiment routes here — with tb's guard rails, quota,
@@ -19,7 +16,11 @@ logging and tier-failover applied. The handler itself calls *back* into tb via
 
 from tingly import Plugin
 
-plugin = Plugin(name="rag-demo", description="Answers from a toy in-memory corpus")
+plugin = Plugin(
+    name="rag-demo",
+    scenario="experiment",  # bind a rule under this scenario on register
+    description="Answers from a toy in-memory corpus",
+)
 
 CORPUS = {
     "tingly-box": "tingly-box is a personal intelligence orchestrator: an LLM "

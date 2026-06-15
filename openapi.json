@@ -4292,8 +4292,8 @@
         "tags": [
           "plugins"
         ],
-        "summary": "List registered plugin-kind providers (live + pinned)",
-        "description": "List registered plugin-kind providers (live + pinned)",
+        "summary": "List live (dynamically-registered) plugin instances",
+        "description": "List live (dynamically-registered) plugin instances",
         "operationId": "apiV2PluginsGet",
         "responses": {
           "200": {
@@ -4302,37 +4302,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PluginsResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "plugins"
-        ],
-        "summary": "Register external plugin code as an upstream (and optionally bind a rule)",
-        "description": "Register external plugin code as an upstream (and optionally bind a rule)",
-        "operationId": "apiV2PluginsPost",
-        "requestBody": {
-          "description": "Request body",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterPluginRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegisterPluginResponse"
                 }
               }
             }
@@ -4420,7 +4389,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegisterPluginDynamicRequest"
+                "$ref": "#/components/schemas/RegisterPluginRequest"
               }
             }
           }
@@ -4431,7 +4400,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegisterPluginDynamicResponse"
+                  "$ref": "#/components/schemas/RegisterPluginResponse"
                 }
               }
             }
@@ -8146,21 +8115,9 @@
       "PluginInfo": {
         "type": "object",
         "properties": {
-          "enabled": {
-            "type": "boolean",
-            "description": "Field enabled"
-          },
           "endpoint": {
             "type": "string",
             "description": "Field endpoint"
-          },
-          "ephemeral": {
-            "type": "boolean",
-            "description": "Field ephemeral"
-          },
-          "managed": {
-            "type": "boolean",
-            "description": "Field managed"
           },
           "model_id": {
             "type": "string",
@@ -8179,10 +8136,7 @@
           "uuid",
           "name",
           "endpoint",
-          "model_id",
-          "managed",
-          "enabled",
-          "ephemeral"
+          "model_id"
         ]
       },
       "PluginLeaseRequest": {
@@ -8917,7 +8871,7 @@
           "message"
         ]
       },
-      "RegisterPluginDynamicRequest": {
+      "RegisterPluginRequest": {
         "type": "object",
         "properties": {
           "endpoint": {
@@ -8961,7 +8915,7 @@
           "endpoint"
         ]
       },
-      "RegisterPluginDynamicResponse": {
+      "RegisterPluginResponse": {
         "type": "object",
         "properties": {
           "lease_id": {
@@ -8999,78 +8953,6 @@
           "lease_id",
           "model_id",
           "ttl_seconds"
-        ]
-      },
-      "RegisterPluginRequest": {
-        "type": "object",
-        "properties": {
-          "endpoint": {
-            "type": "string",
-            "description": "Plugin OpenAI base URL",
-            "example": "http://127.0.0.1:8765/v1"
-          },
-          "model_id": {
-            "type": "string",
-            "description": "Model id the plugin advertises",
-            "example": "plugin/my-rag"
-          },
-          "name": {
-            "type": "string",
-            "description": "Plugin / provider name",
-            "example": "my-rag"
-          },
-          "scenario": {
-            "type": "string",
-            "description": "Scenario to bind a rule under; omit to create only the provider",
-            "example": "experiment"
-          },
-          "tier": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Tier for the bound service (0 = highest priority)"
-          },
-          "token": {
-            "type": "string",
-            "description": "Token tingly-box should send to the plugin (empty = no key)"
-          }
-        },
-        "required": [
-          "name",
-          "endpoint"
-        ]
-      },
-      "RegisterPluginResponse": {
-        "type": "object",
-        "properties": {
-          "model_id": {
-            "type": "string",
-            "description": "Field model_id"
-          },
-          "note": {
-            "type": "string",
-            "description": "Field note"
-          },
-          "provider_uuid": {
-            "type": "string",
-            "description": "Field provider_uuid"
-          },
-          "ready": {
-            "type": "boolean",
-            "description": "Field ready"
-          },
-          "rule_uuid": {
-            "type": "string",
-            "description": "Field rule_uuid"
-          },
-          "scenario": {
-            "type": "string",
-            "description": "Field scenario"
-          }
-        },
-        "required": [
-          "provider_uuid",
-          "model_id",
-          "ready"
         ]
       },
       "RemoveSkillLocationResponse": {
@@ -11444,36 +11326,92 @@
   },
   "tags": [
     {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "auth",
-      "description": "Operations related to auth"
+      "name": "info",
+      "description": "Operations related to info"
     },
     {
       "name": "rules",
       "description": "Operations related to rules"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "oauth",
+      "description": "Operations related to oauth"
     },
     {
       "name": "weixin",
       "description": "Operations related to weixin"
     },
     {
-      "name": "history",
-      "description": "Operations related to history"
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "models",
+      "description": "Operations related to models"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "feishu",
+      "description": "Operations related to feishu"
+    },
+    {
+      "name": "auth",
+      "description": "Operations related to auth"
+    },
+    {
+      "name": "plugins",
+      "description": "Operations related to plugins"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
+    },
+    {
+      "name": "sdk",
+      "description": "Operations related to sdk"
+    },
+    {
+      "name": "usage",
+      "description": "Operations related to usage"
     },
     {
       "name": "onboarding",
       "description": "Operations related to onboarding"
     },
     {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
       "name": "actions",
@@ -11488,76 +11426,20 @@
       "description": "Operations related to scenarios"
     },
     {
-      "name": "plugins",
-      "description": "Operations related to plugins"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "sdk",
-      "description": "Operations related to sdk"
+      "name": "codex",
+      "description": "Operations related to codex"
     },
     {
       "name": "requests",
       "description": "Operations related to requests"
     },
     {
-      "name": "usage",
-      "description": "Operations related to usage"
-    },
-    {
-      "name": "imbot-admin",
-      "description": "Operations related to imbot-admin"
-    },
-    {
-      "name": "feishu",
-      "description": "Operations related to feishu"
-    },
-    {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
       "name": "guardrails",
       "description": "Operations related to guardrails"
     },
     {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
-    },
-    {
-      "name": "info",
-      "description": "Operations related to info"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "imbot-admin",
+      "description": "Operations related to imbot-admin"
     }
   ]
 }

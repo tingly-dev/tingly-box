@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/tingly-dev/tingly-box/internal/constant"
 	"github.com/tingly-dev/tingly-box/internal/typ"
 )
 
@@ -125,7 +126,20 @@ func (r *PluginRegistry) Resolve(id string) (*typ.Provider, bool) {
 		delete(r.byID, id)
 		return nil, false
 	}
-	return buildPluginProvider(reg.ID, reg.Name, reg.Endpoint, reg.ModelID, reg.Token), true
+	// A plugin is an ordinary OpenAI HTTP upstream plus the PluginDetail marker;
+	// routing treats it like any other provider.
+	return &typ.Provider{
+		UUID:          reg.ID,
+		Name:          reg.Name,
+		APIBase:       reg.Endpoint,
+		APIStyle:      "openai",
+		Token:         reg.Token,
+		NoKeyRequired: reg.Token == "",
+		Enabled:       true,
+		AuthType:      typ.AuthTypeAPIKey,
+		Timeout:       constant.DefaultRequestTimeout,
+		PluginDetail:  &typ.PluginDetail{ModelID: reg.ModelID},
+	}, true
 }
 
 // List returns the currently-live registrations (expired ones are reaped).

@@ -57,29 +57,17 @@ today's pieces — three verbs for the one rule⇄plugin relationship:
 The historical "Layer 1/2/3" headings below map exactly to connect / serve /
 register. They are an implementation tour, not three separate products.
 
-### tb-side: a first-class "plugin" provider kind (implemented)
+### tb-side: plugins are ephemeral, not a persisted provider kind
 
-"Register" is now **one step**: `POST /api/v2/plugins` creates a plugin-kind
-provider *and* (when a scenario is given) the rule whose upstream is that plugin.
-
-- **`ai.PluginDetail`** + `Provider.PluginDetail` + `Provider.IsPlugin()` mark a
-  provider as backed by plugin code. It is **distinct from `AuthTypeVirtual`**
-  (in-process `vmodel`): a plugin is an ordinary OpenAI HTTP upstream
-  (`APIStyle=openai`, `api_key`/`no_key`), so **routing is unchanged** — the
-  marker is metadata for UI grouping + lifecycle discovery only. Persisted via a
-  new `plugin_detail` column, reconstructed unconditionally (independent of auth
-  type), AutoMigrate-created.
-- **`POST /api/v2/plugins`** `{name, endpoint, model_id?, token?, scenario?, tier?}`
-  → creates the provider; if `scenario` is bindable, also creates a rule
-  (`RequestModel=model_id`, single tier service → the plugin). Returns
-  `{provider_uuid, model_id, scenario, rule_uuid, ready}`.
-- **`GET /api/v2/plugins`** lists plugin-kind providers for the UI's plugin
-  section.
-- SDK: `register_with_tb(..., scenario=…)` and `tingly plugin register
-  --scenario experiment` do the full one-step wire-in.
-
-This makes "configure this rule with a plugin" literal and eliminates the
-provider+rule two-step mode-picker (`ux-principles.md`).
+An earlier iteration persisted a plugin as a provider row (a `plugin_detail`
+column + a `POST /api/v2/plugins` "pin" path). That was removed: plugins are
+**dynamic/ephemeral** (see below), so there is no persisted plugin provider, no
+DB column, and no separate persistent endpoint. `ai.PluginDetail` +
+`Provider.IsPlugin()` survive only as an **in-memory marker** the registry sets
+on the synthesized provider (distinct from `AuthTypeVirtual`, the in-process
+`vmodel` path). A plugin is otherwise an ordinary OpenAI HTTP upstream, so
+**routing is unchanged**. "Pin" (durable opt-in) can return later as a flag if a
+real need appears.
 
 ### Plugin as runtime service (dynamic registration, implemented)
 
@@ -97,8 +85,8 @@ nothing persisted. Differs from a standard provider (durable, operator-managed).
 - **DNS-style layering**: the rule (the durable "name") is ensured idempotently;
   the instance (endpoint + liveness) is ephemeral. No live instance ⇒ failover.
 - Endpoints (apiV2): `POST /plugins/register` (leased; ensures rule),
-  `POST /plugins/heartbeat`, `POST /plugins/deregister`, `GET /plugins` (live +
-  pinned). The persistent `POST /api/v2/plugins` remains as the **pin** path.
+  `POST /plugins/heartbeat`, `POST /plugins/deregister`, `GET /plugins` (live
+  instances).
 
 **Active configuration** (SDK): `tingly.configure(url=, admin_token_env=)` /
 `Connection` inject the tb target + credentials at runtime (secrets by env
@@ -129,8 +117,8 @@ sdk/python/
       server.py      #   stdlib OpenAI-compatible HTTP server (+ SSE)
       types.py       #   ChatRequest / Message
       manifest.py    #   tingly.toml read/write
-      register.py    #   register the plugin as a tb provider (Layer 3)
-    cli.py           # `tingly doctor` + `tingly plugin {init,run,register}`
+      runtime.py     #   dynamic register / heartbeat / deregister
+    cli.py           # `tingly doctor` + `tingly plugin {init,run}`
     errors.py        # TinglyError hierarchy
 ```
 

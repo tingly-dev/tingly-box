@@ -412,28 +412,20 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 		swagger.WithResponseModel(ProvidersResponse{}),
 	)
 
-	// Plugin registration: a plugin is a first-class provider kind (external
-	// OpenAI upstream). POST wires it in (provider + optional rule) in one step.
-	api.POST("/plugins", s.RegisterPlugin,
-		swagger.WithDescription("Register external plugin code as an upstream (and optionally bind a rule)"),
-		swagger.WithTags("plugins"),
-		swagger.WithRequestModel(RegisterPluginRequest{}),
-		swagger.WithResponseModel(RegisterPluginResponse{}),
-	)
-
 	api.GET("/plugins", s.ListPlugins,
-		swagger.WithDescription("List registered plugin-kind providers (live + pinned)"),
+		swagger.WithDescription("List live (dynamically-registered) plugin instances"),
 		swagger.WithTags("plugins"),
 		swagger.WithResponseModel(PluginsResponse{}),
 	)
 
-	// Dynamic (ephemeral) plugin lifecycle: register a live instance, keep it
-	// alive by heartbeat, and deregister on shutdown. Nothing is persisted.
-	api.POST("/plugins/register", s.RegisterPluginDynamic,
+	// Plugin lifecycle: register a live instance, keep it alive by heartbeat, and
+	// deregister on shutdown. Nothing is persisted — an expired instance simply
+	// falls out of routing (tier failover).
+	api.POST("/plugins/register", s.RegisterPlugin,
 		swagger.WithDescription("Register a live, ephemeral plugin instance (leased)"),
 		swagger.WithTags("plugins"),
-		swagger.WithRequestModel(RegisterPluginDynamicRequest{}),
-		swagger.WithResponseModel(RegisterPluginDynamicResponse{}),
+		swagger.WithRequestModel(RegisterPluginRequest{}),
+		swagger.WithResponseModel(RegisterPluginResponse{}),
 	)
 	api.POST("/plugins/heartbeat", s.HeartbeatPlugin,
 		swagger.WithDescription("Extend a plugin instance's lease"),

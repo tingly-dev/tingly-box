@@ -1,7 +1,12 @@
 package server
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/tingly-dev/tingly-box/internal/server/config"
 	"github.com/tingly-dev/tingly-box/internal/typ"
@@ -18,10 +23,10 @@ func newDynamicPluginServer(t *testing.T) *Server {
 	return &Server{config: cfg, pluginRegistry: reg}
 }
 
-func TestRegisterPluginDynamic_RoutesAndExpires(t *testing.T) {
+func TestRegisterPlugin_RoutesAndExpires(t *testing.T) {
 	s := newDynamicPluginServer(t)
 
-	w, resp := postJSON(t, s.RegisterPluginDynamic, RegisterPluginDynamicRequest{
+	w, resp := postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
 		Name:     "my-rag",
 		Endpoint: "http://127.0.0.1:8765/v1",
 		ModelID:  "plugin/my-rag",
@@ -80,12 +85,30 @@ func TestHeartbeatPlugin_UnknownLease(t *testing.T) {
 	}
 }
 
+func TestListPlugins_ShowsLiveInstances(t *testing.T) {
+	s := newDynamicPluginServer(t)
+	postJSON(t, s.RegisterPlugin, RegisterPluginRequest{Name: "plug", Endpoint: "http://127.0.0.1:8765/v1"})
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	s.ListPlugins(c)
+
+	var resp PluginsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Name != "plug" {
+		t.Fatalf("expected the one live plugin, got %+v", resp.Data)
+	}
+}
+
 func TestReRegisterIsIdempotentForRule(t *testing.T) {
 	s := newDynamicPluginServer(t)
-	postJSON(t, s.RegisterPluginDynamic, RegisterPluginDynamicRequest{
+	postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
 		Name: "p", Endpoint: "http://a/v1", Scenario: string(typ.ScenarioExperiment),
 	})
-	postJSON(t, s.RegisterPluginDynamic, RegisterPluginDynamicRequest{
+	postJSON(t, s.RegisterPlugin, RegisterPluginRequest{
 		Name: "p", Endpoint: "http://b/v1", Scenario: string(typ.ScenarioExperiment),
 	})
 	// exactly one rule for plugin/p
