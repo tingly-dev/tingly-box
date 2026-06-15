@@ -56,7 +56,8 @@ curl -s "${UADMIN[@]}" -X POST "$BASE/api/v1/rule" -d "{
   \"services\":[{\"provider\":\"$VUUID\",\"model\":\"echo-model\",\"weight\":1,\"active\":true}]}" \
   | python3 -c "import sys,json;d=json.load(sys.stdin);print('   rule created:', d.get('success'), d.get('data',{}).get('uuid',''))"
 
-echo "== 4. start the plugin (serves OpenAI on :8765, calls back into tb) =="
+echo "== 4. start the plugin — it DYNAMICALLY self-registers with tb =="
+echo "   (serve(register=True) → POST /plugins/register + heartbeat; nothing persisted)"
 TINGLY_BOX_URL="$BASE" TINGLY_BOX_TOKEN="$UTOK" \
   python3 "$SDK/examples/e2e_plugin.py" >/tmp/plugin_e2e.log 2>&1 &
 PLUG_PID=$!
@@ -65,12 +66,14 @@ for i in $(seq 1 40); do
   sleep 0.3
 done
 curl -sf "http://127.0.0.1:8765/health" >/dev/null || { echo "plugin did not start"; cat /tmp/plugin_e2e.log; exit 1; }
-echo "   plugin up: $(curl -s http://127.0.0.1:8765/v1/models)"
 
-echo "== 5. register the plugin with tb (one step: provider + rule) =="
-curl -s "${UADMIN[@]}" -X POST "$BASE/api/v2/plugins" -d '{
-  "name":"rag-demo","endpoint":"http://127.0.0.1:8765/v1",
-  "model_id":"plugin/rag-demo","scenario":"experiment"}' | python3 -m json.tool
+echo "== 5. tb sees the LIVE ephemeral instance (GET /api/v2/plugins) =="
+for i in $(seq 1 20); do
+  LIST=$(curl -s "${UADMIN[@]}" "$BASE/api/v2/plugins")
+  echo "$LIST" | grep -q 'rag-demo' && break
+  sleep 0.3
+done
+echo "$LIST" | python3 -m json.tool
 
 echo "== 6. CLIENT CALL: model=plugin/rag-demo through tb =="
 echo "   (client → tb → plugin → tb echo-model → back)"

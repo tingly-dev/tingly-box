@@ -58,6 +58,8 @@ class Plugin:
         self._handler: Optional[ChatHandler] = None
         self._clients: dict = {}  # scenario -> lazily-connected client
         self._httpd = None
+        self._lease = None  # runtime.Lease when dynamically registered
+        self._heartbeater = None
 
     # -- authoring -------------------------------------------------------
 
@@ -131,13 +133,26 @@ class Plugin:
         *,
         verbose: bool = True,
         block: bool = True,
+        register: bool = True,
+        advertise_host: Optional[str] = None,
+        ttl_seconds: int = 30,
+        tb: Optional[Any] = None,
     ) -> int:
-        """Run the plugin's HTTP server.
+        """Run the plugin's HTTP server and (by default) register it with tb.
 
-        Returns the bound port (resolved even when ``port=0``). With
-        ``block=False`` the server runs on a daemon thread and the call returns
-        immediately — handy for tests and for embedding.
+        Dynamic registration is ephemeral: the plugin appears in tb only while it
+        runs — a background heartbeat keeps the lease, and it deregisters on
+        shutdown. ``tb`` may be a :class:`tingly.config.Connection` to point at a
+        specific gateway / inject credentials (containers / CI / remote).
+
+        Returns the bound port (resolved even when ``port=0``). ``block=False``
+        runs the server on a daemon thread and returns immediately.
         """
+        if tb is not None:
+            from ..config import configure
+
+            configure(url=tb.url, admin_token=tb.admin_token, admin_token_env=tb.admin_token_env)
+
         httpd, bound = make_server(
             self._dispatch,
             self.model_id,
@@ -150,8 +165,12 @@ class Plugin:
         if verbose:
             print(
                 f"[tingly] plugin {self.name!r} serving model {self.model_id!r} "
-                f"on http://{host}:{bound}/v1  (register as an OpenAI provider in tb)"
+                f"on http://{host}:{bound}/v1"
             )
+
+        if register:
+            self._register(advertise_host or host, bound, ttl_seconds, verbose)
+
         if not block:
             t = threading.Thread(target=httpd.serve_forever, daemon=True)
             t.start()
@@ -161,10 +180,40 @@ class Plugin:
         except KeyboardInterrupt:
             pass
         finally:
-            httpd.shutdown()
+            self.stop()
         return bound
 
+    def _register(self, host: str, port: int, ttl_seconds: int, verbose: bool) -> None:
+        from . import runtime
+
+        endpoint = f"http://{host}:{port}/v1"
+        try:
+            lease = runtime.register(
+                self.name, endpoint, self.model_id,
+                scenario=self.scenario, token=self.api_key, ttl_seconds=ttl_seconds,
+            )
+        except Exception as exc:  # noqa: BLE001 - registration is best-effort
+            if verbose:
+                print(f"[tingly] plugin registration skipped: {exc}")
+            return
+        self._lease = lease
+        self._heartbeater = runtime.Heartbeater(lease).start()
+        if verbose:
+            print(
+                f"[tingly] registered '{self.name}' as model {lease.model_id!r}"
+                + (f" under scenario {lease.scenario!r}" if lease.scenario else "")
+                + f" (lease ttl={lease.ttl_seconds}s)"
+            )
+
     def stop(self) -> None:
+        if self._heartbeater is not None:
+            self._heartbeater.stop()
+            self._heartbeater = None
+        if self._lease is not None:
+            from . import runtime
+
+            runtime.deregister(self._lease)
+            self._lease = None
         if self._httpd is not None:
             self._httpd.shutdown()
             self._httpd = None

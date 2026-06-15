@@ -66,6 +66,10 @@ type Server struct {
 	loadBalancerAPI *LoadBalancerAPI
 	healthMonitor   *loadbalance.HealthMonitor
 
+	// pluginRegistry holds live, ephemeral plugin instances (dynamic
+	// registration). It is the EphemeralProviderResolver for the config.
+	pluginRegistry *PluginRegistry
+
 	// client pool for caching
 	clientPool *client.ClientPool
 
@@ -210,10 +214,15 @@ func NewServer(cfg *config.Config, opts ...ServerOption) *Server {
 
 	// Default options
 	server := &Server{
-		config: cfg,
-		ctx:    ctx,
-		cancel: cancel,
+		config:         cfg,
+		ctx:            ctx,
+		cancel:         cancel,
+		pluginRegistry: NewPluginRegistry(),
 	}
+	// Live plugin instances resolve through this in-memory registry as an
+	// ephemeral provider fallback, so dynamically-registered plugins route
+	// without a persisted provider row.
+	cfg.SetEphemeralProviderResolver(server.pluginRegistry)
 
 	// Apply all options (defaults + provided)
 	for _, opt := range allOpts {

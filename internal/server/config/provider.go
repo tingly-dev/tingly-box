@@ -23,6 +23,22 @@ type ProviderDeleteHook interface {
 	OnProviderDelete(uuid string)
 }
 
+// EphemeralProviderResolver resolves provider UUIDs that are not persisted in
+// the provider store — e.g. live plugin instances held in an in-memory registry.
+// It is consulted as a fallback by provider lookups so dynamically-registered
+// plugins route transparently, while keeping the db layer pure persistence.
+type EphemeralProviderResolver interface {
+	Resolve(uuid string) (*typ.Provider, bool)
+}
+
+// SetEphemeralProviderResolver installs the fallback resolver (e.g. the Server's
+// plugin registry). Safe to call once during server construction.
+func (c *Config) SetEphemeralProviderResolver(r EphemeralProviderResolver) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ephemeralResolver = r
+}
+
 // migrateProvidersToDB migrates providers from JSON config to database.
 // This is a one-time migration that runs on startup if the database is empty.
 // After migration (or if the database is already authoritative), the JSON
@@ -113,6 +129,13 @@ func (c *Config) GetProviderByUUID(uuid string) (*typ.Provider, error) {
 
 	provider, err := c.providerStore.GetByUUID(uuid)
 	if err != nil {
+		// Fall back to the ephemeral resolver (live plugin instances that are not
+		// persisted). A miss here means the provider is truly unavailable.
+		if c.ephemeralResolver != nil {
+			if p, ok := c.ephemeralResolver.Resolve(uuid); ok {
+				return p, nil
+			}
+		}
 		return nil, fmt.Errorf("provider '%s' not found: %w", uuid, err)
 	}
 	return provider, nil
