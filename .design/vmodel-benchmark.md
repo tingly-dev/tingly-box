@@ -166,23 +166,21 @@ seam — so no dedicated `Service()` accessor is shipped until a caller needs on
    `LastRequest`, …) is unchanged, so the matrix/flags/agent suites and
    `cli/harness` keep working. Validated by the full harness matrix
    (`--mode=all` + gosdk/python/node/aisdk drivers), 0 failures.
-3. **Phase 3 — servertest (✅ decided: do NOT migrate; clean up instead).**
+3. **Phase 3 — servertest (✅ decided: do NOT migrate; left unchanged).**
    `servertest.MockProviderServer` is an endpoint-keyed *dumb echo* that
    intentionally wants byte-exact upstream control, **not** protocol-correct
    responses — so the foundation's main value does not apply to it, and a
    migration would be net-new code (an echo `http.Handler`) for a single consumer
-   at gateway-test risk. Decision: leave it standalone; instead deleted its
-   ~250 lines of dead `MockProviderTestSuite`/`RunMockProviderTests` and removed
-   the 13 `fmt.Printf` debug lines (607 → 322 lines). The echo-handler design
-   below is **deferred / demand-driven** — build it only if an external project
-   needs a reusable dumb-echo provider (as a plain handler wrapped by the
-   existing `NewServer`, not a new constructor); then `servertest` can adopt it.
-   See "Phase 3 — servertest: decision & deferred design".
+   at gateway-test risk. Decision: leave it standalone and **untouched in this PR**
+   (it's out of scope for the benchmark foundation; even tangential cleanup is
+   kept separate to honor that boundary). Two follow-ups remain *possible but not
+   done here* — see "Phase 3 — servertest: decision & possible future".
 
-## Phase 3 — servertest: decision & deferred design
+## Phase 3 — servertest: decision & possible future
 
-**Decision: do not migrate `servertest` onto the foundation now.** The analysis
-that led here (grounded in actual usage, not assumed):
+**Decision: do not migrate `servertest` onto the foundation, and leave it
+untouched in this PR.** The analysis that led here (grounded in actual usage,
+not assumed):
 
 - **Lower benefit than Phase 2.** `servertest.MockProviderServer`'s response model
   is fundamentally different from the scenario one:
@@ -210,15 +208,23 @@ that led here (grounded in actual usage, not assumed):
   gold-plating (violates "done ≠ locked", "reduce noise", avoid speculative
   abstraction).
 
-**What was done instead (cleanup, zero benchmark coupling):** deleted the dead
-`MockProviderTestSuite` + `RunMockProviderTests` (~250 lines, never invoked) and
-removed all 13 `fmt.Printf` debug lines. `mock_provider.go` went 607 → 322
-lines; `go test ./internal/servertest/...` stays green. A doc comment now states
-the dumb-echo intent and points here.
+**Current state in this PR:** `servertest` is **unchanged** — no files touched.
+
+**Possible future work (both out of scope here; separate PRs if/when wanted):**
+
+1. **Cleanup (independent, low-risk).** `mock_provider.go` carries ~250 lines of
+   dead scaffolding (`MockProviderTestSuite` + `RunMockProviderTests`, never
+   invoked) and 13 `fmt.Printf` debug lines in the live handlers. Deleting the
+   dead suite and stripping the spam (607 → ~322 lines) is a clear quality win,
+   but it is unrelated to the benchmark foundation and belongs in its own small,
+   obvious-to-review PR — not bundled here. It needs no benchmark coupling.
+2. **Adoption (demand-driven).** If an external project ever needs a reusable
+   dumb-echo provider, build it as described below; `servertest` could then adopt
+   it as a bonus. Until such a consumer exists, this stays unbuilt.
 
 ---
 
-The rest of this section is the **deferred / demand-driven** design: build it
+The rest of this section is the **demand-driven** design for follow-up 2: build it
 only when an external project actually needs a reusable dumb-echo provider; at
 that point servertest can adopt it as a bonus. It is exactly the design's thesis
 a third time — **observability + transport are shared; response generation is

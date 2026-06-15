@@ -75,7 +75,7 @@ Built-in scenarios: `text`, `tool_use`, `tool_result`, `thinking`, `multi_turn`,
 
 Gateway-level integration tests. Tests server features (auth, routing, load balancing) using a deliberately simple mock approach.
 
-- **`MockProviderServer`** — an endpoint-keyed *dumb echo*: set an exact response/error per endpoint, track call counts, capture the last request. By design it wants byte-exact upstream control, **not** protocol-correct responses — so it is intentionally **not** migrated onto `vmodel/benchmark` (see [`vmodel-benchmark.md`](./vmodel-benchmark.md) Phase 3). It stays standalone and minimal.
+- **`MockProviderServer`** — an endpoint-keyed *dumb echo*: set an exact response/error per endpoint, track call counts, capture the last request. By design it wants byte-exact upstream control, **not** protocol-correct responses — so it is intentionally **not** migrated onto `vmodel/benchmark` (see [`vmodel-benchmark.md`](./vmodel-benchmark.md) Phase 3). It stays standalone and untouched by this work; an independent cleanup of its dead scaffolding is noted there as possible future work.
 - **`TestServer`** — wraps a real gateway server + config. Helpers: `AddTestProviders`, `AddTestRule`, `EnsureLoadBalancingRule`.
 - **Request/response helpers** — `CreateTestChatRequest`, `CreateJSONBody`, `AssertJSONResponse`.
 
@@ -103,7 +103,9 @@ response generation). Status:
   `benchmark.NewScenarioServer`; `check`/`scenario` re-exported via aliases.
 - **Phase 3 (decided: no migration)** — `servertest.MockProviderServer` stays a
   standalone dumb-echo by design (it wants byte-exact control, not protocol
-  correctness); it was cleaned up (dead code + debug spam removed) but not folded
-  in. A reusable endpoint responder is deferred / demand-driven.
+  correctness) and is **left unchanged in this work** (out of scope for the
+  foundation). Two follow-ups stay possible but separate: an independent
+  dead-code/`fmt.Printf` cleanup of `mock_provider.go`, and a demand-driven
+  reusable echo handler it could adopt. Neither is built here.
 
 See [`vmodel-benchmark.md`](./vmodel-benchmark.md) for the full design and rationale.
