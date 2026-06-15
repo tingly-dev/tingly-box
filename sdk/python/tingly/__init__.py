@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from ._version import __version__
 from .client import Client, connect
+from .config import Connection, configure
 from .errors import (
     AuthError,
     GatewayUnreachableError,
@@ -25,6 +26,8 @@ from .plugin import ChatRequest, Plugin
 __all__ = [
     "__version__",
     "connect",
+    "configure",
+    "Connection",
     "Client",
     "Plugin",
     "ChatRequest",

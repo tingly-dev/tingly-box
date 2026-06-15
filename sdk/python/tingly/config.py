@@ -50,12 +50,51 @@ def tb_config_path() -> Path:
 
 
 @dataclass
+class Connection:
+    """An explicit, runtime-injected tb connection — for containers / CI /
+    remote where there is no ``~/.tingly-box``.
+
+    Secrets may be given by **reference** (an env var name) so they are not
+    hard-coded; ``token`` resolves the literal or the env var at use time.
+    """
+
+    url: Optional[str] = None
+    admin_token: Optional[str] = None
+    admin_token_env: Optional[str] = None
+
+    def token(self) -> Optional[str]:
+        if self.admin_token:
+            return self.admin_token
+        if self.admin_token_env:
+            return os.environ.get(self.admin_token_env)
+        return None
+
+
+# Process-wide override set by configure(); highest precedence in resolve().
+_OVERRIDE: Optional[Connection] = None
+
+
+def configure(
+    url: Optional[str] = None,
+    admin_token: Optional[str] = None,
+    admin_token_env: Optional[str] = None,
+) -> None:
+    """Actively configure the tb target + credentials for this process.
+
+    Takes precedence over env / files. Useful when a plugin must point at a
+    specific tb and use injected credentials rather than local discovery.
+    """
+    global _OVERRIDE
+    _OVERRIDE = Connection(url=url, admin_token=admin_token, admin_token_env=admin_token_env)
+
+
+@dataclass
 class Resolved:
     """A resolved gateway target plus where it came from (for diagnostics)."""
 
     base_url: Optional[str]
     token: Optional[str]
-    source: str  # "args" | "env" | "sdk.json" | "config.json" | "probe-default"
+    source: str  # "configure" | "args" | "env" | "sdk.json" | "config.json" | "probe-default"
 
 
 def _read_json(path: Path) -> Optional[dict]:
@@ -77,6 +116,16 @@ def resolve(
     token from env / files.
     """
     src = "args"
+
+    # Highest precedence: an explicit configure()/Connection override.
+    if _OVERRIDE is not None:
+        if base_url is None and _OVERRIDE.url:
+            base_url, src = _OVERRIDE.url, "configure"
+        if token is None and _OVERRIDE.token():
+            token = _OVERRIDE.token()
+            if src == "args":
+                src = "configure"
+
     if base_url is None:
         env_url = os.environ.get(ENV_URL)
         if env_url:

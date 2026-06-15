@@ -422,9 +422,30 @@ func useV2Provider(s *Server, api *swagger.RouteGroup) {
 	)
 
 	api.GET("/plugins", s.ListPlugins,
-		swagger.WithDescription("List registered plugin-kind providers"),
+		swagger.WithDescription("List registered plugin-kind providers (live + pinned)"),
 		swagger.WithTags("plugins"),
 		swagger.WithResponseModel(PluginsResponse{}),
+	)
+
+	// Dynamic (ephemeral) plugin lifecycle: register a live instance, keep it
+	// alive by heartbeat, and deregister on shutdown. Nothing is persisted.
+	api.POST("/plugins/register", s.RegisterPluginDynamic,
+		swagger.WithDescription("Register a live, ephemeral plugin instance (leased)"),
+		swagger.WithTags("plugins"),
+		swagger.WithRequestModel(RegisterPluginDynamicRequest{}),
+		swagger.WithResponseModel(RegisterPluginDynamicResponse{}),
+	)
+	api.POST("/plugins/heartbeat", s.HeartbeatPlugin,
+		swagger.WithDescription("Extend a plugin instance's lease"),
+		swagger.WithTags("plugins"),
+		swagger.WithRequestModel(PluginLeaseRequest{}),
+		swagger.WithResponseModel(gin.H{}),
+	)
+	api.POST("/plugins/deregister", s.DeregisterPlugin,
+		swagger.WithDescription("Remove a live plugin instance immediately"),
+		swagger.WithTags("plugins"),
+		swagger.WithRequestModel(PluginLeaseRequest{}),
+		swagger.WithResponseModel(gin.H{}),
 	)
 
 	api.GET("/providers/:uuid", s.GetProvider,

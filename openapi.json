@@ -4292,8 +4292,8 @@
         "tags": [
           "plugins"
         ],
-        "summary": "List registered plugin-kind providers",
-        "description": "List registered plugin-kind providers",
+        "summary": "List registered plugin-kind providers (live + pinned)",
+        "description": "List registered plugin-kind providers (live + pinned)",
         "operationId": "apiV2PluginsGet",
         "responses": {
           "200": {
@@ -4333,6 +4333,105 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RegisterPluginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/plugins/deregister": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Remove a live plugin instance immediately",
+        "description": "Remove a live plugin instance immediately",
+        "operationId": "apiV2PluginsDeregisterPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginLeaseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/H"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/plugins/heartbeat": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Extend a plugin instance's lease",
+        "description": "Extend a plugin instance's lease",
+        "operationId": "apiV2PluginsHeartbeatPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginLeaseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/H"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/plugins/register": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Register a live, ephemeral plugin instance (leased)",
+        "description": "Register a live, ephemeral plugin instance (leased)",
+        "operationId": "apiV2PluginsRegisterPost",
+        "requestBody": {
+          "description": "Request body",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPluginDynamicRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterPluginDynamicResponse"
                 }
               }
             }
@@ -8055,6 +8154,10 @@
             "type": "string",
             "description": "Field endpoint"
           },
+          "ephemeral": {
+            "type": "boolean",
+            "description": "Field ephemeral"
+          },
           "managed": {
             "type": "boolean",
             "description": "Field managed"
@@ -8078,7 +8181,25 @@
           "endpoint",
           "model_id",
           "managed",
-          "enabled"
+          "enabled",
+          "ephemeral"
+        ]
+      },
+      "PluginLeaseRequest": {
+        "type": "object",
+        "properties": {
+          "lease_id": {
+            "type": "string",
+            "description": "Field lease_id"
+          },
+          "ttl_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field ttl_seconds"
+          }
+        },
+        "required": [
+          "lease_id"
         ]
       },
       "PluginsResponse": {
@@ -8794,6 +8915,90 @@
         "required": [
           "success",
           "message"
+        ]
+      },
+      "RegisterPluginDynamicRequest": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "Field endpoint",
+            "example": "http://127.0.0.1:8765/v1"
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Field model_id",
+            "example": "plugin/my-rag"
+          },
+          "name": {
+            "type": "string",
+            "description": "Field name",
+            "example": "my-rag"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario",
+            "example": "experiment"
+          },
+          "tier": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field tier"
+          },
+          "token": {
+            "type": "string",
+            "description": "Field token"
+          },
+          "ttl_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field ttl_seconds",
+            "example": 30
+          }
+        },
+        "required": [
+          "name",
+          "endpoint"
+        ]
+      },
+      "RegisterPluginDynamicResponse": {
+        "type": "object",
+        "properties": {
+          "lease_id": {
+            "type": "string",
+            "description": "Field lease_id"
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Field model_id"
+          },
+          "note": {
+            "type": "string",
+            "description": "Field note"
+          },
+          "plugin_id": {
+            "type": "string",
+            "description": "Field plugin_id"
+          },
+          "rule_uuid": {
+            "type": "string",
+            "description": "Field rule_uuid"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Field scenario"
+          },
+          "ttl_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Field ttl_seconds"
+          }
+        },
+        "required": [
+          "plugin_id",
+          "lease_id",
+          "model_id",
+          "ttl_seconds"
         ]
       },
       "RegisterPluginRequest": {
@@ -11239,92 +11444,40 @@
   },
   "tags": [
     {
-      "name": "logs",
-      "description": "Operations related to logs"
-    },
-    {
-      "name": "history",
-      "description": "Operations related to history"
-    },
-    {
-      "name": "plugins",
-      "description": "Operations related to plugins"
+      "name": "models",
+      "description": "Operations related to models"
     },
     {
       "name": "auth",
       "description": "Operations related to auth"
     },
     {
-      "name": "sdk",
-      "description": "Operations related to sdk"
-    },
-    {
-      "name": "guardrails",
-      "description": "Operations related to guardrails"
-    },
-    {
-      "name": "models",
-      "description": "Operations related to models"
-    },
-    {
-      "name": "token",
-      "description": "Operations related to token"
-    },
-    {
-      "name": "skills",
-      "description": "Operations related to skills"
-    },
-    {
-      "name": "config",
-      "description": "Operations related to config"
-    },
-    {
-      "name": "actions",
-      "description": "Operations related to actions"
-    },
-    {
-      "name": "onboarding",
-      "description": "Operations related to onboarding"
-    },
-    {
-      "name": "oauth",
-      "description": "Operations related to oauth"
-    },
-    {
-      "name": "imbot-settings",
-      "description": "Operations related to imbot-settings"
-    },
-    {
-      "name": "imbot-admin",
-      "description": "Operations related to imbot-admin"
-    },
-    {
-      "name": "mcp",
-      "description": "Operations related to mcp"
-    },
-    {
-      "name": "system-logs",
-      "description": "Operations related to system-logs"
-    },
-    {
-      "name": "codex",
-      "description": "Operations related to codex"
-    },
-    {
-      "name": "mcp-transport",
-      "description": "Operations related to mcp-transport"
-    },
-    {
       "name": "rules",
       "description": "Operations related to rules"
+    },
+    {
+      "name": "providers",
+      "description": "Operations related to providers"
     },
     {
       "name": "weixin",
       "description": "Operations related to weixin"
     },
     {
-      "name": "info",
-      "description": "Operations related to info"
+      "name": "history",
+      "description": "Operations related to history"
+    },
+    {
+      "name": "onboarding",
+      "description": "Operations related to onboarding"
+    },
+    {
+      "name": "system-logs",
+      "description": "Operations related to system-logs"
+    },
+    {
+      "name": "actions",
+      "description": "Operations related to actions"
     },
     {
       "name": "server",
@@ -11335,24 +11488,76 @@
       "description": "Operations related to scenarios"
     },
     {
-      "name": "testing",
-      "description": "Operations related to testing"
+      "name": "plugins",
+      "description": "Operations related to plugins"
     },
     {
-      "name": "usage",
-      "description": "Operations related to usage"
+      "name": "oauth",
+      "description": "Operations related to oauth"
     },
     {
-      "name": "feishu",
-      "description": "Operations related to feishu"
+      "name": "sdk",
+      "description": "Operations related to sdk"
     },
     {
       "name": "requests",
       "description": "Operations related to requests"
     },
     {
-      "name": "providers",
-      "description": "Operations related to providers"
+      "name": "usage",
+      "description": "Operations related to usage"
+    },
+    {
+      "name": "imbot-admin",
+      "description": "Operations related to imbot-admin"
+    },
+    {
+      "name": "feishu",
+      "description": "Operations related to feishu"
+    },
+    {
+      "name": "logs",
+      "description": "Operations related to logs"
+    },
+    {
+      "name": "codex",
+      "description": "Operations related to codex"
+    },
+    {
+      "name": "guardrails",
+      "description": "Operations related to guardrails"
+    },
+    {
+      "name": "token",
+      "description": "Operations related to token"
+    },
+    {
+      "name": "skills",
+      "description": "Operations related to skills"
+    },
+    {
+      "name": "imbot-settings",
+      "description": "Operations related to imbot-settings"
+    },
+    {
+      "name": "mcp",
+      "description": "Operations related to mcp"
+    },
+    {
+      "name": "mcp-transport",
+      "description": "Operations related to mcp-transport"
+    },
+    {
+      "name": "info",
+      "description": "Operations related to info"
+    },
+    {
+      "name": "config",
+      "description": "Operations related to config"
+    },
+    {
+      "name": "testing",
+      "description": "Operations related to testing"
     }
   ]
 }

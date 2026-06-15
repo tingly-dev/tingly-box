@@ -79,9 +79,38 @@ provider *and* (when a scenario is given) the rule whose upstream is that plugin
   --scenario experiment` do the full one-step wire-in.
 
 This makes "configure this rule with a plugin" literal and eliminates the
-provider+rule two-step mode-picker (`ux-principles.md`). Remaining tb-side work:
-the rule-editor UI surfacing "plugin" as a service kind (frontend, codegen), and
-the process supervisor/lifecycle.
+provider+rule two-step mode-picker (`ux-principles.md`).
+
+### Plugin as runtime service (dynamic registration, implemented)
+
+A plugin is a **runtime instance**, not a static config entry. It registers at
+startup, heartbeats to hold a lease, and is auto-removed when it stops/dies —
+nothing persisted. Differs from a standard provider (durable, operator-managed).
+
+- **In-memory `PluginRegistry`** on the Server (process-local, matching tb's
+  circuit-breaker stance — no shared store). Stable id from name (UUIDv5) so a
+  restart re-registers under the same id; rotating `lease_id` per register.
+- **Config hook** `EphemeralProviderResolver`: `GetProviderByUUID` /
+  `validateRuleServices` fall back to the registry, so **routing resolves live
+  plugins transparently** and an expired one simply isn't found → existing tier
+  failover routes to a tier-1 real model. The db layer stays pure persistence.
+- **DNS-style layering**: the rule (the durable "name") is ensured idempotently;
+  the instance (endpoint + liveness) is ephemeral. No live instance ⇒ failover.
+- Endpoints (apiV2): `POST /plugins/register` (leased; ensures rule),
+  `POST /plugins/heartbeat`, `POST /plugins/deregister`, `GET /plugins` (live +
+  pinned). The persistent `POST /api/v2/plugins` remains as the **pin** path.
+
+**Active configuration** (SDK): `tingly.configure(url=, admin_token_env=)` /
+`Connection` inject the tb target + credentials at runtime (secrets by env
+reference), top-precedence in `config.resolve()` — for containers / CI / remote
+where there is no `~/.tingly-box`. `Plugin.serve(register=True, scenario=…,
+ttl_seconds=…, tb=Connection(...))` self-registers, heartbeats on a background
+thread, and deregisters on shutdown.
+
+Verified end-to-end (`examples/e2e_run.sh`): the plugin self-registers as a live
+`ephemeral` instance, a client call routes through it, and it calls back into tb
+— no network/keys. Remaining tb-side: rule-editor UI "plugin" kind (frontend),
+process supervisor, scoped inference tokens, fully-ephemeral binding.
 
 
 ## Shape
