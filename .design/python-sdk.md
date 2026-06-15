@@ -215,6 +215,65 @@ if __name__ == "__main__":
     plugin.serve()                      # http://127.0.0.1:8765/v1
 ```
 
+### How it works (pencil)
+
+Two things to read here: the **anatomy** of a plugin (left), and the **request
+lifecycle** when tb routes a model to it (the numbered loop). Note the loop is a
+cycle — the plugin's handler calls back *into* tb (steps 4–6), so tb is both the
+caller (step 3) and the upstream-for-the-plugin (step 5).
+
+```
+   A PLUGIN (one Python process)                       tingly-box GATEWAY
+  ┌───────────────────────────────────┐          ┌──────────────────────────────┐
+  │  Plugin(name="my-rag")             │          │                              │
+  │                                    │          │  provider:                   │
+  │  @plugin.chat                      │          │   name=my-rag                │
+  │  def handle(req): ...              │          │   api_base=http://…:8765/v1  │
+  │        │                           │          │   model=plugin/my-rag        │
+  │        │ returns str | iter[str]   │          │                              │
+  │        ▼                           │          │  rule: plugin/my-rag → ↑      │
+  │  serve()  →  stdlib HTTP server    │          └──────────────┬───────────────┘
+  │     POST /v1/chat/completions ◄────┼──── (3) POST /v1/chat ──┘   ▲
+  │     GET  /v1/models               │         (model=plugin/my-rag)│ (6) answer
+  │     GET  /health                  │                              │
+  │     · buffered  → chat.completion │                              │
+  │     · stream    → SSE chunks  ────┼──── (7) response ────────────┘
+  │        │                          │
+  │  plugin.llm  (lazy Layer-1 client)│
+  │        │                          │
+  └────────┼──────────────────────────┘
+           │ (4) plugin.llm.ask("…", model="auto")
+           │     = tingly.connect(scenario="experiment") → POST /tingly/experiment/v1/chat
+           ▼
+   ┌──────────────────────────────────────────────────────────────┐
+   │  tingly-box pipeline  (SAME as any client — see Layer 1 graph) │
+   │  scenario→rule · guard rails · routing/tiers · failover ·      │
+   │  quota · logging · transform ─────────────────────────► (5) real upstream
+   └──────────────────────────────────────────────────────────────┘            (Anthropic/
+                                                                                 OpenAI/…)
+
+   request lifecycle:
+     (1) client sends model="plugin/my-rag" to tb         ── see Layer 3 graph
+     (2) tb resolves rule → provider my-rag (api_base = plugin)
+     (3) tb POSTs OpenAI /v1/chat/completions to the PLUGIN
+     (4) handler runs; calls plugin.llm.ask(...)  ── back INTO tb
+     (5) tb routes that call to a real upstream, applies guard rails/quota/…
+     (6) generated text returns to the handler
+     (7) handler's str/iterator → OpenAI response/SSE back to tb → back to client
+```
+
+Key reading:
+
+- **One process, two roles.** As a *server* the plugin answers tb on
+  `:8765/v1`; as a *client* (`plugin.llm`) it consumes tb via Layer 1. Same
+  gateway, both directions.
+- **The author writes only step 4's body.** Everything else — wire parsing,
+  response/SSE shaping (steps 3 & 7), discovery/session (step 4's connect),
+  routing/guard-rails (step 5) — is the SDK and the gateway.
+- **Guard rails apply twice, correctly:** once on the inbound call to the
+  plugin (step 3, via the provider/rule), and again on the plugin's own LLM call
+  (step 5). Neither is wired by the author.
+
 Design choices:
 
 - **No framework dependency.** The server is `http.server.ThreadingHTTPServer`
