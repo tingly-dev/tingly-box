@@ -168,12 +168,13 @@ the underlying service so production-server callers can register extra models.
    `servertest.MockProviderServer` is an endpoint-keyed *dumb echo* that
    intentionally wants byte-exact upstream control, **not** protocol-correct
    responses — so the foundation's main value does not apply to it, and a
-   migration would be net-new code (a third responder) for a single consumer at
-   gateway-test risk. Decision: leave it standalone; instead deleted its
+   migration would be net-new code (an echo `http.Handler`) for a single consumer
+   at gateway-test risk. Decision: leave it standalone; instead deleted its
    ~250 lines of dead `MockProviderTestSuite`/`RunMockProviderTests` and removed
-   the 13 `fmt.Printf` debug lines (607 → 322 lines). The endpoint-responder
-   design below is **deferred / demand-driven** — build it only if an external
-   project needs a reusable dumb-echo provider; then `servertest` can adopt it.
+   the 13 `fmt.Printf` debug lines (607 → 322 lines). The echo-handler design
+   below is **deferred / demand-driven** — build it only if an external project
+   needs a reusable dumb-echo provider (as a plain handler wrapped by the
+   existing `NewServer`, not a new constructor); then `servertest` can adopt it.
    See "Phase 3 — servertest: decision & deferred design".
 
 ## Phase 3 — servertest: decision & deferred design
@@ -219,23 +220,30 @@ The rest of this section is the **deferred / demand-driven** design: build it
 only when an external project actually needs a reusable dumb-echo provider; at
 that point servertest can adopt it as a bonus. It is exactly the design's thesis
 a third time — **observability + transport are shared; response generation is
-pluggable** — so it adds a *third responder* rather than bending servertest onto
-the scenario one.
+pluggable** — so it leans on the existing `NewServer(inner)` seam rather than
+bending servertest onto the scenario one.
 
-### Step 1 — add an endpoint responder to `vmodel/benchmark`
+### Step 1 — ship an echo *handler* (no new constructor)
 
-A new `endpoint_responder.go` + `Server` constructor, reusing the existing
-capture middleware and transports:
+The generic `NewServer(inner http.Handler)` already wraps any handler with the
+capture + transport layer, so a dumb-echo needs **no bespoke constructor** — only
+an `http.Handler`. (Contrast `NewModelServer`/`NewScenarioServer`, which earn
+their constructors by bundling real wiring — a gin router + service, or a
+registry wired into the Server for `RegisterScenario`. An echo bundles nothing
+of the sort.)
 
 ```go
 type MockResponse struct { StatusCode int; Body []byte; Delay time.Duration; Error string }
-type EndpointMock struct { /* mu; per-endpoint MockResponse + stream events */ }
+type EndpointMock struct { /* mu; per-endpoint MockResponse + stream events; implements http.Handler */ }
 func (m *EndpointMock) SetResponse(endpoint string, r MockResponse)
 func (m *EndpointMock) SetStreamingResponse(endpoint string, events []string)
-func NewEndpointServer() (*Server, *EndpointMock)   // inner = EndpointMock mux; capture for free
+
+// usage — one line, via the existing seam:
+mock := benchmark.NewEndpointMock()
+srv := benchmark.NewServer(mock)   // capture + transports for free
 ```
 
-- The inner mux serves `/v1/chat/completions` (+ `/chat/completions`),
+- `EndpointMock` serves `/v1/chat/completions` (+ `/chat/completions`),
   `/v1/messages` (+ `/messages`); honors `Delay` (sleep), `Error` (envelope),
   `stream` flag → `sse.WriteSSEResponse(events)`. Reuses the **same**
   `internal/protocol/sse` writer as the scenario responder.
@@ -251,9 +259,9 @@ func NewEndpointServer() (*Server, *EndpointMock)   // inner = EndpointMock mux;
 
 Keep its exact public signatures (`NewMockProviderServer`, `SetResponse`,
 `SetStreamingResponse`, `GetURL`, `GetCallCount`, `GetLastRequest`, `Reset`,
-`Close`) but back them with `benchmark.NewEndpointServer()`. `MockResponse` /
-`MockStreamingResponse` become aliases of the benchmark types (like Phase 2's
-`EndpointKind`/`CapturedRequest`). No `servertest` test changes.
+`Close`) but back them with `benchmark.NewServer(NewEndpointMock())`.
+`MockResponse` / `MockStreamingResponse` become aliases of the benchmark types
+(like Phase 2's `EndpointKind`/`CapturedRequest`). No `servertest` test changes.
 
 ### Risks / decisions
 
