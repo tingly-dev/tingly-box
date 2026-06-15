@@ -174,6 +174,7 @@ func TestRegisterScenario_RejectsConflictingDescriptor(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestIsSimpleProfileAlias(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -222,5 +223,24 @@ func TestValidateProfileName(t *testing.T) {
 		if err := ValidateProfileName(name); err == nil {
 			t.Errorf("ValidateProfileName(%q) = nil, want error", name)
 		}
+	}
+}
+
+func TestExperimentScenarioDescriptor(t *testing.T) {
+	d, ok := GetScenarioDescriptor(ScenarioExperiment)
+	if !ok {
+		t.Fatalf("expected %q descriptor to be registered", ScenarioExperiment)
+	}
+	if !d.AllowRuleBinding || !d.AllowDirectPathUse {
+		t.Fatalf("expected experiment descriptor to allow rule binding and path use, got %+v", d)
+	}
+	if !d.SupportsProfiles {
+		t.Fatalf("expected experiment scenario to support profiles")
+	}
+	if !ScenarioSupportsTransport(ScenarioExperiment, TransportOpenAI) {
+		t.Fatalf("experiment scenario should support TransportOpenAI")
+	}
+	if !ScenarioSupportsTransport(ScenarioExperiment, TransportAnthropic) {
+		t.Fatalf("experiment scenario should support TransportAnthropic")
 	}
 }

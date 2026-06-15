@@ -114,6 +114,17 @@ func builtinScenarioDescriptorFor(scenario RuleScenario) ScenarioDescriptor {
 			AllowDirectPathUse: true,
 			SupportsProfiles:   true,
 		}
+	case ScenarioExperiment:
+		// SDK / plugin experiment surface. Accepts both OpenAI and Anthropic
+		// transports so a Python experiment can use either SDK against the same
+		// /tingly/experiment endpoint. Profiles let users name parallel experiments.
+		return ScenarioDescriptor{
+			ID:                 scenario,
+			SupportedTransport: []ScenarioTransport{TransportOpenAI, TransportAnthropic},
+			AllowRuleBinding:   true,
+			AllowDirectPathUse: true,
+			SupportsProfiles:   true,
+		}
 	case ScenarioGlobal:
 		return ScenarioDescriptor{
 			ID:                 scenario,
