@@ -27,8 +27,12 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%d", *port)
-	srv, err := benchmark.NewLocalServer(addr)
-	if err != nil {
+	// Use the observable reference Server: real vmodel models over a real TCP
+	// listener, with request capture / endpoint-hit counting. This is the
+	// canonical "run the benchmark as a standalone mock provider" example for
+	// external (non-Go) drivers.
+	srv := benchmark.NewModelServer()
+	if _, err := srv.Listen(addr); err != nil {
 		log.Fatalf("start benchmark server: %v", err)
 	}
 	defer srv.Close()

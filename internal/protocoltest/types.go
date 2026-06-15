@@ -34,48 +34,6 @@ import (
 	"github.com/tingly-dev/tingly-box/internal/protocol"
 )
 
-// TokenUsage holds token counts extracted from a provider response.
-type TokenUsage struct {
-	InputTokens  int
-	OutputTokens int
-}
-
-// ToolCallResult holds a single tool/function call extracted from a response.
-type ToolCallResult struct {
-	ID        string
-	Name      string
-	Arguments string // raw JSON string
-}
-
-// RoundTripResult captures the full result of a round-trip request through the gateway.
-type RoundTripResult struct {
-	// Source and target context
-	SourceProtocol protocol.APIType
-	TargetProtocol protocol.APIType
-	ScenarioName   string
-	IsStreaming    bool
-
-	// HTTP layer
-	HTTPStatus   int
-	RawBody      []byte
-	StreamEvents []string // raw SSE event lines (streaming only)
-
-	// Extracted semantics (populated by the framework after parsing)
-	Content         string
-	Role            string
-	Model           string
-	FinishReason    string
-	ToolCalls       []ToolCallResult
-	ThinkingContent string
-	Usage           *TokenUsage
-}
-
-// Assertion is a named check applied to a RoundTripResult.
-type Assertion struct {
-	Name  string
-	Check func(r *RoundTripResult) error
-}
-
 // TestResult represents the outcome of a single matrix test combination.
 // This is returned by Matrix.ExecuteAll() for CLI and other non-testing contexts.
 type TestResult struct {

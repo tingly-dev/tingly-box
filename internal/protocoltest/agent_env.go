@@ -114,21 +114,6 @@ type AgentTestEnv struct {
 	closed bool
 }
 
-// CapturedRequest represents a request captured by the virtual server
-type CapturedRequest struct {
-	// Headers contains the request headers
-	Headers http.Header
-
-	// Body contains the request body
-	Body []byte
-
-	// Method is the HTTP method
-	Method string
-
-	// Path is the request path
-	Path string
-}
-
 // NewAgentTestEnv creates a new Agent test environment
 // The environment is isolated with a temporary config directory
 // and must be cleaned up with Close() when done

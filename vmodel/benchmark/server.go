@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/tingly-dev/tingly-box/vmodel/virtualserver"
 )
 
@@ -16,11 +14,12 @@ import (
 // LocalServer.Port() to discover an ephemeral port instead.
 const DefaultPort = 12580
 
-// LocalServer wraps a virtualserver.Service exposed over an HTTP listener so
-// the benchmark client can hit a real loopback target. It mounts the vmodel
-// routes at the OpenAI-conventional /v1/ prefix as well as /openai/v1/ and
-// /anthropic/v1/ for benchmark clients that exercise both protocols against
-// a single process.
+// LocalServer is the capture-free load target: a virtualserver.Service exposed
+// over a real HTTP listener so the benchmark load client can hit a loopback
+// target with no per-request observability overhead. It shares route wiring with
+// the observable reference Server via modelRouter (see bench.go) but
+// deliberately omits the capture middleware — for an observable server (request
+// capture, endpoint-hit counts) use NewModelServer().Listen() instead.
 type LocalServer struct {
 	svc      *virtualserver.Service
 	listener net.Listener
@@ -33,17 +32,7 @@ type LocalServer struct {
 // shut down. The underlying virtualmodel registries come pre-populated with
 // the same defaults as production via virtualserver.NewService.
 func NewLocalServer(addr string) (*LocalServer, error) {
-	svc := virtualserver.NewService()
-
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-	router.Use(gin.Recovery())
-
-	// Mount under /v1, /openai/v1, /anthropic/v1 so existing benchmark
-	// clients targeting any of these prefixes work unchanged.
-	for _, prefix := range []string{"/v1", "/openai/v1", "/anthropic/v1"} {
-		svc.SetupRoutes(router.Group(prefix))
-	}
+	router, svc := modelRouter()
 
 	if addr == "" {
 		addr = fmt.Sprintf(":%d", DefaultPort)
